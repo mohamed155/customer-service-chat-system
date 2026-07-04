@@ -1,0 +1,30 @@
+# Rust / backend
+target/
+
+# Node / frontend
+node_modules/
+dist/
+.angular/
+.pnpm-store/
+*.tsbuildinfo
+coverage/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

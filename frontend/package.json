@@ -1,0 +1,51 @@
+{
+  "name": "customer-service-platform-frontend",
+  "private": true,
+  "packageManager": "pnpm@10.34.4",
+  "scripts": {
+    "build": "ng build",
+    "start": "ng serve dashboard",
+    "lint": "eslint \"apps/**/*.{ts,html}\" \"libs/**/*.{ts,html}\"",
+    "test": "ng test dashboard",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@angular/common": "^22.0.5",
+    "@angular/core": "^22.0.5",
+    "@angular/platform-browser": "^22.0.5",
+    "@angular/router": "^22.0.5",
+    "@ngrx/effects": "21.1.1",
+    "@ngrx/signals": "21.1.1",
+    "@ngrx/store": "21.1.1",
+    "@taiga-ui/cdk": "^5.13.0",
+    "@taiga-ui/core": "^5.13.0",
+    "@taiga-ui/event-plugins": "^5.0.0",
+    "@taiga-ui/icons": "^5.13.0",
+    "@taiga-ui/kit": "^5.13.0",
+    "@taiga-ui/styles": "^5.13.0",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1",
+    "zone.js": "~0.16.2"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.0.5",
+    "@angular/cli": "^22.0.5",
+    "@angular/compiler-cli": "^22.0.5",
+    "@ngrx/store-devtools": "21.1.1",
+    "angular-eslint": "^22.0.0",
+    "eslint": "^10.0.0",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.0.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.0.0"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@ngrx/*>@angular/core": "^22.0.0"
+      }
+    }
+  }
+}

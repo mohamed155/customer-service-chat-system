@@ -1,0 +1,33 @@
+name: Backend
+on: [push, pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_DB: customer_service, POSTGRES_USER: customer_service, POSTGRES_PASSWORD: customer_service }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U customer_service" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    defaults: { run: { working-directory: backend } }
+    env:
+      DATABASE_URL: postgres://customer_service:customer_service@localhost:5432/customer_service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: rustfmt, clippy }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: backend }
+      - run: cargo fmt --check
+      - run: cargo clippy --workspace -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo install sqlx-cli --no-default-features --features rustls,postgres
+      - run: sqlx migrate run
+      - run: cargo install cargo-audit
+      - run: cargo audit
+      - name: Build backend image
+        working-directory: .
+        run: docker build -f infra/Dockerfile.backend .
+

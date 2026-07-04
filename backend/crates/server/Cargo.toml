@@ -1,0 +1,13 @@
+[package]
+name = "server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum.workspace = true
+config = { path = "../shared/config" }
+kernel = { path = "../shared/kernel" }
+observability = { path = "../shared/observability" }
+tokio.workspace = true
+tracing.workspace = true
+

@@ -1,0 +1,24 @@
+@import './app/design-system/tokens/tokens.css';
+@import './app/design-system/theme/themes.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--app-color-bg);
+  color: var(--app-color-text);
+  font-family: var(--app-font-family);
+  font-size: var(--app-text-md);
+}
+
+button,
+a {
+  font: inherit;
+}

@@ -1,0 +1,5 @@
+[package]
+name = "integrations"
+version.workspace = true
+edition.workspace = true
+

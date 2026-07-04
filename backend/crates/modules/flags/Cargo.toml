@@ -1,0 +1,5 @@
+[package]
+name = "flags"
+version.workspace = true
+edition.workspace = true
+

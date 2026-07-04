@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "../../out-tsc/dashboard-spec", "types": ["vitest/globals"] },
+  "include": ["src/**/*.spec.ts", "src/test-setup.ts"]
+}

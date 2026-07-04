@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "../../out-tsc/dashboard" },
+  "files": ["src/main.ts"]
+}

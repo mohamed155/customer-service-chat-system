@@ -1,0 +1,12 @@
+[package]
+name = "observability"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum.workspace = true
+serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+

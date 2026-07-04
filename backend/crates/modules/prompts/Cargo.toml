@@ -1,0 +1,5 @@
+[package]
+name = "prompts"
+version.workspace = true
+edition.workspace = true
+

@@ -1,0 +1,102 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "apps",
+  "projects": {
+    "dashboard": {
+      "projectType": "application",
+      "root": "apps/dashboard",
+      "sourceRoot": "apps/dashboard/src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "apps/dashboard/src/main.ts",
+            "index": "apps/dashboard/src/index.html",
+            "tsConfig": "apps/dashboard/tsconfig.app.json",
+            "outputPath": "dist/dashboard",
+            "styles": [
+              "node_modules/@taiga-ui/styles/taiga-ui-theme.less",
+              "node_modules/@taiga-ui/styles/taiga-ui-fonts.less",
+              "apps/dashboard/src/styles.css"
+            ],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "node_modules/@taiga-ui/icons/src",
+                "output": "assets/taiga-ui/icons"
+              }
+            ]
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                { "type": "initial", "maximumWarning": "500kb", "maximumError": "1mb" },
+                { "type": "anyComponentStyle", "maximumWarning": "4kb", "maximumError": "8kb" }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "apps/dashboard/src/environments/environment.ts",
+                  "with": "apps/dashboard/src/environments/environment.development.ts"
+                }
+              ]
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": { "buildTarget": "dashboard:build:production" },
+            "development": { "buildTarget": "dashboard:build:development" }
+          },
+          "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "apps/dashboard/tsconfig.spec.json",
+            "runner": "vitest",
+            "setupFiles": ["apps/dashboard/src/test-setup.ts"]
+          }
+        }
+      }
+    },
+    "widget": {
+      "projectType": "application",
+      "root": "apps/widget",
+      "sourceRoot": "apps/widget/src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "apps/widget/src/main.ts",
+            "index": "apps/widget/src/index.html",
+            "tsConfig": "apps/widget/tsconfig.app.json",
+            "outputPath": "dist/widget",
+            "budgets": [{ "type": "initial", "maximumWarning": "94kb", "maximumError": "97kb" }]
+          }
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": { "buildTarget": "widget:build" }
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "widget:build",
+            "tsConfig": "apps/widget/tsconfig.spec.json",
+            "runner": "vitest",
+            "setupFiles": ["apps/widget/src/test-setup.ts"]
+          }
+        }
+      }
+    }
+  }
+}

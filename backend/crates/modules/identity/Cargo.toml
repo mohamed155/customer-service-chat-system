@@ -1,0 +1,5 @@
+[package]
+name = "identity"
+version.workspace = true
+edition.workspace = true
+

@@ -1,0 +1,22 @@
+name: Frontend
+on: [push, pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.12.4, run_install: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm exec ng build dashboard
+      - run: pnpm exec ng build widget
+      - run: pnpm exec ng test dashboard --watch=false --browsers=ChromeHeadless
+      - run: pnpm exec ng test widget --watch=false --browsers=ChromeHeadless
+      - name: Secret pattern scan
+        working-directory: .
+        continue-on-error: true
+        run: git grep -nE 'AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' -- ':!specs' || true

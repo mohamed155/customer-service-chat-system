@@ -1,0 +1,37 @@
+:root {
+  --app-sidebar-width: 280px;
+  --app-sidebar-collapsed-width: 72px;
+  --app-topbar-height: 64px;
+  --app-page-max-width: 1440px;
+  --app-space-1: 4px;
+  --app-space-2: 8px;
+  --app-space-3: 12px;
+  --app-space-4: 16px;
+  --app-space-5: 20px;
+  --app-space-6: 24px;
+  --app-space-7: 28px;
+  --app-space-8: 32px;
+  --app-radius-sm: 6px;
+  --app-radius-md: 10px;
+  --app-radius-lg: 16px;
+  --app-shadow-sm: 0 1px 2px rgb(15 23 42 / 8%);
+  --app-shadow-md: 0 8px 24px rgb(15 23 42 / 12%);
+  --app-shadow-lg: 0 20px 48px rgb(15 23 42 / 16%);
+  --app-z-sidebar: 10;
+  --app-z-topbar: 20;
+  --app-z-overlay: 100;
+  --app-z-toast: 200;
+  --app-bp-sm: 640px;
+  --app-bp-md: 768px;
+  --app-bp-lg: 1024px;
+  --app-bp-xl: 1280px;
+  --app-font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  --app-text-xs: 0.75rem;
+  --app-text-sm: 0.875rem;
+  --app-text-md: 1rem;
+  --app-text-lg: 1.25rem;
+  --app-text-xl: 1.75rem;
+  --app-font-weight-normal: 400;
+  --app-font-weight-medium: 500;
+  --app-font-weight-bold: 700;
+}
