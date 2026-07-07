@@ -1,25 +1,75 @@
 :root[data-theme='light'] {
   color-scheme: light;
-  --app-color-bg: #f5f7fb;
-  --app-color-surface: #ffffff;
-  --app-color-border: #dce1ea;
-  --app-color-text: #172033;
-  --app-color-text-muted: #667085;
-  --app-color-accent: #5b5bd6;
-  --app-color-success: #17875d;
-  --app-color-warning: #b26a00;
-  --app-color-danger: #c73546;
+  --app-bg: #f5f6f8;
+  --app-panel: #ffffff;
+  --app-panel-2: #fafafb;
+  --app-panel-3: #f3f4f6;
+  --app-sidebar: #fcfcfd;
+  --app-border: #ececef;
+  --app-border-strong: #dededf;
+  --app-text: #191b1f;
+  --app-text-2: #5b616b;
+  --app-text-3: #9598a2;
+  --app-accent: #0ea5e9;
+  --app-accent-strong: #0284c7;
+  --app-accent-ink: #ffffff;
+  --app-accent-soft: rgba(14,165,233,0.10);
+  --app-green: #16a34a;
+  --app-green-soft: rgba(22,163,74,.10);
+  --app-amber: #d97706;
+  --app-amber-soft: rgba(217,119,6,.12);
+  --app-red: #e11d48;
+  --app-red-soft: rgba(225,29,72,.10);
+  --app-shadow: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.05);
+  --app-shadow-lg: 0 12px 32px -8px rgba(16,24,40,.16);
+
+  /* Taiga UI bridge: keep Taiga's own --tui-* custom properties in sync with
+     the Helix palette above so Taiga components inherit our theme instead of
+     their built-in one. */
+  --tui-background-base: var(--app-panel);
+  --tui-text-primary: var(--app-text);
+  --tui-text-secondary: var(--app-text-2);
+  --tui-border-normal: var(--app-border);
+  --tui-background-accent-1: var(--app-accent);
+  --tui-status-negative: var(--app-red);
+  --tui-status-positive: var(--app-green);
+  --tui-status-warning: var(--app-amber);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --app-color-bg: #111522;
-  --app-color-surface: #1b2030;
-  --app-color-border: #343b4f;
-  --app-color-text: #f2f4f7;
-  --app-color-text-muted: #a9b1c3;
-  --app-color-accent: #9b9bf7;
-  --app-color-success: #55c99a;
-  --app-color-warning: #f3b35b;
-  --app-color-danger: #ff7b89;
+  --app-bg: #0a0c10;
+  --app-panel: #13161d;
+  --app-panel-2: #171b23;
+  --app-panel-3: #1d212b;
+  --app-sidebar: #0d1015;
+  --app-border: #242a35;
+  --app-border-strong: #2f3744;
+  --app-text: #e8eaef;
+  --app-text-2: #9aa3b2;
+  --app-text-3: #69707e;
+  --app-accent: #38bdf8;
+  --app-accent-strong: #7dd3fc;
+  --app-accent-ink: #06131c;
+  --app-accent-soft: rgba(56,189,248,0.14);
+  --app-green: #34d399;
+  --app-green-soft: rgba(52,211,153,.13);
+  --app-amber: #fbbf24;
+  --app-amber-soft: rgba(251,191,36,.13);
+  --app-red: #fb7185;
+  --app-red-soft: rgba(251,113,133,.13);
+  --app-shadow: 0 1px 2px rgba(0,0,0,.3);
+  --app-shadow-lg: 0 18px 40px -12px rgba(0,0,0,.6);
+
+  /* Taiga UI bridge: keep Taiga's own --tui-* custom properties in sync with
+     the Helix palette above so Taiga components inherit our theme instead of
+     their built-in one. */
+  --tui-background-base: var(--app-panel);
+  --tui-text-primary: var(--app-text);
+  --tui-text-secondary: var(--app-text-2);
+  --tui-border-normal: var(--app-border);
+  --tui-background-accent-1: var(--app-accent);
+  --tui-status-negative: var(--app-red);
+  --tui-status-positive: var(--app-green);
+  --tui-status-warning: var(--app-amber);
 }
