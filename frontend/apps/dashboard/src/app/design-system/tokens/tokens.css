@@ -1,8 +1,20 @@
 :root {
-  --app-sidebar-width: 280px;
-  --app-sidebar-collapsed-width: 72px;
-  --app-topbar-height: 64px;
-  --app-page-max-width: 1440px;
+  /* Layout */
+  --app-sidebar-expanded-width: 248px;
+  --app-sidebar-collapsed-width: 68px;
+  --app-topbar-height: 60px;
+  --app-content-max-width: 1320px;
+  --app-page-padding-x: 28px;
+  --app-page-padding-y: 24px;
+
+  /* Radius */
+  --app-radius-xs: 6px;
+  --app-radius-sm: 8px;
+  --app-radius-md: 10px;
+  --app-radius-lg: 13px;
+  --app-radius-xl: 16px;
+
+  /* Spacing */
   --app-space-1: 4px;
   --app-space-2: 8px;
   --app-space-3: 12px;
@@ -11,27 +23,31 @@
   --app-space-6: 24px;
   --app-space-7: 28px;
   --app-space-8: 32px;
-  --app-radius-sm: 6px;
-  --app-radius-md: 10px;
-  --app-radius-lg: 16px;
-  --app-shadow-sm: 0 1px 2px rgb(15 23 42 / 8%);
-  --app-shadow-md: 0 8px 24px rgb(15 23 42 / 12%);
-  --app-shadow-lg: 0 20px 48px rgb(15 23 42 / 16%);
+
+  /* Typography */
+  --app-font-family: 'Geist Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --app-font-mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', monospace;
+  --app-font-xs: 11px;
+  --app-font-sm: 12.5px;
+  --app-font-md: 13.5px;
+  --app-font-base: 14px;
+  --app-font-lg: 16px;
+  --app-font-xl: 20px;
+  --app-font-2xl: 24px;
+
+  /* Motion */
+  --app-transition-fast: 120ms ease;
+  --app-transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Z-index */
   --app-z-sidebar: 10;
   --app-z-topbar: 20;
   --app-z-overlay: 100;
   --app-z-toast: 200;
+
+  /* Breakpoints */
   --app-bp-sm: 640px;
   --app-bp-md: 768px;
   --app-bp-lg: 1024px;
   --app-bp-xl: 1280px;
-  --app-font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  --app-text-xs: 0.75rem;
-  --app-text-sm: 0.875rem;
-  --app-text-md: 1rem;
-  --app-text-lg: 1.25rem;
-  --app-text-xl: 1.75rem;
-  --app-font-weight-normal: 400;
-  --app-font-weight-medium: 500;
-  --app-font-weight-bold: 700;
 }
