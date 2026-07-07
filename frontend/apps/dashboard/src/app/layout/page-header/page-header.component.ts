@@ -2,18 +2,18 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 @Component({
   selector: 'app-page-header',
-  template: `<header>
+  template: `<div class="page-header">
     <div>
       <h1>{{ title() }}</h1>
       <ng-content />
     </div>
-  </header>`,
+  </div>`,
   styles: [
     `
-      header {
+      .page-header {
         margin-bottom: var(--app-space-6);
       }
-      header > div {
+      .page-header > div {
         display: flex;
         align-items: center;
         justify-content: space-between;

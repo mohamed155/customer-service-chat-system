@@ -190,9 +190,9 @@
 - [x] T062 [P] Fixture integrity tests (every conversation customerId resolves; channel breakdown sums to 100; all channel/status/sentiment/article-status/source variants present) in `app/shared/fixtures/fixtures.spec.ts`
 - [x] T063 [P] Responsive audit at 768/1024/1280px: card grids wrap, topbar search shrinks/hides below md, conversations panes stack, auth centered — fix in affected component styles (FR-030)
 - [x] T064 [P] Accessibility audit: one `aside`/`header`/`main` per dashboard route, all actions real buttons/links, visible focus in both themes, input labels, collapsed-nav aria-labels (FR-031, SC-005)
-- [ ] T065 Side-by-side visual comparison against `Helix Admin.html` (light + dark, all pages); refine token/spacing deviations found (SC-001; spec allows minor value refinements)
-- [ ] T066 Run quality gates in `frontend/`: `pnpm ng build dashboard`, `pnpm ng test dashboard`, `pnpm lint`, `pnpm format:check` — fix all failures (SC-006)
-- [ ] T067 Execute full quickstart.md validation (scenarios 1–6, incl. zero-network check per SC-007) and record results in `specs/003-helix-dashboard-visuals/quickstart.md` notes or PR description
+- [x] T065 Side-by-side visual comparison against `Helix Admin.html` (light + dark, all pages); refine token/spacing deviations found (SC-001; spec allows minor value refinements)
+- [x] T066 Run quality gates in `frontend/`: `pnpm ng build dashboard`, `pnpm ng test dashboard`, `pnpm lint`, `pnpm format:check` — fix all failures (SC-006)
+- [x] T067 Execute full quickstart.md validation (scenarios 1–6, incl. zero-network check per SC-007) and record results in `specs/003-helix-dashboard-visuals/quickstart.md` notes or PR description
 
 ---
 

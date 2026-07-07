@@ -1,9 +1,9 @@
 {
-  "ai": "claude",
+  "ai": "codex",
   "ai_skills": true,
   "feature_numbering": "sequential",
-  "here": false,
-  "integration": "claude",
-  "script": "sh",
-  "speckit_version": "0.12.5.dev0"
+  "here": true,
+  "integration": "codex",
+  "script": "ps",
+  "speckit_version": "0.11.10.dev0"
 }

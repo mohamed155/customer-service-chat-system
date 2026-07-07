@@ -82,5 +82,10 @@ Expected new/updated test coverage (behavior, not snapshots): sidebar renders gr
 
 ## Validation notes
 
-- 2026-07-07 implementation pass: source-level validation succeeded with `tsc -p apps/dashboard/tsconfig.app.json --noEmit`, `tsc -p apps/dashboard/tsconfig.spec.json --noEmit`, direct local ESLint, and direct local Prettier check.
-- Exact pnpm gates were attempted from `frontend/`, but `pnpm ng build dashboard`, `pnpm ng test dashboard --watch=false`, `pnpm lint`, and `pnpm format:check` all failed before script execution with `fetch failed` under restricted network. Direct Angular CLI build/test entrypoints reached Angular, then failed at esbuild startup with `spawn EPERM`.
+- 2026-07-07 implementation pass: `pnpm ng build dashboard`, `pnpm ng test dashboard --watch=false`, `pnpm lint`, and `pnpm format:check` all pass from `frontend/`.
+- Build output confirms separate lazy chunks for the visual pages, including conversations, overview, AI Agent, settings, knowledge base, integrations, analytics, customers, auth, platform placeholder, and not-found.
+- Playwright validation succeeded at `http://127.0.0.1:4200/`: `/`, all 8 tenant routes, `/platform/overview-placeholder`, all 4 auth routes, and `/nope` rendered. Dashboard routes had exactly one `aside`, one topbar `header`, and one `main`; auth and not-found routes rendered without dashboard chrome.
+- Playwright confirmed the shell model: sidebar 248px expanded / 68px collapsed, topbar 60px, `body { overflow: hidden; }`, main content owns scrolling, active nav has `aria-current`, collapsed nav remains labelled, overview alert dismisses, and no XHR/fetch requests were emitted by fixture-backed pages.
+- Side-by-side screenshots were captured from the running Angular app and `Helix Admin.html` after following the reference visual auth flow into its dashboard. Light and dark captures matched the Helix visual direction, shell treatment, palette, card density, and spacing while preserving this spec's required Overview alert and five-metric layout.
+- Source/reference validation compared the Helix reference CSS variables in `Helix Admin.html` against `themes.css`; values match semantically for the light and dark palettes, with only formatting-normalization differences in `rgba()` and shadow syntax.
+- Playwright screenshots and summary were written to `%TEMP%/helix-visual-validation/` during validation.

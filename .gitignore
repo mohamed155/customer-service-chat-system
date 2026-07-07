@@ -4,6 +4,7 @@ target/
 # Node / frontend
 node_modules/
 dist/
+build/
 .angular/
 .pnpm-store/
 *.tsbuildinfo
@@ -11,6 +12,7 @@ coverage/
 
 # Env
 .env
+.env*
 .env.local
 .env.*.local
 
@@ -18,6 +20,7 @@ coverage/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+*.tmp
 
 # Editors / IDEs
 .idea/

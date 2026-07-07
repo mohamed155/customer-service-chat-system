@@ -41,4 +41,12 @@ describe('ConversationsComponent', () => {
     expect(element.textContent).toContain('Can someone confirm the delivery address?');
     expect(element.textContent).not.toContain('The invoice copy is all I needed.');
   });
+
+  it('does not add an extra header landmark inside the dashboard page content', async () => {
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(ConversationsComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelectorAll('header')).toHaveLength(0);
+  });
 });

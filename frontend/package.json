@@ -39,16 +39,10 @@
     "angular-eslint": "^22.0.0",
     "eslint": "^10.0.0",
     "jsdom": "^26.1.0",
+    "playwright": "^1.61.1",
     "prettier": "^3.0.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.0.0",
     "vitest": "^4.0.0"
-  },
-  "pnpm": {
-    "peerDependencyRules": {
-      "allowedVersions": {
-        "@ngrx/*>@angular/core": "^22.0.0"
-      }
-    }
   }
 }

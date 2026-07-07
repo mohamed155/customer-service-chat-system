@@ -23,7 +23,7 @@ import {
   ],
   template: `
     @if (conversation(); as thread) {
-      <header>
+      <div class="thread-header">
         <div>
           <strong>{{ customer()?.name ?? 'Customer' }}</strong>
           <span>{{ customer()?.email }}</span>
@@ -32,7 +32,7 @@ import {
           <app-channel-badge [channel]="thread.channel" />
           <app-status-badge [status]="thread.status" [tone]="statusTone(thread.status)" />
         </div>
-      </header>
+      </div>
 
       <div class="messages">
         @for (message of thread.messages; track message.id) {
@@ -82,19 +82,19 @@ import {
         grid-template-rows: auto 1fr auto;
         background: var(--app-panel);
       }
-      header {
+      .thread-header {
         display: flex;
         justify-content: space-between;
         gap: var(--app-space-3);
         padding: var(--app-space-4);
         border-bottom: 1px solid var(--app-border);
       }
-      header strong {
+      .thread-header strong {
         display: block;
         color: var(--app-text);
         font-size: var(--app-font-base);
       }
-      header span {
+      .thread-header span {
         color: var(--app-text-3);
         font-size: var(--app-font-sm);
       }

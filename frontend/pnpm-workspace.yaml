@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - libs/*
+
+peerDependencyRules:
+  allowedVersions:
+    '@ngrx/*>@angular/core': ^22.0.0
