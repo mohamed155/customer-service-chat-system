@@ -21,7 +21,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       }
       h1 {
         margin: 0;
-        font-size: var(--app-text-xl);
+        font-size: var(--app-font-xl);
       }
     `,
   ],

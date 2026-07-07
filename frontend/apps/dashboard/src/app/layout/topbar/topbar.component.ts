@@ -47,8 +47,8 @@ import { appUiActions, selectSidebarCollapsed, ThemeMode } from '../../core/stat
         align-items: center;
         gap: var(--app-space-4);
         padding: 0 var(--app-space-6);
-        background: var(--app-color-surface);
-        border-bottom: 1px solid var(--app-color-border);
+        background: var(--app-panel);
+        border-bottom: 1px solid var(--app-border);
       }
       .tools {
         margin-left: auto;

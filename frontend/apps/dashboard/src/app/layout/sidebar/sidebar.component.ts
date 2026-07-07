@@ -35,10 +35,10 @@ import { APP_PATHS } from '../../core/router/app-paths';
     `
       :host {
         display: block;
-        width: var(--app-sidebar-width);
+        width: var(--app-sidebar-expanded-width);
         min-height: 100vh;
-        background: var(--app-color-surface);
-        border-right: 1px solid var(--app-color-border);
+        background: var(--app-panel);
+        border-right: 1px solid var(--app-border);
         transition: width 160ms ease;
       }
       :host.collapsed {
@@ -56,15 +56,15 @@ import { APP_PATHS } from '../../core/router/app-paths';
         min-height: 44px;
         padding: var(--app-space-2);
         border-radius: var(--app-radius-sm);
-        color: var(--app-color-text);
+        color: var(--app-text);
         text-decoration: none;
       }
       a.active {
-        background: var(--app-color-bg);
-        color: var(--app-color-accent);
+        background: var(--app-bg);
+        color: var(--app-accent);
       }
       a:focus-visible {
-        outline: 3px solid var(--app-color-accent);
+        outline: 3px solid var(--app-accent);
         outline-offset: 2px;
       }
     `,

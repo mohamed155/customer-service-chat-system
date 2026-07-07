@@ -24,7 +24,7 @@ import { LayoutStore } from './layout.store';
       .shell {
         min-height: 100vh;
         display: flex;
-        background: var(--app-color-bg);
+        background: var(--app-bg);
       }
       .workspace {
         min-width: 0;
@@ -34,11 +34,11 @@ import { LayoutStore } from './layout.store';
         padding: var(--app-space-6);
       }
       .content {
-        max-width: var(--app-page-max-width);
+        max-width: var(--app-content-max-width);
         margin: 0 auto;
       }
       main:focus-visible {
-        outline: 3px solid var(--app-color-accent);
+        outline: 3px solid var(--app-accent);
         outline-offset: -3px;
       }
     `,
