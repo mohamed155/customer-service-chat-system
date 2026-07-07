@@ -1,18 +1,15 @@
 <!--
 Sync Impact Report
 ==================
-Version change: [TEMPLATE] → 1.0.0 (initial ratification)
-Modified principles: N/A (first concrete version; all principles newly defined)
-Added sections:
-  - Core Principles I–X (Modular Monolith Architecture, Multi-Tenant Isolation,
-    Zero-Trust Security & RBAC, AI Provider Independence & Tool-Mediated Access,
-    API-First & Contract Consistency, Observability by Default,
-    Test-First & Regression Discipline, Database Integrity & Migration Discipline,
-    Design System Discipline, Performance & Efficiency)
-  - Technology Stack & Platform Requirements
-  - Documentation & Future Readiness
-  - Governance
-Removed sections: N/A (replaced template placeholders)
+Version change: 1.0.0 → 1.1.0
+Modified principles: N/A
+Added sections: N/A
+Expanded sections:
+  - Technology Stack & Platform Requirements → Frontend line now mandates
+    standalone components by default (NgModules MUST NOT be introduced for
+    new code); Angular workspace schematics configuration MUST default
+    `standalone: true` for generated components/directives/pipes.
+Removed sections: N/A
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ no change needed (Constitution Check
     gate is populated dynamically from this file; already generic)
@@ -139,7 +136,11 @@ pass.
 ## Technology Stack & Platform Requirements
 
 **Frontend**: Angular, TypeScript, Signals, RxJS, Angular Material or the
-project's own component library.
+project's own component library. Components, directives, and pipes MUST be
+standalone by default — NgModules MUST NOT be introduced for new code. The
+Angular workspace configuration (`angular.json` `schematics` defaults) MUST
+keep `standalone: true` as the generated default so this is enforced by
+tooling, not convention alone.
 
 **Backend**: Rust, Axum, Tokio, SQLx, PostgreSQL, Redis, pgvector, Serde, Tracing.
 
@@ -189,4 +190,4 @@ deviations are grounds to block the plan at the Constitution Check gate.
 When making decisions not explicitly covered above, prioritize simplicity,
 maintainability, and long-term scalability over short-term convenience.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-07-03
+**Version**: 1.1.0 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-07-05
