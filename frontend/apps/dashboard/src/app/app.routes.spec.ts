@@ -24,10 +24,10 @@ describe('application routes', () => {
   );
 
   it.each([
-    ['/', 'Overview — coming soon'],
-    ['/auth/login', 'Login — coming soon'],
+    ['/', 'Total conversations'],
+    ['/auth/login', 'Welcome back'],
     ['/platform/overview-placeholder', 'Platform overview'],
-    ['/tenant/overview', 'Overview — coming soon'],
+    ['/tenant/overview', 'Total conversations'],
     ['/nope', 'Page not found'],
   ])('renders %s', async (url, expected) => {
     const harness = await RouterTestingHarness.create();
