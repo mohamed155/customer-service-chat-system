@@ -74,5 +74,5 @@ import { APP_PATHS } from '../../core/router/app-paths';
 export class SidebarComponent {
   readonly collapsed = input(false);
   protected readonly platformUrl = `/${APP_PATHS.platform.base}/${APP_PATHS.platform.overviewPlaceholder}`;
-  protected readonly tenantUrl = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.overviewPlaceholder}`;
+  protected readonly tenantUrl = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.overview}`;
 }

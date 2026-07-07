@@ -1,13 +1,14 @@
 import { Routes } from '@angular/router';
 import { areaAccessGuard } from './core/router/area-access.guard';
 import { APP_PATHS } from './core/router/app-paths';
+import { PAGE_TITLES } from './core/router/page-title';
 import { AppShellComponent } from './layout/app-shell/app-shell.component';
 
 export const routes: Routes = [
   {
     path: APP_PATHS.root,
     pathMatch: 'full',
-    redirectTo: `${APP_PATHS.tenant.base}/${APP_PATHS.tenant.overviewPlaceholder}`,
+    redirectTo: `${APP_PATHS.tenant.base}/${APP_PATHS.tenant.overview}`,
   },
   {
     path: APP_PATHS.auth.base,
@@ -20,6 +21,8 @@ export const routes: Routes = [
       {
         path: APP_PATHS.platform.base,
         canMatch: [areaAccessGuard],
+        data: { pageTitle: 'platform' },
+        title: PAGE_TITLES.platform.title,
         loadChildren: () =>
           import('./features/platform/platform.routes').then((module) => module.PLATFORM_ROUTES),
       },

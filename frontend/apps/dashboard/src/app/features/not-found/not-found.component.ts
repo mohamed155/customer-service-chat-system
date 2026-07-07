@@ -21,5 +21,5 @@ import { APP_PATHS } from '../../core/router/app-paths';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NotFoundComponent {
-  protected readonly homeUrl = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.overviewPlaceholder}`;
+  protected readonly homeUrl = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.overview}`;
 }
