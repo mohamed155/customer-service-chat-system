@@ -1,11 +1,11 @@
-type Channel = 'web' | 'whatsapp' | 'telegram' | 'mobile-sdk';
-type ConversationStatus = 'open' | 'escalated' | 'closed';
-type Sentiment = 'positive' | 'neutral' | 'angry';
-type MessageAuthor = 'customer' | 'ai' | 'human' | 'system';
-type ArticleStatus = 'draft' | 'published' | 'archived';
-type ArticleSource = 'article' | 'faq' | 'pdf' | 'url';
-type IntegrationStatus = 'connected' | 'not-connected' | 'coming-soon';
-type DeltaDirection = 'up' | 'down';
+export type Channel = 'web' | 'whatsapp' | 'telegram' | 'mobile-sdk';
+export type ConversationStatus = 'open' | 'escalated' | 'closed';
+export type Sentiment = 'positive' | 'neutral' | 'angry';
+export type MessageAuthor = 'customer' | 'ai' | 'human' | 'system';
+export type ArticleStatus = 'draft' | 'published' | 'archived';
+export type ArticleSource = 'article' | 'faq' | 'pdf' | 'url';
+export type IntegrationStatus = 'connected' | 'not-connected' | 'coming-soon';
+export type DeltaDirection = 'up' | 'down';
 
 export interface ConversationFixture {
   id: string;

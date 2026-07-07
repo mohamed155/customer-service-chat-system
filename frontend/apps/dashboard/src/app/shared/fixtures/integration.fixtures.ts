@@ -1,0 +1,68 @@
+import { IntegrationFixture } from './fixture.models';
+
+export const INTEGRATION_FIXTURES: readonly IntegrationFixture[] = [
+  {
+    id: 'website-widget',
+    name: 'Website Widget',
+    description: 'Embed Helix chat on your marketing site and support center.',
+    icon: '@tui.messages-square',
+    status: 'connected',
+    actionLabel: 'Manage',
+  },
+  {
+    id: 'whatsapp',
+    name: 'WhatsApp',
+    description: 'Sync business messaging conversations into the shared inbox.',
+    icon: '@tui.message-circle',
+    status: 'connected',
+    actionLabel: 'Manage',
+  },
+  {
+    id: 'telegram',
+    name: 'Telegram',
+    description: 'Route Telegram support requests through AI and human handoff.',
+    icon: '@tui.send',
+    status: 'not-connected',
+    actionLabel: 'Connect',
+  },
+  {
+    id: 'shopify',
+    name: 'Shopify',
+    description: 'Answer order, refund, and fulfillment questions with commerce context.',
+    icon: '@tui.shopping-bag',
+    status: 'connected',
+    actionLabel: 'Manage',
+  },
+  {
+    id: 'hubspot',
+    name: 'HubSpot',
+    description: 'Surface customer lifecycle and account ownership context.',
+    icon: '@tui.contact',
+    status: 'not-connected',
+    actionLabel: 'Connect',
+  },
+  {
+    id: 'zendesk',
+    name: 'Zendesk',
+    description: 'Escalate complex cases into existing ticket workflows.',
+    icon: '@tui.ticket',
+    status: 'coming-soon',
+    actionLabel: 'Notify me',
+  },
+  {
+    id: 'slack',
+    name: 'Slack',
+    description: 'Send escalation summaries and AI quality alerts to team channels.',
+    icon: '@tui.hash',
+    status: 'not-connected',
+    actionLabel: 'Connect',
+  },
+  {
+    id: 'stripe',
+    name: 'Stripe',
+    description: 'Resolve billing and invoice questions from trusted payment data.',
+    icon: '@tui.credit-card',
+    status: 'coming-soon',
+    actionLabel: 'Notify me',
+  },
+];

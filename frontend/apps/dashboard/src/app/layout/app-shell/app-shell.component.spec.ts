@@ -29,7 +29,7 @@ describe('AppShellComponent', () => {
     const fixture = TestBed.createComponent(AppShellComponent);
     fixture.detectChanges();
     const element: HTMLElement = fixture.nativeElement;
-    expect(element.querySelector('nav')).toBeTruthy();
+    expect(element.querySelector('aside')).toBeTruthy();
     expect(element.querySelector('header')).toBeTruthy();
     expect(element.querySelector('main')).toBeTruthy();
     expect(element.querySelector('router-outlet')).toBeTruthy();

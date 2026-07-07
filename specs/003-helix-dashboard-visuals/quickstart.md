@@ -79,3 +79,8 @@ pnpm format:check
 ```
 
 Expected new/updated test coverage (behavior, not snapshots): sidebar renders groups + collapse state; topbar title per route + theme cycle dispatches `themeModeChanged` with the next mode; overview renders 5 metric cards + alert dismiss; ConversationsStore selection/filter logic; AiAgent/Settings tab stores; auth login renders; fixture referential integrity (conversation → customer); channel breakdown sums to 100.
+
+## Validation notes
+
+- 2026-07-07 implementation pass: source-level validation succeeded with `tsc -p apps/dashboard/tsconfig.app.json --noEmit`, `tsc -p apps/dashboard/tsconfig.spec.json --noEmit`, direct local ESLint, and direct local Prettier check.
+- Exact pnpm gates were attempted from `frontend/`, but `pnpm ng build dashboard`, `pnpm ng test dashboard --watch=false`, `pnpm lint`, and `pnpm format:check` all failed before script execution with `fetch failed` under restricted network. Direct Angular CLI build/test entrypoints reached Angular, then failed at esbuild startup with `spawn EPERM`.

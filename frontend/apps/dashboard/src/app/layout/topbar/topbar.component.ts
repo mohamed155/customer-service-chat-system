@@ -1,41 +1,44 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { TuiButton, TuiIcon } from '@taiga-ui/core';
-import { APP_CONFIG } from '../../core/config/app-config';
-import { appUiActions, selectSidebarCollapsed, ThemeMode } from '../../core/state/app-ui.feature';
+import { TuiIcon } from '@taiga-ui/core';
+import { injectPageTitle } from '../../core/router/page-title';
+import {
+  appUiActions,
+  selectSidebarCollapsed,
+  selectThemeMode,
+  ThemeMode,
+} from '../../core/state/app-ui.feature';
+import { IconButtonComponent } from '../../shared/components/icon-button/icon-button.component';
+import { SearchInputComponent } from '../../shared/components/search-input/search-input.component';
 
 @Component({
   selector: 'app-topbar',
-  imports: [TuiButton, TuiIcon],
+  imports: [IconButtonComponent, SearchInputComponent, TuiIcon],
   template: `
     <header>
-      <button
-        tuiButton
-        type="button"
-        appearance="flat"
-        aria-label="Toggle sidebar"
+      <app-icon-button
+        icon="@tui.menu"
+        label="Toggle sidebar"
+        [active]="collapsed()"
         [attr.aria-expanded]="!collapsed()"
         (click)="toggleSidebar()"
-      >
-        <tui-icon icon="@tui.menu" />
-      </button>
-      <strong>{{ config.appName }}</strong>
-      <div class="tools" aria-label="Display preferences">
-        @for (mode of themeModes; track mode) {
-          <button
-            tuiButton
-            type="button"
-            size="s"
-            appearance="flat"
-            [attr.aria-label]="'Use ' + mode + ' theme'"
-            (click)="setTheme(mode)"
-          >
-            {{ mode }}
-          </button>
-        }
-        <button tuiButton type="button" appearance="flat" aria-label="Notifications">
-          <tui-icon icon="@tui.bell" />
-        </button>
+      />
+
+      <div class="title">
+        <strong>{{ pageTitle()?.title ?? 'Helix' }}</strong>
+        <span>{{ pageTitle()?.subtitle ?? 'Support AI' }}</span>
+      </div>
+
+      <div class="tools" aria-label="Dashboard tools">
+        <app-search-input
+          class="search"
+          placeholder="Search conversations, customers..."
+          shortcutHint="⌘K"
+          [(value)]="search"
+        />
+        <app-icon-button [icon]="themeIcon()" [label]="themeLabel()" (click)="cycleTheme()" />
+        <app-icon-button icon="@tui.bell" label="Notifications" />
+        <button class="new-button" type="button"><tui-icon icon="@tui.plus" />New</button>
       </div>
     </header>
   `,
@@ -45,16 +48,70 @@ import { appUiActions, selectSidebarCollapsed, ThemeMode } from '../../core/stat
         height: var(--app-topbar-height);
         display: flex;
         align-items: center;
-        gap: var(--app-space-4);
-        padding: 0 var(--app-space-6);
+        gap: var(--app-space-3);
+        padding: 0 var(--app-page-padding-x);
         background: var(--app-panel);
         border-bottom: 1px solid var(--app-border);
       }
+      .title {
+        min-width: 0;
+      }
+      .title strong {
+        display: block;
+        color: var(--app-text);
+        font-size: var(--app-font-lg);
+        font-weight: 650;
+        line-height: 1.1;
+      }
+      .title span {
+        display: block;
+        margin-top: 2px;
+        color: var(--app-text-3);
+        font-size: 11.5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       .tools {
+        min-width: 0;
         margin-left: auto;
         display: flex;
         align-items: center;
-        gap: var(--app-space-1);
+        gap: var(--app-space-2);
+      }
+      .search {
+        width: 260px;
+      }
+      .new-button {
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 var(--app-space-3);
+        border: 1px solid var(--app-accent);
+        border-radius: var(--app-radius-md);
+        background: var(--app-accent);
+        color: var(--app-accent-ink);
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .new-button:hover {
+        border-color: var(--app-accent-strong);
+        background: var(--app-accent-strong);
+      }
+      .new-button:focus-visible {
+        outline: 3px solid var(--app-accent-soft);
+        outline-offset: 2px;
+      }
+      @media (max-width: 900px) {
+        .search {
+          width: min(220px, 28vw);
+        }
+      }
+      @media (max-width: 768px) {
+        .search {
+          display: none;
+        }
       }
     `,
   ],
@@ -62,13 +119,31 @@ import { appUiActions, selectSidebarCollapsed, ThemeMode } from '../../core/stat
 })
 export class TopbarComponent {
   private readonly store = inject(Store);
-  protected readonly config = inject(APP_CONFIG);
   protected readonly collapsed = this.store.selectSignal(selectSidebarCollapsed);
-  protected readonly themeModes: readonly ThemeMode[] = ['light', 'dark', 'system'];
+  protected readonly themeMode = this.store.selectSignal(selectThemeMode);
+  protected readonly pageTitle = injectPageTitle();
+  protected readonly search = signal('');
+  protected readonly themeIcon = computed(() => {
+    const mode = this.themeMode();
+    return mode === 'light' ? '@tui.sun' : mode === 'dark' ? '@tui.moon' : '@tui.monitor';
+  });
+  protected readonly themeLabel = computed(() => {
+    const current = this.themeMode();
+    const next = this.nextThemeMode(current);
+    return `Theme is ${current}; switch to ${next}`;
+  });
+
   protected toggleSidebar(): void {
     this.store.dispatch(appUiActions.sidebarToggled());
   }
-  protected setTheme(themeMode: ThemeMode): void {
-    this.store.dispatch(appUiActions.themeModeChanged({ themeMode }));
+
+  protected cycleTheme(): void {
+    this.store.dispatch(
+      appUiActions.themeModeChanged({ themeMode: this.nextThemeMode(this.themeMode()) }),
+    );
+  }
+
+  private nextThemeMode(themeMode: ThemeMode): ThemeMode {
+    return themeMode === 'light' ? 'dark' : themeMode === 'dark' ? 'system' : 'light';
   }
 }

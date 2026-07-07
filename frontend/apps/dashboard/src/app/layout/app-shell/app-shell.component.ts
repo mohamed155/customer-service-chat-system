@@ -14,28 +14,28 @@ import { LayoutStore } from './layout.store';
     <app-sidebar [collapsed]="collapsed()" />
     <div class="workspace">
       <app-topbar />
-      <main tabindex="-1">
-        <div class="content"><router-outlet /></div>
-      </main>
+      <main tabindex="-1"><router-outlet /></main>
     </div>
   </div>`,
   styles: [
     `
       .shell {
-        min-height: 100vh;
-        display: flex;
+        height: 100dvh;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        overflow: hidden;
         background: var(--app-bg);
       }
       .workspace {
         min-width: 0;
-        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
       }
       main {
-        padding: var(--app-space-6);
-      }
-      .content {
-        max-width: var(--app-content-max-width);
-        margin: 0 auto;
+        min-height: 0;
+        flex: 1;
+        overflow-y: auto;
       }
       main:focus-visible {
         outline: 3px solid var(--app-accent);
