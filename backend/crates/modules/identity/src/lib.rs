@@ -137,10 +137,8 @@ pub async fn principal_middleware(
                             display_name,
                             platform_role,
                         };
-                        tracing::Span::current().record(
-                            "principal.id",
-                            field::display(&principal.user_id),
-                        );
+                        tracing::Span::current()
+                            .record("principal.id", field::display(&principal.user_id));
                         request.extensions_mut().insert(principal);
                     }
                 }
@@ -176,10 +174,7 @@ pub struct OptionalPrincipal(pub Option<Principal>);
 impl<S: Send + Sync> FromRequestParts<S> for OptionalPrincipal {
     type Rejection = core::convert::Infallible;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        _state: &S,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         Ok(Self(parts.extensions.get::<Principal>().cloned()))
     }
 }
@@ -199,10 +194,7 @@ impl<S: Send + Sync> FromRequestParts<S> for OptionalPrincipal {
 impl<S: Send + Sync> FromRequestParts<S> for Principal {
     type Rejection = ApiError;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        _state: &S,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         parts
             .extensions
             .get::<Principal>()
@@ -273,11 +265,17 @@ mod tests {
     #[test]
     fn development_and_test_match_processing_arm() {
         assert!(
-            matches!(Environment::Development, Environment::Development | Environment::Test),
+            matches!(
+                Environment::Development,
+                Environment::Development | Environment::Test
+            ),
             "Development should match the header-processing arm"
         );
         assert!(
-            matches!(Environment::Test, Environment::Development | Environment::Test),
+            matches!(
+                Environment::Test,
+                Environment::Development | Environment::Test
+            ),
             "Test should match the header-processing arm"
         );
     }
@@ -285,11 +283,17 @@ mod tests {
     #[test]
     fn production_and_staging_match_ignoring_arm() {
         assert!(
-            matches!(Environment::Production, Environment::Production | Environment::Staging),
+            matches!(
+                Environment::Production,
+                Environment::Production | Environment::Staging
+            ),
             "Production should match the ignoring arm"
         );
         assert!(
-            matches!(Environment::Staging, Environment::Production | Environment::Staging),
+            matches!(
+                Environment::Staging,
+                Environment::Production | Environment::Staging
+            ),
             "Staging should match the ignoring arm"
         );
     }

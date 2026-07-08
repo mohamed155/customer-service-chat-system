@@ -43,7 +43,10 @@ export const mapHttpError = (error: unknown): ApiError => {
 
 export const userMessageFor = (error: ApiError): string => {
   if (error.code === 'network_error') return 'Check your connection and try again.';
-  if (error.status === 401 || error.status === 403) return 'You do not have access to this action.';
+  if (error.status === 401) return 'You do not have access to this action.';
+  if (error.status === 403 && error.code === 'unauthorized')
+    return "You don't have access to this tenant.";
+  if (error.status === 403) return 'You do not have access to this action.';
   if (error.status === 404) return 'The requested item could not be found.';
   if (error.status === 429) return 'Too many requests. Please try again shortly.';
   if (error.status >= 500) return 'The service is temporarily unavailable. Please try again.';

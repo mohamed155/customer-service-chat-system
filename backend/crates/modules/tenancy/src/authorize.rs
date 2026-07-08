@@ -37,11 +37,7 @@ pub async fn fetch_tenant(pool: &PgPool, id: Uuid) -> Option<TenantRow> {
 
 /// Returns `true` when `user_id` has an active (non-deleted) membership in
 /// the tenant identified by `tenant_id`.
-pub async fn has_active_membership(
-    pool: &PgPool,
-    tenant_id: Uuid,
-    user_id: Uuid,
-) -> bool {
+pub async fn has_active_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> bool {
     let result = sqlx::query_scalar::<_, i32>(
         "SELECT 1 \
          FROM tenant_memberships \
@@ -61,6 +57,9 @@ mod tests {
 
     #[test]
     fn tenant_row_size() {
-        assert_eq!(size_of::<TenantRow>(), size_of::<(Uuid, String, String, String)>());
+        assert_eq!(
+            size_of::<TenantRow>(),
+            size_of::<(Uuid, String, String, String)>()
+        );
     }
 }

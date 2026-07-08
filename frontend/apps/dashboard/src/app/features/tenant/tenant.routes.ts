@@ -5,6 +5,12 @@ import { PAGE_TITLES } from '../../core/router/page-title';
 export const TENANT_ROUTES: Routes = [
   { path: '', pathMatch: 'full', redirectTo: APP_PATHS.tenant.overview },
   {
+    path: APP_PATHS.tenant.select,
+    loadComponent: () =>
+      import('./tenant-select/tenant-select.component').then((m) => m.TenantSelectComponent),
+    data: { pageTitle: 'select-tenant' },
+  },
+  {
     path: APP_PATHS.tenant.overview,
     loadComponent: () => import('./overview/overview.component').then((m) => m.OverviewComponent),
     data: { pageTitle: 'overview' },

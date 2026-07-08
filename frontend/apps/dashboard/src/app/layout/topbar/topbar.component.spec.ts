@@ -4,6 +4,9 @@ import { TestBed } from '@angular/core/testing';
 import { Router, RouterOutlet, provideRouter } from '@angular/router';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideTaiga } from '@taiga-ui/core';
+import { of } from 'rxjs';
+import { APP_CONFIG } from '../../core/config/app-config';
+import { ApiService } from '../../core/api/api.service';
 import { appUiActions } from '../../core/state/app-ui.feature';
 import { TopbarComponent } from './topbar.component';
 
@@ -31,8 +34,19 @@ describe('TopbarComponent', () => {
         provideTaiga(),
         provideZonelessChangeDetection(),
         provideMockStore({
-          initialState: { appUi: { themeMode, sidebarCollapsed: false } },
+          initialState: {
+            appUi: { themeMode, sidebarCollapsed: false },
+            tenantContext: { activeTenant: null, status: 'idle' },
+          },
         }),
+        { provide: APP_CONFIG, useValue: { apiBaseUrl: 'http://localhost:8080/api/v1' } },
+        {
+          provide: ApiService,
+          useValue: {
+            get: vi.fn().mockReturnValue(of({ data: {} })),
+            list: vi.fn().mockReturnValue(of({ data: { items: [] } })),
+          },
+        },
       ],
     });
     await TestBed.compileComponents();

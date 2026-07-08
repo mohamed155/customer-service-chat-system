@@ -459,10 +459,7 @@ mod tests {
         // tenant_id is NULL because the user has no membership in tenant_b
         assert!(audited_tenant_id.is_none());
         // details contains requested_tenant_id and reason
-        assert_eq!(
-            details["requested_tenant_id"],
-            serde_json::json!(tenant_b)
-        );
+        assert_eq!(details["requested_tenant_id"], serde_json::json!(tenant_b));
         assert!(details.get("reason").is_some());
     }
 
@@ -528,8 +525,14 @@ mod tests {
             .iter()
             .map(|t| t["id"].clone())
             .collect();
-        assert!(ids.contains(&serde_json::json!(tenant_active)), "active tenant should be present");
-        assert!(!ids.contains(&serde_json::json!(tenant_deleted)), "deleted tenant should be excluded");
+        assert!(
+            ids.contains(&serde_json::json!(tenant_active)),
+            "active tenant should be present"
+        );
+        assert!(
+            !ids.contains(&serde_json::json!(tenant_deleted)),
+            "deleted tenant should be excluded"
+        );
     }
 
     #[tokio::test]
@@ -734,7 +737,10 @@ mod tests {
         let mut res = send_request(
             pool.clone(),
             Request::builder()
-                .uri(&format!("/api/v1/platform/tenants/{}/switch", &nonexistent_id))
+                .uri(&format!(
+                    "/api/v1/platform/tenants/{}/switch",
+                    &nonexistent_id
+                ))
                 .method("POST")
                 .header("X-Dev-User-Id", user_id.to_string())
                 .body(Body::empty())
@@ -770,5 +776,154 @@ mod tests {
         assert_eq!(res.status(), 403);
         let body = body_json(&mut res).await;
         assert_eq!(body["error"]["code"], "unauthorized");
+    }
+
+    // -----------------------------------------------------------------------
+    // Tests — GET /api/v1/me
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn me_returns_200_with_me_response_for_platform_user() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, Some("super_admin")).await;
+        let tenant_id = seed_tenant(&pool, None).await;
+        seed_membership(&pool, tenant_id, user_id, "admin").await;
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/me")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 200);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["id"], serde_json::json!(user_id));
+        assert!(body.get("email").is_some(), "email should be present");
+        assert!(
+            body.get("displayName").is_some(),
+            "displayName should be present"
+        );
+        assert_eq!(body["platformRole"], "super_admin");
+        assert!(
+            body["memberships"].is_array(),
+            "memberships should be an array"
+        );
+        assert_eq!(body["memberships"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn me_returns_200_with_me_response_for_tenant_user() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, None).await;
+        let tenant_id = seed_tenant(&pool, None).await;
+        seed_membership(&pool, tenant_id, user_id, "agent").await;
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/me")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 200);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["id"], serde_json::json!(user_id));
+        assert!(
+            body["platformRole"].is_null(),
+            "platformRole should be null"
+        );
+        assert!(
+            body["memberships"].is_array(),
+            "memberships should be an array"
+        );
+        assert_eq!(body["memberships"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn me_excludes_soft_deleted_memberships() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, None).await;
+        let tenant_active = seed_tenant(&pool, None).await;
+        let tenant_deleted = seed_tenant(&pool, None).await;
+        seed_membership(&pool, tenant_active, user_id, "agent").await;
+        let deleted_membership = seed_membership(&pool, tenant_deleted, user_id, "agent").await;
+
+        // Soft-delete the second membership
+        sqlx::query("UPDATE tenant_memberships SET deleted_at = now() WHERE id = $1")
+            .bind(deleted_membership)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/me")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 200);
+        let body = body_json(&mut res).await;
+        let memberships = body["memberships"].as_array().unwrap();
+        assert_eq!(memberships.len(), 1, "only active membership should appear");
+        assert_eq!(memberships[0]["tenantId"], serde_json::json!(tenant_active));
+    }
+
+    #[tokio::test]
+    async fn me_returns_401_without_principal() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/me")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 401);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["error"]["code"], "unauthenticated");
+    }
+
+    #[tokio::test]
+    async fn me_ignores_x_tenant_id() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, Some("super_admin")).await;
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/me")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .header("X-Tenant-ID", uuid::Uuid::new_v4().to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 200);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["id"], serde_json::json!(user_id));
     }
 }

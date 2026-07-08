@@ -95,6 +95,7 @@ pub fn app(state: AppState) -> Router {
                     state.db.clone(),
                     tenancy::tenant_context_middleware,
                 ))
+                .route("/me", routing::get(tenancy::routes::me))
                 .route(
                     "/platform/tenants",
                     routing::get(tenancy::routes::list_tenants),
@@ -156,6 +157,7 @@ pub fn app_with_test_routes(state: AppState) -> Router {
                     state.db.clone(),
                     tenancy::tenant_context_middleware,
                 ))
+                .route("/me", routing::get(tenancy::routes::me))
                 .route(
                     "/platform/tenants",
                     routing::get(tenancy::routes::list_tenants),

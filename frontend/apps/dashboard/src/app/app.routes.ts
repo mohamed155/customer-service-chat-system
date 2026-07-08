@@ -21,7 +21,7 @@ export const routes: Routes = [
       {
         path: APP_PATHS.platform.base,
         canMatch: [areaAccessGuard],
-        data: { pageTitle: 'platform' },
+        data: { area: 'platform', pageTitle: 'platform' },
         title: PAGE_TITLES.platform.title,
         loadChildren: () =>
           import('./features/platform/platform.routes').then((module) => module.PLATFORM_ROUTES),
@@ -29,6 +29,7 @@ export const routes: Routes = [
       {
         path: APP_PATHS.tenant.base,
         canMatch: [areaAccessGuard],
+        data: { area: 'tenant' },
         loadChildren: () =>
           import('./features/tenant/tenant.routes').then((module) => module.TENANT_ROUTES),
       },

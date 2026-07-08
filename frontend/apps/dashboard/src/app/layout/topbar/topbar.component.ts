@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+
 import { Store } from '@ngrx/store';
 import { TuiIcon } from '@taiga-ui/core';
 import { injectPageTitle } from '../../core/router/page-title';
+import { CurrentUserService } from '../../core/tenant/current-user.service';
 import {
   appUiActions,
   selectSidebarCollapsed,
@@ -10,10 +12,11 @@ import {
 } from '../../core/state/app-ui.feature';
 import { IconButtonComponent } from '../../shared/components/icon-button/icon-button.component';
 import { SearchInputComponent } from '../../shared/components/search-input/search-input.component';
+import { TenantSwitcherComponent } from './tenant-switcher.component';
 
 @Component({
   selector: 'app-topbar',
-  imports: [IconButtonComponent, SearchInputComponent, TuiIcon],
+  imports: [IconButtonComponent, SearchInputComponent, TenantSwitcherComponent, TuiIcon],
   template: `
     <header>
       <app-icon-button
@@ -36,6 +39,9 @@ import { SearchInputComponent } from '../../shared/components/search-input/searc
           shortcutHint="⌘K"
           [(value)]="search"
         />
+        @if (isPlatformUser()) {
+          <app-tenant-switcher />
+        }
         <app-icon-button [icon]="themeIcon()" [label]="themeLabel()" (click)="cycleTheme()" />
         <app-icon-button icon="@tui.bell" label="Notifications" />
         <button class="new-button" type="button"><tui-icon icon="@tui.plus" />New</button>
@@ -119,7 +125,9 @@ import { SearchInputComponent } from '../../shared/components/search-input/searc
 })
 export class TopbarComponent {
   private readonly store = inject(Store);
+  private readonly currentUser = inject(CurrentUserService);
   protected readonly collapsed = this.store.selectSignal(selectSidebarCollapsed);
+  protected readonly isPlatformUser = this.currentUser.isPlatformUser;
   protected readonly themeMode = this.store.selectSignal(selectThemeMode);
   protected readonly pageTitle = injectPageTitle();
   protected readonly search = signal('');

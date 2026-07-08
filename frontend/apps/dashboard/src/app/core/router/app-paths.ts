@@ -10,6 +10,7 @@ export const APP_PATHS = {
   platform: { base: 'platform', overviewPlaceholder: 'overview-placeholder' },
   tenant: {
     base: 'tenant',
+    select: 'select',
     overview: 'overview',
     conversations: 'conversations',
     customers: 'customers',

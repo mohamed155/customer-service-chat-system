@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::Row;
 use uuid::Uuid;
+
 use crate::{audit, authorize::fetch_tenant, TenantContext};
 
 #[derive(Serialize)]
@@ -90,8 +91,7 @@ pub async fn list_tenants(
     let rows = match result {
         Ok(r) => r,
         Err(e) => {
-            return ApiError::internal_error(&format!("Database query failed: {e}"))
-                .into_response();
+            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
         }
     };
 
@@ -131,10 +131,66 @@ fn hex_to_uuid(hex_str: &str) -> Option<Uuid> {
     Some(Uuid::from_u64_pair(hi, lo))
 }
 
-pub async fn get_tenant(
-    State(pool): State<sqlx::PgPool>,
-    ctx: TenantContext,
-) -> Response {
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeResponse {
+    pub id: Uuid,
+    pub email: String,
+    pub display_name: String,
+    pub platform_role: Option<String>,
+    pub memberships: Vec<MembershipSummary>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MembershipSummary {
+    pub tenant_id: Uuid,
+    pub tenant_name: String,
+    pub tenant_slug: String,
+    pub role: String,
+}
+
+pub async fn me(principal: Principal, State(pool): State<sqlx::PgPool>) -> Response {
+    let rows = sqlx::query(
+        r#"
+        SELECT tm.tenant_id, t.name, t.slug, tm.role
+        FROM tenant_memberships tm
+        JOIN tenants t ON t.id = tm.tenant_id
+        WHERE tm.user_id = $1
+          AND tm.deleted_at IS NULL
+          AND t.deleted_at IS NULL
+        "#,
+    )
+    .bind(principal.user_id)
+    .fetch_all(&pool)
+    .await;
+
+    let memberships = match rows {
+        Ok(rows) => rows
+            .iter()
+            .map(|r| MembershipSummary {
+                tenant_id: r.get("tenant_id"),
+                tenant_name: r.get("name"),
+                tenant_slug: r.get("slug"),
+                role: r.get("role"),
+            })
+            .collect(),
+        Err(e) => {
+            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
+        }
+    };
+
+    Json(MeResponse {
+        id: principal.user_id,
+        email: principal.email,
+        display_name: principal.display_name,
+        platform_role: principal.platform_role.map(|r| r.to_string()),
+        memberships,
+    })
+    .into_response()
+}
+
+pub async fn get_tenant(State(pool): State<sqlx::PgPool>, ctx: TenantContext) -> Response {
     let row = match fetch_tenant(&pool, ctx.tenant_id).await {
         Some(r) => r,
         None => {

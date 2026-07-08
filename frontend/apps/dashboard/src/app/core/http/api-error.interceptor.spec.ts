@@ -1,6 +1,7 @@
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { provideMockStore } from '@ngrx/store/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../api/api.models';
 import { apiErrorInterceptor } from './api-error.interceptor';
@@ -12,6 +13,7 @@ describe('HTTP interceptors', () => {
       providers: [
         provideHttpClient(withInterceptors([authTokenInterceptor, apiErrorInterceptor])),
         provideHttpClientTesting(),
+        provideMockStore({}),
       ],
     });
     const requestPromise = firstValueFrom(TestBed.inject(HttpClient).get('/test')).catch(

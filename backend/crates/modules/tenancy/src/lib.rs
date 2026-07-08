@@ -1,5 +1,5 @@
-pub mod authorize;
 pub mod audit;
+pub mod authorize;
 pub mod routes;
 
 use axum::{
@@ -23,10 +23,7 @@ pub struct TenantContext {
 impl<S: Send + Sync> FromRequestParts<S> for TenantContext {
     type Rejection = ApiError;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        _state: &S,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         parts
             .extensions
             .get::<TenantContext>()
@@ -48,13 +45,11 @@ pub async fn tenant_context_middleware(
         Some(v) => match v.to_str() {
             Ok(s) => s.to_owned(),
             Err(_) => {
-                return ApiError::validation_failed("X-Tenant-ID header is invalid")
-                    .into_response()
+                return ApiError::validation_failed("X-Tenant-ID header is invalid").into_response()
             }
         },
         None => {
-            return ApiError::validation_failed("X-Tenant-ID header is missing")
-                .into_response()
+            return ApiError::validation_failed("X-Tenant-ID header is missing").into_response()
         }
     };
 
@@ -68,21 +63,13 @@ pub async fn tenant_context_middleware(
 
     let principal = match request.extensions().get::<identity::Principal>() {
         Some(p) => p.clone(),
-        None => {
-            return ApiError::unauthenticated("Authentication required").into_response()
-        }
+        None => return ApiError::unauthenticated("Authentication required").into_response(),
     };
 
     let tenant = match authorize::fetch_tenant(&pool, tenant_id).await {
         Some(t) => t,
         None => {
-            audit::access_denied(
-                &pool,
-                Some(principal.user_id),
-                &tenant_id_str,
-                "not_found",
-            )
-            .await;
+            audit::access_denied(&pool, Some(principal.user_id), &tenant_id_str, "not_found").await;
             return forbidden_response();
         }
     };
@@ -101,13 +88,8 @@ pub async fn tenant_context_middleware(
                 return forbidden_response();
             }
             if tenant.status != "active" {
-                audit::access_denied(
-                    &pool,
-                    Some(principal.user_id),
-                    &tenant_id_str,
-                    "suspended",
-                )
-                .await;
+                audit::access_denied(&pool, Some(principal.user_id), &tenant_id_str, "suspended")
+                    .await;
                 return ApiError::unauthorized("Tenant is suspended").into_response();
             }
         }
