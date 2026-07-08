@@ -1,6 +1,9 @@
+use axum::http::HeaderName;
+use axum::middleware::from_fn_with_state;
 use axum::response::{IntoResponse, Response};
 use axum::{extract::Request, middleware, routing, Router};
 use config::AppConfig;
+use identity::{principal_middleware, IdentityConfig};
 use kernel::ApiError;
 use observability::health::HealthReport;
 use observability::request_id::{request_id_middleware, REQUEST_ID_HEADER};
@@ -44,6 +47,20 @@ fn cors_layer(config: &AppConfig) -> CorsLayer {
         .filter_map(|o| o.parse::<axum::http::HeaderValue>().ok())
         .collect();
 
+    let mut headers = vec![
+        axum::http::header::CONTENT_TYPE,
+        axum::http::header::AUTHORIZATION,
+        REQUEST_ID_HEADER.clone(),
+        HeaderName::from_static("idempotency-key"),
+        HeaderName::from_static("x-tenant-id"),
+    ];
+    if matches!(
+        config.environment,
+        config::Environment::Development | config::Environment::Test
+    ) {
+        headers.push(HeaderName::from_static("x-dev-user-id"));
+    }
+
     CorsLayer::new()
         .allow_origin(AllowOrigin::list(origins))
         .allow_methods([
@@ -54,17 +71,17 @@ fn cors_layer(config: &AppConfig) -> CorsLayer {
             axum::http::Method::DELETE,
             axum::http::Method::OPTIONS,
         ])
-        .allow_headers([
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::AUTHORIZATION,
-            REQUEST_ID_HEADER.clone(),
-            axum::http::HeaderName::from_static("idempotency-key"),
-        ])
+        .allow_headers(headers)
         .expose_headers([REQUEST_ID_HEADER.clone()])
 }
 
 pub fn app(state: AppState) -> Router {
     let config = state.config.clone();
+
+    let identity_config = IdentityConfig {
+        pool: state.db.clone(),
+        environment: state.config.environment.clone(),
+    };
 
     Router::new()
         .route("/health", routing::get(liveness))
@@ -72,14 +89,16 @@ pub fn app(state: AppState) -> Router {
         .route("/metrics", routing::get(metrics))
         .nest(
             "/api/v1",
-            Router::new().fallback(|request: Request| async move {
-                let request_id = request
-                    .headers()
-                    .get(&REQUEST_ID_HEADER)
-                    .and_then(|value| value.to_str().ok())
-                    .unwrap_or("unknown");
-                ApiError::not_found("Route not found").with_request_id(request_id)
-            }),
+            Router::new()
+                .fallback(|request: Request| async move {
+                    let request_id = request
+                        .headers()
+                        .get(&REQUEST_ID_HEADER)
+                        .and_then(|value| value.to_str().ok())
+                        .unwrap_or("unknown");
+                    ApiError::not_found("Route not found").with_request_id(request_id)
+                })
+                .layer(from_fn_with_state(identity_config, principal_middleware)),
         )
         .fallback(|request: Request| async move {
             let request_id = request
@@ -99,6 +118,11 @@ pub fn app(state: AppState) -> Router {
 pub fn app_with_test_routes(state: AppState) -> Router {
     let config = state.config.clone();
 
+    let identity_config = IdentityConfig {
+        pool: state.db.clone(),
+        environment: state.config.environment.clone(),
+    };
+
     Router::new()
         .route("/health", routing::get(liveness))
         .route("/ready", routing::get(ready_handler))
@@ -112,14 +136,16 @@ pub fn app_with_test_routes(state: AppState) -> Router {
         .route("/test-panic", routing::get(test_panic_handler))
         .nest(
             "/api/v1",
-            Router::new().fallback(|request: Request| async move {
-                let request_id = request
-                    .headers()
-                    .get(&REQUEST_ID_HEADER)
-                    .and_then(|value| value.to_str().ok())
-                    .unwrap_or("unknown");
-                ApiError::not_found("Route not found").with_request_id(request_id)
-            }),
+            Router::new()
+                .fallback(|request: Request| async move {
+                    let request_id = request
+                        .headers()
+                        .get(&REQUEST_ID_HEADER)
+                        .and_then(|value| value.to_str().ok())
+                        .unwrap_or("unknown");
+                    ApiError::not_found("Route not found").with_request_id(request_id)
+                })
+                .layer(from_fn_with_state(identity_config, principal_middleware)),
         )
         .fallback(|request: Request| async move {
             let request_id = request

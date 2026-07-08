@@ -18,6 +18,9 @@ pub async fn trace_middleware(request: Request, next: Next) -> Response {
         request_id = %request_id,
         method = %method,
         path = %path,
+        principal.id = tracing::field::Empty,
+        principal.kind = tracing::field::Empty,
+        tenant.id = tracing::field::Empty,
     );
 
     let response = next.run(request).instrument(span).await;

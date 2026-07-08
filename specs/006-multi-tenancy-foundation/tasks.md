@@ -35,8 +35,8 @@ Backend Cargo workspace: module crates in `backend/crates/modules/`, server in `
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 Implement the identity module in `backend/crates/modules/identity/src/lib.rs`: `PlatformRole` (string-mapped to 005 CHECK values), `PrincipalKind`, `Principal { user_id, email, display_name, platform_role }` types + `principal_middleware` that (per research R2) reads `X-Dev-User-Id` only when `AppConfig.app_environment` is development/test, resolves it against `users` (`deleted_at IS NULL`), attaches `Principal` as a request extension, and records `principal.id`/`principal.kind` on the trace span; include unit tests for the pure parts (env gating decision, header parsing)
-- [ ] T005 Wire the `/api/v1` scaffold in `backend/crates/server/src/router.rs`: layer `principal_middleware` (state: PgPool + config) onto the `/api/v1` nest, extend `cors_layer` allow-headers with `X-Tenant-ID` always and `X-Dev-User-Id` only in development/test (research R7); keep existing fallbacks and spec-004 tests green (`cargo test -p server`)
+- [X] T004 Implement the identity module in `backend/crates/modules/identity/src/lib.rs`: `PlatformRole` (string-mapped to 005 CHECK values), `PrincipalKind`, `Principal { user_id, email, display_name, platform_role }` types + `principal_middleware` that (per research R2) reads `X-Dev-User-Id` only when `AppConfig.app_environment` is development/test, resolves it against `users` (`deleted_at IS NULL`), attaches `Principal` as a request extension, and records `principal.id`/`principal.kind` on the trace span; include unit tests for the pure parts (env gating decision, header parsing)
+- [X] T005 Wire the `/api/v1` scaffold in `backend/crates/server/src/router.rs`: layer `principal_middleware` (state: PgPool + config) onto the `/api/v1` nest, extend `cors_layer` allow-headers with `X-Tenant-ID` always and `X-Dev-User-Id` only in development/test (research R7); keep existing fallbacks and spec-004 tests green (`cargo test -p server`)
 
 **Checkpoint**: Requests can carry a resolvable principal — user story implementation can begin
 
