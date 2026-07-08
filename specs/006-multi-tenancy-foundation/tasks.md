@@ -24,8 +24,8 @@ Backend Cargo workspace: module crates in `backend/crates/modules/`, server in `
 **Purpose**: Turn placeholder crates into buildable dependencies and scaffold test harnesses
 
 - [X] T001 [P] Add dependencies to `backend/crates/modules/identity/Cargo.toml` and `backend/crates/modules/tenancy/Cargo.toml` (workspace deps: axum, sqlx, serde, serde_json, uuid, chrono, tracing, async-trait as needed; path deps: kernel, config; tenancy additionally depends on identity); keep both crates compiling (`cargo check -p identity -p tenancy`)
-- [ ] T002 [P] Create integration-test scaffolding in `backend/crates/server/tests/tenancy.rs`: live-gated pool helper (skip with eprintln when `DATABASE_URL` unreachable — same pattern as `crates/shared/db/tests/schema.rs`), `tower::ServiceExt::oneshot` harness against `server::router::app`, and seed helpers creating unique-per-test users (with/without `platform_role`), tenants (active/suspended), and memberships directly via SQL; add needed `[dev-dependencies]` to `backend/crates/server/Cargo.toml` (tower, http-body-util, uuid, serde_json already in workspace)
-- [ ] T003 [P] Create `frontend/apps/dashboard/src/app/core/api/tenant-api.models.ts` with `TenantSummary`, `MembershipSummary`, `MeResponse` DTOs exactly per data-model.md (string-literal unions for roles/status)
+- [X] T002 [P] Create integration-test scaffolding in `backend/crates/server/tests/tenancy.rs`: live-gated pool helper (skip with eprintln when `DATABASE_URL` unreachable — same pattern as `crates/shared/db/tests/schema.rs`), `tower::ServiceExt::oneshot` harness against `server::router::app`, and seed helpers creating unique-per-test users (with/without `platform_role`), tenants (active/suspended), and memberships directly via SQL; add needed `[dev-dependencies]` to `backend/crates/server/Cargo.toml` (tower, http-body-util, uuid, serde_json already in workspace)
+- [X] T003 [P] Create `frontend/apps/dashboard/src/app/core/api/tenant-api.models.ts` with `TenantSummary`, `MembershipSummary`, `MeResponse` DTOs exactly per data-model.md (string-literal unions for roles/status)
 
 ---
 
