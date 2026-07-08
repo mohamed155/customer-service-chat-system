@@ -90,6 +90,11 @@ pub fn app(state: AppState) -> Router {
         .nest(
             "/api/v1",
             Router::new()
+                .route("/tenant", routing::get(tenancy::routes::get_tenant))
+                .route_layer(from_fn_with_state(
+                    state.db.clone(),
+                    tenancy::tenant_context_middleware,
+                ))
                 .fallback(|request: Request| async move {
                     let request_id = request
                         .headers()
@@ -98,7 +103,8 @@ pub fn app(state: AppState) -> Router {
                         .unwrap_or("unknown");
                     ApiError::not_found("Route not found").with_request_id(request_id)
                 })
-                .layer(from_fn_with_state(identity_config, principal_middleware)),
+                .layer(from_fn_with_state(identity_config, principal_middleware))
+                .with_state(state.db.clone()),
         )
         .fallback(|request: Request| async move {
             let request_id = request
@@ -137,6 +143,11 @@ pub fn app_with_test_routes(state: AppState) -> Router {
         .nest(
             "/api/v1",
             Router::new()
+                .route("/tenant", routing::get(tenancy::routes::get_tenant))
+                .route_layer(from_fn_with_state(
+                    state.db.clone(),
+                    tenancy::tenant_context_middleware,
+                ))
                 .fallback(|request: Request| async move {
                     let request_id = request
                         .headers()
@@ -145,7 +156,8 @@ pub fn app_with_test_routes(state: AppState) -> Router {
                         .unwrap_or("unknown");
                     ApiError::not_found("Route not found").with_request_id(request_id)
                 })
-                .layer(from_fn_with_state(identity_config, principal_middleware)),
+                .layer(from_fn_with_state(identity_config, principal_middleware))
+                .with_state(state.db.clone()),
         )
         .fallback(|request: Request| async move {
             let request_id = request
