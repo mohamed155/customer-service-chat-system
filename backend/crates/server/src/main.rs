@@ -1,38 +1,114 @@
-use axum::{extract::Request, routing::get, Router};
-use kernel::ApiError;
-use observability::{health, metrics, ready, request_id_middleware};
+//! Server — HTTP composition root
+//!
+//! # Purpose
+//! Thin binary that loads config, initialises observability, builds shared
+//! state (database pool, Redis cache), assembles the Axum router, and binds
+//! the HTTP listener with graceful shutdown.
+//!
+//! # Public Interfaces
+//! (Binary crate — no public API. See `server::router` and `server::state`
+//! for crate-internal re-exports used by integration tests.)
+//!
+//! # Dependencies
+//! - `config`, `db`, `cache`, `observability`, `kernel`
+//! - `axum`, `tokio`, `tower-http`
+//!
+//! # Extension Points
+//! - Add `AppState` fields and seed them in `main`.
+//! - Register additional health checks in `health_checks` vec.
 
-fn app() -> Router {
-    Router::new()
-        .nest(
-            "/api/v1",
-            Router::new()
-                .route("/health", get(health))
-                .route("/ready", get(ready))
-                .route("/metrics", get(metrics)),
-        )
-        .fallback(|request: Request| async move {
-            let request_id = request
-                .headers()
-                .get("X-Request-Id")
-                .and_then(|value| value.to_str().ok())
-                .unwrap_or("unknown");
-            ApiError::not_found("Route not found").with_request_id(request_id)
-        })
-        .layer(axum::middleware::from_fn(request_id_middleware))
-}
+use config::AppConfig;
+use server::router;
+use server::state::AppState;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() {
-    observability::init_observability();
-    let port = std::env::var("PORT")
-        .ok()
-        .and_then(|value| value.parse::<u16>().ok())
-        .unwrap_or(8080);
-    let address = format!("0.0.0.0:{port}");
-    let listener = tokio::net::TcpListener::bind(&address)
+    let config = match AppConfig::from_env() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Config error: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    observability::init_observability(config.log_format.clone());
+
+    let db = db::lazy_pool(
+        &config.database_url,
+        config.db_max_connections,
+        Duration::from_millis(config.db_acquire_timeout_ms),
+    );
+
+    let cache = Arc::new(match cache::Cache::new(&config.redis_url) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("Failed to create Redis client (will retry on first use): {e}");
+            cache::Cache::new("redis://127.0.0.1:6379").unwrap()
+        }
+    });
+
+    use cache::RedisHealthCheck;
+    use db::PgHealthCheck;
+
+    let health_checks: Vec<Arc<dyn observability::health::HealthCheck>> = vec![
+        Arc::new(PgHealthCheck::new(db.clone())),
+        Arc::new(RedisHealthCheck::new((*cache).clone())),
+    ];
+
+    let state = AppState {
+        config: Arc::new(config),
+        db,
+        cache,
+        health_checks,
+    };
+
+    let app = router::app(state.clone());
+
+    let address = format!("{}:{}", state.config.bind_address, state.config.port);
+    let listener = TcpListener::bind(&address)
         .await
         .expect("failed to bind HTTP listener");
     tracing::info!(%address, "server listening");
-    axum::serve(listener, app()).await.expect("server failed");
+
+    let grace = state.config.shutdown_grace_seconds;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal(grace))
+        .await
+        .expect("server failed");
+}
+
+async fn shutdown_signal(grace_seconds: u64) {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl-C handler");
+    };
+
+    #[cfg(unix)]
+    let sigterm = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let sigterm = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = sigterm => {},
+    }
+
+    tracing::info!("shutdown signal received, starting graceful shutdown");
+    tokio::time::timeout(
+        Duration::from_secs(grace_seconds),
+        std::future::pending::<()>(),
+    )
+    .await
+    .ok();
+    tracing::info!("graceful shutdown complete");
 }

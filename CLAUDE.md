@@ -24,6 +24,7 @@
 
 ## Recent Changes
 
+- 005-db-migration-foundation: migration workflow + four base tables (users, tenants, tenant_memberships, audit_logs) with conventions (UUID PK, timestamps, soft delete, partial unique indexes, append-only audit) — see `specs/005-db-migration-foundation/plan.md`.
 - 003-helix-dashboard-visuals: Helix Admin visual system (tokens, shell, 8 tenant pages, 4 auth screens, fixtures, SignalStores) — see `specs/003-helix-dashboard-visuals/plan.md`.
 - 002-angular-frontend-foundation: frontend foundation plan (Angular 22 modernization, Taiga UI, NgRx, layered structure) — see `specs/002-angular-frontend-foundation/plan.md`.
 - 001-ai-customer-service-platform: platform-wide spec/plan/tasks; backend scaffolding and original frontend workspace.

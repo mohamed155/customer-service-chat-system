@@ -3,3 +3,6 @@ name = "config"
 version.workspace = true
 edition.workspace = true
 
+[dev-dependencies]
+serial_test.workspace = true
+

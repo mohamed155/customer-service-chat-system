@@ -1,0 +1,11 @@
+[package]
+name = "cache"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+observability = { path = "../observability" }
+redis.workspace = true
+tokio.workspace = true
+tracing.workspace = true
