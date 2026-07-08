@@ -72,13 +72,13 @@ Backend Cargo workspace: module crates in `backend/crates/modules/`, server in `
 
 ### Tests for User Story 2 ⚠️ write first — must FAIL before T013–T015 exist
 
-- [ ] T012 [US2] Add switching integration tests to `backend/crates/server/tests/tenancy.rs`: `GET /api/v1/platform/tenants` → 200 kernel `Page<TenantSummary>` for platform user (contains active + suspended seeds, never deleted; `q` filters by name/slug); tenant user → 403; no principal → 401; `POST /api/v1/platform/tenants/{id}/switch` → 200 `TenantSummary` + exactly one `platform.tenant_switched` audit row (actor, tenant_id, `tenant_slug` in details); switch to suspended tenant → 200; nonexistent/deleted target → 403 `unauthorized`; tenant-user caller → 403
+- [X] T012 [US2] Add switching integration tests to `backend/crates/server/tests/tenancy.rs`: `GET /api/v1/platform/tenants` → 200 kernel `Page<TenantSummary>` for platform user (contains active + suspended seeds, never deleted; `q` filters by name/slug); tenant user → 403; no principal → 401; `POST /api/v1/platform/tenants/{id}/switch` → 200 `TenantSummary` + exactly one `platform.tenant_switched` audit row (actor, tenant_id, `tenant_slug` in details); switch to suspended tenant → 200; nonexistent/deleted target → 403 `unauthorized`; tenant-user caller → 403
 
 ### Implementation for User Story 2
 
-- [ ] T013 [P] [US2] Implement `GET /api/v1/platform/tenants` in `backend/crates/modules/tenancy/src/routes.rs`: platform-principal gate (403 otherwise), kernel cursor pagination + optional `q` (ILIKE on name/slug), `deleted_at IS NULL`, ordered stably for cursors (contracts/http-api.md §C)
-- [ ] T014 [P] [US2] Implement `POST /api/v1/platform/tenants/{id}/switch` in `backend/crates/modules/tenancy/src/routes.rs`: platform-principal gate; `authorize::fetch_tenant` (absent → 403, anti-enumeration); synchronous `audit::record("platform.tenant_switched", …)` then 200 `TenantSummary`; stateless — no server-side selection stored (research R5/R6)
-- [ ] T015 [US2] Mount both platform routes in `backend/crates/server/src/router.rs` (inside identity middleware, outside tenant-context middleware) and verify `cargo test -p server --test tenancy` green including T012
+- [X] T013 [P] [US2] Implement `GET /api/v1/platform/tenants` in `backend/crates/modules/tenancy/src/routes.rs`: platform-principal gate (403 otherwise), kernel cursor pagination + optional `q` (ILIKE on name/slug), `deleted_at IS NULL`, ordered stably for cursors (contracts/http-api.md §C)
+- [X] T014 [P] [US2] Implement `POST /api/v1/platform/tenants/{id}/switch` in `backend/crates/modules/tenancy/src/routes.rs`: platform-principal gate; `authorize::fetch_tenant` (absent → 403, anti-enumeration); synchronous `audit::record("platform.tenant_switched", …)` then 200 `TenantSummary`; stateless — no server-side selection stored (research R5/R6)
+- [X] T015 [US2] Mount both platform routes in `backend/crates/server/src/router.rs` (inside identity middleware, outside tenant-context middleware) and verify `cargo test -p server --test tenancy` green including T012
 
 **Checkpoint**: Switching works end-to-end at the API level with full audit trail
 

@@ -95,6 +95,14 @@ pub fn app(state: AppState) -> Router {
                     state.db.clone(),
                     tenancy::tenant_context_middleware,
                 ))
+                .route(
+                    "/platform/tenants",
+                    routing::get(tenancy::routes::list_tenants),
+                )
+                .route(
+                    "/platform/tenants/{id}/switch",
+                    routing::post(tenancy::routes::switch_tenant),
+                )
                 .fallback(|request: Request| async move {
                     let request_id = request
                         .headers()
@@ -148,6 +156,14 @@ pub fn app_with_test_routes(state: AppState) -> Router {
                     state.db.clone(),
                     tenancy::tenant_context_middleware,
                 ))
+                .route(
+                    "/platform/tenants",
+                    routing::get(tenancy::routes::list_tenants),
+                )
+                .route(
+                    "/platform/tenants/{id}/switch",
+                    routing::post(tenancy::routes::switch_tenant),
+                )
                 .fallback(|request: Request| async move {
                     let request_id = request
                         .headers()

@@ -465,4 +465,310 @@ mod tests {
         );
         assert!(details.get("reason").is_some());
     }
+
+    // -----------------------------------------------------------------------
+    // Tests — GET /api/v1/platform/tenants  (directory / switching)
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn platform_tenants_directory_returns_page_for_platform_user() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, Some("super_admin")).await;
+        let _tenant_a = seed_tenant(&pool, Some("active")).await;
+        let _tenant_b = seed_tenant(&pool, Some("suspended")).await;
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/platform/tenants")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 200);
+        let body = body_json(&mut res).await;
+        assert!(body["items"].is_array(), "expected items array");
+        assert!(body["has_more"].is_boolean(), "expected has_more field");
+        assert!(body["items"].as_array().unwrap().len() >= 2);
+    }
+
+    #[tokio::test]
+    async fn platform_tenants_directory_excludes_deleted() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, Some("super_admin")).await;
+        let tenant_active = seed_tenant(&pool, Some("active")).await;
+        let tenant_deleted = seed_tenant(&pool, Some("active")).await;
+        sqlx::query("UPDATE tenants SET deleted_at = now() WHERE id = $1")
+            .bind(tenant_deleted)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/platform/tenants")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 200);
+        let body = body_json(&mut res).await;
+        let ids: Vec<serde_json::Value> = body["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["id"].clone())
+            .collect();
+        assert!(ids.contains(&serde_json::json!(tenant_active)), "active tenant should be present");
+        assert!(!ids.contains(&serde_json::json!(tenant_deleted)), "deleted tenant should be excluded");
+    }
+
+    #[tokio::test]
+    async fn platform_tenants_directory_q_filters_by_name_or_slug() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, Some("super_admin")).await;
+        let alpha_id = sqlx::query_scalar::<_, uuid::Uuid>(
+            "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
+        )
+        .bind("Alpha Corp")
+        .bind("alpha-corp")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let _beta_id = sqlx::query_scalar::<_, uuid::Uuid>(
+            "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
+        )
+        .bind("Beta Inc")
+        .bind("beta-inc")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/platform/tenants?q=alpha")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 200);
+        let body = body_json(&mut res).await;
+        let ids: Vec<serde_json::Value> = body["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["id"].clone())
+            .collect();
+        assert_eq!(ids.len(), 1, "expected exactly one match for q=alpha");
+        assert_eq!(ids[0], serde_json::json!(alpha_id));
+    }
+
+    #[tokio::test]
+    async fn platform_tenants_directory_tenant_user_returns_403() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, None).await;
+        let tenant_id = seed_tenant(&pool, None).await;
+        seed_membership(&pool, tenant_id, user_id, "agent").await;
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/platform/tenants")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 403);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["error"]["code"], "unauthorized");
+    }
+
+    #[tokio::test]
+    async fn platform_tenants_directory_no_principal_returns_401() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/platform/tenants")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 401);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["error"]["code"], "unauthenticated");
+    }
+
+    #[tokio::test]
+    async fn platform_tenants_switch_returns_200_and_tenant_summary() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, Some("super_admin")).await;
+        let tenant_id = seed_tenant(&pool, Some("active")).await;
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri(&format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
+                .method("POST")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 200);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["id"], serde_json::json!(tenant_id));
+    }
+
+    #[tokio::test]
+    async fn platform_tenants_switch_writes_audit_row() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, Some("super_admin")).await;
+        let tenant_id = seed_tenant(&pool, Some("active")).await;
+
+        // fetch slug from the seeded tenant
+        let slug: String = sqlx::query_scalar("SELECT slug::text FROM tenants WHERE id = $1")
+            .bind(tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        let res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri(&format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
+                .method("POST")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 200);
+        drop(res);
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let row: Option<(uuid::Uuid, String, Option<uuid::Uuid>, serde_json::Value)> =
+            sqlx::query_as(
+                r#"
+                SELECT id, action, tenant_id, details
+                FROM audit_logs
+                WHERE actor_user_id = $1
+                  AND action = 'platform.tenant_switched'
+                ORDER BY created_at DESC
+                LIMIT 1
+                "#,
+            )
+            .bind(user_id)
+            .fetch_optional(&pool)
+            .await
+            .unwrap();
+
+        let (_, action, audited_tenant_id, details) =
+            row.expect("expected a platform.tenant_switched audit row");
+
+        assert_eq!(action, "platform.tenant_switched");
+        assert_eq!(audited_tenant_id, Some(tenant_id));
+        assert_eq!(details["tenant_slug"], slug);
+    }
+
+    #[tokio::test]
+    async fn platform_tenants_switch_to_suspended_returns_200() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, Some("super_admin")).await;
+        let tenant_id = seed_tenant(&pool, Some("suspended")).await;
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri(&format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
+                .method("POST")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 200);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["id"], serde_json::json!(tenant_id));
+    }
+
+    #[tokio::test]
+    async fn platform_tenants_switch_nonexistent_returns_403() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, Some("super_admin")).await;
+        let nonexistent_id = uuid::Uuid::new_v4();
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri(&format!("/api/v1/platform/tenants/{}/switch", &nonexistent_id))
+                .method("POST")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 403);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["error"]["code"], "unauthorized");
+    }
+
+    #[tokio::test]
+    async fn platform_tenants_switch_tenant_user_returns_403() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let user_id = seed_user(&pool, None).await;
+        let tenant_id = seed_tenant(&pool, Some("active")).await;
+        seed_membership(&pool, tenant_id, user_id, "agent").await;
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri(&format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
+                .method("POST")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 403);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["error"]["code"], "unauthorized");
+    }
 }
