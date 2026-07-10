@@ -12,6 +12,7 @@ import {
 } from '../../core/state/app-ui.feature';
 import { IconButtonComponent } from '../../shared/components/icon-button/icon-button.component';
 import { SearchInputComponent } from '../../shared/components/search-input/search-input.component';
+import { PlatformNavComponent } from './platform-nav.component';
 import { TenantSwitcherComponent } from './tenant-switcher.component';
 import { UserMenuComponent } from './user-menu.component';
 
@@ -20,6 +21,7 @@ import { UserMenuComponent } from './user-menu.component';
   imports: [
     IconButtonComponent,
     SearchInputComponent,
+    PlatformNavComponent,
     TenantSwitcherComponent,
     UserMenuComponent,
     TuiIcon,
@@ -47,6 +49,7 @@ import { UserMenuComponent } from './user-menu.component';
           [(value)]="search"
         />
         @if (isPlatformUser()) {
+          <app-platform-nav />
           <app-tenant-switcher />
         }
         <app-icon-button [icon]="themeIcon()" [label]="themeLabel()" (click)="cycleTheme()" />

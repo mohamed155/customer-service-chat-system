@@ -141,4 +141,20 @@ describe('TopbarComponent', () => {
 
     expect(auth.logout).toHaveBeenCalledTimes(1);
   });
+
+  it('shows platform nav control for platform users', async () => {
+    const { fixture } = await setup('light', { authenticated: true, platformUser: true });
+
+    const platformNav = (fixture.nativeElement as HTMLElement).querySelector('app-platform-nav');
+
+    expect(platformNav).not.toBeNull();
+  });
+
+  it('hides platform nav control for tenant users', async () => {
+    const { fixture } = await setup('light', { authenticated: true });
+
+    const platformNav = (fixture.nativeElement as HTMLElement).querySelector('app-platform-nav');
+
+    expect(platformNav).toBeNull();
+  });
 });
