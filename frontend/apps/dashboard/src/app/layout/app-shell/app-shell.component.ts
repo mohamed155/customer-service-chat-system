@@ -4,13 +4,14 @@ import { Store } from '@ngrx/store';
 import { TuiIcon } from '@taiga-ui/core';
 import { ApiErrorNotificationService } from '../../core/errors/api-error-notification.service';
 import { selectSidebarCollapsed } from '../../core/state/app-ui.feature';
+import { BreadcrumbComponent } from '../breadcrumb/breadcrumb.component';
 import { SidebarComponent } from '../sidebar/sidebar.component';
 import { TopbarComponent } from '../topbar/topbar.component';
 import { LayoutStore } from './layout.store';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, SidebarComponent, TopbarComponent, TuiIcon],
+  imports: [BreadcrumbComponent, RouterOutlet, SidebarComponent, TopbarComponent, TuiIcon],
   providers: [LayoutStore],
   template: `<div class="shell">
     <app-sidebar [collapsed]="collapsed()" />
@@ -25,7 +26,7 @@ import { LayoutStore } from './layout.store';
           </button>
         </section>
       }
-      <main tabindex="-1"><router-outlet /></main>
+      <main tabindex="-1"><app-breadcrumb /><router-outlet /></main>
     </div>
   </div>`,
   styles: [

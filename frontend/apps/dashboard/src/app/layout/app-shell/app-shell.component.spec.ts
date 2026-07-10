@@ -35,6 +35,7 @@ describe('AppShellComponent', () => {
     expect(element.querySelector('main')).toBeTruthy();
     expect(element.querySelector('router-outlet')).toBeTruthy();
     expect(element.querySelector('app-sidebar')?.classList.contains('collapsed')).toBe(true);
+    expect(element.querySelector('app-breadcrumb')).toBeTruthy();
   });
 
   it('dispatches the sidebar toggle from the topbar', async () => {
