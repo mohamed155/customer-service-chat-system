@@ -8,6 +8,7 @@ import { APP_CONFIG } from '../../core/config/app-config';
 import { ApiErrorNotificationService } from '../../core/errors/api-error-notification.service';
 import { appUiActions } from '../../core/state/app-ui.feature';
 import { AppShellComponent } from './app-shell.component';
+import { LayoutStore } from './layout.store';
 
 describe('AppShellComponent', () => {
   beforeEach(() =>
@@ -68,5 +69,50 @@ describe('AppShellComponent', () => {
     expect(fixture.nativeElement.textContent).not.toContain(
       "You don't have access to this tenant.",
     );
+  });
+
+  it('shows scrim when drawer is open on mobile', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    const layoutStore = fixture.debugElement.injector.get(LayoutStore);
+    layoutStore.openDrawer();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.scrim')).toBeTruthy();
+  });
+
+  it('closes drawer on scrim click', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    const layoutStore = fixture.debugElement.injector.get(LayoutStore);
+    layoutStore.openDrawer();
+    fixture.detectChanges();
+
+    (fixture.nativeElement.querySelector('.scrim') as HTMLElement).click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.scrim')).toBeNull();
+  });
+
+  it('closes drawer on Escape keydown', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    const layoutStore = fixture.debugElement.injector.get(LayoutStore);
+    layoutStore.openDrawer();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.scrim')).toBeTruthy();
+    (fixture.nativeElement.querySelector('.shell') as HTMLElement).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.scrim')).toBeNull();
   });
 });

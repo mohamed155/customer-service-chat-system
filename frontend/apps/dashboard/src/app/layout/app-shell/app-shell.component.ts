@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, HostListener } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { TuiIcon } from '@taiga-ui/core';
@@ -13,8 +13,17 @@ import { LayoutStore } from './layout.store';
   selector: 'app-shell',
   imports: [BreadcrumbComponent, RouterOutlet, SidebarComponent, TopbarComponent, TuiIcon],
   providers: [LayoutStore],
-  template: `<div class="shell">
-    <app-sidebar [collapsed]="collapsed()" />
+  template: `<div class="shell" (keydown.escape)="closeDrawer()">
+    <div
+      class="sidebar-wrapper"
+      [class.drawer]="isMobile()"
+      [class.open]="isMobile() && drawerOpen()"
+    >
+      <app-sidebar [collapsed]="collapsed()" />
+    </div>
+    @if (isMobile() && drawerOpen()) {
+      <div class="scrim" (click)="closeDrawer()"></div>
+    }
     <div class="workspace">
       <app-topbar />
       @if (errorMessage(); as message) {
@@ -37,6 +46,28 @@ import { LayoutStore } from './layout.store';
         grid-template-columns: auto 1fr;
         overflow: hidden;
         background: var(--app-bg);
+      }
+      .sidebar-wrapper {
+        display: contents;
+      }
+      .sidebar-wrapper.drawer {
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 200;
+        transform: translateX(-100%);
+        transition: transform var(--app-transition-base);
+      }
+      .sidebar-wrapper.drawer.open {
+        transform: translateX(0);
+      }
+      .scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 199;
+        background: rgba(0, 0, 0, 0.4);
       }
       .workspace {
         min-width: 0;
@@ -94,8 +125,14 @@ export class AppShellComponent {
   private readonly errorNotifications = inject(ApiErrorNotificationService);
   protected readonly collapsed = this.store.selectSignal(selectSidebarCollapsed);
   protected readonly errorMessage = this.errorNotifications.message;
+  protected readonly isMobile = this.layoutStore.isMobile;
+  protected readonly drawerOpen = this.layoutStore.drawerOpen;
 
   protected dismissError(): void {
     this.errorNotifications.clear();
+  }
+
+  protected closeDrawer(): void {
+    this.layoutStore.closeDrawer();
   }
 }
