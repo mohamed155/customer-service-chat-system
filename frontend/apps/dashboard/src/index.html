@@ -17,15 +17,25 @@
       })();
     </script>
     <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { height: 100%; overflow: hidden; }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+      }
 
       .skeleton-shell {
         display: flex;
         height: 100vh;
         background: #f5f5f7;
       }
-      html[data-theme="dark"] .skeleton-shell { background: #1c1c1e; }
+      html[data-theme='dark'] .skeleton-shell {
+        background: #1c1c1e;
+      }
 
       .skeleton-sidebar {
         width: 248px;
@@ -35,11 +45,15 @@
         background: #ffffff;
         border-right: 1px solid #e5e5ea;
       }
-      html[data-theme="dark"] .skeleton-sidebar {
+      html[data-theme='dark'] .skeleton-sidebar {
         background: #2c2c2e;
         border-right-color: #38383a;
       }
-      @media (max-width: 767px) { .skeleton-sidebar { display: none; } }
+      @media (max-width: 767px) {
+        .skeleton-sidebar {
+          display: none;
+        }
+      }
 
       .skeleton-brand {
         height: 60px;
@@ -48,16 +62,20 @@
         align-items: center;
         border-bottom: 1px solid #e5e5ea;
       }
-      html[data-theme="dark"] .skeleton-brand { border-bottom-color: #38383a; }
+      html[data-theme='dark'] .skeleton-brand {
+        border-bottom-color: #38383a;
+      }
       .skeleton-brand::before {
-        content: "";
+        content: '';
         display: block;
         width: 32px;
         height: 32px;
         border-radius: 8px;
         background: #e5e5ea;
       }
-      html[data-theme="dark"] .skeleton-brand::before { background: #38383a; }
+      html[data-theme='dark'] .skeleton-brand::before {
+        background: #38383a;
+      }
 
       .skeleton-nav {
         padding: 12px 16px;
@@ -70,7 +88,9 @@
         border-radius: 8px;
         background: #e5e5ea;
       }
-      html[data-theme="dark"] .skeleton-nav-item { background: #38383a; }
+      html[data-theme='dark'] .skeleton-nav-item {
+        background: #38383a;
+      }
 
       .skeleton-workspace {
         flex: 1;
@@ -87,7 +107,7 @@
         align-items: center;
         padding: 0 24px;
       }
-      html[data-theme="dark"] .skeleton-topbar {
+      html[data-theme='dark'] .skeleton-topbar {
         background: #2c2c2e;
         border-bottom-color: #38383a;
       }
@@ -98,7 +118,9 @@
         border-radius: 12px;
         background: #ffffff;
       }
-      html[data-theme="dark"] .skeleton-content { background: #2c2c2e; }
+      html[data-theme='dark'] .skeleton-content {
+        background: #2c2c2e;
+      }
     </style>
   </head>
   <body>

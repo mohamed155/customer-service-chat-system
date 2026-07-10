@@ -23,7 +23,10 @@ import { CUSTOMER_FIXTURES } from '../../../shared/fixtures/customer.fixtures';
   ],
   template: `
     <app-page-container>
-      <app-page-header title="Customers" [description]="'Customer profiles and conversation history'" />
+      <app-page-header
+        title="Customers"
+        [description]="'Customer profiles and conversation history'"
+      />
       <div class="stack">
         <app-toolbar>
           <app-search-input toolbar-start placeholder="Search customers" [(value)]="query" />

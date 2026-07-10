@@ -57,7 +57,12 @@ describe('roleLabel', () => {
           },
         ],
       });
-      expect(roleLabel(user, makeTenant({ id: 't1', name: 'Acme Corp', slug: 'acme', status: 'active' }))).toBeNull();
+      expect(
+        roleLabel(
+          user,
+          makeTenant({ id: 't1', name: 'Acme Corp', slug: 'acme', status: 'active' }),
+        ),
+      ).toBeNull();
     });
 
     it('returns null when user has no platform role and no memberships', () => {

@@ -29,9 +29,7 @@ export function roleLabel(
   }
 
   if (activeTenant) {
-    const membership = user.memberships.find(
-      (m) => m.tenantId === activeTenant.id,
-    );
+    const membership = user.memberships.find((m) => m.tenantId === activeTenant.id);
     if (membership) {
       const label = TENANT_ROLE_LABELS[membership.role];
       return label ? `${label} · ${activeTenant.name}` : null;

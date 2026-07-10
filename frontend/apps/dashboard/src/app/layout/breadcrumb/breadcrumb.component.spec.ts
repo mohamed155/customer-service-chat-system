@@ -106,7 +106,9 @@ describe('BreadcrumbComponent', () => {
       '/tenant/conversations',
     );
 
-    const current = (fixture.nativeElement as HTMLElement).querySelector('span[aria-current="page"]');
+    const current = (fixture.nativeElement as HTMLElement).querySelector(
+      'span[aria-current="page"]',
+    );
     expect(current).not.toBeNull();
     expect(current!.textContent).toContain('Conversations');
   });
@@ -129,7 +131,7 @@ describe('BreadcrumbComponent', () => {
     );
 
     const spans = (fixture.nativeElement as HTMLElement).querySelectorAll('span');
-    const plainSpans = Array.from(spans).filter(s => !s.hasAttribute('aria-current'));
+    const plainSpans = Array.from(spans).filter((s) => !s.hasAttribute('aria-current'));
     expect(plainSpans.length).toBe(1);
     expect(plainSpans[0].textContent).toContain('Workspace');
   });

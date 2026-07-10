@@ -24,7 +24,10 @@ import { ArticleStatus, ArticleSource } from '../../../shared/fixtures/fixture.m
   ],
   template: `
     <app-page-container>
-      <app-page-header title="Knowledge Base" [description]="'Train your AI with trusted company knowledge'" />
+      <app-page-header
+        title="Knowledge Base"
+        [description]="'Train your AI with trusted company knowledge'"
+      />
       <app-section-header title="Knowledge articles" subtitle="Trusted sources for AI answers">
         <button type="button">New article</button>
       </app-section-header>

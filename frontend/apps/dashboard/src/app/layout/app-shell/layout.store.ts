@@ -1,7 +1,14 @@
 import { computed, inject } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { Store } from '@ngrx/store';
-import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
+import {
+  patchState,
+  signalStore,
+  withComputed,
+  withHooks,
+  withMethods,
+  withState,
+} from '@ngrx/signals';
 import { filter } from 'rxjs/operators';
 import { appUiActions } from '../../core/state/app-ui.feature';
 
@@ -43,9 +50,11 @@ export const LayoutStore = signalStore(
           update();
           window.addEventListener('resize', update);
         }
-        router.events.pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd)).subscribe(() => {
-          store.closeDrawer();
-        });
+        router.events
+          .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+          .subscribe(() => {
+            store.closeDrawer();
+          });
       },
       onDestroy(): void {
         if (typeof window !== 'undefined') window.removeEventListener('resize', update);

@@ -20,7 +20,10 @@ import { IntegrationStatus } from '../../../shared/fixtures/fixture.models';
   ],
   template: `
     <app-page-container>
-      <app-page-header title="Integrations" [description]="'Connect channels and business systems'" />
+      <app-page-header
+        title="Integrations"
+        [description]="'Connect channels and business systems'"
+      />
       <app-section-header title="Integrations" subtitle="Connect channels and systems" />
       <section class="grid">
         @for (integration of integrations; track integration.id) {

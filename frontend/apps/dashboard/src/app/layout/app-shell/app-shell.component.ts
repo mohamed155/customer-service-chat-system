@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, HostListener } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { TuiIcon } from '@taiga-ui/core';
@@ -13,7 +13,7 @@ import { LayoutStore } from './layout.store';
   selector: 'app-shell',
   imports: [BreadcrumbComponent, RouterOutlet, SidebarComponent, TopbarComponent, TuiIcon],
   providers: [LayoutStore],
-  template: `<div class="shell" (keydown.escape)="closeDrawer()">
+  template: `<div class="shell">
     <div
       class="sidebar-wrapper"
       [class.drawer]="isMobile()"
@@ -22,7 +22,14 @@ import { LayoutStore } from './layout.store';
       <app-sidebar [collapsed]="collapsed()" />
     </div>
     @if (isMobile() && drawerOpen()) {
-      <div class="scrim" (click)="closeDrawer()"></div>
+      <div
+        class="scrim"
+        (click)="closeDrawer()"
+        (keydown.enter)="closeDrawer()"
+        role="button"
+        tabindex="0"
+        aria-label="Close navigation drawer"
+      ></div>
     }
     <div class="workspace">
       <app-topbar />
@@ -128,11 +135,12 @@ export class AppShellComponent {
   protected readonly isMobile = this.layoutStore.isMobile;
   protected readonly drawerOpen = this.layoutStore.drawerOpen;
 
-  protected dismissError(): void {
-    this.errorNotifications.clear();
-  }
-
+  @HostListener('document:keydown.escape')
   protected closeDrawer(): void {
     this.layoutStore.closeDrawer();
+  }
+
+  protected dismissError(): void {
+    this.errorNotifications.clear();
   }
 }

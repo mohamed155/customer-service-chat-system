@@ -8,11 +8,7 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
 
 @Component({
   selector: 'app-sidebar',
-  imports: [
-    SidebarNavGroupComponent,
-    SidebarNavItemComponent,
-    TuiIcon,
-  ],
+  imports: [SidebarNavGroupComponent, SidebarNavItemComponent, TuiIcon],
   host: { '[class.collapsed]': 'collapsed()' },
   template: `
     <aside>
@@ -132,7 +128,8 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
         width: var(--app-sidebar-collapsed-width);
       }
       @media (max-width: 767px) {
-        :host, :host.collapsed {
+        :host,
+        :host.collapsed {
           width: var(--app-sidebar-expanded-width);
         }
       }
