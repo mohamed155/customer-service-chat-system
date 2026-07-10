@@ -3,17 +3,12 @@ import { TuiIcon } from '@taiga-ui/core';
 import { PAGE_PERMISSIONS } from '../../core/authz/permissions';
 import { PermissionsService } from '../../core/authz/permissions.service';
 import { APP_PATHS } from '../../core/router/app-paths';
-import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
-import { IconButtonComponent } from '../../shared/components/icon-button/icon-button.component';
-import { SIDEBAR_USER } from '../../shared/fixtures/settings.fixtures';
 import { SidebarNavGroupComponent } from './sidebar-nav-group.component';
 import { SidebarNavItemComponent } from './sidebar-nav-item.component';
 
 @Component({
   selector: 'app-sidebar',
   imports: [
-    AvatarComponent,
-    IconButtonComponent,
     SidebarNavGroupComponent,
     SidebarNavItemComponent,
     TuiIcon,
@@ -121,17 +116,6 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
           </app-sidebar-nav-group>
         }
       </nav>
-
-      <footer>
-        <app-avatar [initials]="user.avatarInitials" size="sm" />
-        @if (!collapsed()) {
-          <div>
-            <strong>{{ user.name }}</strong>
-            <span>{{ user.role }} · {{ user.company }}</span>
-          </div>
-          <app-icon-button icon="@tui.log-out" label="Log out" />
-        }
-      </footer>
     </aside>
   `,
   styles: [
@@ -172,15 +156,13 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
         color: var(--app-accent-ink);
         box-shadow: var(--app-shadow);
       }
-      .brand strong,
-      footer strong {
+      .brand strong {
         display: block;
         color: var(--app-text);
         font-size: var(--app-font-sm);
         font-weight: 700;
       }
-      .brand span:not(.logo),
-      footer span {
+      .brand span:not(.logo) {
         display: block;
         color: var(--app-text-3);
         font-size: var(--app-font-xs);
@@ -189,27 +171,11 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
         display: grid;
         gap: var(--app-space-4);
       }
-      footer {
-        min-height: 54px;
-        display: flex;
-        align-items: center;
-        gap: var(--app-space-3);
-        margin-top: auto;
-        padding: var(--app-space-3) var(--app-space-2);
-        border: 1px solid var(--app-border);
-        border-radius: var(--app-radius-lg);
-        background: var(--app-panel);
-      }
-      footer div {
-        min-width: 0;
-        flex: 1;
-      }
       :host.collapsed aside {
         align-items: center;
         padding-inline: var(--app-space-2);
       }
-      :host.collapsed .brand,
-      :host.collapsed footer {
+      :host.collapsed .brand {
         justify-content: center;
         padding-inline: 0;
         border-color: transparent;
@@ -222,7 +188,6 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
 export class SidebarComponent {
   readonly collapsed = input(false);
   protected readonly permissionsService = inject(PermissionsService);
-  protected readonly user = SIDEBAR_USER;
   protected readonly PAGE_PERMISSIONS = PAGE_PERMISSIONS;
   protected readonly APP_PATHS = APP_PATHS;
   protected readonly links = {
