@@ -12,6 +12,7 @@ import {
 } from '../../core/state/app-ui.feature';
 import { IconButtonComponent } from '../../shared/components/icon-button/icon-button.component';
 import { SearchInputComponent } from '../../shared/components/search-input/search-input.component';
+import { LayoutStore } from '../app-shell/layout.store';
 import { PlatformNavComponent } from './platform-nav.component';
 import { TenantSwitcherComponent } from './tenant-switcher.component';
 import { UserMenuComponent } from './user-menu.component';
@@ -138,6 +139,7 @@ import { UserMenuComponent } from './user-menu.component';
 })
 export class TopbarComponent {
   private readonly store = inject(Store);
+  private readonly layoutStore = inject(LayoutStore);
   private readonly currentUser = inject(CurrentUserService);
   protected readonly collapsed = this.store.selectSignal(selectSidebarCollapsed);
   protected readonly isPlatformUser = this.currentUser.isPlatformUser;
@@ -156,7 +158,15 @@ export class TopbarComponent {
   });
 
   protected toggleSidebar(): void {
-    this.store.dispatch(appUiActions.sidebarToggled());
+    if (this.layoutStore.isMobile()) {
+      if (this.layoutStore.drawerOpen()) {
+        this.layoutStore.closeDrawer();
+      } else {
+        this.layoutStore.openDrawer();
+      }
+    } else {
+      this.store.dispatch(appUiActions.sidebarToggled());
+    }
   }
 
   protected cycleTheme(): void {

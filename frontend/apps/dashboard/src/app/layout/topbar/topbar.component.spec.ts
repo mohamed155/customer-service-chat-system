@@ -10,6 +10,7 @@ import { ApiService } from '../../core/api/api.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { appUiActions } from '../../core/state/app-ui.feature';
 import { CurrentUserService } from '../../core/tenant/current-user.service';
+import { LayoutStore } from '../../layout/app-shell/layout.store';
 import { TopbarComponent } from './topbar.component';
 
 @Component({
@@ -73,6 +74,7 @@ describe('TopbarComponent', () => {
         },
         { provide: AuthService, useValue: auth },
         { provide: CurrentUserService, useValue: currentUser },
+        LayoutStore,
       ],
     });
     await TestBed.compileComponents();
@@ -156,5 +158,27 @@ describe('TopbarComponent', () => {
     const platformNav = (fixture.nativeElement as HTMLElement).querySelector('app-platform-nav');
 
     expect(platformNav).toBeNull();
+  });
+
+  it('toggles drawer on mobile instead of dispatching sidebar toggle', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+    const { fixture, store } = await setup('light', { authenticated: true });
+    const dispatch = vi.spyOn(store, 'dispatch');
+    const layoutStore = fixture.debugElement.injector.get(LayoutStore);
+    const menuButton = (fixture.nativeElement as HTMLElement).querySelector(
+      '[aria-label="Toggle sidebar"]',
+    ) as HTMLButtonElement;
+
+    expect(layoutStore.drawerOpen()).toBe(false);
+    menuButton.click();
+    fixture.detectChanges();
+
+    expect(layoutStore.drawerOpen()).toBe(true);
+    expect(dispatch).not.toHaveBeenCalledWith(appUiActions.sidebarToggled());
+
+    menuButton.click();
+    fixture.detectChanges();
+
+    expect(layoutStore.drawerOpen()).toBe(false);
   });
 });
