@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
+import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { CustomerPanelComponent } from './customer-panel.component';
 import { ConversationThreadComponent } from './conversation-thread.component';
 import { ConversationsStore } from './conversations.store';
@@ -12,10 +13,12 @@ import { InboxListComponent } from './inbox-list.component';
     CustomerPanelComponent,
     InboxListComponent,
     PageContainerComponent,
+    PageHeaderComponent,
   ],
   providers: [ConversationsStore],
   template: `
     <app-page-container>
+      <app-page-header title="Conversations" [description]="'Shared inbox · 6 open, 2 escalated'" />
       <section class="inbox-shell">
         <app-inbox-list
           [conversations]="store.filteredConversations()"

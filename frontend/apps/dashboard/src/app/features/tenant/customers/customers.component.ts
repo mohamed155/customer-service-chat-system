@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
+import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { ChannelBadgeComponent } from '../../../shared/components/channel-badge/channel-badge.component';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
@@ -15,12 +16,14 @@ import { CUSTOMER_FIXTURES } from '../../../shared/fixtures/customer.fixtures';
     ChannelBadgeComponent,
     DataTableComponent,
     PageContainerComponent,
+    PageHeaderComponent,
     SearchInputComponent,
     StatusBadgeComponent,
     ToolbarComponent,
   ],
   template: `
     <app-page-container>
+      <app-page-header title="Customers" [description]="'Customer profiles and conversation history'" />
       <div class="stack">
         <app-toolbar>
           <app-search-input toolbar-start placeholder="Search customers" [(value)]="query" />

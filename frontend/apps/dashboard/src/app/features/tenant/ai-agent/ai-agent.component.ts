@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
+import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { AgentPreviewCardComponent } from '../../../shared/components/ai/agent-preview-card/agent-preview-card.component';
 import { AiToolTimelineComponent } from '../../../shared/components/ai/ai-tool-timeline/ai-tool-timeline.component';
 import { PromptEditorShellComponent } from '../../../shared/components/ai/prompt-editor-shell/prompt-editor-shell.component';
@@ -15,6 +16,7 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
     AiToolTimelineComponent,
     DashboardCardComponent,
     PageContainerComponent,
+    PageHeaderComponent,
     PromptEditorShellComponent,
     SectionHeaderComponent,
     StatusBadgeComponent,
@@ -22,6 +24,7 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
   providers: [AiAgentStore],
   template: `
     <app-page-container>
+      <app-page-header title="AI Agent" [description]="'Configure how your assistant behaves'" />
       <div class="tabs" role="tablist" aria-label="AI Agent sections">
         @for (tab of tabs; track tab.id) {
           <button

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
+import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
@@ -12,12 +13,14 @@ import { IntegrationStatus } from '../../../shared/fixtures/fixture.models';
   imports: [
     DashboardCardComponent,
     PageContainerComponent,
+    PageHeaderComponent,
     SectionHeaderComponent,
     StatusBadgeComponent,
     TuiIcon,
   ],
   template: `
     <app-page-container>
+      <app-page-header title="Integrations" [description]="'Connect channels and business systems'" />
       <app-section-header title="Integrations" subtitle="Connect channels and systems" />
       <section class="grid">
         @for (integration of integrations; track integration.id) {

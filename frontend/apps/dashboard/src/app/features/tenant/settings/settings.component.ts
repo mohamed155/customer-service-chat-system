@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
+import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
@@ -24,12 +25,14 @@ import { SettingsStore, SettingsTab } from './settings.store';
     DashboardCardComponent,
     DataTableComponent,
     PageContainerComponent,
+    PageHeaderComponent,
     SectionHeaderComponent,
     StatusBadgeComponent,
   ],
   providers: [SettingsStore],
   template: `
     <app-page-container>
+      <app-page-header title="Settings" [description]="'Workspace preferences and security'" />
       <div class="tabs" role="tablist" aria-label="Settings sections">
         @for (tab of tabs; track tab.id) {
           <button

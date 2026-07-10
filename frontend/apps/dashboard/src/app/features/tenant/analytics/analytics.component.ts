@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
+import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { MetricCardComponent } from '../../../shared/components/metric-card/metric-card.component';
@@ -19,12 +20,14 @@ import {
     DataTableComponent,
     MetricCardComponent,
     PageContainerComponent,
+    PageHeaderComponent,
     SectionHeaderComponent,
     SparklineComponent,
     ToolbarComponent,
   ],
   template: `
     <app-page-container>
+      <app-page-header title="Analytics" [description]="'Trends across every channel'" />
       <div class="stack">
         <app-toolbar>
           <strong toolbar-start>Performance dashboard</strong>

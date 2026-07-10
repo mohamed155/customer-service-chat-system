@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
+import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { SearchInputComponent } from '../../../shared/components/search-input/search-input.component';
@@ -15,6 +16,7 @@ import { ArticleStatus, ArticleSource } from '../../../shared/fixtures/fixture.m
     DashboardCardComponent,
     EmptyStateComponent,
     PageContainerComponent,
+    PageHeaderComponent,
     SearchInputComponent,
     SectionHeaderComponent,
     StatusBadgeComponent,
@@ -22,6 +24,7 @@ import { ArticleStatus, ArticleSource } from '../../../shared/fixtures/fixture.m
   ],
   template: `
     <app-page-container>
+      <app-page-header title="Knowledge Base" [description]="'Train your AI with trusted company knowledge'" />
       <app-section-header title="Knowledge articles" subtitle="Trusted sources for AI answers">
         <button type="button">New article</button>
       </app-section-header>

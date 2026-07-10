@@ -16,6 +16,7 @@ import { CUSTOMER_FIXTURES } from '../../../shared/fixtures/customer.fixtures';
 import { ConversationFixture } from '../../../shared/fixtures/fixture.models';
 import { OVERVIEW_ALERT } from '../../../shared/fixtures/settings.fixtures';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
+import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { OverviewChannelBreakdownComponent } from './overview-channel-breakdown.component';
 import { OverviewTrendChartComponent } from './overview-trend-chart.component';
 
@@ -30,11 +31,13 @@ import { OverviewTrendChartComponent } from './overview-trend-chart.component';
     OverviewChannelBreakdownComponent,
     OverviewTrendChartComponent,
     PageContainerComponent,
+    PageHeaderComponent,
     SectionHeaderComponent,
     StatusBadgeComponent,
   ],
   template: `
     <app-page-container>
+      <app-page-header title="Overview" />
       <div class="overview">
         @if (!alertDismissed()) {
           <app-escalation-banner
