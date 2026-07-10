@@ -155,4 +155,25 @@ describe('SidebarComponent', () => {
     expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(8);
     expect(element.textContent).toContain('Settings');
   });
+
+  it('renders sidebar without error when collapsed input is true', async () => {
+    configure([
+      'overview.view',
+      'conversations.view',
+      'customers.view',
+      'ai_agent.view',
+      'knowledge_base.view',
+      'integrations.view',
+      'analytics.view',
+      'settings.view',
+    ]);
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(SidebarComponent);
+    fixture.componentRef.setInput('collapsed', true);
+    fixture.detectChanges();
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.classList.contains('collapsed')).toBe(true);
+    expect(element.querySelectorAll('a[aria-label]').length).toBeGreaterThan(0);
+  });
 });

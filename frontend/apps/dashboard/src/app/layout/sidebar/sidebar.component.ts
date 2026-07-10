@@ -131,6 +131,11 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
       :host.collapsed {
         width: var(--app-sidebar-collapsed-width);
       }
+      @media (max-width: 767px) {
+        :host, :host.collapsed {
+          width: var(--app-sidebar-expanded-width);
+        }
+      }
       aside {
         height: 100%;
         display: flex;
