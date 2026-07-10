@@ -18,13 +18,12 @@ import { APP_PATHS } from '../../../core/router/app-paths';
         />
         <h2>Select a tenant to get started</h2>
         <p>
-          You are a member of one or more workspaces. Choose a tenant from the
-          tenant switcher in the sidebar to access your conversations, customers,
-          and settings.
+          You are a member of one or more workspaces. Choose a tenant from the tenant switcher in
+          the topbar to access your conversations, customers, and settings.
         </p>
         <p>
-          If you don't see a tenant switcher, contact your workspace administrator
-          to ensure you have the correct access permissions.
+          If you don't see a tenant switcher, contact your workspace administrator to ensure you
+          have the correct access permissions.
         </p>
         <a [routerLink]="APP_PATHS.tenant.base" tuiLink>Back to tenant area</a>
       </div>

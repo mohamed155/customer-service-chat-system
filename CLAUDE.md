@@ -24,6 +24,8 @@
 
 ## Recent Changes
 
+- 007-authentication: real sign-in (Argon2id password hashing, 8h JWT in httpOnly `app_session` cookie, revocation table, CSRF origin check, `POST /auth/login|logout`, login page, authGuard/guestGuard, credentials interceptor) — see `specs/007-authentication/plan.md`.
+- 006-multi-tenancy-foundation: tenant isolation runtime (identity/tenancy modules, tenant-context middleware, `X-Tenant-ID` contract, switch audit, dashboard tenant context store, topbar switcher, dev identity header) — see `specs/006-multi-tenancy-foundation/plan.md`.
 - 005-db-migration-foundation: migration workflow + four base tables (users, tenants, tenant_memberships, audit_logs) with conventions (UUID PK, timestamps, soft delete, partial unique indexes, append-only audit) — see `specs/005-db-migration-foundation/plan.md`.
 - 003-helix-dashboard-visuals: Helix Admin visual system (tokens, shell, 8 tenant pages, 4 auth screens, fixtures, SignalStores) — see `specs/003-helix-dashboard-visuals/plan.md`.
 - 002-angular-frontend-foundation: frontend foundation plan (Angular 22 modernization, Taiga UI, NgRx, layered structure) — see `specs/002-angular-frontend-foundation/plan.md`.

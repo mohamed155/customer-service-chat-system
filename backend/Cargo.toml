@@ -24,7 +24,11 @@ uuid = { version = "1", features = ["v4", "v7", "serde"] }
 redis = { version = "0.28", features = ["tokio-comp", "connection-manager"] }
 tower-http = { version = "0.6", features = ["cors", "catch-panic"] }
 async-trait = "0.1"
+argon2 = "0.5"
+axum-extra = { version = "0.10", features = ["cookie"] }
 futures = "0.3"
 http-body-util = "0.1"
+jsonwebtoken = "9"
+rand = "0.8"
 serial_test = "3"
 

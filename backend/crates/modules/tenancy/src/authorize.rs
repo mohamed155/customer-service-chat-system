@@ -35,20 +35,24 @@ pub async fn fetch_tenant(pool: &PgPool, id: Uuid) -> Option<TenantRow> {
     }
 }
 
-/// Returns `true` when `user_id` has an active (non-deleted) membership in
-/// the tenant identified by `tenant_id`.
-pub async fn has_active_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> bool {
-    let result = sqlx::query_scalar::<_, i32>(
-        "SELECT 1 \
+/// Returns the stored role for an active membership, or `None` when no active
+/// membership exists (or the lookup fails).
+pub async fn fetch_membership_role(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    user_id: Uuid,
+) -> Option<String> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT role \
          FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(tenant_id)
     .bind(user_id)
     .fetch_optional(pool)
-    .await;
-
-    matches!(result, Ok(Some(1)))
+    .await
+    .ok()
+    .flatten()
 }
 
 #[cfg(test)]

@@ -41,6 +41,8 @@ async fn live_readiness_with_real_deps() {
         config: Arc::new(config::AppConfig {
             database_url: db_url,
             redis_url,
+            auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
+            auth_session_ttl_seconds: 28_800,
             port: 0,
             bind_address: "0.0.0.0".into(),
             environment: config::Environment::Test,

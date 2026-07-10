@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+authz = { path = "../modules/authz" }
 axum.workspace = true
 cache = { path = "../shared/cache" }
 config = { path = "../shared/config" }
@@ -20,6 +21,7 @@ tower-http.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+argon2.workspace = true
 async-trait.workspace = true
 http-body-util.workspace = true
 serial_test.workspace = true

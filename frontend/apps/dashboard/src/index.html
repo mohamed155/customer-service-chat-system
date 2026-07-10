@@ -5,8 +5,108 @@
     <title>AI Customer Service Platform</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; overflow: hidden; }
+
+      .skeleton-shell {
+        display: flex;
+        height: 100vh;
+        background: #f5f5f7;
+      }
+      html[data-theme="dark"] .skeleton-shell { background: #1c1c1e; }
+
+      .skeleton-sidebar {
+        width: 248px;
+        min-width: 248px;
+        display: flex;
+        flex-direction: column;
+        background: #ffffff;
+        border-right: 1px solid #e5e5ea;
+      }
+      html[data-theme="dark"] .skeleton-sidebar {
+        background: #2c2c2e;
+        border-right-color: #38383a;
+      }
+      @media (max-width: 767px) { .skeleton-sidebar { display: none; } }
+
+      .skeleton-brand {
+        height: 60px;
+        padding: 0 16px;
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid #e5e5ea;
+      }
+      html[data-theme="dark"] .skeleton-brand { border-bottom-color: #38383a; }
+      .skeleton-brand::before {
+        content: "";
+        display: block;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: #e5e5ea;
+      }
+      html[data-theme="dark"] .skeleton-brand::before { background: #38383a; }
+
+      .skeleton-nav {
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .skeleton-nav-item {
+        height: 36px;
+        border-radius: 8px;
+        background: #e5e5ea;
+      }
+      html[data-theme="dark"] .skeleton-nav-item { background: #38383a; }
+
+      .skeleton-workspace {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .skeleton-topbar {
+        height: 60px;
+        background: #ffffff;
+        border-bottom: 1px solid #e5e5ea;
+        display: flex;
+        align-items: center;
+        padding: 0 24px;
+      }
+      html[data-theme="dark"] .skeleton-topbar {
+        background: #2c2c2e;
+        border-bottom-color: #38383a;
+      }
+
+      .skeleton-content {
+        flex: 1;
+        margin: 24px;
+        border-radius: 12px;
+        background: #ffffff;
+      }
+      html[data-theme="dark"] .skeleton-content { background: #2c2c2e; }
+    </style>
   </head>
   <body>
-    <app-root></app-root>
+    <app-root>
+      <div class="skeleton-shell">
+        <aside class="skeleton-sidebar">
+          <div class="skeleton-brand"></div>
+          <div class="skeleton-nav">
+            <div class="skeleton-nav-item"></div>
+            <div class="skeleton-nav-item"></div>
+            <div class="skeleton-nav-item"></div>
+            <div class="skeleton-nav-item"></div>
+          </div>
+        </aside>
+        <div class="skeleton-workspace">
+          <header class="skeleton-topbar"></header>
+          <main class="skeleton-content"></main>
+        </div>
+      </div>
+    </app-root>
   </body>
 </html>

@@ -1,8 +1,16 @@
 //! Identity module — principal types, middleware, and extractors.
 
+pub mod audit;
+
+pub mod password;
+
+pub mod routes;
+
+pub mod session;
+
 use axum::{
     extract::{FromRequestParts, Request, State},
-    http::request::Parts,
+    http::{header, request::Parts},
     middleware::Next,
     response::Response,
 };
@@ -12,6 +20,8 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use tracing::field;
 use uuid::Uuid;
+
+use crate::session::SessionClaims;
 
 /// Platform-level roles for internal (staff) users.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,6 +65,7 @@ impl FromStr for PlatformRole {
 pub enum PrincipalKind {
     Platform,
     Tenant,
+    InvalidPlatformRole,
 }
 
 /// Authenticated user principal resolved from the request context.
@@ -64,13 +75,16 @@ pub struct Principal {
     pub email: String,
     pub display_name: String,
     pub platform_role: Option<PlatformRole>,
+    pub invalid_platform_role: bool,
 }
 
 impl Principal {
     /// Returns [`PrincipalKind::Platform`] when the user carries a platform
     /// role and [`PrincipalKind::Tenant`] otherwise.
     pub fn kind(&self) -> PrincipalKind {
-        if self.platform_role.is_some() {
+        if self.invalid_platform_role {
+            PrincipalKind::InvalidPlatformRole
+        } else if self.platform_role.is_some() {
             PrincipalKind::Platform
         } else {
             PrincipalKind::Tenant
@@ -83,6 +97,8 @@ impl Principal {
 pub struct IdentityConfig {
     pub pool: PgPool,
     pub environment: Environment,
+    pub auth_jwt_secret: String,
+    pub auth_session_ttl_seconds: u64,
 }
 
 /// Axum middleware that resolves the current [`Principal`] from the request.
@@ -113,41 +129,121 @@ pub async fn principal_middleware(
     mut request: Request,
     next: Next,
 ) -> Response {
+    let session_cookie = request
+        .headers()
+        .get(header::COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(extract_app_session_cookie)
+        .map(str::to_owned);
+    let dev_user_id = request
+        .headers()
+        .get("X-Dev-User-Id")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| Uuid::from_str(value).ok());
+
+    let cookie_principal = resolve_cookie_principal(&cfg, session_cookie.as_deref()).await;
+    if let Some((principal, claims)) = cookie_principal {
+        tracing::Span::current().record("principal.id", field::display(&principal.user_id));
+        request.extensions_mut().insert(claims);
+        request.extensions_mut().insert(principal);
+        return next.run(request).await;
+    }
+
     match cfg.environment {
         Environment::Development | Environment::Test => {
-            if let Some(header_value) = request
-                .headers()
-                .get("X-Dev-User-Id")
-                .and_then(|v| v.to_str().ok())
-            {
-                if let Ok(user_id) = Uuid::from_str(header_value) {
-                    let result = sqlx::query_as::<_, (Uuid, String, String, Option<String>)>(
-                        "SELECT id, email, display_name, platform_role \
-                         FROM users WHERE id = $1 AND deleted_at IS NULL",
-                    )
-                    .bind(user_id)
-                    .fetch_optional(&cfg.pool)
-                    .await;
-
-                    if let Ok(Some((id, email, display_name, role_str))) = result {
-                        let platform_role = role_str.and_then(|r| PlatformRole::from_str(&r).ok());
-                        let principal = Principal {
-                            user_id: id,
-                            email,
-                            display_name,
-                            platform_role,
-                        };
-                        tracing::Span::current()
-                            .record("principal.id", field::display(&principal.user_id));
-                        request.extensions_mut().insert(principal);
-                    }
-                }
+            if let Some(principal) = resolve_dev_header_principal(&cfg, dev_user_id).await {
+                tracing::Span::current().record("principal.id", field::display(&principal.user_id));
+                request.extensions_mut().insert(principal);
             }
         }
         Environment::Production | Environment::Staging => {}
     }
 
     next.run(request).await
+}
+
+async fn resolve_cookie_principal(
+    cfg: &IdentityConfig,
+    jwt: Option<&str>,
+) -> Option<(Principal, SessionClaims)> {
+    let jwt = jwt?;
+    let claims = session::validate_token(&cfg.auth_jwt_secret, jwt).ok()?;
+
+    let result = sqlx::query_as::<_, (Uuid, String, String, Option<String>)>(
+        r#"
+        SELECT id, email, display_name, platform_role
+        FROM users
+        WHERE id = $1
+          AND deleted_at IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM revoked_sessions WHERE jti = $2
+          )
+        "#,
+    )
+    .bind(claims.sub)
+    .bind(claims.jti)
+    .fetch_optional(&cfg.pool)
+    .await
+    .ok()?;
+
+    let (id, email, display_name, role_str) = result?;
+    principal_from_row(id, email, display_name, role_str).map(|principal| (principal, claims))
+}
+
+fn extract_app_session_cookie(cookie_header: &str) -> Option<&str> {
+    cookie_header.split(';').find_map(|part| {
+        let value = part.trim().strip_prefix("app_session=")?;
+        (!value.is_empty()).then_some(value)
+    })
+}
+
+async fn resolve_dev_header_principal(
+    cfg: &IdentityConfig,
+    user_id: Option<Uuid>,
+) -> Option<Principal> {
+    let user_id = user_id?;
+    let result = sqlx::query_as::<_, (Uuid, String, String, Option<String>)>(
+        "SELECT id, email, display_name, platform_role \
+         FROM users WHERE id = $1 AND deleted_at IS NULL",
+    )
+    .bind(user_id)
+    .fetch_optional(&cfg.pool)
+    .await
+    .ok()?;
+
+    let (id, email, display_name, role_str) = result?;
+    principal_from_row(id, email, display_name, role_str)
+}
+
+fn principal_from_row(
+    user_id: Uuid,
+    email: String,
+    display_name: String,
+    stored_platform_role: Option<String>,
+) -> Option<Principal> {
+    let (platform_role, invalid_platform_role) = match stored_platform_role {
+        Some(stored_role) => match PlatformRole::from_str(&stored_role) {
+            Ok(role) => (Some(role), false),
+            Err(error) => {
+                tracing::error!(
+                    user.id = %user_id,
+                    platform.role = %stored_role,
+                    %error,
+                    "unrecognized stored platform role"
+                );
+                (None, true)
+            }
+        },
+        None => (None, false),
+    };
+
+    Some(Principal {
+        user_id,
+        email,
+        display_name,
+        platform_role,
+        invalid_platform_role,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +332,64 @@ mod tests {
         assert!("SUPER_ADMIN".parse::<PlatformRole>().is_err());
     }
 
+    #[test]
+    fn unknown_stored_platform_role_rejects_principal_construction() {
+        let principal = principal_from_row(
+            Uuid::nil(),
+            "legacy@example.com".into(),
+            "Legacy".into(),
+            Some("legacy_admin".into()),
+        )
+        .expect("recognized user remains authenticated");
+
+        assert!(principal.invalid_platform_role);
+        assert_eq!(principal.kind(), PrincipalKind::InvalidPlatformRole);
+    }
+
+    #[tokio::test]
+    async fn unknown_stored_platform_role_is_denied_at_middleware_boundary() {
+        use axum::{
+            body::Body,
+            http::{Request, StatusCode},
+            middleware,
+            response::IntoResponse,
+            routing::get,
+            Router,
+        };
+        use tower::ServiceExt;
+
+        let app = Router::new()
+            .route(
+                "/",
+                get(|principal: Principal| async move {
+                    if principal.kind() == PrincipalKind::InvalidPlatformRole {
+                        ApiError::unauthorized("Access denied").into_response()
+                    } else {
+                        StatusCode::OK.into_response()
+                    }
+                }),
+            )
+            .layer(middleware::from_fn(
+                |mut request: axum::extract::Request, next: middleware::Next| async move {
+                    if let Some(principal) = principal_from_row(
+                        Uuid::nil(),
+                        "legacy@example.com".into(),
+                        "Legacy".into(),
+                        Some("legacy_admin".into()),
+                    ) {
+                        request.extensions_mut().insert(principal);
+                    }
+                    next.run(request).await
+                },
+            ));
+
+        let response = app
+            .oneshot(Request::get("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
     // -- PrincipalKind classification -----------------------------------
 
     #[test]
@@ -245,6 +399,7 @@ mod tests {
             email: "admin@test.com".into(),
             display_name: "Admin".into(),
             platform_role: Some(PlatformRole::SuperAdmin),
+            invalid_platform_role: false,
         };
         assert_eq!(p.kind(), PrincipalKind::Platform);
     }
@@ -256,6 +411,7 @@ mod tests {
             email: "user@test.com".into(),
             display_name: "User".into(),
             platform_role: None,
+            invalid_platform_role: false,
         };
         assert_eq!(p.kind(), PrincipalKind::Tenant);
     }

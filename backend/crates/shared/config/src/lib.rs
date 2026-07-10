@@ -80,6 +80,8 @@ fn validate_origin(s: &str) -> Result<(), ConfigError> {
 pub struct AppConfig {
     pub database_url: String,
     pub redis_url: String,
+    pub auth_jwt_secret: String,
+    pub auth_session_ttl_seconds: u64,
     pub port: u16,
     pub bind_address: String,
     pub environment: Environment,
@@ -96,6 +98,8 @@ impl fmt::Debug for AppConfig {
         f.debug_struct("AppConfig")
             .field("database_url", &"[REDACTED]")
             .field("redis_url", &"[REDACTED]")
+            .field("auth_jwt_secret", &"[REDACTED]")
+            .field("auth_session_ttl_seconds", &self.auth_session_ttl_seconds)
             .field("port", &self.port)
             .field("bind_address", &self.bind_address)
             .field("environment", &self.environment)
@@ -179,9 +183,23 @@ impl AppConfig {
             .parse()
             .map_err(|_| ConfigError("SHUTDOWN_GRACE_SECONDS must be a valid u64".into()))?;
 
+        let auth_jwt_secret = required("AUTH_JWT_SECRET")?;
+        if auth_jwt_secret.len() < 32 {
+            return Err(ConfigError(
+                "AUTH_JWT_SECRET must be at least 32 bytes".into(),
+            ));
+        }
+
+        let auth_session_ttl_seconds = env::var("AUTH_SESSION_TTL_SECONDS")
+            .unwrap_or_else(|_| "28800".into())
+            .parse()
+            .map_err(|_| ConfigError("AUTH_SESSION_TTL_SECONDS must be a valid u64".into()))?;
+
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             redis_url: required("REDIS_URL")?,
+            auth_jwt_secret,
+            auth_session_ttl_seconds,
             port,
             bind_address,
             environment,
@@ -218,6 +236,8 @@ mod tests {
                 "BIND_ADDRESS",
                 "CORS_ALLOWED_ORIGINS",
                 "LOG_FORMAT",
+                "AUTH_JWT_SECRET",
+                "AUTH_SESSION_TTL_SECONDS",
                 "DB_MAX_CONNECTIONS",
                 "DB_ACQUIRE_TIMEOUT_MS",
                 "READY_PROBE_TIMEOUT_MS",
@@ -287,9 +307,11 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
         ]);
         let config = AppConfig::from_env().unwrap();
         assert_eq!(config.port, 8080);
+        assert_eq!(config.auth_session_ttl_seconds, 28_800);
         assert_eq!(config.db_max_connections, 10);
         assert_eq!(config.db_acquire_timeout_ms, 3000);
         assert_eq!(config.ready_probe_timeout_ms, 2000);
@@ -318,6 +340,7 @@ mod tests {
             ("REDIS_URL", "redis://user:pass@localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
         ]);
         let config = AppConfig::from_env().unwrap();
         let debug_str = format!("{config:?}");
@@ -329,5 +352,67 @@ mod tests {
             debug_str.contains("[REDACTED]"),
             "Debug output should contain [REDACTED]: {debug_str}"
         );
+        assert!(
+            !debug_str.contains("0123456789abcdef0123456789abcdef"),
+            "Debug output leaked JWT secret: {debug_str}"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn missing_auth_jwt_secret_returns_error() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+        ]);
+        let err = AppConfig::from_env().unwrap_err();
+        assert!(err.0.contains("AUTH_JWT_SECRET"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn short_auth_jwt_secret_returns_error() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "too-short"),
+        ]);
+        let err = AppConfig::from_env().unwrap_err();
+        assert!(err.0.contains("AUTH_JWT_SECRET"));
+        assert!(err.0.contains("32"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn auth_session_ttl_seconds_can_be_overridden() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            ("AUTH_SESSION_TTL_SECONDS", "3600"),
+        ]);
+        let config = AppConfig::from_env().unwrap();
+        assert_eq!(config.auth_session_ttl_seconds, 3600);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn invalid_auth_session_ttl_seconds_returns_error() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            ("AUTH_SESSION_TTL_SECONDS", "not_a_number"),
+        ]);
+        let err = AppConfig::from_env().unwrap_err();
+        assert!(err.0.contains("AUTH_SESSION_TTL_SECONDS"));
     }
 }

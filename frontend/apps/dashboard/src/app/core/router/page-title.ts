@@ -13,7 +13,8 @@ export type PageTitleKey =
   | 'integrations'
   | 'analytics'
   | 'settings'
-  | 'platform';
+  | 'platform'
+  | 'selectTenant';
 
 /** A page's resolved topbar title/subtitle. */
 export interface PageTitleData {
@@ -51,6 +52,7 @@ export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
   analytics: { title: 'Analytics', subtitle: 'Trends across every channel' },
   settings: { title: 'Settings', subtitle: 'Workspace preferences and security' },
   platform: { title: 'Platform', subtitle: 'Platform administration' },
+  selectTenant: { title: 'Select tenant', subtitle: 'Choose a tenant context to continue' },
 } as const;
 
 /** Resolves a `PAGE_TITLES` entry to its current title/subtitle, evaluating a function subtitle fresh. */

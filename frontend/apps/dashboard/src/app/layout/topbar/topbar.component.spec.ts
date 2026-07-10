@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, RouterOutlet, provideRouter } from '@angular/router';
@@ -7,7 +7,9 @@ import { provideTaiga } from '@taiga-ui/core';
 import { of } from 'rxjs';
 import { APP_CONFIG } from '../../core/config/app-config';
 import { ApiService } from '../../core/api/api.service';
+import { AuthService } from '../../core/auth/auth.service';
 import { appUiActions } from '../../core/state/app-ui.feature';
+import { CurrentUserService } from '../../core/tenant/current-user.service';
 import { TopbarComponent } from './topbar.component';
 
 @Component({
@@ -20,7 +22,29 @@ class HostComponent {}
 class EmptyComponent {}
 
 describe('TopbarComponent', () => {
-  async function setup(themeMode: 'light' | 'dark' | 'system' = 'light') {
+  async function setup(
+    themeMode: 'light' | 'dark' | 'system' = 'light',
+    options: { authenticated?: boolean; platformUser?: boolean } = {},
+  ) {
+    const user = signal(
+      options.authenticated
+        ? {
+            id: 'user-1',
+            email: 'agent@example.com',
+            displayName: 'Agent',
+            platformRole: options.platformUser ? 'super_admin' : null,
+            memberships: [],
+          }
+        : null,
+    );
+    const auth = { logout: vi.fn().mockResolvedValue(undefined) };
+    const currentUser = {
+      currentUser: user.asReadonly(),
+      isPlatformUser: computed(() => user()?.platformRole != null),
+      clear: vi.fn(),
+      load: vi.fn(),
+    };
+
     TestBed.configureTestingModule({
       imports: [HostComponent],
       providers: [
@@ -47,6 +71,8 @@ describe('TopbarComponent', () => {
             list: vi.fn().mockReturnValue(of({ data: { items: [] } })),
           },
         },
+        { provide: AuthService, useValue: auth },
+        { provide: CurrentUserService, useValue: currentUser },
       ],
     });
     await TestBed.compileComponents();
@@ -54,7 +80,7 @@ describe('TopbarComponent', () => {
     await router.navigateByUrl('/tenant/conversations');
     const fixture = TestBed.createComponent(HostComponent);
     fixture.detectChanges();
-    return { fixture, store: TestBed.inject(MockStore) };
+    return { fixture, store: TestBed.inject(MockStore), auth };
   }
 
   it('renders title and subtitle from route data', async () => {
@@ -89,5 +115,27 @@ describe('TopbarComponent', () => {
     (element.querySelector('.new-button') as HTMLButtonElement).click();
 
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('hides sign out for signed-out users', async () => {
+    const { fixture } = await setup();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[aria-label="Sign out"]'),
+    ).toBeNull();
+  });
+
+  it('shows sign out to authenticated users and delegates logout', async () => {
+    const { fixture, auth } = await setup('light', { authenticated: true });
+    const signOut = (fixture.nativeElement as HTMLElement).querySelector(
+      '[aria-label="Sign out"]',
+    ) as HTMLElement;
+
+    expect(signOut).not.toBeNull();
+
+    signOut.click();
+    await fixture.whenStable();
+
+    expect(auth.logout).toHaveBeenCalledTimes(1);
   });
 });

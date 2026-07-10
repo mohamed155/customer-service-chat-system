@@ -40,9 +40,19 @@ describe('TenantSwitcherComponent', () => {
       email: 'admin@test.com',
       displayName: 'Admin',
       platformRole: isPlatform ? 'super_admin' : null,
+      platformPermissions: [],
+      staffTenantPermissions: null,
       memberships: isPlatform
         ? []
-        : [{ tenantId: 't-1', tenantName: 'Acme Corp', tenantSlug: 'acme', role: 'agent' }],
+        : [
+            {
+              tenantId: 't-1',
+              tenantName: 'Acme Corp',
+              tenantSlug: 'acme',
+              role: 'agent',
+              permissions: [],
+            },
+          ],
     });
 
     await TestBed.compileComponents();

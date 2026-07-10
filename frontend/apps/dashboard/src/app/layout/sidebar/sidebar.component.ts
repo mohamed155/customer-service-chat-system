@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
+import { PAGE_PERMISSIONS } from '../../core/authz/permissions';
+import { PermissionsService } from '../../core/authz/permissions.service';
 import { APP_PATHS } from '../../core/router/app-paths';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 import { IconButtonComponent } from '../../shared/components/icon-button/icon-button.component';
@@ -30,66 +32,94 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
       </div>
 
       <nav aria-label="Primary navigation">
-        <app-sidebar-nav-group label="Workspace" [collapsed]="collapsed()">
-          <app-sidebar-nav-item
-            icon="@tui.layout-dashboard"
-            label="Overview"
-            [link]="links.overview"
-            [collapsed]="collapsed()"
-          />
-          <app-sidebar-nav-item
-            icon="@tui.messages-square"
-            label="Conversations"
-            [link]="links.conversations"
-            [collapsed]="collapsed()"
-            [badgeCount]="6"
-          />
-          <app-sidebar-nav-item
-            icon="@tui.users"
-            label="Customers"
-            [link]="links.customers"
-            [collapsed]="collapsed()"
-          />
-        </app-sidebar-nav-group>
+        @if (
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.overview]) ||
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.conversations]) ||
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.customers])
+        ) {
+          <app-sidebar-nav-group label="Workspace" [collapsed]="collapsed()">
+            @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.overview])) {
+              <app-sidebar-nav-item
+                icon="@tui.layout-dashboard"
+                label="Overview"
+                [link]="links.overview"
+                [collapsed]="collapsed()"
+              />
+            }
+            @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.conversations])) {
+              <app-sidebar-nav-item
+                icon="@tui.messages-square"
+                label="Conversations"
+                [link]="links.conversations"
+                [collapsed]="collapsed()"
+                [badgeCount]="6"
+              />
+            }
+            @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.customers])) {
+              <app-sidebar-nav-item
+                icon="@tui.users"
+                label="Customers"
+                [link]="links.customers"
+                [collapsed]="collapsed()"
+              />
+            }
+          </app-sidebar-nav-group>
+        }
 
-        <app-sidebar-nav-group label="AI" [collapsed]="collapsed()">
-          <app-sidebar-nav-item
-            icon="@tui.bot"
-            label="AI Agent"
-            [link]="links.aiAgent"
-            [collapsed]="collapsed()"
-          />
-          <app-sidebar-nav-item
-            icon="@tui.book-open"
-            label="Knowledge Base"
-            [link]="links.knowledgeBase"
-            [collapsed]="collapsed()"
-          />
-          <app-sidebar-nav-item
-            icon="@tui.plug"
-            label="Integrations"
-            [link]="links.integrations"
-            [collapsed]="collapsed()"
-          />
-        </app-sidebar-nav-group>
+        @if (
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.aiAgent]) ||
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase]) ||
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.integrations])
+        ) {
+          <app-sidebar-nav-group label="AI" [collapsed]="collapsed()">
+            @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.aiAgent])) {
+              <app-sidebar-nav-item
+                icon="@tui.bot"
+                label="AI Agent"
+                [link]="links.aiAgent"
+                [collapsed]="collapsed()"
+              />
+            }
+            @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase])) {
+              <app-sidebar-nav-item
+                icon="@tui.book-open"
+                label="Knowledge Base"
+                [link]="links.knowledgeBase"
+                [collapsed]="collapsed()"
+              />
+            }
+            @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.integrations])) {
+              <app-sidebar-nav-item
+                icon="@tui.plug"
+                label="Integrations"
+                [link]="links.integrations"
+                [collapsed]="collapsed()"
+              />
+            }
+          </app-sidebar-nav-group>
+        }
 
-        <app-sidebar-nav-group label="Insights" [collapsed]="collapsed()">
-          <app-sidebar-nav-item
-            icon="@tui.chart-line"
-            label="Analytics"
-            [link]="links.analytics"
-            [collapsed]="collapsed()"
-          />
-        </app-sidebar-nav-group>
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.analytics])) {
+          <app-sidebar-nav-group label="Insights" [collapsed]="collapsed()">
+            <app-sidebar-nav-item
+              icon="@tui.chart-line"
+              label="Analytics"
+              [link]="links.analytics"
+              [collapsed]="collapsed()"
+            />
+          </app-sidebar-nav-group>
+        }
 
-        <app-sidebar-nav-group label="Settings" [collapsed]="collapsed()">
-          <app-sidebar-nav-item
-            icon="@tui.settings"
-            label="Settings"
-            [link]="links.settings"
-            [collapsed]="collapsed()"
-          />
-        </app-sidebar-nav-group>
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.settings])) {
+          <app-sidebar-nav-group label="Settings" [collapsed]="collapsed()">
+            <app-sidebar-nav-item
+              icon="@tui.settings"
+              label="Settings"
+              [link]="links.settings"
+              [collapsed]="collapsed()"
+            />
+          </app-sidebar-nav-group>
+        }
       </nav>
 
       <footer>
@@ -191,7 +221,10 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
 })
 export class SidebarComponent {
   readonly collapsed = input(false);
+  protected readonly permissionsService = inject(PermissionsService);
   protected readonly user = SIDEBAR_USER;
+  protected readonly PAGE_PERMISSIONS = PAGE_PERMISSIONS;
+  protected readonly APP_PATHS = APP_PATHS;
   protected readonly links = {
     overview: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.overview}`,
     conversations: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.conversations}`,

@@ -16,13 +16,18 @@ export interface MembershipSummary {
   readonly tenantName: string;
   readonly tenantSlug: string;
   readonly role: MembershipRole;
+  readonly permissions: Permission[];
 }
+
+import { Permission } from '../authz/permissions';
 
 export interface MeResponse {
   readonly id: string;
   readonly email: string;
   readonly displayName: string;
   readonly platformRole: PlatformRole | null;
+  readonly platformPermissions: Permission[];
+  readonly staffTenantPermissions: Permission[] | null;
   readonly memberships: MembershipSummary[];
 }
 

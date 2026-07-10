@@ -1,12 +1,16 @@
 use axum::{
     extract::{Path, Query, State},
     response::{IntoResponse, Json, Response},
+    Extension,
 };
+use config::AppConfig;
 use identity::Principal;
 use kernel::{ApiError, Page, PageParams};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::Row;
+use std::str::FromStr;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{audit, authorize::fetch_tenant, TenantContext};
@@ -25,15 +29,11 @@ pub struct ListTenantsQuery {
 }
 
 pub async fn list_tenants(
-    principal: Principal,
+    _principal: Principal,
     Query(query): Query<ListTenantsQuery>,
     Query(params): Query<PageParams>,
     State(pool): State<sqlx::PgPool>,
 ) -> Response {
-    if principal.kind() != identity::PrincipalKind::Platform {
-        return ApiError::unauthorized("Access denied").into_response();
-    }
-
     let params = params.normalized();
     let limit = params.limit + 1;
 
@@ -138,6 +138,8 @@ pub struct MeResponse {
     pub email: String,
     pub display_name: String,
     pub platform_role: Option<String>,
+    pub platform_permissions: Vec<String>,
+    pub staff_tenant_permissions: Option<Vec<String>>,
     pub memberships: Vec<MembershipSummary>,
 }
 
@@ -148,9 +150,31 @@ pub struct MembershipSummary {
     pub tenant_name: String,
     pub tenant_slug: String,
     pub role: String,
+    pub permissions: Vec<String>,
 }
 
-pub async fn me(principal: Principal, State(pool): State<sqlx::PgPool>) -> Response {
+pub async fn me(
+    principal: Principal,
+    State(pool): State<sqlx::PgPool>,
+    Extension(config): Extension<Arc<AppConfig>>,
+) -> Response {
+    match build_me_response(
+        &pool,
+        principal,
+        config.environment == config::Environment::Production,
+    )
+    .await
+    {
+        Ok(response) => Json(response).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+pub async fn build_me_response(
+    pool: &sqlx::PgPool,
+    principal: Principal,
+    is_production: bool,
+) -> Result<MeResponse, ApiError> {
     let rows = sqlx::query(
         r#"
         SELECT tm.tenant_id, t.name, t.slug, tm.role
@@ -162,32 +186,53 @@ pub async fn me(principal: Principal, State(pool): State<sqlx::PgPool>) -> Respo
         "#,
     )
     .bind(principal.user_id)
-    .fetch_all(&pool)
-    .await;
+    .fetch_all(pool)
+    .await
+    .map_err(|error| ApiError::internal_error(format!("Database query failed: {error}")))?;
 
-    let memberships = match rows {
-        Ok(rows) => rows
-            .iter()
-            .map(|r| MembershipSummary {
+    let memberships = rows
+        .iter()
+        .map(|r| {
+            let role: String = r.get("role");
+            let permissions = authz::TenantRole::from_str(&role)
+                .map(authz::tenant_role_permissions)
+                .map(permission_codes)
+                .unwrap_or_else(|error| {
+                    tracing::error!(tenant.role = %role, %error, "unrecognized stored tenant role in /me");
+                    Vec::new()
+                });
+            MembershipSummary {
                 tenant_id: r.get("tenant_id"),
                 tenant_name: r.get("name"),
                 tenant_slug: r.get("slug"),
-                role: r.get("role"),
-            })
-            .collect(),
-        Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
-        }
-    };
+                role,
+                permissions,
+            }
+        })
+        .collect();
 
-    Json(MeResponse {
+    let platform_permissions = principal
+        .platform_role
+        .map(authz::platform_role_permissions)
+        .map(permission_codes)
+        .unwrap_or_default();
+    let staff_tenant_permissions = principal
+        .platform_role
+        .map(|role| permission_codes(authz::staff_tenant_permissions(role, is_production)));
+
+    Ok(MeResponse {
         id: principal.user_id,
         email: principal.email,
         display_name: principal.display_name,
         platform_role: principal.platform_role.map(|r| r.to_string()),
+        platform_permissions,
+        staff_tenant_permissions,
         memberships,
     })
-    .into_response()
+}
+
+fn permission_codes(permissions: &[authz::Permission]) -> Vec<String> {
+    permissions.iter().map(ToString::to_string).collect()
 }
 
 pub async fn get_tenant(State(pool): State<sqlx::PgPool>, ctx: TenantContext) -> Response {
@@ -213,10 +258,6 @@ pub async fn switch_tenant(
     Path(id): Path<uuid::Uuid>,
     State(pool): State<sqlx::PgPool>,
 ) -> Response {
-    if principal.kind() != identity::PrincipalKind::Platform {
-        return ApiError::unauthorized("Access denied").into_response();
-    }
-
     let row = match fetch_tenant(&pool, id).await {
         Some(r) => r,
         None => {

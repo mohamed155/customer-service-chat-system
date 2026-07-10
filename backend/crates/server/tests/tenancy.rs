@@ -31,6 +31,8 @@ pub fn test_config() -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
+        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
+        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
@@ -634,7 +636,7 @@ mod tests {
         let mut res = send_request(
             pool.clone(),
             Request::builder()
-                .uri(&format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
+                .uri(format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
                 .method("POST")
                 .header("X-Dev-User-Id", user_id.to_string())
                 .body(Body::empty())
@@ -665,7 +667,7 @@ mod tests {
         let res = send_request(
             pool.clone(),
             Request::builder()
-                .uri(&format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
+                .uri(format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
                 .method("POST")
                 .header("X-Dev-User-Id", user_id.to_string())
                 .body(Body::empty())
@@ -713,7 +715,7 @@ mod tests {
         let mut res = send_request(
             pool.clone(),
             Request::builder()
-                .uri(&format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
+                .uri(format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
                 .method("POST")
                 .header("X-Dev-User-Id", user_id.to_string())
                 .body(Body::empty())
@@ -737,7 +739,7 @@ mod tests {
         let mut res = send_request(
             pool.clone(),
             Request::builder()
-                .uri(&format!(
+                .uri(format!(
                     "/api/v1/platform/tenants/{}/switch",
                     &nonexistent_id
                 ))
@@ -765,7 +767,7 @@ mod tests {
         let mut res = send_request(
             pool.clone(),
             Request::builder()
-                .uri(&format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
+                .uri(format!("/api/v1/platform/tenants/{}/switch", &tenant_id))
                 .method("POST")
                 .header("X-Dev-User-Id", user_id.to_string())
                 .body(Body::empty())

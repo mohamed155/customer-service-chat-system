@@ -5,6 +5,7 @@ import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideTaiga } from '@taiga-ui/core';
 import { environment } from '../../../environments/environment';
 import { APP_CONFIG } from '../../core/config/app-config';
+import { ApiErrorNotificationService } from '../../core/errors/api-error-notification.service';
 import { appUiActions } from '../../core/state/app-ui.feature';
 import { AppShellComponent } from './app-shell.component';
 
@@ -46,5 +47,25 @@ describe('AppShellComponent', () => {
       fixture.nativeElement.querySelector('[aria-label="Toggle sidebar"]') as HTMLButtonElement
     ).click();
     expect(dispatch).toHaveBeenCalledWith(appUiActions.sidebarToggled());
+  });
+
+  it('renders and dismisses tenant access errors', async () => {
+    await TestBed.compileComponents();
+    const notifications = TestBed.inject(ApiErrorNotificationService);
+    notifications.show("You don't have access to this tenant.");
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain("You don't have access to this tenant.");
+    (
+      fixture.nativeElement.querySelector(
+        '[aria-label="Dismiss tenant access alert"]',
+      ) as HTMLButtonElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain(
+      "You don't have access to this tenant.",
+    );
   });
 });

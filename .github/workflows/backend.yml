@@ -14,6 +14,7 @@ jobs:
     defaults: { run: { working-directory: backend } }
     env:
       DATABASE_URL: postgres://customer_service:customer_service@localhost:5432/customer_service
+      AUTH_JWT_SECRET: 0123456789abcdef0123456789abcdef
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

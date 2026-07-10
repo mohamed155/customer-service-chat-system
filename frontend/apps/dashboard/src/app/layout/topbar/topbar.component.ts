@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 
 import { Store } from '@ngrx/store';
 import { TuiIcon } from '@taiga-ui/core';
+import { AuthService } from '../../core/auth/auth.service';
 import { injectPageTitle } from '../../core/router/page-title';
 import { CurrentUserService } from '../../core/tenant/current-user.service';
 import {
@@ -44,6 +45,9 @@ import { TenantSwitcherComponent } from './tenant-switcher.component';
         }
         <app-icon-button [icon]="themeIcon()" [label]="themeLabel()" (click)="cycleTheme()" />
         <app-icon-button icon="@tui.bell" label="Notifications" />
+        @if (isAuthenticated()) {
+          <app-icon-button icon="@tui.log-out" label="Sign out" (click)="signOut()" />
+        }
         <button class="new-button" type="button"><tui-icon icon="@tui.plus" />New</button>
       </div>
     </header>
@@ -125,9 +129,11 @@ import { TenantSwitcherComponent } from './tenant-switcher.component';
 })
 export class TopbarComponent {
   private readonly store = inject(Store);
+  private readonly auth = inject(AuthService);
   private readonly currentUser = inject(CurrentUserService);
   protected readonly collapsed = this.store.selectSignal(selectSidebarCollapsed);
   protected readonly isPlatformUser = this.currentUser.isPlatformUser;
+  protected readonly isAuthenticated = computed(() => this.currentUser.currentUser() != null);
   protected readonly themeMode = this.store.selectSignal(selectThemeMode);
   protected readonly pageTitle = injectPageTitle();
   protected readonly search = signal('');
@@ -149,6 +155,10 @@ export class TopbarComponent {
     this.store.dispatch(
       appUiActions.themeModeChanged({ themeMode: this.nextThemeMode(this.themeMode()) }),
     );
+  }
+
+  protected async signOut(): Promise<void> {
+    await this.auth.logout();
   }
 
   private nextThemeMode(themeMode: ThemeMode): ThemeMode {
