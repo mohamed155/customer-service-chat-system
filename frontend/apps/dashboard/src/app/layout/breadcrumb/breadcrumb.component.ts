@@ -36,7 +36,7 @@ import { injectBreadcrumbs } from '../../core/router/breadcrumb';
       li + li::before {
         content: '›';
         margin-right: var(--app-space-2);
-        color: var(--app-text-secondary);
+        color: var(--app-text-2);
       }
       a {
         color: var(--app-accent);
@@ -50,7 +50,7 @@ import { injectBreadcrumbs } from '../../core/router/breadcrumb';
         color: var(--app-text);
       }
       span:not([aria-current]) {
-        color: var(--app-text-secondary);
+        color: var(--app-text-2);
       }
     `,
   ],

@@ -35,7 +35,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       .description {
         margin: var(--app-space-1) 0 0;
         font-size: var(--app-font-sm);
-        color: var(--app-text-secondary);
+        color: var(--app-text-2);
       }
     `,
   ],

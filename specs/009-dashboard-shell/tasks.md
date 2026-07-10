@@ -189,3 +189,14 @@ Task: "T006 platform-nav.component.ts in layout/topbar/"
 - No backend changes in this feature; `/me` contract from spec 008 is consumed unchanged.
 - `PageContainerComponent` (`layout/page-container/page-container.component.ts`) is pre-existing and already adopted everywhere — do not recreate it.
 - Commit after each task or logical group; every checkpoint is a safe stopping point.
+
+---
+
+## Phase 8: Convergence
+
+**Purpose**: Close remaining gaps between the implemented shell and the spec/plan/contract. All four quality gates (build, test, lint, format) pass and the feature is functionally complete; the items below are visual-polish and contract-fidelity defects surfaced by post-implementation assessment. Ordered most-severe first.
+
+- [X] T024 Repoint the undefined `--app-text-secondary` CSS custom property to the defined muted token `--app-text-2` in `frontend/apps/dashboard/src/app/layout/breadcrumb/breadcrumb.component.ts` (lines ~39 and ~53) and `frontend/apps/dashboard/src/app/layout/page-header/page-header.component.ts` (line ~38); the token is not defined in `design-system/tokens/tokens.css` or `design-system/theme/themes.css`, so breadcrumb separators/inactive crumbs and the page-header description currently inherit the default text color instead of rendering muted, per FR-007 / FR-008 / SC-006 / Constitution IX (contradicts)
+- [X] T025 Define `--app-fill-hover` for both light and dark in `frontend/apps/dashboard/src/app/design-system/theme/themes.css` (or repoint the references to an existing hover token such as `--app-panel-2`) so the hover backgrounds in `frontend/apps/dashboard/src/app/layout/topbar/user-menu.component.ts` (lines ~70, ~132) and `frontend/apps/dashboard/src/app/layout/topbar/platform-nav.component.ts` (line ~120) actually apply; the token is currently undefined (the pre-existing `tenant-switcher.component.ts` shares the same reference and would also be fixed) per plan R3 / Constitution IX (contradicts)
+- [X] T026 Make the platform breadcrumb read "Platform / Platform overview" instead of the current duplicate "Platform / Platform" — add a `pageTitle`/breadcrumb label to the `overview-placeholder` child route in `frontend/apps/dashboard/src/app/features/platform/platform.routes.ts`, or suppress the area-root crumb in `frontend/apps/dashboard/src/app/core/router/breadcrumb.ts` when it duplicates the first page crumb — per FR-007 and `contracts/ui-shell.md` (partial)
+- [X] T027 Resolve the initial-bundle budget regression (overage grew ~22.8 kB → ~30.6 kB after the new shell components): either raise the `budgets` threshold in `frontend/apps/dashboard/project.json`/`angular.json` to reflect the intended shell size or trim, so `pnpm ng build dashboard` no longer emits a *new* warning beyond the pre-existing baseline, per tasks T021 / Constitution X (partial)

@@ -14,6 +14,7 @@ export type PageTitleKey =
   | 'analytics'
   | 'settings'
   | 'platform'
+  | 'platformOverview'
   | 'selectTenant';
 
 /** A page's resolved topbar title/subtitle. */
@@ -52,6 +53,7 @@ export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
   analytics: { title: 'Analytics', subtitle: 'Trends across every channel' },
   settings: { title: 'Settings', subtitle: 'Workspace preferences and security' },
   platform: { title: 'Platform', subtitle: 'Platform administration' },
+  platformOverview: { title: 'Platform overview', subtitle: 'Platform administration' },
   selectTenant: { title: 'Select tenant', subtitle: 'Choose a tenant context to continue' },
 } as const;
 
