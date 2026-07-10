@@ -1,0 +1,107 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
+import { provideTaiga } from '@taiga-ui/core';
+import { PermissionsService } from '../../core/authz/permissions.service';
+import { PlatformNavComponent } from './platform-nav.component';
+
+describe('PlatformNavComponent', () => {
+  async function setup(hasPermission: boolean) {
+    const permissionsMock = { has: vi.fn().mockReturnValue(hasPermission) };
+    const routerMock = { navigate: vi.fn() };
+
+    TestBed.configureTestingModule({
+      imports: [PlatformNavComponent],
+      providers: [
+        provideTaiga(),
+        provideZonelessChangeDetection(),
+        { provide: PermissionsService, useValue: permissionsMock },
+        { provide: Router, useValue: routerMock },
+      ],
+    });
+
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(PlatformNavComponent);
+    fixture.detectChanges();
+    return { fixture, permissionsMock, routerMock };
+  }
+
+  it('is hidden for tenant users (no platform.admin)', async () => {
+    const { fixture } = await setup(false);
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.nav')).toBeNull();
+    expect(element.textContent).not.toContain('Platform');
+  });
+
+  it('is hidden for platform roles without platform.admin', async () => {
+    const { fixture } = await setup(false);
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.nav')).toBeNull();
+  });
+
+  it('is visible with "Platform overview" entry for Super Admin', async () => {
+    const { fixture } = await setup(true);
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.trigger')).toBeTruthy();
+    expect(element.textContent).toContain('Platform');
+  });
+
+  it('opens dropdown when trigger is clicked', async () => {
+    const { fixture } = await setup(true);
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger') as HTMLElement;
+    trigger.click();
+    fixture.detectChanges();
+    const dropdown = (fixture.nativeElement as HTMLElement).querySelector('.dropdown');
+    expect(dropdown).toBeTruthy();
+  });
+
+  it('closes dropdown when trigger is clicked again', async () => {
+    const { fixture } = await setup(true);
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger') as HTMLElement;
+    trigger.click();
+    fixture.detectChanges();
+    trigger.click();
+    fixture.detectChanges();
+    const dropdown = (fixture.nativeElement as HTMLElement).querySelector('.dropdown');
+    expect(dropdown).toBeNull();
+  });
+
+  it('navigates and closes when an entry is clicked', async () => {
+    const { fixture, routerMock } = await setup(true);
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger') as HTMLElement;
+    trigger.click();
+    fixture.detectChanges();
+
+    const option = (fixture.nativeElement as HTMLElement).querySelector('.option') as HTMLElement;
+    option.click();
+    fixture.detectChanges();
+
+    expect(routerMock.navigate).toHaveBeenCalledWith(['/platform/overview-placeholder']);
+    const dropdown = (fixture.nativeElement as HTMLElement).querySelector('.dropdown');
+    expect(dropdown).toBeNull();
+  });
+
+  it('closes on outside click', async () => {
+    const { fixture } = await setup(true);
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger') as HTMLElement;
+    trigger.click();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.dropdown')).toBeTruthy();
+
+    document.body.click();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.dropdown')).toBeNull();
+  });
+
+  it('closes on escape', async () => {
+    const { fixture } = await setup(true);
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger') as HTMLElement;
+    trigger.click();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.dropdown')).toBeTruthy();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.dropdown')).toBeNull();
+  });
+});
