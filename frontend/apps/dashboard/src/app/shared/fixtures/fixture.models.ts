@@ -141,13 +141,6 @@ export interface SessionFixture {
   current: boolean;
 }
 
-export interface SidebarUserFixture {
-  name: string;
-  role: string;
-  company: string;
-  avatarInitials: string;
-}
-
 export interface AlertFixture {
   title: string;
   description: string;

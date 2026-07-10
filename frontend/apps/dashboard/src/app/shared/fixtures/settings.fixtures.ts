@@ -3,7 +3,6 @@ import {
   ApiKeyFixture,
   InvoiceFixture,
   SessionFixture,
-  SidebarUserFixture,
   TeamMemberFixture,
   UsageFixture,
   WorkspaceProfileFixture,
@@ -100,13 +99,6 @@ export const SESSION_FIXTURES: readonly SessionFixture[] = [
     current: false,
   },
 ];
-
-export const SIDEBAR_USER: SidebarUserFixture = {
-  name: 'Nadia Farouk',
-  role: 'Owner',
-  company: 'Helix Support Ops',
-  avatarInitials: 'NF',
-};
 
 export const OVERVIEW_ALERT: AlertFixture = {
   title: 'Elevated AI provider latency',
