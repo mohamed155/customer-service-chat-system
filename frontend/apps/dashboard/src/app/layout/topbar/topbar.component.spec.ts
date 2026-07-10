@@ -117,23 +117,26 @@ describe('TopbarComponent', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it('hides sign out for signed-out users', async () => {
+  it('hides user menu for signed-out users', async () => {
     const { fixture } = await setup();
 
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[aria-label="Sign out"]'),
-    ).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('app-user-menu')).toBeNull();
   });
 
-  it('shows sign out to authenticated users and delegates logout', async () => {
+  it('shows user menu to authenticated users and delegates logout', async () => {
     const { fixture, auth } = await setup('light', { authenticated: true });
-    const signOut = (fixture.nativeElement as HTMLElement).querySelector(
-      '[aria-label="Sign out"]',
+    const menu = (fixture.nativeElement as HTMLElement).querySelector(
+      'app-user-menu',
     ) as HTMLElement;
 
-    expect(signOut).not.toBeNull();
+    expect(menu).not.toBeNull();
 
-    signOut.click();
+    const trigger = menu.querySelector('.trigger') as HTMLElement;
+    trigger.click();
+    fixture.detectChanges();
+
+    const signOutBtn = menu.querySelector('.sign-out') as HTMLElement;
+    signOutBtn.click();
     await fixture.whenStable();
 
     expect(auth.logout).toHaveBeenCalledTimes(1);

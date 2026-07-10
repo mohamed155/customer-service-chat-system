@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 
 import { Store } from '@ngrx/store';
 import { TuiIcon } from '@taiga-ui/core';
-import { AuthService } from '../../core/auth/auth.service';
 import { injectPageTitle } from '../../core/router/page-title';
 import { CurrentUserService } from '../../core/tenant/current-user.service';
 import {
@@ -14,10 +13,17 @@ import {
 import { IconButtonComponent } from '../../shared/components/icon-button/icon-button.component';
 import { SearchInputComponent } from '../../shared/components/search-input/search-input.component';
 import { TenantSwitcherComponent } from './tenant-switcher.component';
+import { UserMenuComponent } from './user-menu.component';
 
 @Component({
   selector: 'app-topbar',
-  imports: [IconButtonComponent, SearchInputComponent, TenantSwitcherComponent, TuiIcon],
+  imports: [
+    IconButtonComponent,
+    SearchInputComponent,
+    TenantSwitcherComponent,
+    UserMenuComponent,
+    TuiIcon,
+  ],
   template: `
     <header>
       <app-icon-button
@@ -46,7 +52,7 @@ import { TenantSwitcherComponent } from './tenant-switcher.component';
         <app-icon-button [icon]="themeIcon()" [label]="themeLabel()" (click)="cycleTheme()" />
         <app-icon-button icon="@tui.bell" label="Notifications" />
         @if (isAuthenticated()) {
-          <app-icon-button icon="@tui.log-out" label="Sign out" (click)="signOut()" />
+          <app-user-menu />
         }
         <button class="new-button" type="button"><tui-icon icon="@tui.plus" />New</button>
       </div>
@@ -129,7 +135,6 @@ import { TenantSwitcherComponent } from './tenant-switcher.component';
 })
 export class TopbarComponent {
   private readonly store = inject(Store);
-  private readonly auth = inject(AuthService);
   private readonly currentUser = inject(CurrentUserService);
   protected readonly collapsed = this.store.selectSignal(selectSidebarCollapsed);
   protected readonly isPlatformUser = this.currentUser.isPlatformUser;
@@ -155,10 +160,6 @@ export class TopbarComponent {
     this.store.dispatch(
       appUiActions.themeModeChanged({ themeMode: this.nextThemeMode(this.themeMode()) }),
     );
-  }
-
-  protected async signOut(): Promise<void> {
-    await this.auth.logout();
   }
 
   private nextThemeMode(themeMode: ThemeMode): ThemeMode {
