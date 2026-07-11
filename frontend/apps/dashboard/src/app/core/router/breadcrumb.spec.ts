@@ -146,4 +146,27 @@ describe('injectBreadcrumbs', () => {
     const intermediate = crumbs().at(1);
     expect(intermediate?.link).toBe('/tenant');
   });
+
+  it('renders Platform / Platform overview for two-level platform nesting', async () => {
+    const { router } = await setup([
+      {
+        path: 'platform',
+        children: [
+          {
+            path: 'overview',
+            component: EmptyComponent,
+            data: { pageTitle: 'platformOverview' },
+          },
+        ],
+      },
+    ]);
+
+    await router.navigateByUrl('/platform/overview');
+    const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
+
+    expect(crumbs()).toEqual([
+      { label: 'Platform', link: null },
+      { label: 'Platform overview', link: null },
+    ]);
+  });
 });

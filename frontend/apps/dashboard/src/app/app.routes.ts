@@ -29,7 +29,6 @@ export const routes: Routes = [
         canMatch: [areaAccessGuard, permissionGuard],
         data: {
           area: 'platform',
-          pageTitle: 'platform',
           requiredPermission: PAGE_PERMISSIONS[APP_PATHS.platform.base],
         },
         title: PAGE_TITLES.platform.title,
