@@ -19,7 +19,7 @@ import { LayoutStore } from './layout.store';
       [class.drawer]="isMobile()"
       [class.open]="isMobile() && drawerOpen()"
     >
-      <app-sidebar [collapsed]="collapsed()" />
+      <app-sidebar [collapsed]="isMobile() ? false : collapsed()" />
     </div>
     @if (isMobile() && drawerOpen()) {
       <div

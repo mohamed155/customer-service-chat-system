@@ -53,12 +53,19 @@ import { UserMenuComponent } from './user-menu.component';
           <app-platform-nav />
           <app-tenant-switcher />
         }
-        <app-icon-button [icon]="themeIcon()" [label]="themeLabel()" (click)="cycleTheme()" />
-        <app-icon-button icon="@tui.bell" label="Notifications" />
+        <button class="new-button" type="button">
+          <tui-icon icon="@tui.plus" /><span class="new-label">New</span>
+        </button>
+        <app-icon-button
+          class="theme-toggle"
+          [icon]="themeIcon()"
+          [label]="themeLabel()"
+          (click)="cycleTheme()"
+        />
+        <app-icon-button class="notification-bell" icon="@tui.bell" label="Notifications" />
         @if (isAuthenticated()) {
           <app-user-menu />
         }
-        <button class="new-button" type="button"><tui-icon icon="@tui.plus" />New</button>
       </div>
     </header>
   `,
@@ -131,6 +138,35 @@ import { UserMenuComponent } from './user-menu.component';
       @media (max-width: 768px) {
         .search {
           display: none;
+        }
+      }
+      @media (max-width: 480px) {
+        header {
+          gap: var(--app-space-2);
+          padding: 0 var(--app-space-2);
+        }
+        .title {
+          display: none;
+        }
+        .notification-bell {
+          display: none;
+        }
+        .new-button {
+          display: none;
+        }
+        .tools {
+          gap: var(--app-space-1);
+        }
+        ::ng-deep app-platform-nav .trigger span,
+        ::ng-deep app-tenant-switcher .trigger .name,
+        ::ng-deep app-tenant-switcher .trigger tui-icon[icon='@tui.chevron-down'] {
+          display: none;
+        }
+        ::ng-deep app-platform-nav .trigger,
+        ::ng-deep app-tenant-switcher .trigger {
+          padding: 0 var(--app-space-2);
+          min-width: 38px;
+          justify-content: center;
         }
       }
     `,

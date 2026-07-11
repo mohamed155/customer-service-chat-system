@@ -1,20 +1,15 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { ChannelBadgeComponent } from '../../../shared/components/channel-badge/channel-badge.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { EscalationBannerComponent } from '../../../shared/components/ai/escalation-banner/escalation-banner.component';
+import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
+import { PAGE_ROUTE, RoutedPageStore } from '../routed-page.store';
 import { MetricCardComponent } from '../../../shared/components/metric-card/metric-card.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
-import {
-  CHANNEL_BREAKDOWN,
-  OVERVIEW_METRICS,
-  OVERVIEW_TREND_SERIES,
-} from '../../../shared/fixtures/analytics.fixtures';
-import { CONVERSATION_FIXTURES } from '../../../shared/fixtures/conversation.fixtures';
-import { CUSTOMER_FIXTURES } from '../../../shared/fixtures/customer.fixtures';
 import { ConversationFixture } from '../../../shared/fixtures/fixture.models';
-import { OVERVIEW_ALERT } from '../../../shared/fixtures/settings.fixtures';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { OverviewChannelBreakdownComponent } from './overview-channel-breakdown.component';
@@ -26,7 +21,9 @@ import { OverviewTrendChartComponent } from './overview-trend-chart.component';
     AvatarComponent,
     ChannelBadgeComponent,
     DashboardCardComponent,
+    EmptyStateComponent,
     EscalationBannerComponent,
+    LoadingStateComponent,
     MetricCardComponent,
     OverviewChannelBreakdownComponent,
     OverviewTrendChartComponent,
@@ -35,71 +32,90 @@ import { OverviewTrendChartComponent } from './overview-trend-chart.component';
     SectionHeaderComponent,
     StatusBadgeComponent,
   ],
+  providers: [RoutedPageStore, { provide: PAGE_ROUTE, useValue: 'overview' }],
   template: `
     <app-page-container>
       <app-page-header title="Overview" />
-      <div class="overview">
-        @if (!alertDismissed()) {
-          <app-escalation-banner
-            [title]="alert.title"
-            [description]="alert.description"
-            (dismissed)="alertDismissed.set(true)"
-          />
-        }
-
-        <section class="metrics" aria-label="Overview metrics">
-          @for (metric of metrics; track metric.id) {
-            <app-metric-card [metric]="metric" />
+      @if (page.loading()) {
+        <app-loading-state />
+      } @else if (hasError()) {
+        <app-empty-state
+          icon="@tui.alert-circle"
+          title="Something went wrong"
+          description="We couldn't load this page. Please try again."
+        >
+          <button type="button" (click)="retry()">Try again</button>
+        </app-empty-state>
+      } @else if (hasData()) {
+        <div class="overview">
+          @if (!alertDismissed()) {
+            <app-escalation-banner
+              [title]="pageData()!.alert.title"
+              [description]="pageData()!.alert.description"
+              (dismissed)="alertDismissed.set(true)"
+            />
           }
-        </section>
 
-        <section class="dashboard-grid">
-          <app-dashboard-card>
-            <app-section-header
-              card-header
-              title="Conversation trends"
-              subtitle="Volume, AI resolution, and escalations over the last 12 periods"
-            />
-            <app-overview-trend-chart [series]="trendSeries" />
-          </app-dashboard-card>
-
-          <app-dashboard-card>
-            <app-section-header
-              card-header
-              title="Channel mix"
-              subtitle="Where customers are asking for help"
-            />
-            <app-overview-channel-breakdown [breakdown]="breakdown" />
-          </app-dashboard-card>
-        </section>
-
-        <app-dashboard-card>
-          <app-section-header
-            card-header
-            title="Recent activity"
-            subtitle="Live inbox preview from fixture conversations"
-          />
-          <div class="activity">
-            @for (conversation of recentConversations; track conversation.id) {
-              <article>
-                <app-avatar [initials]="customerInitials(conversation)" size="md" />
-                <div class="activity-copy">
-                  <strong>{{ customerName(conversation) }}</strong>
-                  <span>{{ conversation.snippet }}</span>
-                  <div>
-                    <app-channel-badge [channel]="conversation.channel" />
-                    <app-status-badge
-                      [status]="conversation.status"
-                      [tone]="statusTone(conversation.status)"
-                    />
-                  </div>
-                </div>
-                <time>{{ relativeTime(conversation.updatedAt) }}</time>
-              </article>
+          <section class="metrics" aria-label="Overview metrics">
+            @for (metric of pageData()!.metrics; track metric.id) {
+              <app-metric-card [metric]="metric" />
             }
-          </div>
-        </app-dashboard-card>
-      </div>
+          </section>
+
+          <section class="dashboard-grid">
+            <app-dashboard-card>
+              <app-section-header
+                card-header
+                title="Conversation trends"
+                subtitle="Volume, AI resolution, and escalations over the last 12 periods"
+              />
+              <app-overview-trend-chart [series]="pageData()!.trendSeries" />
+            </app-dashboard-card>
+
+            <app-dashboard-card>
+              <app-section-header
+                card-header
+                title="Channel mix"
+                subtitle="Where customers are asking for help"
+              />
+              <app-overview-channel-breakdown [breakdown]="pageData()!.breakdown" />
+            </app-dashboard-card>
+          </section>
+
+          <app-dashboard-card>
+            <app-section-header
+              card-header
+              title="Recent activity"
+              subtitle="Live inbox preview from fixture conversations"
+            />
+            <div class="activity">
+              @for (conversation of pageData()!.recentConversations; track conversation.id) {
+                <article>
+                  <app-avatar [initials]="customerInitials(conversation)" size="md" />
+                  <div class="activity-copy">
+                    <strong>{{ customerName(conversation) }}</strong>
+                    <span>{{ conversation.snippet }}</span>
+                    <div>
+                      <app-channel-badge [channel]="conversation.channel" />
+                      <app-status-badge
+                        [status]="conversation.status"
+                        [tone]="statusTone(conversation.status)"
+                      />
+                    </div>
+                  </div>
+                  <time>{{ relativeTime(conversation.updatedAt) }}</time>
+                </article>
+              }
+            </div>
+          </app-dashboard-card>
+        </div>
+      } @else {
+        <app-empty-state
+          icon="@tui.layout-dashboard"
+          title="No data yet"
+          description="Metrics and activity will appear here once your workspace is active."
+        />
+      }
     </app-page-container>
   `,
   styles: [
@@ -182,25 +198,27 @@ import { OverviewTrendChartComponent } from './overview-trend-chart.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OverviewComponent {
+  protected readonly page = inject(RoutedPageStore);
+  protected readonly hasData = computed(() => this.page.data() !== undefined);
+  protected readonly hasError = computed(() => this.page.error() !== null);
   protected readonly alertDismissed = signal(false);
-  protected readonly alert = OVERVIEW_ALERT;
-  protected readonly metrics = OVERVIEW_METRICS;
-  protected readonly trendSeries = OVERVIEW_TREND_SERIES;
-  protected readonly breakdown = CHANNEL_BREAKDOWN;
-  protected readonly recentConversations = CONVERSATION_FIXTURES.slice(0, 5);
+
+  protected readonly pageData = computed(() => {
+    const data = this.page.data();
+    if (data?.page === 'overview') return data.data;
+    return undefined;
+  });
 
   protected customerName(conversation: ConversationFixture): string {
-    return (
-      CUSTOMER_FIXTURES.find((customer) => customer.id === conversation.customerId)?.name ??
-      'Customer'
-    );
+    const customers = this.pageData()?.customers;
+    if (!customers) return 'Customer';
+    return customers.find((c) => c.id === conversation.customerId)?.name ?? 'Customer';
   }
 
   protected customerInitials(conversation: ConversationFixture): string {
-    return (
-      CUSTOMER_FIXTURES.find((customer) => customer.id === conversation.customerId)
-        ?.avatarInitials ?? 'HC'
-    );
+    const customers = this.pageData()?.customers;
+    if (!customers) return 'HC';
+    return customers.find((c) => c.id === conversation.customerId)?.avatarInitials ?? 'HC';
   }
 
   protected statusTone(status: ConversationFixture['status']): 'green' | 'amber' | 'red' {
@@ -210,5 +228,9 @@ export class OverviewComponent {
   protected relativeTime(iso: string): string {
     const hours = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000));
     return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+  }
+
+  protected retry(): void {
+    this.page.retry();
   }
 }

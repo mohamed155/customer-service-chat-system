@@ -3,8 +3,7 @@ import { AvatarComponent } from '../../../shared/components/avatar/avatar.compon
 import { ChannelBadgeComponent } from '../../../shared/components/channel-badge/channel-badge.component';
 import { SentimentBadgeComponent } from '../../../shared/components/sentiment-badge/sentiment-badge.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
-import { CUSTOMER_FIXTURES } from '../../../shared/fixtures/customer.fixtures';
-import { ConversationFixture } from '../../../shared/fixtures/fixture.models';
+import { ConversationFixture, CustomerFixture } from '../../../shared/fixtures/fixture.models';
 import { ConversationStatusFilter } from './conversations.store';
 
 @Component({
@@ -161,6 +160,7 @@ import { ConversationStatusFilter } from './conversations.store';
 })
 export class InboxListComponent {
   readonly conversations = input.required<readonly ConversationFixture[]>();
+  readonly customers = input.required<readonly CustomerFixture[]>();
   readonly selectedId = input<string | null>(null);
   readonly statusFilter = input.required<ConversationStatusFilter>();
   readonly selected = output<string>();
@@ -174,14 +174,14 @@ export class InboxListComponent {
 
   protected customerName(conversation: ConversationFixture): string {
     return (
-      CUSTOMER_FIXTURES.find((customer) => customer.id === conversation.customerId)?.name ??
+      this.customers().find((customer) => customer.id === conversation.customerId)?.name ??
       'Customer'
     );
   }
 
   protected customerInitials(conversation: ConversationFixture): string {
     return (
-      CUSTOMER_FIXTURES.find((customer) => customer.id === conversation.customerId)
+      this.customers().find((customer) => customer.id === conversation.customerId)
         ?.avatarInitials ?? 'HC'
     );
   }

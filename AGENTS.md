@@ -13,7 +13,7 @@
 - HTTP: typed `ApiResponse<T>`/`ApiError`/`PaginatedResponse<T>`/`ApiListQuery` aligned with `specs/001-ai-customer-service-platform/contracts/rest-api.md` (cursor pagination, error envelope, `X-Request-Id`). Functional interceptors only. No fake auth logic.
 - Route paths come from `APP_PATHS` constants in `core/router` — no string literals in features.
 - `apps/widget` and `libs/*` (Helix hx- components) are prior scaffolding — do not modify or use for the dashboard; Taiga UI only.
-- Quality gates (run in `frontend/`): `pnpm ng build dashboard`, `pnpm ng test dashboard`, `pnpm lint`, `pnpm format:check` — all must pass.
+- Quality gates (run in `frontend/`): `pnpm ng build dashboard`, `pnpm ng test dashboard`, `pnpm test:e2e`, `pnpm lint`, `pnpm format:check` — all must pass.
 
 ## Recent Changes
 

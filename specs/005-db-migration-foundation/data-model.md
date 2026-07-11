@@ -14,7 +14,7 @@
 | Tenant ownership | Non-nullable `tenant_id UUID REFERENCES tenants(id)` (constitution II) |
 | FK delete behavior | `ON DELETE RESTRICT` — hard deletes are design errors (R9) |
 
-`audit_logs` is exempt from `updated_at` and `deleted_at` (append-only, R8).
+`audit_logs` is exempt from `deleted_at` (append-only, R8) and from soft-delete cascades; it carries `updated_at` (migration 0010) but the append-only trigger (`forbid_mutation()`) prevents application updates from succeeding.
 
 ## Entity: users (migration 0003)
 
@@ -48,7 +48,7 @@ Customer organizations; the root of all tenant-owned data.
 |--------|------|-------------|
 | id | UUID | PK, default `gen_random_uuid()` |
 | name | TEXT | NOT NULL; CHECK `length(name) BETWEEN 1 AND 200` |
-| slug | CITEXT | NOT NULL; CHECK `slug ~ '^[a-z0-9](-?[a-z0-9])*$' AND length(slug) <= 63`; unique among active rows; **renamable** (spec clarification — uniqueness re-validated by the index on UPDATE, change must be audited by callers per FR-015a) |
+| slug | CITEXT | NOT NULL; CHECK `slug ~ '^[a-z0-9](-?[a-z0-9])*$' AND length(slug) <= 63`; unique among active rows; **renamable** (spec clarification — uniqueness re-validated by the index on UPDATE; migration 0009+0012+0015 automatically write a `tenant.slug_changed` audit row, and slug changes require a transaction-local `set_audit_actor()` context) |
 | status | TEXT | NOT NULL DEFAULT `'active'`; CHECK in (`active`,`suspended`) (FR-019) |
 | created_at / updated_at | TIMESTAMPTZ | NOT NULL, default `now()`; trigger-maintained |
 | deleted_at | TIMESTAMPTZ | NULL |
@@ -94,12 +94,13 @@ Immutable record of sensitive actions (FR-012, FR-014).
 | actor_user_id | UUID | NULL, FK → `users(id)`; NULL = system/automated actor |
 | action | TEXT | NOT NULL; CHECK `length(action) BETWEEN 1 AND 100` (e.g. `tenant.slug_changed`, `membership.role_changed`) |
 | resource_type | TEXT | NOT NULL |
-| resource_id | TEXT | NULL (TEXT, not UUID — may reference non-UUID resources, R8) |
+| resource_id | TEXT | NOT NULL (TEXT, not UUID — may reference non-UUID resources, R8; `audit_logs_resource_required` CHECK, migration 0013) |
 | tenant_id | UUID | NULL, FK → `tenants(id)`; NULL = platform-level action (FR-014) |
 | details | JSONB | NOT NULL DEFAULT `'{}'` — structured change payload (changed fields / before-after), spec clarification |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` |
+| updated_at | TIMESTAMPTZ | NOT NULL DEFAULT `now()` (migration 0010; `set_updated_at` trigger present but ineffective due to the append-only `forbid_mutation()` trigger that rejects all UPDATEs) |
 
-No `updated_at`, no `deleted_at`.
+No `deleted_at`.
 
 **Indexes**
 - `audit_logs_tenant_created_idx` — `(tenant_id, created_at DESC)` (tenant timeline, FR-017)
@@ -110,13 +111,16 @@ No `updated_at`, no `deleted_at`.
 
 **Relationships**: optional N:1 → users (actor), optional N:1 → tenants. FKs remain valid under soft delete because parent rows are never physically removed.
 
-## Trigger functions (migration 0005 & 0006 introduce; 0001 already has set_updated_at)
+## Trigger functions
 
-| Function | Purpose |
-|----------|---------|
-| `set_updated_at()` | existing (0001) — maintains `updated_at` |
-| `cascade_soft_delete_memberships()` | shared by the users/tenants AFTER UPDATE triggers: on NULL→NOT NULL `deleted_at` transition, `UPDATE tenant_memberships SET deleted_at = NEW.deleted_at WHERE (tenant_id/user_id) = NEW.id AND deleted_at IS NULL` (parameterized by trigger argument or two thin functions) |
-| `forbid_mutation()` | raises exception; attached to `audit_logs` for UPDATE/DELETE |
+| Function | Migration | Purpose |
+|----------|-----------|---------|
+| `set_updated_at()` | 0001 (existing) | Maintains `updated_at` on every applicable table; added to `audit_logs` in 0010 |
+| `cascade_soft_delete_user_memberships()` | 0008 | AFTER UPDATE on `users`: when `deleted_at` transitions NULL → NOT NULL, `UPDATE tenant_memberships SET deleted_at = NEW.deleted_at WHERE deleted_at IS NULL AND user_id = NEW.id` (scoped to user) |
+| `cascade_soft_delete_tenant_memberships()` | 0008 | AFTER UPDATE on `tenants`: same pattern, scoped to `tenant_id` |
+| `reject_membership_with_deleted_parent()` | 0009, refined in 0011 | BEFORE INSERT OR UPDATE on `tenant_memberships`: takes `SELECT ... FOR UPDATE` locks on the parent user and tenant rows, then rejects the write if either parent is soft-deleted. Prevents reactivation and reparenting into deleted parents. |
+| `audit_tenant_slug_change()` | 0009, 0012, 0015 | AFTER UPDATE on `tenants`: when `slug` changes and the row is active, writes an `audit_logs` row with `action = 'tenant.slug_changed'` and the new/old slugs in `details`. The actor comes from the transaction-local `app.audit_actor_id` GUC set by `set_audit_actor(uuid)`; the UPDATE is rejected if no actor is set. |
+| `forbid_mutation()` | 0006 | Raises exception; attached to `audit_logs` for UPDATE/DELETE — append-only enforcement (FR-012) |
 
 ## Relationship diagram
 
@@ -139,8 +143,8 @@ users 1 ──── N tenant_memberships N ──── 1 tenants
 | FR-013 tenant_id on tenant-owned tables | `tenant_memberships.tenant_id NOT NULL` FK |
 | FR-014 audit fields + details payload | audit_logs columns incl. `details JSONB` |
 | FR-015 active uniqueness (email, slug, membership) | three partial unique indexes |
-| FR-015a renamable slug | UPDATE allowed; partial unique index re-validates |
+| FR-015a renamable slug | UPDATE allowed; partial unique index re-validates; `audit_tenant_slug_change()` trigger writes the audit row; `set_audit_actor()` must be called in the same transaction |
 | FR-016 FK integrity + single role | FKs + `role` CHECK; platform roles via `users.platform_role` CHECK |
 | FR-017 tenant-aware indexes | index set above |
 | FR-019 tenant status | `status` CHECK + default |
-| FR-020 soft-delete cascades | `cascade_soft_delete_memberships` triggers |
+| FR-020 soft-delete cascades | `cascade_soft_delete_user_memberships` + `cascade_soft_delete_tenant_memberships` triggers (migrations 0005, 0008); `reject_membership_with_deleted_parent` (migrations 0009, 0011) prevents reactivation and reparenting to deleted parents |

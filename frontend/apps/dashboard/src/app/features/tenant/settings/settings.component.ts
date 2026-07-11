@@ -1,5 +1,8 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
+import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
+import { PAGE_ROUTE, RoutedPageStore } from '../routed-page.store';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
@@ -7,14 +10,6 @@ import { DashboardCardComponent } from '../../../shared/components/dashboard-car
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
-import {
-  API_KEY_FIXTURE,
-  INVOICE_FIXTURES,
-  SESSION_FIXTURES,
-  TEAM_MEMBERS,
-  USAGE_FIXTURES,
-  WORKSPACE_PROFILE,
-} from '../../../shared/fixtures/settings.fixtures';
 import { appUiActions, ThemeMode } from '../../../core/state/app-ui.feature';
 import { SettingsStore, SettingsTab } from './settings.store';
 
@@ -24,122 +19,99 @@ import { SettingsStore, SettingsTab } from './settings.store';
     AvatarComponent,
     DashboardCardComponent,
     DataTableComponent,
+    EmptyStateComponent,
+    LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,
     SectionHeaderComponent,
     StatusBadgeComponent,
   ],
-  providers: [SettingsStore],
+  providers: [SettingsStore, RoutedPageStore, { provide: PAGE_ROUTE, useValue: 'settings' }],
   template: `
     <app-page-container>
       <app-page-header title="Settings" [description]="'Workspace preferences and security'" />
-      <div class="tabs" role="tablist" aria-label="Settings sections">
-        @for (tab of tabs; track tab.id) {
-          <button
-            type="button"
-            role="tab"
-            [class.active]="store.activeTab() === tab.id"
-            [attr.aria-selected]="store.activeTab() === tab.id"
-            (click)="store.setTab(tab.id)"
-          >
-            {{ tab.label }}
-          </button>
-        }
-      </div>
+      @if (page.loading()) {
+        <app-loading-state />
+      } @else if (hasError()) {
+        <app-empty-state
+          icon="@tui.alert-circle"
+          title="Something went wrong"
+          description="We couldn't load this page. Please try again."
+        >
+          <button type="button" (click)="retry()">Try again</button>
+        </app-empty-state>
+      } @else if (hasData()) {
+        <div class="tabs" role="tablist" aria-label="Settings sections">
+          @for (tab of tabs; track tab.id) {
+            <button
+              type="button"
+              role="tab"
+              [class.active]="store.activeTab() === tab.id"
+              [attr.aria-selected]="store.activeTab() === tab.id"
+              (click)="store.setTab(tab.id)"
+            >
+              {{ tab.label }}
+            </button>
+          }
+        </div>
 
-      @switch (store.activeTab()) {
-        @case ('general') {
-          <section class="grid two">
-            <app-dashboard-card>
-              <app-section-header
-                card-header
-                title="Workspace profile"
-                subtitle="Static workspace preferences"
-              />
-              <label>Name<input [value]="profile.name" /></label>
-              <label>Domain<input [value]="profile.domain" /></label>
-              <label>Timezone<input [value]="profile.timezone" /></label>
-              <label>Default language<input [value]="profile.defaultLanguage" /></label>
-            </app-dashboard-card>
-            <app-dashboard-card>
-              <app-section-header
-                card-header
-                title="Theme preference"
-                subtitle="Uses the global app UI action"
-              />
-              <div class="segmented">
-                @for (mode of themeModes; track mode) {
-                  <button type="button" (click)="setTheme(mode)">{{ mode }}</button>
-                }
-              </div>
-              <label class="check"><input type="checkbox" checked /> Email notifications</label>
-              <label class="check"><input type="checkbox" checked /> AI quality alerts</label>
-            </app-dashboard-card>
-          </section>
-        }
-        @case ('team') {
-          <app-data-table>
-            <table>
-              <thead>
-                <tr>
-                  <th>Member</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (member of team; track member.id) {
-                  <tr>
-                    <td>
-                      <div class="person">
-                        <app-avatar [initials]="member.avatarInitials" size="sm" /><span
-                          >{{ member.name }}<small>{{ member.email }}</small></span
-                        >
-                      </div>
-                    </td>
-                    <td><app-status-badge [status]="member.role" tone="accent" /></td>
-                    <td>
-                      <app-status-badge
-                        [status]="member.status"
-                        [tone]="member.status === 'active' ? 'green' : 'amber'"
-                      />
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </app-data-table>
-        }
-        @case ('billing') {
-          <section class="grid two">
-            <app-dashboard-card>
-              <app-section-header card-header title="Usage" subtitle="Current plan limits" />
-              @for (usage of usageFixtures; track usage.label) {
-                <div class="usage">
-                  <span>{{ usage.label }}</span
-                  ><strong>{{ usage.used }} / {{ usage.limit }} {{ usage.unit }}</strong>
-                  <div><i [style.width.%]="(usage.used / usage.limit) * 100"></i></div>
+        @switch (store.activeTab()) {
+          @case ('general') {
+            <section class="grid two">
+              <app-dashboard-card>
+                <app-section-header
+                  card-header
+                  title="Workspace profile"
+                  subtitle="Static workspace preferences"
+                />
+                <label>Name<input [value]="pageData()!.profile.name" /></label>
+                <label>Domain<input [value]="pageData()!.profile.domain" /></label>
+                <label>Timezone<input [value]="pageData()!.profile.timezone" /></label>
+                <label
+                  >Default language<input [value]="pageData()!.profile.defaultLanguage"
+                /></label>
+              </app-dashboard-card>
+              <app-dashboard-card>
+                <app-section-header
+                  card-header
+                  title="Theme preference"
+                  subtitle="Uses the global app UI action"
+                />
+                <div class="segmented">
+                  @for (mode of themeModes; track mode) {
+                    <button type="button" (click)="setTheme(mode)">{{ mode }}</button>
+                  }
                 </div>
-              }
-            </app-dashboard-card>
+                <label class="check"><input type="checkbox" checked /> Email notifications</label>
+                <label class="check"><input type="checkbox" checked /> AI quality alerts</label>
+              </app-dashboard-card>
+            </section>
+          }
+          @case ('team') {
             <app-data-table>
               <table>
                 <thead>
                   <tr>
-                    <th>Invoice</th>
-                    <th>Amount</th>
+                    <th>Member</th>
+                    <th>Role</th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  @for (invoice of invoices; track invoice.id) {
+                  @for (member of pageData()!.team; track member.id) {
                     <tr>
-                      <td>{{ invoice.period }}</td>
-                      <td>{{ invoice.amount }}</td>
+                      <td>
+                        <div class="person">
+                          <app-avatar [initials]="member.avatarInitials" size="sm" /><span
+                            >{{ member.name }}<small>{{ member.email }}</small></span
+                          >
+                        </div>
+                      </td>
+                      <td><app-status-badge [status]="member.role" tone="accent" /></td>
                       <td>
                         <app-status-badge
-                          [status]="invoice.status"
-                          [tone]="invoice.status === 'paid' ? 'green' : 'amber'"
+                          [status]="member.status"
+                          [tone]="member.status === 'active' ? 'green' : 'amber'"
                         />
                       </td>
                     </tr>
@@ -147,54 +119,104 @@ import { SettingsStore, SettingsTab } from './settings.store';
                 </tbody>
               </table>
             </app-data-table>
-          </section>
-        }
-        @case ('api-keys') {
-          <app-dashboard-card>
-            <app-section-header card-header title="API keys" subtitle="Masked fixture value only" />
-            <label
-              >{{ apiKey.label }}<input class="mono" [value]="apiKey.maskedValue" readonly
-            /></label>
-            <p>Created {{ apiKey.createdAt }}</p>
-          </app-dashboard-card>
-        }
-        @case ('security') {
-          <section class="grid two">
+          }
+          @case ('billing') {
+            <section class="grid two">
+              <app-dashboard-card>
+                <app-section-header card-header title="Usage" subtitle="Current plan limits" />
+                @for (usage of pageData()!.usage; track usage.label) {
+                  <div class="usage">
+                    <span>{{ usage.label }}</span
+                    ><strong>{{ usage.used }} / {{ usage.limit }} {{ usage.unit }}</strong>
+                    <div><i [style.width.%]="(usage.used / usage.limit) * 100"></i></div>
+                  </div>
+                }
+              </app-dashboard-card>
+              <app-data-table>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Invoice</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (invoice of pageData()!.invoices; track invoice.id) {
+                      <tr>
+                        <td>{{ invoice.period }}</td>
+                        <td>{{ invoice.amount }}</td>
+                        <td>
+                          <app-status-badge
+                            [status]="invoice.status"
+                            [tone]="invoice.status === 'paid' ? 'green' : 'amber'"
+                          />
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </app-data-table>
+            </section>
+          }
+          @case ('api-keys') {
             <app-dashboard-card>
               <app-section-header
                 card-header
-                title="Two-factor authentication"
-                subtitle="Visual switch"
+                title="API keys"
+                subtitle="Masked fixture value only"
               />
-              <label class="switch"><input type="checkbox" checked /><span></span>Enabled</label>
+              <label
+                >{{ pageData()!.apiKey.label
+                }}<input class="mono" [value]="pageData()!.apiKey.maskedValue" readonly
+              /></label>
+              <p>Created {{ pageData()!.apiKey.createdAt }}</p>
             </app-dashboard-card>
-            <app-data-table>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Device</th>
-                    <th>Location</th>
-                    <th>Last active</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (session of sessions; track session.id) {
+          }
+          @case ('security') {
+            <section class="grid two">
+              <app-dashboard-card>
+                <app-section-header
+                  card-header
+                  title="Two-factor authentication"
+                  subtitle="Visual switch"
+                />
+                <label class="switch"><input type="checkbox" checked /><span></span>Enabled</label>
+              </app-dashboard-card>
+              <app-data-table>
+                <table>
+                  <thead>
                     <tr>
-                      <td>
-                        {{ session.device }}
-                        @if (session.current) {
-                          <span class="current">Current</span>
-                        }
-                      </td>
-                      <td>{{ session.location }}</td>
-                      <td class="muted">{{ session.lastActiveAt }}</td>
+                      <th>Device</th>
+                      <th>Location</th>
+                      <th>Last active</th>
                     </tr>
-                  }
-                </tbody>
-              </table>
-            </app-data-table>
-          </section>
+                  </thead>
+                  <tbody>
+                    @for (session of pageData()!.sessions; track session.id) {
+                      <tr>
+                        <td>
+                          {{ session.device }}
+                          @if (session.current) {
+                            <span class="current">Current</span>
+                          }
+                        </td>
+                        <td>{{ session.location }}</td>
+                        <td class="muted">{{ session.lastActiveAt }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </app-data-table>
+            </section>
+          }
         }
+      } @else {
+        <app-empty-state
+          icon="@tui.settings"
+          title="Default settings apply"
+          description="Customize your workspace preferences and configurations."
+        />
       }
     </app-page-container>
   `,
@@ -308,14 +330,11 @@ import { SettingsStore, SettingsTab } from './settings.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SettingsComponent {
+  protected readonly page = inject(RoutedPageStore);
+  protected readonly hasData = computed(() => this.page.data() !== undefined);
+  protected readonly hasError = computed(() => this.page.error() !== null);
   private readonly globalStore = inject(Store);
   protected readonly store = inject(SettingsStore);
-  protected readonly profile = WORKSPACE_PROFILE;
-  protected readonly team = TEAM_MEMBERS;
-  protected readonly usageFixtures = USAGE_FIXTURES;
-  protected readonly invoices = INVOICE_FIXTURES;
-  protected readonly apiKey = API_KEY_FIXTURE;
-  protected readonly sessions = SESSION_FIXTURES;
   protected readonly themeModes: readonly ThemeMode[] = ['light', 'dark', 'system'];
   protected readonly tabs: readonly { id: SettingsTab; label: string }[] = [
     { id: 'general', label: 'General' },
@@ -325,7 +344,17 @@ export class SettingsComponent {
     { id: 'security', label: 'Security' },
   ];
 
+  protected readonly pageData = computed(() => {
+    const data = this.page.data();
+    if (data?.page === 'settings') return data.data;
+    return undefined;
+  });
+
   protected setTheme(themeMode: ThemeMode): void {
     this.globalStore.dispatch(appUiActions.themeModeChanged({ themeMode }));
+  }
+
+  protected retry(): void {
+    this.page.retry();
   }
 }

@@ -189,4 +189,28 @@ describe('UserMenuComponent', () => {
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).querySelector('.dropdown')).toBeNull();
   });
+
+  it('has role="menuitem" on sign-out button', async () => {
+    const { fixture } = await setup();
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger')!;
+    trigger.dispatchEvent(new Event('click'));
+    fixture.detectChanges();
+
+    const signOutBtn = (fixture.nativeElement as HTMLElement).querySelector('.sign-out')!;
+    expect(signOutBtn.getAttribute('role')).toBe('menuitem');
+  });
+
+  it('focuses sign-out button when menu opens', async () => {
+    const { fixture } = await setup();
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger')!;
+
+    trigger.dispatchEvent(new Event('click'));
+    fixture.detectChanges();
+
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges();
+
+    const signOutBtn = (fixture.nativeElement as HTMLElement).querySelector('.sign-out')!;
+    expect(document.activeElement).toBe(signOutBtn);
+  });
 });

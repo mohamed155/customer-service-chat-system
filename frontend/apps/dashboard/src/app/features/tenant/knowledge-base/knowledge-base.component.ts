@@ -1,13 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
+import { PAGE_ROUTE, RoutedPageStore } from '../routed-page.store';
 import { SearchInputComponent } from '../../../shared/components/search-input/search-input.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { ToolbarComponent } from '../../../shared/components/toolbar/toolbar.component';
-import { KNOWLEDGE_FIXTURES } from '../../../shared/fixtures/knowledge.fixtures';
 import { ArticleStatus, ArticleSource } from '../../../shared/fixtures/fixture.models';
 
 @Component({
@@ -15,6 +16,7 @@ import { ArticleStatus, ArticleSource } from '../../../shared/fixtures/fixture.m
   imports: [
     DashboardCardComponent,
     EmptyStateComponent,
+    LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,
     SearchInputComponent,
@@ -22,60 +24,82 @@ import { ArticleStatus, ArticleSource } from '../../../shared/fixtures/fixture.m
     StatusBadgeComponent,
     ToolbarComponent,
   ],
+  providers: [RoutedPageStore, { provide: PAGE_ROUTE, useValue: 'knowledge-base' }],
   template: `
     <app-page-container>
       <app-page-header
         title="Knowledge Base"
         [description]="'Train your AI with trusted company knowledge'"
       />
-      <app-section-header title="Knowledge articles" subtitle="Trusted sources for AI answers">
-        <button type="button">New article</button>
-      </app-section-header>
-      <div class="stack">
-        <app-toolbar>
-          <app-search-input toolbar-start placeholder="Search knowledge" [(value)]="query" />
-          <select
-            toolbar-end
-            aria-label="Category filter"
-            [value]="category()"
-            (change)="setCategory($event)"
-          >
-            <option value="all">All categories</option>
-            @for (item of categories(); track item) {
-              <option [value]="item">{{ item }}</option>
-            }
-          </select>
-        </app-toolbar>
+      @if (page.loading()) {
+        <app-loading-state />
+      } @else if (hasError()) {
+        <app-empty-state
+          icon="@tui.alert-circle"
+          title="Something went wrong"
+          description="We couldn't load this page. Please try again."
+        >
+          <button type="button" (click)="retry()">Try again</button>
+        </app-empty-state>
+      } @else {
+        <app-section-header title="Knowledge articles" subtitle="Trusted sources for AI answers">
+          <button type="button">New article</button>
+        </app-section-header>
+        <div class="stack">
+          <app-toolbar>
+            <app-search-input toolbar-start placeholder="Search knowledge" [(value)]="query" />
+            <select
+              toolbar-end
+              aria-label="Category filter"
+              [value]="category()"
+              (change)="setCategory($event)"
+            >
+              <option value="all">All categories</option>
+              @for (item of categories(); track item) {
+                <option [value]="item">{{ item }}</option>
+              }
+            </select>
+          </app-toolbar>
 
-        @if (articles().length) {
-          <section class="cards">
-            @for (article of articles(); track article.id) {
-              <app-dashboard-card>
-                <div class="article-head">
-                  <div>
-                    <strong>{{ article.title }}</strong>
-                    <span>{{ article.category }} · Updated {{ article.updatedAt }}</span>
+          @if (articles().length) {
+            <section class="cards">
+              @for (article of articles(); track article.id) {
+                <app-dashboard-card>
+                  <div class="article-head">
+                    <div>
+                      <strong>{{ article.title }}</strong>
+                      <span>{{ article.category }} · Updated {{ article.updatedAt }}</span>
+                    </div>
+                    <span class="indexed" [class.off]="!article.indexed">
+                      {{ article.indexed ? 'Indexed' : 'Re-index needed' }}
+                    </span>
                   </div>
-                  <span class="indexed" [class.off]="!article.indexed">
-                    {{ article.indexed ? 'Indexed' : 'Re-index needed' }}
-                  </span>
-                </div>
-                <p>{{ article.excerpt }}</p>
-                <div class="badges">
-                  <app-status-badge [status]="article.status" [tone]="statusTone(article.status)" />
-                  <app-status-badge [status]="sourceLabel(article.source)" tone="neutral" />
-                </div>
-              </app-dashboard-card>
-            }
-          </section>
-        } @else {
-          <app-empty-state
-            icon="@tui.search-x"
-            title="No articles match"
-            description="Adjust the search or category filter to show knowledge sources."
-          />
-        }
-      </div>
+                  <p>{{ article.excerpt }}</p>
+                  <div class="badges">
+                    <app-status-badge
+                      [status]="article.status"
+                      [tone]="statusTone(article.status)"
+                    />
+                    <app-status-badge [status]="sourceLabel(article.source)" tone="neutral" />
+                  </div>
+                </app-dashboard-card>
+              }
+            </section>
+          } @else if (articles().length === 0 && hasData()) {
+            <app-empty-state
+              icon="@tui.search-x"
+              title="No articles match"
+              description="Adjust the search or category filter to show knowledge sources."
+            />
+          } @else {
+            <app-empty-state
+              icon="@tui.book-open"
+              title="No articles yet"
+              description="Create your first knowledge article to train the AI assistant."
+            />
+          }
+        </div>
+      }
     </app-page-container>
   `,
   styles: [
@@ -158,15 +182,26 @@ import { ArticleStatus, ArticleSource } from '../../../shared/fixtures/fixture.m
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class KnowledgeBaseComponent {
+  protected readonly page = inject(RoutedPageStore);
+  protected readonly hasData = computed(() => this.page.data() !== undefined);
+  protected readonly hasError = computed(() => this.page.error() !== null);
   protected readonly query = signal('');
   protected readonly category = signal('all');
+
+  protected readonly fixtureData = computed(() => {
+    const data = this.page.data();
+    if (data?.page === 'knowledge-base') return data.data;
+    return [];
+  });
+
   protected readonly categories = computed(() => [
-    ...new Set(KNOWLEDGE_FIXTURES.map((article) => article.category)),
+    ...new Set(this.fixtureData().map((article) => article.category)),
   ]);
+
   protected readonly articles = computed(() => {
     const query = this.query().trim().toLowerCase();
     const category = this.category();
-    return KNOWLEDGE_FIXTURES.filter((article) => {
+    return this.fixtureData().filter((article) => {
       const matchesQuery = query
         ? `${article.title} ${article.excerpt} ${article.category}`.toLowerCase().includes(query)
         : true;
@@ -185,5 +220,9 @@ export class KnowledgeBaseComponent {
 
   protected sourceLabel(source: ArticleSource): string {
     return source === 'faq' ? 'FAQ' : source.toUpperCase();
+  }
+
+  protected retry(): void {
+    this.page.retry();
   }
 }

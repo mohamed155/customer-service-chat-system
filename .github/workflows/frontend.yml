@@ -11,6 +11,12 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install chromium --with-deps
+      - name: Run E2E tests
+        working-directory: frontend
+        run: pnpm test:e2e
       - run: pnpm run lint
       - run: pnpm exec ng build dashboard
       - run: pnpm exec ng build widget

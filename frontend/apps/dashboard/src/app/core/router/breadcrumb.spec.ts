@@ -35,10 +35,30 @@ describe('injectBreadcrumbs', () => {
     const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
 
     const expected: Crumb[] = [
-      { label: 'Workspace', link: null },
+      { label: 'Workspace', link: '/tenant/overview' },
       { label: 'Conversations', link: null },
     ];
     expect(crumbs()).toEqual(expected);
+  });
+
+  it('produces Workspace crumb with navigable link for /tenant/overview', async () => {
+    const { router } = await setup([
+      {
+        path: 'tenant',
+        children: [
+          {
+            path: 'overview',
+            component: EmptyComponent,
+            data: { pageTitle: 'overview' },
+          },
+        ],
+      },
+    ]);
+
+    await router.navigateByUrl('/tenant/overview');
+    const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
+
+    expect(crumbs()[0].link).toBe('/tenant/overview');
   });
 
   it('sets area root to Platform when first segment is platform', async () => {
@@ -59,10 +79,30 @@ describe('injectBreadcrumbs', () => {
     const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
 
     const expected: Crumb[] = [
-      { label: 'Platform', link: null },
+      { label: 'Platform', link: '/platform/overview-placeholder' },
       { label: 'Conversations', link: null },
     ];
     expect(crumbs()).toEqual(expected);
+  });
+
+  it('produces Platform crumb with navigable link for /platform/overview-placeholder', async () => {
+    const { router } = await setup([
+      {
+        path: 'platform',
+        children: [
+          {
+            path: 'overview-placeholder',
+            component: EmptyComponent,
+            data: { pageTitle: 'platformOverview' },
+          },
+        ],
+      },
+    ]);
+
+    await router.navigateByUrl('/platform/overview-placeholder');
+    const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
+
+    expect(crumbs()[0].link).toBe('/platform/overview-placeholder');
   });
 
   it('sets area root to Home for unknown first segment', async () => {
@@ -165,7 +205,7 @@ describe('injectBreadcrumbs', () => {
     const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
 
     expect(crumbs()).toEqual([
-      { label: 'Platform', link: null },
+      { label: 'Platform', link: '/platform/overview-placeholder' },
       { label: 'Platform overview', link: null },
     ]);
   });

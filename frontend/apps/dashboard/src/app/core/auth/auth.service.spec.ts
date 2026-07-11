@@ -5,17 +5,20 @@ import { ApiError, ApiResponse } from '../api/api.models';
 import { MeResponse } from '../api/tenant-api.models';
 import { ApiService } from '../api/api.service';
 import { CurrentUserService } from '../tenant/current-user.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
 import { AuthLoginError, AuthService, INVALID_CREDENTIALS_MESSAGE } from './auth.service';
 
 describe('AuthService', () => {
   let service: AuthService;
   let api: { post: ReturnType<typeof vi.fn> };
   let currentUser: { clear: ReturnType<typeof vi.fn>; load: ReturnType<typeof vi.fn> };
+  let tenantContext: { clear: ReturnType<typeof vi.fn> };
   let router: { navigate: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     api = { post: vi.fn() };
     currentUser = { clear: vi.fn(), load: vi.fn() };
+    tenantContext = { clear: vi.fn() };
     router = { navigate: vi.fn().mockResolvedValue(true) };
 
     TestBed.configureTestingModule({
@@ -23,6 +26,7 @@ describe('AuthService', () => {
         AuthService,
         { provide: ApiService, useValue: api },
         { provide: CurrentUserService, useValue: currentUser },
+        { provide: TenantContextService, useValue: tenantContext },
         { provide: Router, useValue: router },
       ],
     });
@@ -94,6 +98,7 @@ describe('AuthService', () => {
     expect(service.pending()).toBe(true);
     expect(api.post).toHaveBeenCalledWith('/auth/logout', {});
     expect(currentUser.clear).not.toHaveBeenCalled();
+    expect(tenantContext.clear).not.toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
 
     response.next({ data: undefined });
@@ -101,6 +106,31 @@ describe('AuthService', () => {
     await logout;
 
     expect(currentUser.clear).toHaveBeenCalledTimes(1);
+    expect(tenantContext.clear).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/auth/login']);
+    expect(service.pending()).toBe(false);
+  });
+
+  it('clears local state and navigates to login when server logout fails with 500', async () => {
+    const apiError: ApiError = { code: 'internal_error', message: 'Server error', status: 500 };
+    api.post.mockReturnValue(throwError(() => apiError));
+
+    await service.logout();
+
+    expect(currentUser.clear).toHaveBeenCalledTimes(1);
+    expect(tenantContext.clear).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/auth/login']);
+    expect(service.pending()).toBe(false);
+  });
+
+  it('clears local state and navigates to login when session is already expired (401)', async () => {
+    const apiError: ApiError = { code: 'unauthenticated', message: 'Session expired', status: 401 };
+    api.post.mockReturnValue(throwError(() => apiError));
+
+    await service.logout();
+
+    expect(currentUser.clear).toHaveBeenCalledTimes(1);
+    expect(tenantContext.clear).toHaveBeenCalledTimes(1);
     expect(router.navigate).toHaveBeenCalledWith(['/auth/login']);
     expect(service.pending()).toBe(false);
   });

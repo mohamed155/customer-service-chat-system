@@ -7,6 +7,7 @@ import { ApiService } from '../api/api.service';
 import { mapHttpError, userMessageFor } from '../errors/http-error.mapper';
 import { APP_PATHS } from '../router/app-paths';
 import { CurrentUserService } from '../tenant/current-user.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
 
 export const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
 
@@ -25,6 +26,7 @@ export class AuthLoginError extends Error {
 export class AuthService {
   private readonly api = inject(ApiService);
   private readonly currentUser = inject(CurrentUserService);
+  private readonly tenantContext = inject(TenantContextService);
   private readonly router = inject(Router);
   private readonly pendingSignal = signal(false);
 
@@ -48,11 +50,14 @@ export class AuthService {
 
     try {
       await firstValueFrom(this.api.post<void>('/auth/logout', {}));
-      this.currentUser.clear();
-      await this.router.navigate([`/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`]);
-    } finally {
-      this.pendingSignal.set(false);
+    } catch (err) {
+      console.error('Server logout failed, cleaning up locally', err);
     }
+
+    this.currentUser.clear();
+    this.tenantContext.clear();
+    await this.router.navigate([`/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`]);
+    this.pendingSignal.set(false);
   }
 
   private toLoginError(error: unknown): AuthLoginError {

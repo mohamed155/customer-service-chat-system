@@ -98,6 +98,15 @@ describe('AppShellComponent', () => {
     expect(fixture.nativeElement.querySelector('.scrim')).toBeNull();
   });
 
+  it('forces sidebar expanded in drawer mode even when store says collapsed', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+    const sidebar: HTMLElement = fixture.nativeElement.querySelector('app-sidebar')!;
+    expect(sidebar.classList.contains('collapsed')).toBe(false);
+  });
+
   it('closes drawer on Escape keydown', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
     await TestBed.compileComponents();

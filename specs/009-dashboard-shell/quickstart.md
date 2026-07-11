@@ -13,6 +13,7 @@
 cd frontend
 pnpm ng test dashboard     # user-menu, platform-nav, breadcrumb, layout-store drawer, sidebar (footer removed), page-container specs
 pnpm ng build dashboard
+pnpm test:e2e
 pnpm lint
 pnpm format:check
 ```

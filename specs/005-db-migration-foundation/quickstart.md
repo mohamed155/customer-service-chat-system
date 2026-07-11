@@ -65,8 +65,8 @@ Runs the DB integration tests (they skip with a notice if `DATABASE_URL` is unre
 Push a branch / open a PR. `.github/workflows/backend.yml` already:
 
 1. boots a clean `pgvector:pg16` service,
-2. runs `cargo test --workspace` (includes schema tests against the live service),
-3. runs `sqlx migrate run` from scratch.
+2. installs `sqlx-cli` and runs `sqlx migrate run` against the clean service to apply the full migration history,
+3. runs `cargo test --workspace` (schema tests reuse the migrated service).
 
 **Expected**: pipeline green; any broken migration or schema regression fails the build.
 

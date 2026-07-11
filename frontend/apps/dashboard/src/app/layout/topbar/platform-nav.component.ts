@@ -1,9 +1,10 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  computed,
   ElementRef,
   HostListener,
+  afterNextRender,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -22,7 +23,7 @@ interface PlatformDestination {
 const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
   {
     label: 'Platform overview',
-    path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.overviewPlaceholder}`,
+    path: `/${APP_PATHS.platform.base}`,
     permission: 'platform.admin',
   },
 ] as const;
@@ -38,6 +39,7 @@ const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
           class="trigger"
           (click)="toggle()"
           [attr.aria-expanded]="open()"
+          aria-haspopup="menu"
           aria-label="Platform"
         >
           <tui-icon icon="@tui.layout-dashboard" />
@@ -47,14 +49,19 @@ const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
         @if (open()) {
           <div
             class="dropdown"
-            (click)="close()"
-            (keydown.Enter)="close()"
-            (keydown.Space)="$event.preventDefault(); close()"
+            role="menu"
             tabindex="-1"
-            role="button"
+            (click)="close()"
+            (keydown)="onDropdownKeydown($event)"
           >
             @for (dest of destinations(); track dest.path) {
-              <button type="button" class="option" (click)="navigate(dest)">
+              <button
+                type="button"
+                class="option"
+                role="menuitem"
+                (click)="navigate(dest)"
+                (keydown.enter)="navigate(dest)"
+              >
                 {{ dest.label }}
               </button>
             }
@@ -133,17 +140,58 @@ export class PlatformNavComponent {
     PLATFORM_DESTINATIONS.filter((d) => this.permissions.has(d.permission)),
   );
 
+  constructor() {
+    afterNextRender(() => {
+      if (this.open()) {
+        this.focusFirstOption();
+      }
+    });
+  }
+
   toggle(): void {
     this.open.update((v) => !v);
+    if (!this.open()) {
+      this.focusTrigger();
+    }
   }
 
   close(): void {
     this.open.set(false);
+    this.focusTrigger();
   }
 
   navigate(dest: PlatformDestination): void {
     this.close();
     this.router.navigate([dest.path]);
+  }
+
+  protected onDropdownKeydown(event: KeyboardEvent): void {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const items = Array.from(
+        this.elementRef.nativeElement.querySelectorAll('.option'),
+      ) as HTMLElement[];
+      const current = document.activeElement as HTMLElement | null;
+      const currentIndex = items.indexOf(current as HTMLElement);
+      let nextIndex: number;
+      if (event.key === 'ArrowDown') {
+        nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+      } else {
+        nextIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+      }
+      items[nextIndex]?.focus();
+    }
+  }
+
+  private focusTrigger(): void {
+    (this.elementRef.nativeElement.querySelector('.trigger') as HTMLElement)?.focus();
+  }
+
+  private focusFirstOption(): void {
+    const items = Array.from(
+      this.elementRef.nativeElement.querySelectorAll('.option'),
+    ) as HTMLElement[];
+    items[0]?.focus();
   }
 
   @HostListener('document:click', ['$event'])

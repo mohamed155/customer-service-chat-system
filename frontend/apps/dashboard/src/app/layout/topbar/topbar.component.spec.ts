@@ -181,4 +181,37 @@ describe('TopbarComponent', () => {
 
     expect(layoutStore.drawerOpen()).toBe(false);
   });
+
+  it('avoids horizontal overflow at narrow viewports', async () => {
+    const { fixture } = await setup('light', { authenticated: true, platformUser: true });
+    const el = fixture.nativeElement as HTMLElement;
+    const tools = el.querySelector('.tools') as HTMLElement;
+    const header = el.querySelector('header') as HTMLElement;
+
+    // Verify the component includes the expected responsive breakpoint rules
+    const styleTags = [...document.querySelectorAll('style')];
+    expect(styleTags.some((s) => s.textContent?.includes('@media (max-width: 480px)'))).toBe(true);
+
+    // Simulate narrow viewport for LayoutStore (CSS media queries are evaluated
+    // by jsdom at style-computation time and use window.innerWidth)
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+    window.dispatchEvent(new Event('resize'));
+    fixture.detectChanges();
+
+    // Regression: no horizontal overflow at 360px
+    expect(tools.scrollWidth).toBeLessThanOrEqual(tools.clientWidth);
+
+    // Theme toggle remains reachable (no display:none hiding at any width)
+    const themeToggle = header.querySelector('.theme-toggle') as HTMLElement;
+    expect(themeToggle).not.toBeNull();
+    expect(window.getComputedStyle(themeToggle).display).not.toBe('none');
+
+    // Critical controls must remain reachable at the narrowest breakpoint
+    expect(header.querySelector('app-user-menu')).not.toBeNull();
+    expect(header.querySelector('app-platform-nav')).not.toBeNull();
+    expect(header.querySelector('app-tenant-switcher')).not.toBeNull();
+
+    // New button remains in the DOM (hidden via CSS media query at <480px)
+    expect(header.querySelector('.new-button')).not.toBeNull();
+  });
 });

@@ -108,4 +108,42 @@ describe('TenantSwitcherComponent', () => {
     expect(api.post).toHaveBeenCalledWith('/platform/tenants/t-1/switch', undefined);
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ tenantId: 't-1' }));
   });
+
+  it('has aria-haspopup="listbox" on trigger', async () => {
+    const { fixture } = await setup(true);
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger')!;
+    expect(trigger.getAttribute('aria-haspopup')).toBe('listbox');
+  });
+
+  it('has role="option" and aria-selected on options', async () => {
+    const { fixture, store } = await setup(true);
+    store.setState({
+      tenantContext: {
+        activeTenant: { id: 't-1', name: 'Acme Corp', slug: 'acme', status: 'active' },
+        status: 'idle' as const,
+      },
+    });
+    fixture.detectChanges();
+
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger') as HTMLElement;
+    trigger.click();
+    fixture.detectChanges();
+
+    const options = (fixture.nativeElement as HTMLElement).querySelectorAll('.option');
+    expect(options.length).toBeGreaterThan(0);
+    expect(options[0].getAttribute('role')).toBe('option');
+    expect(options[0].getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('closes dropdown on escape key', async () => {
+    const { fixture } = await setup(true);
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger') as HTMLElement;
+    trigger.click();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.dropdown')).toBeTruthy();
+
+    fixture.nativeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'escape' }));
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.dropdown')).toBeNull();
+  });
 });

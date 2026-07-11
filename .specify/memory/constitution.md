@@ -1,14 +1,14 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 → 1.1.0
+Version change: 1.1.0 → 1.2.0
 Modified principles: N/A
 Added sections: N/A
 Expanded sections:
-  - Technology Stack & Platform Requirements → Frontend line now mandates
-    standalone components by default (NgModules MUST NOT be introduced for
-    new code); Angular workspace schematics configuration MUST default
-    `standalone: true` for generated components/directives/pipes.
+  - Technology Stack & Platform Requirements → Frontend now mandates
+    RxJS-first asynchronous logic: Angular code MUST prefer RxJS observables
+    and operator composition over Promise-based flows; Observable→Promise
+    conversion is confined to inherently Promise-based integration boundaries.
 Removed sections: N/A
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ no change needed (Constitution Check
@@ -16,9 +16,7 @@ Templates requiring updates:
   - .specify/templates/spec-template.md ✅ no constitution-specific references found
   - .specify/templates/tasks-template.md ✅ no constitution-specific references found
   - .specify/templates/checklist-template.md ✅ no constitution-specific references found
-Follow-up TODOs:
-  - TODO(RATIFICATION_DATE): Original ratification date unknown; set to the date
-    this constitution was first adopted by the team if different from today.
+Follow-up TODOs: none.
 -->
 
 # AI Customer Service Platform Constitution
@@ -142,6 +140,16 @@ Angular workspace configuration (`angular.json` `schematics` defaults) MUST
 keep `standalone: true` as the generated default so this is enforced by
 tooling, not convention alone.
 
+Asynchronous and event-driven logic in Angular code MUST prefer RxJS
+observables and operator composition (`pipe`, `map`, `switchMap`,
+`catchError`, …) over Promise-based flows. Converting an Observable to a
+Promise (`firstValueFrom`/`lastValueFrom`, `async/await` wrappers, `.then()`
+chains) is permitted only at integration boundaries where the consumed or
+exposed API is inherently Promise-based (e.g., application initializers,
+imperative `Router.navigate` calls); such conversions MUST stay localized to
+that boundary and MUST NOT replace operator composition inside services,
+interceptors, guards, effects, or component streams.
+
 **Backend**: Rust, Axum, Tokio, SQLx, PostgreSQL, Redis, pgvector, Serde, Tracing.
 
 **Storage**: S3-compatible object storage.
@@ -190,4 +198,4 @@ deviations are grounds to block the plan at the Constitution Check gate.
 When making decisions not explicitly covered above, prioritize simplicity,
 maintainability, and long-term scalability over short-term convenience.
 
-**Version**: 1.1.0 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-07-05
+**Version**: 1.2.0 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-07-11

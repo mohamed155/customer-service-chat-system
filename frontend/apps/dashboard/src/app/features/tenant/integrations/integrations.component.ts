@@ -1,43 +1,66 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
+import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
+import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
+import { PAGE_ROUTE, RoutedPageStore } from '../routed-page.store';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
-import { INTEGRATION_FIXTURES } from '../../../shared/fixtures/integration.fixtures';
 import { IntegrationStatus } from '../../../shared/fixtures/fixture.models';
 
 @Component({
   selector: 'app-integrations',
   imports: [
     DashboardCardComponent,
+    EmptyStateComponent,
+    LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,
     SectionHeaderComponent,
     StatusBadgeComponent,
     TuiIcon,
   ],
+  providers: [RoutedPageStore, { provide: PAGE_ROUTE, useValue: 'integrations' }],
   template: `
     <app-page-container>
       <app-page-header
         title="Integrations"
         [description]="'Connect channels and business systems'"
       />
-      <app-section-header title="Integrations" subtitle="Connect channels and systems" />
-      <section class="grid">
-        @for (integration of integrations; track integration.id) {
-          <app-dashboard-card>
-            <div class="head">
-              <span class="icon"><tui-icon [icon]="integration.icon" /></span>
-              <app-status-badge [status]="integration.status" [tone]="tone(integration.status)" />
-            </div>
-            <h2>{{ integration.name }}</h2>
-            <p>{{ integration.description }}</p>
-            <button type="button">{{ integration.actionLabel }}</button>
-          </app-dashboard-card>
-        }
-      </section>
+      @if (page.loading()) {
+        <app-loading-state />
+      } @else if (hasError()) {
+        <app-empty-state
+          icon="@tui.alert-circle"
+          title="Something went wrong"
+          description="We couldn't load this page. Please try again."
+        >
+          <button type="button" (click)="retry()">Try again</button>
+        </app-empty-state>
+      } @else if (hasData()) {
+        <app-section-header title="Integrations" subtitle="Connect channels and systems" />
+        <section class="grid">
+          @for (integration of integrations(); track integration.id) {
+            <app-dashboard-card>
+              <div class="head">
+                <span class="icon"><tui-icon [icon]="integration.icon" /></span>
+                <app-status-badge [status]="integration.status" [tone]="tone(integration.status)" />
+              </div>
+              <h2>{{ integration.name }}</h2>
+              <p>{{ integration.description }}</p>
+              <button type="button">{{ integration.actionLabel }}</button>
+            </app-dashboard-card>
+          }
+        </section>
+      } @else {
+        <app-empty-state
+          icon="@tui.plug"
+          title="No integrations configured"
+          description="Connect your channels and tools to extend the platform's capabilities."
+        />
+      }
     </app-page-container>
   `,
   styles: [
@@ -96,9 +119,21 @@ import { IntegrationStatus } from '../../../shared/fixtures/fixture.models';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IntegrationsComponent {
-  protected readonly integrations = INTEGRATION_FIXTURES;
+  protected readonly page = inject(RoutedPageStore);
+  protected readonly hasData = computed(() => this.page.data() !== undefined);
+  protected readonly hasError = computed(() => this.page.error() !== null);
+
+  protected readonly integrations = computed(() => {
+    const data = this.page.data();
+    if (data?.page === 'integrations') return data.data;
+    return [];
+  });
 
   protected tone(status: IntegrationStatus): 'green' | 'amber' | 'neutral' {
     return status === 'connected' ? 'green' : status === 'coming-soon' ? 'amber' : 'neutral';
+  }
+
+  protected retry(): void {
+    this.page.retry();
   }
 }

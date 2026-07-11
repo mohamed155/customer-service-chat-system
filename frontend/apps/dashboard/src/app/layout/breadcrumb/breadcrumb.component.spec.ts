@@ -85,8 +85,9 @@ describe('BreadcrumbComponent', () => {
     );
 
     const links = (fixture.nativeElement as HTMLElement).querySelectorAll('a');
-    expect(links.length).toBe(1);
-    expect(links[0].textContent).toContain('Overview');
+    expect(links.length).toBe(2);
+    expect(links[0].textContent).toContain('Workspace');
+    expect(links[1].textContent).toContain('Overview');
   });
 
   it('renders non-link entries (current page) with aria-current="page"', async () => {
@@ -113,7 +114,74 @@ describe('BreadcrumbComponent', () => {
     expect(current!.textContent).toContain('Conversations');
   });
 
-  it('renders non-link entries (area root) as plain text without aria-current', async () => {
+  it('wraps and truncates on narrow viewports with deep trails', async () => {
+    const { fixture } = await setup(
+      [
+        {
+          path: 'a',
+          data: { pageTitle: 'Alpha' },
+          children: [
+            {
+              path: 'b',
+              data: { pageTitle: 'Bravo' },
+              children: [
+                {
+                  path: 'c',
+                  data: { pageTitle: 'Charlie' },
+                  children: [
+                    {
+                      path: 'd',
+                      component: EmptyComponent,
+                      data: {
+                        pageTitle: 'Delta with an extremely long label that should not overflow',
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      '/a/b/c/d',
+    );
+
+    const container = (fixture.nativeElement as HTMLElement).querySelector('nav')!;
+    container.style.width = '200px';
+    const allElements = container.querySelectorAll('*');
+    let hasOverflow = false;
+    allElements.forEach((el) => {
+      if (el.scrollWidth > el.clientWidth) {
+        hasOverflow = true;
+      }
+    });
+    expect(hasOverflow).toBe(false);
+  });
+
+  it('renders ancestor area-root crumb as navigable anchor when link is set', async () => {
+    const { fixture } = await setup(
+      [
+        {
+          path: 'tenant',
+          children: [
+            {
+              path: 'settings',
+              component: EmptyComponent,
+              data: { pageTitle: 'settings' },
+            },
+          ],
+        },
+      ],
+      '/tenant/settings',
+    );
+
+    const links = (fixture.nativeElement as HTMLElement).querySelectorAll('a');
+    const workspaceLink = Array.from(links).find((a) => a.textContent?.trim() === 'Workspace');
+    expect(workspaceLink).not.toBeUndefined();
+    expect(workspaceLink!.hasAttribute('href')).toBe(true);
+  });
+
+  it('aligns breadcrumb inner to content column', async () => {
     const { fixture } = await setup(
       [
         {
@@ -130,9 +198,34 @@ describe('BreadcrumbComponent', () => {
       '/tenant/conversations',
     );
 
+    const inner = (fixture.nativeElement as HTMLElement).querySelector('.breadcrumb-inner')!;
+    expect(inner).not.toBeNull();
+    const style = getComputedStyle(inner);
+    expect(style.maxWidth).toBeTruthy();
+    expect(style.marginLeft).toBe('auto');
+    expect(style.marginRight).toBe('auto');
+  });
+
+  it('renders non-link entries (area root) as plain text without aria-current', async () => {
+    const { fixture } = await setup(
+      [
+        {
+          path: 'custom',
+          children: [
+            {
+              path: 'page',
+              component: EmptyComponent,
+              data: { pageTitle: 'overview' },
+            },
+          ],
+        },
+      ],
+      '/custom/page',
+    );
+
     const spans = (fixture.nativeElement as HTMLElement).querySelectorAll('span');
     const plainSpans = Array.from(spans).filter((s) => !s.hasAttribute('aria-current'));
     expect(plainSpans.length).toBe(1);
-    expect(plainSpans[0].textContent).toContain('Workspace');
+    expect(plainSpans[0].textContent).toContain('Home');
   });
 });

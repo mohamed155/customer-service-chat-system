@@ -4,7 +4,10 @@ import {
   computed,
   ElementRef,
   inject,
+  QueryList,
   signal,
+  ViewChild,
+  ViewChildren,
 } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
 import { AuthService } from '../../core/auth/auth.service';
@@ -21,6 +24,7 @@ import { AvatarComponent } from '../../shared/components/avatar/avatar.component
       <button
         type="button"
         class="trigger"
+        #trigger
         (click)="toggle()"
         [attr.aria-expanded]="open()"
         aria-haspopup="menu"
@@ -40,7 +44,7 @@ import { AvatarComponent } from '../../shared/components/avatar/avatar.component
             }
           </div>
           <div class="divider"></div>
-          <button type="button" class="sign-out" (click)="signOut()">
+          <button type="button" class="sign-out" #menuItem role="menuitem" (click)="signOut()">
             <tui-icon icon="@tui.log-out" />
             Sign out
           </button>
@@ -140,6 +144,8 @@ import { AvatarComponent } from '../../shared/components/avatar/avatar.component
   host: {
     '(document:click)': 'handleClick($event)',
     '(keydown.escape)': 'close()',
+    '(keydown.arrowdown)': 'handleArrowDown($event)',
+    '(keydown.arrowup)': 'handleArrowUp($event)',
   },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -151,6 +157,12 @@ export class UserMenuComponent {
 
   protected readonly currentUser = this.currentUserService.currentUser;
   protected readonly open = signal(false);
+
+  @ViewChild('trigger', { read: ElementRef })
+  protected triggerButton?: ElementRef<HTMLElement>;
+
+  @ViewChildren('menuItem')
+  protected menuItems!: QueryList<ElementRef<HTMLElement>>;
 
   protected readonly initials = computed(() => {
     const name = this.currentUser()?.displayName;
@@ -170,10 +182,16 @@ export class UserMenuComponent {
 
   toggle(): void {
     this.open.update((v) => !v);
+    if (this.open()) {
+      setTimeout(() => this.menuItems.first?.nativeElement.focus());
+    } else {
+      this.triggerButton?.nativeElement.focus();
+    }
   }
 
   close(): void {
     this.open.set(false);
+    this.triggerButton?.nativeElement.focus();
   }
 
   protected handleClick(event: MouseEvent): void {
@@ -181,6 +199,26 @@ export class UserMenuComponent {
     if (!this.elementRef.nativeElement.contains(event.target as Node)) {
       this.close();
     }
+  }
+
+  protected handleArrowDown(event: Event): void {
+    if (!this.open()) return;
+    event.preventDefault();
+    const items = this.menuItems.toArray();
+    if (items.length === 0) return;
+    const currentIndex = items.findIndex((item) => item.nativeElement === document.activeElement);
+    const nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+    items[nextIndex].nativeElement.focus();
+  }
+
+  protected handleArrowUp(event: Event): void {
+    if (!this.open()) return;
+    event.preventDefault();
+    const items = this.menuItems.toArray();
+    if (items.length === 0) return;
+    const currentIndex = items.findIndex((item) => item.nativeElement === document.activeElement);
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+    items[prevIndex].nativeElement.focus();
   }
 
   protected async signOut(): Promise<void> {

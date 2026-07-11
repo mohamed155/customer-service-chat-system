@@ -39,9 +39,11 @@ export const LayoutStore = signalStore(
     const update = (): void => {
       const width = window.innerWidth;
       const narrow = width < LAYOUT_COLLAPSE_BREAKPOINT;
+      const mobile = width < MOBILE_BREAKPOINT;
       patchState(store, { viewportWidth: width });
       if (narrow && !previousNarrow)
         globalStore.dispatch(appUiActions.sidebarCollapsedSet({ collapsed: true }));
+      if (!mobile && store.drawerOpen()) store.closeDrawer();
       previousNarrow = narrow;
     };
     return {

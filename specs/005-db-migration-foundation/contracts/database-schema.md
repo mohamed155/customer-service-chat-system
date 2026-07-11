@@ -36,22 +36,25 @@ This feature exposes no HTTP API. Its public interfaces are (A) the migration wo
 
 - Lookup by slug: `WHERE slug = $1 AND deleted_at IS NULL` — index-served, case-insensitive, at most one row.
 - `status ∈ {active, suspended}`; suspended ≠ deleted. Termination = soft delete.
-- Slug is mutable; a slug change MUST be recorded in `audit_logs` by the caller (FR-015a) — the database enforces uniqueness, the application enforces the audit entry.
+- Slug is mutable; the database **automatically** writes an `audit_logs` row with `action = 'tenant.slug_changed'` and the old/new slugs in `details` (migrations 0009+0012+0015). The application must call `set_audit_actor(<user_id>)` **within the same explicit transaction** as the slug UPDATE; the UPDATE is rejected otherwise.
 
 ### tenant_memberships
 
 - At most one **active** membership per `(tenant_id, user_id)`; inserting a duplicate active pair fails with a unique violation.
 - `role ∈ {owner, admin, manager, agent, viewer}` — exactly one per membership.
-- Soft-deleting a tenant or a user automatically soft-deletes its active memberships (database trigger). Application code MUST NOT assume memberships outlive their parents.
+- Soft-deleting a tenant or a user automatically soft-deletes its active memberships (database trigger — migrations 0005+0008). Application code MUST NOT assume memberships outlive their parents.
+- An active membership cannot reference a soft-deleted parent (inserts, reactivation, and reparenting updates are all rejected by the `reject_membership_with_deleted_parent` trigger from migration 0009+0011).
+- The guard uses `SELECT ... FOR UPDATE` on the parent user and tenant rows, so a concurrent parent soft-delete blocks the membership write until the membership transaction commits.
 - Tenant-scoped listing (`WHERE tenant_id = $1 AND deleted_at IS NULL`) and user-scoped listing (`WHERE user_id = $1`) are index-served.
 
 ### audit_logs
 
 - INSERT-only. `UPDATE`/`DELETE` raise a database exception — do not build any code path that attempts them.
-- Required on insert: `action`, `resource_type`; `details` defaults to `{}`.
-- `tenant_id NULL` ⇔ platform-level action; `actor_user_id NULL` ⇔ system actor.
+- Required on insert: `action`, `resource_type`, and `resource_id` (NOT NULL since migration 0013 — the `audit_logs_resource_required` CHECK requires every entry to identify the affected resource).
+- Optional: `actor_user_id` (NULL ⇔ system actor), `tenant_id` (NULL ⇔ platform-level action), `details` (defaults to `{}`).
 - Tenant timeline (`WHERE tenant_id = $1 ORDER BY created_at DESC`) is index-served.
 - Entries remain readable after their actor/tenant is soft-deleted.
+- `updated_at` column is present (migration 0010) but ineffective because the append-only `forbid_mutation()` trigger prevents all updates.
 
 ## C. Compatibility promises to future features
 

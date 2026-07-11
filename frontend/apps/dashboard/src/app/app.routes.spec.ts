@@ -33,7 +33,10 @@ describe('application routes', () => {
         provideRouter(routes),
         provideTaiga(),
         provideMockStore({
-          initialState: { appUi: { themeMode: 'system', sidebarCollapsed: false } },
+          initialState: {
+            appUi: { themeMode: 'system', sidebarCollapsed: false },
+            tenantContext: { activeTenant: null, status: 'idle' as const },
+          },
         }),
         { provide: CurrentUserService, useValue: currentUser },
         {
@@ -55,7 +58,9 @@ describe('application routes', () => {
   ])('renders protected route %s for authenticated users', async (url, expected) => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl(url);
-    expect(harness.routeNativeElement?.textContent).toContain(expected);
+    await vi.waitFor(() => {
+      expect(harness.routeNativeElement?.textContent).toContain(expected);
+    });
   });
 
   it('renders /auth/login for signed-out users', async () => {

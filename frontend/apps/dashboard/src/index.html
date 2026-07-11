@@ -112,9 +112,46 @@
         border-bottom-color: #38383a;
       }
 
+      .skeleton-topbar-tools {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .skeleton-control {
+        border-radius: 8px;
+        background: #e5e5ea;
+      }
+      html[data-theme='dark'] .skeleton-control {
+        background: #38383a;
+      }
+      .skeleton-control-nav {
+        width: 28px;
+        height: 38px;
+      }
+      .skeleton-control-theme {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+      }
+      .skeleton-control-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+      }
+      @media (max-width: 767px) {
+        .skeleton-control-nav,
+        .skeleton-control-theme {
+          display: none;
+        }
+      }
+
       .skeleton-content {
         flex: 1;
-        margin: 24px;
+        max-width: 1320px;
+        width: 100%;
+        margin: 24px auto;
+        padding: 0 24px;
         border-radius: 12px;
         background: #ffffff;
       }
@@ -136,7 +173,13 @@
           </div>
         </aside>
         <div class="skeleton-workspace">
-          <header class="skeleton-topbar"></header>
+          <header class="skeleton-topbar">
+            <div class="skeleton-topbar-tools">
+              <div class="skeleton-control skeleton-control-nav"></div>
+              <div class="skeleton-control skeleton-control-theme"></div>
+              <div class="skeleton-control skeleton-control-avatar"></div>
+            </div>
+          </header>
           <main class="skeleton-content"></main>
         </div>
       </div>

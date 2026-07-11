@@ -18,7 +18,7 @@ Technical approach: frontend-only. The shell keeps the existing blocking `provid
 
 **Storage**: No backend/schema changes. localStorage only: existing `app.themeMode` (persisted theme, also read by the new pre-boot inline script) and `app.tenant` (existing). Sidebar/drawer state stays session-scoped in memory per the established state rules.
 
-**Testing**: Vitest via `pnpm ng test dashboard`; quality gates `pnpm ng build dashboard`, `pnpm lint`, `pnpm format:check` (run in `frontend/`)
+**Testing**: Vitest via `pnpm ng test dashboard`; quality gates `pnpm ng build dashboard`, `pnpm ng test dashboard`, `pnpm test:e2e`, `pnpm lint`, `pnpm format:check` (run in `frontend/`)
 
 **Target Platform**: Evergreen browsers, viewports from ~360px (small phones) to desktop
 

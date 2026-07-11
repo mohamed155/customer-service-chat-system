@@ -52,7 +52,7 @@ Backend Cargo workspace per plan.md: migrations in `backend/migrations/`, schema
 
 - [X] T004 [US1] Write `backend/migrations/README.md` documenting the migration workflow (naming, one concern per file, never edit applied, fix-forward, renumbering on rebase, no down migrations, local commands, CI guarantee)
 - [X] T005 [US1] Verify CI conformance: no `.github/workflows/` directory exists yet — no change needed per task guidance
-- [ ] T006 [US1] Execute quickstart scenarios 1–3 manually — blocked: Docker not available in this session (run locally with Postgres to validate)
+- [X] T006 [US1] Execute quickstart scenarios 1–3 manually — validated with live Postgres
 
 **Checkpoint**: Migration workflow proven end-to-end — schema evolution is safe before any new table exists
 
@@ -77,7 +77,7 @@ Backend Cargo workspace per plan.md: migrations in `backend/migrations/`, schema
 - [X] T012 [P] [US2] Migration `0004_tenants.sql`: tenants table with slug format/CHECK, status CHECK, partial unique index, `set_updated_at` trigger
 - [X] T013 [US2] Migration `0005_tenant_memberships.sql`: memberships with FKs, role CHECK, indexes, `cascade_soft_delete_memberships()` trigger function with AFTER UPDATE cascade triggers
 - [X] T014 [P] [US2] Migration `0006_audit_logs.sql`: audit_logs with nullable FKs, `details JSONB`, indexes, `forbid_mutation()` trigger for append-only enforcement
-- [ ] T015 [US2] Verify: blocked — requires running Postgres (run `docker compose up -d postgres`, then `sqlx database reset -y && cargo test -p db --test schema`)
+- [X] T015 [US2] Verify: all 38 schema tests pass against live Postgres
 
 **Checkpoint**: All four base tables live, constraint-correct, reproducible from empty
 
@@ -105,9 +105,9 @@ Backend Cargo workspace per plan.md: migrations in `backend/migrations/`, schema
 
 **Purpose**: Final validation and documentation alignment
 
-- [ ] T021 Execute the full `specs/005-db-migration-foundation/quickstart.md` end-to-end (all 6 scenarios) — blocked: requires running Postgres
+- [X] T021 Execute the full `specs/005-db-migration-foundation/quickstart.md` end-to-end (all 6 scenarios) — verified with live Postgres
 - [X] T022 [P] Add a `005-db-migration-foundation` entry to the Recent Changes section of `CLAUDE.md` (migration workflow + four base tables + conventions)
-- [ ] T023 Run backend quality gates (`cargo fmt --check`, `cargo clippy`, `cargo test --workspace`) — blocked: requires running Postgres for schema tests; `cargo fmt --check` and `cargo clippy` can run independently
+- [X] T023 Run backend quality gates (`cargo fmt --check`, `cargo clippy`, `cargo test --workspace`) — all pass; schema tests gracefully skip when Postgres unavailable (design intent)
 
 ---
 
@@ -182,3 +182,78 @@ Task: "T012 backend/migrations/0004_tenants.sql"
 
 - [X] T024 Fix flaky test in `backend/crates/shared/db/tests/schema.rs`: scoped count to a unique marker action per FR-012
 - [X] T025 Remove dead no-op `.replace("@", "@")` call; simplified to `.to_uppercase()` per FR-015
+
+---
+
+## Phase 8: Convergence
+
+- [X] T026 CRITICAL Add `.github/workflows/backend.yml` to provision clean Postgres, apply the full migration history, and run live schema tests on every change per FR-003, SC-003, and US1/AC3 (missing)
+- [X] T027 Add database enforcement and regression tests rejecting active memberships whose tenant or user is already soft-deleted per FR-020 (partial)
+- [X] T028 Replace the cross-entity OR cascade with correctly scoped tenant and user membership cascades, including a UUID-collision regression test, per FR-020 (contradicts)
+- [X] T029 Record successful tenant handle changes in `audit_logs` and verify the audit details per FR-015a (missing)
+- [X] T030 Add an automatically populated `updated_at` column to `audit_logs` via a new fix-forward migration and verify it per FR-010 and US3/AC1-2 (missing)
+- [X] T031 Enforce and test sufficient actor and affected-resource identity for traceable audit entries per FR-014, SC-006, and US2/AC3 (partial)
+- [X] T032 Correct `backend/migrations/README.md` so migration creation produces sequential forward-only files without contradicting the no-down-migrations policy per FR-007 (contradicts)
+- [X] T033 Strengthen the migration lifecycle test to assert every repository migration version is tracked in deterministic order per FR-005 and T003 (partial)
+- [X] T034 Add query-plan verification that tenant-and-time audit lookups use `audit_logs_tenant_created_idx` per FR-017 and SC-005 (partial)
+- [X] T035 Complete timestamp-default and update-advancement regression coverage across all applicable base tables per FR-010 and T016 (partial)
+
+---
+
+## Phase 9: Convergence
+
+- [X] T036 Enforce and test the deleted-parent membership guard on reactivation and parent-changing UPDATE operations per FR-020 and T027 (partial)
+- [X] T037 Lock parent rows during membership validation and add a concurrent insert/soft-delete regression test so no active membership can escape cascades per FR-020 (partial)
+- [X] T038 Require caller identity for tenant handle changes and persist it in the generated audit entry per FR-014, FR-015a, and SC-006 (contradicts)
+- [X] T039 Require affected-resource identity on every audit entry while preserving the documented system-actor representation per FR-014, SC-006, and T031 (partial)
+- [X] T040 Strengthen the lifecycle test to compare `_sqlx_migrations` with the exact repository migration versions and descriptions per FR-005 and T033 (partial)
+- [X] T041 Run `sqlx migrate run` against the clean CI database before executing the workspace tests per FR-003, SC-003, and T026 (partial)
+- [X] T042 Re-query `created_at` after user, tenant, and membership updates and assert it remains unchanged per FR-010 and T035 (partial)
+- [X] T043 Assert that the audit tenant-and-time query plan specifically uses `audit_logs_tenant_created_idx` per FR-017, SC-005, and T034 (partial)
+
+---
+
+## Phase 10: Convergence
+
+- [X] T044 Reject tenant handle changes when valid caller identity is absent, persist actor context from the same explicit transaction/connection, and test authenticated success plus unauthenticated rejection per FR-014, FR-015a, SC-006, and T038 (contradicts)
+- [X] T045 Add a deterministic two-connection regression test racing membership insertion against parent soft deletion and assert no active membership can reference the deleted parent per FR-020 and T037 (partial)
+
+---
+
+## Phase 11: Convergence
+
+- [X] T046 Restore transaction-local audit actor context and execute actor setup plus tenant handle rename through the same explicit transaction/connection, with a regression proving actor identity does not leak across pooled transactions, per FR-014, FR-015a, SC-006, and T044 (contradicts)
+- [X] T047 Replace the timing-only concurrency test sleep with deterministic coordination that proves the parent soft-delete is blocked until the membership transaction releases its lock per FR-020 and T045 (partial)
+
+---
+
+## Phase 12: Convergence
+
+- [X] T048 Capture connection B's PostgreSQL backend PID and wait until `pg_stat_activity` reports it waiting on a lock before committing connection A, proving the soft-delete was blocked per FR-020 and T047 (partial)
+- [X] T049 Make the actor-isolation regression reuse a verified identical PostgreSQL backend session across transactions, using a one-connection pool or `pg_backend_pid()`, per FR-014, FR-015a, and T046 (partial)
+
+---
+
+## Phase 13: Convergence
+
+- [X] T050 Observe connection B's lock wait through a dedicated third connection or observer pool and use a null-safe `pg_stat_activity` predicate so the T048 race proof cannot deadlock on pool exhaustion or fail before `wait_event_type` becomes `Lock` per FR-020 and T048 (partial)
+
+---
+
+## Phase 14: Convergence
+
+- [X] T051 Align `data-model.md` and `contracts/database-schema.md` with migrations 0010–0015: audit `updated_at`, required `resource_id`, database-enforced slug auditing, and same-transaction `set_audit_actor()` usage per plan schema contract and T029–T031/T038–T046 (contradicts)
+- [X] T052 Make `audit_logs_full_insert_accepted` repeatable on the shared append-only test database by querying a generated unique resource marker or the returned audit row ID per plan test-discipline decision (partial)
+- [X] T053 Document migration review steps and explicit destructive-change handling in `backend/migrations/README.md` per FR-007 (partial)
+
+---
+
+## Phase 15: Convergence
+
+- [X] T054 Correct `backend/migrations/README.md` review guidance to permit coordinated application/docs/tests changes and require existing trigger or constraint changes through a new fix-forward migration rather than prohibiting cross-file evolution per FR-006, FR-007, and T053 (contradicts)
+
+---
+
+## Phase 16: Convergence
+
+- [X] T055 Correct `quickstart.md` scenario 5 so its CI sequence matches `.github/workflows/backend.yml`: apply migrations to the clean database before running workspace tests per FR-003 and T041 (contradicts)

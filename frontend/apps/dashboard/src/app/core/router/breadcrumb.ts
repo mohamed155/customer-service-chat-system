@@ -45,7 +45,14 @@ function readCrumbs(router: Router): Crumb[] {
     areaLabel = 'Home';
   }
 
-  const crumbs: Crumb[] = [{ label: areaLabel, link: null }, ...pageCrumbs];
+  const areaLink: string | null =
+    areaLabel === 'Workspace'
+      ? '/tenant/overview'
+      : areaLabel === 'Platform'
+        ? '/platform/overview-placeholder'
+        : null;
+
+  const crumbs: Crumb[] = [{ label: areaLabel, link: areaLink }, ...pageCrumbs];
 
   if (crumbs.length > 0) {
     crumbs[crumbs.length - 1] = { ...crumbs[crumbs.length - 1], link: null };

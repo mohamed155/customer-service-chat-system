@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, effect, inject, model, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  effect,
+  ElementRef,
+  inject,
+  model,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { TuiIcon } from '@taiga-ui/core';
@@ -17,6 +26,7 @@ import { TenantSummary } from '../../core/api/tenant-api.models';
         class="trigger"
         (click)="toggle()"
         [attr.aria-expanded]="open()"
+        aria-haspopup="listbox"
         aria-label="Switch tenant"
       >
         <tui-icon icon="@tui.building" />
@@ -25,22 +35,15 @@ import { TenantSummary } from '../../core/api/tenant-api.models';
       </button>
 
       @if (open()) {
-        <div
-          class="dropdown"
-          (click)="close()"
-          (keydown.Enter)="close()"
-          (keydown.Space)="$event.preventDefault(); close()"
-          tabindex="-1"
-          role="button"
-        >
+        <div class="dropdown" role="listbox">
           <label class="search-label">
             <tui-icon icon="@tui.search" class="search-icon" />
             <input
               class="search-input"
               type="search"
+              #searchInput
               placeholder="Search tenants..."
               [(ngModel)]="query"
-              (click)="$event.stopPropagation()"
             />
           </label>
           <div class="list">
@@ -48,7 +51,9 @@ import { TenantSummary } from '../../core/api/tenant-api.models';
               <button
                 type="button"
                 class="option"
+                role="option"
                 [class.active]="tenant.id === activeTenant()?.id"
+                [attr.aria-selected]="tenant.id === activeTenant()?.id"
                 (click)="select(tenant)"
               >
                 <span class="option-name">{{ tenant.name }}</span>
@@ -175,11 +180,16 @@ import { TenantSummary } from '../../core/api/tenant-api.models';
       }
     `,
   ],
+  host: {
+    '(document:click)': 'handleClick($event)',
+    '(keydown.escape)': 'close()',
+  },
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TenantSwitcherComponent {
   private readonly api = inject(ApiService);
   private readonly tenantContext = inject(TenantContextService);
+  private readonly elementRef = inject(ElementRef);
   protected readonly currentUser = inject(CurrentUserService);
 
   protected readonly open = signal(false);
@@ -190,6 +200,9 @@ export class TenantSwitcherComponent {
   protected readonly isPlatformUser = this.currentUser.isPlatformUser;
 
   protected readonly filteredTenants = signal<TenantSummary[]>([]);
+
+  @ViewChild('searchInput', { read: ElementRef })
+  protected searchInput?: ElementRef<HTMLInputElement>;
 
   constructor() {
     this.loadTenants();
@@ -215,10 +228,20 @@ export class TenantSwitcherComponent {
       this.loadTenants();
     }
     this.open.update((v) => !v);
+    if (this.open()) {
+      setTimeout(() => this.searchInput?.nativeElement.focus());
+    }
   }
 
   close(): void {
     this.open.set(false);
+  }
+
+  protected handleClick(event: MouseEvent): void {
+    if (!this.open()) return;
+    if (!this.elementRef.nativeElement.contains(event.target as Node)) {
+      this.close();
+    }
   }
 
   async select(tenant: TenantSummary): Promise<void> {

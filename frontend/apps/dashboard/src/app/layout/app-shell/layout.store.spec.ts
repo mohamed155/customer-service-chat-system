@@ -54,6 +54,20 @@ describe('LayoutStore', () => {
     expect(layout.drawerOpen()).toBe(false);
   });
 
+  it('closes drawer when viewport resizes from mobile to desktop', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 500 });
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [LayoutStore, provideMockStore(), provideRouter([])],
+    });
+    const layout = TestBed.inject(LayoutStore);
+    layout.openDrawer();
+    expect(layout.drawerOpen()).toBe(true);
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    window.dispatchEvent(new Event('resize'));
+    expect(layout.drawerOpen()).toBe(false);
+  });
+
   it('closes drawer on navigation', async () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({

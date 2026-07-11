@@ -46,6 +46,23 @@ describe('PlatformNavComponent', () => {
     expect(element.textContent).toContain('Platform');
   });
 
+  it('has correct ARIA menu semantics', async () => {
+    const { fixture } = await setup(true);
+    const element = fixture.nativeElement as HTMLElement;
+    const trigger = element.querySelector('.trigger') as HTMLElement;
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+    trigger.click();
+    fixture.detectChanges();
+
+    const dropdown = element.querySelector('.dropdown') as HTMLElement;
+    expect(dropdown.getAttribute('role')).toBe('menu');
+
+    const option = element.querySelector('.option') as HTMLElement;
+    expect(option.getAttribute('role')).toBe('menuitem');
+  });
+
   it('opens dropdown when trigger is clicked', async () => {
     const { fixture } = await setup(true);
     const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger') as HTMLElement;
@@ -76,7 +93,7 @@ describe('PlatformNavComponent', () => {
     option.click();
     fixture.detectChanges();
 
-    expect(routerMock.navigate).toHaveBeenCalledWith(['/platform/overview-placeholder']);
+    expect(routerMock.navigate).toHaveBeenCalledWith(['/platform']);
     const dropdown = (fixture.nativeElement as HTMLElement).querySelector('.dropdown');
     expect(dropdown).toBeNull();
   });

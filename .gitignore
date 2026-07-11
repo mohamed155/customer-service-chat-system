@@ -9,6 +9,8 @@ build/
 .pnpm-store/
 *.tsbuildinfo
 coverage/
+playwright-report/
+test-results/
 
 # Env
 .env
