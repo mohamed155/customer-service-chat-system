@@ -12,7 +12,13 @@ describe('PermissionsService', () => {
   const configure = (user: MeResponse | null, activeTenantId: string | null) => {
     currentUser = { currentUser: vi.fn(() => user) };
     const activeTenant: TenantSummary | null = activeTenantId
-      ? { id: activeTenantId, name: 'T1', slug: 't1', status: 'active' as const }
+      ? {
+          id: activeTenantId,
+          name: 'T1',
+          slug: 't1',
+          status: 'active' as const,
+          plan: 'trial' as const,
+        }
       : null;
     tenantContext = { activeTenant: vi.fn(() => activeTenant) };
     TestBed.configureTestingModule({

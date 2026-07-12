@@ -1,0 +1,5 @@
+env:DATABASE_URL="postgres://customer_service:customer_service_dev@localhost:5432/customer_service"
+env:REDIS_URL="redis://localhost:6379"
+env:APP_ENVIRONMENT="development"
+env:PORT="8080"
+env:CORS_ALLOWED_ORIGINS="http://localhost:4200"

@@ -28,6 +28,7 @@ export class CurrentUserService {
           name: first.tenantName,
           slug: first.tenantSlug,
           status: 'active',
+          plan: 'trial',
         };
         this.store.dispatch(tenantContextActions.setActiveTenant({ tenant: summary }));
       }

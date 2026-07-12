@@ -1,6 +1,5 @@
 import { Routes } from '@angular/router';
 import { permissionGuard } from './core/authz/permission.guard';
-import { PAGE_PERMISSIONS } from './core/authz/permissions';
 import { areaAccessGuard } from './core/router/area-access.guard';
 import { authGuard } from './core/router/auth.guard';
 import { guestGuard } from './core/router/guest.guard';
@@ -29,7 +28,7 @@ export const routes: Routes = [
         canMatch: [areaAccessGuard, permissionGuard],
         data: {
           area: 'platform',
-          requiredPermission: PAGE_PERMISSIONS[APP_PATHS.platform.base],
+          requiredPermission: 'platform.tenants.list',
         },
         title: PAGE_TITLES.platform.title,
         loadChildren: () =>

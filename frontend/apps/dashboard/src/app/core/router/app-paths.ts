@@ -7,7 +7,12 @@ export const APP_PATHS = {
     forgotPassword: 'forgot-password',
     verifyEmail: 'verify-email',
   },
-  platform: { base: 'platform', overviewPlaceholder: 'overview-placeholder' },
+  platform: {
+    base: 'platform',
+    overviewPlaceholder: 'overview-placeholder',
+    tenants: 'tenants',
+    newTenant: 'new',
+  },
   tenant: {
     base: 'tenant',
     select: 'select',

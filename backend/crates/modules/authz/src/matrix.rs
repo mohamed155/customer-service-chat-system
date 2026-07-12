@@ -56,6 +56,7 @@ const TENANT_VIEWER: &[Permission] = &[
 const PLATFORM_ALL: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
+    Permission::PlatformTenantsManage,
     Permission::PlatformAdmin,
     Permission::PlatformBillingView,
     Permission::PlatformDiagnosticsView,
@@ -68,6 +69,11 @@ const PLATFORM_DEVELOPER: &[Permission] = &[
 const PLATFORM_TENANT_ACCESS: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
+];
+const PLATFORM_SUPPORT: &[Permission] = &[
+    Permission::PlatformTenantsList,
+    Permission::PlatformTenantsSwitch,
+    Permission::PlatformTenantsManage,
 ];
 const PLATFORM_FINANCE: &[Permission] = &[
     Permission::PlatformTenantsList,
@@ -122,7 +128,8 @@ pub fn platform_role_permissions(role: PlatformRole) -> &'static [Permission] {
     match role {
         PlatformRole::SuperAdmin => PLATFORM_ALL,
         PlatformRole::Developer => PLATFORM_DEVELOPER,
-        PlatformRole::Support | PlatformRole::Sales => PLATFORM_TENANT_ACCESS,
+        PlatformRole::Support => PLATFORM_SUPPORT,
+        PlatformRole::Sales => PLATFORM_TENANT_ACCESS,
         PlatformRole::Finance => PLATFORM_FINANCE,
     }
 }

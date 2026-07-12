@@ -65,6 +65,21 @@ const PLATFORM_OPERATIONS: &[&str] = &[
     "/api/v1/test/platform/diagnostics/view",
 ];
 
+/// T047: deny-by-default sweep covering the create (POST), detail (GET),
+/// and management write (PATCH) endpoints explicitly.  `__TENANT_DETAIL__`
+/// is a sentinel expanded at runtime to
+/// `/api/v1/platform/tenants/{seeded-tenant-id}` because the detail path
+/// needs a real UUID.
+const PLATFORM_OPERATIONS_DENY_BY_DEFAULT: &[(&str, Method)] = &[
+    ("/api/v1/platform/tenants", Method::GET),
+    ("/api/v1/platform/tenants", Method::POST),
+    ("__TENANT_DETAIL__", Method::GET),
+    ("__TENANT_DETAIL__", Method::PATCH),
+    ("/api/v1/test/platform/admin", Method::GET),
+    ("/api/v1/test/platform/billing/view", Method::GET),
+    ("/api/v1/test/platform/diagnostics/view", Method::GET),
+];
+
 fn test_config(environment: Environment) -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
@@ -641,6 +656,9 @@ async fn permission_denial_writes_audit_reason_without_exposing_permission() {
         .to_string()
         .contains("settings.manage"));
 
+    // Give the async audit write a moment to flush.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
     let details: Value = sqlx::query_scalar(
         "SELECT details FROM audit_logs WHERE actor_user_id = $1 AND action = 'tenant.access_denied' ORDER BY created_at DESC LIMIT 1",
     )
@@ -736,7 +754,11 @@ async fn me_returns_exact_platform_support_payload_in_production() {
             "email": email,
             "displayName": display_name,
             "platformRole": "support",
-            "platformPermissions": ["platform.tenants.list", "platform.tenants.switch"],
+            "platformPermissions": [
+                "platform.tenants.list",
+                "platform.tenants.switch",
+                "platform.tenants.manage"
+            ],
             "staffTenantPermissions": [
                 "overview.view",
                 "conversations.view",
@@ -896,6 +918,110 @@ async fn staff_tenant_access_is_environment_aware() {
     }
 }
 
+// PlatformTenantsManage is held by Super Admin and Support only.  Every
+// other platform role (Developer, Sales, Finance) plus plain tenant users
+// must be rejected with 403 on POST /api/v1/platform/tenants, and anonymous
+// callers with 401 — independent of the create-tenant handler's own
+// validation logic (which is exercised separately in platform_tenants.rs).
+#[tokio::test]
+async fn platform_tenants_create_allow_manage_deny_others() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+
+    let unique = Uuid::new_v4().simple().to_string();
+    let allowed = ["super-admin", "support"];
+    let denied = ["developer", "sales", "finance"];
+
+    for role in allowed {
+        let user_id = seed_user(&pool, Some(role.replace('-', "_").as_str())).await;
+        let slug = format!("ok-{role}-{unique}");
+        let body = serde_json::to_vec(&json!({
+            "name": format!("Test {role}"),
+            "slug": slug,
+        }))
+        .unwrap();
+        let request = Request::post("/api/v1/platform/tenants")
+            .header("X-Dev-User-Id", user_id.to_string())
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let response = send(pool.clone(), Environment::Test, request).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::CREATED,
+            "expected 201 for role={role}, got {}",
+            response.status()
+        );
+    }
+
+    for role in denied {
+        let user_id = seed_user(&pool, Some(role)).await;
+        let slug = format!("no-{role}-{unique}");
+        let body = serde_json::to_vec(&json!({
+            "name": format!("Test {role}"),
+            "slug": slug,
+        }))
+        .unwrap();
+        let request = Request::post("/api/v1/platform/tenants")
+            .header("X-Dev-User-Id", user_id.to_string())
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let response = send(pool.clone(), Environment::Test, request).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::FORBIDDEN,
+            "expected 403 for role={role}, got {}",
+            response.status()
+        );
+    }
+
+    // Plain tenant user (no platform role) → 403 even with a valid body.
+    let tenant_id = seed_tenant(&pool).await;
+    let tenant_user = seed_user(&pool, None).await;
+    seed_membership(&pool, tenant_id, tenant_user, "admin").await;
+    let slug = format!("tenantuser-{unique}");
+    let body = serde_json::to_vec(&json!({
+        "name": "Tenant User Create",
+        "slug": slug,
+    }))
+    .unwrap();
+    let request = Request::post("/api/v1/platform/tenants")
+        .header("X-Dev-User-Id", tenant_user.to_string())
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap();
+    let response = send(pool.clone(), Environment::Test, request).await;
+    assert_eq!(
+        response.status(),
+        StatusCode::FORBIDDEN,
+        "expected 403 for tenant user, got {}",
+        response.status()
+    );
+    let body = body_json(response).await;
+    assert_eq!(body["error"]["code"], "unauthorized");
+
+    // Anonymous → 401 (auth runs before authorization).
+    let body = serde_json::to_vec(&json!({
+        "name": "Anonymous Create",
+        "slug": format!("anon-{unique}"),
+    }))
+    .unwrap();
+    let request = Request::post("/api/v1/platform/tenants")
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap();
+    let response = send(pool, Environment::Test, request).await;
+    assert_eq!(
+        response.status(),
+        StatusCode::UNAUTHORIZED,
+        "expected 401 for anonymous, got {}",
+        response.status()
+    );
+    let body = body_json(response).await;
+    assert_eq!(body["error"]["code"], "unauthenticated");
+}
+
 #[tokio::test]
 async fn me_staff_tenant_permissions_follow_environment_for_every_platform_role() {
     let Some(pool) = get_pool().await else { return };
@@ -973,5 +1099,275 @@ async fn me_staff_tenant_permissions_follow_environment_for_every_platform_role(
                 "unexpected /me staff permissions for {role} in {environment:?}"
             );
         }
+    }
+}
+
+// US2 (T023) — `GET /api/v1/platform/tenants/{id}` is read-only and gated by
+// `platform.tenants.list` (every platform role) but rejected for tenant users.
+#[tokio::test]
+async fn platform_tenant_detail_allowed_for_every_platform_role() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+
+    let tenant_id = seed_tenant(&pool).await;
+    let roles = ["super_admin", "developer", "support", "sales", "finance"];
+
+    for role in roles {
+        let user_id = seed_user(&pool, Some(role)).await;
+        let response = send(
+            pool.clone(),
+            Environment::Test,
+            authenticated_request(
+                &format!("/api/v1/platform/tenants/{tenant_id}"),
+                Method::GET,
+                user_id,
+                None,
+                Environment::Test,
+            ),
+        )
+        .await;
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "expected 200 for role={role} on GET /platform/tenants/{{id}}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn platform_tenant_detail_denied_for_every_tenant_role() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+
+    let tenant_id = seed_tenant(&pool).await;
+    let roles = ["owner", "admin", "manager", "agent", "viewer"];
+
+    for role in roles {
+        let user_id = seed_user(&pool, None).await;
+        seed_membership(&pool, tenant_id, user_id, role).await;
+        let response = send(
+            pool.clone(),
+            Environment::Test,
+            authenticated_request(
+                &format!("/api/v1/platform/tenants/{tenant_id}"),
+                Method::GET,
+                user_id,
+                None,
+                Environment::Test,
+            ),
+        )
+        .await;
+        assert_eq!(
+            response.status(),
+            StatusCode::FORBIDDEN,
+            "expected 403 for tenant role={role} on GET /platform/tenants/{{id}}"
+        );
+        let body = body_json(response).await;
+        assert_eq!(body["error"]["code"], "unauthorized");
+    }
+}
+
+// US2 (T023) — bad `status` filter on the list endpoint is a 422
+// `validation_failed` with a per-field `details` array, independent of the
+// tenant-list RBAC tests above.
+#[tokio::test]
+async fn platform_tenants_list_invalid_status_filter_returns_422() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+
+    let user_id = seed_user(&pool, Some("super_admin")).await;
+    let response = send(
+        pool,
+        Environment::Test,
+        authenticated_request(
+            "/api/v1/platform/tenants?status=invalid",
+            Method::GET,
+            user_id,
+            None,
+            Environment::Test,
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        response.status(),
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "expected 422 for status=invalid"
+    );
+    let body = body_json(response).await;
+    assert_eq!(body["error"]["code"], "validation_failed");
+    let details = body["error"]["details"]
+        .as_array()
+        .expect("details must be an array");
+    assert!(
+        details
+            .iter()
+            .any(|d| d["field"] == "status" && d["code"] == "invalid_value"),
+        "expected a status invalid_value detail, got: {details:?}"
+    );
+}
+
+// US3 (T031) — PATCH /api/v1/platform/tenants/{id} is gated by
+// `platform.tenants.manage`, held by Super Admin and Support only. Every
+// other platform role (Developer, Sales, Finance) and every tenant role
+// (Owner, Admin, Manager, Agent, Viewer) must be rejected with 403, and
+// anonymous callers with 401 — independent of the update_tenant handler's
+// own validation logic (which is exercised separately in platform_tenants.rs).
+#[tokio::test]
+async fn platform_tenants_update_allow_manage_deny_others() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+
+    let tenant_id = seed_tenant(&pool).await;
+    let unique = Uuid::new_v4().simple().to_string();
+
+    // Allowed: super_admin + support must reach the handler (we accept any
+    // non-401/non-403 response; the handler's own validation is tested in
+    // platform_tenants.rs).
+    for role in ["super_admin", "support"] {
+        let user_id = seed_user(&pool, Some(role)).await;
+        let body = serde_json::to_vec(&json!({
+            "name": format!("Updated by {role} {unique}"),
+        }))
+        .unwrap();
+        let request = Request::patch(format!("/api/v1/platform/tenants/{tenant_id}"))
+            .header("X-Dev-User-Id", user_id.to_string())
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let response = send(pool.clone(), Environment::Test, request).await;
+        assert_ne!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "allowed role {role} must not be 401"
+        );
+        assert_ne!(
+            response.status(),
+            StatusCode::FORBIDDEN,
+            "allowed role {role} must not be 403, got {}",
+            response.status()
+        );
+    }
+
+    // Denied: other platform roles → 403.
+    for role in ["developer", "sales", "finance"] {
+        let user_id = seed_user(&pool, Some(role)).await;
+        let body = serde_json::to_vec(&json!({ "name": format!("Updated by {role}") })).unwrap();
+        let request = Request::patch(format!("/api/v1/platform/tenants/{tenant_id}"))
+            .header("X-Dev-User-Id", user_id.to_string())
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let response = send(pool.clone(), Environment::Test, request).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::FORBIDDEN,
+            "expected 403 for platform role={role} on PATCH /platform/tenants/{{id}}, got {}",
+            response.status()
+        );
+        let body = body_json(response).await;
+        assert_eq!(body["error"]["code"], "unauthorized");
+    }
+
+    // Denied: every tenant role → 403 (platform-scope route, no platform role).
+    for role in ["owner", "admin", "manager", "agent", "viewer"] {
+        let user_id = seed_user(&pool, None).await;
+        seed_membership(&pool, tenant_id, user_id, role).await;
+        let body =
+            serde_json::to_vec(&json!({ "name": format!("Updated by tenant {role}") })).unwrap();
+        let request = Request::patch(format!("/api/v1/platform/tenants/{tenant_id}"))
+            .header("X-Dev-User-Id", user_id.to_string())
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let response = send(pool.clone(), Environment::Test, request).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::FORBIDDEN,
+            "expected 403 for tenant role={role} on PATCH /platform/tenants/{{id}}, got {}",
+            response.status()
+        );
+        let body = body_json(response).await;
+        assert_eq!(body["error"]["code"], "unauthorized");
+    }
+
+    // Anonymous → 401 (auth runs before authorization).
+    let body = serde_json::to_vec(&json!({ "name": "Anonymous Update" })).unwrap();
+    let request = Request::patch(format!("/api/v1/platform/tenants/{tenant_id}"))
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap();
+    let response = send(pool, Environment::Test, request).await;
+    assert_eq!(
+        response.status(),
+        StatusCode::UNAUTHORIZED,
+        "expected 401 for anonymous on PATCH /platform/tenants/{{id}}"
+    );
+    let body = body_json(response).await;
+    assert_eq!(body["error"]["code"], "unauthenticated");
+}
+
+// T047: deny-by-default sweep extended to cover `POST /api/v1/platform/tenants`
+// and `GET /api/v1/platform/tenants/{id}`. A no-platform-role user (no
+// membership, no platform permission) must receive 403 on every operation in
+// `PLATFORM_OPERATIONS_DENY_BY_DEFAULT` — the same fail-closed guarantee the
+// existing sweep asserts for the read-only list and the synthetic test
+// endpoints, but now also for the create and detail paths.
+#[tokio::test]
+async fn no_role_user_is_denied_on_every_platform_tenant_endpoint() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+    let user_id = seed_user(&pool, None).await;
+    let tenant_id = seed_tenant(&pool).await;
+
+    for (uri, method) in PLATFORM_OPERATIONS_DENY_BY_DEFAULT {
+        let actual_uri = if *uri == "__TENANT_DETAIL__" {
+            format!("/api/v1/platform/tenants/{tenant_id}")
+        } else {
+            (*uri).to_string()
+        };
+        // POST /api/v1/platform/tenants and PATCH __TENANT_DETAIL__
+        // require a body; others are empty.
+        let request = if *method == Method::POST && *uri == "/api/v1/platform/tenants" {
+            Request::post(&actual_uri)
+                .header("X-Dev-User-Id", user_id.to_string())
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({
+                        "name": "Deny By Default Sweep",
+                        "slug": format!("deny-default-{}", Uuid::new_v4().simple()),
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap()
+        } else if *method == Method::PATCH && uri.contains("__TENANT_DETAIL__") {
+            Request::patch(&actual_uri)
+                .header("X-Dev-User-Id", user_id.to_string())
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&json!({ "name": "Deny PATCH Sweep" })).unwrap(),
+                ))
+                .unwrap()
+        } else {
+            authenticated_request(
+                &actual_uri,
+                method.clone(),
+                user_id,
+                None,
+                Environment::Test,
+            )
+        };
+        let response = send(pool.clone(), Environment::Test, request).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::FORBIDDEN,
+            "expected 403 for {method} {actual_uri} with no role, got {}",
+            response.status()
+        );
+        let body = body_json(response).await;
+        assert_eq!(
+            body["error"]["code"], "unauthorized",
+            "expected error code unauthorized for {method} {actual_uri}, got {body:?}"
+        );
     }
 }

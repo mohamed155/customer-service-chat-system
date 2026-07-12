@@ -224,6 +224,7 @@ mod tests {
                 "platformPermissions": [
                     "platform.tenants.list",
                     "platform.tenants.switch",
+                    "platform.tenants.manage",
                     "platform.admin",
                     "platform.billing.view",
                     "platform.diagnostics.view"

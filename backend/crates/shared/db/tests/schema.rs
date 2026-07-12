@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use chrono::SubsecRound;
+
 async fn get_pool() -> Option<sqlx::PgPool> {
     let url = match std::env::var("DATABASE_URL") {
         Ok(v) => v,
@@ -46,6 +48,8 @@ async fn run_migrations_succeeds() {
         (13, "audit resource required"),
         (14, "slug audit require actor"),
         (15, "slug audit transaction actor"),
+        (16, "tenant business metadata"),
+        (17, "tenant directory indexes"),
     ];
     assert_eq!(
         rows.len(),
@@ -78,6 +82,14 @@ async fn run_migrations_idempotent() {
 
 fn valid_email() -> String {
     format!("test_{}@example.com", uuid::Uuid::new_v4())
+}
+
+/// Truncate a `DateTime<Utc>` to PostgreSQL `TIMESTAMPTZ` microsecond precision
+/// so that values written via SQLx round-trip back identically. Without this,
+/// `Utc::now()` carries nanoseconds that PG silently truncates on insert,
+/// causing read-back comparisons to fail by a few hundred nanoseconds.
+fn truncate_to_micros(ts: chrono::DateTime<chrono::Utc>) -> chrono::DateTime<chrono::Utc> {
+    ts.trunc_subsecs(6)
 }
 
 fn valid_slug() -> String {
@@ -940,7 +952,7 @@ async fn cascade_already_deleted_membership_unchanged() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    let original_deleted = chrono::Utc::now() - chrono::Duration::hours(1);
+    let original_deleted = truncate_to_micros(chrono::Utc::now() - chrono::Duration::hours(1));
     sqlx::query("UPDATE tenant_memberships SET deleted_at = $1 WHERE id = $2")
         .bind(original_deleted)
         .bind(mid)
@@ -1106,6 +1118,8 @@ async fn index_coverage_all_indexes_exist() {
         "tenant_memberships_user_idx",
         "audit_logs_tenant_created_idx",
         "audit_logs_created_idx",
+        "idx_tenants_directory_filter",
+        "idx_tenants_directory_search",
     ];
     for idx_name in &expected_indexes {
         let row: Option<(String,)> =
@@ -1139,18 +1153,24 @@ async fn index_coverage_membership_tenant_query_uses_index() {
         .execute(&pool)
         .await
         .unwrap();
-    // Disable seqscan and check for index scan
+    // Disable seqscan and check for index scan. We use a transaction so that
+    // SET LOCAL actually persists for the EXPLAIN below; the SET must run as
+    // its own simple query (Postgres rejects multiple commands in a prepared
+    // statement).
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
     let plan: (serde_json::Value,) = sqlx::query_as(
-        r#"
-        SET LOCAL enable_seqscan = off;
-        EXPLAIN (FORMAT JSON)
-        SELECT * FROM tenant_memberships WHERE tenant_id = $1 AND deleted_at IS NULL
-        "#,
+        "EXPLAIN (FORMAT JSON) \
+         SELECT * FROM tenant_memberships WHERE tenant_id = $1 AND deleted_at IS NULL",
     )
     .bind(tid)
-    .fetch_one(&pool)
+    .fetch_one(&mut *tx)
     .await
     .unwrap();
+    tx.commit().await.unwrap();
     let plan_str = plan.0.to_string();
     assert!(
         plan_str.contains("Index Scan") || plan_str.contains("Bitmap Index Scan"),
@@ -1470,17 +1490,20 @@ async fn index_coverage_audit_tenant_time_query_uses_index() {
     .execute(&pool)
     .await
     .unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
     let plan: (serde_json::Value,) = sqlx::query_as(
-        r#"
-        SET LOCAL enable_seqscan = off;
-        EXPLAIN (FORMAT JSON)
-        SELECT * FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC
-        "#,
+        "EXPLAIN (FORMAT JSON) \
+         SELECT * FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC",
     )
     .bind(tid)
-    .fetch_one(&pool)
+    .fetch_one(&mut *tx)
     .await
     .unwrap();
+    tx.commit().await.unwrap();
     let plan_str = plan.0.to_string();
     assert!(
         plan_str.contains("Index Scan") || plan_str.contains("Bitmap Index Scan"),
@@ -1492,6 +1515,156 @@ async fn index_coverage_audit_tenant_time_query_uses_index() {
         "audit tenant+time query should use audit_logs_tenant_created_idx, got plan: {}",
         plan_str,
     );
+}
+
+// ---------------------------------------------------------------------------
+// T128 — Tenant directory EXPLAIN plan regressions
+//
+// Verifies the production index strategy for the four list_tenants query
+// shapes uses index scans rather than sequential scans. The specific index
+// chosen by the planner depends on data volume — with test-scale data the
+// planner may prefer tenants_pkey over the composite/GIN indexes, which is
+// acceptable for the index strategy (both are index scans). Under production
+// data volume (500+ active tenants) the composite and GIN indexes will be
+// preferred for filtered and search queries respectively.
+// ---------------------------------------------------------------------------
+
+fn assert_index_scan(plan_str: &str) {
+    assert!(
+        plan_str.contains("\"Index Scan\"")
+            || plan_str.contains("\"Bitmap Index Scan\"")
+            || plan_str.contains("\"Bitmap Heap Scan\""),
+        "query plan must use an index scan (not sequential scan), got plan: {}",
+        plan_str,
+    );
+}
+
+fn assert_no_seq_scan(plan_str: &str) {
+    assert!(
+        !plan_str.contains("\"Seq Scan\""),
+        "query plan must NOT use a sequential scan, got plan: {}",
+        plan_str,
+    );
+}
+
+#[tokio::test]
+async fn tenant_directory_explain_cursor_only() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let plan: (serde_json::Value,) = sqlx::query_as(
+        "EXPLAIN (FORMAT JSON) \
+         SELECT id, name, slug, status, plan FROM tenants \
+         WHERE deleted_at IS NULL AND id > $1 \
+         ORDER BY id ASC LIMIT $2",
+    )
+    .bind(uuid::Uuid::nil())
+    .bind(10i64)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let plan_str = plan.0.to_string();
+    assert_index_scan(&plan_str);
+    assert_no_seq_scan(&plan_str);
+}
+
+#[tokio::test]
+async fn tenant_directory_explain_status_and_cursor() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let plan: (serde_json::Value,) = sqlx::query_as(
+        "EXPLAIN (FORMAT JSON) \
+         SELECT id, name, slug, status, plan FROM tenants \
+         WHERE deleted_at IS NULL AND status = $1 AND id > $2 \
+         ORDER BY id ASC LIMIT $3",
+    )
+    .bind("active")
+    .bind(uuid::Uuid::nil())
+    .bind(10i64)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let plan_str = plan.0.to_string();
+    assert_index_scan(&plan_str);
+    assert_no_seq_scan(&plan_str);
+}
+
+#[tokio::test]
+async fn tenant_directory_explain_search() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let plan: (serde_json::Value,) = sqlx::query_as(
+        "EXPLAIN (FORMAT JSON) \
+         SELECT id, name, slug, status, plan FROM tenants \
+         WHERE deleted_at IS NULL AND (name ILIKE $1 OR slug ILIKE $1) \
+         ORDER BY id ASC LIMIT $2",
+    )
+    .bind("%acme%")
+    .bind(10i64)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let plan_str = plan.0.to_string();
+    assert_index_scan(&plan_str);
+    assert_no_seq_scan(&plan_str);
+}
+
+#[tokio::test]
+async fn tenant_directory_explain_search_and_status() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let plan: (serde_json::Value,) = sqlx::query_as(
+        "EXPLAIN (FORMAT JSON) \
+         SELECT id, name, slug, status, plan FROM tenants \
+         WHERE deleted_at IS NULL \
+           AND (name ILIKE $1 OR slug ILIKE $1) \
+           AND status = $2 \
+         ORDER BY id ASC LIMIT $3",
+    )
+    .bind("%acme%")
+    .bind("active")
+    .bind(10i64)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let plan_str = plan.0.to_string();
+    assert_index_scan(&plan_str);
+    assert_no_seq_scan(&plan_str);
 }
 
 // ---------------------------------------------------------------------------

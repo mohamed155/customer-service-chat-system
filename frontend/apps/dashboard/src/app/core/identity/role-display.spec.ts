@@ -22,6 +22,7 @@ function makeTenant(overrides: Partial<TenantSummary> = {}): TenantSummary {
     name: 'Acme Corp',
     slug: 'acme',
     status: 'active',
+    plan: 'trial',
     ...overrides,
   };
 }
@@ -60,7 +61,13 @@ describe('roleLabel', () => {
       expect(
         roleLabel(
           user,
-          makeTenant({ id: 't1', name: 'Acme Corp', slug: 'acme', status: 'active' }),
+          makeTenant({
+            id: 't1',
+            name: 'Acme Corp',
+            slug: 'acme',
+            status: 'active',
+            plan: 'trial',
+          }),
         ),
       ).toBeNull();
     });

@@ -1,0 +1,7 @@
+set "PORT=8080"
+set "APP_ENVIRONMENT=development"
+set "REDIS_URL=redis://localhost:6379"
+set "DATABASE_URL=postgres://customer_service:customer_service_dev@localhost:5432/customer_service"
+set "CORS_ALLOWED_ORIGINS=http://localhost:4200"
+set "AUTH_JWT_SECRET=local-dev-jwt-secret-do-not-use-in-production-32bytes-min"
+"C:\Users\user\customer-service-chat-system\backend\target\release\server.exe"

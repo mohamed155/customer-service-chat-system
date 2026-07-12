@@ -89,13 +89,31 @@ describe('PlatformNavComponent', () => {
     trigger.click();
     fixture.detectChanges();
 
-    const option = (fixture.nativeElement as HTMLElement).querySelector('.option') as HTMLElement;
-    option.click();
+    const options = (fixture.nativeElement as HTMLElement).querySelectorAll('.option');
+    // The first destination is "Tenants" (US2 added platform.tenants.list);
+    // the second is the original "Platform overview" (Super Admin only).
+    expect(options[0].textContent).toContain('Tenants');
+    expect(options[1].textContent).toContain('Platform overview');
+
+    (options[1] as HTMLElement).click();
     fixture.detectChanges();
 
     expect(routerMock.navigate).toHaveBeenCalledWith(['/platform']);
     const dropdown = (fixture.nativeElement as HTMLElement).querySelector('.dropdown');
     expect(dropdown).toBeNull();
+  });
+
+  it('navigates to the Tenants entry when clicked', async () => {
+    const { fixture, routerMock } = await setup(true);
+    const trigger = (fixture.nativeElement as HTMLElement).querySelector('.trigger') as HTMLElement;
+    trigger.click();
+    fixture.detectChanges();
+
+    const options = (fixture.nativeElement as HTMLElement).querySelectorAll('.option');
+    (options[0] as HTMLElement).click();
+    fixture.detectChanges();
+
+    expect(routerMock.navigate).toHaveBeenCalledWith(['/platform/tenants']);
   });
 
   it('closes on outside click', async () => {

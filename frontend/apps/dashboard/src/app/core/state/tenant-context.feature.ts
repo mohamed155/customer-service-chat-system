@@ -20,7 +20,11 @@ const isTenantSummary = (value: unknown): value is TenantSummary =>
   typeof (value as Record<string, unknown>)['name'] === 'string' &&
   typeof (value as Record<string, unknown>)['slug'] === 'string' &&
   ((value as Record<string, unknown>)['status'] === 'active' ||
-    (value as Record<string, unknown>)['status'] === 'suspended');
+    (value as Record<string, unknown>)['status'] === 'suspended') &&
+  ((value as Record<string, unknown>)['plan'] === 'trial' ||
+    (value as Record<string, unknown>)['plan'] === 'starter' ||
+    (value as Record<string, unknown>)['plan'] === 'professional' ||
+    (value as Record<string, unknown>)['plan'] === 'enterprise');
 
 export const createInitialTenantContextState = (): TenantContextState => {
   const stored =

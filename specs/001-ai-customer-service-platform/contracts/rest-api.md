@@ -37,7 +37,7 @@ silently ignored.
 Request: `?limit=25&cursor=<opaque>` (limit ≤100).
 Response envelope:
 ```json
-{ "items": [...], "next_cursor": "c_...", "has_more": true }
+{ "items": [...], "nextCursor": "c_...", "hasMore": true }
 ```
 
 ### Filtering & sorting

@@ -10,6 +10,7 @@ const mockTenant: TenantSummary = {
   name: 'Test Corp',
   slug: 'test-corp',
   status: 'active',
+  plan: 'trial',
 };
 
 describe('TenantContext feature', () => {
@@ -71,6 +72,7 @@ describe('TenantContext feature', () => {
       name: 'New Co',
       slug: 'new-co',
       status: 'active',
+      plan: 'starter',
     };
     let state = tenantContextFeature.reducer(
       createInitialTenantContextState(),

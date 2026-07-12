@@ -6,7 +6,13 @@ import { TenantSummary } from '../api/tenant-api.models';
 import { tenantContextActions } from '../state/tenant-context.feature';
 import { of, throwError } from 'rxjs';
 
-const fakeTenant: TenantSummary = { id: 't-1', name: 'Acme', slug: 'acme', status: 'active' };
+const fakeTenant: TenantSummary = {
+  id: 't-1',
+  name: 'Acme',
+  slug: 'acme',
+  status: 'active',
+  plan: 'trial',
+};
 
 describe('TenantContextService', () => {
   let service: TenantContextService;

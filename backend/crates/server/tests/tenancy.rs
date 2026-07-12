@@ -491,7 +491,7 @@ mod tests {
         assert_eq!(res.status(), 200);
         let body = body_json(&mut res).await;
         assert!(body["items"].is_array(), "expected items array");
-        assert!(body["has_more"].is_boolean(), "expected has_more field");
+        assert!(body["hasMore"].is_boolean(), "expected hasMore field");
         assert!(body["items"].as_array().unwrap().len() >= 2);
     }
 
@@ -501,8 +501,25 @@ mod tests {
         db::run_migrations(&pool).await.unwrap();
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
-        let tenant_active = seed_tenant(&pool, Some("active")).await;
-        let tenant_deleted = seed_tenant(&pool, Some("active")).await;
+        // Use unique names so we can filter to just our seeded rows,
+        // independent of state from other tests.
+        let unique = uuid::Uuid::new_v4().simple().to_string();
+        let tenant_active = sqlx::query_scalar::<_, uuid::Uuid>(
+            "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(format!("Active Exclude {unique}"))
+        .bind(format!("active-exclude-{unique}"))
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let tenant_deleted = sqlx::query_scalar::<_, uuid::Uuid>(
+            "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(format!("Deleted Exclude {unique}"))
+        .bind(format!("deleted-exclude-{unique}"))
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         sqlx::query("UPDATE tenants SET deleted_at = now() WHERE id = $1")
             .bind(tenant_deleted)
             .execute(&pool)
@@ -512,7 +529,7 @@ mod tests {
         let mut res = send_request(
             pool.clone(),
             Request::builder()
-                .uri("/api/v1/platform/tenants")
+                .uri(format!("/api/v1/platform/tenants?q=Exclude+{unique}"))
                 .header("X-Dev-User-Id", user_id.to_string())
                 .body(Body::empty())
                 .unwrap(),
@@ -543,19 +560,22 @@ mod tests {
         db::run_migrations(&pool).await.unwrap();
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
+        // Use unique slugs so re-runs don't collide with the unique constraint
+        // on `tenants_slug_active_uniq` from previous test runs.
+        let unique = uuid::Uuid::new_v4().simple().to_string();
         let alpha_id = sqlx::query_scalar::<_, uuid::Uuid>(
             "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
         )
-        .bind("Alpha Corp")
-        .bind("alpha-corp")
+        .bind(format!("Alpha Corp {unique}"))
+        .bind(format!("alpha-corp-{unique}"))
         .fetch_one(&pool)
         .await
         .unwrap();
         let _beta_id = sqlx::query_scalar::<_, uuid::Uuid>(
             "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
         )
-        .bind("Beta Inc")
-        .bind("beta-inc")
+        .bind(format!("Beta Inc {unique}"))
+        .bind(format!("beta-inc-{unique}"))
         .fetch_one(&pool)
         .await
         .unwrap();
@@ -563,7 +583,7 @@ mod tests {
         let mut res = send_request(
             pool.clone(),
             Request::builder()
-                .uri("/api/v1/platform/tenants?q=alpha")
+                .uri(format!("/api/v1/platform/tenants?q=Alpha+Corp+{unique}"))
                 .header("X-Dev-User-Id", user_id.to_string())
                 .body(Body::empty())
                 .unwrap(),
@@ -578,7 +598,11 @@ mod tests {
             .iter()
             .map(|t| t["id"].clone())
             .collect();
-        assert_eq!(ids.len(), 1, "expected exactly one match for q=alpha");
+        assert_eq!(
+            ids.len(),
+            1,
+            "expected exactly one match for q=Alpha Corp {unique}"
+        );
         assert_eq!(ids[0], serde_json::json!(alpha_id));
     }
 

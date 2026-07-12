@@ -246,13 +246,13 @@ test.describe('dashboard shell', () => {
     await expect(page).toHaveURL(/\/tenant\/overview$/);
   });
 
-  test('activates platform destinations navigating to overview-placeholder', async ({ page }) => {
+  test('activates platform destinations navigating to platform tenants', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await mockApi(page, identities.platform);
     await page.goto('/tenant/select');
     await page.getByRole('button', { name: 'Platform' }).click();
     await page.getByRole('menuitem', { name: 'Platform overview' }).click();
-    await expect(page).toHaveURL(/\/platform\/overview-placeholder$/);
+    await expect(page).toHaveURL(/\/platform\/tenants$/);
   });
 
   test('logs out successfully and redirects to sign-in', async ({ page }) => {

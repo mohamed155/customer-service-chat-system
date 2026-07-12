@@ -9,9 +9,9 @@ import { TenantSummary } from '../../core/api/tenant-api.models';
 import { TenantSwitcherComponent } from './tenant-switcher.component';
 
 const fakeTenants: TenantSummary[] = [
-  { id: 't-1', name: 'Acme Corp', slug: 'acme', status: 'active' },
-  { id: 't-2', name: 'Globex Inc', slug: 'globex', status: 'active' },
-  { id: 't-3', name: 'Initech', slug: 'initech', status: 'suspended' },
+  { id: 't-1', name: 'Acme Corp', slug: 'acme', status: 'active', plan: 'trial' },
+  { id: 't-2', name: 'Globex Inc', slug: 'globex', status: 'active', plan: 'starter' },
+  { id: 't-3', name: 'Initech', slug: 'initech', status: 'suspended', plan: 'professional' },
 ];
 
 describe('TenantSwitcherComponent', () => {
@@ -81,7 +81,13 @@ describe('TenantSwitcherComponent', () => {
     const { fixture, store } = await setup(true);
     store.setState({
       tenantContext: {
-        activeTenant: { id: 't-1', name: 'Acme Corp', slug: 'acme', status: 'active' },
+        activeTenant: {
+          id: 't-1',
+          name: 'Acme Corp',
+          slug: 'acme',
+          status: 'active',
+          plan: 'trial',
+        },
         status: 'idle' as const,
       },
     });
@@ -119,7 +125,13 @@ describe('TenantSwitcherComponent', () => {
     const { fixture, store } = await setup(true);
     store.setState({
       tenantContext: {
-        activeTenant: { id: 't-1', name: 'Acme Corp', slug: 'acme', status: 'active' },
+        activeTenant: {
+          id: 't-1',
+          name: 'Acme Corp',
+          slug: 'acme',
+          status: 'active',
+          plan: 'trial',
+        },
         status: 'idle' as const,
       },
     });

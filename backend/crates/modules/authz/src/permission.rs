@@ -48,6 +48,8 @@ pub enum Permission {
     PlatformTenantsList,
     #[serde(rename = "platform.tenants.switch")]
     PlatformTenantsSwitch,
+    #[serde(rename = "platform.tenants.manage")]
+    PlatformTenantsManage,
     #[serde(rename = "platform.admin")]
     PlatformAdmin,
     #[serde(rename = "platform.billing.view")]
@@ -80,7 +82,7 @@ impl Permission {
         Self::OwnerAssign,
     ];
 
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 26] = [
         Self::OverviewView,
         Self::ConversationsView,
         Self::ConversationsManage,
@@ -103,6 +105,7 @@ impl Permission {
         Self::OwnerAssign,
         Self::PlatformTenantsList,
         Self::PlatformTenantsSwitch,
+        Self::PlatformTenantsManage,
         Self::PlatformAdmin,
         Self::PlatformBillingView,
         Self::PlatformDiagnosticsView,
@@ -134,6 +137,7 @@ impl fmt::Display for Permission {
             Self::OwnerAssign => "owner.assign",
             Self::PlatformTenantsList => "platform.tenants.list",
             Self::PlatformTenantsSwitch => "platform.tenants.switch",
+            Self::PlatformTenantsManage => "platform.tenants.manage",
             Self::PlatformAdmin => "platform.admin",
             Self::PlatformBillingView => "platform.billing.view",
             Self::PlatformDiagnosticsView => "platform.diagnostics.view",
@@ -175,7 +179,7 @@ mod tests {
 
     #[test]
     fn catalog_parity_with_contract() {
-        let contract_codes: [&str; 25] = [
+        let contract_codes: [&str; 26] = [
             "overview.view",
             "conversations.view",
             "conversations.manage",
@@ -198,6 +202,7 @@ mod tests {
             "owner.assign",
             "platform.tenants.list",
             "platform.tenants.switch",
+            "platform.tenants.manage",
             "platform.admin",
             "platform.billing.view",
             "platform.diagnostics.view",

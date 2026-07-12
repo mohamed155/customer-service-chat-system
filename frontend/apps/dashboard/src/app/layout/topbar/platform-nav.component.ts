@@ -22,6 +22,11 @@ interface PlatformDestination {
 
 const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
   {
+    label: 'Tenants',
+    path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.tenants}`,
+    permission: 'platform.tenants.list',
+  },
+  {
     label: 'Platform overview',
     path: `/${APP_PATHS.platform.base}`,
     permission: 'platform.admin',

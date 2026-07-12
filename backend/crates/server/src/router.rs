@@ -6,7 +6,7 @@ use axum::routing::MethodRouter;
 use axum::Extension;
 use axum::{extract::Request, middleware, routing, Router};
 use config::AppConfig;
-use identity::{principal_middleware, IdentityConfig};
+use identity::{principal_middleware, IdentityConfig, Principal};
 use kernel::ApiError;
 use observability::health::HealthReport;
 use observability::request_id::{request_id_middleware, REQUEST_ID_HEADER};
@@ -51,9 +51,24 @@ async fn csrf_origin_middleware(
 ) -> Response {
     let method = request.method();
     let is_safe_method = matches!(method, &Method::GET | &Method::HEAD | &Method::OPTIONS);
-    let is_api_request = request.uri().path().starts_with("/api/v1");
 
-    if is_api_request && !is_safe_method {
+    // CSRF only applies to authenticated state-changing requests:
+    //   * Safe methods (GET/HEAD/OPTIONS) cannot mutate state and skip the
+    //     check.
+    //   * Unauthenticated state-changing requests fall through to the
+    //     downstream auth gate, which returns 401 before any CSRF (403)
+    //     check can fire. The auth-before-CSRF ordering is asserted by
+    //     `anonymous_foreign_origin_protected_request_returns_401_before_csrf`.
+    //   * Authenticated state-changing requests must come from an allowed
+    //     origin (when an Origin header is present).
+    //
+    // The middleware runs inside the `/api/v1` nest, so the path prefix
+    // has been stripped by the time the request reaches us. We deliberately
+    // do not key the exemption off the path: `/auth/login` is a public
+    // state-changing endpoint that should still be CSRF-protected when
+    // invoked with a valid session cookie (see
+    // `csrf_origin_policy_blocks_foreign_state_changing_requests_only`).
+    if !is_safe_method && request.extensions().get::<Principal>().is_some() {
         let origin = request
             .headers()
             .get(header::ORIGIN)
@@ -132,6 +147,26 @@ impl ProtectedRoutes {
         self
     }
 
+    /// Register a route that serves two different methods on the same path
+    /// with two different permission gates.  The per-method permission layer
+    /// is applied to each `MethodRouter` *before* the merge, so a GET
+    /// request only goes through `get_permission` and a POST request only
+    /// goes through `post_permission`.
+    fn guarded_with_methods(
+        mut self,
+        path: &str,
+        get_router: MethodRouter<sqlx::PgPool>,
+        get_permission: Permission,
+        post_router: MethodRouter<sqlx::PgPool>,
+        post_permission: Permission,
+    ) -> Self {
+        let merged = get_router
+            .route_layer(require_permission(get_permission))
+            .merge(post_router.route_layer(require_permission(post_permission)));
+        self.router = self.router.route(path, merged);
+        self
+    }
+
     fn mount_platform(self, router: Router<sqlx::PgPool>) -> Router<sqlx::PgPool> {
         router.merge(
             self.router
@@ -207,11 +242,23 @@ fn authenticated_routes() -> Router<sqlx::PgPool> {
 }
 
 fn platform_routes(include_test_routes: bool) -> ProtectedRoutes {
+    // /platform/tenants/{id} serves both the read-only detail (US2/T022) and
+    // the partial update (US3/T029) on the same path with per-method
+    // permission gates.
     let routes = ProtectedRoutes::new()
-        .guarded(
+        .guarded_with_methods(
             "/platform/tenants",
             routing::get(tenancy::routes::list_tenants),
             Permission::PlatformTenantsList,
+            routing::post(tenancy::routes::create_tenant),
+            Permission::PlatformTenantsManage,
+        )
+        .guarded_with_methods(
+            "/platform/tenants/{id}",
+            routing::get(tenancy::routes::get_tenant_detail),
+            Permission::PlatformTenantsList,
+            routing::patch(tenancy::routes::update_tenant),
+            Permission::PlatformTenantsManage,
         )
         .guarded(
             "/platform/tenants/{id}/switch",

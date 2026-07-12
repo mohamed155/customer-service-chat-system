@@ -48,11 +48,14 @@ pub async fn login_succeeded(pool: &PgPool, user_id: Uuid) {
 }
 
 pub async fn login_failed(pool: &PgPool, email: &str, reason: &str) {
+    // `resource_id` is NOT NULL-constrained (audit_logs_resource_required);
+    // use the email as the resource identifier so the row can be correlated
+    // with the user record even when the lookup didn't resolve to one.
     record(
         pool,
         "auth.login_failed",
         None,
-        None,
+        Some(email),
         &json!({
             "email": email,
             "reason": reason,

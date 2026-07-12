@@ -10,6 +10,7 @@ const mockTenant: TenantSummary = {
   name: 'Test Corp',
   slug: 'test-corp',
   status: 'active',
+  plan: 'trial',
 };
 
 describe('TenantContextEffects', () => {

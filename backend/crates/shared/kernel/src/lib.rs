@@ -97,6 +97,22 @@ impl ApiError {
         Self::new_with_code(StatusCode::UNPROCESSABLE_ENTITY, "unprocessable", message)
     }
 
+    /// `unprocessable_entity` — HTTP 422 with code `validation_failed`.
+    ///
+    /// Used when a request is syntactically well-formed (so JSON extraction
+    /// succeeds) but fails semantic validation.  The status matches the
+    /// contract for per-field validation failures (see
+    /// `specs/010-platform-tenant-management/contracts/rest-api.md`); the
+    /// code `validation_failed` aligns with the rest of the platform's error
+    /// vocabulary.
+    pub fn unprocessable_entity(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "validation_failed",
+            message,
+        )
+    }
+
     pub fn rate_limited(message: impl Into<String>) -> Self {
         Self::new_with_code(StatusCode::TOO_MANY_REQUESTS, "rate_limited", message)
     }
@@ -132,10 +148,187 @@ where
     type Rejection = ApiError;
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        match Json::<T>::from_request(req, state).await {
-            Ok(json) => Ok(Self(json.0)),
-            Err(_) => Err(ApiError::validation_failed("Invalid request body")),
+        let bytes = match axum::body::Bytes::from_request(req, state).await {
+            Ok(b) => b,
+            Err(_) => return Err(ApiError::validation_failed("Invalid request body")),
+        };
+        match serde_json::from_slice::<T>(&bytes) {
+            Ok(value) => Ok(Self(value)),
+            Err(error) => Err(classify_serde_error(error)),
         }
+    }
+}
+
+/// `classify_serde_error` — turn a Serde JSON deserialization failure into
+/// either a 400 `validation_failed` (body is not even valid JSON) or a 422
+/// `validation_failed` with per-field `ErrorDetail` (body is well-formed but
+/// the type/shape does not match the contract).
+///
+/// The two cases are deliberately distinct: malformed JSON is a transport-
+/// layer problem, while shape errors are a contract violation the UI needs
+/// to surface. `contracts/rest-api.md` requires 422 for the latter so the
+/// caller can read the offending field name out of `details`.
+fn classify_serde_error(error: serde_json::Error) -> ApiError {
+    if error.is_syntax() || error.is_eof() {
+        return ApiError::validation_failed("Request body is not valid JSON");
+    }
+
+    // The body is well-formed JSON.  Pull the field name (if any) out of the
+    // Serde error message so the 422 envelope can name the offending field.
+    // `deny_unknown_fields` produces "unknown field `foo`, expected ..." and
+    // missing/invalid-value errors include the path before the colon.
+    let message = error.to_string();
+    let field = extract_field_from_serde_error(&message);
+
+    let detail = ErrorDetail {
+        field: field.unwrap_or_else(|| "<root>".to_string()),
+        code: "invalid_value".to_string(),
+        message: humanize_serde_error(&message),
+    };
+    ApiError::unprocessable_entity("Validation failed").with_details(vec![detail])
+}
+
+/// Pull a field name out of a Serde error message when one is present.
+///
+/// Known Serde message shapes we recognise:
+///   * `unknown field `foo`, expected ...`            → `foo`
+///   * `missing field `name``                          → `name`
+///   * `invalid type: integer ..., expected a string`  → empty (root)
+///   * `invalid value: ...`                            → empty (root)
+///
+/// The shape we return is the field NAME, not a path — for the tenant-
+/// management payloads the rejected fields are always at the top level,
+/// so a name is what the UI's per-control error mapping expects.
+fn extract_field_from_serde_error(message: &str) -> Option<String> {
+    if let Some(rest) = message.strip_prefix("unknown field `") {
+        if let Some(end) = rest.find('`') {
+            return Some(rest[..end].to_string());
+        }
+    }
+    if let Some(rest) = message.strip_prefix("missing field `") {
+        if let Some(end) = rest.find('`') {
+            return Some(rest[..end].to_string());
+        }
+    }
+    None
+}
+
+/// Convert the raw Serde error text into a concise human-readable message
+/// the UI can display verbatim.  We strip the line/column tail Serde appends
+/// (" at line N column M") so the message reads cleanly in a form.
+fn humanize_serde_error(message: &str) -> String {
+    let trimmed = match message.find(" at line ") {
+        Some(idx) => &message[..idx],
+        None => message,
+    };
+    trimmed.trim().to_string()
+}
+
+#[cfg(test)]
+mod extractor_tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    async fn run<T>(body: &'static str) -> (u16, serde_json::Value)
+    where
+        T: DeserializeOwned + Send + 'static,
+        ApiJson<T>: FromRequest<(), Rejection = ApiError>,
+    {
+        let svc = axum::Router::new().route(
+            "/probe",
+            axum::routing::post(|_payload: ApiJson<T>| async move {
+                axum::Json(serde_json::json!({ "ok": true }))
+            }),
+        );
+        let req = Request::post("/probe")
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .unwrap();
+        let res = svc.oneshot(req).await.unwrap();
+        let status = res.status().as_u16();
+        let bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        (status, value)
+    }
+
+    #[tokio::test]
+    async fn malformed_json_returns_400() {
+        #[derive(serde::Deserialize)]
+        #[allow(dead_code)]
+        struct Probe {
+            #[allow(dead_code)]
+            name: String,
+        }
+        let (status, body) = run::<Probe>("{ not valid json").await;
+        assert_eq!(
+            status, 400,
+            "malformed JSON must be 400, got {status}: {body}"
+        );
+        assert_eq!(body["error"]["code"], "validation_failed");
+    }
+
+    #[tokio::test]
+    async fn unknown_field_returns_422_with_field_named() {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        #[allow(dead_code)]
+        struct Probe {
+            #[allow(dead_code)]
+            name: String,
+        }
+        let (status, body) = run::<Probe>(r#"{"name": "x", "extraneous": "y"}"#).await;
+        assert_eq!(
+            status, 422,
+            "unknown field must be 422, got {status}: {body}"
+        );
+        assert_eq!(body["error"]["code"], "validation_failed");
+        let details = body["error"]["details"].as_array().expect("details array");
+        assert!(
+            details.iter().any(|d| d["field"] == "extraneous"),
+            "expected `extraneous` in details, got: {details:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn wrong_type_returns_422() {
+        #[derive(serde::Deserialize)]
+        #[allow(dead_code)]
+        struct Probe {
+            #[allow(dead_code)]
+            name: String,
+        }
+        let (status, body) = run::<Probe>(r#"{"name": 5}"#).await;
+        assert_eq!(
+            status, 422,
+            "wrong-typed field must be 422, got {status}: {body}"
+        );
+        let details = body["error"]["details"].as_array().expect("details array");
+        assert_eq!(details.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn missing_field_returns_422_with_field_named() {
+        #[derive(serde::Deserialize)]
+        #[allow(dead_code)]
+        struct Probe {
+            #[allow(dead_code)]
+            name: String,
+            #[allow(dead_code)]
+            slug: String,
+        }
+        let (status, body) = run::<Probe>(r#"{"name": "x"}"#).await;
+        assert_eq!(
+            status, 422,
+            "missing required field must be 422, got {status}: {body}"
+        );
+        let details = body["error"]["details"].as_array().expect("details array");
+        assert!(
+            details.iter().any(|d| d["field"] == "slug"),
+            "expected `slug` in details, got: {details:?}"
+        );
     }
 }
 
@@ -163,6 +356,7 @@ impl PageParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct Page<T> {
     pub items: Vec<T>,
     pub next_cursor: Option<String>,
@@ -213,6 +407,14 @@ mod tests {
         let err = ApiError::unprocessable("invalid data");
         assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(err.envelope.error.code, "unprocessable");
+    }
+
+    #[test]
+    fn unprocessable_entity_has_422_and_validation_failed_code() {
+        let err = ApiError::unprocessable_entity("validation failed");
+        assert_eq!(err.status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(err.envelope.error.code, "validation_failed");
+        assert_eq!(err.envelope.error.message, "validation failed");
     }
 
     #[test]
