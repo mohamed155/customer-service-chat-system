@@ -134,7 +134,7 @@ where
     Option::<String>::deserialize(deserializer).map(Some)
 }
 
-fn is_valid_email(value: &str) -> bool {
+pub(crate) fn is_valid_email(value: &str) -> bool {
     // Total length check (RFC 5321)
     if value.len() > 254 {
         return false;

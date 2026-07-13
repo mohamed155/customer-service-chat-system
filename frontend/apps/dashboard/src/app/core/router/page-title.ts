@@ -7,12 +7,16 @@ import { filter, map } from 'rxjs';
 export type PageTitleKey =
   | 'overview'
   | 'conversations'
+  | 'conversationDetail'
   | 'customers'
+  | 'customerProfile'
   | 'aiAgent'
   | 'knowledgeBase'
   | 'integrations'
   | 'analytics'
   | 'settings'
+  | 'team'
+  | 'inviteAccept'
   | 'platform'
   | 'platformOverview'
   | 'selectTenant'
@@ -45,8 +49,16 @@ function overviewSubtitle(): string {
 /** Typed, readonly map of topbar title/subtitle text for every route that renders inside the Helix shell. */
 export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
   overview: { title: 'Overview', subtitle: overviewSubtitle },
-  conversations: { title: 'Conversations', subtitle: 'Shared inbox · 6 open, 2 escalated' },
+  conversations: { title: 'Conversations', subtitle: 'Manage your team conversations' },
+  conversationDetail: {
+    title: 'Conversation',
+    subtitle: 'Customer conversation details and timeline',
+  },
   customers: { title: 'Customers', subtitle: 'Customer profiles and conversation history' },
+  customerProfile: {
+    title: 'Customer profile',
+    subtitle: 'Contact, identifiers, and conversation history',
+  },
   aiAgent: { title: 'AI Agent', subtitle: 'Configure how your assistant behaves' },
   knowledgeBase: {
     title: 'Knowledge Base',
@@ -55,6 +67,8 @@ export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
   integrations: { title: 'Integrations', subtitle: 'Connect channels and business systems' },
   analytics: { title: 'Analytics', subtitle: 'Trends across every channel' },
   settings: { title: 'Settings', subtitle: 'Workspace preferences and security' },
+  team: { title: 'Team', subtitle: 'Manage team members and invitations' },
+  inviteAccept: { title: 'Accept invitation', subtitle: 'Join your team' },
   platform: { title: 'Platform', subtitle: 'Platform administration' },
   platformOverview: { title: 'Platform overview', subtitle: 'Platform administration' },
   selectTenant: { title: 'Select tenant', subtitle: 'Choose a tenant context to continue' },

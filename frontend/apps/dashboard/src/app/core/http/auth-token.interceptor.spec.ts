@@ -11,6 +11,7 @@ describe('authTokenInterceptor', () => {
     appName: 'Dashboard',
     environmentName: 'development',
     enableNgRxDevtools: false,
+    publicDashboardUrl: 'http://localhost:4200',
   };
 
   function configure(apiBaseUrl = config.apiBaseUrl): void {

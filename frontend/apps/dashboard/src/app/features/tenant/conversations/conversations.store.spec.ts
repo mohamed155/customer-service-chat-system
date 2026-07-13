@@ -1,40 +1,41 @@
 import { TestBed } from '@angular/core/testing';
-import { CONVERSATION_FIXTURES } from '../../../shared/fixtures/conversation.fixtures';
-import { CUSTOMER_FIXTURES } from '../../../shared/fixtures/customer.fixtures';
+import { ConversationsApiService } from './conversations-api.service';
 import { ConversationsStore } from './conversations.store';
 
 describe('ConversationsStore', () => {
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [ConversationsStore] });
+    TestBed.configureTestingModule({
+      providers: [
+        ConversationsStore,
+        {
+          provide: ConversationsApiService,
+          useValue: {
+            list: vi.fn(),
+          },
+        },
+      ],
+    });
   });
 
-  it('starts with empty state until setPageData is called', () => {
+  it('starts with empty state', () => {
     const store = TestBed.inject(ConversationsStore);
-
-    expect(store.conversations()).toEqual([]);
+    expect(store.items()).toEqual([]);
     expect(store.selectedId()).toBeNull();
+    expect(store.loading()).toBe(false);
+    expect(store.error()).toBeNull();
+    expect(store.filters()).toEqual({ status: 'open' });
   });
 
-  it('setPageData populates conversations and selects the first one', () => {
+  it('selects a conversation by id', () => {
     const store = TestBed.inject(ConversationsStore);
-    store.setPageData(CONVERSATION_FIXTURES, CUSTOMER_FIXTURES);
+    TestBed.inject(ConversationsApiService).list = vi.fn().mockReturnValue({
+      pipe: () => ({
+        pipe: vi.fn(),
+      }),
+    });
 
-    expect(store.selectedId()).toBe(CONVERSATION_FIXTURES[0].id);
-    expect(store.selectedConversation()?.id).toBe(CONVERSATION_FIXTURES[0].id);
-  });
-
-  it('updates selection and moves hidden selection when filtering', () => {
-    const store = TestBed.inject(ConversationsStore);
-    store.setPageData(CONVERSATION_FIXTURES, CUSTOMER_FIXTURES);
-    const closed = CONVERSATION_FIXTURES.find((conversation) => conversation.status === 'closed')!;
-    store.select(closed.id);
-    expect(store.selectedId()).toBe(closed.id);
-
-    store.setFilter('open');
-
-    expect(
-      store.filteredConversations().every((conversation) => conversation.status === 'open'),
-    ).toBe(true);
-    expect(store.selectedConversation()?.status).toBe('open');
+    store.select('c2');
+    expect(store.selectedId()).toBe('c2');
+    expect(store.selectedConversation()).toBeNull(); // no items yet
   });
 });

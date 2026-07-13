@@ -7,9 +7,11 @@ use axum::response::Response;
 use axum::{routing::get, Extension, Router};
 use config::Environment;
 use http_body_util::BodyExt;
+use rand::RngCore;
 use serde_json::{json, Value};
 use server::router;
 use server::state::AppState;
+use sha2::Digest;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -48,14 +50,32 @@ const VIEWER_PERMISSIONS: &[&str] = &[
 
 const TENANT_OPERATIONS: &[(&str, &str)] = &[
     ("/api/v1/tenant", "overview.view"),
+    ("/api/v1/tenant/conversations", "conversations.view"),
+    (
+        "/api/v1/tenant/conversations/{id}",
+        "conversations.view",
+    ),
     (
         "/api/v1/test/tenant/conversations/manage",
         "conversations.manage",
     ),
+    ("/api/v1/tenant/conversations/{id}/messages", "conversations.view"),
     ("/api/v1/test/tenant/members/manage", "members.manage"),
+    ("/api/v1/test/tenant/members/{id}", "members.manage"),
+    ("/api/v1/test/tenant/members/view", "members.view"),
+    (
+        "/api/v1/test/tenant/members/invitations/view",
+        "members.view",
+    ),
+    (
+        "/api/v1/test/tenant/members/invitations/manage",
+        "members.manage",
+    ),
     ("/api/v1/test/tenant/settings/manage", "settings.manage"),
     ("/api/v1/test/tenant/billing/view", "billing.view"),
     ("/api/v1/test/tenant/billing/manage", "billing.manage"),
+    ("/api/v1/test/tenant/customers/view", "customers.view"),
+    ("/api/v1/test/tenant/customers/manage", "customers.manage"),
 ];
 
 const PLATFORM_OPERATIONS: &[&str] = &[
@@ -91,6 +111,9 @@ fn test_config(environment: Environment) -> config::AppConfig {
         environment,
         cors_allowed_origins: vec![],
         log_format: config::LogFormat::Pretty,
+        smtp_url: None,
+        smtp_from: None,
+        public_dashboard_url: "http://localhost:4200".into(),
         db_max_connections: 2,
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
@@ -107,17 +130,27 @@ fn app_state(pool: sqlx::PgPool, environment: Environment) -> AppState {
     }
 }
 
+fn require_db_tests() -> bool {
+    std::env::var("REQUIRE_DB_TESTS").as_deref() == Ok("1")
+}
+
 async fn get_pool() -> Option<sqlx::PgPool> {
     let url = match std::env::var("DATABASE_URL") {
         Ok(value) => value,
         Err(_) => {
             eprintln!("skipping RBAC live tests: DATABASE_URL not set");
+            if require_db_tests() {
+                panic!("REQUIRE_DB_TESTS=1 but DATABASE_URL is not set — refusing to silently skip RBAC tests");
+            }
             return None;
         }
     };
     let pool = db::lazy_pool(&url, 4, Duration::from_secs(5));
     if sqlx::query("SELECT 1").execute(&pool).await.is_err() {
         eprintln!("skipping RBAC live tests: DATABASE_URL is unreachable");
+        if require_db_tests() {
+            panic!("REQUIRE_DB_TESTS=1 but DATABASE_URL is unreachable — refusing to silently skip RBAC tests");
+        }
         return None;
     }
     Some(pool)
@@ -160,6 +193,31 @@ fn authenticated_request(
     builder.body(Body::empty()).unwrap()
 }
 
+fn authenticated_json_request(
+    uri: &str,
+    method: Method,
+    user_id: Uuid,
+    tenant_id: Option<Uuid>,
+    environment: Environment,
+    body: Value,
+) -> Request<Body> {
+    let mut builder = Request::builder()
+        .uri(uri)
+        .method(method)
+        .header("content-type", "application/json");
+    if environment == Environment::Production {
+        builder = builder.header("cookie", session_cookie(user_id, environment));
+    } else {
+        builder = builder.header("X-Dev-User-Id", user_id.to_string());
+    }
+    if let Some(tenant_id) = tenant_id {
+        builder = builder.header("X-Tenant-ID", tenant_id.to_string());
+    }
+    builder
+        .body(Body::from(serde_json::to_vec(&body).unwrap()))
+        .unwrap()
+}
+
 async fn body_json(response: Response) -> Value {
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     serde_json::from_slice(&bytes).unwrap()
@@ -194,6 +252,27 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .execute(pool)
         .await
         .unwrap();
+}
+
+async fn seed_invitation(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    email: &str,
+    invited_by: Uuid,
+) -> Uuid {
+    let mut bytes = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    let token_hash = hex::encode(sha2::Sha256::digest(bytes));
+    sqlx::query_scalar(
+        "INSERT INTO tenant_invitations (tenant_id, email, role, token_hash, invited_by, expires_at) VALUES ($1, $2, 'agent', $3, $4, now() + interval '7 days') RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind(email)
+    .bind(token_hash)
+    .bind(invited_by)
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 async fn assert_status(
@@ -350,6 +429,378 @@ async fn all_tenant_roles_have_representative_allows_and_denies() {
     }
 }
 
+#[tokio::test]
+async fn customer_operations_follow_the_tenant_role_matrix() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+    let tenant_id = seed_tenant(&pool).await;
+
+    for (role, expected) in [
+        ("owner", [true, true]),
+        ("admin", [true, true]),
+        ("manager", [true, true]),
+        ("agent", [true, true]),
+        ("viewer", [true, false]),
+    ] {
+        let user_id = seed_user(&pool, None).await;
+        seed_membership(&pool, tenant_id, user_id, role).await;
+        for ((uri, _), allowed) in TENANT_OPERATIONS
+            .iter()
+            .filter(|(_, permission)| matches!(*permission, "customers.view" | "customers.manage"))
+            .zip(expected)
+        {
+            assert_status(
+                &pool,
+                Environment::Test,
+                uri,
+                user_id,
+                Some(tenant_id),
+                if allowed {
+                    StatusCode::OK
+                } else {
+                    StatusCode::FORBIDDEN
+                },
+            )
+            .await;
+        }
+    }
+}
+
+#[tokio::test]
+async fn tenant_team_routes_cover_actual_methods_for_roles_and_anonymous_callers() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+
+    for role in ["owner", "admin", "manager", "agent", "viewer"] {
+        let tenant_id = seed_tenant(&pool).await;
+        let actor = seed_user(&pool, None).await;
+        seed_membership(&pool, tenant_id, actor, role).await;
+
+        let target = seed_user(&pool, None).await;
+        seed_membership(&pool, tenant_id, target, "agent").await;
+        let target_id: Uuid = sqlx::query_scalar(
+            "SELECT id FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2",
+        )
+        .bind(tenant_id)
+        .bind(target)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let invitation_id = seed_invitation(
+            &pool,
+            tenant_id,
+            &format!("invite-{role}-{}@example.com", Uuid::new_v4().simple()),
+            actor,
+        )
+        .await;
+
+        let expected_ok = matches!(role, "owner" | "admin" | "manager");
+
+        let get_response = send(
+            pool.clone(),
+            Environment::Test,
+            authenticated_request(
+                "/api/v1/tenant/members",
+                Method::GET,
+                actor,
+                Some(tenant_id),
+                Environment::Test,
+            ),
+        )
+        .await;
+        assert_eq!(
+            get_response.status(),
+            if expected_ok {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            "unexpected GET /tenant/members result for {role}"
+        );
+
+        let invitations_get_response = send(
+            pool.clone(),
+            Environment::Test,
+            authenticated_request(
+                "/api/v1/tenant/members/invitations",
+                Method::GET,
+                actor,
+                Some(tenant_id),
+                Environment::Test,
+            ),
+        )
+        .await;
+        assert_eq!(
+            invitations_get_response.status(),
+            if expected_ok {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            "unexpected GET /tenant/members/invitations result for {role}"
+        );
+
+        let post_response = send(
+            pool.clone(),
+            Environment::Test,
+            authenticated_json_request(
+                "/api/v1/tenant/members/invitations",
+                Method::POST,
+                actor,
+                Some(tenant_id),
+                Environment::Test,
+                json!({
+                    "email": format!("post-{role}-{}@example.com", Uuid::new_v4().simple()),
+                    "role": "agent",
+                }),
+            ),
+        )
+        .await;
+        assert_eq!(
+            post_response.status(),
+            if expected_ok {
+                StatusCode::CREATED
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            "unexpected POST /tenant/members/invitations result for {role}"
+        );
+
+        let patch_response = send(
+            pool.clone(),
+            Environment::Test,
+            authenticated_json_request(
+                &format!("/api/v1/tenant/members/{target_id}"),
+                Method::PATCH,
+                actor,
+                Some(tenant_id),
+                Environment::Test,
+                json!({"status": "disabled"}),
+            ),
+        )
+        .await;
+        assert_eq!(
+            patch_response.status(),
+            if expected_ok {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            "unexpected PATCH /tenant/members/{{id}} result for {role}"
+        );
+
+        let delete_response = send(
+            pool.clone(),
+            Environment::Test,
+            authenticated_request(
+                &format!("/api/v1/tenant/members/invitations/{invitation_id}"),
+                Method::DELETE,
+                actor,
+                Some(tenant_id),
+                Environment::Test,
+            ),
+        )
+        .await;
+        assert_eq!(
+            delete_response.status(),
+            if expected_ok {
+                StatusCode::NO_CONTENT
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            "unexpected DELETE /tenant/members/invitations/{{id}} result for {role}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn anonymous_team_routes_are_rejected_before_authorization() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+    let tenant_id = seed_tenant(&pool).await;
+    let target = seed_user(&pool, None).await;
+    seed_membership(&pool, tenant_id, target, "agent").await;
+    let target_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2",
+    )
+    .bind(tenant_id)
+    .bind(target)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let invitation_id = seed_invitation(&pool, tenant_id, "anon-invite@example.com", target).await;
+
+    let requests = [
+        Request::get("/api/v1/tenant/members")
+            .header("X-Tenant-ID", tenant_id.to_string())
+            .body(Body::empty())
+            .unwrap(),
+        Request::get("/api/v1/tenant/members/invitations")
+            .header("X-Tenant-ID", tenant_id.to_string())
+            .body(Body::empty())
+            .unwrap(),
+        Request::post("/api/v1/tenant/members/invitations")
+            .header("X-Tenant-ID", tenant_id.to_string())
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&json!({"email":"anon@example.com","role":"agent"})).unwrap(),
+            ))
+            .unwrap(),
+        Request::builder()
+            .uri(format!("/api/v1/tenant/members/{target_id}"))
+            .method(Method::PATCH)
+            .header("X-Tenant-ID", tenant_id.to_string())
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&json!({"status":"disabled"})).unwrap(),
+            ))
+            .unwrap(),
+        Request::delete(format!(
+            "/api/v1/tenant/members/invitations/{invitation_id}"
+        ))
+        .header("X-Tenant-ID", tenant_id.to_string())
+        .body(Body::empty())
+        .unwrap(),
+    ];
+
+    for request in requests {
+        let response = send(pool.clone(), Environment::Test, request).await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+}
+
+#[tokio::test]
+async fn production_staff_team_route_matrix_is_method_aware() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+    let tenant_id = seed_tenant(&pool).await;
+    let target = seed_user(&pool, Some("developer")).await;
+    seed_membership(&pool, tenant_id, target, "agent").await;
+    let target_id: Uuid = sqlx::query_scalar(
+        "SELECT id FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2",
+    )
+    .bind(tenant_id)
+    .bind(target)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let invitation_id = seed_invitation(&pool, tenant_id, "prod-invite@example.com", target).await;
+
+    for role in ["super_admin", "developer", "support", "sales", "finance"] {
+        let actor = seed_user(&pool, Some(role)).await;
+        let can_view = matches!(role, "super_admin" | "developer" | "sales" | "finance");
+        let can_manage = role == "super_admin";
+
+        let get_response = send(
+            pool.clone(),
+            Environment::Production,
+            authenticated_request(
+                "/api/v1/tenant/members",
+                Method::GET,
+                actor,
+                Some(tenant_id),
+                Environment::Production,
+            ),
+        )
+        .await;
+        assert_eq!(
+            get_response.status(),
+            if can_view {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            }
+        );
+
+        let invitations_get_response = send(
+            pool.clone(),
+            Environment::Production,
+            authenticated_request(
+                "/api/v1/tenant/members/invitations",
+                Method::GET,
+                actor,
+                Some(tenant_id),
+                Environment::Production,
+            ),
+        )
+        .await;
+        assert_eq!(
+            invitations_get_response.status(),
+            if can_view {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            }
+        );
+
+        let post_response = send(
+            pool.clone(),
+            Environment::Production,
+            authenticated_json_request(
+                "/api/v1/tenant/members/invitations",
+                Method::POST,
+                actor,
+                Some(tenant_id),
+                Environment::Production,
+                json!({"email": format!("prod-{role}@example.com"), "role": "agent"}),
+            ),
+        )
+        .await;
+        assert_eq!(
+            post_response.status(),
+            if can_manage {
+                StatusCode::CREATED
+            } else {
+                StatusCode::FORBIDDEN
+            }
+        );
+
+        let patch_response = send(
+            pool.clone(),
+            Environment::Production,
+            authenticated_json_request(
+                &format!("/api/v1/tenant/members/{target_id}"),
+                Method::PATCH,
+                actor,
+                Some(tenant_id),
+                Environment::Production,
+                json!({"status": "disabled"}),
+            ),
+        )
+        .await;
+        assert_eq!(
+            patch_response.status(),
+            if can_manage {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            }
+        );
+
+        let delete_response = send(
+            pool.clone(),
+            Environment::Production,
+            authenticated_request(
+                &format!("/api/v1/tenant/members/invitations/{invitation_id}"),
+                Method::DELETE,
+                actor,
+                Some(tenant_id),
+                Environment::Production,
+            ),
+        )
+        .await;
+        assert_eq!(
+            delete_response.status(),
+            if can_manage {
+                StatusCode::NO_CONTENT
+            } else {
+                StatusCode::FORBIDDEN
+            }
+        );
+    }
+}
+
 // Owner and Super Admin own every permission in their respective scopes,
 // making a role-derived same-scope denial impossible (it would contradict the
 // canonical matrix).  Their fail-closed coverage relies on:
@@ -366,6 +817,7 @@ async fn full_access_roles_do_not_bypass_missing_effective_permissions() {
         principal_kind: identity::PrincipalKind::Tenant,
         tenant_role: Some(authz::TenantRole::Owner),
         permissions: authz::PermissionSet::default(),
+        request_id: String::new(),
     };
     let tenant_response = Router::new()
         .route(
@@ -890,12 +1342,35 @@ async fn staff_tenant_access_is_environment_aware() {
     for role in roles {
         let user_id = seed_user(&pool, Some(role)).await;
         let cookie = session_cookie(user_id, Environment::Production);
+        // Positions correspond to TENANT_OPERATIONS: overview.view,
+        // conversations.view (x3 routes: /conversations, /conversations/{id},
+        // /conversations/{id}/messages), conversations.manage,
+        // members.manage (x2 synthetic routes), members.view (x2 synthetic routes),
+        // settings.manage, billing.view, billing.manage, customers.view,
+        // customers.manage — must match the canonical production
+        // `staff_tenant_permissions` matrix asserted in
+        // `me_staff_tenant_permissions_follow_environment_for_every_platform_role`.
         let expected = match role {
-            "super_admin" => [true, true, true, true, true, true],
-            "developer" => [true, false, false, false, false, false],
-            "support" => [true, true, false, false, false, false],
-            "sales" => [true, false, false, false, false, false],
-            "finance" => [true, false, false, false, true, false],
+            "super_admin" => [
+                true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true, true,
+            ],
+            "developer" => [
+                true, true, true, false, true, false, false, true, true, false,
+                false, false, false, true, false,
+            ],
+            "support" => [
+                true, true, true, true, true, false, false, false, false, false,
+                false, false, false, true, true,
+            ],
+            "sales" => [
+                true, false, false, false, false, false, false, true, true, false,
+                false, false, false, false, false,
+            ],
+            "finance" => [
+                true, false, false, false, false, false, false, true, true, false,
+                false, true, false, false, false,
+            ],
             _ => unreachable!(),
         };
         for ((uri, _), allowed) in TENANT_OPERATIONS.iter().zip(expected) {
@@ -1369,5 +1844,197 @@ async fn no_role_user_is_denied_on_every_platform_tenant_endpoint() {
             body["error"]["code"], "unauthorized",
             "expected error code unauthorized for {method} {actual_uri}, got {body:?}"
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// T072 — Customer routes respect the tenant role matrix
+// ---------------------------------------------------------------------------
+
+async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO customers (tenant_id, display_name, email) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind(name)
+    .bind(format!("{}-{}@example.com", name, Uuid::new_v4().simple()))
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn assert_http_status(
+    pool: &sqlx::PgPool,
+    environment: Environment,
+    request: Request<Body>,
+    expected: StatusCode,
+    label: &str,
+) -> Response {
+    let response = send(pool.clone(), environment, request).await;
+    assert_eq!(
+        response.status(),
+        expected,
+        "unexpected status for {label}: expected {expected}, got {}",
+        response.status()
+    );
+    response
+}
+
+#[tokio::test]
+async fn customer_routes_respect_the_role_matrix() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+
+    let roles: &[(&str, bool, bool)] = &[
+        ("owner", true, true),
+        ("admin", true, true),
+        ("manager", true, true),
+        ("agent", true, true),
+        ("viewer", true, false),
+    ];
+
+    for (role, can_view, can_manage) in roles {
+        let tenant_id = seed_tenant(&pool).await;
+        let user_id = seed_user(&pool, None).await;
+        seed_membership(&pool, tenant_id, user_id, role).await;
+
+        let customer_id = seed_customer(&pool, tenant_id, "RBAC Customer").await;
+
+        // GET /tenant/customers — requires customers.view
+        let response = assert_http_status(
+            &pool,
+            Environment::Test,
+            authenticated_request(
+                "/api/v1/tenant/customers",
+                Method::GET,
+                user_id,
+                Some(tenant_id),
+                Environment::Test,
+            ),
+            if *can_view {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            &format!("{role} GET /tenant/customers"),
+        )
+        .await;
+        if *can_view {
+            let body = body_json(response).await;
+            assert!(
+                body["data"].is_array(),
+                "GET customers must return a data array"
+            );
+        }
+
+        // POST /tenant/customers — requires customers.manage
+        let create_body = json!({
+            "display_name": format!("New by {role}"),
+            "email": format!("new-{role}@example.com"),
+        });
+        let response = assert_http_status(
+            &pool,
+            Environment::Test,
+            authenticated_json_request(
+                "/api/v1/tenant/customers",
+                Method::POST,
+                user_id,
+                Some(tenant_id),
+                Environment::Test,
+                create_body,
+            ),
+            if *can_manage {
+                StatusCode::CREATED
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            &format!("{role} POST /tenant/customers"),
+        )
+        .await;
+
+        // GET /tenant/customers/{id} — requires customers.view
+        let response = assert_http_status(
+            &pool,
+            Environment::Test,
+            authenticated_request(
+                &format!("/api/v1/tenant/customers/{customer_id}"),
+                Method::GET,
+                user_id,
+                Some(tenant_id),
+                Environment::Test,
+            ),
+            if *can_view {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            &format!("{role} GET /tenant/customers/{{id}}"),
+        )
+        .await;
+        if *can_view {
+            let body = body_json(response).await;
+            assert_eq!(
+                body["data"]["display_name"].as_str().unwrap(),
+                "RBAC Customer",
+                "GET detail must return the correct customer"
+            );
+        }
+
+        // PATCH /tenant/customers/{id} — requires customers.manage
+        let patch_body = json!({ "display_name": format!("Patched by {role}") });
+        let response = assert_http_status(
+            &pool,
+            Environment::Test,
+            authenticated_json_request(
+                &format!("/api/v1/tenant/customers/{customer_id}"),
+                Method::PATCH,
+                user_id,
+                Some(tenant_id),
+                Environment::Test,
+                patch_body,
+            ),
+            if *can_manage {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            &format!("{role} PATCH /tenant/customers/{{id}}"),
+        )
+        .await;
+        if *can_manage {
+            let body = body_json(response).await;
+            assert_eq!(
+                body["data"]["display_name"].as_str().unwrap(),
+                format!("Patched by {role}"),
+                "PATCH must return updated customer"
+            );
+        }
+
+        // GET /tenant/customers/{id}/conversations — requires customers.view
+        let response = assert_http_status(
+            &pool,
+            Environment::Test,
+            authenticated_request(
+                &format!("/api/v1/tenant/customers/{customer_id}/conversations"),
+                Method::GET,
+                user_id,
+                Some(tenant_id),
+                Environment::Test,
+            ),
+            if *can_view {
+                StatusCode::OK
+            } else {
+                StatusCode::FORBIDDEN
+            },
+            &format!("{role} GET /tenant/customers/{{id}}/conversations"),
+        )
+        .await;
+        if *can_view {
+            let body = body_json(response).await;
+            assert!(
+                body["data"].is_array(),
+                "conversations must return a data array"
+            );
+        }
     }
 }

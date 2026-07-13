@@ -8,11 +8,19 @@ authz = { path = "../authz" }
 axum.workspace = true
 chrono.workspace = true
 config = { path = "../../shared/config" }
+hex.workspace = true
 identity = { path = "../identity" }
 kernel = { path = "../../shared/kernel" }
+notifications = { path = "../notifications" }
+rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
 sqlx = { workspace = true, features = ["postgres"] }
 tracing.workspace = true
 uuid.workspace = true
+url = "2"
 
+[dev-dependencies]
+async-trait.workspace = true

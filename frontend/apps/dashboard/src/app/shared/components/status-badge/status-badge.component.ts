@@ -1,9 +1,4 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import {
-  ArticleStatus,
-  ConversationStatus,
-  IntegrationStatus,
-} from '../../fixtures/fixture.models';
 
 export type BadgeTone = 'green' | 'amber' | 'red' | 'accent' | 'neutral';
 
@@ -50,9 +45,7 @@ export type BadgeTone = 'green' | 'amber' | 'red' | 'accent' | 'neutral';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class StatusBadgeComponent {
-  readonly status = input.required<
-    ConversationStatus | ArticleStatus | IntegrationStatus | string
-  >();
+  readonly status = input.required<string>();
   readonly tone = input<BadgeTone>('neutral');
 
   protected readonly toneClass = computed(() => this.tone());

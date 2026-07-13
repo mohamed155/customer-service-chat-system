@@ -45,7 +45,7 @@ export class AuthService {
     }
   }
 
-  async logout(): Promise<void> {
+  async logout(options: { returnUrl?: string } = {}): Promise<void> {
     this.pendingSignal.set(true);
 
     try {
@@ -56,7 +56,12 @@ export class AuthService {
 
     this.currentUser.clear();
     this.tenantContext.clear();
-    await this.router.navigate([`/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`]);
+    const loginRoute = [`/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`];
+    if (options.returnUrl) {
+      await this.router.navigate(loginRoute, { queryParams: { returnUrl: options.returnUrl } });
+    } else {
+      await this.router.navigate(loginRoute);
+    }
     this.pendingSignal.set(false);
   }
 

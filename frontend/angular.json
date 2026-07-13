@@ -57,6 +57,17 @@
                   "with": "apps/dashboard/src/environments/environment.development.ts"
                 }
               ]
+            },
+            "e2e": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "apps/dashboard/src/environments/environment.ts",
+                  "with": "apps/dashboard/src/environments/environment.e2e.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -65,7 +76,8 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": { "buildTarget": "dashboard:build:production" },
-            "development": { "buildTarget": "dashboard:build:development" }
+            "development": { "buildTarget": "dashboard:build:development" },
+            "e2e": { "buildTarget": "dashboard:build:e2e" }
           },
           "defaultConfiguration": "development"
         },

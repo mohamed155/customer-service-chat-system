@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { Subject, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { ApiError, ApiResponse } from '../api/api.models';
 import { MeResponse } from '../api/tenant-api.models';
 import { ApiService } from '../api/api.service';
@@ -108,6 +108,19 @@ describe('AuthService', () => {
     expect(currentUser.clear).toHaveBeenCalledTimes(1);
     expect(tenantContext.clear).toHaveBeenCalledTimes(1);
     expect(router.navigate).toHaveBeenCalledWith(['/auth/login']);
+    expect(service.pending()).toBe(false);
+  });
+
+  it('preserves an explicit return URL when logging out for account switching', async () => {
+    api.post.mockReturnValue(of({ data: undefined }));
+
+    await service.logout({ returnUrl: '/invite/test-token' });
+
+    expect(currentUser.clear).toHaveBeenCalledTimes(1);
+    expect(tenantContext.clear).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/auth/login'], {
+      queryParams: { returnUrl: '/invite/test-token' },
+    });
     expect(service.pending()).toBe(false);
   });
 

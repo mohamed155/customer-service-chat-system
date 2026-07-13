@@ -2,16 +2,28 @@ use std::time::Duration;
 
 use chrono::SubsecRound;
 
+fn require_db_tests() -> bool {
+    std::env::var("REQUIRE_DB_TESTS").as_deref() == Ok("1")
+}
+
 async fn get_pool() -> Option<sqlx::PgPool> {
     let url = match std::env::var("DATABASE_URL") {
         Ok(v) => v,
         Err(_) => {
+            assert!(
+                !require_db_tests(),
+                "REQUIRE_DB_TESTS=1 but DATABASE_URL is not set; refusing to skip schema tests"
+            );
             eprintln!("skipping schema test: DATABASE_URL not set");
             return None;
         }
     };
     let pool = db::lazy_pool(&url, 2, Duration::from_secs(5));
     if sqlx::query("SELECT 1").execute(&pool).await.is_err() {
+        assert!(
+            !require_db_tests(),
+            "REQUIRE_DB_TESTS=1 but DATABASE_URL is unreachable; refusing to skip schema tests"
+        );
         eprintln!("skipping schema test: could not connect to DATABASE_URL");
         return None;
     }
@@ -50,6 +62,23 @@ async fn run_migrations_succeeds() {
         (15, "slug audit transaction actor"),
         (16, "tenant business metadata"),
         (17, "tenant directory indexes"),
+        (18, "membership status"),
+        (19, "tenant invitations"),
+        (20, "invitation email delivery status"),
+        (21, "invitation delivery outbox"),
+        (22, "outbox delivery claims"),
+        (23, "invitation expired status"),
+        (24, "invitation expired invariant"),
+        (25, "customers"),
+        (26, "conversations"),
+        (27, "composite fk customer children"),
+        (28, "customer search indexes"),
+        (29, "identifier soft delete"),
+        (30, "customer identifier cascade"),
+        (31, "invitation delivery error"),
+        (32, "normalize identifiers"),
+        (33, "conversation core"),
+        (34, "messages"),
     ];
     assert_eq!(
         rows.len(),
@@ -1120,6 +1149,16 @@ async fn index_coverage_all_indexes_exist() {
         "audit_logs_created_idx",
         "idx_tenants_directory_filter",
         "idx_tenants_directory_search",
+        "tenant_invitations_token_hash_uniq",
+        "tenant_invitations_pending_email_uniq",
+        "customers_tenant_cursor_idx",
+        "customers_display_name_trgm_idx",
+        "customers_email_trgm_idx",
+        "customers_phone_trgm_idx",
+        "customer_channel_identifiers_customer_idx",
+        "customer_channel_identifiers_identifier_trgm_idx",
+        "customer_channel_identifiers_live_unique_idx",
+        "conversations_customer_recent_idx",
     ];
     for idx_name in &expected_indexes {
         let row: Option<(String,)> =
@@ -1514,6 +1553,155 @@ async fn index_coverage_audit_tenant_time_query_uses_index() {
         plan_str.contains("audit_logs_tenant_created_idx"),
         "audit tenant+time query should use audit_logs_tenant_created_idx, got plan: {}",
         plan_str,
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T108 — Customer list query index coverage
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn customer_index_coverage_uses_intended_indexes() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    sqlx::query("INSERT INTO customers (tenant_id, display_name, email) VALUES ($1, $2, $3)")
+        .bind(tid)
+        .bind("Test Customer")
+        .bind("test@example.com")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    let plan: (serde_json::Value,) = sqlx::query_as(
+        "EXPLAIN (FORMAT JSON) \
+         SELECT id, display_name, email, phone, metadata, created_at, updated_at \
+         FROM customers \
+         WHERE tenant_id = $1 AND deleted_at IS NULL \
+         ORDER BY created_at DESC, id DESC",
+    )
+    .bind(tid)
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    let plan_str = plan.0.to_string();
+    assert!(
+        plan_str.contains("Index Scan") || plan_str.contains("Bitmap Index Scan"),
+        "tenant+cursor customer query should use an index, got plan: {}",
+        plan_str,
+    );
+
+    // --- Structural index definition verification ---
+    // 1. Verify customers_tenant_cursor_idx via pg_indexes.indexdef
+    let idxdef: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'customers_tenant_cursor_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        !idxdef.contains("UNIQUE"),
+        "customers_tenant_cursor_idx must not be unique"
+    );
+    assert!(
+        idxdef.contains("USING btree"),
+        "customers_tenant_cursor_idx must use btree"
+    );
+    assert!(idxdef.contains("tenant_id"), "must cover tenant_id");
+    assert!(
+        idxdef.contains("created_at DESC"),
+        "created_at must be DESC"
+    );
+    assert!(idxdef.contains("id DESC"), "id must be DESC");
+    assert!(
+        idxdef.contains("deleted_at IS NULL"),
+        "must have WHERE deleted_at IS NULL"
+    );
+
+    // 2. Direct pg_catalog structural query (access method, uniqueness, predicate)
+    let (am_name, is_unique, pred): (String, bool, Option<String>) = sqlx::query_as(
+        "SELECT a.amname, i.indisunique, pg_get_expr(i.indpred, i.indrelid)
+         FROM pg_index i
+         JOIN pg_class c ON c.oid = i.indexrelid
+         JOIN pg_am a ON a.oid = c.relam
+         WHERE c.relname = 'customers_tenant_cursor_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(am_name, "btree", "access method must be btree");
+    assert!(!is_unique, "must not be unique");
+    let pred_str = pred.as_deref().unwrap_or("");
+    assert!(
+        pred_str.contains("deleted_at IS NULL"),
+        "predicate must include deleted_at IS NULL, got: {pred_str}"
+    );
+
+    // 3. Verify key column order via pg_index.indkey + pg_attribute
+    let index_attrs: Vec<(i16, String)> = sqlx::query_as(
+        "SELECT a.attnum, a.attname
+         FROM pg_index i
+         JOIN pg_class c ON c.oid = i.indexrelid
+         JOIN pg_attribute a ON a.attrelid = i.indrelid
+            AND a.attnum = ANY(i.indkey)
+         WHERE c.relname = 'customers_tenant_cursor_idx'
+         ORDER BY array_position(i.indkey, a.attnum)",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let col_names: Vec<&str> = index_attrs.iter().map(|(_, n)| n.as_str()).collect();
+    assert!(
+        col_names.contains(&"tenant_id"),
+        "index must include tenant_id, got {col_names:?}"
+    );
+    assert!(
+        col_names.contains(&"created_at"),
+        "index must include created_at, got {col_names:?}"
+    );
+    assert!(
+        col_names.contains(&"id"),
+        "index must include id, got {col_names:?}"
+    );
+
+    // 4. Verify DESC ordering via pg_index.indnkeyatts and indoption
+    let ind_options: Vec<i16> = sqlx::query_scalar(
+        "SELECT unnest(i.indoption)
+         FROM pg_index i
+         JOIN pg_class c ON c.oid = i.indexrelid
+         WHERE c.relname = 'customers_tenant_cursor_idx'",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    // indoption bit 0 = DESC. For a 3-column index, we expect the 2nd and 3rd
+    // columns (created_at, id) to have DESC set, the 1st (tenant_id) to be ASC.
+    assert_eq!(ind_options.len(), 3, "expected 3 key columns");
+    assert_eq!(
+        ind_options[0] & 1,
+        0,
+        "tenant_id must be ASC (bit 0 not set), got {:#06b}",
+        ind_options[0]
+    );
+    assert_eq!(
+        ind_options[1] & 1,
+        1,
+        "created_at must be DESC (bit 0 set), got {:#06b}",
+        ind_options[1]
+    );
+    assert_eq!(
+        ind_options[2] & 1,
+        1,
+        "id must be DESC (bit 0 set), got {:#06b}",
+        ind_options[2]
     );
 }
 
@@ -2045,4 +2233,1215 @@ async fn actor_does_not_leak_across_pooled_transactions() {
             "second transaction on the same backend must NOT inherit the first transaction's actor"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// T006 — Migrations 0025/0026: customer profiles schema
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0025_customer_profile_columns_exist() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    for (table, columns) in [
+        (
+            "customers",
+            &[
+                "id",
+                "tenant_id",
+                "display_name",
+                "email",
+                "phone",
+                "metadata",
+                "created_at",
+                "updated_at",
+                "deleted_at",
+            ][..],
+        ),
+        (
+            "customer_channel_identifiers",
+            &[
+                "id",
+                "tenant_id",
+                "customer_id",
+                "channel",
+                "identifier",
+                "created_at",
+            ][..],
+        ),
+        (
+            "conversations",
+            &[
+                "id",
+                "tenant_id",
+                "customer_id",
+                "channel",
+                "status",
+                "last_activity_at",
+                "created_at",
+                "updated_at",
+                "deleted_at",
+            ][..],
+        ),
+    ] {
+        for column in columns {
+            let exists: (bool,) = sqlx::query_as(
+                "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+                 WHERE table_name = $1 AND column_name = $2)",
+            )
+            .bind(table)
+            .bind(column)
+            .fetch_one(&pool)
+            .await
+            .expect("query column existence");
+            assert!(exists.0, "{table}.{column} column should exist");
+        }
+    }
+}
+
+#[tokio::test]
+async fn migration_0025_0026_check_constraints_exist() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    for (table, constraint, expected_definition) in [
+        (
+            "customers",
+            "customers_display_name_length",
+            "CHECK (((length(display_name) >= 1) AND (length(display_name) <= 200)))",
+        ),
+        (
+            "customers",
+            "customers_metadata_object",
+            "CHECK ((jsonb_typeof(metadata) = 'object'::text))",
+        ),
+        (
+            "customer_channel_identifiers",
+            "customer_channel_identifiers_channel_check",
+            "CHECK ((channel = ANY (ARRAY['email'::text, 'phone'::text, 'web_chat'::text, 'whatsapp'::text, 'telegram'::text])))",
+        ),
+        (
+            "customer_channel_identifiers",
+            "customer_channel_identifiers_identifier_length",
+            "CHECK (((length(identifier) >= 1) AND (length(identifier) <= 320)))",
+        ),
+        (
+            "conversations",
+            "conversations_channel_check",
+            "CHECK ((channel = ANY (ARRAY['email'::text, 'phone'::text, 'web_chat'::text, 'whatsapp'::text, 'telegram'::text])))",
+        ),
+        (
+            "conversations",
+            "conversations_status_check",
+            "CHECK ((status = ANY (ARRAY['open'::text, 'escalated'::text, 'closed'::text])))",
+        ),
+    ] {
+        let definition: Option<String> = sqlx::query_scalar(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint \
+             WHERE conrelid = $1::regclass AND conname = $2 AND contype = 'c'",
+        )
+        .bind(table)
+        .bind(constraint)
+        .fetch_one(&pool)
+        .await
+        .expect("query check constraint definition");
+        let definition = definition.expect("{constraint} CHECK constraint should exist");
+        let normalized_definition = definition.split_whitespace().collect::<String>();
+        let normalized_expected = expected_definition.split_whitespace().collect::<String>();
+        assert_eq!(
+            normalized_definition, normalized_expected,
+            "{constraint} CHECK definition mismatch; actual: {definition}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn migration_0025_identifier_unique_index_exists() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    let definition: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' \
+         AND indexname = 'customer_channel_identifiers_live_unique_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("customer channel identifier live unique index");
+    assert!(definition.starts_with("CREATE UNIQUE INDEX"));
+    assert!(definition.contains("tenant_id, channel, identifier"));
+    assert!(definition.contains("deleted_at IS NULL"));
+}
+
+#[tokio::test]
+async fn migration_0025_0026_foreign_keys_exist() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    for (table, column, referenced_table) in [
+        ("customers", "tenant_id", "tenants"),
+        ("customer_channel_identifiers", "tenant_id", "tenants"),
+        ("customer_channel_identifiers", "customer_id", "customers"),
+        ("conversations", "tenant_id", "tenants"),
+        ("conversations", "customer_id", "customers"),
+    ] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS( \
+                 SELECT 1 FROM information_schema.key_column_usage AS kcu \
+                 JOIN information_schema.table_constraints AS tc \
+                   ON tc.constraint_name = kcu.constraint_name \
+                  AND tc.table_schema = kcu.table_schema \
+                 JOIN information_schema.constraint_column_usage AS ccu \
+                   ON ccu.constraint_name = tc.constraint_name \
+                  AND ccu.table_schema = tc.table_schema \
+                 WHERE tc.constraint_type = 'FOREIGN KEY' \
+                   AND kcu.table_schema = 'public' \
+                   AND kcu.table_name = $1 \
+                   AND kcu.column_name = $2 \
+                   AND ccu.table_name = $3 \
+                   AND ccu.column_name = 'id')",
+        )
+        .bind(table)
+        .bind(column)
+        .bind(referenced_table)
+        .fetch_one(&pool)
+        .await
+        .expect("query foreign key");
+        assert!(
+            exists.0,
+            "{table}.{column} should reference {referenced_table}.id"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// T054 — Migration 0027: composite FK constraints
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0027_composite_fk_constraints_exist() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    for (table, constraint_name) in [
+        (
+            "customer_channel_identifiers",
+            "customer_channel_identifiers_parent_tenant_fkey",
+        ),
+        ("conversations", "conversations_parent_tenant_fkey"),
+    ] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS( \
+             SELECT 1 FROM pg_constraint \
+             WHERE conrelid = $1::regclass AND conname = $2 AND contype = 'f')",
+        )
+        .bind(table)
+        .bind(constraint_name)
+        .fetch_one(&pool)
+        .await
+        .expect("query constraint existence");
+        assert!(
+            exists.0,
+            "{table} should have composite FK {constraint_name}"
+        );
+    }
+
+    // Verify the supporting unique index exists
+    let idx_exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM pg_indexes WHERE indexname = 'customers_tenant_id_id_uq')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query index existence");
+    assert!(
+        idx_exists.0,
+        "customers_tenant_id_id_uq unique index should exist"
+    );
+}
+
+#[tokio::test]
+async fn migration_0027_identifier_parent_tenant_fk_rejects_mismatch() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    let tid: uuid::Uuid =
+        sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+            .bind("FK Reject Tenant A")
+            .bind(format!("fk-reject-a-{}", uuid::Uuid::new_v4().simple()))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    let cid: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO customers (tenant_id, display_name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tid)
+    .bind("FK Reject Customer")
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    // Try inserting a channel identifier with a different tenant_id
+    let other_tid: uuid::Uuid =
+        sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+            .bind("FK Reject Tenant B")
+            .bind(format!("fk-reject-b-{}", uuid::Uuid::new_v4().simple()))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    let result = sqlx::query(
+        "INSERT INTO customer_channel_identifiers (tenant_id, customer_id, channel, identifier) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(other_tid)
+    .bind(cid)
+    .bind("email")
+    .bind("cross-tenant@example.com")
+    .execute(&pool)
+    .await;
+
+    assert!(
+        result.is_err(),
+        "inserting identifier with mismatched tenant_id should be rejected by composite FK"
+    );
+}
+
+#[tokio::test]
+async fn migration_0027_conversation_parent_tenant_fk_rejects_mismatch() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    let tid: uuid::Uuid =
+        sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+            .bind("FK Reject Tenant C")
+            .bind(format!("fk-reject-c-{}", uuid::Uuid::new_v4().simple()))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    let cid: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO customers (tenant_id, display_name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tid)
+    .bind("FK Reject Customer 2")
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let other_tid: uuid::Uuid =
+        sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+            .bind("FK Reject Tenant D")
+            .bind(format!("fk-reject-d-{}", uuid::Uuid::new_v4().simple()))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    let result = sqlx::query(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status, last_activity_at) \
+         VALUES ($1, $2, $3, $4, now())",
+    )
+    .bind(other_tid)
+    .bind(cid)
+    .bind("web_chat")
+    .bind("open")
+    .execute(&pool)
+    .await;
+
+    assert!(
+        result.is_err(),
+        "inserting conversation with mismatched tenant_id should be rejected by composite FK"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T006 — Migration 0018: tenant_memberships status column
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0018_status_column_exists() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS( \
+         SELECT 1 FROM information_schema.columns \
+         WHERE table_name = 'tenant_memberships' AND column_name = 'status')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query information_schema.columns");
+    assert!(exists.0, "tenant_memberships.status column should exist");
+}
+
+#[tokio::test]
+async fn migration_0018_status_check_constraint() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS( \
+         SELECT 1 FROM information_schema.table_constraints \
+         WHERE table_name = 'tenant_memberships' \
+           AND constraint_name = 'tenant_memberships_status_check' \
+           AND constraint_type = 'CHECK')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query check constraint");
+    assert!(
+        exists.0,
+        "tenant_memberships_status_check CHECK constraint should exist"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T007 — Migration 0019: tenant_invitations table
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0019_tenant_invitations_table_exists() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS( \
+         SELECT 1 FROM information_schema.tables \
+         WHERE table_name = 'tenant_invitations')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query information_schema.tables");
+    assert!(exists.0, "tenant_invitations table should exist");
+}
+
+#[tokio::test]
+async fn migration_0019_tenant_invitations_columns_exist() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    for col in &[
+        "id",
+        "tenant_id",
+        "email",
+        "role",
+        "token_hash",
+        "status",
+        "invited_by",
+        "expires_at",
+        "accepted_at",
+        "accepted_user_id",
+        "revoked_at",
+        "revoked_by",
+        "created_at",
+        "updated_at",
+    ] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+             WHERE table_name = 'tenant_invitations' AND column_name = $1)",
+        )
+        .bind(col)
+        .fetch_one(&pool)
+        .await
+        .expect("query column existence");
+        assert!(exists.0, "tenant_invitations.{} column should exist", col);
+    }
+}
+
+#[tokio::test]
+async fn migration_0020_invitation_email_delivery_status_exists() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.expect("run migrations");
+
+    let column: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+         WHERE table_name = 'tenant_invitations' \
+         AND column_name = 'email_delivery_status' \
+         AND column_default = '''unconfigured''::text' \
+         AND is_nullable = 'NO')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query email delivery status column");
+    assert!(column.0, "email delivery status column should exist");
+
+    let constraint: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM pg_constraint \
+         WHERE conrelid = 'tenant_invitations'::regclass \
+         AND conname = 'tenant_invitations_email_delivery_status_check')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query email delivery status constraint");
+    assert!(constraint.0, "email delivery status check should exist");
+}
+
+#[tokio::test]
+async fn invitation_email_delivery_status_constraint_rejects_invalid_value() {
+    let pool = match get_pool().await {
+        Some(pool) => pool,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let suffix = uuid::Uuid::new_v4();
+    let user_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO users (email, display_name) VALUES ($1, 'Constraint User') RETURNING id",
+    )
+    .bind(format!("constraint-{suffix}@example.com"))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let tenant_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO tenants (name, slug) VALUES ('Constraint Tenant', $1) RETURNING id",
+    )
+    .bind(format!("constraint-{suffix}"))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let invitation_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO tenant_invitations (tenant_id,email,role,token_hash,invited_by,expires_at) \
+         VALUES ($1,$2,'agent',$3,$4,now() + interval '1 day') RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind(format!("invite-{suffix}@example.com"))
+    .bind(suffix.simple().to_string().repeat(2))
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let result =
+        sqlx::query("UPDATE tenant_invitations SET email_delivery_status = 'lost' WHERE id = $1")
+            .bind(invitation_id)
+            .execute(&pool)
+            .await;
+    if let Err(sqlx::Error::Database(error)) = result {
+        assert_eq!(error.code().as_deref(), Some("23514"));
+    } else {
+        panic!("invalid delivery status must violate the database constraint");
+    }
+}
+
+#[tokio::test]
+async fn invitation_delivery_outbox_claim_index_has_production_predicate() {
+    let pool = match get_pool().await {
+        Some(pool) => pool,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let definition: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'outbox_invitation_delivery_claimable_idx'",
+    ).fetch_one(&pool).await.expect("claimable outbox index");
+    assert!(definition.contains("available_at"));
+    assert!(definition.contains("processed_at IS NULL"));
+    assert!(definition.contains("dead_lettered_at IS NULL"));
+    assert!(definition.contains("event_type = 'invitation.email_delivery'"));
+}
+
+#[tokio::test]
+async fn migration_0019_tenant_invitations_unique_indexes_exist() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    for idx_name in &[
+        "tenant_invitations_token_hash_uniq",
+        "tenant_invitations_pending_email_uniq",
+    ] {
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT indexname FROM pg_indexes WHERE indexname = $1")
+                .bind(idx_name)
+                .fetch_optional(&pool)
+                .await
+                .unwrap();
+        assert!(
+            row.is_some(),
+            "expected index '{}' not found in pg_indexes",
+            idx_name,
+        );
+    }
+}
+
+#[tokio::test]
+async fn migration_0023_allows_expired_and_rejects_unknown_invitation_status() {
+    let pool = match get_pool().await {
+        Some(pool) => pool,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let suffix = uuid::Uuid::new_v4();
+    let user_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO users (email, display_name) VALUES ($1, 'Expiry Constraint User') RETURNING id",
+    )
+    .bind(format!("expiry-status-{suffix}@example.com"))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let tenant_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO tenants (name, slug) VALUES ('Expiry Constraint Tenant', $1) RETURNING id",
+    )
+    .bind(format!("expiry-status-{suffix}"))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let invitation_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO tenant_invitations (tenant_id,email,role,token_hash,invited_by,expires_at) \
+         VALUES ($1,$2,'agent',$3,$4,now() - interval '1 hour') RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind(format!("expiry-invite-{suffix}@example.com"))
+    .bind(format!("{suffix}expired"))
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    sqlx::query("UPDATE tenant_invitations SET status = 'expired' WHERE id = $1")
+        .bind(invitation_id)
+        .execute(&pool)
+        .await
+        .expect("expired must be an allowed lifecycle status");
+    let unknown = sqlx::query("UPDATE tenant_invitations SET status = 'unknown' WHERE id = $1")
+        .bind(invitation_id)
+        .execute(&pool)
+        .await;
+    assert!(
+        matches!(unknown, Err(sqlx::Error::Database(ref error)) if error.code().as_deref() == Some("23514"))
+    );
+}
+
+#[tokio::test]
+async fn invitation_expired_status_rejects_future_expiry() {
+    let pool = match get_pool().await {
+        Some(pool) => pool,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let suffix = uuid::Uuid::new_v4();
+    let user_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO users (email, display_name) VALUES ($1, 'Future Expiry User') RETURNING id",
+    )
+    .bind(format!("future-expiry-{suffix}@example.com"))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let tenant_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO tenants (name, slug) VALUES ('Future Expiry Tenant', $1) RETURNING id",
+    )
+    .bind(format!("future-expiry-{suffix}"))
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let invitation_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO tenant_invitations (tenant_id,email,role,token_hash,invited_by,expires_at) \
+         VALUES ($1,$2,'agent',$3,$4,now() + interval '1 day') RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind(format!("future-invite-{suffix}@example.com"))
+    .bind(format!("{suffix}future"))
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let result = sqlx::query("UPDATE tenant_invitations SET status = 'expired' WHERE id = $1")
+        .bind(invitation_id)
+        .execute(&pool)
+        .await;
+    assert!(
+        matches!(result, Err(sqlx::Error::Database(ref error)) if error.code().as_deref() == Some("23514"))
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T090 — Post-0029 index definitions (detailed definition checks)
+//
+// These verify the exact index definitions supplementing the existence-only
+// checks in migration_0027/0028/0029 tests above.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0027_customers_tenant_id_id_uq_definition() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    // customers_tenant_id_id_uq is the UNIQUE constraint backing the
+    // composite FK target from migration 0027.
+    let indexdef: Result<String, sqlx::Error> = sqlx::query_scalar(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint \
+         WHERE conrelid = 'customers'::regclass \
+         AND conname = 'customers_tenant_id_id_uq'",
+    )
+    .fetch_one(&pool)
+    .await;
+    match indexdef {
+        Ok(def) => {
+            assert!(
+                def.contains("UNIQUE"),
+                "customers_tenant_id_id_uq must be a UNIQUE constraint"
+            );
+            assert!(
+                def.contains("tenant_id") && def.contains("id"),
+                "customers_tenant_id_id_uq must cover (tenant_id, id)"
+            );
+        }
+        Err(_) => {
+            // Fallback: check the index definition directly.
+            let idxdef: String = sqlx::query_scalar(
+                "SELECT indexdef FROM pg_indexes \
+                 WHERE indexname = 'customers_tenant_id_id_uq'",
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("customers_tenant_id_id_uq indexdef");
+            assert!(
+                idxdef.contains("UNIQUE"),
+                "customers_tenant_id_id_uq must be a UNIQUE index"
+            );
+            assert!(
+                idxdef.contains("tenant_id") && idxdef.contains("id"),
+                "customers_tenant_id_id_uq must cover (tenant_id, id)"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn migration_0028_trigram_index_definitions() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    // customers_phone_trgm_idx — GIN trigram index on phone with partial filter.
+    let phone_def: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes \
+         WHERE indexname = 'customers_phone_trgm_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("customers_phone_trgm_idx indexdef");
+    assert!(
+        phone_def.to_lowercase().contains("gin"),
+        "customers_phone_trgm_idx must use GIN, got: {phone_def}"
+    );
+    assert!(
+        phone_def.contains("gin_trgm_ops"),
+        "customers_phone_trgm_idx must use gin_trgm_ops"
+    );
+    assert!(
+        phone_def.contains("phone IS NOT NULL"),
+        "customers_phone_trgm_idx must have WHERE phone IS NOT NULL"
+    );
+
+    // customer_channel_identifiers_identifier_trgm_idx — GIN trigram index on identifier.
+    let ident_def: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes \
+         WHERE indexname = 'customer_channel_identifiers_identifier_trgm_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("customer_channel_identifiers_identifier_trgm_idx indexdef");
+    assert!(
+        ident_def.to_lowercase().contains("gin"),
+        "customer_channel_identifiers_identifier_trgm_idx must use GIN, got: {ident_def}"
+    );
+    assert!(
+        ident_def.contains("gin_trgm_ops"),
+        "customer_channel_identifiers_identifier_trgm_idx must use gin_trgm_ops"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T075 — pg_trgm extension and trigram index definitions
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0025_trgm_extension_is_installed() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let exists: (bool,) =
+        sqlx::query_as("SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm')")
+            .fetch_one(&pool)
+            .await
+            .expect("query pg_extension");
+    assert!(exists.0, "pg_trgm extension must be installed");
+}
+
+#[tokio::test]
+async fn migration_0028_supplementary_indexes_exist() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let expected_indexes = [
+        "customers_phone_trgm_idx",
+        "customer_channel_identifiers_identifier_trgm_idx",
+    ];
+    for idx_name in &expected_indexes {
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT indexname FROM pg_indexes WHERE indexname = $1")
+                .bind(idx_name)
+                .fetch_optional(&pool)
+                .await
+                .unwrap();
+        assert!(
+            row.is_some(),
+            "expected trigram index '{}' not found in pg_indexes",
+            idx_name,
+        );
+    }
+}
+
+#[tokio::test]
+async fn migration_0025_customer_trigram_index_names_exist() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    for idx_name in &[
+        "customers_display_name_trgm_idx",
+        "customers_email_trgm_idx",
+    ] {
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT indexname FROM pg_indexes WHERE indexname = $1")
+                .bind(idx_name)
+                .fetch_optional(&pool)
+                .await
+                .unwrap();
+        assert!(
+            row.is_some(),
+            "expected trigram index '{}' not found in pg_indexes",
+            idx_name,
+        );
+    }
+}
+
+#[tokio::test]
+async fn migration_0029_identifier_soft_delete_index_exists() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    let old_idx: Option<(String,)> = sqlx::query_as(
+        "SELECT indexname FROM pg_indexes WHERE indexname = 'customer_channel_identifiers_unique_idx'",
+    )
+    .fetch_optional(&pool)
+    .await
+    .unwrap();
+    assert!(old_idx.is_none(), "old unique index must be dropped");
+
+    let definition: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' \
+         AND indexname = 'customer_channel_identifiers_live_unique_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("live unique index definition");
+    assert!(definition.starts_with("CREATE UNIQUE INDEX"));
+    assert!(definition.contains("tenant_id, channel, identifier"));
+    assert!(definition.contains("deleted_at IS NULL"));
+}
+
+#[tokio::test]
+async fn migration_0029_identifier_soft_delete_column_exists() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+         WHERE table_name = 'customer_channel_identifiers' AND column_name = 'deleted_at')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query column existence");
+    assert!(
+        exists.0,
+        "customer_channel_identifiers.deleted_at column should exist"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T125 — Migration 0030: cascade trigger and exact index definitions
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0030_cascade_and_all_index_definitions() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    // Assert the cascade trigger exists.
+    let trigger_exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM pg_trigger \
+         WHERE tgname = 'trg_cascade_identifier_soft_delete' \
+           AND tgrelid = 'customers'::regclass)",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query pg_trigger");
+    assert!(
+        trigger_exists.0,
+        "trg_cascade_identifier_soft_delete must exist (migration 0030)"
+    );
+
+    // Helper closures to reduce boilerplate.
+    let def = |name: &str| {
+        let name = name.to_owned();
+        let pool = &pool;
+        async move {
+            sqlx::query_scalar::<_, String>("SELECT indexdef FROM pg_indexes WHERE indexname = $1")
+                .bind(&name)
+                .fetch_one(pool)
+                .await
+                .unwrap_or_else(|_| panic!("index {name} not found"))
+        }
+    };
+
+    // ---- customers_tenant_cursor_idx ----
+    let d = def("customers_tenant_cursor_idx").await;
+    assert!(!d.contains("UNIQUE"), "must not be unique");
+    assert!(d.contains("USING btree"), "must use btree");
+    assert!(d.contains("tenant_id"), "must cover tenant_id");
+    assert!(d.contains("created_at DESC"), "created_at must be DESC");
+    assert!(d.contains("id DESC"), "id must be DESC");
+    assert!(
+        d.contains("deleted_at IS NULL"),
+        "partial filter on deleted_at"
+    );
+
+    // ---- customers_display_name_trgm_idx ----
+    let d = def("customers_display_name_trgm_idx").await;
+    assert!(!d.contains("UNIQUE"), "must not be unique");
+    assert!(d.contains("USING gin"), "must use GIN");
+    assert!(d.contains("display_name"), "must cover display_name");
+    assert!(d.contains("gin_trgm_ops"), "must use gin_trgm_ops");
+
+    // ---- customers_email_trgm_idx ----
+    let d = def("customers_email_trgm_idx").await;
+    assert!(!d.contains("UNIQUE"), "must not be unique");
+    assert!(d.contains("USING gin"), "must use GIN");
+    assert!(d.contains("email"), "must cover email");
+    assert!(d.contains("gin_trgm_ops"), "must use gin_trgm_ops");
+
+    // ---- customers_phone_trgm_idx ----
+    let d = def("customers_phone_trgm_idx").await;
+    assert!(!d.contains("UNIQUE"), "must not be unique");
+    assert!(d.contains("USING gin"), "must use GIN");
+    assert!(d.contains("phone"), "must cover phone");
+    assert!(d.contains("gin_trgm_ops"), "must use gin_trgm_ops");
+    assert!(
+        d.contains("phone IS NOT NULL"),
+        "partial filter on phone IS NOT NULL"
+    );
+
+    // ---- customer_channel_identifiers_customer_idx ----
+    let d = def("customer_channel_identifiers_customer_idx").await;
+    assert!(!d.contains("UNIQUE"), "must not be unique");
+    assert!(d.contains("USING btree"), "must use btree");
+    assert!(d.contains("customer_id"), "must cover customer_id");
+
+    // ---- customer_channel_identifiers_identifier_trgm_idx ----
+    let d = def("customer_channel_identifiers_identifier_trgm_idx").await;
+    assert!(!d.contains("UNIQUE"), "must not be unique");
+    assert!(d.contains("USING gin"), "must use GIN");
+    assert!(d.contains("identifier"), "must cover identifier");
+    assert!(d.contains("gin_trgm_ops"), "must use gin_trgm_ops");
+
+    // ---- customer_channel_identifiers_live_unique_idx ----
+    let d = def("customer_channel_identifiers_live_unique_idx").await;
+    assert!(d.starts_with("CREATE UNIQUE INDEX"), "must be UNIQUE");
+    assert!(d.contains("tenant_id"), "must cover tenant_id");
+    assert!(d.contains("channel"), "must cover channel");
+    assert!(d.contains("identifier"), "must cover identifier");
+    assert!(
+        d.contains("deleted_at IS NULL"),
+        "partial filter on deleted_at IS NULL"
+    );
+
+    // ---- conversations_customer_recent_idx ----
+    let d = def("conversations_customer_recent_idx").await;
+    assert!(!d.contains("UNIQUE"), "must not be unique");
+    assert!(d.contains("USING btree"), "must use btree");
+    assert!(d.contains("tenant_id"), "must cover tenant_id");
+    assert!(d.contains("customer_id"), "must cover customer_id");
+    assert!(
+        d.contains("last_activity_at DESC"),
+        "last_activity_at must be DESC"
+    );
+    assert!(
+        d.contains("deleted_at IS NULL"),
+        "partial filter on deleted_at"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T004 — Migration 0033: conversation core — status, assignee, indexes
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0033_conversation_core_changes() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    // 1. Status CHECK accepts open|pending|resolved|closed
+    let definition: Option<String> = sqlx::query_scalar(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint \
+         WHERE conrelid = 'conversations'::regclass \
+         AND conname = 'conversations_status_check' AND contype = 'c'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query check constraint definition");
+    let definition =
+        definition.expect("conversations_status_check CHECK constraint should exist");
+    let normalized = definition.split_whitespace().collect::<String>();
+    let expected = "CHECK ((status = ANY (ARRAY['open'::text, 'pending'::text, 'resolved'::text, 'closed'::text])))"
+        .split_whitespace()
+        .collect::<String>();
+    assert_eq!(
+        normalized, expected,
+        "conversations_status_check definition mismatch"
+    );
+
+    // 2. assigned_membership_id column exists and is nullable
+    let col: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+         WHERE table_name = 'conversations' AND column_name = 'assigned_membership_id' \
+         AND is_nullable = 'YES')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query column");
+    assert!(
+        col.0,
+        "conversations.assigned_membership_id should exist and be nullable"
+    );
+
+    // 2b. Composite FK to tenant_memberships exists
+    let fk: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM pg_constraint \
+         WHERE conrelid = 'conversations'::regclass \
+         AND conname = 'conversations_assignee_tenant_fkey' \
+         AND contype = 'f')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query FK");
+    assert!(
+        fk.0,
+        "conversations_assignee_tenant_fkey FK should exist"
+    );
+
+    // 3. conversations_inbox_idx
+    let d: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'conversations_inbox_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("conversations_inbox_idx");
+    assert!(
+        d.contains("tenant_id, status, last_activity_at DESC, id DESC"),
+        "inbox index must cover tenant_id, status, last_activity_at DESC, id DESC"
+    );
+    assert!(
+        d.contains("deleted_at IS NULL"),
+        "inbox index must be partial on deleted_at IS NULL"
+    );
+
+    // 3b. conversations_assignee_idx
+    let d: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'conversations_assignee_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("conversations_assignee_idx");
+    assert!(
+        d.contains("tenant_id, assigned_membership_id, last_activity_at DESC"),
+        "assignee index must cover tenant_id, assigned_membership_id, last_activity_at DESC"
+    );
+    assert!(
+        d.contains("deleted_at IS NULL"),
+        "assignee index must be partial on deleted_at IS NULL"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T004 — Migration 0034: messages table
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0034_messages_table() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    // 4. Messages columns with correct types and nullability
+    for (col, expected_udt, nullable) in [
+        ("id", "uuid", false),
+        ("tenant_id", "uuid", false),
+        ("conversation_id", "uuid", false),
+        ("kind", "text", false),
+        ("sender_membership_id", "uuid", true),
+        ("logged_by_membership_id", "uuid", true),
+        ("body", "text", false),
+        ("seq", "int8", false),
+        ("created_at", "timestamptz", false),
+    ] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+             WHERE table_name = 'messages' AND column_name = $1 \
+             AND udt_name = $2 AND is_nullable = $3)",
+        )
+        .bind(col)
+        .bind(expected_udt)
+        .bind(if nullable { "YES" } else { "NO" })
+        .fetch_one(&pool)
+        .await
+        .expect("query column");
+        assert!(
+            exists.0,
+            "messages.{col} should exist with type {expected_udt} nullable={nullable}"
+        );
+    }
+
+    // 5. kind CHECK accepts customer|reply|note
+    let def: Option<String> = sqlx::query_scalar(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint \
+         WHERE conrelid = 'messages'::regclass AND conname = 'messages_kind_check' AND contype = 'c'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query kind check");
+    let def = def.expect("messages_kind_check should exist");
+    let normalized = def.split_whitespace().collect::<String>();
+    let expected = "CHECK ((kind = ANY (ARRAY['customer'::text, 'reply'::text, 'note'::text])))"
+        .split_whitespace()
+        .collect::<String>();
+    assert_eq!(normalized, expected, "messages_kind_check definition");
+
+    // 6. body length CHECK (1-10000)
+    let def: Option<String> = sqlx::query_scalar(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint \
+         WHERE conrelid = 'messages'::regclass AND conname = 'messages_body_length' AND contype = 'c'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query body length check");
+    let def = def.expect("messages_body_length should exist");
+    let normalized = def.split_whitespace().collect::<String>();
+    let expected = "CHECK (((char_length(body) >= 1) AND (char_length(body) <= 10000)))"
+        .split_whitespace()
+        .collect::<String>();
+    assert_eq!(normalized, expected, "messages_body_length definition");
+
+    // 7. kind-consistency CHECK exists
+    let exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM pg_constraint \
+         WHERE conrelid = 'messages'::regclass \
+         AND conname = 'messages_kind_consistency' AND contype = 'c')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query kind-consistency check");
+    assert!(
+        exists.0,
+        "messages_kind_consistency CHECK should exist"
+    );
+
+    // 8. Composite FKs exist
+    for fk_name in [
+        "messages_conversation_fkey",
+        "messages_sender_fkey",
+        "messages_logged_by_fkey",
+    ] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM pg_constraint \
+             WHERE conrelid = 'messages'::regclass AND conname = $1 AND contype = 'f')",
+        )
+        .bind(fk_name)
+        .fetch_one(&pool)
+        .await
+        .expect("query FK");
+        assert!(exists.0, "{fk_name} FK should exist");
+    }
+
+    // 9. seq is GENERATED ALWAYS AS IDENTITY (bigint)
+    let identity: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+         WHERE table_name = 'messages' AND column_name = 'seq' \
+         AND is_identity = 'YES' AND identity_generation = 'ALWAYS' \
+         AND udt_name = 'int8')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query seq identity");
+    assert!(
+        identity.0,
+        "messages.seq should be GENERATED ALWAYS AS IDENTITY (bigint)"
+    );
+
+    // 10. messages_timeline_idx exists
+    let idx: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'messages_timeline_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("messages_timeline_idx");
+    assert!(
+        idx.contains("tenant_id, conversation_id, created_at DESC, seq DESC"),
+        "timeline index must cover tenant_id, conversation_id, created_at DESC, seq DESC"
+    );
 }

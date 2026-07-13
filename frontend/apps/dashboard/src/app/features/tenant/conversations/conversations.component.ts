@@ -1,121 +1,196 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
+import { map } from 'rxjs';
+import { PermissionsService } from '../../../core/authz/permissions.service';
+import { APP_PATHS } from '../../../core/router/app-paths';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
-import { CustomerPanelComponent } from './customer-panel.component';
-import { ConversationThreadComponent } from './conversation-thread.component';
+import { ConversationsApiService } from './conversations-api.service';
 import { ConversationsStore } from './conversations.store';
 import { InboxListComponent } from './inbox-list.component';
-import { PAGE_ROUTE, RoutedPageStore } from '../routed-page.store';
+import { NewConversationDialogComponent } from './new-conversation-dialog.component';
 
 @Component({
   selector: 'app-conversations',
   imports: [
-    ConversationThreadComponent,
-    CustomerPanelComponent,
     EmptyStateComponent,
     InboxListComponent,
     LoadingStateComponent,
+    NewConversationDialogComponent,
     PageContainerComponent,
     PageHeaderComponent,
   ],
-  providers: [
-    ConversationsStore,
-    RoutedPageStore,
-    { provide: PAGE_ROUTE, useValue: 'conversations' },
-  ],
+  providers: [ConversationsStore],
   template: `
     <app-page-container>
-      <app-page-header title="Conversations" [description]="'Shared inbox · 6 open, 2 escalated'" />
-      @if (page.loading()) {
+      <app-page-header title="Conversations">
+        @if (hasManagePerm()) {
+          <button type="button" class="new-btn" (click)="showNewDialog.set(true)">
+            New conversation
+          </button>
+        }
+      </app-page-header>
+
+      @if (store.loading() && !store.items().length) {
         <app-loading-state />
-      } @else if (hasError()) {
+      } @else if (store.error(); as err) {
         <app-empty-state
           icon="@tui.alert-circle"
           title="Something went wrong"
-          description="We couldn't load this page. Please try again."
+          description="We couldn't load conversations. Please try again."
         >
-          <button type="button" (click)="retry()">Try again</button>
+          <button type="button" (click)="store.loadInbox()">Try again</button>
         </app-empty-state>
-      } @else if (store.filteredConversations().length) {
+      } @else if (store.items().length) {
+        <div class="filter-bar">
+          <select
+            class="filter-select"
+            [value]="store.filters().channel ?? ''"
+            (change)="onChannelChange($event)"
+          >
+            <option value="">All channels</option>
+            <option value="email">Email</option>
+            <option value="web_chat">Web Chat</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="telegram">Telegram</option>
+            <option value="phone">Phone</option>
+          </select>
+          <select
+            class="filter-select"
+            [value]="store.filters().assignee ?? ''"
+            (change)="onAssigneeChange($event)"
+          >
+            <option value="">All assignees</option>
+            <option value="me">Me</option>
+            <option value="unassigned">Unassigned</option>
+            @for (member of members(); track member.id) {
+              <option [value]="member.id">{{ member.displayName }}</option>
+            }
+          </select>
+        </div>
+
         <section class="inbox-shell">
           <app-inbox-list
-            [conversations]="store.filteredConversations()"
-            [customers]="store.customers()"
+            [conversations]="store.items()"
             [selectedId]="store.selectedId()"
             [statusFilter]="store.statusFilter()"
-            (selected)="store.select($event)"
-            (filterChanged)="store.setFilter($event)"
+            (selected)="onSelectConversation($event)"
+            (filterChanged)="store.setFilter({ status: $event })"
           />
-          <app-conversation-thread
-            [conversation]="store.selectedConversation()"
-            [customer]="store.selectedCustomer()"
-          />
-          <app-customer-panel [customer]="store.selectedCustomer()" />
         </section>
+
+        @if (store.hasMore()) {
+          <div class="pagination">
+            <button type="button" class="load-more" (click)="store.nextPage()">Load more</button>
+          </div>
+        }
       } @else if (store.statusFilter() !== 'all') {
         <app-empty-state
           icon="@tui.message-circle"
           title="No conversations match"
-          description="Try adjusting the status filter to find what you're looking for."
+          description="Try adjusting the filters to find what you're looking for."
         >
-          <button type="button" (click)="store.setFilter('all')">Show all conversations</button>
+          <button type="button" (click)="store.resetFilters()">Show all conversations</button>
         </app-empty-state>
       } @else {
         <app-empty-state
           icon="@tui.message-circle"
           title="No conversations yet"
           description="Customer conversations will appear here once your customers start reaching out."
-        >
-        </app-empty-state>
+        />
+      }
+
+      @if (showNewDialog()) {
+        <app-new-conversation-dialog
+          (create)="onConversationCreated($event)"
+          (closeDialog)="showNewDialog.set(false)"
+        />
       }
     </app-page-container>
   `,
   styles: [
     `
       .inbox-shell {
-        height: calc(100dvh - var(--app-topbar-height) - (var(--app-page-padding-y) * 2));
-        min-height: 680px;
-        display: grid;
-        grid-template-columns: minmax(320px, 380px) minmax(0, 1fr) 300px;
-        overflow: hidden;
+        display: block;
         border: 1px solid var(--app-border);
         border-radius: var(--app-radius-xl);
         background: var(--app-panel);
         box-shadow: var(--app-shadow);
       }
-      @media (max-width: 1024px) {
-        .inbox-shell {
-          grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
-        }
+      .filter-bar {
+        display: flex;
+        gap: var(--app-space-2);
+        margin-bottom: var(--app-space-3);
       }
-      @media (max-width: 768px) {
-        .inbox-shell {
-          height: auto;
-          min-height: 0;
-          grid-template-columns: 1fr;
-        }
+      .filter-select {
+        height: 34px;
+        padding: 0 var(--app-space-3);
+        border: 1px solid var(--app-border);
+        border-radius: var(--app-radius-md);
+        background: var(--app-panel);
+        color: var(--app-text);
+        font-size: var(--app-font-sm);
+      }
+      .new-btn {
+        height: 34px;
+        padding: 0 var(--app-space-4);
+        border: 1px solid var(--app-accent);
+        border-radius: var(--app-radius-md);
+        background: var(--app-accent);
+        color: var(--app-accent-ink);
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .pagination {
+        display: flex;
+        justify-content: center;
+        margin-top: var(--app-space-4);
+      }
+      .load-more {
+        height: 36px;
+        padding: 0 var(--app-space-5);
+        border: 1px solid var(--app-border);
+        border-radius: var(--app-radius-md);
+        background: var(--app-panel);
+        color: var(--app-text);
+        font-weight: 600;
+        cursor: pointer;
       }
     `,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ConversationsComponent {
-  protected readonly page = inject(RoutedPageStore);
-  protected readonly hasError = computed(() => this.page.error() !== null);
   protected readonly store = inject(ConversationsStore);
+  private readonly api = inject(ConversationsApiService);
+  private readonly router = inject(Router);
+  private readonly permissions = inject(PermissionsService);
+  protected readonly members = toSignal(this.api.listAssignableMembers().pipe(map((r) => r.data)), {
+    initialValue: [],
+  });
+  protected readonly showNewDialog = signal(false);
 
-  constructor() {
-    effect(() => {
-      const data = this.page.data();
-      if (data?.page === 'conversations') {
-        this.store.setPageData(data.data.conversations, data.data.customers);
-      }
-    });
+  protected readonly hasManagePerm = () => this.permissions.has('conversations.manage' as const);
+
+  protected onSelectConversation(id: string): void {
+    this.router.navigate(['/', APP_PATHS.tenant.base, APP_PATHS.tenant.conversationDetail(id)]);
   }
 
-  protected retry(): void {
-    this.page.retry();
+  protected onConversationCreated(id: string): void {
+    this.showNewDialog.set(false);
+    this.router.navigate(['/', APP_PATHS.tenant.base, APP_PATHS.tenant.conversationDetail(id)]);
+  }
+
+  protected onChannelChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.store.setFilter({ channel: value || undefined });
+  }
+
+  protected onAssigneeChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    this.store.setFilter({ assignee: value || undefined });
   }
 }

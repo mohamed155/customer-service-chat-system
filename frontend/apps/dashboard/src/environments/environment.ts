@@ -5,4 +5,5 @@ export const environment: AppConfig = {
   appName: 'AI Customer Service Platform',
   environmentName: 'production',
   enableNgRxDevtools: false,
+  publicDashboardUrl: 'https://dashboard.example.com',
 };

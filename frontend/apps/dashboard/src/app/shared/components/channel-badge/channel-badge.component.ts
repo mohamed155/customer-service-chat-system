@@ -1,16 +1,36 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { Channel } from '../../fixtures/fixture.models';
+import { TuiIcon } from '@taiga-ui/core';
+import { Channel as FixtureChannel } from '../../fixtures/fixture.models';
 
-const CHANNEL_LABELS: Record<Channel, string> = {
+export type ChannelBadgeChannel =
+  FixtureChannel | 'email' | 'phone' | 'web_chat' | 'whatsapp' | 'telegram';
+
+const CHANNEL_LABELS: Record<ChannelBadgeChannel, string> = {
   web: 'Website',
+  web_chat: 'Web chat',
   whatsapp: 'WhatsApp',
   telegram: 'Telegram',
   'mobile-sdk': 'Mobile SDK',
+  email: 'Email',
+  phone: 'Phone',
+};
+
+const CHANNEL_ICONS: Partial<Record<ChannelBadgeChannel, string>> = {
+  email: '@tui.mail',
+  phone: '@tui.phone',
 };
 
 @Component({
   selector: 'app-channel-badge',
-  template: `<span class="dot"></span><span>{{ label() }}</span>`,
+  imports: [TuiIcon],
+  template: `
+    @if (icon(); as icon) {
+      <tui-icon [icon]="icon" />
+    } @else {
+      <span class="dot"></span>
+    }
+    <span>{{ label() }}</span>
+  `,
   styles: [
     `
       :host {
@@ -32,11 +52,17 @@ const CHANNEL_LABELS: Record<Channel, string> = {
         border-radius: 999px;
         background: var(--app-accent);
       }
+      tui-icon {
+        width: 14px;
+        height: 14px;
+        color: var(--app-accent);
+      }
     `,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ChannelBadgeComponent {
-  readonly channel = input.required<Channel>();
+  readonly channel = input.required<ChannelBadgeChannel>();
   protected readonly label = computed(() => CHANNEL_LABELS[this.channel()]);
+  protected readonly icon = computed(() => CHANNEL_ICONS[this.channel()]);
 }

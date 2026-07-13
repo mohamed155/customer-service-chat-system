@@ -63,7 +63,14 @@ fn permission_guard(
 
         tracing::Span::current().record("authz.denied_permission", field::display(required));
         tracing::warn!(authz.denied_permission = %required, "permission denied");
-        ApiError::unauthorized("Access denied").into_response()
+        let request_id = request
+            .headers()
+            .get("x-request-id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        ApiError::unauthorized("Access denied")
+            .with_request_id(request_id)
+            .into_response()
     })
 }
 

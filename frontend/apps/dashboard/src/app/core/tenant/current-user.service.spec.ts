@@ -35,6 +35,87 @@ describe('CurrentUserService', () => {
     expect(service.isPlatformUser()).toBe(true);
   });
 
+  it('prefers a requested tenant when loading current user memberships', async () => {
+    const me: MeResponse = {
+      id: 'u-2',
+      email: 'agent@test.com',
+      displayName: 'Agent',
+      platformRole: null,
+      platformPermissions: [],
+      staffTenantPermissions: null,
+      memberships: [
+        {
+          tenantId: 't-1',
+          tenantName: 'First',
+          tenantSlug: 'first',
+          role: 'agent',
+          permissions: [],
+        },
+        {
+          tenantId: 't-2',
+          tenantName: 'Second',
+          tenantSlug: 'second',
+          role: 'manager',
+          permissions: [],
+        },
+      ],
+    };
+    api.get.mockReturnValue(of({ data: me }));
+    const store = TestBed.inject(Store);
+    const dispatch = vi.spyOn(store, 'dispatch');
+
+    await service.load('t-2');
+
+    expect(service.currentUser()).toEqual(me);
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: '[Tenant Context] Set Active Tenant',
+        tenant: expect.objectContaining({ id: 't-2' }),
+      }),
+    );
+  });
+
+  it('prefers the active tenant when no tenant is requested', async () => {
+    const me: MeResponse = {
+      id: 'u-2',
+      email: 'agent@test.com',
+      displayName: 'Agent',
+      platformRole: null,
+      platformPermissions: [],
+      staffTenantPermissions: null,
+      memberships: [
+        {
+          tenantId: 't-1',
+          tenantName: 'First',
+          tenantSlug: 'first',
+          role: 'agent',
+          permissions: [],
+        },
+        {
+          tenantId: 't-2',
+          tenantName: 'Second',
+          tenantSlug: 'second',
+          role: 'manager',
+          permissions: [],
+        },
+      ],
+    };
+    api.get.mockReturnValue(of({ data: me }));
+    const store = TestBed.inject(Store);
+    const dispatch = vi.spyOn(store, 'dispatch');
+    dispatch.mockClear();
+
+    await service.load('t-2');
+    await service.load();
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: '[Tenant Context] Set Active Tenant',
+        tenant: expect.objectContaining({ id: 't-2' }),
+      }),
+    );
+  });
+
   it('identifies a non-platform user', async () => {
     const me: MeResponse = {
       id: 'u-2',

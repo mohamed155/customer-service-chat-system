@@ -31,11 +31,14 @@ export type Permission =
 export const PAGE_PERMISSIONS = {
   [APP_PATHS.tenant.overview]: 'overview.view',
   [APP_PATHS.tenant.conversations]: 'conversations.view',
+  [APP_PATHS.tenant.conversationDetail(':id')]: 'conversations.view',
   [APP_PATHS.tenant.customers]: 'customers.view',
+  [APP_PATHS.tenant.customerDetail(':id')]: 'customers.view',
   [APP_PATHS.tenant.aiAgent]: 'ai_agent.view',
   [APP_PATHS.tenant.knowledgeBase]: 'knowledge_base.view',
   [APP_PATHS.tenant.integrations]: 'integrations.view',
   [APP_PATHS.tenant.analytics]: 'analytics.view',
   [APP_PATHS.tenant.settings]: 'settings.view',
+  [APP_PATHS.tenant.team]: 'members.view',
   [APP_PATHS.platform.base]: 'platform.admin',
 } as const satisfies Record<string, Permission>;

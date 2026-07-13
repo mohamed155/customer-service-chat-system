@@ -5,12 +5,61 @@ use axum::{
     Extension,
 };
 use config::AppConfig;
-use kernel::ApiError;
+use kernel::{ApiError, ErrorDetail};
 use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{audit, password, session, Principal};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountCreationInput {
+    pub display_name: String,
+    pub password: String,
+}
+
+pub fn validate_account_creation(
+    display_name: Option<&str>,
+    password: Option<&str>,
+) -> Result<AccountCreationInput, ApiError> {
+    let mut details: Vec<ErrorDetail> = Vec::new();
+
+    let display_name = match display_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(value) => value.to_owned(),
+        None => {
+            details.push(ErrorDetail {
+                field: "displayName".into(),
+                code: "required".into(),
+                message: "Display name is required for new accounts".into(),
+            });
+            String::new()
+        }
+    };
+
+    let password = match password.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) => value.to_owned(),
+        None => {
+            details.push(ErrorDetail {
+                field: "password".into(),
+                code: "required".into(),
+                message: "Password is required for new accounts".into(),
+            });
+            String::new()
+        }
+    };
+
+    if !details.is_empty() {
+        return Err(ApiError::unprocessable_entity("Validation failed").with_details(details));
+    }
+
+    Ok(AccountCreationInput {
+        display_name,
+        password,
+    })
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -152,4 +201,27 @@ async fn verify_login_password(user: Option<&LoginUser>, password: String) -> bo
     .await;
 
     matches!(result, Ok(Ok(true)))
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::{http::StatusCode, response::IntoResponse};
+
+    use super::validate_account_creation;
+
+    #[test]
+    fn validate_account_creation_rejects_missing_fields() {
+        let error = validate_account_creation(None, None).unwrap_err();
+        let response = error.into_response();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn validate_account_creation_trims_and_accepts_inputs() {
+        let account = validate_account_creation(Some("  New User  "), Some("  secret123  "))
+            .expect("valid account creation");
+
+        assert_eq!(account.display_name, "New User");
+        assert_eq!(account.password, "secret123");
+    }
 }

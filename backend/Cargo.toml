@@ -31,4 +31,6 @@ http-body-util = "0.1"
 jsonwebtoken = "9"
 rand = "0.8"
 serial_test = "3"
-
+hex = "0.4"
+getrandom = "0.3"
+sha2 = "0.10"

@@ -1,4 +1,4 @@
-export type Channel = 'web' | 'whatsapp' | 'telegram' | 'mobile-sdk';
+export type Channel = 'web' | 'whatsapp' | 'telegram' | 'mobile-sdk' | 'email' | 'phone';
 export type ConversationStatus = 'open' | 'escalated' | 'closed';
 export type Sentiment = 'positive' | 'neutral' | 'angry';
 export type MessageAuthor = 'customer' | 'ai' | 'human' | 'system';

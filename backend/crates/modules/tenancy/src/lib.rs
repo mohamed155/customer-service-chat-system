@@ -1,5 +1,7 @@
 pub mod audit;
 pub mod authorize;
+pub mod invitations;
+pub mod members;
 pub mod routes;
 
 use axum::{
@@ -20,6 +22,7 @@ pub struct TenantContext {
     pub principal_kind: identity::PrincipalKind,
     pub tenant_role: Option<authz::TenantRole>,
     pub permissions: authz::PermissionSet,
+    pub request_id: String,
 }
 
 #[derive(Clone)]
@@ -40,8 +43,10 @@ impl<S: Send + Sync> FromRequestParts<S> for TenantContext {
     }
 }
 
-fn forbidden_response() -> Response {
-    ApiError::unauthorized("Access denied").into_response()
+fn forbidden_response_with_request_id(request_id: &str) -> Response {
+    ApiError::unauthorized("Access denied")
+        .with_request_id(request_id)
+        .into_response()
 }
 
 pub async fn tenant_context_middleware(
@@ -74,6 +79,13 @@ pub async fn tenant_context_middleware(
         None => return ApiError::unauthenticated("Authentication required").into_response(),
     };
 
+    let request_id = request
+        .headers()
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_owned();
+
     let tenant = match authorize::fetch_tenant(&config.pool, tenant_id).await {
         Some(t) => t,
         None => {
@@ -84,7 +96,7 @@ pub async fn tenant_context_middleware(
                 "not_found",
             )
             .await;
-            return forbidden_response();
+            return forbidden_response_with_request_id(&request_id);
         }
     };
 
@@ -116,7 +128,7 @@ pub async fn tenant_context_middleware(
                     "no_membership",
                 )
                 .await;
-                return forbidden_response();
+                return forbidden_response_with_request_id(&request_id);
             };
             let Some((tenant_role, permissions)) =
                 permission_set_for_stored_tenant_role(&stored_role)
@@ -134,7 +146,7 @@ pub async fn tenant_context_middleware(
                     "unknown_role",
                 )
                 .await;
-                return forbidden_response();
+                return forbidden_response_with_request_id(&request_id);
             };
             if tenant.status != "active" {
                 audit::access_denied(
@@ -156,6 +168,7 @@ pub async fn tenant_context_middleware(
         principal_kind: principal.kind(),
         tenant_role,
         permissions: permissions.clone(),
+        request_id,
     };
 
     tracing::Span::current().record("tenant.id", field::display(&tenant_id));

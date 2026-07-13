@@ -19,13 +19,31 @@ export const TENANT_ROUTES: Routes = [
   {
     path: APP_PATHS.tenant.conversations,
     canMatch: [permissionGuard],
-    loadComponent: () =>
-      import('./conversations/conversations.component').then((m) => m.ConversationsComponent),
     data: {
       pageTitle: 'conversations',
       requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.conversations],
     },
     title: PAGE_TITLES.conversations.title,
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./conversations/conversations.component').then((m) => m.ConversationsComponent),
+      },
+      {
+        path: ':id',
+        canMatch: [permissionGuard],
+        loadComponent: () =>
+          import('./conversations/conversation-detail.component').then(
+            (m) => m.ConversationDetailComponent,
+          ),
+        data: {
+          pageTitle: 'conversationDetail',
+          requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.conversationDetail(':id')],
+        },
+        title: PAGE_TITLES.conversationDetail.title,
+      },
+    ],
   },
   {
     path: APP_PATHS.tenant.customers,
@@ -37,6 +55,17 @@ export const TENANT_ROUTES: Routes = [
       requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.customers],
     },
     title: PAGE_TITLES.customers.title,
+  },
+  {
+    path: APP_PATHS.tenant.customerDetail(':id'),
+    canMatch: [permissionGuard],
+    loadComponent: () =>
+      import('./customers/customer-profile.component').then((m) => m.CustomerProfileComponent),
+    data: {
+      pageTitle: 'customerProfile',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.customerDetail(':id')],
+    },
+    title: PAGE_TITLES.customerProfile.title,
   },
   {
     path: APP_PATHS.tenant.aiAgent,
@@ -87,5 +116,15 @@ export const TENANT_ROUTES: Routes = [
       requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.settings],
     },
     title: PAGE_TITLES.settings.title,
+  },
+  {
+    path: APP_PATHS.tenant.team,
+    canMatch: [permissionGuard],
+    loadComponent: () => import('./team/team-list.component').then((m) => m.TeamListComponent),
+    data: {
+      pageTitle: 'team',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.team],
+    },
+    title: PAGE_TITLES.team.title,
   },
 ];

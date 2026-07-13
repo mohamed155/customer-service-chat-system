@@ -90,7 +90,7 @@ describe('TopbarComponent', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
 
     expect(text).toContain('Conversations');
-    expect(text).toContain('Shared inbox · 6 open, 2 escalated');
+    expect(text).toContain('Manage your team conversations');
   });
 
   it('dispatches the next theme mode when the theme button is clicked', async () => {

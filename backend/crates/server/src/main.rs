@@ -65,7 +65,12 @@ async fn main() {
         health_checks,
     };
 
-    let app = router::app(state.clone());
+    let email_sender = router::configured_email_sender(&state.config);
+    let app = router::app_with_email_sender(state.clone(), email_sender.clone());
+    let delivery_worker = tokio::spawn(tenancy::invitations::run_invitation_delivery_worker(
+        state.db.clone(),
+        email_sender,
+    ));
 
     let address = format!("{}:{}", state.config.bind_address, state.config.port);
     let listener = TcpListener::bind(&address)
@@ -74,10 +79,14 @@ async fn main() {
     tracing::info!(%address, "server listening");
 
     let grace = state.config.shutdown_grace_seconds;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal(grace))
-        .await
-        .expect("server failed");
+    tokio::select! {
+        result = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal(grace)) => {
+            result.expect("server failed");
+        }
+        result = delivery_worker => {
+            panic!("invitation delivery worker stopped unexpectedly: {result:?}");
+        }
+    }
 }
 
 async fn shutdown_signal(grace_seconds: u64) {

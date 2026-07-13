@@ -4,7 +4,7 @@ describe('PAGE_TITLES', () => {
   it('has exact title/subtitle text for every static entry', () => {
     expect(PAGE_TITLES.conversations).toEqual({
       title: 'Conversations',
-      subtitle: 'Shared inbox · 6 open, 2 escalated',
+      subtitle: 'Manage your team conversations',
     });
     expect(PAGE_TITLES.customers).toEqual({
       title: 'Customers',

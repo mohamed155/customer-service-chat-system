@@ -3,3 +3,22 @@ name = "customers"
 version.workspace = true
 edition.workspace = true
 
+[dependencies]
+authz = { path = "../authz" }
+axum.workspace = true
+identity = { path = "../identity" }
+kernel = { path = "../../shared/kernel" }
+serde.workspace = true
+serde_json.workspace = true
+sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
+thiserror = "2"
+time = "0.3"
+tenancy = { path = "../tenancy" }
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+http-body-util.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tower.workspace = true

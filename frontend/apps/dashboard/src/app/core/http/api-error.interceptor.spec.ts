@@ -16,6 +16,7 @@ const config: AppConfig = {
   appName: 'Dashboard',
   environmentName: 'development',
   enableNgRxDevtools: false,
+  publicDashboardUrl: 'http://localhost:4200',
 };
 
 const configure = (initialState = {}) => {
@@ -120,6 +121,24 @@ describe('HTTP interceptors', () => {
       .expectOne('/api/v1/auth/login')
       .flush(
         { error: { code: 'unauthenticated', message: 'Invalid email or password' } },
+        { status: 401, statusText: 'Unauthorized' },
+      );
+
+    expect(await requestPromise).toMatchObject({ code: 'unauthenticated', status: 401 });
+    expect(currentUser.clear).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('does not redirect when anonymous app bootstrap receives a /me 401', async () => {
+    const { router, currentUser } = configure();
+    const requestPromise = firstValueFrom(TestBed.inject(HttpClient).get('/api/v1/me')).catch(
+      (error: ApiError) => error,
+    );
+
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/me')
+      .flush(
+        { error: { code: 'unauthenticated', message: 'Authentication required' } },
         { status: 401, statusText: 'Unauthorized' },
       );
 

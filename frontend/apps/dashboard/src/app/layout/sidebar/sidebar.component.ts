@@ -26,7 +26,8 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
         @if (
           permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.overview]) ||
           permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.conversations]) ||
-          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.customers])
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.customers]) ||
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.team])
         ) {
           <app-sidebar-nav-group label="Workspace" [collapsed]="collapsed()">
             @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.overview])) {
@@ -51,6 +52,14 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
                 icon="@tui.users"
                 label="Customers"
                 [link]="links.customers"
+                [collapsed]="collapsed()"
+              />
+            }
+            @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.team])) {
+              <app-sidebar-nav-item
+                icon="@tui.badge-check"
+                label="Team"
+                [link]="links.team"
                 [collapsed]="collapsed()"
               />
             }
@@ -201,5 +210,6 @@ export class SidebarComponent {
     integrations: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.integrations}`,
     analytics: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.analytics}`,
     settings: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.settings}`,
+    team: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.team}`,
   } as const;
 }

@@ -19,6 +19,14 @@ export const routes: Routes = [
     loadChildren: () => import('./features/auth/auth.routes').then((module) => module.AUTH_ROUTES),
   },
   {
+    path: `${APP_PATHS.invite}/:token`,
+    loadComponent: () =>
+      import('./features/auth/invite/accept-invitation.component').then(
+        (m) => m.AcceptInvitationComponent,
+      ),
+    data: { pageTitle: 'inviteAccept' },
+  },
+  {
     path: '',
     component: AppShellComponent,
     canMatch: [authGuard],

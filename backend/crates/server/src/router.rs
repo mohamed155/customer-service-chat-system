@@ -8,11 +8,11 @@ use axum::{extract::Request, middleware, routing, Router};
 use config::AppConfig;
 use identity::{principal_middleware, IdentityConfig, Principal};
 use kernel::ApiError;
+use notifications::{noop::LogEmailSender, smtp::SmtpEmailSender, EmailSender};
 use observability::health::HealthReport;
 use observability::request_id::{request_id_middleware, REQUEST_ID_HEADER};
 use observability::trace::trace_middleware;
 use observability::{liveness, metrics};
-use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::catch_panic::CatchPanicLayer;
@@ -30,7 +30,7 @@ async fn ready_handler(
     .await
 }
 
-fn panic_handler(panic_info: Box<dyn Any + Send + 'static>) -> axum::response::Response {
+fn panic_handler(panic_info: Box<dyn std::any::Any + Send + 'static>) -> axum::response::Response {
     let payload = panic_info
         .downcast_ref::<&str>()
         .copied()
@@ -52,22 +52,6 @@ async fn csrf_origin_middleware(
     let method = request.method();
     let is_safe_method = matches!(method, &Method::GET | &Method::HEAD | &Method::OPTIONS);
 
-    // CSRF only applies to authenticated state-changing requests:
-    //   * Safe methods (GET/HEAD/OPTIONS) cannot mutate state and skip the
-    //     check.
-    //   * Unauthenticated state-changing requests fall through to the
-    //     downstream auth gate, which returns 401 before any CSRF (403)
-    //     check can fire. The auth-before-CSRF ordering is asserted by
-    //     `anonymous_foreign_origin_protected_request_returns_401_before_csrf`.
-    //   * Authenticated state-changing requests must come from an allowed
-    //     origin (when an Origin header is present).
-    //
-    // The middleware runs inside the `/api/v1` nest, so the path prefix
-    // has been stripped by the time the request reaches us. We deliberately
-    // do not key the exemption off the path: `/auth/login` is a public
-    // state-changing endpoint that should still be CSRF-protected when
-    // invoked with a valid session cookie (see
-    // `csrf_origin_policy_blocks_foreign_state_changing_requests_only`).
     if !is_safe_method && request.extensions().get::<Principal>().is_some() {
         let origin = request
             .headers()
@@ -147,11 +131,6 @@ impl ProtectedRoutes {
         self
     }
 
-    /// Register a route that serves two different methods on the same path
-    /// with two different permission gates.  The per-method permission layer
-    /// is applied to each `MethodRouter` *before* the merge, so a GET
-    /// request only goes through `get_permission` and a POST request only
-    /// goes through `post_permission`.
     fn guarded_with_methods(
         mut self,
         path: &str,
@@ -235,6 +214,14 @@ fn public_routes() -> Router<sqlx::PgPool> {
     Router::new()
         .route("/auth/login", routing::post(login))
         .route("/auth/logout", routing::post(identity::routes::logout))
+        .route(
+            "/invitations/{token}",
+            routing::get(tenancy::invitations::preview_invitation),
+        )
+        .route(
+            "/invitations/{token}/accept",
+            routing::post(tenancy::invitations::accept_invitation),
+        )
 }
 
 fn authenticated_routes() -> Router<sqlx::PgPool> {
@@ -242,9 +229,6 @@ fn authenticated_routes() -> Router<sqlx::PgPool> {
 }
 
 fn platform_routes(include_test_routes: bool) -> ProtectedRoutes {
-    // /platform/tenants/{id} serves both the read-only detail (US2/T022) and
-    // the partial update (US3/T029) on the same path with per-method
-    // permission gates.
     let routes = ProtectedRoutes::new()
         .guarded_with_methods(
             "/platform/tenants",
@@ -288,13 +272,91 @@ fn platform_routes(include_test_routes: bool) -> ProtectedRoutes {
 }
 
 fn tenant_routes(include_test_routes: bool) -> ProtectedRoutes {
-    let routes = ProtectedRoutes::new().guarded(
-        "/tenant",
-        routing::get(tenancy::routes::get_tenant),
-        Permission::OverviewView,
-    );
+    let routes = ProtectedRoutes::new()
+        .guarded(
+            "/tenant",
+            routing::get(tenancy::routes::get_tenant),
+            Permission::OverviewView,
+        )
+        .guarded_with_methods(
+            "/tenant/customers",
+            routing::get(customers::routes::list_customers),
+            Permission::CustomersView,
+            routing::post(customers::routes::create_customer),
+            Permission::CustomersManage,
+        )
+        .guarded_with_methods(
+            "/tenant/customers/{id}",
+            routing::get(customers::routes::get_customer),
+            Permission::CustomersView,
+            routing::patch(customers::routes::update_customer),
+            Permission::CustomersManage,
+        )
+        .guarded_with_methods(
+            "/tenant/conversations",
+            routing::get(conversations::routes::list_conversations),
+            Permission::ConversationsView,
+            routing::post(conversations::routes::create_conversation),
+            Permission::ConversationsManage,
+        )
+        .guarded_with_methods(
+            "/tenant/conversations/{id}",
+            routing::get(conversations::routes::get_conversation),
+            Permission::ConversationsView,
+            routing::patch(conversations::routes::patch_conversation),
+            Permission::ConversationsManage,
+        )
+        .guarded_with_methods(
+            "/tenant/conversations/{id}/messages",
+            routing::get(conversations::routes::get_timeline),
+            Permission::ConversationsView,
+            routing::post(conversations::routes::add_message),
+            Permission::ConversationsManage,
+        )
+        .guarded(
+            "/tenant/customers/{id}/conversations",
+            routing::get(conversations::get_conversation_history),
+            Permission::CustomersView,
+        )
+        .guarded(
+            "/tenant/members",
+            routing::get(tenancy::members::list_members),
+            Permission::MembersView,
+        )
+        .guarded(
+            "/tenant/members/{id}",
+            routing::patch(tenancy::members::update_member),
+            Permission::MembersManage,
+        )
+        .guarded_with_methods(
+            "/tenant/members/invitations",
+            routing::get(tenancy::invitations::list_invitations),
+            Permission::MembersView,
+            routing::post(tenancy::invitations::create_invitation),
+            Permission::MembersManage,
+        )
+        .guarded(
+            "/tenant/members/invitations/{id}/delivery",
+            routing::get(tenancy::invitations::get_invitation_delivery),
+            Permission::MembersView,
+        )
+        .guarded(
+            "/tenant/members/invitations/{id}",
+            routing::delete(tenancy::invitations::revoke_invitation),
+            Permission::MembersManage,
+        );
     if include_test_routes {
         routes
+            .guarded(
+                "/test/tenant/members/{id}",
+                // Also accept GET so the RBAC matrix test (rbac.rs
+                // TENANT_OPERATIONS, which always probes with GET) can
+                // exercise `members.manage` through this path-parameterized
+                // synthetic route, in addition to mirroring the real PATCH
+                // /tenant/members/{id} endpoint's method.
+                routing::patch(|| async { StatusCode::OK }).get(|| async { StatusCode::OK }),
+                Permission::MembersManage,
+            )
             .guarded(
                 "/test/tenant/conversations/manage",
                 routing::get(|| async { StatusCode::OK }),
@@ -302,6 +364,31 @@ fn tenant_routes(include_test_routes: bool) -> ProtectedRoutes {
             )
             .guarded(
                 "/test/tenant/members/manage",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::MembersManage,
+            )
+            .guarded(
+                "/test/tenant/members/view",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::MembersView,
+            )
+            .guarded(
+                "/test/tenant/customers/view",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::CustomersView,
+            )
+            .guarded(
+                "/test/tenant/customers/manage",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::CustomersManage,
+            )
+            .guarded(
+                "/test/tenant/members/invitations/view",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::MembersView,
+            )
+            .guarded(
+                "/test/tenant/members/invitations/manage",
                 routing::get(|| async { StatusCode::OK }),
                 Permission::MembersManage,
             )
@@ -325,7 +412,11 @@ fn tenant_routes(include_test_routes: bool) -> ProtectedRoutes {
     }
 }
 
-fn api_routes(state: &AppState, include_test_routes: bool) -> Router<sqlx::PgPool> {
+fn api_routes(
+    state: &AppState,
+    include_test_routes: bool,
+    email_sender: Option<Arc<dyn EmailSender>>,
+) -> Router<sqlx::PgPool> {
     let identity_config = IdentityConfig {
         pool: state.db.clone(),
         environment: state.config.environment.clone(),
@@ -336,6 +427,20 @@ fn api_routes(state: &AppState, include_test_routes: bool) -> Router<sqlx::PgPoo
         pool: state.db.clone(),
         is_production: state.config.environment == config::Environment::Production,
     };
+
+    let email_sender: Arc<dyn EmailSender> = email_sender.unwrap_or_else(|| {
+        if let (Some(url), Some(from)) = (&state.config.smtp_url, &state.config.smtp_from) {
+            match SmtpEmailSender::new(url, from) {
+                Ok(s) => Arc::new(s),
+                Err(e) => {
+                    tracing::warn!(error = %e, "failed to create SMTP sender, falling back to log");
+                    Arc::new(LogEmailSender)
+                }
+            }
+        } else {
+            Arc::new(LogEmailSender)
+        }
+    });
 
     let routes = Router::new()
         .merge(public_routes())
@@ -352,6 +457,7 @@ fn api_routes(state: &AppState, include_test_routes: bool) -> Router<sqlx::PgPoo
                 .unwrap_or("unknown");
             ApiError::not_found("Route not found").with_request_id(request_id)
         })
+        .layer(Extension(email_sender))
         .layer(Extension(state.config.clone()))
         .layer(from_fn_with_state(
             state.config.clone(),
@@ -360,7 +466,25 @@ fn api_routes(state: &AppState, include_test_routes: bool) -> Router<sqlx::PgPoo
         .layer(from_fn_with_state(identity_config, principal_middleware))
 }
 
-fn build_app(state: AppState, include_test_routes: bool) -> Router {
+pub fn configured_email_sender(config: &AppConfig) -> Arc<dyn EmailSender> {
+    if let (Some(url), Some(from)) = (&config.smtp_url, &config.smtp_from) {
+        match SmtpEmailSender::new(url, from) {
+            Ok(sender) => Arc::new(sender),
+            Err(error) => {
+                tracing::warn!(%error, "failed to create SMTP sender, falling back to log");
+                Arc::new(LogEmailSender)
+            }
+        }
+    } else {
+        Arc::new(LogEmailSender)
+    }
+}
+
+fn build_app(
+    state: AppState,
+    include_test_routes: bool,
+    email_sender: Option<Arc<dyn EmailSender>>,
+) -> Router {
     let config = state.config.clone();
     let mut router = Router::new()
         .route("/health", routing::get(liveness))
@@ -380,7 +504,7 @@ fn build_app(state: AppState, include_test_routes: bool) -> Router {
     router
         .nest(
             "/api/v1",
-            api_routes(&state, include_test_routes).with_state(state.db.clone()),
+            api_routes(&state, include_test_routes, email_sender).with_state(state.db.clone()),
         )
         .fallback(|request: Request| async move {
             let request_id = request
@@ -398,11 +522,22 @@ fn build_app(state: AppState, include_test_routes: bool) -> Router {
 }
 
 pub fn app(state: AppState) -> Router {
-    build_app(state, false)
+    build_app(state, false, None)
+}
+
+pub fn app_with_email_sender(state: AppState, email_sender: Arc<dyn EmailSender>) -> Router {
+    build_app(state, false, Some(email_sender))
 }
 
 pub fn app_with_test_routes(state: AppState) -> Router {
-    build_app(state, true)
+    build_app(state, true, None)
+}
+
+pub fn app_with_test_routes_and_email_sender(
+    state: AppState,
+    email_sender: Arc<dyn EmailSender>,
+) -> Router {
+    build_app(state, true, Some(email_sender))
 }
 
 #[cfg(test)]

@@ -53,6 +53,7 @@ const isSessionExpired = (
   error.status === 401 &&
   error.code === 'unauthenticated' &&
   targetsApiBaseUrl(requestUrl, apiBaseUrl) &&
+  !requestUrl.includes('/me') &&
   !requestUrl.includes('/auth/login');
 
 const targetsApiBaseUrl = (requestUrl: string, apiBaseUrl: string): boolean => {

@@ -6,3 +6,6 @@ edition.workspace = true
 [dev-dependencies]
 serial_test.workspace = true
 
+[dependencies]
+url = "2"
+

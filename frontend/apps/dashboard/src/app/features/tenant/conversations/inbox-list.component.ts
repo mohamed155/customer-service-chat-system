@@ -1,14 +1,15 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
-import { ChannelBadgeComponent } from '../../../shared/components/channel-badge/channel-badge.component';
-import { SentimentBadgeComponent } from '../../../shared/components/sentiment-badge/sentiment-badge.component';
+import {
+  ChannelBadgeComponent,
+  ChannelBadgeChannel,
+} from '../../../shared/components/channel-badge/channel-badge.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
-import { ConversationFixture, CustomerFixture } from '../../../shared/fixtures/fixture.models';
-import { ConversationStatusFilter } from './conversations.store';
+import { Conversation, ConversationListQuery } from '../../../core/api/tenant-api.models';
 
 @Component({
   selector: 'app-inbox-list',
-  imports: [AvatarComponent, ChannelBadgeComponent, SentimentBadgeComponent, StatusBadgeComponent],
+  imports: [AvatarComponent, ChannelBadgeComponent, StatusBadgeComponent],
   template: `
     <div class="filters" aria-label="Conversation status filters">
       @for (filter of filters; track filter) {
@@ -32,23 +33,24 @@ import { ConversationStatusFilter } from './conversations.store';
         >
           <app-avatar [initials]="customerInitials(conversation)" size="md" />
           <span class="copy">
-            <strong>
-              {{ customerName(conversation) }}
-              @if (conversation.unread) {
-                <i aria-label="Unread"></i>
-              }
-            </strong>
-            <span>{{ conversation.snippet }}</span>
+            <strong>{{ conversation.customer.displayName }}</strong>
+            <span class="preview">{{ conversation.lastMessage?.preview ?? 'No messages' }}</span>
             <span class="badges">
-              <app-channel-badge [channel]="conversation.channel" />
+              <app-channel-badge [channel]="channelBadge(conversation.channel)" />
               <app-status-badge
                 [status]="conversation.status"
                 [tone]="statusTone(conversation.status)"
               />
-              <app-sentiment-badge [sentiment]="conversation.sentiment" />
             </span>
           </span>
-          <time>{{ relativeTime(conversation.updatedAt) }}</time>
+          <span class="meta">
+            @if (conversation.assignee; as assignee) {
+              <span class="assignee" [class.inactive]="!assignee.active">
+                {{ assignee.displayName }}
+              </span>
+            }
+            <time>{{ relativeTime(conversation.lastActivityAt) }}</time>
+          </span>
         </button>
       }
     </div>
@@ -126,13 +128,7 @@ import { ConversationStatusFilter } from './conversations.store';
         color: var(--app-text);
         font-size: var(--app-font-sm);
       }
-      i {
-        width: 7px;
-        height: 7px;
-        border-radius: 999px;
-        background: var(--app-accent);
-      }
-      .copy > span:not(.badges) {
+      .preview {
         overflow: hidden;
         color: var(--app-text-2);
         font-size: var(--app-font-sm);
@@ -144,9 +140,25 @@ import { ConversationStatusFilter } from './conversations.store';
         gap: 5px;
         flex-wrap: wrap;
       }
+      .meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+      }
+      .assignee {
+        font-size: var(--app-font-xs);
+        color: var(--app-text-2);
+        white-space: nowrap;
+      }
+      .assignee.inactive {
+        color: var(--app-text-3);
+        text-decoration: line-through;
+      }
       time {
         color: var(--app-text-3);
         font-size: var(--app-font-xs);
+        white-space: nowrap;
       }
       @media (max-width: 768px) {
         :host {
@@ -159,41 +171,43 @@ import { ConversationStatusFilter } from './conversations.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class InboxListComponent {
-  readonly conversations = input.required<readonly ConversationFixture[]>();
-  readonly customers = input.required<readonly CustomerFixture[]>();
+  readonly conversations = input.required<readonly Conversation[]>();
   readonly selectedId = input<string | null>(null);
-  readonly statusFilter = input.required<ConversationStatusFilter>();
+  readonly statusFilter = input.required<ConversationListQuery['status']>();
   readonly selected = output<string>();
-  readonly filterChanged = output<ConversationStatusFilter>();
-  protected readonly filters: readonly ConversationStatusFilter[] = [
+  readonly filterChanged = output<ConversationListQuery['status']>();
+  protected readonly filters: readonly ConversationListQuery['status'][] = [
     'all',
     'open',
-    'escalated',
+    'pending',
+    'resolved',
     'closed',
   ];
 
-  protected customerName(conversation: ConversationFixture): string {
-    return (
-      this.customers().find((customer) => customer.id === conversation.customerId)?.name ??
-      'Customer'
-    );
+  protected channelBadge(channel: string): ChannelBadgeChannel {
+    return channel as ChannelBadgeChannel;
   }
 
-  protected customerInitials(conversation: ConversationFixture): string {
-    return (
-      this.customers().find((customer) => customer.id === conversation.customerId)
-        ?.avatarInitials ?? 'HC'
-    );
+  protected customerInitials(conversation: Conversation): string {
+    return conversation.customer.displayName
+      .split(' ')
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   }
 
-  protected filterLabel(filter: ConversationStatusFilter): string {
+  protected filterLabel(filter: ConversationListQuery['status']): string {
     return filter === 'all'
       ? 'All'
-      : filter.replace(/\b\w/g, (character) => character.toUpperCase());
+      : (filter as string).replace(/\b\w/g, (character) => character.toUpperCase());
   }
 
-  protected statusTone(status: ConversationFixture['status']): 'green' | 'amber' | 'red' {
-    return status === 'closed' ? 'green' : status === 'escalated' ? 'red' : 'amber';
+  protected statusTone(status: Conversation['status']): 'green' | 'amber' | 'red' | 'neutral' {
+    if (status === 'closed' || status === 'resolved') return 'green';
+    if (status === 'pending') return 'red';
+    if (status === 'open') return 'amber';
+    return 'neutral';
   }
 
   protected relativeTime(iso: string): string {

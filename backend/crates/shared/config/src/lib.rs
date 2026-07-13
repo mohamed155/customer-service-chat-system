@@ -15,6 +15,7 @@
 //! - Add new fields by extending the struct, the parser, and the test matrix.
 
 use std::{env, error::Error, fmt, str::FromStr};
+use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Environment {
@@ -87,6 +88,9 @@ pub struct AppConfig {
     pub environment: Environment,
     pub cors_allowed_origins: Vec<String>,
     pub log_format: LogFormat,
+    pub smtp_url: Option<String>,
+    pub smtp_from: Option<String>,
+    pub public_dashboard_url: String,
     pub db_max_connections: u32,
     pub db_acquire_timeout_ms: u64,
     pub ready_probe_timeout_ms: u64,
@@ -95,6 +99,7 @@ pub struct AppConfig {
 
 impl fmt::Debug for AppConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let smtp_url = self.smtp_url.as_ref().map(|_| "[REDACTED]");
         f.debug_struct("AppConfig")
             .field("database_url", &"[REDACTED]")
             .field("redis_url", &"[REDACTED]")
@@ -108,6 +113,9 @@ impl fmt::Debug for AppConfig {
             .field("db_max_connections", &self.db_max_connections)
             .field("db_acquire_timeout_ms", &self.db_acquire_timeout_ms)
             .field("ready_probe_timeout_ms", &self.ready_probe_timeout_ms)
+            .field("smtp_url", &smtp_url)
+            .field("smtp_from", &self.smtp_from)
+            .field("public_dashboard_url", &self.public_dashboard_url)
             .field("shutdown_grace_seconds", &self.shutdown_grace_seconds)
             .finish()
     }
@@ -195,11 +203,25 @@ impl AppConfig {
             .parse()
             .map_err(|_| ConfigError("AUTH_SESSION_TTL_SECONDS must be a valid u64".into()))?;
 
+        let smtp_url = env::var("SMTP_URL").ok();
+        let smtp_from = env::var("SMTP_FROM").ok();
+        let public_dashboard_url =
+            env::var("PUBLIC_DASHBOARD_URL").unwrap_or_else(|_| match environment {
+                Environment::Production | Environment::Staging => {
+                    "https://dashboard.example.com".into()
+                }
+                Environment::Development | Environment::Test => "http://localhost:4200".into(),
+            });
+        validate_public_dashboard_url(&public_dashboard_url)?;
+
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             redis_url: required("REDIS_URL")?,
             auth_jwt_secret,
             auth_session_ttl_seconds,
+            smtp_url,
+            smtp_from,
+            public_dashboard_url,
             port,
             bind_address,
             environment,
@@ -210,6 +232,18 @@ impl AppConfig {
             ready_probe_timeout_ms,
             shutdown_grace_seconds,
         })
+    }
+}
+
+fn validate_public_dashboard_url(url: &str) -> Result<(), ConfigError> {
+    let parsed = Url::parse(url)
+        .map_err(|e| ConfigError(format!("PUBLIC_DASHBOARD_URL must be a valid URL: {e}")))?;
+
+    match parsed.scheme() {
+        "http" | "https" => Ok(()),
+        other => Err(ConfigError(format!(
+            "PUBLIC_DASHBOARD_URL must use http or https, got {other}"
+        ))),
     }
 }
 
@@ -242,6 +276,9 @@ mod tests {
                 "DB_ACQUIRE_TIMEOUT_MS",
                 "READY_PROBE_TIMEOUT_MS",
                 "SHUTDOWN_GRACE_SECONDS",
+                "SMTP_URL",
+                "SMTP_FROM",
+                "PUBLIC_DASHBOARD_URL",
             ] {
                 env::remove_var(key);
             }
@@ -341,6 +378,8 @@ mod tests {
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
             ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            ("SMTP_URL", "smtp://user:pass@smtp.example.com:587"),
+            ("SMTP_FROM", "alerts@example.com"),
         ]);
         let config = AppConfig::from_env().unwrap();
         let debug_str = format!("{config:?}");
@@ -356,6 +395,30 @@ mod tests {
             !debug_str.contains("0123456789abcdef0123456789abcdef"),
             "Debug output leaked JWT secret: {debug_str}"
         );
+        assert!(
+            !debug_str.contains("smtp://user:pass@smtp.example.com:587"),
+            "Debug output leaked SMTP credentials: {debug_str}"
+        );
+        assert!(
+            debug_str.contains("[REDACTED]"),
+            "Debug output should contain a redacted SMTP URL: {debug_str}"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn invalid_public_dashboard_url_returns_error() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            ("PUBLIC_DASHBOARD_URL", "ftp://example.com"),
+        ]);
+        let err = AppConfig::from_env().unwrap_err();
+        assert!(err.0.contains("PUBLIC_DASHBOARD_URL"));
+        assert!(err.0.contains("http or https"));
     }
 
     #[test]

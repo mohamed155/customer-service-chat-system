@@ -45,7 +45,7 @@ pub async fn fetch_membership_role(
     sqlx::query_scalar::<_, String>(
         "SELECT role \
          FROM tenant_memberships \
-         WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
+         WHERE tenant_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
     )
     .bind(tenant_id)
     .bind(user_id)

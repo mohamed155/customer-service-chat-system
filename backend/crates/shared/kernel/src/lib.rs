@@ -26,6 +26,7 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json;
 
 pub use idempotency::{
     idempotency_middleware, CachedResponse, IdempotencyKey, IdempotencyStore,
@@ -39,11 +40,17 @@ pub struct ErrorDetail {
     pub message: String,
 }
 
+impl From<ErrorDetail> for serde_json::Value {
+    fn from(detail: ErrorDetail) -> Self {
+        serde_json::to_value(detail).expect("ErrorDetail is always serializable")
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ErrorBody {
     pub code: String,
     pub message: String,
-    pub details: Vec<ErrorDetail>,
+    pub details: Vec<serde_json::Value>,
     pub request_id: String,
 }
 
@@ -93,6 +100,15 @@ impl ApiError {
         Self::new_with_code(StatusCode::CONFLICT, "conflict", message)
     }
 
+    /// `gone` — HTTP 410 with code `gone`.
+    ///
+    /// Used when a resource was valid but is no longer available and will not
+    /// become available again at this URL (e.g. an expired or single-use
+    /// invitation token that has already been consumed).
+    pub fn gone(message: impl Into<String>) -> Self {
+        Self::new_with_code(StatusCode::GONE, "gone", message)
+    }
+
     pub fn unprocessable(message: impl Into<String>) -> Self {
         Self::new_with_code(StatusCode::UNPROCESSABLE_ENTITY, "unprocessable", message)
     }
@@ -121,14 +137,25 @@ impl ApiError {
         Self::new_with_code(StatusCode::INTERNAL_SERVER_ERROR, "internal_error", message)
     }
 
-    pub fn with_details(mut self, details: Vec<ErrorDetail>) -> Self {
-        self.envelope.error.details = details;
+    /// Attach structured details. Accepts any iterable whose items can be
+    /// converted into `serde_json::Value` (e.g. `Vec<ErrorDetail>` or
+    /// `Vec<serde_json::Value>`).
+    pub fn with_details<I, V>(mut self, details: I) -> Self
+    where
+        I: IntoIterator<Item = V>,
+        V: Into<serde_json::Value>,
+    {
+        self.envelope.error.details = details.into_iter().map(Into::into).collect();
         self
     }
 
     pub fn with_request_id(mut self, request_id: impl Into<String>) -> Self {
         self.envelope.error.request_id = request_id.into();
         self
+    }
+
+    pub fn details(&self) -> &[serde_json::Value] {
+        &self.envelope.error.details
     }
 }
 
@@ -440,7 +467,10 @@ mod tests {
         }];
         let err = ApiError::validation_failed("bad request").with_details(details);
         assert_eq!(err.envelope.error.details.len(), 1);
-        assert_eq!(err.envelope.error.details[0].field, "email");
+        assert_eq!(
+            err.envelope.error.details[0]["field"].as_str().unwrap(),
+            "email"
+        );
     }
 
     #[test]
