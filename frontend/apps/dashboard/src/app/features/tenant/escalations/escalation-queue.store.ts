@@ -38,8 +38,7 @@ export const EscalationQueueStore = signalStore(
                   hasMore: res.data.hasMore,
                   loading: false,
                 }),
-              error: () =>
-                patchState(store, { loading: false, error: 'Failed to load queue' }),
+              error: () => patchState(store, { loading: false, error: 'Failed to load queue' }),
             }),
           ),
         ),
@@ -63,8 +62,7 @@ export const EscalationQueueStore = signalStore(
                   hasMore: res.data.hasMore,
                   loading: false,
                 }),
-              error: () =>
-                patchState(store, { loading: false, error: 'Failed to load more' }),
+              error: () => patchState(store, { loading: false, error: 'Failed to load more' }),
             }),
           );
         }),
@@ -92,9 +90,7 @@ export const EscalationQueueStore = signalStore(
           const data = JSON.parse(event.data) as { escalationId?: string };
           if (data.escalationId) {
             patchState(store, {
-              items: store
-                .items()
-                .filter((item) => item.escalation.id !== data.escalationId),
+              items: store.items().filter((item) => item.escalation.id !== data.escalationId),
             });
           }
         }

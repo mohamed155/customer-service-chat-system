@@ -43,7 +43,11 @@ import { EscalationQueueStore } from './escalation-queue.store';
                 <td class="muted">{{ formatWaiting(item.waitingSeconds) }}</td>
                 <td>
                   @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.escalations])) {
-                    <button type="button" class="claim-btn" (click)="store.claim(item.escalation.id)">
+                    <button
+                      type="button"
+                      class="claim-btn"
+                      (click)="store.claim(item.escalation.id)"
+                    >
                       Claim
                     </button>
                   }

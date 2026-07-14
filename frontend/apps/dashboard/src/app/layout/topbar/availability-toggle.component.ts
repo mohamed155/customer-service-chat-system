@@ -9,9 +9,13 @@ import { RealtimeService } from '../../core/realtime/realtime.service';
   selector: 'app-availability-toggle',
   imports: [TuiIcon],
   template: `
-    <button type="button" class="toggle" (click)="toggle()"
-            [class.available]="state() === 'available'"
-            [class.away]="state() === 'away'">
+    <button
+      type="button"
+      class="toggle"
+      (click)="toggle()"
+      [class.available]="state() === 'available'"
+      [class.away]="state() === 'away'"
+    >
       <tui-icon [icon]="state() === 'available' ? '@tui.circle-check' : '@tui.circle-minus'" />
       <span>{{ state() === 'available' ? 'Available' : 'Away' }}</span>
     </button>
@@ -54,21 +58,24 @@ export class AvailabilityToggleComponent {
 
   constructor() {
     this.loadState();
-    this.realtime?.events().pipe(filter(e => e.event === 'availability.changed')).subscribe(e => {
-      const data = JSON.parse(e.data);
-      this.state.set(data.state);
-    });
+    this.realtime
+      ?.events()
+      .pipe(filter((e) => e.event === 'availability.changed'))
+      .subscribe((e) => {
+        const data = JSON.parse(e.data);
+        this.state.set(data.state);
+      });
   }
 
   private loadState(): void {
-    this.api.get<Availability>('tenant/availability/me').subscribe(res => {
+    this.api.get<Availability>('tenant/availability/me').subscribe((res) => {
       this.state.set(res.data.state);
     });
   }
 
   toggle(): void {
     const newState: AvailabilityState = this.state() === 'available' ? 'away' : 'available';
-    this.api.put<Availability>('tenant/availability/me', { state: newState }).subscribe(res => {
+    this.api.put<Availability>('tenant/availability/me', { state: newState }).subscribe((res) => {
       this.state.set(res.data.state);
     });
   }

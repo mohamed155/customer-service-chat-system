@@ -20,11 +20,7 @@ export class NotificationsService {
       .subscribe((event) => {
         this.inAppSignal.update((n) => n + 1);
 
-        if (
-          'Notification' in window &&
-          Notification.permission === 'granted' &&
-          document.hidden
-        ) {
+        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
           try {
             const data = JSON.parse(event.data) as Record<string, unknown>;
             new Notification('Escalation assigned', {

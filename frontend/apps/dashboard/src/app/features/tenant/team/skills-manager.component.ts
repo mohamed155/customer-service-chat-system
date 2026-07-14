@@ -14,12 +14,17 @@ import { PermissionsService } from '../../../core/authz/permissions.service';
         <h3>Skill Catalog</h3>
         @if (canManage()) {
           <div class="add-form">
-            <input #newName
+            <input
+              #newName
               type="text"
               placeholder="New skill name"
               (keydown.enter)="addSkill(newName.value); newName.value = ''"
             />
-            <button type="button" class="add-btn" (click)="addSkill(newName.value); newName.value = ''">
+            <button
+              type="button"
+              class="add-btn"
+              (click)="addSkill(newName.value); newName.value = ''"
+            >
               <tui-icon icon="@tui.plus" />
             </button>
           </div>
@@ -39,11 +44,16 @@ import { PermissionsService } from '../../../core/authz/permissions.service';
             } @else {
               <span class="skill-name" (dblclick)="startEdit(skill.id)">{{ skill.name }}</span>
             }
-            <span class="skill-count">{{ skill.agentCount }} agent{{ skill.agentCount === 1 ? '' : 's' }}</span>
+            <span class="skill-count"
+              >{{ skill.agentCount }} agent{{ skill.agentCount === 1 ? '' : 's' }}</span
+            >
             @if (canManage()) {
-              <button type="button" class="delete-btn"
+              <button
+                type="button"
+                class="delete-btn"
                 [attr.aria-label]="'Delete skill ' + skill.name"
-                (click)="deleteSkill(skill.id)">
+                (click)="deleteSkill(skill.id)"
+              >
                 <tui-icon icon="@tui.trash" />
               </button>
             }
@@ -159,7 +169,7 @@ export class SkillsManagerComponent {
   }
 
   private loadSkills(): void {
-    this.api.get<Skill[]>('tenant/skills').subscribe(res => {
+    this.api.get<Skill[]>('tenant/skills').subscribe((res) => {
       this.skills.set(res.data);
     });
   }
@@ -169,7 +179,7 @@ export class SkillsManagerComponent {
     if (!trimmed) return;
     this.api.post<Skill>('tenant/skills', { name: trimmed }).subscribe({
       next: (res) => {
-        this.skills.update(list => [...list, res.data]);
+        this.skills.update((list) => [...list, res.data]);
       },
     });
   }
@@ -180,7 +190,7 @@ export class SkillsManagerComponent {
     if (!trimmed) return;
     this.api.patch<Skill>(`tenant/skills/${id}`, { name: trimmed }).subscribe({
       next: (res) => {
-        this.skills.update(list => list.map(s => s.id === id ? res.data : s));
+        this.skills.update((list) => list.map((s) => (s.id === id ? res.data : s)));
       },
     });
   }
@@ -188,7 +198,7 @@ export class SkillsManagerComponent {
   deleteSkill(id: string): void {
     this.api.delete<void>(`tenant/skills/${id}`).subscribe({
       next: () => {
-        this.skills.update(list => list.filter(s => s.id !== id));
+        this.skills.update((list) => list.filter((s) => s.id !== id));
       },
     });
   }

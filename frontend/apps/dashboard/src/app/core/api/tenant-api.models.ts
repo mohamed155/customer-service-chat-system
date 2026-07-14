@@ -305,11 +305,7 @@ export interface RequiredSkillRef {
 export type EscalationStatus = 'queued' | 'assigned' | 'closed';
 
 export type RoutingReason =
-  | 'skill_match'
-  | 'load_fallback'
-  | 'manual_claim'
-  | 'queue_auto'
-  | 'manual_reassignment';
+  'skill_match' | 'load_fallback' | 'manual_claim' | 'queue_auto' | 'manual_reassignment';
 
 export interface RoutingInfo {
   readonly reason: RoutingReason;
@@ -600,7 +596,9 @@ export function conversationDetailFromWire(wire: ConversationDetailWire): Conver
   };
 }
 
-export function conversationDetailEscalationFromWire(wire: ConversationDetailEscalationWire): ConversationDetailEscalation {
+export function conversationDetailEscalationFromWire(
+  wire: ConversationDetailEscalationWire,
+): ConversationDetailEscalation {
   return {
     ...conversationDetailFromWire(wire),
     escalation: wire.escalation,

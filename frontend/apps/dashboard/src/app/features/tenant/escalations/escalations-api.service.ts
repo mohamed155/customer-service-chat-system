@@ -8,9 +8,7 @@ import { QueueEntry } from '../../../core/api/tenant-api.models';
 export class EscalationsApiService {
   private readonly api = inject(ApiService);
 
-  listQueue(
-    query?: ApiListQuery,
-  ): Observable<ApiResponse<PaginatedResponse<QueueEntry>>> {
+  listQueue(query?: ApiListQuery): Observable<ApiResponse<PaginatedResponse<QueueEntry>>> {
     return this.api.list<QueueEntry>('tenant/escalations/queue', query);
   }
 
