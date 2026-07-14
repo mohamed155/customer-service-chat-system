@@ -301,7 +301,7 @@ fn tenant_routes(include_test_routes: bool) -> ProtectedRoutes {
         )
         .guarded_with_methods(
             "/tenant/conversations/{id}",
-            routing::get(conversations::routes::get_conversation),
+            routing::get(crate::handlers::get_conversation_with_escalation),
             Permission::ConversationsView,
             routing::patch(conversations::routes::patch_conversation),
             Permission::ConversationsManage,
@@ -319,8 +319,51 @@ fn tenant_routes(include_test_routes: bool) -> ProtectedRoutes {
             Permission::CustomersView,
         )
         .guarded(
+            "/tenant/events",
+            routing::get(escalations::events::stream_events),
+            Permission::ConversationsView,
+        )
+        .guarded(
+            "/tenant/conversations/{id}/escalate",
+            routing::post(escalations::routes::escalate),
+            Permission::ConversationsManage,
+        )
+        .guarded(
+            "/tenant/escalations/queue",
+            routing::get(escalations::routes::list_queue),
+            Permission::ConversationsView,
+        )
+        .guarded(
+            "/tenant/escalations/{id}/claim",
+            routing::post(escalations::routes::claim),
+            Permission::ConversationsManage,
+        )
+        .guarded(
+            "/tenant/availability/me",
+            routing::get(escalations::routes::get_my_availability)
+                .put(escalations::routes::set_my_availability),
+            Permission::ConversationsManage,
+        )
+        .guarded(
+            "/tenant/skills",
+            routing::get(escalations::routes::list_skills)
+                .post(escalations::routes::create_skill),
+            Permission::MembersView,
+        )
+        .guarded(
+            "/tenant/skills/{id}",
+            routing::patch(escalations::routes::rename_skill)
+                .delete(escalations::routes::delete_skill),
+            Permission::MembersManage,
+        )
+        .guarded(
+            "/tenant/members/{membershipId}/skills",
+            routing::put(escalations::routes::set_member_skills),
+            Permission::MembersManage,
+        )
+        .guarded(
             "/tenant/members",
-            routing::get(tenancy::members::list_members),
+            routing::get(crate::handlers::list_members_with_skills),
             Permission::MembersView,
         )
         .guarded(
@@ -347,6 +390,26 @@ fn tenant_routes(include_test_routes: bool) -> ProtectedRoutes {
         );
     if include_test_routes {
         routes
+            .guarded(
+                "/test/tenant/events",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::ConversationsView,
+            )
+            .guarded(
+                "/test/tenant/escalations/manage",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::ConversationsManage,
+            )
+            .guarded(
+                "/test/tenant/escalations/view",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::ConversationsView,
+            )
+            .guarded(
+                "/test/tenant/skills/manage",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::MembersManage,
+            )
             .guarded(
                 "/test/tenant/members/{id}",
                 // Also accept GET so the RBAC matrix test (rbac.rs
@@ -459,6 +522,7 @@ fn api_routes(
         })
         .layer(Extension(email_sender))
         .layer(Extension(state.config.clone()))
+        .layer(Extension(state.escalations.clone()))
         .layer(from_fn_with_state(
             state.config.clone(),
             csrf_origin_middleware,
