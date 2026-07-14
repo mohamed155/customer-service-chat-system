@@ -22,6 +22,7 @@ pub struct InboxQueryParams {
     pub status: Option<String>,
     pub assignee: Option<String>,
     pub channel: Option<String>,
+    pub escalated: Option<bool>,
     pub cursor: Option<String>,
     pub limit: u32,
 }
@@ -32,6 +33,7 @@ impl Default for InboxQueryParams {
             status: None,
             assignee: None,
             channel: None,
+            escalated: None,
             cursor: None,
             limit: 25,
         }
@@ -207,6 +209,7 @@ pub async fn list_conversations(
         params.status,
         params.assignee,
         params.channel,
+        params.escalated,
         params.cursor,
         limit,
     )
@@ -354,6 +357,21 @@ pub async fn get_timeline(
         }
     };
 
+    match queries::conversation_row_in_tx(&mut tx, ctx.tenant_id, conversation_id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return ApiError::not_found("Conversation not found")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(error) => {
+            tracing::error!(%error, "failed to check conversation existence");
+            return ApiError::internal_error("Failed to load messages")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    }
+
     let (messages, has_more, next_cursor) = match queries::timeline_query_in_tx(
         &mut tx,
         ctx.tenant_id,
@@ -479,6 +497,21 @@ pub async fn add_message(
         }
     };
 
+    match queries::conversation_row_in_tx(&mut tx, ctx.tenant_id, conversation_id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return ApiError::not_found("Conversation not found")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(error) => {
+            tracing::error!(%error, "failed to check conversation existence");
+            return ApiError::internal_error("Failed to add message")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    }
+
     let (message, status_ref) = match queries::add_message_in_tx(
         &mut tx,
         ctx.tenant_id,
@@ -508,8 +541,10 @@ pub async fn add_message(
     }
 
     Json(json!({
-        "message": message,
-        "conversation": status_ref,
+        "data": {
+            "message": message,
+            "conversation": status_ref,
+        }
     }))
     .into_response()
 }
@@ -562,6 +597,21 @@ pub async fn patch_conversation(
                 .into_response();
         }
     };
+
+    match queries::conversation_row_in_tx(&mut tx, ctx.tenant_id, id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return ApiError::not_found("Conversation not found")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(error) => {
+            tracing::error!(%error, "failed to check conversation existence");
+            return ApiError::internal_error("Failed to update conversation")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    }
 
     let detail = match queries::patch_conversation_in_tx(
         &mut tx,
