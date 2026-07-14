@@ -3,3 +3,19 @@ name = "escalations"
 version.workspace = true
 edition.workspace = true
 
+[dependencies]
+axum.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+conversations = { path = "../conversations" }
+futures.workspace = true
+hex.workspace = true
+identity = { path = "../identity" }
+kernel = { path = "../../shared/kernel" }
+serde.workspace = true
+serde_json.workspace = true
+sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
+tenancy = { path = "../tenancy" }
+tokio.workspace = true
+tokio-stream = { version = "0.1", features = ["sync"] }
+tracing.workspace = true
+uuid.workspace = true

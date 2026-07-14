@@ -17,6 +17,9 @@ export class ApiService {
   patch<T>(path: string, body: unknown): Observable<ApiResponse<T>> {
     return this.wrap(this.http.patch<T>(this.url(path), body, { observe: 'response' }));
   }
+  put<T>(path: string, body: unknown): Observable<ApiResponse<T>> {
+    return this.wrap(this.http.put<T>(this.url(path), body, { observe: 'response' }));
+  }
   delete<T>(path: string): Observable<ApiResponse<T>> {
     return this.wrap(this.http.delete<T>(this.url(path), { observe: 'response' }));
   }

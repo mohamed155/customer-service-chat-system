@@ -337,21 +337,10 @@ async fn collect_pages(
 
 // ---------------------------------------------------------------------------
 // User Story 1 — Inbox List
-//
-// Tests for the `GET /tenant/conversations` endpoint.  These are currently
-// marked `#[ignore]` because the inbox list handler and its route
-// registration (T013/T014) do not exist yet.  Once the route is registered,
-// remove the `#[ignore]` annotations to verify the full contract.
-//
-// All tests are live-database-gated via `REQUIRE_DB_TESTS=1` (same pattern
-// as the rest of the integration test suites) and tagged
-// `serial(conversations_db)` so they share a single test binary and a single
-// truncate-on-entry reset.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn default_view_shows_only_open_conversations() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -428,7 +417,6 @@ async fn default_view_shows_only_open_conversations() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn status_all_returns_every_status() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -469,7 +457,6 @@ async fn status_all_returns_every_status() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn status_filter_returns_only_matching_status() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -508,7 +495,6 @@ async fn status_filter_returns_only_matching_status() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn assignee_me_filter_returns_only_assigned_to_current_user() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -552,7 +538,6 @@ async fn assignee_me_filter_returns_only_assigned_to_current_user() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn assignee_unassigned_returns_only_unassigned_conversations() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -595,7 +580,6 @@ async fn assignee_unassigned_returns_only_unassigned_conversations() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn assignee_uuid_filter_returns_conversations_for_that_membership() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -645,7 +629,6 @@ async fn assignee_uuid_filter_returns_conversations_for_that_membership() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn channel_filter_returns_only_conversations_on_that_channel() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -688,7 +671,6 @@ async fn channel_filter_returns_only_conversations_on_that_channel() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn combined_filters_narrow_results_correctly() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -759,7 +741,6 @@ async fn combined_filters_narrow_results_correctly() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn unknown_status_value_returns_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -781,7 +762,6 @@ async fn unknown_status_value_returns_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn unknown_channel_value_returns_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -803,7 +783,6 @@ async fn unknown_channel_value_returns_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn unknown_assignee_value_returns_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -825,7 +804,6 @@ async fn unknown_assignee_value_returns_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn keyset_pagination_has_more_and_no_duplicates() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -866,7 +844,6 @@ async fn keyset_pagination_has_more_and_no_duplicates() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn empty_filter_match_returns_data_array_empty() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -907,7 +884,6 @@ async fn empty_filter_match_returns_data_array_empty() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn per_tenant_isolation_list_and_pagination() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -983,7 +959,6 @@ async fn per_tenant_isolation_list_and_pagination() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn per_tenant_isolation_status_count_respects_boundaries() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1034,7 +1009,6 @@ async fn per_tenant_isolation_status_count_respects_boundaries() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn inbox_item_shape_includes_expected_fields() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1094,7 +1068,6 @@ async fn inbox_item_shape_includes_expected_fields() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn inbox_item_assignee_is_null_when_unassigned() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1232,16 +1205,10 @@ fn message_ids(body: &serde_json::Value) -> Vec<Uuid> {
 
 // ---------------------------------------------------------------------------
 // User Story 2 — Read a Conversation Timeline
-//
-// Tests for GET /tenant/conversations/{id} (detail) and
-// GET /tenant/conversations/{id}/messages (timeline keyset pagination).
-// Marked #[ignore] until the detail/timeline handlers (T026–T029) are
-// registered.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id} (T028/T029)"]
 async fn detail_returns_conversation_and_participants() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1282,7 +1249,6 @@ async fn detail_returns_conversation_and_participants() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id}/messages (T028/T029)"]
 async fn timeline_returns_messages_in_desc_order_paginated() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1334,7 +1300,6 @@ async fn timeline_returns_messages_in_desc_order_paginated() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id}/messages (T028/T029)"]
 async fn timeline_tie_broken_by_seq() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1369,7 +1334,6 @@ async fn timeline_tie_broken_by_seq() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id}/messages (T028/T029)"]
 async fn load_older_never_reorders_or_duplicates() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1414,7 +1378,6 @@ async fn load_older_never_reorders_or_duplicates() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id}/messages (T028/T029)"]
 async fn empty_timeline_shows_empty_list() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1438,7 +1401,6 @@ async fn empty_timeline_shows_empty_list() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id} and /messages (T028/T029)"]
 async fn cross_tenant_detail_timeline_404() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1474,14 +1436,10 @@ async fn cross_tenant_detail_timeline_404() {
 
 // ---------------------------------------------------------------------------
 // User Story 3 — Reply and Leave Internal Notes
-//
-// Tests for POST /tenant/conversations/{id}/messages.
-// Marked #[ignore] until the add-message handler (T040/T041) is registered.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn reply_message_appended_correctly() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1515,7 +1473,6 @@ async fn reply_message_appended_correctly() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn note_message_appended_correctly() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1544,7 +1501,6 @@ async fn note_message_appended_correctly() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn logged_customer_message_appended_correctly() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1574,7 +1530,6 @@ async fn logged_customer_message_appended_correctly() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn last_activity_at_bumps_on_message() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1608,7 +1563,6 @@ async fn last_activity_at_bumps_on_message() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn empty_whitespace_body_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1637,7 +1591,6 @@ async fn empty_whitespace_body_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn over_10000_char_body_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1665,7 +1618,6 @@ async fn over_10000_char_body_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn reply_on_resolved_reopens_and_audits() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1702,7 +1654,6 @@ async fn reply_on_resolved_reopens_and_audits() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn note_never_changes_status() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1729,7 +1680,6 @@ async fn note_never_changes_status() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn viewer_403_for_message_post() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1751,7 +1701,6 @@ async fn viewer_403_for_message_post() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn cross_tenant_message_post_404() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1779,14 +1728,10 @@ async fn cross_tenant_message_post_404() {
 
 // ---------------------------------------------------------------------------
 // User Story 4 — Manage Status and Assignment
-//
-// Tests for PATCH /tenant/conversations/{id}.
-// Marked #[ignore] until the patch handler (T050/T051) is registered.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn patch_status_any_to_any() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1818,7 +1763,6 @@ async fn patch_status_any_to_any() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn patch_assign_to_active_member() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1850,7 +1794,6 @@ async fn patch_assign_to_active_member() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn patch_unassign() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1880,7 +1823,6 @@ async fn patch_unassign() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn patch_inactive_membership_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1907,7 +1849,6 @@ async fn patch_inactive_membership_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn patch_cross_tenant_membership_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1936,7 +1877,6 @@ async fn patch_cross_tenant_membership_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn status_changed_audit_row_written() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1959,7 +1899,6 @@ async fn status_changed_audit_row_written() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn assignment_changed_audit_row_written() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1983,7 +1922,6 @@ async fn assignment_changed_audit_row_written() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn no_audit_on_noop_patch() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2018,7 +1956,6 @@ async fn no_audit_on_noop_patch() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn missing_both_fields_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2042,7 +1979,6 @@ async fn missing_both_fields_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn viewer_403_for_patch() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2064,7 +2000,6 @@ async fn viewer_403_for_patch() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn cross_tenant_patch_404() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2089,14 +2024,10 @@ async fn cross_tenant_patch_404() {
 
 // ---------------------------------------------------------------------------
 // User Story 5 — Start a New Conversation
-//
-// Tests for POST /tenant/conversations (create).
-// Marked #[ignore] until the create handler (T059/T060) is registered.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn create_conversation_returns_open_unassigned_with_message() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2127,10 +2058,6 @@ async fn create_conversation_returns_open_unassigned_with_message() {
     assert_eq!(data["customer"]["id"].as_str().unwrap(), customer_id.to_string());
     assert_eq!(data["channel"].as_str().unwrap(), "web_chat");
 
-    // First message present as kind: reply
-    let msgs = data["messages"].as_array()
-        .or_else(|| data["participants"].and_then(|_| None))
-        .unwrap_or(&serde_json::json!([]));
     // For the create response, the first message may be in a `messages` field
     // or elsewhere; check at least one message exists
     let timeline_resp = send_get(&pool, admin.user_id, tenant_id,
@@ -2145,7 +2072,6 @@ async fn create_conversation_returns_open_unassigned_with_message() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn conversation_created_audit_row() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2172,7 +2098,6 @@ async fn conversation_created_audit_row() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn create_missing_customer_id_channel_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2213,7 +2138,6 @@ async fn create_missing_customer_id_channel_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn create_empty_message_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2240,7 +2164,6 @@ async fn create_empty_message_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn create_unknown_customer_404() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2265,7 +2188,6 @@ async fn create_unknown_customer_404() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn create_cross_tenant_customer_404() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2291,7 +2213,6 @@ async fn create_cross_tenant_customer_404() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn second_concurrent_open_conversation_succeeds() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2331,7 +2252,6 @@ async fn second_concurrent_open_conversation_succeeds() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn new_conversation_appears_in_customer_history() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2367,15 +2287,11 @@ async fn new_conversation_appears_in_customer_history() {
 
 // ---------------------------------------------------------------------------
 // Seeded-volume performance checks (SC-002)
-//
-// Tests that create many conversations / messages and assert response times
-// stay under 1 second. Marked #[ignore] until the relevant handlers are
-// registered, gated behind REQUIRE_DB_TESTS=1.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014); volume check"]
+#[ignore]
 async fn inbox_list_with_10k_conversations_stays_under_1s() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2408,7 +2324,7 @@ async fn inbox_list_with_10k_conversations_stays_under_1s() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id}/messages (T028/T029); volume check"]
+#[ignore]
 async fn timeline_with_1k_messages_stays_under_1s() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2444,4 +2360,122 @@ async fn timeline_with_1k_messages_stays_under_1s() {
     if elapsed >= std::time::Duration::from_secs(1) {
         eprintln!("SLOW TIMELINE (SC-002): {:?} — record query plan for diagnosis", elapsed);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Concurrent status/assignment writers (T076)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[serial_test::serial(conversations_db)]
+async fn two_members_update_status_and_assignment_concurrently() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let tenant_id = seed_tenant(&pool, "Concurrent Update Tenant").await;
+    let admin = seed_admin(&pool, tenant_id, "concurrent-admin@example.com").await;
+    let agent = seed_member(&pool, tenant_id, "concurrent-agent@example.com", "agent").await;
+    let customer_id = seed_customer(&pool, tenant_id, "Concurrent Cust", None, None).await;
+    let conv_id = seed_conversation(
+        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
+    ).await;
+
+    let pool1 = pool.clone();
+    let pool2 = pool.clone();
+    let conv_id1 = conv_id;
+    let conv_id2 = conv_id;
+    let tenant_id1 = tenant_id;
+    let tenant_id2 = tenant_id;
+    let admin_user_id1 = admin.user_id;
+    let admin_user_id2 = admin.user_id;
+    let _admin_membership_id1 = admin.membership_id;
+    let agent_membership_id2 = agent.membership_id;
+
+    let jh1 = tokio::spawn(async move {
+        let payload = serde_json::json!({ "status": "pending" });
+        send(pool1.clone(), json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id1}"),
+            admin_user_id1, tenant_id1, payload,
+        )).await
+    });
+
+    let jh2 = tokio::spawn(async move {
+        let payload = serde_json::json!({ "assigned_membership_id": agent_membership_id2 });
+        send(pool2.clone(), json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id2}"),
+            admin_user_id2, tenant_id2, payload,
+        )).await
+    });
+
+    let (r1, r2) = tokio::join!(jh1, jh2);
+    let r1 = r1.expect("spawn 1 completed");
+    let r2 = r2.expect("spawn 2 completed");
+
+    assert_eq!(r1.status(), StatusCode::OK, "concurrent status update must succeed");
+    assert_eq!(r2.status(), StatusCode::OK, "concurrent assignment update must succeed");
+
+    let db_status: String = sqlx::query_scalar(
+        "SELECT status FROM conversations WHERE id = $1",
+    ).bind(conv_id).fetch_one(&pool).await.unwrap();
+    let db_assignee: Option<Uuid> = sqlx::query_scalar(
+        "SELECT assigned_membership_id FROM conversations WHERE id = $1",
+    ).bind(conv_id).fetch_one(&pool).await.unwrap();
+
+    assert!(
+        ["open", "pending", "resolved", "closed"].contains(&db_status.as_str()),
+        "final status must be a valid value, got {db_status}"
+    );
+    assert!(
+        db_assignee.is_none() || db_assignee == Some(agent.membership_id),
+        "final assignee must be valid, got {db_assignee:?}"
+    );
+
+    let audit_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1",
+    ).bind(conv_id.to_string()).fetch_one(&pool).await.unwrap();
+    assert!(audit_count >= 1, "at least one audit record must be preserved, got {audit_count}");
+}
+
+// ---------------------------------------------------------------------------
+// Viewer 403 for conversation creation (T077)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[serial_test::serial(conversations_db)]
+async fn viewer_403_for_create() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let tenant_id = seed_tenant(&pool, "Viewer Create Tenant").await;
+    let viewer_id = seed_viewer(&pool, tenant_id, "viewer-create@example.com").await;
+    let customer_id = seed_customer(&pool, tenant_id, "Viewer Create Cust", None, None).await;
+
+    let conv_count_before: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM conversations WHERE tenant_id = $1",
+    ).bind(tenant_id).fetch_one(&pool).await.unwrap();
+    let audit_count_before: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM audit_logs",
+    ).fetch_one(&pool).await.unwrap();
+
+    let payload = serde_json::json!({
+        "customer_id": customer_id,
+        "channel": "web_chat",
+        "message": { "body": "Viewer create attempt" }
+    });
+    let response = send(pool.clone(), json_post(
+        "/api/v1/tenant/conversations",
+        viewer_id, tenant_id, payload,
+    )).await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN,
+        "viewer must receive 403 on create");
+
+    let conv_count_after: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM conversations WHERE tenant_id = $1",
+    ).bind(tenant_id).fetch_one(&pool).await.unwrap();
+    let audit_count_after: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM audit_logs",
+    ).fetch_one(&pool).await.unwrap();
+
+    assert_eq!(conv_count_after, conv_count_before,
+        "no conversation should be created by viewer");
+    assert_eq!(audit_count_after, audit_count_before,
+        "no audit row should be written for viewer create attempt");
 }

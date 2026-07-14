@@ -8,7 +8,10 @@ import {
   addMessagePayloadToWire,
   Conversation,
   ConversationDetail,
+  ConversationDetailEscalation,
+  conversationDetailEscalationFromWire,
   conversationDetailFromWire,
+  ConversationDetailEscalationWire,
   ConversationDetailWire,
   ConversationListQuery,
   conversationFromWire,
@@ -56,13 +59,15 @@ export class ConversationsApiService {
     return this.api.get<TeamMember[]>('/tenant/members');
   }
 
-  get(id: string): Observable<ApiResponse<ConversationDetail>> {
-    return this.api.get<{ data: ConversationDetailWire }>(`/tenant/conversations/${id}`).pipe(
-      map(({ data, ...response }) => ({
-        ...response,
-        data: conversationDetailFromWire(data.data),
-      })),
-    );
+  get(id: string): Observable<ApiResponse<ConversationDetailEscalation>> {
+    return this.api
+      .get<{ data: ConversationDetailEscalationWire }>(`/tenant/conversations/${id}`)
+      .pipe(
+        map(({ data, ...response }) => ({
+          ...response,
+          data: conversationDetailEscalationFromWire(data.data),
+        })),
+      );
   }
 
   getTimeline(id: string, cursor?: string): Observable<ApiResponse<PaginatedResponse<Message>>> {

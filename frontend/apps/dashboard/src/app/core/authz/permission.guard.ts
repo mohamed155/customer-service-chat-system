@@ -7,6 +7,7 @@ import { PAGE_PERMISSIONS, Permission } from './permissions';
 const SIDEBAR_PAGE_ORDER = [
   APP_PATHS.tenant.overview,
   APP_PATHS.tenant.conversations,
+  APP_PATHS.tenant.escalations,
   APP_PATHS.tenant.customers,
   APP_PATHS.tenant.aiAgent,
   APP_PATHS.tenant.knowledgeBase,

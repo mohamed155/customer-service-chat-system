@@ -14,6 +14,7 @@ import {
   PatchMemberPayload,
   MeResponse,
   InvitationDeliveryResponse,
+  Skill,
 } from '../../../core/api/tenant-api.models';
 
 @Injectable({ providedIn: 'root' })
@@ -46,6 +47,26 @@ export class TeamApiService {
 
   revokeInvitation(id: string): Observable<ApiResponse<void>> {
     return this.api.delete<void>(`tenant/members/invitations/${id}`);
+  }
+
+  getSkills(): Observable<ApiResponse<Skill[]>> {
+    return this.api.get<Skill[]>('tenant/skills');
+  }
+
+  createSkill(name: string): Observable<ApiResponse<Skill>> {
+    return this.api.post<Skill>('tenant/skills', { name });
+  }
+
+  renameSkill(id: string, name: string): Observable<ApiResponse<Skill>> {
+    return this.api.patch<Skill>(`tenant/skills/${id}`, { name });
+  }
+
+  deleteSkill(id: string): Observable<ApiResponse<void>> {
+    return this.api.delete<void>(`tenant/skills/${id}`);
+  }
+
+  setMemberSkills(membershipId: string, skillIds: string[]): Observable<ApiResponse<void>> {
+    return this.api.put<void>(`tenant/members/${membershipId}/skills`, { skillIds });
   }
 
   previewInvitation(token: string): Observable<ApiResponse<InvitationPreview>> {

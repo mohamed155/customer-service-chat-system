@@ -58,11 +58,20 @@ async fn main() {
         Arc::new(RedisHealthCheck::new((*cache).clone())),
     ];
 
+    let escalations_runtime = escalations::presence::Runtime::new(
+        db.clone(),
+        Duration::from_secs(45),
+    );
+    if let Err(e) = escalations_runtime.startup_sweep().await {
+        tracing::warn!(error = %e, "escalations startup sweep encountered errors (continuing)");
+    }
+
     let state = AppState {
         config: Arc::new(config),
         db,
         cache,
         health_checks,
+        escalations: escalations_runtime,
     };
 
     let email_sender = router::configured_email_sender(&state.config);
@@ -70,6 +79,9 @@ async fn main() {
     let delivery_worker = tokio::spawn(tenancy::invitations::run_invitation_delivery_worker(
         state.db.clone(),
         email_sender,
+    ));
+    let escalation_worker = tokio::spawn(escalations::events::run_escalation_outbox_worker(
+        state.db.clone(),
     ));
 
     let address = format!("{}:{}", state.config.bind_address, state.config.port);
@@ -85,6 +97,9 @@ async fn main() {
         }
         result = delivery_worker => {
             panic!("invitation delivery worker stopped unexpectedly: {result:?}");
+        }
+        result = escalation_worker => {
+            panic!("escalation outbox worker stopped unexpectedly: {result:?}");
         }
     }
 }

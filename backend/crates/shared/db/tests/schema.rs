@@ -79,6 +79,9 @@ async fn run_migrations_succeeds() {
         (32, "normalize identifiers"),
         (33, "conversation core"),
         (34, "messages"),
+        (35, "agent skills"),
+        (36, "agent availability"),
+        (37, "escalations"),
     ];
     assert_eq!(
         rows.len(),
@@ -3443,5 +3446,330 @@ async fn migration_0034_messages_table() {
     assert!(
         idx.contains("tenant_id, conversation_id, created_at DESC, seq DESC"),
         "timeline index must cover tenant_id, conversation_id, created_at DESC, seq DESC"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T005 — Migration 0035: agent skills (skills + agent_skills)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0035_agent_skills() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    // 1. skills columns exist with correct types
+    for (col, udt, nullable) in [
+        ("id", "uuid", false),
+        ("tenant_id", "uuid", false),
+        ("name", "text", false),
+        ("created_at", "timestamptz", false),
+        ("updated_at", "timestamptz", false),
+    ] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+             WHERE table_name = 'skills' AND column_name = $1 \
+             AND udt_name = $2 AND is_nullable = $3)",
+        )
+        .bind(col)
+        .bind(udt)
+        .bind(if nullable { "YES" } else { "NO" })
+        .fetch_one(&pool)
+        .await
+        .expect("query column");
+        assert!(exists.0, "skills.{col} should exist with type {udt}");
+    }
+
+    // 2. skills name CHECK (1-50)
+    let def: Option<String> = sqlx::query_scalar(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint \
+         WHERE conrelid = 'skills'::regclass AND conname = 'skills_name_check' AND contype = 'c'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query skills name check");
+    let def = def.expect("skills_name_check should exist");
+    assert!(
+        def.contains("char_length(trim(name)) BETWEEN 1 AND 50"),
+        "skills name CHECK should enforce 1-50 chars after trim"
+    );
+
+    // 3. Case-insensitive unique index
+    let idx: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'skills_tenant_lower_name_uniq'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("skills_tenant_lower_name_uniq");
+    assert!(
+        idx.contains("lower(name)"),
+        "case-insensitive unique index must use lower(name)"
+    );
+
+    // 4. agent_skills columns
+    for (col, udt, nullable) in [
+        ("tenant_id", "uuid", false),
+        ("membership_id", "uuid", false),
+        ("skill_id", "uuid", false),
+        ("created_at", "timestamptz", false),
+    ] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+             WHERE table_name = 'agent_skills' AND column_name = $1 \
+             AND udt_name = $2 AND is_nullable = $3)",
+        )
+        .bind(col)
+        .bind(udt)
+        .bind(if nullable { "YES" } else { "NO" })
+        .fetch_one(&pool)
+        .await
+        .expect("query column");
+        assert!(exists.0, "agent_skills.{col} should exist");
+    }
+
+    // 5. Composite FKs on agent_skills
+    for fk_name in ["agent_skills_tenant_id_membership_id_fkey", "agent_skills_tenant_id_skill_id_fkey"] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM pg_constraint \
+             WHERE conrelid = 'agent_skills'::regclass AND conname = $1 AND contype = 'f')",
+        )
+        .bind(fk_name)
+        .fetch_one(&pool)
+        .await
+        .expect("query FK");
+        assert!(exists.0, "{fk_name} should exist");
+    }
+
+    // 6. agent_skills_tenant_skill_idx
+    let idx: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'agent_skills_tenant_skill_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("agent_skills_tenant_skill_idx");
+    assert!(
+        idx.contains("tenant_id, skill_id"),
+        "agent_skills index must cover tenant_id, skill_id"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T005 — Migration 0036: agent availability
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0036_agent_availability() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    // 1. Columns
+    for (col, udt, nullable) in [
+        ("tenant_id", "uuid", false),
+        ("membership_id", "uuid", false),
+        ("state", "text", false),
+        ("state_changed_at", "timestamptz", false),
+        ("created_at", "timestamptz", false),
+        ("updated_at", "timestamptz", false),
+    ] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+             WHERE table_name = 'agent_availability' AND column_name = $1 \
+             AND udt_name = $2 AND is_nullable = $3)",
+        )
+        .bind(col)
+        .bind(udt)
+        .bind(if nullable { "YES" } else { "NO" })
+        .fetch_one(&pool)
+        .await
+        .expect("query column");
+        assert!(exists.0, "agent_availability.{col} should exist");
+    }
+
+    // 2. State CHECK (available|away)
+    let def: Option<String> = sqlx::query_scalar(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint \
+         WHERE conrelid = 'agent_availability'::regclass \
+         AND conname = 'agent_availability_state_check' AND contype = 'c'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query state check");
+    let def = def.expect("agent_availability_state_check should exist");
+    assert!(
+        def.contains("available") && def.contains("away"),
+        "state CHECK should allow available and away"
+    );
+
+    // 3. Composite FK
+    let fk: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM pg_constraint \
+         WHERE conrelid = 'agent_availability'::regclass \
+         AND conname = 'agent_availability_tenant_id_membership_id_fkey' AND contype = 'f')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query FK");
+    assert!(fk.0, "agent_availability composite FK should exist");
+}
+
+// ---------------------------------------------------------------------------
+// T005 — Migration 0037: escalations
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0037_escalations() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    // 1. conversations.escalated_at
+    let col: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+         WHERE table_name = 'conversations' AND column_name = 'escalated_at' \
+         AND is_nullable = 'YES')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query escalated_at");
+    assert!(col.0, "conversations.escalated_at should exist and be nullable");
+
+    // 2. conversations_tenant_id_id_uq
+    let uq: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM pg_constraint \
+         WHERE conrelid = 'conversations'::regclass \
+         AND conname = 'conversations_tenant_id_id_uq' AND contype = 'u')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query unique constraint");
+    assert!(uq.0, "conversations_tenant_id_id_uq should exist");
+
+    // 3. Load-count index
+    let idx: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'conversations_open_pending_load_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("conversations_open_pending_load_idx");
+    assert!(
+        idx.contains("tenant_id, assigned_membership_id"),
+        "load-count index must cover tenant_id, assigned_membership_id"
+    );
+
+    // 4. Escalated inbox index
+    let idx: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'conversations_escalated_inbox_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("conversations_escalated_inbox_idx");
+    assert!(
+        idx.contains("escalated_at IS NOT NULL"),
+        "escalated inbox index must be partial on escalated_at IS NOT NULL"
+    );
+
+    // 5. escalations columns
+    for (col, udt, nullable) in [
+        ("id", "uuid", false),
+        ("tenant_id", "uuid", false),
+        ("conversation_id", "uuid", false),
+        ("reason", "text", false),
+        ("required_skill_ids", "_uuid", false),
+        ("required_skill_names", "_text", false),
+        ("status", "text", false),
+        ("routing_reason", "text", true),
+        ("matched_skill_ids", "_uuid", false),
+        ("matched_skill_names", "_text", false),
+        ("assigned_membership_id", "uuid", true),
+        ("escalated_at", "timestamptz", false),
+        ("assigned_at", "timestamptz", true),
+        ("closed_at", "timestamptz", true),
+    ] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+             WHERE table_name = 'escalations' AND column_name = $1 \
+             AND udt_name = $2 AND is_nullable = $3)",
+        )
+        .bind(col)
+        .bind(udt)
+        .bind(if nullable { "YES" } else { "NO" })
+        .fetch_one(&pool)
+        .await
+        .expect("query column");
+        assert!(exists.0, "escalations.{col} should exist");
+    }
+
+    // 6. Status CHECK
+    let def: Option<String> = sqlx::query_scalar(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint \
+         WHERE conrelid = 'escalations'::regclass \
+         AND conname = 'escalations_status_check' AND contype = 'c'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query status check");
+    let def = def.expect("escalations_status_check should exist");
+    assert!(
+        def.contains("queued") && def.contains("assigned") && def.contains("closed"),
+        "status CHECK should allow queued, assigned, closed"
+    );
+
+    // 7. Consistency CHECK
+    let check: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM pg_constraint \
+         WHERE conrelid = 'escalations'::regclass \
+         AND conname = 'escalations_consistency_check' AND contype = 'c')",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query consistency check");
+    assert!(check.0, "escalations_consistency_check should exist");
+
+    // 8. Partial unique index (one active per conversation)
+    let idx: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'escalations_one_active_uniq'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("escalations_one_active_uniq");
+    assert!(
+        idx.contains("WHERE ((status = 'queued'::text) OR (status = 'assigned'::text))"),
+        "escalations_one_active_uniq must be partial on queued/assigned"
+    );
+    assert!(
+        idx.contains("UNIQUE"),
+        "escalations_one_active_uniq must be unique"
+    );
+
+    // 9. Queue index
+    let idx: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'escalations_queue_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("escalations_queue_idx");
+    assert!(
+        idx.contains("tenant_id, escalated_at"),
+        "queue index must cover tenant_id, escalated_at"
+    );
+
+    // 10. outbox_escalations_claimable_idx
+    let idx: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'outbox_escalations_claimable_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("outbox_escalations_claimable_idx");
+    assert!(
+        idx.contains("claimed_at IS NULL"),
+        "outbox claimable index must be partial on claimed_at IS NULL"
     );
 }

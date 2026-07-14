@@ -101,6 +101,7 @@
 
 pub mod audit;
 pub mod model;
+pub mod outbox;
 pub mod queries;
 pub mod routes;
 

@@ -10,9 +10,11 @@ import {
   selectThemeMode,
   ThemeMode,
 } from '../../core/state/app-ui.feature';
+import { PermissionsService } from '../../core/authz/permissions.service';
 import { IconButtonComponent } from '../../shared/components/icon-button/icon-button.component';
 import { SearchInputComponent } from '../../shared/components/search-input/search-input.component';
 import { LayoutStore } from '../app-shell/layout.store';
+import { AvailabilityToggleComponent } from './availability-toggle.component';
 import { PlatformNavComponent } from './platform-nav.component';
 import { TenantSwitcherComponent } from './tenant-switcher.component';
 import { UserMenuComponent } from './user-menu.component';
@@ -20,6 +22,7 @@ import { UserMenuComponent } from './user-menu.component';
 @Component({
   selector: 'app-topbar',
   imports: [
+    AvailabilityToggleComponent,
     IconButtonComponent,
     SearchInputComponent,
     PlatformNavComponent,
@@ -56,6 +59,9 @@ import { UserMenuComponent } from './user-menu.component';
         <button class="new-button" type="button">
           <tui-icon icon="@tui.plus" /><span class="new-label">New</span>
         </button>
+        @if (canManageConversations()) {
+          <app-availability-toggle />
+        }
         <app-icon-button
           class="theme-toggle"
           [icon]="themeIcon()"
@@ -177,7 +183,9 @@ export class TopbarComponent {
   private readonly store = inject(Store);
   private readonly layoutStore = inject(LayoutStore);
   private readonly currentUser = inject(CurrentUserService);
+  private readonly permissions = inject(PermissionsService);
   protected readonly collapsed = this.store.selectSignal(selectSidebarCollapsed);
+  protected readonly canManageConversations = () => this.permissions.has('conversations.manage');
   protected readonly isPlatformUser = this.currentUser.isPlatformUser;
   protected readonly isAuthenticated = computed(() => this.currentUser.currentUser() != null);
   protected readonly themeMode = this.store.selectSignal(selectThemeMode);

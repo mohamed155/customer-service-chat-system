@@ -7,16 +7,20 @@ edition.workspace = true
 authz = { path = "../modules/authz" }
 axum.workspace = true
 cache = { path = "../shared/cache" }
+chrono = { workspace = true }
 config = { path = "../shared/config" }
 conversations = { path = "../modules/conversations" }
 customers = { path = "../modules/customers" }
+escalations = { path = "../modules/escalations" }
 db = { path = "../shared/db" }
 identity = { path = "../modules/identity" }
 kernel = { path = "../shared/kernel" }
 notifications = { path = "../modules/notifications" }
 observability = { path = "../shared/observability" }
+serde = { workspace = true }
 sqlx = { workspace = true, features = ["postgres"] }
 tenancy = { path = "../modules/tenancy" }
+uuid = { workspace = true }
 tokio.workspace = true
 serde_json.workspace = true
 tower.workspace = true

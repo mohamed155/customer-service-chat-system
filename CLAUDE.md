@@ -24,6 +24,7 @@
 
 ## Recent Changes
 
+- 014-human-handoff-routing: AI→human escalation + routing (escalations module: skills catalog, agent availability with presence auto-revert, skill→load→queue routing under per-tenant advisory locks, claimable auto-draining queue, `GET /tenant/events` SSE + fetch-based realtime client, escalation banner/routing reason, topbar availability toggle) — see `specs/014-human-handoff-routing/plan.md`.
 - 007-authentication: real sign-in (Argon2id password hashing, 8h JWT in httpOnly `app_session` cookie, revocation table, CSRF origin check, `POST /auth/login|logout`, login page, authGuard/guestGuard, credentials interceptor) — see `specs/007-authentication/plan.md`.
 - 006-multi-tenancy-foundation: tenant isolation runtime (identity/tenancy modules, tenant-context middleware, `X-Tenant-ID` contract, switch audit, dashboard tenant context store, topbar switcher, dev identity header) — see `specs/006-multi-tenancy-foundation/plan.md`.
 - 005-db-migration-foundation: migration workflow + four base tables (users, tenants, tenant_memberships, audit_logs) with conventions (UUID PK, timestamps, soft delete, partial unique indexes, append-only audit) — see `specs/005-db-migration-foundation/plan.md`.

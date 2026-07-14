@@ -86,6 +86,8 @@ export interface TeamMember {
   readonly role: MembershipRole;
   readonly status: MemberStatus;
   readonly joinedAt: string;
+  readonly skills?: Skill[];
+  readonly availability?: AvailabilityState;
 }
 
 export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
@@ -295,6 +297,100 @@ export interface ConversationDetail extends Conversation {
   readonly participants: readonly Participant[];
 }
 
+export interface RequiredSkillRef {
+  readonly id: string | null;
+  readonly name: string;
+}
+
+export type EscalationStatus = 'queued' | 'assigned' | 'closed';
+
+export type RoutingReason =
+  | 'skill_match'
+  | 'load_fallback'
+  | 'manual_claim'
+  | 'queue_auto'
+  | 'manual_reassignment';
+
+export interface RoutingInfo {
+  readonly reason: RoutingReason;
+  readonly matchedSkills: string[];
+  readonly assignedMembershipId: string;
+  readonly assignedAt: string;
+}
+
+export interface Escalation {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly reason: string;
+  readonly requiredSkills: RequiredSkillRef[];
+  readonly status: EscalationStatus;
+  readonly routing: RoutingInfo | null;
+  readonly escalatedAt: string;
+  readonly closedAt: string | null;
+}
+
+export interface QueueEntry {
+  readonly escalation: Escalation;
+  readonly conversation: {
+    readonly id: string;
+    readonly channel: string;
+    readonly customer: { readonly id: string; readonly name: string };
+  };
+  readonly waitingSeconds: number;
+}
+
+export interface Skill {
+  readonly id: string;
+  readonly name: string;
+  readonly agentCount: number;
+}
+
+export type AvailabilityState = 'available' | 'away';
+
+export interface Availability {
+  readonly membershipId: string;
+  readonly state: AvailabilityState;
+  readonly stateChangedAt: string | null;
+}
+
+export interface ConversationDetailEscalation extends ConversationDetail {
+  readonly escalation: Escalation | null;
+}
+
+export interface ConversationDetailEscalationWire extends ConversationDetailWire {
+  readonly escalation: Escalation | null;
+}
+
+export interface EscalationAssignedEvent {
+  readonly v: number;
+  readonly escalationId: string;
+  readonly conversationId: string;
+  readonly reason: string;
+  readonly routingReason: RoutingReason;
+  readonly matchedSkills: string[];
+  readonly assignedAt: string;
+}
+
+export interface EscalationQueuedEvent {
+  readonly v: number;
+  readonly escalationId: string;
+  readonly conversationId: string;
+  readonly escalatedAt: string;
+  readonly requiredSkills: string[];
+}
+
+export interface EscalationRemovedEvent {
+  readonly v: number;
+  readonly escalationId: string;
+  readonly cause: string;
+}
+
+export interface AvailabilityChangedEvent {
+  readonly v: number;
+  readonly membershipId: string;
+  readonly state: AvailabilityState;
+}
+
 export interface Message {
   readonly id: string;
   readonly kind: MessageKind;
@@ -501,6 +597,13 @@ export function conversationDetailFromWire(wire: ConversationDetailWire): Conver
   return {
     ...conversationFromWire(wire),
     participants: wire.participants.map(participantFromWire),
+  };
+}
+
+export function conversationDetailEscalationFromWire(wire: ConversationDetailEscalationWire): ConversationDetailEscalation {
+  return {
+    ...conversationDetailFromWire(wire),
+    escalation: wire.escalation,
   };
 }
 

@@ -29,13 +29,27 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
         >
           Internal note
         </button>
+        <button
+          type="button"
+          class="mode-tab"
+          [class.active]="mode() === 'customer'"
+          (click)="mode.set('customer')"
+        >
+          Customer
+        </button>
       </div>
 
       <form [formGroup]="form" (ngSubmit)="submit()" class="composer-form">
         <textarea
           formControlName="body"
           aria-label="Message body"
-          [placeholder]="mode() === 'reply' ? 'Reply to customer…' : 'Add an internal note…'"
+          [placeholder]="
+            mode() === 'reply'
+              ? 'Type a reply…'
+              : mode() === 'note'
+                ? 'Add an internal note…'
+                : 'Log a customer message…'
+          "
           rows="3"
         ></textarea>
         @if (form.controls.body.touched && form.controls.body.invalid) {
@@ -125,7 +139,7 @@ export class ComposerComponent {
 
   private readonly fb = inject(FormBuilder);
 
-  protected readonly mode = signal<'reply' | 'note'>('reply');
+  protected readonly mode = signal<'reply' | 'note' | 'customer'>('reply');
 
   protected readonly form = this.fb.nonNullable.group({
     body: ['', [Validators.required, Validators.minLength(1)]],
