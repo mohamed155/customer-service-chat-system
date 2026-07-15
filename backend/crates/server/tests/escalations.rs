@@ -30,6 +30,10 @@ fn test_config() -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
+        ai_openai_base_url: None,
+        ai_anthropic_base_url: None,
+        ai_gemini_base_url: None,
     }
 }
 
@@ -37,10 +41,11 @@ fn app_state(pool: sqlx::PgPool) -> AppState {
     let escalations = escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(1));
     AppState {
         config: Arc::new(test_config()),
-        db: pool,
+        db: pool.clone(),
         cache: Arc::new(cache::Cache::new("redis://127.0.0.1:6379").unwrap()),
         health_checks: vec![],
         escalations,
+        ai: ai::AiService::from_config(pool.clone(), &test_config()).unwrap(),
     }
 }
 
@@ -188,12 +193,7 @@ async fn send_put(
     send(state, json_put(uri, user_id, tenant_id, body.clone())).await
 }
 
-async fn send_delete(
-    state: &AppState,
-    user_id: Uuid,
-    tenant_id: Uuid,
-    uri: &str,
-) -> Response {
+async fn send_delete(state: &AppState, user_id: Uuid, tenant_id: Uuid, uri: &str) -> Response {
     send(state, json_delete(uri, user_id, tenant_id)).await
 }
 
@@ -262,7 +262,10 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> Seeded
     .fetch_one(pool)
     .await
     .unwrap();
-    SeededMembership { user_id, membership_id }
+    SeededMembership {
+        user_id,
+        membership_id,
+    }
 }
 
 async fn seed_member(
@@ -282,7 +285,10 @@ async fn seed_member(
     .fetch_one(pool)
     .await
     .unwrap();
-    SeededMembership { user_id, membership_id }
+    SeededMembership {
+        user_id,
+        membership_id,
+    }
 }
 
 async fn seed_customer(
@@ -329,14 +335,12 @@ async fn seed_conversation(
 }
 
 async fn seed_skill(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
-    sqlx::query_scalar(
-        "INSERT INTO skills (tenant_id, name) VALUES ($1, $2) RETURNING id",
-    )
-    .bind(tenant_id)
-    .bind(name)
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    sqlx::query_scalar("INSERT INTO skills (tenant_id, name) VALUES ($1, $2) RETURNING id")
+        .bind(tenant_id)
+        .bind(name)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn seed_agent_skill(
@@ -389,7 +393,10 @@ async fn seed_inactive_member(
     .fetch_one(pool)
     .await
     .unwrap();
-    SeededMembership { user_id, membership_id }
+    SeededMembership {
+        user_id,
+        membership_id,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -419,22 +426,12 @@ fn escalation_ids(body: &serde_json::Value) -> Vec<Uuid> {
         .expect("queue data array")
         .iter()
         .map(|item| {
-            Uuid::parse_str(
-                item["escalation"]["id"]
-                    .as_str()
-                    .expect("escalation id"),
-            )
-            .unwrap()
+            Uuid::parse_str(item["escalation"]["id"].as_str().expect("escalation id")).unwrap()
         })
         .collect()
 }
 
-async fn get_queue_list(
-    state: &AppState,
-    user_id: Uuid,
-    tenant_id: Uuid,
-    query: &str,
-) -> Response {
+async fn get_queue_list(state: &AppState, user_id: Uuid, tenant_id: Uuid, query: &str) -> Response {
     send_get(
         state,
         user_id,
@@ -449,11 +446,7 @@ fn make_epoch_cursor() -> String {
     escalations::queries::encode_queue_cursor(&epoch, &Uuid::nil())
 }
 
-async fn collect_queue_pages(
-    state: &AppState,
-    user_id: Uuid,
-    tenant_id: Uuid,
-) -> Vec<Uuid> {
+async fn collect_queue_pages(state: &AppState, user_id: Uuid, tenant_id: Uuid) -> Vec<Uuid> {
     let mut cursor: Option<String> = Some(make_epoch_cursor());
     let mut ids = Vec::new();
     loop {
@@ -484,15 +477,22 @@ async fn get_conversation(
     tenant_id: Uuid,
     id: Uuid,
 ) -> serde_json::Value {
-    let resp =
-        send_get(state, user_id, tenant_id, &format!("/api/v1/tenant/conversations/{id}")).await;
+    let resp = send_get(
+        state,
+        user_id,
+        tenant_id,
+        &format!("/api/v1/tenant/conversations/{id}"),
+    )
+    .await;
     assert_eq!(resp.status(), StatusCode::OK);
     body_json(resp).await
 }
 
-async fn process_outbox(pool: &sqlx::PgPool) {
+async fn process_outbox(state: &AppState) {
+    let pool = &state.db;
+    let runtime = &state.escalations;
     for _ in 0..20 {
-        if !escalations::events::process_escalation_outbox_once(pool)
+        if !escalations::events::process_escalation_outbox_once(pool, runtime)
             .await
             .expect("outbox processing failed")
         {
@@ -503,14 +503,12 @@ async fn process_outbox(pool: &sqlx::PgPool) {
 }
 
 async fn fetch_audit_count(pool: &sqlx::PgPool, action: &str, resource_id: Uuid) -> i64 {
-    sqlx::query_scalar(
-        "SELECT COUNT(*) FROM audit_logs WHERE action = $1 AND resource_id = $2",
-    )
-    .bind(action)
-    .bind(resource_id.to_string())
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE action = $1 AND resource_id = $2")
+        .bind(action)
+        .bind(resource_id.to_string())
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 // ===========================================================================
@@ -558,9 +556,15 @@ async fn lower_load_wins() {
     let agent_b = seed_member(&pool, tenant, "agent-b@load.test", "agent").await;
     let customer = seed_customer(&pool, tenant, "Cust", None, None).await;
     // Agent A has one conversation (higher load)
-    let _assigned_conv =
-        seed_conversation(&pool, tenant, customer, "web_chat", "open", Some(agent_a.membership_id))
-            .await;
+    let _assigned_conv = seed_conversation(
+        &pool,
+        tenant,
+        customer,
+        "web_chat",
+        "open",
+        Some(agent_a.membership_id),
+    )
+    .await;
     let conv = seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await;
     let billing = seed_skill(&pool, tenant, "billing").await;
     seed_agent_skill(&pool, tenant, agent_a.membership_id, billing).await;
@@ -695,7 +699,9 @@ async fn no_agent_present_or_available_queues_escalation() {
     let resp = send_post(
         &state,
         // Use the admin as the escalating user
-        seed_admin(&pool, tenant, "admin@no-agent.test").await.user_id,
+        seed_admin(&pool, tenant, "admin@no-agent.test")
+            .await
+            .user_id,
         tenant,
         &format!("/api/v1/tenant/conversations/{conv}/escalate"),
         &serde_json::json!({"reason": "help"}),
@@ -786,8 +792,7 @@ async fn cross_tenant_conversation_returns_404() {
     let tenant_b = seed_tenant(&pool, "tenant-b-404").await;
     let admin_a = seed_admin(&pool, tenant_a, "admin@a.test").await;
     let customer_a = seed_customer(&pool, tenant_a, "Cust", None, None).await;
-    let conv_a =
-        seed_conversation(&pool, tenant_a, customer_a, "web_chat", "open", None).await;
+    let conv_a = seed_conversation(&pool, tenant_a, customer_a, "web_chat", "open", None).await;
 
     // admin_a tries to escalate conversation from tenant_a using tenant_b's tenant_id
     let resp = send_post(
@@ -893,13 +898,12 @@ async fn escalated_at_set_on_conversation() {
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
 
-    let escalated_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
-        "SELECT escalated_at FROM conversations WHERE id = $1",
-    )
-    .bind(conv)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let escalated_at: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT escalated_at FROM conversations WHERE id = $1")
+            .bind(conv)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert!(escalated_at.is_some(), "escalated_at must be set");
 }
 
@@ -961,7 +965,8 @@ async fn escalated_filter_combinable_with_status() {
     let agent = seed_member(&pool, tenant, "agent@combo.test", "agent").await;
     let customer = seed_customer(&pool, tenant, "Cust", None, None).await;
     let conv_open = seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await;
-    let conv_pending = seed_conversation(&pool, tenant, customer, "web_chat", "pending", None).await;
+    let conv_pending =
+        seed_conversation(&pool, tenant, customer, "web_chat", "pending", None).await;
     seed_availability(&pool, tenant, agent.membership_id, "available").await;
     let _guard = connect_presence(&state, agent.user_id, tenant).await;
 
@@ -1075,10 +1080,22 @@ async fn queue_list_oldest_first_keyset_paginated() {
     let detail1 = get_conversation(&state, agent.user_id, tenant, conv1).await;
     let detail2 = get_conversation(&state, agent.user_id, tenant, conv2).await;
     let detail3 = get_conversation(&state, agent.user_id, tenant, conv3).await;
-    let t1 = detail1["escalation"]["escalatedAt"].as_str().unwrap().to_string();
-    let t2 = detail2["escalation"]["escalatedAt"].as_str().unwrap().to_string();
-    let t3 = detail3["escalation"]["escalatedAt"].as_str().unwrap().to_string();
-    assert!(t1 < t2 && t2 < t3, "escalations must be ordered by escalated_at ASC");
+    let t1 = detail1["escalation"]["escalatedAt"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let t2 = detail2["escalation"]["escalatedAt"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let t3 = detail3["escalation"]["escalatedAt"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        t1 < t2 && t2 < t3,
+        "escalations must be ordered by escalated_at ASC"
+    );
 }
 
 #[tokio::test]
@@ -1102,7 +1119,11 @@ async fn claim_assigns_and_audits() {
     )
     .await;
     assert_eq!(esc_resp.status(), StatusCode::CREATED);
-    let esc_id: Uuid = body_json(esc_resp).await["id"].as_str().unwrap().parse().unwrap();
+    let esc_id: Uuid = body_json(esc_resp).await["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
 
     // Claim it
     let resp = send_post(
@@ -1142,7 +1163,11 @@ async fn concurrent_claims_one_succeeds_one_409() {
         &serde_json::json!({"reason": "concurrent"}),
     )
     .await;
-    let esc_id: Uuid = body_json(esc_resp).await["id"].as_str().unwrap().parse().unwrap();
+    let esc_id: Uuid = body_json(esc_resp).await["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
 
     let state1 = state.clone();
     let state2 = state.clone();
@@ -1192,7 +1217,11 @@ async fn away_agent_can_claim() {
         &serde_json::json!({"reason": "away claim"}),
     )
     .await;
-    let esc_id: Uuid = body_json(esc_resp).await["id"].as_str().unwrap().parse().unwrap();
+    let esc_id: Uuid = body_json(esc_resp).await["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
 
     // Agent is away by default, not seeded as available
     let resp = send_post(
@@ -1341,7 +1370,11 @@ async fn three_queued_one_agent_assigns_exactly_one() {
     let _guard = connect_presence(&state, agent.user_id, tenant).await;
 
     let remaining = collect_queue_pages(&state, agent.user_id, tenant).await;
-    assert_eq!(remaining.len(), 2, "one should be assigned, two remain queued");
+    assert_eq!(
+        remaining.len(),
+        2,
+        "one should be assigned, two remain queued"
+    );
 }
 
 #[tokio::test]
@@ -1378,7 +1411,7 @@ async fn resolve_queued_removes_from_queue() {
     assert_eq!(patch_resp.status(), StatusCode::OK);
 
     // Process outbox to close the escalation
-    process_outbox(&pool).await;
+    process_outbox(&state).await;
 
     let remaining = collect_queue_pages(&state, agent.user_id, tenant).await;
     assert!(remaining.is_empty(), "queued escalation should be closed");
@@ -1548,7 +1581,11 @@ async fn away_agent_still_claims_after_toggle() {
         &serde_json::json!({"reason": "away claim2"}),
     )
     .await;
-    let esc_id: Uuid = body_json(esc_resp).await["id"].as_str().unwrap().parse().unwrap();
+    let esc_id: Uuid = body_json(esc_resp).await["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
 
     // Set to away explicitly
     send_put(
@@ -1646,7 +1683,10 @@ async fn deactivated_member_treated_as_unavailable() {
     .await;
     assert_eq!(resp.status(), StatusCode::CREATED);
     let body = body_json(resp).await;
-    assert_eq!(body["status"], "queued", "deactivated member not selectable");
+    assert_eq!(
+        body["status"], "queued",
+        "deactivated member not selectable"
+    );
 }
 
 // ===========================================================================
@@ -1672,7 +1712,11 @@ async fn create_rename_delete_skill() {
     )
     .await;
     assert_eq!(create_resp.status(), StatusCode::OK);
-    let skill_id: Uuid = body_json(create_resp).await["id"].as_str().unwrap().parse().unwrap();
+    let skill_id: Uuid = body_json(create_resp).await["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
 
     // List
     let list_resp = send_get(&state, member.user_id, tenant, "/api/v1/tenant/skills").await;
@@ -1782,13 +1826,12 @@ async fn delete_skill_removes_agent_skills_and_queue_refs() {
     assert_eq!(del_resp.status(), StatusCode::NO_CONTENT);
 
     // agent_skills should be cleaned by CASCADE
-    let agent_skill_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM agent_skills WHERE skill_id = $1",
-    )
-    .bind(skill)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let agent_skill_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM agent_skills WHERE skill_id = $1")
+            .bind(skill)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(agent_skill_count, 0);
 
     let escalation_exists: bool = sqlx::query_scalar(
@@ -1800,7 +1843,10 @@ async fn delete_skill_removes_agent_skills_and_queue_refs() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert!(escalation_exists, "escalation row must still exist after skill delete");
+    assert!(
+        escalation_exists,
+        "escalation row must still exist after skill delete"
+    );
 }
 
 #[tokio::test]
@@ -1912,10 +1958,9 @@ async fn tenant_isolation_skills() {
     let _skill_a = seed_skill(&pool, tenant_a, "unique-a").await;
     let _skill_b = seed_skill(&pool, tenant_b, "unique-b").await;
 
-    let list_a = body_json(
-        send_get(&state, member_a.user_id, tenant_a, "/api/v1/tenant/skills").await,
-    )
-    .await;
+    let list_a =
+        body_json(send_get(&state, member_a.user_id, tenant_a, "/api/v1/tenant/skills").await)
+            .await;
     let names_a: Vec<String> = list_a["data"]
         .as_array()
         .unwrap()
@@ -1949,7 +1994,11 @@ async fn each_skill_mutation_writes_audit() {
     )
     .await;
     assert_eq!(create_resp.status(), StatusCode::OK);
-    let skill_id: Uuid = body_json(create_resp).await["id"].as_str().unwrap().parse().unwrap();
+    let skill_id: Uuid = body_json(create_resp).await["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
 
     send(
         &state,
@@ -1974,7 +2023,10 @@ async fn each_skill_mutation_writes_audit() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert!(audit_after >= audit_before + 3, "create+rename+delete should write 3+ audit rows");
+    assert!(
+        audit_after >= audit_before + 3,
+        "create+rename+delete should write 3+ audit rows"
+    );
 }
 
 // ===========================================================================
@@ -1996,7 +2048,10 @@ async fn get_conversation_embeds_escalation() {
 
     // Not escalated → null
     let detail = get_conversation(&state, agent.user_id, tenant, conv).await;
-    assert!(detail["escalation"].is_null(), "never-escalated must be null");
+    assert!(
+        detail["escalation"].is_null(),
+        "never-escalated must be null"
+    );
 
     // Escalate
     send_post(
@@ -2010,7 +2065,10 @@ async fn get_conversation_embeds_escalation() {
 
     // Now has escalation
     let detail2 = get_conversation(&state, agent.user_id, tenant, conv).await;
-    assert!(detail2["escalation"].is_object(), "escalated must have escalation object");
+    assert!(
+        detail2["escalation"].is_object(),
+        "escalated must have escalation object"
+    );
     assert_eq!(detail2["escalation"]["status"], "assigned");
 }
 
@@ -2065,7 +2123,7 @@ async fn patch_assignee_escalated_conversation_relabels() {
     assert_eq!(patch_resp.status(), StatusCode::OK);
 
     // Process outbox
-    process_outbox(&pool).await;
+    process_outbox(&state).await;
 
     // Check escalation relabeled
     let routing_reason: Option<String> = sqlx::query_scalar(
@@ -2105,7 +2163,7 @@ async fn routing_engine_origin_does_not_relabel() {
     .await;
 
     // Process outbox
-    process_outbox(&pool).await;
+    process_outbox(&state).await;
 
     // Routing reason should still be skill_match (or load_fallback), NOT manual_reassignment
     let routing_reason: String = sqlx::query_scalar(

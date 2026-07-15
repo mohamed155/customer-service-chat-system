@@ -74,9 +74,16 @@ pub async fn route_new_escalation_in_tx(
         RouteError::Internal(e.to_string())
     })?;
 
-    audit::record_escalation_created(tx, actor_user_id, tenant_id, escalation_id, conversation_id, reason)
-        .await
-        .map_err(|e| RouteError::Internal(e.to_string()))?;
+    audit::record_escalation_created(
+        tx,
+        actor_user_id,
+        tenant_id,
+        escalation_id,
+        conversation_id,
+        reason,
+    )
+    .await
+    .map_err(|e| RouteError::Internal(e.to_string()))?;
 
     let candidate = queries::select_candidate_in_tx(tx, tenant_id, required_skill_ids, present_ids)
         .await
@@ -97,7 +104,11 @@ pub async fn route_new_escalation_in_tx(
              assigned_at = now() \
              WHERE id = $5",
         )
-        .bind(if cand.match_count > 0 { "skill_match" } else { "load_fallback" })
+        .bind(if cand.match_count > 0 {
+            "skill_match"
+        } else {
+            "load_fallback"
+        })
         .bind(cand.membership_id)
         .bind(&cand.matched_ids)
         .bind(&matched_names)
@@ -131,7 +142,11 @@ pub async fn route_new_escalation_in_tx(
             actor_user_id,
             tenant_id,
             escalation_id,
-            if cand.match_count > 0 { "skill_match" } else { "load_fallback" },
+            if cand.match_count > 0 {
+                "skill_match"
+            } else {
+                "load_fallback"
+            },
             &matched_names,
             cand.load_count,
             cand.membership_id,
@@ -147,7 +162,11 @@ pub async fn route_new_escalation_in_tx(
             reason,
             required_skill_ids,
             required_skill_names,
-            Some(if cand.match_count > 0 { "skill_match" } else { "load_fallback" }),
+            Some(if cand.match_count > 0 {
+                "skill_match"
+            } else {
+                "load_fallback"
+            }),
             &matched_names,
             Some(cand.membership_id),
         )
@@ -223,7 +242,9 @@ pub async fn claim_in_tx(
         match row {
             None => Err(ClaimError::NotFound),
             Some(r) => match r.assigned_membership_id {
-                Some(mid) => Err(ClaimError::AlreadyClaimed { assigned_membership_id: mid }),
+                Some(mid) => Err(ClaimError::AlreadyClaimed {
+                    assigned_membership_id: mid,
+                }),
                 None => Err(ClaimError::NotFound),
             },
         }
@@ -262,15 +283,13 @@ pub async fn drain_one_for_membership_in_tx(
 ) -> sqlx::Result<Option<Uuid>> {
     queries::take_tenant_routing_lock_in_tx(tx, tenant_id).await?;
 
+    // First try: skill-matching entry
     let candidate: Option<(Uuid, Vec<Uuid>, Vec<String>)> = sqlx::query_as(
         "SELECT e.id, e.required_skill_ids, e.required_skill_names \
          FROM escalations e \
          WHERE e.tenant_id = $1 AND e.status = 'queued' \
-         AND (
-             e.required_skill_ids = '{}' \
-             OR EXISTS(SELECT 1 FROM agent_skills ask \
-                       WHERE ask.membership_id = $2 AND ask.skill_id = ANY(e.required_skill_ids))
-         ) \
+         AND EXISTS(SELECT 1 FROM agent_skills ask \
+                    WHERE ask.membership_id = $2 AND ask.skill_id = ANY(e.required_skill_ids)) \
          ORDER BY e.escalated_at ASC \
          LIMIT 1",
     )
@@ -278,6 +297,22 @@ pub async fn drain_one_for_membership_in_tx(
     .bind(membership_id)
     .fetch_optional(&mut **tx)
     .await?;
+
+    // Fallback: oldest entry outright when no skill match
+    let candidate = if candidate.is_some() {
+        candidate
+    } else {
+        sqlx::query_as(
+            "SELECT e.id, e.required_skill_ids, e.required_skill_names \
+             FROM escalations e \
+             WHERE e.tenant_id = $1 AND e.status = 'queued' \
+             ORDER BY e.escalated_at ASC \
+             LIMIT 1",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&mut **tx)
+        .await?
+    };
 
     if let Some((escalation_id, req_skill_ids, _req_skill_names)) = candidate {
         let matched_names = if req_skill_ids.is_empty() {
@@ -299,12 +334,11 @@ pub async fn drain_one_for_membership_in_tx(
         .execute(&mut **tx)
         .await?;
 
-        let conv_id: Uuid = sqlx::query_scalar(
-            "SELECT conversation_id FROM escalations WHERE id = $1",
-        )
-        .bind(escalation_id)
-        .fetch_one(&mut **tx)
-        .await?;
+        let conv_id: Uuid =
+            sqlx::query_scalar("SELECT conversation_id FROM escalations WHERE id = $1")
+                .bind(escalation_id)
+                .fetch_one(&mut **tx)
+                .await?;
 
         conversations::queries::assign_in_tx(
             tx,
@@ -316,13 +350,8 @@ pub async fn drain_one_for_membership_in_tx(
         )
         .await?;
 
-        conversations::queries::set_escalated_in_tx(
-            tx,
-            tenant_id,
-            conv_id,
-            Some(Utc::now()),
-        )
-        .await?;
+        conversations::queries::set_escalated_in_tx(tx, tenant_id, conv_id, Some(Utc::now()))
+            .await?;
 
         audit::record_escalation_assigned(
             tx,
@@ -361,10 +390,12 @@ pub async fn drain_any_in_tx(
     .await?;
 
     if let Some((escalation_id, req_ids)) = oldest {
-        let candidate = queries::select_candidate_in_tx(tx, tenant_id, &req_ids, present_ids).await?;
+        let candidate =
+            queries::select_candidate_in_tx(tx, tenant_id, &req_ids, present_ids).await?;
         if let Some(cand) = candidate {
             let matched_names = if cand.match_count > 0 && !cand.matched_ids.is_empty() {
-                crate::model::sql::skill_names_for_ids_in_tx(tx, tenant_id, &cand.matched_ids).await?
+                crate::model::sql::skill_names_for_ids_in_tx(tx, tenant_id, &cand.matched_ids)
+                    .await?
             } else {
                 Vec::new()
             };
@@ -382,12 +413,11 @@ pub async fn drain_any_in_tx(
             .execute(&mut **tx)
             .await?;
 
-            let conv_id: Uuid = sqlx::query_scalar(
-                "SELECT conversation_id FROM escalations WHERE id = $1",
-            )
-            .bind(escalation_id)
-            .fetch_one(&mut **tx)
-            .await?;
+            let conv_id: Uuid =
+                sqlx::query_scalar("SELECT conversation_id FROM escalations WHERE id = $1")
+                    .bind(escalation_id)
+                    .fetch_one(&mut **tx)
+                    .await?;
 
             conversations::queries::assign_in_tx(
                 tx,
@@ -404,7 +434,7 @@ pub async fn drain_any_in_tx(
                 actor_user_id,
                 tenant_id,
                 escalation_id,
-                if cand.match_count > 0 { "skill_match" } else { "load_fallback" },
+                "queue_auto",
                 &matched_names,
                 cand.load_count,
                 cand.membership_id,
@@ -443,26 +473,21 @@ async fn build_escalation(
                 .cloned()
                 .chain(std::iter::repeat(String::new())),
         )
-        .map(|(id, name)| RequiredSkillRef {
-            id: Some(id),
-            name,
-        })
+        .map(|(id, name)| RequiredSkillRef { id: Some(id), name })
         .collect();
 
-    let routing = routing_reason.map(|rr| {
-        RoutingInfo {
-            reason: match rr {
-                "skill_match" => RoutingReason::SkillMatch,
-                "load_fallback" => RoutingReason::LoadFallback,
-                "manual_claim" => RoutingReason::ManualClaim,
-                "queue_auto" => RoutingReason::QueueAuto,
-                "manual_reassignment" => RoutingReason::ManualReassignment,
-                _ => RoutingReason::LoadFallback,
-            },
-            matched_skills: matched_skill_names.to_vec(),
-            assigned_membership_id: assigned_membership_id.unwrap_or_default(),
-            assigned_at: Utc::now(),
-        }
+    let routing = routing_reason.map(|rr| RoutingInfo {
+        reason: match rr {
+            "skill_match" => RoutingReason::SkillMatch,
+            "load_fallback" => RoutingReason::LoadFallback,
+            "manual_claim" => RoutingReason::ManualClaim,
+            "queue_auto" => RoutingReason::QueueAuto,
+            "manual_reassignment" => RoutingReason::ManualReassignment,
+            _ => RoutingReason::LoadFallback,
+        },
+        matched_skills: matched_skill_names.to_vec(),
+        assigned_membership_id: assigned_membership_id.unwrap_or_default(),
+        assigned_at: Utc::now(),
     });
 
     Ok(Escalation {

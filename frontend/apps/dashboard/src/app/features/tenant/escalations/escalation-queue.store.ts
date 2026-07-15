@@ -69,10 +69,15 @@ export const EscalationQueueStore = signalStore(
       ),
     ),
     claim(id: string): void {
+      const previous = store.items();
+      patchState(store, {
+        items: previous.filter((item) => item.escalation.id !== id),
+      });
       api.claim(id).subscribe({
-        next: () => {
+        error: () => {
           patchState(store, {
-            items: store.items().filter((item) => item.escalation.id !== id),
+            items: previous,
+            error: 'This escalation was already claimed by another agent.',
           });
         },
       });

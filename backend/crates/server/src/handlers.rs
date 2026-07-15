@@ -103,22 +103,16 @@ pub async fn list_members_with_skills(
     let cursor = params.cursor.as_deref();
     let limit = params.limit;
 
-    let (rows, has_more) = match members::list_members_rows_in_tx(
-        &mut tx,
-        ctx.tenant_id,
-        q,
-        status,
-        cursor,
-        limit,
-    )
-    .await
-    {
-        Ok(result) => result,
-        Err(e) => {
-            tracing::error!(error = %e, "failed to fetch team members");
-            return ApiError::internal_error("Failed to fetch team members").into_response();
-        }
-    };
+    let (rows, has_more) =
+        match members::list_members_rows_in_tx(&mut tx, ctx.tenant_id, q, status, cursor, limit)
+            .await
+        {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to fetch team members");
+                return ApiError::internal_error("Failed to fetch team members").into_response();
+            }
+        };
 
     let membership_ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
 
@@ -207,40 +201,42 @@ pub async fn get_conversation_with_escalation(
         }
     };
 
-    let detail =
-        match conversations::queries::detail_query_in_tx(&mut tx, ctx.tenant_id, conversation_id)
-            .await
-        {
-            Ok(Some(detail)) => detail,
-            Ok(None) => {
-                return ApiError::not_found("Conversation not found")
-                    .with_request_id(&ctx.request_id)
-                    .into_response();
-            }
-            Err(e) => {
-                tracing::error!(error = %e, conversation_id = %conversation_id, "detail query failed");
-                return ApiError::internal_error("Failed to load conversation")
-                    .with_request_id(&ctx.request_id)
-                    .into_response();
-            }
-        };
+    let detail = match conversations::queries::detail_query_in_tx(
+        &mut tx,
+        ctx.tenant_id,
+        conversation_id,
+    )
+    .await
+    {
+        Ok(Some(detail)) => detail,
+        Ok(None) => {
+            return ApiError::not_found("Conversation not found")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!(error = %e, conversation_id = %conversation_id, "detail query failed");
+            return ApiError::internal_error("Failed to load conversation")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
 
-    let escalation =
-        match escalations::queries::latest_escalation_for_conversation_in_tx(
-            &mut tx,
-            ctx.tenant_id,
-            conversation_id,
-        )
-        .await
-        {
-            Ok(esc) => esc,
-            Err(e) => {
-                tracing::error!(error = %e, conversation_id = %conversation_id, "escalation query failed");
-                return ApiError::internal_error("Failed to load escalation data")
-                    .with_request_id(&ctx.request_id)
-                    .into_response();
-            }
-        };
+    let escalation = match escalations::queries::latest_escalation_for_conversation_in_tx(
+        &mut tx,
+        ctx.tenant_id,
+        conversation_id,
+    )
+    .await
+    {
+        Ok(esc) => esc,
+        Err(e) => {
+            tracing::error!(error = %e, conversation_id = %conversation_id, "escalation query failed");
+            return ApiError::internal_error("Failed to load escalation data")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
 
     if let Err(e) = tx.commit().await {
         tracing::error!(error = %e, "failed to commit transaction");
@@ -249,10 +245,7 @@ pub async fn get_conversation_with_escalation(
             .into_response();
     }
 
-    let detail_with_esc = ConversationDetailWithEscalation {
-        detail,
-        escalation,
-    };
+    let detail_with_esc = ConversationDetailWithEscalation { detail, escalation };
 
     Json(serde_json::json!({ "data": detail_with_esc })).into_response()
 }

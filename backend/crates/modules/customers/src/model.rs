@@ -1025,9 +1025,17 @@ mod tests {
     #[test]
     fn tristate_serde_distinguishes_null_and_absent() {
         let p: UpdateCustomerPayload = serde_json::from_str(r#"{"email": null}"#).unwrap();
-        assert_eq!(p.email, TriState::Clear, "null email must deserialize as Clear");
+        assert_eq!(
+            p.email,
+            TriState::Clear,
+            "null email must deserialize as Clear"
+        );
         let p: UpdateCustomerPayload = serde_json::from_str(r#"{}"#).unwrap();
-        assert_eq!(p.email, TriState::Absent, "absent email must deserialize as Absent");
+        assert_eq!(
+            p.email,
+            TriState::Absent,
+            "absent email must deserialize as Absent"
+        );
         let p: UpdateCustomerPayload =
             serde_json::from_str(r#"{"email": "test@example.com"}"#).unwrap();
         assert_eq!(
@@ -1080,5 +1088,4 @@ mod tests {
             assert!(!is_valid_phone(bad), "expected {bad:?} to be invalid");
         }
     }
-
 }

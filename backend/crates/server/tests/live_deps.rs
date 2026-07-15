@@ -37,28 +37,36 @@ async fn live_readiness_with_real_deps() {
         Arc::new(RedisHealthCheck::new((*cache).clone())),
     ];
 
+    let cfg = config::AppConfig {
+        database_url: db_url,
+        redis_url,
+        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
+        auth_session_ttl_seconds: 28_800,
+        port: 0,
+        bind_address: "0.0.0.0".into(),
+        environment: config::Environment::Test,
+        cors_allowed_origins: vec![],
+        log_format: config::LogFormat::Pretty,
+        smtp_url: None,
+        smtp_from: None,
+        public_dashboard_url: "http://localhost:4200".into(),
+        db_max_connections: 2,
+        db_acquire_timeout_ms: 5000,
+        ready_probe_timeout_ms: 5000,
+        shutdown_grace_seconds: 1,
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
+        ai_openai_base_url: None,
+        ai_anthropic_base_url: None,
+        ai_gemini_base_url: None,
+    };
+    let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     let state = AppState {
-        config: Arc::new(config::AppConfig {
-            database_url: db_url,
-            redis_url,
-            auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-            auth_session_ttl_seconds: 28_800,
-            port: 0,
-            bind_address: "0.0.0.0".into(),
-            environment: config::Environment::Test,
-            cors_allowed_origins: vec![],
-            log_format: config::LogFormat::Pretty,
-            smtp_url: None,
-            smtp_from: None,
-            public_dashboard_url: "http://localhost:4200".into(),
-            db_max_connections: 2,
-            db_acquire_timeout_ms: 5000,
-            ready_probe_timeout_ms: 5000,
-            shutdown_grace_seconds: 1,
-        }),
-        db: pool,
+        config: Arc::new(cfg),
+        db: pool.clone(),
         cache,
         health_checks,
+        escalations: escalations::presence::Runtime::new(pool, Duration::from_secs(45)),
+        ai,
     };
 
     let app = router::app(state);

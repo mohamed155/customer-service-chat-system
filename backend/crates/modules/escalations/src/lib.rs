@@ -55,9 +55,9 @@
 //!   The `POST …/escalate` endpoint is the interim test surface (research R6).
 
 pub mod audit;
+pub mod events;
 pub mod model;
 pub mod presence;
 pub mod queries;
 pub mod routes;
 pub mod routing;
-pub mod events;

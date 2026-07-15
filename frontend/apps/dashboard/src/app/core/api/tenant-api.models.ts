@@ -502,6 +502,7 @@ export interface ConversationListQuery {
   readonly status?: ConversationStatus | 'all';
   readonly assignee?: string;
   readonly channel?: string;
+  readonly escalated?: string;
   readonly cursor?: string;
   readonly limit?: number;
 }

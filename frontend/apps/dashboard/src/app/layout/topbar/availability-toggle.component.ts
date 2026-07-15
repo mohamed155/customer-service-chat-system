@@ -3,6 +3,7 @@ import { TuiIcon } from '@taiga-ui/core';
 import { filter } from 'rxjs';
 import { ApiService } from '../../core/api/api.service';
 import { Availability, AvailabilityState } from '../../core/api/tenant-api.models';
+import { NotificationsService } from '../../core/realtime/notifications.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
 
 @Component({
@@ -54,6 +55,7 @@ import { RealtimeService } from '../../core/realtime/realtime.service';
 export class AvailabilityToggleComponent {
   private readonly api = inject(ApiService);
   private readonly realtime = inject(RealtimeService, { optional: true });
+  private readonly notifications = inject(NotificationsService);
   readonly state = signal<AvailabilityState>('away');
 
   constructor() {
@@ -68,15 +70,20 @@ export class AvailabilityToggleComponent {
   }
 
   private loadState(): void {
-    this.api.get<Availability>('tenant/availability/me').subscribe((res) => {
-      this.state.set(res.data.state);
+    this.api.get<Availability>('tenant/availability/me').subscribe({
+      next: (res) => this.state.set(res.data.state),
+      error: () => {},
     });
   }
 
   toggle(): void {
     const newState: AvailabilityState = this.state() === 'available' ? 'away' : 'available';
-    this.api.put<Availability>('tenant/availability/me', { state: newState }).subscribe((res) => {
-      this.state.set(res.data.state);
+    if (newState === 'available') {
+      this.notifications.requestPermission();
+    }
+    this.api.put<Availability>('tenant/availability/me', { state: newState }).subscribe({
+      next: (res) => this.state.set(res.data.state),
+      error: () => {},
     });
   }
 }

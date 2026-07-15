@@ -94,9 +94,7 @@ impl Runtime {
                         .unwrap_or_default()
                 })
             }
-            Err(_) => {
-                Vec::new()
-            }
+            Err(_) => Vec::new(),
         }
     }
 

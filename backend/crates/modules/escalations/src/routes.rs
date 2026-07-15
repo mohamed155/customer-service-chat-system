@@ -18,10 +18,10 @@ use tenancy::TenantContext;
 
 use crate::audit;
 use crate::model::{
-    AvailabilityState, CreateSkillPayload, EscalatePayload, Escalation, EscalationAssignedEvent,
-    EscalationQueuedEvent, EscalationRemovedEvent, RenameSkillPayload, SetAvailabilityPayload,
-    SetMemberSkillsPayload, QueueEntry, QueueEntryConversationRef, Availability, CustomerRef,
-    RequiredSkillRef, EscalationStatus,
+    Availability, AvailabilityState, CreateSkillPayload, CustomerRef, EscalatePayload, Escalation,
+    EscalationAssignedEvent, EscalationQueuedEvent, EscalationRemovedEvent, EscalationStatus,
+    QueueEntry, QueueEntryConversationRef, RenameSkillPayload, RequiredSkillRef,
+    SetAvailabilityPayload, SetMemberSkillsPayload,
 };
 use crate::presence;
 use crate::queries;
@@ -88,12 +88,9 @@ pub async fn escalate(
     }
 
     if !required_skill_ids.is_empty() {
-        let valid = queries::skill_ids_exist_in_tenant_in_tx(
-            &mut tx,
-            ctx.tenant_id,
-            &required_skill_ids,
-        )
-        .await;
+        let valid =
+            queries::skill_ids_exist_in_tenant_in_tx(&mut tx, ctx.tenant_id, &required_skill_ids)
+                .await;
         match valid {
             Ok(true) => {}
             Ok(false) => {
@@ -294,10 +291,7 @@ pub async fn list_queue(
                         .cloned()
                         .chain(std::iter::repeat(String::new())),
                 )
-                .map(|(id, name)| RequiredSkillRef {
-                    id: Some(id),
-                    name,
-                })
+                .map(|(id, name)| RequiredSkillRef { id: Some(id), name })
                 .collect();
 
             QueueEntry {
@@ -324,9 +318,9 @@ pub async fn list_queue(
         })
         .collect();
 
-    let next_cursor = entries.last().map(|e| {
-        queries::encode_queue_cursor(&e.escalation.escalated_at, &e.escalation.id)
-    });
+    let next_cursor = entries
+        .last()
+        .map(|e| queries::encode_queue_cursor(&e.escalation.escalated_at, &e.escalation.id));
 
     Json(json!({
         "data": entries,
@@ -417,7 +411,9 @@ pub async fn claim(
                 .with_request_id(&ctx.request_id)
                 .into_response()
         }
-        Err(routing::ClaimError::AlreadyClaimed { assigned_membership_id }) => {
+        Err(routing::ClaimError::AlreadyClaimed {
+            assigned_membership_id,
+        }) => {
             tx.rollback().await.ok();
             ApiError::conflict("Escalation already claimed")
                 .with_details(vec![json!({
@@ -553,22 +549,18 @@ pub async fn set_my_availability(
     let prev_state = prev.as_ref().map(|r| r.state.as_str());
     let prev_state_str = prev_state.unwrap_or("away");
 
-    let availability = match queries::upsert_availability_in_tx(
-        &mut tx,
-        ctx.tenant_id,
-        membership_id,
-        new_state,
-    )
-    .await
-    {
-        Ok(a) => a,
-        Err(e) => {
-            tracing::error!(%e, "set_availability: upsert failed");
-            return ApiError::internal_error("Failed to set availability")
-                .with_request_id(&ctx.request_id)
-                .into_response();
-        }
-    };
+    let availability =
+        match queries::upsert_availability_in_tx(&mut tx, ctx.tenant_id, membership_id, new_state)
+            .await
+        {
+            Ok(a) => a,
+            Err(e) => {
+                tracing::error!(%e, "set_availability: upsert failed");
+                return ApiError::internal_error("Failed to set availability")
+                    .with_request_id(&ctx.request_id)
+                    .into_response();
+            }
+        };
 
     audit::record_availability_changed(
         &mut tx,
@@ -603,7 +595,7 @@ pub async fn set_my_availability(
             Ok(tx) => tx,
             Err(_) => return Json(json!(availability)).into_response(),
         };
-        if let Err(e) = routing::drain_one_for_membership_in_tx(
+        let drained_esc_id = match routing::drain_one_for_membership_in_tx(
             &mut drain_tx,
             ctx.tenant_id,
             membership_id,
@@ -612,11 +604,39 @@ pub async fn set_my_availability(
         )
         .await
         {
-            tracing::error!(%e, "set_availability: drain failed");
-            drain_tx.rollback().await.ok();
-            return Json(json!(availability)).into_response();
-        }
+            Ok(eid) => eid,
+            Err(e) => {
+                tracing::error!(%e, "set_availability: drain failed");
+                drain_tx.rollback().await.ok();
+                return Json(json!(availability)).into_response();
+            }
+        };
         drain_tx.commit().await.ok();
+
+        if let Some(escalation_id) = drained_esc_id {
+            let assigned_event = crate::model::EscalationAssignedEvent {
+                v: 1,
+                escalation_id,
+                conversation_id: Uuid::nil(),
+                reason: String::new(),
+                routing_reason: crate::model::RoutingReason::QueueAuto,
+                matched_skills: Vec::new(),
+                assigned_at: Utc::now(),
+            };
+            runtime.broadcast(
+                ctx.tenant_id,
+                presence::Event::EscalationAssigned(assigned_event),
+            );
+            let removed_event = crate::model::EscalationRemovedEvent {
+                v: 1,
+                escalation_id,
+                cause: "assigned".into(),
+            };
+            runtime.broadcast(
+                ctx.tenant_id,
+                presence::Event::EscalationRemoved(removed_event),
+            );
+        }
     }
 
     Json(json!(availability)).into_response()
@@ -626,10 +646,7 @@ pub async fn set_my_availability(
 // Skills CRUD
 // ---------------------------------------------------------------------------
 
-pub async fn list_skills(
-    State(pool): State<PgPool>,
-    ctx: TenantContext,
-) -> Response {
+pub async fn list_skills(State(pool): State<PgPool>, ctx: TenantContext) -> Response {
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => {
@@ -733,14 +750,13 @@ pub async fn rename_skill(
         }
     };
 
-    let old_name: Option<String> = sqlx::query_scalar(
-        "SELECT name FROM skills WHERE tenant_id = $1 AND id = $2",
-    )
-    .bind(ctx.tenant_id)
-    .bind(skill_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .unwrap_or(None);
+    let old_name: Option<String> =
+        sqlx::query_scalar("SELECT name FROM skills WHERE tenant_id = $1 AND id = $2")
+            .bind(ctx.tenant_id)
+            .bind(skill_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .unwrap_or(None);
 
     let old_name = match old_name {
         Some(n) => n,
@@ -808,14 +824,13 @@ pub async fn delete_skill(
         }
     };
 
-    let name: Option<String> = sqlx::query_scalar(
-        "SELECT name FROM skills WHERE tenant_id = $1 AND id = $2",
-    )
-    .bind(ctx.tenant_id)
-    .bind(skill_id)
-    .fetch_optional(&mut *tx)
-    .await
-    .unwrap_or(None);
+    let name: Option<String> =
+        sqlx::query_scalar("SELECT name FROM skills WHERE tenant_id = $1 AND id = $2")
+            .bind(ctx.tenant_id)
+            .bind(skill_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .unwrap_or(None);
 
     let name = match name {
         Some(n) => n,

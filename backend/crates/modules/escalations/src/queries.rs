@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::model::{Availability, AvailabilityState, Escalation, EscalationStatus, RequiredSkillRef, RoutingInfo, RoutingReason};
+use crate::model::{
+    Availability, AvailabilityState, Escalation, EscalationStatus, RequiredSkillRef, RoutingInfo,
+    RoutingReason,
+};
 
 // ---------------------------------------------------------------------------
 // Cursor helpers
@@ -144,10 +147,12 @@ pub async fn take_tenant_routing_lock_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
 ) -> sqlx::Result<()> {
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtext('escalations.routing'), hashtext($1::text))")
-        .bind(tenant_id.to_string())
-        .execute(&mut **tx)
-        .await?;
+    sqlx::query(
+        "SELECT pg_advisory_xact_lock(hashtext('escalations.routing'), hashtext($1::text))",
+    )
+    .bind(tenant_id.to_string())
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 
@@ -228,13 +233,12 @@ pub async fn skill_ids_exist_in_tenant_in_tx(
     if ids.is_empty() {
         return Ok(true);
     }
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM skills WHERE tenant_id = $1 AND id = ANY($2)",
-    )
-    .bind(tenant_id)
-    .bind(ids)
-    .fetch_one(&mut **tx)
-    .await?;
+    let count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM skills WHERE tenant_id = $1 AND id = ANY($2)")
+            .bind(tenant_id)
+            .bind(ids)
+            .fetch_one(&mut **tx)
+            .await?;
     Ok(count as usize == ids.len())
 }
 
@@ -268,13 +272,12 @@ pub async fn create_skill_in_tx(
     tenant_id: Uuid,
     name: &str,
 ) -> sqlx::Result<crate::model::Skill> {
-    let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO skills (tenant_id, name) VALUES ($1, $2) RETURNING id",
-    )
-    .bind(tenant_id)
-    .bind(name)
-    .fetch_one(&mut **tx)
-    .await?;
+    let id: Uuid =
+        sqlx::query_scalar("INSERT INTO skills (tenant_id, name) VALUES ($1, $2) RETURNING id")
+            .bind(tenant_id)
+            .bind(name)
+            .fetch_one(&mut **tx)
+            .await?;
     Ok(crate::model::Skill {
         id,
         name: name.to_owned(),
@@ -501,10 +504,7 @@ pub fn row_to_escalation(row: EscalationRow) -> Escalation {
                 .cloned()
                 .chain(std::iter::repeat(String::new())),
         )
-        .map(|(id, name)| RequiredSkillRef {
-            id: Some(id),
-            name,
-        })
+        .map(|(id, name)| RequiredSkillRef { id: Some(id), name })
         .collect();
 
     let routing = match row.routing_reason {
@@ -515,17 +515,19 @@ pub fn row_to_escalation(row: EscalationRow) -> Escalation {
                 "manual_claim" => RoutingReason::ManualClaim,
                 "queue_auto" => RoutingReason::QueueAuto,
                 "manual_reassignment" => RoutingReason::ManualReassignment,
-                _ => return Escalation {
-                    id: row.id,
-                    conversation_id: row.conversation_id,
-                    reason: row.reason,
-                    required_skills,
-                    status: serde_json::from_value(serde_json::Value::String(row.status))
-                        .unwrap_or(EscalationStatus::Queued),
-                    routing: None,
-                    escalated_at: row.escalated_at,
-                    closed_at: row.closed_at,
-                },
+                _ => {
+                    return Escalation {
+                        id: row.id,
+                        conversation_id: row.conversation_id,
+                        reason: row.reason,
+                        required_skills,
+                        status: serde_json::from_value(serde_json::Value::String(row.status))
+                            .unwrap_or(EscalationStatus::Queued),
+                        routing: None,
+                        escalated_at: row.escalated_at,
+                        closed_at: row.closed_at,
+                    }
+                }
             };
             Some(RoutingInfo {
                 reason,

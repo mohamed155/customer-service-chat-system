@@ -9,8 +9,8 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
 use futures::Stream;
-use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
+use tokio_stream::wrappers::BroadcastStream;
 use tracing::{error, info};
 use uuid::Uuid;
 
@@ -19,6 +19,7 @@ use tenancy::TenantContext;
 
 use crate::audit;
 use crate::presence;
+use crate::routing;
 
 pub struct GuardedStream {
     pub guard: presence::PresenceGuard,
@@ -117,6 +118,47 @@ pub async fn stream_events(
 
     let (guard, rx) = runtime.connect(ctx.tenant_id, membership_id);
 
+    // Reconnect drain: if the agent is already available (reconnect within grace window),
+    // drain one queued escalation for them.
+    let pool_for_drain = pool.clone();
+    let tenant_id = ctx.tenant_id;
+    let runtime_for_drain = runtime.clone();
+    tokio::spawn(async move {
+        let avail_state: Option<String> = sqlx::query_scalar(
+            "SELECT state FROM agent_availability \
+             WHERE tenant_id = $1 AND membership_id = $2",
+        )
+        .bind(tenant_id)
+        .bind(membership_id)
+        .fetch_optional(&pool_for_drain)
+        .await
+        .ok()
+        .flatten();
+        if avail_state.as_deref() == Some("available") {
+            let present_ids = runtime_for_drain
+                .present_membership_ids_async(tenant_id)
+                .await;
+            let mut tx = match pool_for_drain.begin().await {
+                Ok(tx) => tx,
+                Err(_) => return,
+            };
+            if let Err(e) = routing::drain_one_for_membership_in_tx(
+                &mut tx,
+                tenant_id,
+                membership_id,
+                &present_ids,
+                Uuid::nil(),
+            )
+            .await
+            {
+                tracing::error!(%e, "reconnect drain failed");
+                tx.rollback().await.ok();
+                return;
+            }
+            tx.commit().await.ok();
+        }
+    });
+
     let stream = GuardedStream {
         guard,
         inner: BroadcastStream::new(rx),
@@ -125,8 +167,8 @@ pub async fn stream_events(
         membership_id,
     };
 
-    let sse = Sse::new(stream)
-        .keep_alive(KeepAlive::new().interval(Duration::from_secs(20)).text(""));
+    let sse =
+        Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(20)).text(""));
 
     sse.into_response()
 }
@@ -135,7 +177,10 @@ pub async fn stream_events(
 // Outbox consumer
 // ---------------------------------------------------------------------------
 
-pub async fn process_escalation_outbox_once(pool: &sqlx::PgPool) -> sqlx::Result<bool> {
+pub async fn process_escalation_outbox_once(
+    pool: &sqlx::PgPool,
+    runtime: &Arc<presence::Runtime>,
+) -> sqlx::Result<bool> {
     let claim_token = Uuid::new_v4();
     let maybe_row: Option<(i64, Uuid, String, serde_json::Value)> = sqlx::query_as(
         "UPDATE outbox_events \
@@ -183,14 +228,26 @@ pub async fn process_escalation_outbox_once(pool: &sqlx::PgPool) -> sqlx::Result
                     .get("newStatus")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
+                let prev_status = payload
+                    .get("prevStatus")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 if new_status == "resolved" || new_status == "closed" {
                     close_active_escalation_in_tx(
                         &mut tx,
                         tenant_id,
                         conversation_id,
                         new_status,
+                        runtime,
                     )
                     .await?;
+
+                    // Freed load: try to drain a queued escalation
+                    if prev_status == "open" || prev_status == "pending" {
+                        let present_ids = runtime.present_membership_ids_async(tenant_id).await;
+                        routing::drain_any_in_tx(&mut tx, tenant_id, &present_ids, Uuid::nil())
+                            .await?;
+                    }
                 }
             }
             "conversation.assignment_changed" => {
@@ -198,13 +255,24 @@ pub async fn process_escalation_outbox_once(pool: &sqlx::PgPool) -> sqlx::Result
                     .get("newMembershipId")
                     .and_then(|v| v.as_str())
                     .and_then(|s| Uuid::parse_str(s).ok());
+                let old_membership = payload
+                    .get("oldMembershipId")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok());
                 relabel_reassignment_in_tx(
                     &mut tx,
                     tenant_id,
                     conversation_id,
                     new_membership,
+                    runtime,
                 )
                 .await?;
+
+                // Freed load: old assignee lost a conversation
+                if old_membership.is_some() && old_membership != new_membership {
+                    let present_ids = runtime.present_membership_ids_async(tenant_id).await;
+                    routing::drain_any_in_tx(&mut tx, tenant_id, &present_ids, Uuid::nil()).await?;
+                }
             }
             _ => {}
         }
@@ -239,6 +307,7 @@ async fn close_active_escalation_in_tx(
     tenant_id: Uuid,
     conversation_id: Uuid,
     cause: &str,
+    runtime: &Arc<presence::Runtime>,
 ) -> sqlx::Result<()> {
     let escalation_id: Option<Uuid> = sqlx::query_scalar(
         "UPDATE escalations SET status = 'closed', closed_at = now() \
@@ -253,6 +322,13 @@ async fn close_active_escalation_in_tx(
     if let Some(eid) = escalation_id {
         conversations::queries::set_escalated_in_tx(tx, tenant_id, conversation_id, None).await?;
         audit::record_escalation_closed(tx, Uuid::nil(), tenant_id, eid, cause).await?;
+        let notification =
+            presence::Event::EscalationRemoved(crate::model::EscalationRemovedEvent {
+                v: 1,
+                escalation_id: eid,
+                cause: "closed".into(),
+            });
+        runtime.broadcast(tenant_id, notification);
     }
     Ok(())
 }
@@ -262,13 +338,57 @@ async fn relabel_reassignment_in_tx(
     tenant_id: Uuid,
     conversation_id: Uuid,
     new_membership_id: Option<Uuid>,
+    runtime: &Arc<presence::Runtime>,
 ) -> sqlx::Result<()> {
+    // Case 1: queued escalation → transition to assigned (CHECK requires all assignment columns)
+    if let Some(mid) = new_membership_id {
+        let queued: Option<(Uuid,)> = sqlx::query_as(
+            "UPDATE escalations SET status = 'assigned', routing_reason = 'manual_reassignment', \
+             assigned_membership_id = $1, assigned_at = now() \
+             WHERE tenant_id = $2 AND conversation_id = $3 \
+             AND status = 'queued' \
+             RETURNING id",
+        )
+        .bind(mid)
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        if let Some((eid,)) = queued {
+            audit::record_escalation_assigned(
+                tx,
+                Uuid::nil(),
+                tenant_id,
+                eid,
+                "manual_reassignment",
+                &[],
+                0,
+                mid,
+            )
+            .await?;
+            let notification =
+                presence::Event::EscalationAssigned(crate::model::EscalationAssignedEvent {
+                    v: 1,
+                    escalation_id: eid,
+                    conversation_id,
+                    reason: String::new(),
+                    routing_reason: crate::model::RoutingReason::ManualReassignment,
+                    matched_skills: Vec::new(),
+                    assigned_at: chrono::Utc::now(),
+                });
+            runtime.broadcast(tenant_id, notification);
+            return Ok(());
+        }
+    }
+
+    // Case 2: already-assigned escalation → relabel
     let escalation_id: Option<(Uuid,)> = sqlx::query_as(
         "UPDATE escalations SET routing_reason = 'manual_reassignment', \
          assigned_membership_id = COALESCE($3, assigned_membership_id), \
          assigned_at = COALESCE(assigned_at, now()) \
          WHERE tenant_id = $1 AND conversation_id = $2 \
-         AND status IN ('queued', 'assigned') \
+         AND status = 'assigned' \
          AND routing_reason IS DISTINCT FROM 'manual_reassignment' \
          RETURNING id",
     )
@@ -291,14 +411,28 @@ async fn relabel_reassignment_in_tx(
                 mid,
             )
             .await?;
+            let notification =
+                presence::Event::EscalationAssigned(crate::model::EscalationAssignedEvent {
+                    v: 1,
+                    escalation_id: eid,
+                    conversation_id,
+                    reason: String::new(),
+                    routing_reason: crate::model::RoutingReason::ManualReassignment,
+                    matched_skills: Vec::new(),
+                    assigned_at: chrono::Utc::now(),
+                });
+            runtime.broadcast(tenant_id, notification);
         }
     }
     Ok(())
 }
 
-pub async fn run_escalation_outbox_worker(pool: sqlx::PgPool) -> ! {
+pub async fn run_escalation_outbox_worker(
+    pool: sqlx::PgPool,
+    runtime: Arc<presence::Runtime>,
+) -> ! {
     loop {
-        match process_escalation_outbox_once(&pool).await {
+        match process_escalation_outbox_once(&pool, &runtime).await {
             Ok(true) => {}
             Ok(false) => {
                 tokio::time::sleep(Duration::from_secs(1)).await;

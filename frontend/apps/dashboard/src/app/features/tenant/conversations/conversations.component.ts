@@ -70,6 +70,14 @@ import { NewConversationDialogComponent } from './new-conversation-dialog.compon
               <option [value]="member.id">{{ member.displayName }}</option>
             }
           </select>
+          <button
+            type="button"
+            class="filter-chip"
+            [class.active]="store.filters().escalated === 'true'"
+            (click)="onEscalatedToggle()"
+          >
+            Escalated
+          </button>
         </div>
 
         <section class="inbox-shell">
@@ -134,6 +142,22 @@ import { NewConversationDialogComponent } from './new-conversation-dialog.compon
         color: var(--app-text);
         font-size: var(--app-font-sm);
       }
+      .filter-chip {
+        height: 34px;
+        padding: 0 var(--app-space-3);
+        border: 1px solid var(--app-border);
+        border-radius: var(--app-radius-md);
+        background: var(--app-panel);
+        color: var(--app-text-2);
+        font-size: var(--app-font-sm);
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .filter-chip.active {
+        background: var(--app-accent);
+        color: var(--app-accent-ink);
+        border-color: var(--app-accent);
+      }
       .new-btn {
         height: 34px;
         padding: 0 var(--app-space-4);
@@ -192,5 +216,10 @@ export class ConversationsComponent {
   protected onAssigneeChange(event: Event): void {
     const value = (event.target as HTMLSelectElement).value;
     this.store.setFilter({ assignee: value || undefined });
+  }
+
+  protected onEscalatedToggle(): void {
+    const current = this.store.filters().escalated;
+    this.store.setFilter({ escalated: current === 'true' ? undefined : 'true' });
   }
 }

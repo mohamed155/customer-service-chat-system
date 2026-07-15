@@ -58,13 +58,13 @@ async fn main() {
         Arc::new(RedisHealthCheck::new((*cache).clone())),
     ];
 
-    let escalations_runtime = escalations::presence::Runtime::new(
-        db.clone(),
-        Duration::from_secs(45),
-    );
+    let escalations_runtime =
+        escalations::presence::Runtime::new(db.clone(), Duration::from_secs(45));
     if let Err(e) = escalations_runtime.startup_sweep().await {
         tracing::warn!(error = %e, "escalations startup sweep encountered errors (continuing)");
     }
+
+    let ai_service = ai::AiService::from_config(db.clone(), &config).expect("AI service init");
 
     let state = AppState {
         config: Arc::new(config),
@@ -72,6 +72,7 @@ async fn main() {
         cache,
         health_checks,
         escalations: escalations_runtime,
+        ai: ai_service,
     };
 
     let email_sender = router::configured_email_sender(&state.config);
@@ -82,6 +83,7 @@ async fn main() {
     ));
     let escalation_worker = tokio::spawn(escalations::events::run_escalation_outbox_worker(
         state.db.clone(),
+        state.escalations.clone(),
     ));
 
     let address = format!("{}:{}", state.config.bind_address, state.config.port);

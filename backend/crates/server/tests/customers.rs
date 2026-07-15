@@ -31,15 +31,21 @@ fn test_config() -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
+        ai_openai_base_url: None,
+        ai_anthropic_base_url: None,
+        ai_gemini_base_url: None,
     }
 }
 
 fn app_state(pool: sqlx::PgPool) -> AppState {
     AppState {
         config: Arc::new(test_config()),
-        db: pool,
+        db: pool.clone(),
         cache: Arc::new(cache::Cache::new("redis://127.0.0.1:6379").unwrap()),
         health_checks: vec![],
+        escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
+        ai: ai::AiService::from_config(pool, &test_config()).unwrap(),
     }
 }
 
@@ -500,7 +506,10 @@ async fn name_search_stays_within_the_sc_002_budget_at_ten_thousand_customers() 
 
     // Update table statistics so the query planner accurately considers
     // trigram indexes for ILIKE searches at the 10,000-customer volume.
-    sqlx::query("ANALYZE customers").execute(&pool).await.unwrap();
+    sqlx::query("ANALYZE customers")
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query("ANALYZE customer_channel_identifiers")
         .execute(&pool)
         .await
@@ -1253,13 +1262,11 @@ fn json_request(
 }
 
 async fn count_customers(pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
-    sqlx::query_scalar(
-        "SELECT COUNT(*) FROM customers WHERE tenant_id = $1 AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE tenant_id = $1 AND deleted_at IS NULL")
+        .bind(tenant_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn count_identifiers(pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {

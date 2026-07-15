@@ -294,17 +294,14 @@ pub async fn list_members(
     let status = params.status.as_deref();
     let cursor = params.cursor.as_deref();
 
-    let (rows, has_more) = match list_members_rows_in_tx(
-        &mut tx, ctx.tenant_id, q, status, cursor, limit,
-    )
-    .await
-    {
-        Ok(result) => result,
-        Err(e) => {
-            tracing::error!(error = %e, "failed to fetch team members");
-            return ApiError::internal_error("Failed to fetch team members").into_response();
-        }
-    };
+    let (rows, has_more) =
+        match list_members_rows_in_tx(&mut tx, ctx.tenant_id, q, status, cursor, limit).await {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to fetch team members");
+                return ApiError::internal_error("Failed to fetch team members").into_response();
+            }
+        };
 
     if let Err(e) = tx.commit().await {
         tracing::error!(error = %e, "failed to commit transaction");

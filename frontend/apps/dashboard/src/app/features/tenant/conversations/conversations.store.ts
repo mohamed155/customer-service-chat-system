@@ -19,6 +19,7 @@ export interface InboxFilters {
   readonly status?: ConversationListQuery['status'];
   readonly assignee?: string;
   readonly channel?: string;
+  readonly escalated?: string;
 }
 
 interface ConversationsState {

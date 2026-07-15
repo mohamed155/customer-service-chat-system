@@ -203,13 +203,12 @@ pub mod sql {
         if ids.is_empty() {
             return Ok(true);
         }
-        let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM skills WHERE tenant_id = $1 AND id = ANY($2)",
-        )
-        .bind(tenant_id)
-        .bind(ids)
-        .fetch_one(&mut **tx)
-        .await?;
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM skills WHERE tenant_id = $1 AND id = ANY($2)")
+                .bind(tenant_id)
+                .bind(ids)
+                .fetch_one(&mut **tx)
+                .await?;
         Ok(count as usize == ids.len())
     }
 

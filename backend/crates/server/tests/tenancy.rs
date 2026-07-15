@@ -45,6 +45,10 @@ pub fn test_config() -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
+        ai_openai_base_url: None,
+        ai_anthropic_base_url: None,
+        ai_gemini_base_url: None,
     }
 }
 
@@ -52,9 +56,11 @@ pub fn test_config() -> config::AppConfig {
 pub fn test_app_state(pool: sqlx::PgPool) -> AppState {
     AppState {
         config: Arc::new(test_config()),
-        db: pool,
+        db: pool.clone(),
         cache: Arc::new(cache::Cache::new("redis://127.0.0.1:6379").unwrap()),
         health_checks: vec![],
+        escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
+        ai: ai::AiService::from_config(pool, &test_config()).unwrap(),
     }
 }
 

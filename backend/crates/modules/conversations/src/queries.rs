@@ -111,13 +111,15 @@ pub async fn participants_in_tx(
 
     let agents: Vec<Participant> = agent_participants
         .into_iter()
-        .map(|(user_id, membership_id, display_name, active)| Participant {
-            participant_type: "agent".into(),
-            id: Some(user_id),
-            membership_id: Some(membership_id),
-            display_name,
-            active: Some(active),
-        })
+        .map(
+            |(user_id, membership_id, display_name, active)| Participant {
+                participant_type: "agent".into(),
+                id: Some(user_id),
+                membership_id: Some(membership_id),
+                display_name,
+                active: Some(active),
+            },
+        )
         .collect();
 
     let mut all = Vec::with_capacity(1 + agents.len());
@@ -145,9 +147,7 @@ pub fn decode_cursor(cursor: &str) -> Option<(DateTime<Utc>, Uuid)> {
     let bytes = hex::decode(cursor).ok()?;
     let decoded = String::from_utf8(bytes).ok()?;
     let (ts, id) = decoded.split_once('|')?;
-    let ts = DateTime::parse_from_rfc3339(ts)
-        .ok()?
-        .with_timezone(&Utc);
+    let ts = DateTime::parse_from_rfc3339(ts).ok()?.with_timezone(&Utc);
     let id = Uuid::parse_str(id).ok()?;
     Some((ts, id))
 }
@@ -169,9 +169,7 @@ pub fn decode_timeline_cursor(cursor: &str) -> Option<(DateTime<Utc>, i64)> {
     let bytes = hex::decode(cursor).ok()?;
     let decoded = String::from_utf8(bytes).ok()?;
     let (ts, seq) = decoded.split_once('|')?;
-    let ts = DateTime::parse_from_rfc3339(ts)
-        .ok()?
-        .with_timezone(&Utc);
+    let ts = DateTime::parse_from_rfc3339(ts).ok()?.with_timezone(&Utc);
     let seq = seq.parse().ok()?;
     Some((ts, seq))
 }
@@ -995,10 +993,7 @@ pub async fn create_conversation_in_tx(
     let customer_ok = customers::customer_exists_in_tx(tx, tenant_id, customer_id).await?;
     if !customer_ok {
         return Err(sqlx::Error::Protocol(
-            format!(
-                "Customer {customer_id} not found in tenant {tenant_id}"
-            )
-            .into(),
+            format!("Customer {customer_id} not found in tenant {tenant_id}").into(),
         ));
     }
 

@@ -1,8 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
 import { PermissionsService } from '../../../core/authz/permissions.service';
-import { PAGE_PERMISSIONS } from '../../../core/authz/permissions';
-import { APP_PATHS } from '../../../core/router/app-paths';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { EscalationQueueStore } from './escalation-queue.store';
 
@@ -10,6 +8,10 @@ import { EscalationQueueStore } from './escalation-queue.store';
   selector: 'app-escalation-queue',
   imports: [DataTableComponent, TuiIcon],
   template: `
+    @if (store.error(); as err) {
+      <div class="error-banner">{{ err }}</div>
+    }
+
     @if (store.items().length === 0 && !store.loading()) {
       <div class="empty">
         <tui-icon icon="@tui.inbox" />
@@ -42,7 +44,7 @@ import { EscalationQueueStore } from './escalation-queue.store';
                 <td class="muted">{{ item.conversation.channel }}</td>
                 <td class="muted">{{ formatWaiting(item.waitingSeconds) }}</td>
                 <td>
-                  @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.escalations])) {
+                  @if (permissionsService.has('conversations.manage')) {
                     <button
                       type="button"
                       class="claim-btn"
@@ -105,6 +107,16 @@ import { EscalationQueueStore } from './escalation-queue.store';
         font-size: 48px;
         opacity: 0.4;
       }
+      .error-banner {
+        padding: 8px 16px;
+        margin-bottom: 12px;
+        border-radius: var(--app-radius-md);
+        background: var(--app-danger-bg, #fee2e2);
+        border: 1px solid var(--app-danger, #dc2626);
+        color: var(--app-danger, #dc2626);
+        font-size: var(--app-font-sm);
+        font-weight: 600;
+      }
     `,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -112,8 +124,6 @@ import { EscalationQueueStore } from './escalation-queue.store';
 export class EscalationQueueComponent {
   readonly store = inject(EscalationQueueStore);
   protected readonly permissionsService = inject(PermissionsService);
-  protected readonly PAGE_PERMISSIONS = PAGE_PERMISSIONS;
-  protected readonly APP_PATHS = APP_PATHS;
 
   protected formatWaiting(seconds: number): string {
     if (seconds < 60) return '<1m';

@@ -8,7 +8,7 @@ export class NotificationsService {
   readonly inAppSignal = signal<number>(0);
 
   requestPermission(): void {
-    if ('Notification' in window && Notification.permission === 'default') {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       void Notification.requestPermission();
     }
   }
@@ -20,11 +20,15 @@ export class NotificationsService {
       .subscribe((event) => {
         this.inAppSignal.update((n) => n + 1);
 
-        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+        if (
+          typeof Notification !== 'undefined' &&
+          Notification.permission === 'granted' &&
+          document.hidden
+        ) {
           try {
             const data = JSON.parse(event.data) as Record<string, unknown>;
             new Notification('Escalation assigned', {
-              body: (data.reason as string) ?? 'A new escalation has been assigned to you.',
+              body: (data['reason'] as string) ?? 'A new escalation has been assigned to you.',
             });
           } catch {
             new Notification('Escalation assigned');

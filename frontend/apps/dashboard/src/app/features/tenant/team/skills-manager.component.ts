@@ -162,7 +162,7 @@ export class SkillsManagerComponent {
   private readonly permissions = inject(PermissionsService);
   readonly skills = signal<Skill[]>([]);
   readonly editingId = signal<string | null>(null);
-  readonly canManage = () => this.permissions.has('conversations.manage');
+  readonly canManage = () => this.permissions.has('members.manage');
 
   constructor() {
     this.loadSkills();

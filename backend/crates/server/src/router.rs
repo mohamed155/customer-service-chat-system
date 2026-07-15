@@ -248,6 +248,22 @@ fn platform_routes(include_test_routes: bool) -> ProtectedRoutes {
             "/platform/tenants/{id}/switch",
             routing::post(tenancy::routes::switch_tenant),
             Permission::PlatformTenantsSwitch,
+        )
+        .guarded(
+            "/platform/ai/config",
+            routing::get(ai::routes::get_platform_config).put(ai::routes::put_platform_config),
+            Permission::PlatformAdmin,
+        )
+        .guarded(
+            "/platform/ai/credentials/{provider}",
+            routing::put(ai::routes::put_platform_credential)
+                .delete(ai::routes::delete_platform_credential),
+            Permission::PlatformAdmin,
+        )
+        .guarded(
+            "/platform/ai/config/test",
+            routing::post(ai::routes::test_platform_config),
+            Permission::PlatformAdmin,
         );
     if include_test_routes {
         routes
@@ -346,8 +362,7 @@ fn tenant_routes(include_test_routes: bool) -> ProtectedRoutes {
         )
         .guarded(
             "/tenant/skills",
-            routing::get(escalations::routes::list_skills)
-                .post(escalations::routes::create_skill),
+            routing::get(escalations::routes::list_skills).post(escalations::routes::create_skill),
             Permission::MembersView,
         )
         .guarded(
@@ -387,6 +402,39 @@ fn tenant_routes(include_test_routes: bool) -> ProtectedRoutes {
             "/tenant/members/invitations/{id}",
             routing::delete(tenancy::invitations::revoke_invitation),
             Permission::MembersManage,
+        )
+        .guarded_with_methods(
+            "/tenant/ai/config",
+            routing::get(ai::routes::get_tenant_config),
+            Permission::AiAgentView,
+            routing::put(ai::routes::put_tenant_config).delete(ai::routes::delete_tenant_config),
+            Permission::AiAgentManage,
+        )
+        .guarded(
+            "/tenant/ai/credentials/{provider}",
+            routing::put(ai::routes::put_tenant_credential)
+                .delete(ai::routes::delete_tenant_credential),
+            Permission::AiAgentManage,
+        )
+        .guarded(
+            "/tenant/ai/config/test",
+            routing::post(ai::routes::test_tenant_config),
+            Permission::AiAgentManage,
+        )
+        .guarded(
+            "/tenant/ai/usage",
+            routing::get(ai::routes::list_tenant_usage),
+            Permission::AiAgentView,
+        )
+        .guarded(
+            "/tenant/ai/usage/summary",
+            routing::get(ai::routes::tenant_usage_summary),
+            Permission::AiAgentView,
+        )
+        .guarded(
+            "/tenant/ai/usage/{id}",
+            routing::get(ai::routes::get_tenant_usage_detail),
+            Permission::AiAgentManage,
         );
     if include_test_routes {
         routes
@@ -470,6 +518,16 @@ fn tenant_routes(include_test_routes: bool) -> ProtectedRoutes {
                 routing::get(|| async { StatusCode::OK }),
                 Permission::BillingManage,
             )
+            .guarded(
+                "/test/tenant/ai/manage",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::AiAgentManage,
+            )
+            .guarded(
+                "/test/tenant/ai/view",
+                routing::get(|| async { StatusCode::OK }),
+                Permission::AiAgentView,
+            )
     } else {
         routes
     }
@@ -523,6 +581,7 @@ fn api_routes(
         .layer(Extension(email_sender))
         .layer(Extension(state.config.clone()))
         .layer(Extension(state.escalations.clone()))
+        .layer(Extension(state.ai.clone()))
         .layer(from_fn_with_state(
             state.config.clone(),
             csrf_origin_middleware,
