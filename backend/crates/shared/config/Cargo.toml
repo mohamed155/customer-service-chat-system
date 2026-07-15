@@ -8,4 +8,5 @@ serial_test.workspace = true
 
 [dependencies]
 url = "2"
+base64.workspace = true
 

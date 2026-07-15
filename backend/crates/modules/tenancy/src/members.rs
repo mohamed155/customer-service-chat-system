@@ -28,7 +28,7 @@ use axum::{
 use identity::Principal;
 use kernel::{ApiError, ErrorDetail, Page};
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
+use sqlx::{Postgres, Transaction};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -123,6 +123,103 @@ pub struct TeamMemberResponse {
     pub joined_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, sqlx::FromRow)]
+pub struct MemberRow {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub display_name: String,
+    pub email: String,
+    pub role: String,
+    pub status: String,
+    pub joined_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Execute the list-members query inside a transaction, returning rows
+/// (over-fetched by one) and a `has_more` flag.
+///
+/// The caller is responsible for validation — cursor format, limit range,
+/// etc. are assumed to have been checked before calling this function.
+pub async fn list_members_rows_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    q: Option<&str>,
+    status: Option<&str>,
+    cursor: Option<&str>,
+    limit: u32,
+) -> sqlx::Result<(Vec<MemberRow>, bool)> {
+    let mut where_clauses: Vec<String> =
+        vec!["tm.tenant_id = $1".into(), "tm.deleted_at IS NULL".into()];
+    let mut next_bind: usize = 2;
+
+    if let Some(q) = q {
+        if !q.is_empty() {
+            where_clauses.push(format!(
+                "(u.display_name ILIKE ${next_bind} OR u.email ILIKE ${next_bind})"
+            ));
+            next_bind += 1;
+        }
+    }
+
+    if status.is_some() {
+        where_clauses.push(format!("tm.status = ${next_bind}"));
+        next_bind += 1;
+    }
+
+    if cursor.is_some() {
+        where_clauses.push(format!(
+            "(tm.created_at, tm.id) < (${next_bind}::timestamptz, ${bind2}::uuid)",
+            next_bind = next_bind,
+            bind2 = next_bind + 1
+        ));
+        next_bind += 2;
+    }
+
+    let where_sql = where_clauses.join(" AND ");
+    let order_limit = format!(
+        "ORDER BY tm.created_at DESC, tm.id DESC LIMIT ${next_bind}",
+        next_bind = next_bind
+    );
+
+    let sql = format!(
+        "SELECT tm.id, tm.user_id, u.display_name, u.email, tm.role, tm.status, \
+                tm.created_at AS joined_at \
+         FROM tenant_memberships tm \
+         JOIN users u ON u.id = tm.user_id \
+         WHERE {where_sql} {order_limit}"
+    );
+
+    let mut query = sqlx::query_as::<_, MemberRow>(&sql);
+    query = query.bind(tenant_id);
+
+    if let Some(q) = q {
+        if !q.is_empty() {
+            query = query.bind(format!("%{q}%"));
+        }
+    }
+
+    if let Some(status) = status {
+        query = query.bind(status);
+    }
+
+    if let Some(cursor) = cursor {
+        if let Some((joined_str, id_str)) = cursor.split_once('_') {
+            if let Ok(joined) = chrono::DateTime::parse_from_rfc3339(joined_str) {
+                if let Ok(id) = Uuid::parse_str(id_str) {
+                    query = query.bind(joined);
+                    query = query.bind(id);
+                }
+            }
+        }
+    }
+
+    query = query.bind(i64::from(limit + 1));
+
+    let rows = query.fetch_all(&mut **tx).await?;
+
+    let has_more = rows.len() > limit as usize;
+    Ok((rows.into_iter().take(limit as usize).collect(), has_more))
+}
+
 pub async fn list_members(
     State(pool): State<sqlx::PgPool>,
     ctx: TenantContext,
@@ -185,95 +282,42 @@ pub async fn list_members(
 
     let limit = params.limit;
 
-    let mut where_clauses: Vec<String> =
-        vec!["tm.tenant_id = $1".into(), "tm.deleted_at IS NULL".into()];
-    let mut next_bind: usize = 2;
-
-    if let Some(ref q) = params.q {
-        if !q.is_empty() {
-            where_clauses.push(format!(
-                "(u.display_name ILIKE ${next_bind} OR u.email ILIKE ${next_bind})"
-            ));
-            next_bind += 1;
-        }
-    }
-
-    if params.status.is_some() {
-        where_clauses.push(format!("tm.status = ${next_bind}"));
-        next_bind += 1;
-    }
-
-    if params.cursor.is_some() {
-        where_clauses.push(format!(
-            "(tm.created_at, tm.id) < (${next_bind}::timestamptz, ${bind2}::uuid)",
-            next_bind = next_bind,
-            bind2 = next_bind + 1
-        ));
-        next_bind += 2;
-    }
-
-    let where_sql = where_clauses.join(" AND ");
-    let order_limit = format!(
-        "ORDER BY tm.created_at DESC, tm.id DESC LIMIT ${next_bind}",
-        next_bind = next_bind
-    );
-    // `tenant_memberships` has no `joined_at` column — `created_at` is the
-    // canonical "when this membership began" timestamp (data-model.md §1);
-    // alias it so the Rust-side field/response name (`joinedAt`) is unchanged.
-    let sql = format!(
-        "SELECT tm.id, tm.user_id, u.display_name, u.email, tm.role, tm.status, \
-                tm.created_at AS joined_at \
-         FROM tenant_memberships tm \
-         JOIN users u ON u.id = tm.user_id \
-         WHERE {where_sql} {order_limit}"
-    );
-
-    let mut query = sqlx::query(&sql);
-    query = query.bind(ctx.tenant_id);
-
-    if let Some(ref q) = params.q {
-        if !q.is_empty() {
-            query = query.bind(format!("%{q}%"));
-        }
-    }
-
-    if let Some(ref status) = params.status {
-        query = query.bind(status);
-    }
-
-    if let Some(ref cursor) = params.cursor {
-        if let Some((joined_str, id_str)) = cursor.split_once('_') {
-            if let Ok(joined) = chrono::DateTime::parse_from_rfc3339(joined_str) {
-                if let Ok(id) = Uuid::parse_str(id_str) {
-                    query = query.bind(joined);
-                    query = query.bind(id);
-                }
-            }
-        }
-    }
-
-    query = query.bind(i64::from(limit + 1));
-
-    let rows = match query.fetch_all(&pool).await {
-        Ok(rows) => rows,
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
         Err(e) => {
-            tracing::error!(error = %e, "failed to fetch team members");
+            tracing::error!(error = %e, "failed to begin transaction");
             return ApiError::internal_error("Failed to fetch team members").into_response();
         }
     };
 
-    let has_more = rows.len() > limit as usize;
+    let q = params.q.as_deref();
+    let status = params.status.as_deref();
+    let cursor = params.cursor.as_deref();
+
+    let (rows, has_more) =
+        match list_members_rows_in_tx(&mut tx, ctx.tenant_id, q, status, cursor, limit).await {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to fetch team members");
+                return ApiError::internal_error("Failed to fetch team members").into_response();
+            }
+        };
+
+    if let Err(e) = tx.commit().await {
+        tracing::error!(error = %e, "failed to commit transaction");
+        return ApiError::internal_error("Failed to commit transaction").into_response();
+    }
+
     let items: Vec<TeamMemberResponse> = rows
         .into_iter()
-        .take(limit as usize)
         .map(|r| TeamMemberResponse {
-            id: r.get("id"),
-            user_id: r.get("user_id"),
-            display_name: r.get("display_name"),
-            email: r.get("email"),
-            role: r.get("role"),
-            status: r.get("status"),
-            joined_at: r.get("joined_at"),
+            id: r.id,
+            user_id: r.user_id,
+            display_name: r.display_name,
+            email: r.email,
+            role: r.role,
+            status: r.status,
+            joined_at: r.joined_at,
         })
         .collect();
 

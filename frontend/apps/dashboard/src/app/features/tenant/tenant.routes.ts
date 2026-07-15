@@ -118,6 +118,17 @@ export const TENANT_ROUTES: Routes = [
     title: PAGE_TITLES.settings.title,
   },
   {
+    path: APP_PATHS.tenant.escalations,
+    canMatch: [permissionGuard],
+    loadComponent: () =>
+      import('./escalations/escalation-queue.component').then((m) => m.EscalationQueueComponent),
+    data: {
+      pageTitle: 'escalations',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.escalations],
+    },
+    title: PAGE_TITLES.escalations.title,
+  },
+  {
     path: APP_PATHS.tenant.team,
     canMatch: [permissionGuard],
     loadComponent: () => import('./team/team-list.component').then((m) => m.TeamListComponent),

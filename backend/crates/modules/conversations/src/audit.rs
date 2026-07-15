@@ -83,7 +83,10 @@ fn details_for_status_changed(from: &str, to: &str, auto: bool) -> Value {
     })
 }
 
-fn details_for_assignment_changed(from_membership_id: Option<Uuid>, to_membership_id: Option<Uuid>) -> Value {
+fn details_for_assignment_changed(
+    from_membership_id: Option<Uuid>,
+    to_membership_id: Option<Uuid>,
+) -> Value {
     json!({
         "from_membership_id": from_membership_id.map(|id| id.to_string()),
         "to_membership_id": to_membership_id.map(|id| id.to_string()),

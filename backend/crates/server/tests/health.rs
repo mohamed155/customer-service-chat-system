@@ -43,32 +43,41 @@ impl HealthCheck for TimeoutCheck {
 }
 
 fn make_state(checks: Vec<Arc<dyn HealthCheck>>) -> AppState {
+    let pool = db::lazy_pool(
+        "postgres://unreachable:5432/test",
+        1,
+        Duration::from_secs(1),
+    );
+    let cfg = config::AppConfig {
+        database_url: "postgres://localhost:5432/test".into(),
+        redis_url: "redis://localhost:6379".into(),
+        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
+        auth_session_ttl_seconds: 28_800,
+        port: 0,
+        bind_address: "0.0.0.0".into(),
+        environment: config::Environment::Test,
+        cors_allowed_origins: vec!["http://localhost:4200".into()],
+        log_format: config::LogFormat::Pretty,
+        smtp_url: None,
+        smtp_from: None,
+        public_dashboard_url: "http://localhost:4200".into(),
+        db_max_connections: 1,
+        db_acquire_timeout_ms: 1000,
+        ready_probe_timeout_ms: 500,
+        shutdown_grace_seconds: 1,
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
+        ai_openai_base_url: None,
+        ai_anthropic_base_url: None,
+        ai_gemini_base_url: None,
+    };
+    let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     AppState {
-        config: Arc::new(config::AppConfig {
-            database_url: "postgres://localhost:5432/test".into(),
-            redis_url: "redis://localhost:6379".into(),
-            auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-            auth_session_ttl_seconds: 28_800,
-            port: 0,
-            bind_address: "0.0.0.0".into(),
-            environment: config::Environment::Test,
-            cors_allowed_origins: vec!["http://localhost:4200".into()],
-            log_format: config::LogFormat::Pretty,
-            smtp_url: None,
-            smtp_from: None,
-            public_dashboard_url: "http://localhost:4200".into(),
-            db_max_connections: 1,
-            db_acquire_timeout_ms: 1000,
-            ready_probe_timeout_ms: 500,
-            shutdown_grace_seconds: 1,
-        }),
-        db: db::lazy_pool(
-            "postgres://unreachable:5432/test",
-            1,
-            Duration::from_secs(1),
-        ),
+        config: Arc::new(cfg),
+        db: pool.clone(),
         cache: Arc::new(cache::Cache::new("redis://unreachable:6379").unwrap()),
         health_checks: checks,
+        escalations: escalations::presence::Runtime::new(pool, Duration::from_secs(45)),
+        ai,
     }
 }
 

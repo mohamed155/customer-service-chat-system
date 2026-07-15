@@ -9,4 +9,6 @@ pub struct AppState {
     pub db: PgPool,
     pub cache: Arc<cache::Cache>,
     pub health_checks: Vec<Arc<dyn HealthCheck>>,
+    pub escalations: Arc<escalations::presence::Runtime>,
+    pub ai: ai::AiService,
 }

@@ -10,6 +10,7 @@ import {
   PatchMemberPayload,
   TeamMember,
   TenantInvitation,
+  Skill,
 } from '../../../core/api/tenant-api.models';
 import { TeamApiService } from './team-api.service';
 
@@ -21,6 +22,7 @@ describe('TeamApiService', () => {
     post: ReturnType<typeof vi.fn>;
     patch: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
+    put: ReturnType<typeof vi.fn>;
   };
 
   const mockInvitation: TenantInvitation = {
@@ -49,6 +51,7 @@ describe('TeamApiService', () => {
       post: vi.fn(),
       patch: vi.fn(),
       delete: vi.fn(),
+      put: vi.fn(),
     };
     TestBed.configureTestingModule({
       providers: [TeamApiService, { provide: ApiService, useValue: api }],
@@ -168,6 +171,69 @@ describe('TeamApiService', () => {
 
       expect(api.get).toHaveBeenCalledWith('invitations/token-123');
       expect(result.data).toEqual(mockPreview);
+    });
+  });
+
+  describe('getSkills', () => {
+    it('calls api.get with tenant/skills', async () => {
+      const skills: Skill[] = [
+        { id: 's-1', name: 'billing', agentCount: 3 },
+        { id: 's-2', name: 'support', agentCount: 5 },
+      ];
+      api.get.mockReturnValue(of({ data: skills }));
+
+      const result = await firstValueFrom(service.getSkills());
+
+      expect(api.get).toHaveBeenCalledWith('tenant/skills');
+      expect(result.data).toEqual(skills);
+    });
+  });
+
+  describe('createSkill', () => {
+    it('calls api.post with skill name', async () => {
+      const skill: Skill = { id: 's-3', name: 'billing', agentCount: 0 };
+      api.post.mockReturnValue(of({ data: skill }));
+
+      const result = await firstValueFrom(service.createSkill('billing'));
+
+      expect(api.post).toHaveBeenCalledWith('tenant/skills', { name: 'billing' });
+      expect(result.data).toEqual(skill);
+    });
+  });
+
+  describe('renameSkill', () => {
+    it('calls api.patch with skill id and name', async () => {
+      const skill: Skill = { id: 's-1', name: 'billing-v2', agentCount: 3 };
+      api.patch.mockReturnValue(of({ data: skill }));
+
+      const result = await firstValueFrom(service.renameSkill('s-1', 'billing-v2'));
+
+      expect(api.patch).toHaveBeenCalledWith('tenant/skills/s-1', { name: 'billing-v2' });
+      expect(result.data).toEqual(skill);
+    });
+  });
+
+  describe('deleteSkill', () => {
+    it('calls api.delete with skill id', async () => {
+      api.delete.mockReturnValue(of({ data: undefined }));
+
+      const result = await firstValueFrom(service.deleteSkill('s-1'));
+
+      expect(api.delete).toHaveBeenCalledWith('tenant/skills/s-1');
+      expect(result.data).toBeUndefined();
+    });
+  });
+
+  describe('setMemberSkills', () => {
+    it('calls api.put with membership id and skill ids', async () => {
+      api.put.mockReturnValue(of({ data: undefined }));
+
+      const result = await firstValueFrom(service.setMemberSkills('m-1', ['s-1', 's-2']));
+
+      expect(api.put).toHaveBeenCalledWith('tenant/members/m-1/skills', {
+        skillIds: ['s-1', 's-2'],
+      });
+      expect(result.data).toBeUndefined();
     });
   });
 

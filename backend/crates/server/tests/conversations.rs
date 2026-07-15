@@ -31,15 +31,21 @@ fn test_config() -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
+        ai_openai_base_url: None,
+        ai_anthropic_base_url: None,
+        ai_gemini_base_url: None,
     }
 }
 
 fn app_state(pool: sqlx::PgPool) -> AppState {
     AppState {
         config: Arc::new(test_config()),
-        db: pool,
+        db: pool.clone(),
         cache: Arc::new(cache::Cache::new("redis://127.0.0.1:6379").unwrap()),
         health_checks: vec![],
+        escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
+        ai: ai::AiService::from_config(pool, &test_config()).unwrap(),
     }
 }
 
@@ -167,7 +173,10 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> Seeded
     .fetch_one(pool)
     .await
     .unwrap();
-    SeededMembership { user_id, membership_id }
+    SeededMembership {
+        user_id,
+        membership_id,
+    }
 }
 
 async fn seed_member(
@@ -187,7 +196,10 @@ async fn seed_member(
     .fetch_one(pool)
     .await
     .unwrap();
-    SeededMembership { user_id, membership_id }
+    SeededMembership {
+        user_id,
+        membership_id,
+    }
 }
 
 async fn seed_customer(
@@ -337,21 +349,10 @@ async fn collect_pages(
 
 // ---------------------------------------------------------------------------
 // User Story 1 — Inbox List
-//
-// Tests for the `GET /tenant/conversations` endpoint.  These are currently
-// marked `#[ignore]` because the inbox list handler and its route
-// registration (T013/T014) do not exist yet.  Once the route is registered,
-// remove the `#[ignore]` annotations to verify the full contract.
-//
-// All tests are live-database-gated via `REQUIRE_DB_TESTS=1` (same pattern
-// as the rest of the integration test suites) and tagged
-// `serial(conversations_db)` so they share a single test binary and a single
-// truncate-on-entry reset.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn default_view_shows_only_open_conversations() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -428,7 +429,6 @@ async fn default_view_shows_only_open_conversations() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn status_all_returns_every_status() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -469,7 +469,6 @@ async fn status_all_returns_every_status() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn status_filter_returns_only_matching_status() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -508,7 +507,6 @@ async fn status_filter_returns_only_matching_status() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn assignee_me_filter_returns_only_assigned_to_current_user() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -552,7 +550,6 @@ async fn assignee_me_filter_returns_only_assigned_to_current_user() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn assignee_unassigned_returns_only_unassigned_conversations() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -595,7 +592,6 @@ async fn assignee_unassigned_returns_only_unassigned_conversations() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn assignee_uuid_filter_returns_conversations_for_that_membership() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -645,7 +641,6 @@ async fn assignee_uuid_filter_returns_conversations_for_that_membership() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn channel_filter_returns_only_conversations_on_that_channel() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -688,7 +683,6 @@ async fn channel_filter_returns_only_conversations_on_that_channel() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn combined_filters_narrow_results_correctly() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -759,7 +753,6 @@ async fn combined_filters_narrow_results_correctly() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn unknown_status_value_returns_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -781,7 +774,6 @@ async fn unknown_status_value_returns_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn unknown_channel_value_returns_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -803,7 +795,6 @@ async fn unknown_channel_value_returns_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn unknown_assignee_value_returns_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -825,7 +816,6 @@ async fn unknown_assignee_value_returns_422() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn keyset_pagination_has_more_and_no_duplicates() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -866,7 +856,6 @@ async fn keyset_pagination_has_more_and_no_duplicates() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn empty_filter_match_returns_data_array_empty() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -907,7 +896,6 @@ async fn empty_filter_match_returns_data_array_empty() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn per_tenant_isolation_list_and_pagination() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -983,7 +971,6 @@ async fn per_tenant_isolation_list_and_pagination() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn per_tenant_isolation_status_count_respects_boundaries() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1006,10 +993,7 @@ async fn per_tenant_isolation_status_count_respects_boundaries() {
     .await;
 
     // Tenant A sees the conversation.
-    let a_body = body_json(
-        get_inbox_list(&pool, admin_a.user_id, tenant_a, "").await,
-    )
-    .await;
+    let a_body = body_json(get_inbox_list(&pool, admin_a.user_id, tenant_a, "").await).await;
     assert_eq!(
         a_body["data"].as_array().unwrap().len(),
         1,
@@ -1017,10 +1001,8 @@ async fn per_tenant_isolation_status_count_respects_boundaries() {
     );
 
     // Tenant B sees nothing.
-    let b_body = body_json(
-        get_inbox_list(&pool, admin_b.user_id, tenant_b, "status=all").await,
-    )
-    .await;
+    let b_body =
+        body_json(get_inbox_list(&pool, admin_b.user_id, tenant_b, "status=all").await).await;
     assert_eq!(
         b_body["data"].as_array().unwrap().len(),
         0,
@@ -1034,14 +1016,19 @@ async fn per_tenant_isolation_status_count_respects_boundaries() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn inbox_item_shape_includes_expected_fields() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
     let tenant_id = seed_tenant(&pool, "Shape Tenant").await;
     let admin = seed_admin(&pool, tenant_id, "shape@example.com").await;
-    let customer_id = seed_customer(&pool, tenant_id, "Shape Customer", Some("shape@test.com"), None)
-        .await;
+    let customer_id = seed_customer(
+        &pool,
+        tenant_id,
+        "Shape Customer",
+        Some("shape@test.com"),
+        None,
+    )
+    .await;
 
     seed_conversation(
         &pool,
@@ -1057,7 +1044,10 @@ async fn inbox_item_shape_includes_expected_fields() {
     let body = body_json(get_inbox_list(&pool, admin.user_id, tenant_id, "").await).await;
     let item = &body["data"][0];
     assert!(item["id"].is_string(), "id must be a string");
-    assert!(item["customer"]["id"].is_string(), "customer.id must be a string");
+    assert!(
+        item["customer"]["id"].is_string(),
+        "customer.id must be a string"
+    );
     assert!(
         item["customer"]["display_name"].is_string(),
         "customer.display_name must be a string"
@@ -1094,7 +1084,6 @@ async fn inbox_item_shape_includes_expected_fields() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014)"]
 async fn inbox_item_assignee_is_null_when_unassigned() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1182,7 +1171,10 @@ async fn seed_inactive_member(
     .fetch_one(pool)
     .await
     .unwrap();
-    SeededMembership { user_id, membership_id }
+    SeededMembership {
+        user_id,
+        membership_id,
+    }
 }
 
 fn json_post(uri: &str, user_id: Uuid, tenant_id: Uuid, body: serde_json::Value) -> Request<Body> {
@@ -1232,16 +1224,10 @@ fn message_ids(body: &serde_json::Value) -> Vec<Uuid> {
 
 // ---------------------------------------------------------------------------
 // User Story 2 — Read a Conversation Timeline
-//
-// Tests for GET /tenant/conversations/{id} (detail) and
-// GET /tenant/conversations/{id}/messages (timeline keyset pagination).
-// Marked #[ignore] until the detail/timeline handlers (T026–T029) are
-// registered.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id} (T028/T029)"]
 async fn detail_returns_conversation_and_participants() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1249,40 +1235,72 @@ async fn detail_returns_conversation_and_participants() {
     let admin = seed_admin(&pool, tenant_id, "detail@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Detail Customer", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open",
-        Some(admin.membership_id), Utc::now() - chrono::Duration::hours(1),
-    ).await;
-    seed_message(&pool, tenant_id, conv_id, "reply",
-        Some(admin.membership_id), None, "Hello",
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        Some(admin.membership_id),
+        Utc::now() - chrono::Duration::hours(1),
+    )
+    .await;
+    seed_message(
+        &pool,
+        tenant_id,
+        conv_id,
+        "reply",
+        Some(admin.membership_id),
+        None,
+        "Hello",
         Utc::now() - chrono::Duration::minutes(30),
-    ).await;
+    )
+    .await;
 
-    let response = send_get(&pool, admin.user_id, tenant_id,
-        &format!("/api/v1/tenant/conversations/{conv_id}")).await;
+    let response = send_get(
+        &pool,
+        admin.user_id,
+        tenant_id,
+        &format!("/api/v1/tenant/conversations/{conv_id}"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
     let data = &body["data"];
 
     assert_eq!(data["id"].as_str().unwrap(), conv_id.to_string());
-    assert_eq!(data["customer"]["id"].as_str().unwrap(), customer_id.to_string());
-    assert_eq!(data["customer"]["display_name"].as_str().unwrap(), "Detail Customer");
+    assert_eq!(
+        data["customer"]["id"].as_str().unwrap(),
+        customer_id.to_string()
+    );
+    assert_eq!(
+        data["customer"]["display_name"].as_str().unwrap(),
+        "Detail Customer"
+    );
     assert_eq!(data["channel"].as_str().unwrap(), "web_chat");
     assert_eq!(data["status"].as_str().unwrap(), "open");
-    assert_eq!(data["assignee"]["membership_id"].as_str().unwrap(), admin.membership_id.to_string());
+    assert_eq!(
+        data["assignee"]["membership_id"].as_str().unwrap(),
+        admin.membership_id.to_string()
+    );
 
     let participants = data["participants"].as_array().expect("participants array");
-    assert!(!participants.is_empty(), "participants must have at least the customer");
-    let customer_participant = participants.iter().find(|p| {
-        p["id"].as_str() == Some(&customer_id.to_string())
-    });
-    assert!(customer_participant.is_some(), "participants must include the customer");
+    assert!(
+        !participants.is_empty(),
+        "participants must have at least the customer"
+    );
+    let customer_participant = participants
+        .iter()
+        .find(|p| p["id"].as_str() == Some(&customer_id.to_string()));
+    assert!(
+        customer_participant.is_some(),
+        "participants must include the customer"
+    );
     assert!(data["created_at"].is_string());
     assert!(data["last_activity_at"].is_string());
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id}/messages (T028/T029)"]
 async fn timeline_returns_messages_in_desc_order_paginated() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1290,17 +1308,30 @@ async fn timeline_returns_messages_in_desc_order_paginated() {
     let admin = seed_admin(&pool, tenant_id, "timeline-order@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Timeline Customer", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "email", "open", None,
+        &pool,
+        tenant_id,
+        customer_id,
+        "email",
+        "open",
+        None,
         Utc::now() - chrono::Duration::hours(2),
-    ).await;
+    )
+    .await;
 
     let base = Utc::now() - chrono::Duration::hours(1);
     let mut msg_ids = Vec::new();
     for i in 0..5 {
-        let id = seed_message(&pool, tenant_id, conv_id, "reply",
-            Some(admin.membership_id), None, &format!("Message {i}"),
+        let id = seed_message(
+            &pool,
+            tenant_id,
+            conv_id,
+            "reply",
+            Some(admin.membership_id),
+            None,
+            &format!("Message {i}"),
             base + chrono::Duration::minutes(i as i64 * 10),
-        ).await;
+        )
+        .await;
         msg_ids.push(id);
     }
     msg_ids.reverse(); // newest first
@@ -1318,23 +1349,34 @@ async fn timeline_returns_messages_in_desc_order_paginated() {
         let body = body_json(response).await;
         collected.extend(message_ids(&body));
         if !body["pagination"]["has_more"].as_bool().unwrap() {
-            assert!(body["pagination"]["next_cursor"].is_null(),
-                "next_cursor must be null when has_more is false");
+            assert!(
+                body["pagination"]["next_cursor"].is_null(),
+                "next_cursor must be null when has_more is false"
+            );
             break;
         }
-        cursor = Some(body["pagination"]["next_cursor"]
-            .as_str().expect("next cursor").to_owned());
+        cursor = Some(
+            body["pagination"]["next_cursor"]
+                .as_str()
+                .expect("next cursor")
+                .to_owned(),
+        );
     }
 
-    assert_eq!(collected, msg_ids,
-        "timeline must return messages in created_at DESC order without duplicates");
+    assert_eq!(
+        collected, msg_ids,
+        "timeline must return messages in created_at DESC order without duplicates"
+    );
     let unique: std::collections::HashSet<Uuid> = collected.iter().copied().collect();
-    assert_eq!(unique.len(), collected.len(), "no duplicate messages across pages");
+    assert_eq!(
+        unique.len(),
+        collected.len(),
+        "no duplicate messages across pages"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id}/messages (T028/T029)"]
 async fn timeline_tie_broken_by_seq() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1342,34 +1384,53 @@ async fn timeline_tie_broken_by_seq() {
     let admin = seed_admin(&pool, tenant_id, "tiebreak@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Tiebreak Customer", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None,
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
         Utc::now() - chrono::Duration::hours(1),
-    ).await;
+    )
+    .await;
 
     let same_time = Utc::now() - chrono::Duration::minutes(30);
     let mut msg_ids = Vec::new();
     for i in 0..4 {
-        let id = seed_message(&pool, tenant_id, conv_id, "reply",
-            Some(admin.membership_id), None, &format!("Same time msg {i}"),
+        let id = seed_message(
+            &pool,
+            tenant_id,
+            conv_id,
+            "reply",
+            Some(admin.membership_id),
+            None,
+            &format!("Same time msg {i}"),
             same_time,
-        ).await;
+        )
+        .await;
         msg_ids.push(id);
     }
     // seq is identity — later inserts have higher seq, so newest seq first
     msg_ids.reverse();
 
-    let response = send_get(&pool, admin.user_id, tenant_id,
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages?limit=10")).await;
+    let response = send_get(
+        &pool,
+        admin.user_id,
+        tenant_id,
+        &format!("/api/v1/tenant/conversations/{conv_id}/messages?limit=10"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
     let ids = message_ids(&body);
-    assert_eq!(ids, msg_ids,
-        "same-created_at messages must be tie-broken by seq DESC");
+    assert_eq!(
+        ids, msg_ids,
+        "same-created_at messages must be tie-broken by seq DESC"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id}/messages (T028/T029)"]
 async fn load_older_never_reorders_or_duplicates() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1377,44 +1438,72 @@ async fn load_older_never_reorders_or_duplicates() {
     let admin = seed_admin(&pool, tenant_id, "load-older@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Load Older Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None,
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
         Utc::now() - chrono::Duration::hours(3),
-    ).await;
+    )
+    .await;
 
     let base = Utc::now() - chrono::Duration::hours(2);
     for i in 0..8 {
-        seed_message(&pool, tenant_id, conv_id, "reply",
-            Some(admin.membership_id), None, &format!("Msg {i}"),
+        seed_message(
+            &pool,
+            tenant_id,
+            conv_id,
+            "reply",
+            Some(admin.membership_id),
+            None,
+            &format!("Msg {i}"),
             base + chrono::Duration::minutes(i as i64 * 10),
-        ).await;
+        )
+        .await;
     }
 
     // First page: newest 3
-    let response = send_get(&pool, admin.user_id, tenant_id,
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages?limit=3")).await;
+    let response = send_get(
+        &pool,
+        admin.user_id,
+        tenant_id,
+        &format!("/api/v1/tenant/conversations/{conv_id}/messages?limit=3"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let page1 = body_json(response).await;
     let page1_ids: std::collections::HashSet<Uuid> = message_ids(&page1).into_iter().collect();
-    let cursor = page1["pagination"]["next_cursor"].as_str().map(|c| c.to_owned());
+    let cursor = page1["pagination"]["next_cursor"]
+        .as_str()
+        .map(|c| c.to_owned());
 
     // Second page: load older
     if let Some(c) = cursor {
-        let response2 = send_get(&pool, admin.user_id, tenant_id,
-            &format!("/api/v1/tenant/conversations/{conv_id}/messages?limit=3&cursor={}",
-                encode_cursor(&c))).await;
+        let response2 = send_get(
+            &pool,
+            admin.user_id,
+            tenant_id,
+            &format!(
+                "/api/v1/tenant/conversations/{conv_id}/messages?limit=3&cursor={}",
+                encode_cursor(&c)
+            ),
+        )
+        .await;
         assert_eq!(response2.status(), StatusCode::OK);
         let page2 = body_json(response2).await;
         let page2_ids: std::collections::HashSet<Uuid> = message_ids(&page2).into_iter().collect();
 
         // No overlap
-        assert!(page1_ids.is_disjoint(&page2_ids),
-            "load-older must not return messages already seen");
+        assert!(
+            page1_ids.is_disjoint(&page2_ids),
+            "load-older must not return messages already seen"
+        );
     }
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id}/messages (T028/T029)"]
 async fn empty_timeline_shows_empty_list() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1422,23 +1511,36 @@ async fn empty_timeline_shows_empty_list() {
     let admin = seed_admin(&pool, tenant_id, "empty-timeline@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Empty Timeline Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None,
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
         Utc::now(),
-    ).await;
+    )
+    .await;
 
-    let response = send_get(&pool, admin.user_id, tenant_id,
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages")).await;
+    let response = send_get(
+        &pool,
+        admin.user_id,
+        tenant_id,
+        &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
-    assert_eq!(body["data"], serde_json::json!([]),
-        "conversation with no messages must return empty data array");
+    assert_eq!(
+        body["data"],
+        serde_json::json!([]),
+        "conversation with no messages must return empty data array"
+    );
     assert!(!body["pagination"]["has_more"].as_bool().unwrap());
     assert!(body["pagination"]["next_cursor"].is_null());
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id} and /messages (T028/T029)"]
 async fn cross_tenant_detail_timeline_404() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1447,25 +1549,47 @@ async fn cross_tenant_detail_timeline_404() {
     let admin_b = seed_admin(&pool, tenant_b, "cross-detail-b@example.com").await;
     let customer_a = seed_customer(&pool, tenant_a, "Cross Detail Cust A", None, None).await;
     let conv_a = seed_conversation(
-        &pool, tenant_a, customer_a, "web_chat", "open", None,
+        &pool,
+        tenant_a,
+        customer_a,
+        "web_chat",
+        "open",
+        None,
         Utc::now(),
-    ).await;
+    )
+    .await;
 
     // Detail — tenant B requests tenant A's conversation
-    let detail_resp = send_get(&pool, admin_b.user_id, tenant_b,
-        &format!("/api/v1/tenant/conversations/{conv_a}")).await;
-    assert_eq!(detail_resp.status(), StatusCode::NOT_FOUND,
-        "cross-tenant detail must return 404");
+    let detail_resp = send_get(
+        &pool,
+        admin_b.user_id,
+        tenant_b,
+        &format!("/api/v1/tenant/conversations/{conv_a}"),
+    )
+    .await;
+    assert_eq!(
+        detail_resp.status(),
+        StatusCode::NOT_FOUND,
+        "cross-tenant detail must return 404"
+    );
     let detail_headers = detail_resp.headers().clone();
     let detail_body = body_json(detail_resp).await;
     assert_eq!(detail_body["error"]["code"], "not_found");
     assert_error_has_request_id(&detail_headers, &detail_body).await;
 
     // Timeline — tenant B requests tenant A's conversation messages
-    let tl_resp = send_get(&pool, admin_b.user_id, tenant_b,
-        &format!("/api/v1/tenant/conversations/{conv_a}/messages")).await;
-    assert_eq!(tl_resp.status(), StatusCode::NOT_FOUND,
-        "cross-tenant timeline must return 404");
+    let tl_resp = send_get(
+        &pool,
+        admin_b.user_id,
+        tenant_b,
+        &format!("/api/v1/tenant/conversations/{conv_a}/messages"),
+    )
+    .await;
+    assert_eq!(
+        tl_resp.status(),
+        StatusCode::NOT_FOUND,
+        "cross-tenant timeline must return 404"
+    );
     let tl_headers = tl_resp.headers().clone();
     let tl_body = body_json(tl_resp).await;
     assert_eq!(tl_body["error"]["code"], "not_found");
@@ -1474,14 +1598,10 @@ async fn cross_tenant_detail_timeline_404() {
 
 // ---------------------------------------------------------------------------
 // User Story 3 — Reply and Leave Internal Notes
-//
-// Tests for POST /tenant/conversations/{id}/messages.
-// Marked #[ignore] until the add-message handler (T040/T041) is registered.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn reply_message_appended_correctly() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1489,25 +1609,47 @@ async fn reply_message_appended_correctly() {
     let admin = seed_admin(&pool, tenant_id, "reply@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Reply Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open",
-        Some(admin.membership_id), Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        Some(admin.membership_id),
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({
         "kind": "reply",
         "body": "I am looking into this for you."
     });
-    let response = send(pool.clone(), json_post(
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
-        admin.user_id, tenant_id, payload,
-    )).await;
-    assert_eq!(response.status(), StatusCode::OK, "reply should succeed with 200");
+    let response = send(
+        pool.clone(),
+        json_post(
+            &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "reply should succeed with 200"
+    );
     let body = body_json(response).await;
 
     let msg = &body["data"]["message"];
     assert_eq!(msg["kind"].as_str().unwrap(), "reply");
-    assert_eq!(msg["body"].as_str().unwrap(), "I am looking into this for you.");
-    assert_eq!(msg["sender"]["membership_id"].as_str().unwrap(), admin.membership_id.to_string());
+    assert_eq!(
+        msg["body"].as_str().unwrap(),
+        "I am looking into this for you."
+    );
+    assert_eq!(
+        msg["sender"]["membership_id"].as_str().unwrap(),
+        admin.membership_id.to_string()
+    );
     assert!(msg["sender"]["display_name"].is_string());
     assert!(msg["created_at"].is_string());
     assert!(msg["id"].is_string());
@@ -1515,7 +1657,6 @@ async fn reply_message_appended_correctly() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn note_message_appended_correctly() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1523,28 +1664,46 @@ async fn note_message_appended_correctly() {
     let admin = seed_admin(&pool, tenant_id, "note@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Note Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "email", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "email",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({
         "kind": "note",
         "body": "Internal: customer mentioned billing issue."
     });
-    let response = send(pool.clone(), json_post(
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_post(
+            &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
     let msg = &body["data"]["message"];
     assert_eq!(msg["kind"].as_str().unwrap(), "note");
-    assert_eq!(msg["body"].as_str().unwrap(), "Internal: customer mentioned billing issue.");
-    assert_eq!(msg["sender"]["membership_id"].as_str().unwrap(), admin.membership_id.to_string());
+    assert_eq!(
+        msg["body"].as_str().unwrap(),
+        "Internal: customer mentioned billing issue."
+    );
+    assert_eq!(
+        msg["sender"]["membership_id"].as_str().unwrap(),
+        admin.membership_id.to_string()
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn logged_customer_message_appended_correctly() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1552,29 +1711,44 @@ async fn logged_customer_message_appended_correctly() {
     let admin = seed_admin(&pool, tenant_id, "logged-customer@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Logged Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "whatsapp", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "whatsapp",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({
         "kind": "customer",
         "body": "I need help with my order.",
         "logged_by_membership_id": admin.membership_id,
     });
-    let response = send(pool.clone(), json_post(
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_post(
+            &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
     let msg = &body["data"]["message"];
     assert_eq!(msg["kind"].as_str().unwrap(), "customer");
     assert_eq!(msg["body"].as_str().unwrap(), "I need help with my order.");
-    assert!(msg["logged_by"].is_object(), "logged-by actor must be present for customer-kind messages");
+    assert!(
+        msg["logged_by"].is_object(),
+        "logged-by actor must be present for customer-kind messages"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn last_activity_at_bumps_on_message() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1582,33 +1756,52 @@ async fn last_activity_at_bumps_on_message() {
     let admin = seed_admin(&pool, tenant_id, "bump@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Bump Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None,
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
         Utc::now() - chrono::Duration::hours(2),
-    ).await;
+    )
+    .await;
 
-    let orig_activity: chrono::DateTime<chrono::Utc> = sqlx::query_scalar(
-        "SELECT last_activity_at FROM conversations WHERE id = $1",
-    ).bind(conv_id).fetch_one(&pool).await.unwrap();
+    let orig_activity: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar("SELECT last_activity_at FROM conversations WHERE id = $1")
+            .bind(conv_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     let payload = serde_json::json!({"kind": "reply", "body": "Bump!"});
-    let response = send(pool.clone(), json_post(
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_post(
+            &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 
-    let new_activity: chrono::DateTime<chrono::Utc> = sqlx::query_scalar(
-        "SELECT last_activity_at FROM conversations WHERE id = $1",
-    ).bind(conv_id).fetch_one(&pool).await.unwrap();
-    assert!(new_activity > orig_activity,
-        "last_activity_at must be bumped after a new message");
+    let new_activity: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar("SELECT last_activity_at FROM conversations WHERE id = $1")
+            .bind(conv_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        new_activity > orig_activity,
+        "last_activity_at must be bumped after a new message"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn empty_whitespace_body_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1616,28 +1809,45 @@ async fn empty_whitespace_body_422() {
     let admin = seed_admin(&pool, tenant_id, "empty-body@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Empty Body Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     for (label, body_val) in [("empty string", ""), ("whitespace", "   ")] {
         let payload = serde_json::json!({"kind": "reply", "body": body_val});
-        let response = send(pool.clone(), json_post(
-            &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
-            admin.user_id, tenant_id, payload,
-        )).await;
-        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY,
-            "{label} body should yield 422");
+        let response = send(
+            pool.clone(),
+            json_post(
+                &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
+                admin.user_id,
+                tenant_id,
+                payload,
+            ),
+        )
+        .await;
+        assert_eq!(
+            response.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{label} body should yield 422"
+        );
         let body = body_json(response).await;
         assert_eq!(body["error"]["code"], "validation_failed");
         let details = body["error"]["details"].as_array().expect("details array");
-        assert!(details.iter().any(|d| d["field"] == "body"),
-            "{label} should report body field, got {details:?}");
+        assert!(
+            details.iter().any(|d| d["field"] == "body"),
+            "{label} should report body field, got {details:?}"
+        );
     }
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn over_10000_char_body_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1645,27 +1855,44 @@ async fn over_10000_char_body_422() {
     let admin = seed_admin(&pool, tenant_id, "long-body@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Long Body Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let long_body = "x".repeat(10_001);
     let payload = serde_json::json!({"kind": "reply", "body": long_body});
-    let response = send(pool.clone(), json_post(
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
-        admin.user_id, tenant_id, payload,
-    )).await;
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY,
-        "body > 10,000 chars should yield 422");
+    let response = send(
+        pool.clone(),
+        json_post(
+            &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "body > 10,000 chars should yield 422"
+    );
     let body = body_json(response).await;
     assert_eq!(body["error"]["code"], "validation_failed");
     let details = body["error"]["details"].as_array().expect("details array");
-    assert!(details.iter().any(|d| d["field"] == "body"),
-        "should report body field, got {details:?}");
+    assert!(
+        details.iter().any(|d| d["field"] == "body"),
+        "should report body field, got {details:?}"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn reply_on_resolved_reopens_and_audits() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1673,36 +1900,55 @@ async fn reply_on_resolved_reopens_and_audits() {
     let admin = seed_admin(&pool, tenant_id, "reopen@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Reopen Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "resolved",
-        Some(admin.membership_id), Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "resolved",
+        Some(admin.membership_id),
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({"kind": "reply", "body": "Following up."});
-    let response = send(pool.clone(), json_post(
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_post(
+            &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
 
     // Response includes the updated conversation status
-    assert_eq!(body["data"]["conversation"]["status"].as_str().unwrap(), "open",
-        "reply on resolved conversation must auto-reopen to open");
+    assert_eq!(
+        body["data"]["conversation"]["status"].as_str().unwrap(),
+        "open",
+        "reply on resolved conversation must auto-reopen to open"
+    );
 
     // Verify the DB row was updated
-    let db_status: String = sqlx::query_scalar(
-        "SELECT status FROM conversations WHERE id = $1",
-    ).bind(conv_id).fetch_one(&pool).await.unwrap();
+    let db_status: String = sqlx::query_scalar("SELECT status FROM conversations WHERE id = $1")
+        .bind(conv_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(db_status, "open", "DB row must reflect open status");
 
     // Audit row written
     let audit_count = fetch_audit_count(&pool, "conversation.status_changed", conv_id).await;
-    assert_eq!(audit_count, 1, "status_changed audit must be written on auto-reopen");
+    assert_eq!(
+        audit_count, 1,
+        "status_changed audit must be written on auto-reopen"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn note_never_changes_status() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1710,26 +1956,43 @@ async fn note_never_changes_status() {
     let admin = seed_admin(&pool, tenant_id, "note-no-reopen@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Note No Reopen Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "closed", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "closed",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({"kind": "note", "body": "Internal note on closed."});
-    let response = send(pool.clone(), json_post(
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_post(
+            &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 
     // Status must remain closed
-    let db_status: String = sqlx::query_scalar(
-        "SELECT status FROM conversations WHERE id = $1",
-    ).bind(conv_id).fetch_one(&pool).await.unwrap();
-    assert_eq!(db_status, "closed", "note must not change conversation status");
+    let db_status: String = sqlx::query_scalar("SELECT status FROM conversations WHERE id = $1")
+        .bind(conv_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        db_status, "closed",
+        "note must not change conversation status"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn viewer_403_for_message_post() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1737,21 +2000,36 @@ async fn viewer_403_for_message_post() {
     let viewer_id = seed_viewer(&pool, tenant_id, "viewer-msg@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Viewer Msg Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({"kind": "reply", "body": "Should be blocked."});
-    let response = send(pool.clone(), json_post(
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
-        viewer_id, tenant_id, payload,
-    )).await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN,
-        "viewer must receive 403 on message post");
+    let response = send(
+        pool.clone(),
+        json_post(
+            &format!("/api/v1/tenant/conversations/{conv_id}/messages"),
+            viewer_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::FORBIDDEN,
+        "viewer must receive 403 on message post"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations/{id}/messages (T040/T041)"]
 async fn cross_tenant_message_post_404() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1760,33 +2038,47 @@ async fn cross_tenant_message_post_404() {
     let admin_b = seed_admin(&pool, tenant_b, "cross-msg-b@example.com").await;
     let customer_a = seed_customer(&pool, tenant_a, "Cross Msg Cust A", None, None).await;
     let conv_a = seed_conversation(
-        &pool, tenant_a, customer_a, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_a,
+        customer_a,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     for kind in ["reply", "note", "customer"] {
         let payload = serde_json::json!({"kind": kind, "body": "Cross tenant test"});
-        let response = send(pool.clone(), json_post(
-            &format!("/api/v1/tenant/conversations/{conv_a}/messages"),
-            admin_b.user_id, tenant_b, payload,
-        )).await;
-        assert_eq!(response.status(), StatusCode::NOT_FOUND,
-            "cross-tenant {kind} post must return 404");
+        let response = send(
+            pool.clone(),
+            json_post(
+                &format!("/api/v1/tenant/conversations/{conv_a}/messages"),
+                admin_b.user_id,
+                tenant_b,
+                payload,
+            ),
+        )
+        .await;
+        assert_eq!(
+            response.status(),
+            StatusCode::NOT_FOUND,
+            "cross-tenant {kind} post must return 404"
+        );
         let body = body_json(response).await;
-        assert_eq!(body["error"]["code"], "not_found",
-            "cross-tenant {kind} post error code");
+        assert_eq!(
+            body["error"]["code"], "not_found",
+            "cross-tenant {kind} post error code"
+        );
     }
 }
 
 // ---------------------------------------------------------------------------
 // User Story 4 — Manage Status and Assignment
-//
-// Tests for PATCH /tenant/conversations/{id}.
-// Marked #[ignore] until the patch handler (T050/T051) is registered.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn patch_status_any_to_any() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1794,31 +2086,52 @@ async fn patch_status_any_to_any() {
     let admin = seed_admin(&pool, tenant_id, "patch-status@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Patch Status Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     for status in ["pending", "resolved", "closed", "open"] {
         let payload = serde_json::json!({"status": status});
-        let response = send(pool.clone(), json_patch(
-            &format!("/api/v1/tenant/conversations/{conv_id}"),
-            admin.user_id, tenant_id, payload,
-        )).await;
-        assert_eq!(response.status(), StatusCode::OK,
-            "PATCH status to {status} should succeed");
+        let response = send(
+            pool.clone(),
+            json_patch(
+                &format!("/api/v1/tenant/conversations/{conv_id}"),
+                admin.user_id,
+                tenant_id,
+                payload,
+            ),
+        )
+        .await;
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "PATCH status to {status} should succeed"
+        );
         let body = body_json(response).await;
-        assert_eq!(body["data"]["status"].as_str().unwrap(), status,
-            "response status must be {status}");
+        assert_eq!(
+            body["data"]["status"].as_str().unwrap(),
+            status,
+            "response status must be {status}"
+        );
 
-        let db_status: String = sqlx::query_scalar(
-            "SELECT status FROM conversations WHERE id = $1",
-        ).bind(conv_id).fetch_one(&pool).await.unwrap();
+        let db_status: String =
+            sqlx::query_scalar("SELECT status FROM conversations WHERE id = $1")
+                .bind(conv_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(db_status, status, "DB status must be {status}");
     }
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn patch_assign_to_active_member() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1827,14 +2140,27 @@ async fn patch_assign_to_active_member() {
     let agent = seed_member(&pool, tenant_id, "assign-agent@example.com", "agent").await;
     let customer_id = seed_customer(&pool, tenant_id, "Assign Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({"assigned_membership_id": agent.membership_id});
-    let response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_id}"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id}"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
     assert_eq!(
@@ -1842,15 +2168,17 @@ async fn patch_assign_to_active_member() {
         agent.membership_id.to_string(),
     );
 
-    let db_assignee: Option<Uuid> = sqlx::query_scalar(
-        "SELECT assigned_membership_id FROM conversations WHERE id = $1",
-    ).bind(conv_id).fetch_one(&pool).await.unwrap();
+    let db_assignee: Option<Uuid> =
+        sqlx::query_scalar("SELECT assigned_membership_id FROM conversations WHERE id = $1")
+            .bind(conv_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(db_assignee, Some(agent.membership_id));
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn patch_unassign() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1858,29 +2186,45 @@ async fn patch_unassign() {
     let admin = seed_admin(&pool, tenant_id, "unassign@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Unassign Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open",
-        Some(admin.membership_id), Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        Some(admin.membership_id),
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({"assigned_membership_id": null});
-    let response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_id}"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id}"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
-    assert!(body["data"]["assignee"].is_null(),
-        "assignee must be null after unassignment");
+    assert!(
+        body["data"]["assignee"].is_null(),
+        "assignee must be null after unassignment"
+    );
 
-    let db_assignee: Option<Uuid> = sqlx::query_scalar(
-        "SELECT assigned_membership_id FROM conversations WHERE id = $1",
-    ).bind(conv_id).fetch_one(&pool).await.unwrap();
+    let db_assignee: Option<Uuid> =
+        sqlx::query_scalar("SELECT assigned_membership_id FROM conversations WHERE id = $1")
+            .bind(conv_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(db_assignee, None, "DB assigned_membership_id must be null");
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn patch_inactive_membership_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1889,25 +2233,41 @@ async fn patch_inactive_membership_422() {
     let inactive = seed_inactive_member(&pool, tenant_id, "inactive@example.com", "agent").await;
     let customer_id = seed_customer(&pool, tenant_id, "Inactive Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({"assigned_membership_id": inactive.membership_id});
-    let response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_id}"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id}"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let body = body_json(response).await;
     assert_eq!(body["error"]["code"], "validation_failed");
     let details = body["error"]["details"].as_array().expect("details array");
-    assert!(details.iter().any(|d| d["field"] == "assigned_membership_id"),
-        "should report assigned_membership_id field, got {details:?}");
+    assert!(
+        details
+            .iter()
+            .any(|d| d["field"] == "assigned_membership_id"),
+        "should report assigned_membership_id field, got {details:?}"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn patch_cross_tenant_membership_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1917,26 +2277,42 @@ async fn patch_cross_tenant_membership_422() {
     let admin_b = seed_admin(&pool, tenant_b, "cross-assign-b@example.com").await;
     let customer_b = seed_customer(&pool, tenant_b, "Cross Assign Cust B", None, None).await;
     let conv_b = seed_conversation(
-        &pool, tenant_b, customer_b, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_b,
+        customer_b,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     // Tenant B's conversation, but using tenant A's membership
     let payload = serde_json::json!({"assigned_membership_id": admin_a.membership_id});
-    let response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_b}"),
-        admin_b.user_id, tenant_b, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_b}"),
+            admin_b.user_id,
+            tenant_b,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let body = body_json(response).await;
     assert_eq!(body["error"]["code"], "validation_failed");
     let details = body["error"]["details"].as_array().expect("details array");
-    assert!(details.iter().any(|d| d["field"] == "assigned_membership_id"),
-        "should report assigned_membership_id field");
+    assert!(
+        details
+            .iter()
+            .any(|d| d["field"] == "assigned_membership_id"),
+        "should report assigned_membership_id field"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn status_changed_audit_row_written() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1944,14 +2320,27 @@ async fn status_changed_audit_row_written() {
     let admin = seed_admin(&pool, tenant_id, "audit-status@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Audit Status Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({"status": "resolved"});
-    let _response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_id}"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let _response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id}"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
 
     let audit_count = fetch_audit_count(&pool, "conversation.status_changed", conv_id).await;
     assert_eq!(audit_count, 1, "status_changed audit must be written");
@@ -1959,7 +2348,6 @@ async fn status_changed_audit_row_written() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn assignment_changed_audit_row_written() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1968,14 +2356,27 @@ async fn assignment_changed_audit_row_written() {
     let agent = seed_member(&pool, tenant_id, "audit-assign-agent@example.com", "agent").await;
     let customer_id = seed_customer(&pool, tenant_id, "Audit Assign Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({"assigned_membership_id": agent.membership_id});
-    let _response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_id}"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let _response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id}"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
 
     let audit_count = fetch_audit_count(&pool, "conversation.assignment_changed", conv_id).await;
     assert_eq!(audit_count, 1, "assignment_changed audit must be written");
@@ -1983,7 +2384,6 @@ async fn assignment_changed_audit_row_written() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn no_audit_on_noop_patch() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -1991,26 +2391,44 @@ async fn no_audit_on_noop_patch() {
     let admin = seed_admin(&pool, tenant_id, "noop-audit@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Noop Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open",
-        Some(admin.membership_id), Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        Some(admin.membership_id),
+        Utc::now(),
+    )
+    .await;
 
     // PATCH with same status
     let payload = serde_json::json!({"status": "open"});
-    let _response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_id}"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let _response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id}"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
 
     let status_audit = fetch_audit_count(&pool, "conversation.status_changed", conv_id).await;
     assert_eq!(status_audit, 0, "no status_changed audit on no-op");
 
     // PATCH with same assignee
     let payload = serde_json::json!({"assigned_membership_id": admin.membership_id});
-    let _response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_id}"),
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let _response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id}"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
 
     let assign_audit = fetch_audit_count(&pool, "conversation.assignment_changed", conv_id).await;
     assert_eq!(assign_audit, 0, "no assignment_changed audit on no-op");
@@ -2018,7 +2436,6 @@ async fn no_audit_on_noop_patch() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn missing_both_fields_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2026,23 +2443,38 @@ async fn missing_both_fields_422() {
     let admin = seed_admin(&pool, tenant_id, "missing-fields@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Missing Fields Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({});
-    let response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_id}"),
-        admin.user_id, tenant_id, payload,
-    )).await;
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY,
-        "empty PATCH body must yield 422");
+    let response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id}"),
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "empty PATCH body must yield 422"
+    );
     let body = body_json(response).await;
     assert_eq!(body["error"]["code"], "validation_failed");
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn viewer_403_for_patch() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2050,21 +2482,36 @@ async fn viewer_403_for_patch() {
     let viewer_id = seed_viewer(&pool, tenant_id, "viewer-patch@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Viewer Patch Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({"status": "resolved"});
-    let response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_id}"),
-        viewer_id, tenant_id, payload,
-    )).await;
-    assert_eq!(response.status(), StatusCode::FORBIDDEN,
-        "viewer must receive 403 on PATCH");
+    let response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id}"),
+            viewer_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::FORBIDDEN,
+        "viewer must receive 403 on PATCH"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on PATCH /tenant/conversations/{id} (T050/T051)"]
 async fn cross_tenant_patch_404() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2073,30 +2520,42 @@ async fn cross_tenant_patch_404() {
     let admin_b = seed_admin(&pool, tenant_b, "cross-patch-b@example.com").await;
     let customer_a = seed_customer(&pool, tenant_a, "Cross Patch Cust A", None, None).await;
     let conv_a = seed_conversation(
-        &pool, tenant_a, customer_a, "web_chat", "open", None, Utc::now(),
-    ).await;
+        &pool,
+        tenant_a,
+        customer_a,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
 
     let payload = serde_json::json!({"status": "resolved"});
-    let response = send(pool.clone(), json_patch(
-        &format!("/api/v1/tenant/conversations/{conv_a}"),
-        admin_b.user_id, tenant_b, payload,
-    )).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND,
-        "cross-tenant PATCH must return 404");
+    let response = send(
+        pool.clone(),
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_a}"),
+            admin_b.user_id,
+            tenant_b,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::NOT_FOUND,
+        "cross-tenant PATCH must return 404"
+    );
     let body = body_json(response).await;
     assert_eq!(body["error"]["code"], "not_found");
 }
 
 // ---------------------------------------------------------------------------
 // User Story 5 — Start a New Conversation
-//
-// Tests for POST /tenant/conversations (create).
-// Marked #[ignore] until the create handler (T059/T060) is registered.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn create_conversation_returns_open_unassigned_with_message() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2111,41 +2570,64 @@ async fn create_conversation_returns_open_unassigned_with_message() {
             "body": "I need help with my account."
         }
     });
-    let response = send(pool.clone(), json_post(
-        "/api/v1/tenant/conversations",
-        admin.user_id, tenant_id, payload,
-    )).await;
-    assert_eq!(response.status(), StatusCode::CREATED,
-        "create conversation should return 201");
+    let response = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::CREATED,
+        "create conversation should return 201"
+    );
     let body = body_json(response).await;
     let data = &body["data"];
 
-    assert_eq!(data["status"].as_str().unwrap(), "open",
-        "new conversation must be open");
-    assert!(data["assignee"].is_null(),
-        "new conversation must be unassigned");
-    assert_eq!(data["customer"]["id"].as_str().unwrap(), customer_id.to_string());
+    assert_eq!(
+        data["status"].as_str().unwrap(),
+        "open",
+        "new conversation must be open"
+    );
+    assert!(
+        data["assignee"].is_null(),
+        "new conversation must be unassigned"
+    );
+    assert_eq!(
+        data["customer"]["id"].as_str().unwrap(),
+        customer_id.to_string()
+    );
     assert_eq!(data["channel"].as_str().unwrap(), "web_chat");
 
-    // First message present as kind: reply
-    let msgs = data["messages"].as_array()
-        .or_else(|| data["participants"].and_then(|_| None))
-        .unwrap_or(&serde_json::json!([]));
     // For the create response, the first message may be in a `messages` field
     // or elsewhere; check at least one message exists
-    let timeline_resp = send_get(&pool, admin.user_id, tenant_id,
-        &format!("/api/v1/tenant/conversations/{}/messages", data["id"].as_str().unwrap())).await;
+    let timeline_resp = send_get(
+        &pool,
+        admin.user_id,
+        tenant_id,
+        &format!(
+            "/api/v1/tenant/conversations/{}/messages",
+            data["id"].as_str().unwrap()
+        ),
+    )
+    .await;
     assert_eq!(timeline_resp.status(), StatusCode::OK);
     let tl_body = body_json(timeline_resp).await;
     let tl_msgs = tl_body["data"].as_array().expect("timeline data");
     assert_eq!(tl_msgs.len(), 1, "timeline must have one message");
-    assert_eq!(tl_msgs[0]["kind"].as_str().unwrap(), "reply",
-        "first message kind must be reply");
+    assert_eq!(
+        tl_msgs[0]["kind"].as_str().unwrap(),
+        "reply",
+        "first message kind must be reply"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn conversation_created_audit_row() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2158,10 +2640,16 @@ async fn conversation_created_audit_row() {
         "channel": "email",
         "message": {"body": "Help"}
     });
-    let response = send(pool.clone(), json_post(
-        "/api/v1/tenant/conversations",
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let body = body_json(response).await;
     let conv_id = Uuid::parse_str(body["data"]["id"].as_str().unwrap()).unwrap();
@@ -2172,7 +2660,6 @@ async fn conversation_created_audit_row() {
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn create_missing_customer_id_channel_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2184,36 +2671,51 @@ async fn create_missing_customer_id_channel_422() {
         "channel": "web_chat",
         "message": {"body": "Hello"}
     });
-    let response = send(pool.clone(), json_post(
-        "/api/v1/tenant/conversations",
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let body = body_json(response).await;
     assert_eq!(body["error"]["code"], "validation_failed");
     let details = body["error"]["details"].as_array().expect("details array");
-    assert!(details.iter().any(|d| d["field"] == "customer_id"),
-        "should report missing customer_id, got {details:?}");
+    assert!(
+        details.iter().any(|d| d["field"] == "customer_id"),
+        "should report missing customer_id, got {details:?}"
+    );
 
     // Missing channel
     let payload = serde_json::json!({
         "customer_id": Uuid::new_v4(),
         "message": {"body": "Hello"}
     });
-    let response = send(pool.clone(), json_post(
-        "/api/v1/tenant/conversations",
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let body = body_json(response).await;
     let details = body["error"]["details"].as_array().expect("details array");
-    assert!(details.iter().any(|d| d["field"] == "channel"),
-        "should report missing channel, got {details:?}");
+    assert!(
+        details.iter().any(|d| d["field"] == "channel"),
+        "should report missing channel, got {details:?}"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn create_empty_message_422() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2226,21 +2728,29 @@ async fn create_empty_message_422() {
         "channel": "web_chat",
         "message": {"body": ""}
     });
-    let response = send(pool.clone(), json_post(
-        "/api/v1/tenant/conversations",
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let body = body_json(response).await;
     assert_eq!(body["error"]["code"], "validation_failed");
     let details = body["error"]["details"].as_array().expect("details array");
-    assert!(details.iter().any(|d| d["field"] == "message.body" || d["field"].as_str().map_or(false, |f| f.contains("message"))),
-        "should report message validation, got {details:?}");
+    assert!(
+        details.iter().any(|d| d["field"] == "message.body"
+            || d["field"].as_str().map_or(false, |f| f.contains("message"))),
+        "should report message validation, got {details:?}"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn create_unknown_customer_404() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2253,19 +2763,27 @@ async fn create_unknown_customer_404() {
         "channel": "web_chat",
         "message": {"body": "Hello"}
     });
-    let response = send(pool.clone(), json_post(
-        "/api/v1/tenant/conversations",
-        admin.user_id, tenant_id, payload,
-    )).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND,
-        "unknown customer_id must return 404");
+    let response = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::NOT_FOUND,
+        "unknown customer_id must return 404"
+    );
     let body = body_json(response).await;
     assert_eq!(body["error"]["code"], "not_found");
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn create_cross_tenant_customer_404() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2279,19 +2797,27 @@ async fn create_cross_tenant_customer_404() {
         "channel": "web_chat",
         "message": {"body": "Hello"}
     });
-    let response = send(pool.clone(), json_post(
-        "/api/v1/tenant/conversations",
-        admin_b.user_id, tenant_b, payload,
-    )).await;
-    assert_eq!(response.status(), StatusCode::NOT_FOUND,
-        "cross-tenant customer_id must return 404 (FR-016)");
+    let response = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            admin_b.user_id,
+            tenant_b,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::NOT_FOUND,
+        "cross-tenant customer_id must return 404 (FR-016)"
+    );
     let body = body_json(response).await;
     assert_eq!(body["error"]["code"], "not_found");
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn second_concurrent_open_conversation_succeeds() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2305,10 +2831,16 @@ async fn second_concurrent_open_conversation_succeeds() {
         "channel": "web_chat",
         "message": {"body": "First"}
     });
-    let resp1 = send(pool.clone(), json_post(
-        "/api/v1/tenant/conversations",
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let resp1 = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(resp1.status(), StatusCode::CREATED);
 
     // Second concurrent open conversation — should succeed (Q3)
@@ -2317,21 +2849,31 @@ async fn second_concurrent_open_conversation_succeeds() {
         "channel": "web_chat",
         "message": {"body": "Second"}
     });
-    let resp2 = send(pool.clone(), json_post(
-        "/api/v1/tenant/conversations",
-        admin.user_id, tenant_id, payload2,
-    )).await;
-    assert_eq!(resp2.status(), StatusCode::CREATED,
-        "second open conversation for same customer+channel must succeed");
+    let resp2 = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            admin.user_id,
+            tenant_id,
+            payload2,
+        ),
+    )
+    .await;
+    assert_eq!(
+        resp2.status(),
+        StatusCode::CREATED,
+        "second open conversation for same customer+channel must succeed"
+    );
     let body2 = body_json(resp2).await;
-    assert_ne!(body2["data"]["id"].as_str().unwrap(),
+    assert_ne!(
+        body2["data"]["id"].as_str().unwrap(),
         body_json(resp1).await["data"]["id"].as_str().unwrap(),
-        "second conversation must have a different id");
+        "second conversation must have a different id"
+    );
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on POST /tenant/conversations (T059/T060)"]
 async fn new_conversation_appears_in_customer_history() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2344,38 +2886,51 @@ async fn new_conversation_appears_in_customer_history() {
         "channel": "web_chat",
         "message": {"body": "Appear in history"}
     });
-    let response = send(pool.clone(), json_post(
-        "/api/v1/tenant/conversations",
-        admin.user_id, tenant_id, payload,
-    )).await;
+    let response = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            admin.user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::CREATED);
-    let conv_id = body_json(response).await["data"]["id"].as_str().unwrap().to_string();
+    let conv_id = body_json(response).await["data"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // Check that the conversation appears in customer history (FR-018)
-    let history_resp = send_get(&pool, admin.user_id, tenant_id,
-        &format!("/api/v1/tenant/customers/{customer_id}/conversations")).await;
+    let history_resp = send_get(
+        &pool,
+        admin.user_id,
+        tenant_id,
+        &format!("/api/v1/tenant/customers/{customer_id}/conversations"),
+    )
+    .await;
     assert_eq!(history_resp.status(), StatusCode::OK);
     let history_body = body_json(history_resp).await;
     let history_ids: Vec<&str> = history_body["data"]
-        .as_array().expect("history data array")
+        .as_array()
+        .expect("history data array")
         .iter()
         .map(|item| item["id"].as_str().expect("conversation id"))
         .collect();
-    assert!(history_ids.contains(&conv_id.as_str()),
-        "new conversation must appear in customer history, got {history_ids:?}");
+    assert!(
+        history_ids.contains(&conv_id.as_str()),
+        "new conversation must appear in customer history, got {history_ids:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
 // Seeded-volume performance checks (SC-002)
-//
-// Tests that create many conversations / messages and assert response times
-// stay under 1 second. Marked #[ignore] until the relevant handlers are
-// registered, gated behind REQUIRE_DB_TESTS=1.
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations route (T013/T014); volume check"]
+#[ignore]
 async fn inbox_list_with_10k_conversations_stays_under_1s() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2386,29 +2941,43 @@ async fn inbox_list_with_10k_conversations_stays_under_1s() {
     let base = Utc::now() - chrono::Duration::hours(48);
     for i in 0..10_000 {
         seed_conversation(
-            &pool, tenant_id, customer_id, "web_chat", "open", None,
+            &pool,
+            tenant_id,
+            customer_id,
+            "web_chat",
+            "open",
+            None,
             base + chrono::Duration::minutes(i as i64),
-        ).await;
+        )
+        .await;
     }
 
     let start = std::time::Instant::now();
     let response = get_inbox_list(&pool, admin.user_id, tenant_id, "limit=50").await;
     let elapsed = start.elapsed();
 
-    assert_eq!(response.status(), StatusCode::OK,
-        "inbox with 10k conversations must return 200");
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "inbox with 10k conversations must return 200"
+    );
 
-    assert!(elapsed < std::time::Duration::from_secs(1),
-        "inbox list with 10k conversations took {elapsed:?}, expected <1s (SC-002)");
+    assert!(
+        elapsed < std::time::Duration::from_secs(1),
+        "inbox list with 10k conversations took {elapsed:?}, expected <1s (SC-002)"
+    );
 
     if elapsed >= std::time::Duration::from_secs(1) {
-        eprintln!("SLOW INBOX (SC-002): {:?} — record query plan for diagnosis", elapsed);
+        eprintln!(
+            "SLOW INBOX (SC-002): {:?} — record query plan for diagnosis",
+            elapsed
+        );
     }
 }
 
 #[tokio::test]
 #[serial_test::serial(conversations_db)]
-#[ignore = "depends on GET /tenant/conversations/{id}/messages (T028/T029); volume check"]
+#[ignore]
 async fn timeline_with_1k_messages_stays_under_1s() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
@@ -2416,32 +2985,233 @@ async fn timeline_with_1k_messages_stays_under_1s() {
     let admin = seed_admin(&pool, tenant_id, "volume-timeline@example.com").await;
     let customer_id = seed_customer(&pool, tenant_id, "Volume Timeline Cust", None, None).await;
     let conv_id = seed_conversation(
-        &pool, tenant_id, customer_id, "web_chat", "open", None,
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
         Utc::now() - chrono::Duration::hours(2),
-    ).await;
+    )
+    .await;
 
     let base = Utc::now() - chrono::Duration::hours(1);
     for i in 0..1_000 {
         seed_message(
-            &pool, tenant_id, conv_id, "reply",
-            Some(admin.membership_id), None,
+            &pool,
+            tenant_id,
+            conv_id,
+            "reply",
+            Some(admin.membership_id),
+            None,
             &format!("Volume message {i}"),
             base + chrono::Duration::seconds(i as i64),
-        ).await;
+        )
+        .await;
     }
 
     let start = std::time::Instant::now();
-    let response = send_get(&pool, admin.user_id, tenant_id,
-        &format!("/api/v1/tenant/conversations/{conv_id}/messages?limit=50")).await;
+    let response = send_get(
+        &pool,
+        admin.user_id,
+        tenant_id,
+        &format!("/api/v1/tenant/conversations/{conv_id}/messages?limit=50"),
+    )
+    .await;
     let elapsed = start.elapsed();
 
-    assert_eq!(response.status(), StatusCode::OK,
-        "timeline with 1k messages must return 200");
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "timeline with 1k messages must return 200"
+    );
 
-    assert!(elapsed < std::time::Duration::from_secs(1),
-        "timeline with 1k messages took {elapsed:?}, expected <1s (SC-002)");
+    assert!(
+        elapsed < std::time::Duration::from_secs(1),
+        "timeline with 1k messages took {elapsed:?}, expected <1s (SC-002)"
+    );
 
     if elapsed >= std::time::Duration::from_secs(1) {
-        eprintln!("SLOW TIMELINE (SC-002): {:?} — record query plan for diagnosis", elapsed);
+        eprintln!(
+            "SLOW TIMELINE (SC-002): {:?} — record query plan for diagnosis",
+            elapsed
+        );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Concurrent status/assignment writers (T076)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[serial_test::serial(conversations_db)]
+async fn two_members_update_status_and_assignment_concurrently() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let tenant_id = seed_tenant(&pool, "Concurrent Update Tenant").await;
+    let admin = seed_admin(&pool, tenant_id, "concurrent-admin@example.com").await;
+    let agent = seed_member(&pool, tenant_id, "concurrent-agent@example.com", "agent").await;
+    let customer_id = seed_customer(&pool, tenant_id, "Concurrent Cust", None, None).await;
+    let conv_id = seed_conversation(
+        &pool,
+        tenant_id,
+        customer_id,
+        "web_chat",
+        "open",
+        None,
+        Utc::now(),
+    )
+    .await;
+
+    let pool1 = pool.clone();
+    let pool2 = pool.clone();
+    let conv_id1 = conv_id;
+    let conv_id2 = conv_id;
+    let tenant_id1 = tenant_id;
+    let tenant_id2 = tenant_id;
+    let admin_user_id1 = admin.user_id;
+    let admin_user_id2 = admin.user_id;
+    let _admin_membership_id1 = admin.membership_id;
+    let agent_membership_id2 = agent.membership_id;
+
+    let jh1 = tokio::spawn(async move {
+        let payload = serde_json::json!({ "status": "pending" });
+        send(
+            pool1.clone(),
+            json_patch(
+                &format!("/api/v1/tenant/conversations/{conv_id1}"),
+                admin_user_id1,
+                tenant_id1,
+                payload,
+            ),
+        )
+        .await
+    });
+
+    let jh2 = tokio::spawn(async move {
+        let payload = serde_json::json!({ "assigned_membership_id": agent_membership_id2 });
+        send(
+            pool2.clone(),
+            json_patch(
+                &format!("/api/v1/tenant/conversations/{conv_id2}"),
+                admin_user_id2,
+                tenant_id2,
+                payload,
+            ),
+        )
+        .await
+    });
+
+    let (r1, r2) = tokio::join!(jh1, jh2);
+    let r1 = r1.expect("spawn 1 completed");
+    let r2 = r2.expect("spawn 2 completed");
+
+    assert_eq!(
+        r1.status(),
+        StatusCode::OK,
+        "concurrent status update must succeed"
+    );
+    assert_eq!(
+        r2.status(),
+        StatusCode::OK,
+        "concurrent assignment update must succeed"
+    );
+
+    let db_status: String = sqlx::query_scalar("SELECT status FROM conversations WHERE id = $1")
+        .bind(conv_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let db_assignee: Option<Uuid> =
+        sqlx::query_scalar("SELECT assigned_membership_id FROM conversations WHERE id = $1")
+            .bind(conv_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    assert!(
+        ["open", "pending", "resolved", "closed"].contains(&db_status.as_str()),
+        "final status must be a valid value, got {db_status}"
+    );
+    assert!(
+        db_assignee.is_none() || db_assignee == Some(agent.membership_id),
+        "final assignee must be valid, got {db_assignee:?}"
+    );
+
+    let audit_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1")
+            .bind(conv_id.to_string())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        audit_count >= 1,
+        "at least one audit record must be preserved, got {audit_count}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Viewer 403 for conversation creation (T077)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+#[serial_test::serial(conversations_db)]
+async fn viewer_403_for_create() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let tenant_id = seed_tenant(&pool, "Viewer Create Tenant").await;
+    let viewer_id = seed_viewer(&pool, tenant_id, "viewer-create@example.com").await;
+    let customer_id = seed_customer(&pool, tenant_id, "Viewer Create Cust", None, None).await;
+
+    let conv_count_before: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM conversations WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let audit_count_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    let payload = serde_json::json!({
+        "customer_id": customer_id,
+        "channel": "web_chat",
+        "message": { "body": "Viewer create attempt" }
+    });
+    let response = send(
+        pool.clone(),
+        json_post(
+            "/api/v1/tenant/conversations",
+            viewer_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::FORBIDDEN,
+        "viewer must receive 403 on create"
+    );
+
+    let conv_count_after: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM conversations WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let audit_count_after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        conv_count_after, conv_count_before,
+        "no conversation should be created by viewer"
+    );
+    assert_eq!(
+        audit_count_after, audit_count_before,
+        "no audit row should be written for viewer create attempt"
+    );
 }

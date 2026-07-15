@@ -111,13 +111,15 @@ pub async fn participants_in_tx(
 
     let agents: Vec<Participant> = agent_participants
         .into_iter()
-        .map(|(user_id, membership_id, display_name, active)| Participant {
-            participant_type: "agent".into(),
-            id: Some(user_id),
-            membership_id: Some(membership_id),
-            display_name,
-            active: Some(active),
-        })
+        .map(
+            |(user_id, membership_id, display_name, active)| Participant {
+                participant_type: "agent".into(),
+                id: Some(user_id),
+                membership_id: Some(membership_id),
+                display_name,
+                active: Some(active),
+            },
+        )
         .collect();
 
     let mut all = Vec::with_capacity(1 + agents.len());
@@ -145,9 +147,7 @@ pub fn decode_cursor(cursor: &str) -> Option<(DateTime<Utc>, Uuid)> {
     let bytes = hex::decode(cursor).ok()?;
     let decoded = String::from_utf8(bytes).ok()?;
     let (ts, id) = decoded.split_once('|')?;
-    let ts = DateTime::parse_from_rfc3339(ts)
-        .ok()?
-        .with_timezone(&Utc);
+    let ts = DateTime::parse_from_rfc3339(ts).ok()?.with_timezone(&Utc);
     let id = Uuid::parse_str(id).ok()?;
     Some((ts, id))
 }
@@ -169,9 +169,7 @@ pub fn decode_timeline_cursor(cursor: &str) -> Option<(DateTime<Utc>, i64)> {
     let bytes = hex::decode(cursor).ok()?;
     let decoded = String::from_utf8(bytes).ok()?;
     let (ts, seq) = decoded.split_once('|')?;
-    let ts = DateTime::parse_from_rfc3339(ts)
-        .ok()?
-        .with_timezone(&Utc);
+    let ts = DateTime::parse_from_rfc3339(ts).ok()?.with_timezone(&Utc);
     let seq = seq.parse().ok()?;
     Some((ts, seq))
 }
@@ -270,6 +268,7 @@ pub async fn inbox_query(
     status: Option<String>,
     assignee: Option<String>,
     channel: Option<String>,
+    escalated: Option<bool>,
     cursor: Option<String>,
     limit: i64,
 ) -> sqlx::Result<(Vec<InboxRow>, bool)> {
@@ -333,6 +332,13 @@ pub async fn inbox_query(
         }
         None => None,
     };
+
+    // ---- escalated filter ----
+    match escalated {
+        Some(true) => sql.push_str(" AND c.escalated_at IS NOT NULL"),
+        Some(false) => sql.push_str(" AND c.escalated_at IS NULL"),
+        None => {}
+    }
 
     // ---- channel filter ----
     if channel.is_some() {
@@ -779,13 +785,111 @@ pub async fn add_message_in_tx(
 }
 
 // ---------------------------------------------------------------------------
+// T008 — assign_in_tx: extract-only assignment, used by escalations routing
+// ---------------------------------------------------------------------------
+
+/// Assign (or unassign) a conversation's membership. Validates target via
+/// `active_membership_exists_in_tx`. Writes audit and outbox. Does not
+/// lock the row — caller must hold `SELECT ... FOR UPDATE` if needed.
+/// Used by the escalations routing engine (origin = "escalations") and
+/// by `patch_conversation_in_tx` for the assignment half.
+pub async fn assign_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    assigned_membership_id: Option<Uuid>,
+    actor_user_id: Option<Uuid>,
+    origin: &str,
+) -> sqlx::Result<()> {
+    let prior: (Option<Uuid>,) = sqlx::query_as(
+        "SELECT assigned_membership_id FROM conversations \
+         WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    if prior.0 == assigned_membership_id {
+        return Ok(());
+    }
+
+    if let Some(mid) = assigned_membership_id {
+        if !active_membership_exists_in_tx(tx, tenant_id, mid).await? {
+            return Err(sqlx::Error::Protocol(
+                format!("Membership {mid} is not active in tenant {tenant_id}").into(),
+            ));
+        }
+    }
+
+    sqlx::query(
+        "UPDATE conversations SET assigned_membership_id = $1 \
+         WHERE tenant_id = $2 AND id = $3",
+    )
+    .bind(assigned_membership_id)
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .execute(&mut **tx)
+    .await?;
+
+    if let Some(uid) = actor_user_id {
+        crate::audit::record_assignment_changed(
+            tx,
+            uid,
+            tenant_id,
+            conversation_id,
+            prior.0,
+            assigned_membership_id,
+        )
+        .await?;
+    }
+
+    crate::outbox::emit_assignment_changed_in_tx(
+        tx,
+        tenant_id,
+        conversation_id,
+        prior.0,
+        assigned_membership_id,
+        actor_user_id,
+        origin,
+    )
+    .await?;
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// T008 — set_escalated_in_tx: maintains conversations.escalated_at column
+// ---------------------------------------------------------------------------
+
+/// Set or clear the `escalated_at` flag. Written only by the escalations
+/// module via this public interface (module ownership, R5).
+pub async fn set_escalated_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    escalated_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "UPDATE conversations SET escalated_at = $1 \
+         WHERE tenant_id = $2 AND id = $3",
+    )
+    .bind(escalated_at)
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // T049 — Patch conversation (lock + update status/assignment)
 // ---------------------------------------------------------------------------
 
 /// Lock the conversation row (SELECT FOR UPDATE), read prior values, and
 /// apply status and/or assignment changes. Validates assignment target via
 /// `active_membership_exists_in_tx`. Skips no-op audits. Writes audit rows
-/// for changes. Returns the updated `ConversationDetail`.
+/// and outbox events for changes. Returns the updated `ConversationDetail`.
 pub async fn patch_conversation_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
@@ -829,38 +933,31 @@ pub async fn patch_conversation_in_tx(
                 false,
             )
             .await?;
+
+            crate::outbox::emit_status_changed_in_tx(
+                tx,
+                tenant_id,
+                id,
+                &prior.0,
+                new_status,
+                None,
+                "conversations",
+            )
+            .await?;
         }
     }
 
-    // 3. Apply assignment change
+    // 3. Apply assignment change (delegate to assign_in_tx)
     if let Some(new_assignment) = assigned_membership_id {
         let prior_assignment = prior.1;
         if new_assignment != prior_assignment {
-            if let Some(mid) = new_assignment {
-                if !active_membership_exists_in_tx(tx, tenant_id, mid).await? {
-                    return Err(sqlx::Error::Protocol(
-                        format!("Membership {mid} is not active in tenant {tenant_id}").into(),
-                    ));
-                }
-            }
-
-            sqlx::query(
-                "UPDATE conversations SET assigned_membership_id = $1 \
-                 WHERE tenant_id = $2 AND id = $3",
-            )
-            .bind(new_assignment)
-            .bind(tenant_id)
-            .bind(id)
-            .execute(&mut **tx)
-            .await?;
-
-            crate::audit::record_assignment_changed(
+            assign_in_tx(
                 tx,
-                actor_user_id,
                 tenant_id,
                 id,
-                prior_assignment,
                 new_assignment,
+                Some(actor_user_id),
+                "conversations",
             )
             .await?;
         }
@@ -896,10 +993,7 @@ pub async fn create_conversation_in_tx(
     let customer_ok = customers::customer_exists_in_tx(tx, tenant_id, customer_id).await?;
     if !customer_ok {
         return Err(sqlx::Error::Protocol(
-            format!(
-                "Customer {customer_id} not found in tenant {tenant_id}"
-            )
-            .into(),
+            format!("Customer {customer_id} not found in tenant {tenant_id}").into(),
         ));
     }
 

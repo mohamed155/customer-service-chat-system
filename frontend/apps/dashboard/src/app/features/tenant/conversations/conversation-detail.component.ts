@@ -14,6 +14,7 @@ import {
   SelectFilterOption,
 } from '../../../shared/components/select-filter/select-filter.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { EscalationBannerComponent } from '../escalations/escalation-banner.component';
 import { ConversationsApiService } from './conversations-api.service';
 import { ConversationDetailStore } from './conversation-detail.store';
 import { ConversationThreadComponent } from './conversation-thread.component';
@@ -34,6 +35,7 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
     ComposerComponent,
     ConversationThreadComponent,
     EmptyStateComponent,
+    EscalationBannerComponent,
     LoadingStateComponent,
     SelectFilterComponent,
     StatusBadgeComponent,
@@ -83,6 +85,10 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
             </div>
           }
         </header>
+
+        @if (conv.escalation) {
+          <app-escalation-banner [escalation]="conv.escalation" />
+        }
 
         @if (conv.participants.length) {
           <div class="participants-bar">

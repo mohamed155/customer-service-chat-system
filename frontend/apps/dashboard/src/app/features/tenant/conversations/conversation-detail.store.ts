@@ -5,7 +5,7 @@ import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
 import {
   AddMessagePayload,
-  ConversationDetail,
+  ConversationDetailEscalation,
   ConversationStatus,
   Message,
 } from '../../../core/api/tenant-api.models';
@@ -18,7 +18,7 @@ export interface TimelinePage {
 }
 
 interface ConversationDetailState {
-  readonly conversation: ConversationDetail | null;
+  readonly conversation: ConversationDetailEscalation | null;
   readonly timelinePages: TimelinePage[];
   readonly loading: boolean;
   readonly loadingTimeline: boolean;
@@ -184,7 +184,12 @@ export const ConversationDetailStore = signalStore(
       patchStatus(id: string, status: ConversationStatus): void {
         api.patch(id, { status }).subscribe({
           next: (response) => {
-            patchState(store, { conversation: response.data });
+            const current = store.conversation();
+            patchState(store, {
+              conversation: current
+                ? { ...response.data, escalation: current.escalation }
+                : (response.data as ConversationDetailEscalation),
+            });
           },
           error: (err: unknown) => {
             patchState(store, {
@@ -196,7 +201,12 @@ export const ConversationDetailStore = signalStore(
       patchAssignment(id: string, membershipId: string | null): void {
         api.patch(id, { assignedMembershipId: membershipId }).subscribe({
           next: (response) => {
-            patchState(store, { conversation: response.data });
+            const current = store.conversation();
+            patchState(store, {
+              conversation: current
+                ? { ...response.data, escalation: current.escalation }
+                : (response.data as ConversationDetailEscalation),
+            });
           },
           error: (err: unknown) => {
             patchState(store, {

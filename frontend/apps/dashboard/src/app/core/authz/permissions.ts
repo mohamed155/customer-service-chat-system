@@ -41,4 +41,5 @@ export const PAGE_PERMISSIONS = {
   [APP_PATHS.tenant.settings]: 'settings.view',
   [APP_PATHS.tenant.team]: 'members.view',
   [APP_PATHS.platform.base]: 'platform.admin',
+  [APP_PATHS.tenant.escalations]: 'conversations.view',
 } as const satisfies Record<string, Permission>;

@@ -10,9 +10,12 @@ import {
   selectThemeMode,
   ThemeMode,
 } from '../../core/state/app-ui.feature';
+import { PermissionsService } from '../../core/authz/permissions.service';
+import { NotificationsService } from '../../core/realtime/notifications.service';
 import { IconButtonComponent } from '../../shared/components/icon-button/icon-button.component';
 import { SearchInputComponent } from '../../shared/components/search-input/search-input.component';
 import { LayoutStore } from '../app-shell/layout.store';
+import { AvailabilityToggleComponent } from './availability-toggle.component';
 import { PlatformNavComponent } from './platform-nav.component';
 import { TenantSwitcherComponent } from './tenant-switcher.component';
 import { UserMenuComponent } from './user-menu.component';
@@ -20,6 +23,7 @@ import { UserMenuComponent } from './user-menu.component';
 @Component({
   selector: 'app-topbar',
   imports: [
+    AvailabilityToggleComponent,
     IconButtonComponent,
     SearchInputComponent,
     PlatformNavComponent,
@@ -56,13 +60,21 @@ import { UserMenuComponent } from './user-menu.component';
         <button class="new-button" type="button">
           <tui-icon icon="@tui.plus" /><span class="new-label">New</span>
         </button>
+        @if (canManageConversations()) {
+          <app-availability-toggle />
+        }
         <app-icon-button
           class="theme-toggle"
           [icon]="themeIcon()"
           [label]="themeLabel()"
           (click)="cycleTheme()"
         />
-        <app-icon-button class="notification-bell" icon="@tui.bell" label="Notifications" />
+        <div class="notification-wrapper">
+          <app-icon-button class="notification-bell" icon="@tui.bell" label="Notifications" />
+          @if (notificationsService.inAppSignal()) {
+            <span class="badge">{{ notificationsService.inAppSignal() }}</span>
+          }
+        </div>
         @if (isAuthenticated()) {
           <app-user-menu />
         }
@@ -130,6 +142,26 @@ import { UserMenuComponent } from './user-menu.component';
         outline: 3px solid var(--app-accent-soft);
         outline-offset: 2px;
       }
+      .notification-wrapper {
+        position: relative;
+        display: inline-flex;
+      }
+      .badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 999px;
+        background: var(--tui-status-danger, #dc2626);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 16px;
+        text-align: center;
+        pointer-events: none;
+      }
       @media (max-width: 900px) {
         .search {
           width: min(220px, 28vw);
@@ -177,7 +209,10 @@ export class TopbarComponent {
   private readonly store = inject(Store);
   private readonly layoutStore = inject(LayoutStore);
   private readonly currentUser = inject(CurrentUserService);
+  private readonly permissions = inject(PermissionsService);
+  protected readonly notificationsService = inject(NotificationsService);
   protected readonly collapsed = this.store.selectSignal(selectSidebarCollapsed);
+  protected readonly canManageConversations = () => this.permissions.has('conversations.manage');
   protected readonly isPlatformUser = this.currentUser.isPlatformUser;
   protected readonly isAuthenticated = computed(() => this.currentUser.currentUser() != null);
   protected readonly themeMode = this.store.selectSignal(selectThemeMode);

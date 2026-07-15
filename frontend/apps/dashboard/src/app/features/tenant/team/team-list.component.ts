@@ -22,6 +22,7 @@ import { Store } from '@ngrx/store';
 import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
+import { AvailabilityDotComponent } from '../../../shared/components/availability-dot/availability-dot.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
@@ -39,9 +40,11 @@ import {
 import { MEMBER_STATUS_TONES, MEMBERSHIP_ROLE_TONES } from '../../../core/ui/status-badge-config';
 import { ToolbarComponent } from '../../../shared/components/toolbar/toolbar.component';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
+import { DialogShellComponent } from '../../../shared/components/dialog-shell/dialog-shell.component';
 import { InviteDialogComponent } from './invite-dialog.component';
 import { InvitationTableComponent } from './invitation-table.component';
 import { RoleSelectComponent } from './role-select.component';
+import { SkillsManagerComponent } from './skills-manager.component';
 import { TeamStore } from './team.store';
 
 const ROLE_RANKS: Record<MembershipRole, number> = {
@@ -56,8 +59,10 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
   selector: 'app-team-list',
   imports: [
     DatePipe,
+    AvailabilityDotComponent,
     ButtonComponent,
     DataTableComponent,
+    DialogShellComponent,
     EmptyStateComponent,
     AvatarComponent,
     InviteDialogComponent,
@@ -69,6 +74,7 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
     RoleSelectComponent,
     SearchInputComponent,
     SelectFilterComponent,
+    SkillsManagerComponent,
     StatusBadgeComponent,
     ToolbarComponent,
   ],
@@ -120,6 +126,11 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
               [options]="invitationStatusOptions"
               (valueChange)="onInvitationStatusChange($event)"
             />
+            @if (canManage()) {
+              <app-button toolbar-end variant="ghost" (pressed)="showSkillsManager.set(true)">
+                Skills
+              </app-button>
+            }
             @if (canManage()) {
               <app-button toolbar-end variant="primary" (pressed)="openInviteDialog($event)">
                 Invite
@@ -230,7 +241,19 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
                     <tr>
                       <td class="cell-name">
                         <app-avatar [initials]="memberInitials(member.displayName)" size="sm" />
-                        <strong>{{ member.displayName }}</strong>
+                        <div class="member-info">
+                          <strong>{{ member.displayName }}</strong>
+                          @if (member.availability) {
+                            <app-availability-dot [state]="member.availability" />
+                          }
+                        </div>
+                        @if (member.skills && member.skills.length > 0) {
+                          <div class="skill-chips">
+                            @for (skill of member.skills; track skill.id) {
+                              <span class="skill-chip">{{ skill.name }}</span>
+                            }
+                          </div>
+                        }
                       </td>
                       <td class="muted">{{ member.email }}</td>
                       <td>
@@ -315,6 +338,12 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
         [canAssignOwner]="canAssignOwner()"
       />
     }
+
+    @if (showSkillsManager()) {
+      <app-dialog-shell (close)="showSkillsManager.set(false)">
+        <app-skills-manager />
+      </app-dialog-shell>
+    }
   `,
   styles: [
     `
@@ -326,6 +355,27 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
         display: flex;
         align-items: center;
         gap: var(--app-space-3);
+      }
+      .member-info {
+        display: flex;
+        align-items: center;
+        gap: var(--app-space-2);
+      }
+      .skill-chips {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        margin-left: auto;
+      }
+      .skill-chip {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: var(--app-panel-2);
+        color: var(--app-text-2);
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
       }
       strong,
       small {
@@ -365,6 +415,7 @@ export class TeamListComponent {
   private readonly globalStore = inject(Store, { optional: true });
 
   protected readonly showInviteDialog = signal(false);
+  protected readonly showSkillsManager = signal(false);
   protected readonly invitationSubmitting = signal(false);
   protected readonly invitationError = signal<string | null>(null);
   protected readonly invitationResult = signal<CreateInvitationResponse | null>(null);

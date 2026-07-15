@@ -26,6 +26,7 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
         @if (
           permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.overview]) ||
           permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.conversations]) ||
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.escalations]) ||
           permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.customers]) ||
           permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.team])
         ) {
@@ -45,6 +46,14 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
                 [link]="links.conversations"
                 [collapsed]="collapsed()"
                 [badgeCount]="6"
+              />
+            }
+            @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.escalations])) {
+              <app-sidebar-nav-item
+                icon="@tui.arrow-up-from-line"
+                label="Escalations"
+                [link]="links.escalations"
+                [collapsed]="collapsed()"
               />
             }
             @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.customers])) {
@@ -205,6 +214,7 @@ export class SidebarComponent {
     overview: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.overview}`,
     conversations: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.conversations}`,
     customers: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.customers}`,
+    escalations: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.escalations}`,
     aiAgent: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.aiAgent}`,
     knowledgeBase: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.knowledgeBase}`,
     integrations: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.integrations}`,

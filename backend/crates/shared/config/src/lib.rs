@@ -91,6 +91,10 @@ pub struct AppConfig {
     pub smtp_url: Option<String>,
     pub smtp_from: Option<String>,
     pub public_dashboard_url: String,
+    pub ai_key_encryption_key: Option<String>,
+    pub ai_openai_base_url: Option<String>,
+    pub ai_anthropic_base_url: Option<String>,
+    pub ai_gemini_base_url: Option<String>,
     pub db_max_connections: u32,
     pub db_acquire_timeout_ms: u64,
     pub ready_probe_timeout_ms: u64,
@@ -100,6 +104,7 @@ pub struct AppConfig {
 impl fmt::Debug for AppConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let smtp_url = self.smtp_url.as_ref().map(|_| "[REDACTED]");
+        let ai_key = self.ai_key_encryption_key.as_ref().map(|_| "[REDACTED]");
         f.debug_struct("AppConfig")
             .field("database_url", &"[REDACTED]")
             .field("redis_url", &"[REDACTED]")
@@ -117,6 +122,10 @@ impl fmt::Debug for AppConfig {
             .field("smtp_from", &self.smtp_from)
             .field("public_dashboard_url", &self.public_dashboard_url)
             .field("shutdown_grace_seconds", &self.shutdown_grace_seconds)
+            .field("ai_key_encryption_key", &ai_key)
+            .field("ai_openai_base_url", &self.ai_openai_base_url)
+            .field("ai_anthropic_base_url", &self.ai_anthropic_base_url)
+            .field("ai_gemini_base_url", &self.ai_gemini_base_url)
             .finish()
     }
 }
@@ -205,6 +214,33 @@ impl AppConfig {
 
         let smtp_url = env::var("SMTP_URL").ok();
         let smtp_from = env::var("SMTP_FROM").ok();
+
+        let ai_key_encryption_key = match env::var("APP_AI_KEY_ENCRYPTION_KEY") {
+            Ok(v) => {
+                use base64::Engine;
+                let decoded = base64::engine::general_purpose::STANDARD
+                    .decode(&v)
+                    .map_err(|_| {
+                        ConfigError("APP_AI_KEY_ENCRYPTION_KEY must be valid base64".into())
+                    })?;
+                if decoded.len() != 32 {
+                    return Err(ConfigError(
+                        "APP_AI_KEY_ENCRYPTION_KEY must be a base64-encoded string of exactly 32 bytes".into(),
+                    ));
+                }
+                Some(v)
+            }
+            Err(_) if environment == Environment::Test => None,
+            Err(_) => {
+                return Err(ConfigError(
+                    "required environment variable APP_AI_KEY_ENCRYPTION_KEY is missing".into(),
+                ));
+            }
+        };
+        let ai_openai_base_url = env::var("APP_AI_OPENAI_BASE_URL").ok();
+        let ai_anthropic_base_url = env::var("APP_AI_ANTHROPIC_BASE_URL").ok();
+        let ai_gemini_base_url = env::var("APP_AI_GEMINI_BASE_URL").ok();
+
         let public_dashboard_url =
             env::var("PUBLIC_DASHBOARD_URL").unwrap_or_else(|_| match environment {
                 Environment::Production | Environment::Staging => {
@@ -222,6 +258,10 @@ impl AppConfig {
             smtp_url,
             smtp_from,
             public_dashboard_url,
+            ai_key_encryption_key,
+            ai_openai_base_url,
+            ai_anthropic_base_url,
+            ai_gemini_base_url,
             port,
             bind_address,
             environment,
@@ -279,6 +319,10 @@ mod tests {
                 "SMTP_URL",
                 "SMTP_FROM",
                 "PUBLIC_DASHBOARD_URL",
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "APP_AI_OPENAI_BASE_URL",
+                "APP_AI_ANTHROPIC_BASE_URL",
+                "APP_AI_GEMINI_BASE_URL",
             ] {
                 env::remove_var(key);
             }
@@ -305,6 +349,10 @@ mod tests {
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
             ("PORT", "not_a_port"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
         ]);
         let err = AppConfig::from_env().unwrap_err();
         assert!(err.0.contains("PORT"));
@@ -331,6 +379,10 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "not-a-url"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
         ]);
         let err = AppConfig::from_env().unwrap_err();
         assert!(err.0.contains("CORS"));
@@ -345,6 +397,10 @@ mod tests {
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
             ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
         ]);
         let config = AppConfig::from_env().unwrap();
         assert_eq!(config.port, 8080);
@@ -354,6 +410,9 @@ mod tests {
         assert_eq!(config.ready_probe_timeout_ms, 2000);
         assert_eq!(config.shutdown_grace_seconds, 10);
         assert_eq!(config.log_format, LogFormat::Pretty);
+        assert_eq!(config.ai_openai_base_url, None);
+        assert_eq!(config.ai_anthropic_base_url, None);
+        assert_eq!(config.ai_gemini_base_url, None);
     }
 
     #[test]
@@ -364,6 +423,10 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "production"),
             ("CORS_ALLOWED_ORIGINS", ""),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
         ]);
         let err = AppConfig::from_env().unwrap_err();
         assert!(err.0.contains("CORS_ALLOWED_ORIGINS") || err.0.contains("origin"));
@@ -380,6 +443,10 @@ mod tests {
             ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             ("SMTP_URL", "smtp://user:pass@smtp.example.com:587"),
             ("SMTP_FROM", "alerts@example.com"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
         ]);
         let config = AppConfig::from_env().unwrap();
         let debug_str = format!("{config:?}");
@@ -415,6 +482,10 @@ mod tests {
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
             ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             ("PUBLIC_DASHBOARD_URL", "ftp://example.com"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
         ]);
         let err = AppConfig::from_env().unwrap_err();
         assert!(err.0.contains("PUBLIC_DASHBOARD_URL"));
@@ -429,6 +500,10 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
         ]);
         let err = AppConfig::from_env().unwrap_err();
         assert!(err.0.contains("AUTH_JWT_SECRET"));
@@ -443,6 +518,10 @@ mod tests {
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
             ("AUTH_JWT_SECRET", "too-short"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
         ]);
         let err = AppConfig::from_env().unwrap_err();
         assert!(err.0.contains("AUTH_JWT_SECRET"));
@@ -459,9 +538,31 @@ mod tests {
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
             ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             ("AUTH_SESSION_TTL_SECONDS", "3600"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
         ]);
         let config = AppConfig::from_env().unwrap();
         assert_eq!(config.auth_session_ttl_seconds, 3600);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn ai_key_encryption_key_rejects_non_32_byte_base64() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            ("APP_AI_KEY_ENCRYPTION_KEY", "dG9vX3Nob3J0"), // base64 of "too_short" (9 bytes)
+        ]);
+        let err = AppConfig::from_env().unwrap_err();
+        assert!(
+            err.0.contains("32 bytes"),
+            "Expected 32-byte validation error, got: {err}"
+        );
     }
 
     #[test]
@@ -474,6 +575,10 @@ mod tests {
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
             ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             ("AUTH_SESSION_TTL_SECONDS", "not_a_number"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
         ]);
         let err = AppConfig::from_env().unwrap_err();
         assert!(err.0.contains("AUTH_SESSION_TTL_SECONDS"));

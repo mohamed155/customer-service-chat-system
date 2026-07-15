@@ -22,6 +22,7 @@ pub struct InboxQueryParams {
     pub status: Option<String>,
     pub assignee: Option<String>,
     pub channel: Option<String>,
+    pub escalated: Option<bool>,
     pub cursor: Option<String>,
     pub limit: u32,
 }
@@ -32,6 +33,7 @@ impl Default for InboxQueryParams {
             status: None,
             assignee: None,
             channel: None,
+            escalated: None,
             cursor: None,
             limit: 25,
         }
@@ -59,13 +61,11 @@ struct PaginatedResponse<T: Serialize> {
 // ---------------------------------------------------------------------------
 
 fn status_from_str(s: &str) -> model::ConversationStatus {
-    serde_json::from_value(Value::String(s.to_owned()))
-        .unwrap_or(model::ConversationStatus::Open)
+    serde_json::from_value(Value::String(s.to_owned())).unwrap_or(model::ConversationStatus::Open)
 }
 
 fn kind_from_str(s: &str) -> model::MessageKind {
-    serde_json::from_value(Value::String(s.to_owned()))
-        .unwrap_or(model::MessageKind::Reply)
+    serde_json::from_value(Value::String(s.to_owned())).unwrap_or(model::MessageKind::Reply)
 }
 
 fn row_to_conversation(row: queries::InboxRow) -> model::Conversation {
@@ -207,6 +207,7 @@ pub async fn list_conversations(
         params.status,
         params.assignee,
         params.channel,
+        params.escalated,
         params.cursor,
         limit,
     )
@@ -228,8 +229,7 @@ pub async fn list_conversations(
             .into_response();
     }
 
-    let data: Vec<model::Conversation> =
-        rows.into_iter().map(row_to_conversation).collect();
+    let data: Vec<model::Conversation> = rows.into_iter().map(row_to_conversation).collect();
 
     let next_cursor = has_more.then(|| {
         let last = data.last().expect("page with more rows has a last item");
@@ -354,6 +354,21 @@ pub async fn get_timeline(
         }
     };
 
+    match queries::conversation_row_in_tx(&mut tx, ctx.tenant_id, conversation_id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return ApiError::not_found("Conversation not found")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(error) => {
+            tracing::error!(%error, "failed to check conversation existence");
+            return ApiError::internal_error("Failed to load messages")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    }
+
     let (messages, has_more, next_cursor) = match queries::timeline_query_in_tx(
         &mut tx,
         ctx.tenant_id,
@@ -413,14 +428,16 @@ pub async fn add_message(
 
     let body = payload.body.trim().to_string();
     if body.is_empty() || body.len() > 10000 {
-        return ApiError::unprocessable_entity("Message body must be between 1 and 10000 characters")
-            .with_details(vec![json!({
-                "field": "body",
-                "code": "invalid_length",
-                "message": "Body must be 1-10000 characters after trimming"
-            })])
-            .with_request_id(&ctx.request_id)
-            .into_response();
+        return ApiError::unprocessable_entity(
+            "Message body must be between 1 and 10000 characters",
+        )
+        .with_details(vec![json!({
+            "field": "body",
+            "code": "invalid_length",
+            "message": "Body must be 1-10000 characters after trimming"
+        })])
+        .with_request_id(&ctx.request_id)
+        .into_response();
     }
 
     let kind_str = serde_json::to_string(&payload.kind)
@@ -479,6 +496,21 @@ pub async fn add_message(
         }
     };
 
+    match queries::conversation_row_in_tx(&mut tx, ctx.tenant_id, conversation_id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return ApiError::not_found("Conversation not found")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(error) => {
+            tracing::error!(%error, "failed to check conversation existence");
+            return ApiError::internal_error("Failed to add message")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    }
+
     let (message, status_ref) = match queries::add_message_in_tx(
         &mut tx,
         ctx.tenant_id,
@@ -508,8 +540,10 @@ pub async fn add_message(
     }
 
     Json(json!({
-        "message": message,
-        "conversation": status_ref,
+        "data": {
+            "message": message,
+            "conversation": status_ref,
+        }
     }))
     .into_response()
 }
@@ -536,14 +570,16 @@ pub async fn patch_conversation(
     };
 
     if payload.status.is_none() && payload.assigned_membership_id.is_none() {
-        return ApiError::unprocessable_entity("At least one of status or assigned_membership_id is required")
-            .with_details(vec![json!({
-                "field": "<body>",
-                "code": "missing_fields",
-                "message": "Specify at least one of: status, assigned_membership_id"
-            })])
-            .with_request_id(&ctx.request_id)
-            .into_response();
+        return ApiError::unprocessable_entity(
+            "At least one of status or assigned_membership_id is required",
+        )
+        .with_details(vec![json!({
+            "field": "<body>",
+            "code": "missing_fields",
+            "message": "Specify at least one of: status, assigned_membership_id"
+        })])
+        .with_request_id(&ctx.request_id)
+        .into_response();
     }
 
     let status_str = payload.status.as_ref().map(|s| {
@@ -562,6 +598,21 @@ pub async fn patch_conversation(
                 .into_response();
         }
     };
+
+    match queries::conversation_row_in_tx(&mut tx, ctx.tenant_id, id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return ApiError::not_found("Conversation not found")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(error) => {
+            tracing::error!(%error, "failed to check conversation existence");
+            return ApiError::internal_error("Failed to update conversation")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    }
 
     let detail = match queries::patch_conversation_in_tx(
         &mut tx,

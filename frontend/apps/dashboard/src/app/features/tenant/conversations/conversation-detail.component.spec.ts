@@ -4,7 +4,12 @@ import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { APP_CONFIG } from '../../../core/config/app-config';
-import { ConversationDetail, Message } from '../../../core/api/tenant-api.models';
+import {
+  ConversationDetail,
+  ConversationDetailEscalation,
+  Escalation,
+  Message,
+} from '../../../core/api/tenant-api.models';
 import { ConversationsApiService } from './conversations-api.service';
 import { ConversationDetailStore } from './conversation-detail.store';
 import { ConversationDetailComponent } from './conversation-detail.component';
@@ -283,5 +288,79 @@ describe('ConversationDetailComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('Maya Chen');
+  });
+
+  describe('escalation', () => {
+    const escalationMock: Escalation = {
+      id: 'e-1',
+      conversationId: 'c1',
+      reason: 'customer_requested',
+      requiredSkills: [],
+      status: 'queued',
+      routing: null,
+      escalatedAt: '2026-07-14T10:00:00Z',
+      closedAt: null,
+    };
+
+    it('renders escalation banner when conversation().escalation is present', async () => {
+      const escalatedConv: ConversationDetailEscalation = {
+        ...mockConversation,
+        escalation: escalationMock,
+      };
+      storeMock.conversation.mockReturnValue(escalatedConv);
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(ConversationDetailComponent);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-escalation-banner')).toBeTruthy();
+      expect(fixture.nativeElement.textContent).toContain('Escalated');
+    });
+
+    it('does not render escalation banner when escalation is null', async () => {
+      const noEscalation: ConversationDetailEscalation = {
+        ...mockConversation,
+        escalation: null,
+      };
+      storeMock.conversation.mockReturnValue(noEscalation);
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(ConversationDetailComponent);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('app-escalation-banner')).toBeFalsy();
+    });
+
+    it('shows manual-reassignment controls under conversations.manage on escalated conversations', async () => {
+      const escalatedConv: ConversationDetailEscalation = {
+        ...mockConversation,
+        escalation: escalationMock,
+      };
+      storeMock.conversation.mockReturnValue(escalatedConv);
+      TestBed.overrideProvider(PermissionsService, {
+        useValue: { has: vi.fn(() => true), effective: vi.fn(() => new Set()) },
+      });
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(ConversationDetailComponent);
+      fixture.detectChanges();
+
+      const controlGroups = fixture.nativeElement.querySelectorAll('.control-group');
+      expect(controlGroups.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('hides manual-reassignment controls when user lacks conversations.manage on escalated conversations', async () => {
+      const escalatedConv: ConversationDetailEscalation = {
+        ...mockConversation,
+        escalation: escalationMock,
+      };
+      storeMock.conversation.mockReturnValue(escalatedConv);
+      TestBed.overrideProvider(PermissionsService, {
+        useValue: { has: vi.fn(() => false), effective: vi.fn(() => new Set()) },
+      });
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(ConversationDetailComponent);
+      fixture.detectChanges();
+
+      const controlGroups = fixture.nativeElement.querySelectorAll('.control-group');
+      expect(controlGroups.length).toBe(0);
+    });
   });
 });

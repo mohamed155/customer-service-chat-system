@@ -37,7 +37,7 @@ describe('SidebarComponent', () => {
     const element: HTMLElement = fixture.nativeElement;
 
     expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(4);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(8);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(9);
     expect(element.textContent).toContain('Workspace');
     expect(element.textContent).toContain('AI');
     expect(element.textContent).toContain('Insights');
@@ -76,7 +76,7 @@ describe('SidebarComponent', () => {
     const element: HTMLElement = fixture.nativeElement;
 
     expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(2);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(4);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(5);
     expect(element.textContent).toContain('Workspace');
     expect(element.textContent).toContain('Conversations');
     expect(element.textContent).not.toContain('AI Agent');
@@ -100,7 +100,7 @@ describe('SidebarComponent', () => {
     const element: HTMLElement = fixture.nativeElement;
 
     expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(3);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(7);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(8);
     expect(element.textContent).toContain('AI');
     expect(element.textContent).toContain('AI Agent');
     expect(element.textContent).toContain('Integrations');
@@ -123,7 +123,7 @@ describe('SidebarComponent', () => {
     const element: HTMLElement = fixture.nativeElement;
 
     expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(2);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(4);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(5);
     expect(element.textContent).toContain('Workspace');
     expect(element.textContent).toContain('Overview');
     expect(element.textContent).toContain('Conversations');
@@ -152,7 +152,7 @@ describe('SidebarComponent', () => {
     const element: HTMLElement = fixture.nativeElement;
 
     expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(4);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(8);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(9);
     expect(element.textContent).toContain('Settings');
   });
 

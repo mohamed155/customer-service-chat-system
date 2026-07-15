@@ -26,7 +26,6 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 pub use idempotency::{
     idempotency_middleware, CachedResponse, IdempotencyKey, IdempotencyStore,

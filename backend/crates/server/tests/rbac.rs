@@ -51,15 +51,15 @@ const VIEWER_PERMISSIONS: &[&str] = &[
 const TENANT_OPERATIONS: &[(&str, &str)] = &[
     ("/api/v1/tenant", "overview.view"),
     ("/api/v1/tenant/conversations", "conversations.view"),
-    (
-        "/api/v1/tenant/conversations/{id}",
-        "conversations.view",
-    ),
+    ("/api/v1/tenant/conversations/{id}", "conversations.view"),
     (
         "/api/v1/test/tenant/conversations/manage",
         "conversations.manage",
     ),
-    ("/api/v1/tenant/conversations/{id}/messages", "conversations.view"),
+    (
+        "/api/v1/tenant/conversations/{id}/messages",
+        "conversations.view",
+    ),
     ("/api/v1/test/tenant/members/manage", "members.manage"),
     ("/api/v1/test/tenant/members/{id}", "members.manage"),
     ("/api/v1/test/tenant/members/view", "members.view"),
@@ -76,6 +76,18 @@ const TENANT_OPERATIONS: &[(&str, &str)] = &[
     ("/api/v1/test/tenant/billing/manage", "billing.manage"),
     ("/api/v1/test/tenant/customers/view", "customers.view"),
     ("/api/v1/test/tenant/customers/manage", "customers.manage"),
+    ("/api/v1/test/tenant/events", "conversations.view"),
+    (
+        "/api/v1/test/tenant/escalations/manage",
+        "conversations.manage",
+    ),
+    ("/api/v1/test/tenant/escalations/view", "conversations.view"),
+    ("/api/v1/test/tenant/skills/manage", "members.manage"),
+    ("/api/v1/tenant/ai/config", "ai_agent.view"),
+    ("/api/v1/test/tenant/ai/manage", "ai_agent.manage"),
+    ("/api/v1/test/tenant/ai/view", "ai_agent.view"),
+    ("/api/v1/tenant/ai/usage", "ai_agent.view"),
+    ("/api/v1/tenant/ai/usage/summary", "ai_agent.view"),
 ];
 
 const PLATFORM_OPERATIONS: &[&str] = &[
@@ -83,6 +95,7 @@ const PLATFORM_OPERATIONS: &[&str] = &[
     "/api/v1/test/platform/admin",
     "/api/v1/test/platform/billing/view",
     "/api/v1/test/platform/diagnostics/view",
+    "/api/v1/platform/ai/config",
 ];
 
 /// T047: deny-by-default sweep covering the create (POST), detail (GET),
@@ -118,15 +131,22 @@ fn test_config(environment: Environment) -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
+        ai_openai_base_url: None,
+        ai_anthropic_base_url: None,
+        ai_gemini_base_url: None,
     }
 }
 
 fn app_state(pool: sqlx::PgPool, environment: Environment) -> AppState {
+    let cfg = test_config(environment);
     AppState {
-        config: Arc::new(test_config(environment)),
-        db: pool,
+        config: Arc::new(cfg.clone()),
+        db: pool.clone(),
         cache: Arc::new(cache::Cache::new("redis://127.0.0.1:6379").unwrap()),
         health_checks: vec![],
+        escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
+        ai: ai::AiService::from_config(pool, &cfg).unwrap(),
     }
 }
 
@@ -324,10 +344,12 @@ async fn anonymous_foreign_origin_protected_request_returns_401_before_csrf() {
     let mut config = test_config(Environment::Test);
     config.cors_allowed_origins = vec!["https://dashboard.example".into()];
     let response = router::app_with_test_routes(AppState {
-        config: Arc::new(config),
-        db: pool,
+        config: Arc::new(config.clone()),
+        db: pool.clone(),
         cache: Arc::new(cache::Cache::new("redis://127.0.0.1:6379").unwrap()),
         health_checks: vec![],
+        escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
+        ai: ai::AiService::from_config(pool, &config).unwrap(),
     })
     .oneshot(
         Request::post("/api/v1/auth/logout")
@@ -1347,29 +1369,29 @@ async fn staff_tenant_access_is_environment_aware() {
         // /conversations/{id}/messages), conversations.manage,
         // members.manage (x2 synthetic routes), members.view (x2 synthetic routes),
         // settings.manage, billing.view, billing.manage, customers.view,
-        // customers.manage — must match the canonical production
+        // customers.manage, ai_agent.view (x2), ai_agent.manage — must match
         // `staff_tenant_permissions` matrix asserted in
         // `me_staff_tenant_permissions_follow_environment_for_every_platform_role`.
         let expected = match role {
             "super_admin" => [
-                true, true, true, true, true, true, true, true, true, true,
-                true, true, true, true, true,
+                true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+                true, true, true, true,
             ],
             "developer" => [
-                true, true, true, false, true, false, false, true, true, false,
-                false, false, false, true, false,
+                true, true, true, false, true, false, false, true, true, false, false, false,
+                false, true, false, true, false, true,
             ],
             "support" => [
-                true, true, true, true, true, false, false, false, false, false,
-                false, false, false, true, true,
+                true, true, true, true, true, false, false, false, false, false, false, false,
+                false, true, true, false, false, false,
             ],
             "sales" => [
-                true, false, false, false, false, false, false, true, true, false,
-                false, false, false, false, false,
+                true, false, false, false, false, false, false, true, true, false, false, false,
+                false, false, false, false, false, false,
             ],
             "finance" => [
-                true, false, false, false, false, false, false, true, true, false,
-                false, true, false, false, false,
+                true, false, false, false, false, false, false, true, true, false, false, true,
+                false, false, false, false, false, false,
             ],
             _ => unreachable!(),
         };

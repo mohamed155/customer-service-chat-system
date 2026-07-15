@@ -27,6 +27,7 @@ export const APP_PATHS = {
     analytics: 'analytics',
     settings: 'settings',
     team: 'team',
+    escalations: 'escalations',
   },
   invite: 'invite',
   notFound: '**',

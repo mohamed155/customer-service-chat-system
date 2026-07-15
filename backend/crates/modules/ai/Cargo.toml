@@ -3,3 +3,31 @@ name = "ai"
 version.workspace = true
 edition.workspace = true
 
+[dependencies]
+ai-providers = { path = "../../ai-providers" }
+aes-gcm.workspace = true
+async-trait.workspace = true
+authz = { path = "../authz" }
+axum.workspace = true
+base64.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+config = { path = "../../shared/config" }
+futures.workspace = true
+getrandom.workspace = true
+hex.workspace = true
+identity = { path = "../identity" }
+kernel = { path = "../../shared/kernel" }
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
+tenancy = { path = "../tenancy" }
+tokio.workspace = true
+tokio-stream = { version = "0.1", features = ["sync"] }
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+ai-providers = { path = "../../ai-providers", features = ["test-providers"] }
+tokio = { workspace = true, features = ["test-util"] }
+wiremock.workspace = true
