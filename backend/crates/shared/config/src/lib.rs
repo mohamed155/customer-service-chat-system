@@ -99,6 +99,12 @@ pub struct AppConfig {
     pub db_acquire_timeout_ms: u64,
     pub ready_probe_timeout_ms: u64,
     pub shutdown_grace_seconds: u64,
+    /// When `true`, the interactive API documentation (`/swagger-ui`) and
+    /// machine-readable spec (`/api-docs/openapi.json`) are served. In
+    /// non-production environments the docs are always served regardless
+    /// of this flag; in production the flag must be explicitly set to
+    /// `true` to expose them (default `false` per FR-014).
+    pub docs_enabled: bool,
 }
 
 impl fmt::Debug for AppConfig {
@@ -118,6 +124,7 @@ impl fmt::Debug for AppConfig {
             .field("db_max_connections", &self.db_max_connections)
             .field("db_acquire_timeout_ms", &self.db_acquire_timeout_ms)
             .field("ready_probe_timeout_ms", &self.ready_probe_timeout_ms)
+            .field("docs_enabled", &self.docs_enabled)
             .field("smtp_url", &smtp_url)
             .field("smtp_from", &self.smtp_from)
             .field("public_dashboard_url", &self.public_dashboard_url)
@@ -250,6 +257,18 @@ impl AppConfig {
             });
         validate_public_dashboard_url(&public_dashboard_url)?;
 
+        let docs_enabled = env::var("APP_DOCS_ENABLED")
+            .ok()
+            .map(|v| match v.to_ascii_lowercase().as_str() {
+                "1" | "true" | "yes" | "on" => Ok(true),
+                "0" | "false" | "no" | "off" => Ok(false),
+                other => Err(ConfigError(format!(
+                    "APP_DOCS_ENABLED must be a boolean, got '{other}'"
+                ))),
+            })
+            .transpose()?
+            .unwrap_or(false);
+
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             redis_url: required("REDIS_URL")?,
@@ -271,6 +290,7 @@ impl AppConfig {
             db_acquire_timeout_ms,
             ready_probe_timeout_ms,
             shutdown_grace_seconds,
+            docs_enabled,
         })
     }
 }
@@ -316,6 +336,7 @@ mod tests {
                 "DB_ACQUIRE_TIMEOUT_MS",
                 "READY_PROBE_TIMEOUT_MS",
                 "SHUTDOWN_GRACE_SECONDS",
+                "APP_DOCS_ENABLED",
                 "SMTP_URL",
                 "SMTP_FROM",
                 "PUBLIC_DASHBOARD_URL",
@@ -582,5 +603,74 @@ mod tests {
         ]);
         let err = AppConfig::from_env().unwrap_err();
         assert!(err.0.contains("AUTH_SESSION_TTL_SECONDS"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn docs_enabled_defaults_to_false() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "production"),
+            ("CORS_ALLOWED_ORIGINS", "https://app.example.com"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+        ]);
+        let config = AppConfig::from_env().unwrap();
+        assert!(
+            !config.docs_enabled,
+            "docs_enabled should default to false when APP_DOCS_ENABLED is unset"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn docs_enabled_can_be_opted_in() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "production"),
+            ("CORS_ALLOWED_ORIGINS", "https://app.example.com"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            ("APP_DOCS_ENABLED", "true"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+        ]);
+        let config = AppConfig::from_env().unwrap();
+        assert!(config.docs_enabled);
+
+        for value in ["false", "0", "no", "off", "FALSE", "No"] {
+            env::set_var("APP_DOCS_ENABLED", value);
+            let config = AppConfig::from_env().unwrap();
+            assert!(
+                !config.docs_enabled,
+                "value '{value}' should parse to docs_enabled = false"
+            );
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn docs_enabled_rejects_non_boolean_values() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "production"),
+            ("CORS_ALLOWED_ORIGINS", "https://app.example.com"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            ("APP_DOCS_ENABLED", "maybe"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+        ]);
+        let err = AppConfig::from_env().unwrap_err();
+        assert!(err.0.contains("APP_DOCS_ENABLED"));
+        assert!(err.0.contains("boolean"));
     }
 }

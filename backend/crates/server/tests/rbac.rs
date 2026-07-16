@@ -42,7 +42,6 @@ const VIEWER_PERMISSIONS: &[&str] = &[
     "overview.view",
     "conversations.view",
     "customers.view",
-    "ai_agent.view",
     "knowledge_base.view",
     "integrations.view",
     "analytics.view",
@@ -131,6 +130,7 @@ fn test_config(environment: Environment) -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        docs_enabled: false,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
@@ -1379,7 +1379,7 @@ async fn staff_tenant_access_is_environment_aware() {
             ],
             "developer" => [
                 true, true, true, false, true, false, false, true, true, false, false, false,
-                false, true, false, true, false, true,
+                false, true, false, false, false, false,
             ],
             "support" => [
                 true, true, true, true, true, false, false, false, false, false, false, false,
@@ -1531,7 +1531,6 @@ async fn me_staff_tenant_permissions_follow_environment_for_every_platform_role(
                 "overview.view",
                 "conversations.view",
                 "customers.view",
-                "ai_agent.view",
                 "knowledge_base.view",
                 "integrations.view",
                 "analytics.view",
@@ -1954,7 +1953,7 @@ async fn customer_routes_respect_the_role_matrix() {
             "display_name": format!("New by {role}"),
             "email": format!("new-{role}@example.com"),
         });
-        let response = assert_http_status(
+        let _response = assert_http_status(
             &pool,
             Environment::Test,
             authenticated_json_request(

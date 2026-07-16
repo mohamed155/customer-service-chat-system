@@ -40,6 +40,7 @@ describe('AppShellComponent', () => {
   });
 
   it('dispatches the sidebar toggle from the topbar', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 });
     await TestBed.compileComponents();
     const store = TestBed.inject(MockStore);
     const dispatch = vi.spyOn(store, 'dispatch');

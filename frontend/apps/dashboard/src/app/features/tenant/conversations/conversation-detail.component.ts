@@ -15,6 +15,7 @@ import {
 } from '../../../shared/components/select-filter/select-filter.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { EscalationBannerComponent } from '../escalations/escalation-banner.component';
+import { AiHandlingBannerComponent } from './ai-handling-banner.component';
 import { ConversationsApiService } from './conversations-api.service';
 import { ConversationDetailStore } from './conversation-detail.store';
 import { ConversationThreadComponent } from './conversation-thread.component';
@@ -35,6 +36,7 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
     ComposerComponent,
     ConversationThreadComponent,
     EmptyStateComponent,
+    AiHandlingBannerComponent,
     EscalationBannerComponent,
     LoadingStateComponent,
     SelectFilterComponent,
@@ -85,6 +87,14 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
             </div>
           }
         </header>
+
+        @if (conv.awaitingAiDecision) {
+          <app-ai-handling-banner
+            [visible]="true"
+            (choosePlatformAi)="store.setAiHandling(conv.id, 'platform_ai')"
+            (chooseHuman)="store.setAiHandling(conv.id, 'human')"
+          />
+        }
 
         @if (conv.escalation) {
           <app-escalation-banner [escalation]="conv.escalation" />

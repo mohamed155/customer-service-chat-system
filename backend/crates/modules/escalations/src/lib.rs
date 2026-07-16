@@ -28,7 +28,7 @@
 //! - `POST /tenant/escalations/{id}/claim`
 //! - `GET  /tenant/availability/me`, `PUT /tenant/availability/me`
 //! - `GET  /tenant/skills`, `POST /tenant/skills`,
-//!        `PATCH /tenant/skills/{id}`, `DELETE /tenant/skills/{id}`
+//!   `PATCH /tenant/skills/{id}`, `DELETE /tenant/skills/{id}`
 //! - `PUT  /tenant/members/{membershipId}/skills`
 //! - `GET  /tenant/events` (SSE stream)
 //!

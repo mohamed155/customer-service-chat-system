@@ -19,6 +19,7 @@ use kernel::ApiError;
 use sqlx::PgPool;
 use std::str::FromStr;
 use tracing::field;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::session::SessionClaims;
@@ -69,11 +70,12 @@ pub enum PrincipalKind {
 }
 
 /// Authenticated user principal resolved from the request context.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ToSchema)]
 pub struct Principal {
     pub user_id: Uuid,
     pub email: String,
     pub display_name: String,
+    #[schema(value_type = Option<String>, example = "super_admin")]
     pub platform_role: Option<PlatformRole>,
     pub invalid_platform_role: bool,
 }

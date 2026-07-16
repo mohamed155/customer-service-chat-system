@@ -105,16 +105,28 @@ pub mod outbox;
 pub mod queries;
 pub mod routes;
 
+use uuid::Uuid;
+
+#[async_trait::async_trait]
+pub trait AiAgentStatus: Send + Sync {
+    async fn agent_configured(&self, tenant_id: Uuid) -> bool;
+    async fn platform_ai_available(&self, tenant_id: Uuid) -> bool;
+}
+
 use axum::{
     extract::{rejection::PathRejection, Path, State},
     response::{IntoResponse, Json, Response},
 };
 use chrono::{DateTime, Utc};
-use kernel::ApiError;
+use kernel::{ApiError, ErrorEnvelope};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+/// Per-conversation summary returned by the customer-profile history
+/// endpoint.  A narrower projection than `model::Conversation`: no
+/// `last_message` or assignee, since the dashboard only needs the metadata
+/// to render the list.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct ConversationSummary {
     pub id: Uuid,
     pub channel: String,
@@ -125,16 +137,19 @@ pub struct ConversationSummary {
 
 const HISTORY_PAGE_SIZE: i64 = 20;
 
-#[derive(Serialize)]
-struct HistoryPagination {
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct HistoryPagination {
     next_cursor: Option<String>,
     has_more: bool,
 }
 
-#[derive(Serialize)]
-struct HistoryResponse {
-    data: Vec<ConversationSummary>,
-    pagination: HistoryPagination,
+/// `GET /tenant/customers/{id}/conversations` response envelope
+/// (`{data, pagination}`).  Doc-only — the handler builds the body inline
+/// with `Json(HistoryResponse { ... })`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct HistoryResponse {
+    pub data: Vec<ConversationSummary>,
+    pub pagination: HistoryPagination,
 }
 
 /// Fetches up to `HISTORY_PAGE_SIZE + 1` conversations for the supplied
@@ -198,6 +213,30 @@ pub async fn list_recent_for_customer_in_tx(
 /// Both the customer-existence check and the conversation query execute inside
 /// a single Postgres transaction, ensuring both reads come from the same
 /// database snapshot (T139).
+#[utoipa::path(
+    get,
+    path = "/tenant/customers/{id}/conversations",
+    tag = "conversations",
+    operation_id = "get_conversation_history",
+    summary = "List a customer's recent conversations",
+    description = "Return the top 20 conversations for the given customer, ordered by \
+                  `last_activity_at DESC` (newest first). `pagination.has_more` is `true` when \
+                  more than 20 rows exist beyond the returned window; `pagination.next_cursor` \
+                  is currently always `null` (the windowed view does not yet support cursor \
+                  pagination — the client can re-request to refresh). Returns 404 when the \
+                  customer does not exist, is soft-deleted, or belongs to another tenant. \
+                  Requires permission: customers.view",
+    params(("id" = Uuid, Path, description = "Customer identifier")),
+    responses(
+        (status = 200, description = "Windowed history of conversations (data + pagination).", body = HistoryResponse),
+        (status = 400, description = "Validation failed (invalid customer id).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Customer not found.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn get_conversation_history(
     State(pool): State<sqlx::PgPool>,
     ctx: tenancy::TenantContext,

@@ -37,6 +37,7 @@ impl std::fmt::Display for RouteError {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn route_new_escalation_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     _pool: &PgPool,
@@ -452,6 +453,7 @@ pub async fn drain_any_in_tx(
 // Helpers
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 async fn build_escalation(
     _tx: &mut Transaction<'_, Postgres>,
     escalation_id: Uuid,
@@ -504,4 +506,21 @@ async fn build_escalation(
         escalated_at: Utc::now(),
         closed_at: None,
     })
+}
+
+pub async fn has_open_escalation(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+) -> sqlx::Result<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS( \
+         SELECT 1 FROM escalations \
+         WHERE tenant_id = $1 AND conversation_id = $2 AND status IN ('queued', 'assigned') \
+         )",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .fetch_one(pool)
+    .await
 }

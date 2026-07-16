@@ -8,10 +8,11 @@ use axum::{
 };
 use chrono::Utc;
 use identity::Principal;
-use kernel::{ApiError, ApiJson};
-use serde::Deserialize;
+use kernel::{ApiError, ApiJson, ErrorEnvelope};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use tenancy::TenantContext;
@@ -21,16 +22,81 @@ use crate::model::{
     Availability, AvailabilityState, CreateSkillPayload, CustomerRef, EscalatePayload, Escalation,
     EscalationAssignedEvent, EscalationQueuedEvent, EscalationRemovedEvent, EscalationStatus,
     QueueEntry, QueueEntryConversationRef, RenameSkillPayload, RequiredSkillRef,
-    SetAvailabilityPayload, SetMemberSkillsPayload,
+    SetAvailabilityPayload, SetMemberSkillsPayload, Skill,
 };
 use crate::presence;
 use crate::queries;
 use crate::routing;
 
 // ---------------------------------------------------------------------------
+// OpenAPI doc-only response envelopes
+// ---------------------------------------------------------------------------
+//
+// These wrappers mirror the inline `json!({"data": ...})` shapes the handlers
+// emit, with concrete `ToSchema` element types so `#[utoipa::path]` can attach
+// a concrete `body = ...` schema to each operation (FR-005, FR-008). The
+// handlers continue to build their envelopes inline with `json!` macros —
+// the wrapper types exist purely for the OpenAPI surface.
+
+/// Pagination metadata returned alongside a keyset-paginated list.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct Pagination {
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
+
+/// `GET /tenant/escalations/queue` response envelope (`{data, pagination}`).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct QueueListResponse {
+    pub data: Vec<QueueEntry>,
+    pub pagination: Pagination,
+}
+
+/// `GET /tenant/skills` response envelope (`{data}`).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SkillListResponse {
+    pub data: Vec<Skill>,
+}
+
+/// `PUT /tenant/members/{membershipId}/skills` response envelope
+/// (`{data}` — the updated skill list).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MemberSkillsResponse {
+    pub data: Vec<Skill>,
+}
+
+// ---------------------------------------------------------------------------
 // Escalate
 // ---------------------------------------------------------------------------
 
+/// `POST /tenant/conversations/{id}/escalate` — escalate a conversation.
+#[utoipa::path(
+    post,
+    path = "/tenant/conversations/{id}/escalate",
+    tag = "escalations",
+    operation_id = "escalate_conversation",
+    summary = "Escalate a conversation to a human agent",
+    description = "Escalate an active (open/pending) conversation so it is either assigned to \
+                  a matching available agent or queued. `reason` is trimmed and must be \
+                  1..=2000 characters. `requiredSkillIds` (optional) restricts routing to agents \
+                  that hold every listed skill — if no available agent matches, the escalation is \
+                  queued. Returns 201 with the new `Escalation` (assigned or queued). 409 is \
+                  returned if the conversation already has an active escalation. \
+                  Requires permission: conversations.manage",
+    params(("id" = Uuid, Path, description = "Conversation identifier")),
+    request_body = EscalatePayload,
+    responses(
+        (status = 201, description = "Escalation created (assigned or queued).", body = Escalation),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Conversation not found.", body = ErrorEnvelope),
+        (status = 409, description = "Conversation already has an active escalation.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (reason length, or unknown required skill id).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn escalate(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -216,12 +282,38 @@ pub async fn escalate(
 // Queue list
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize)]
+/// Query string for `GET /tenant/escalations/queue`.  `cursor` is the opaque
+/// pagination cursor returned by a prior response; `limit` is clamped to
+/// 1..=100 by the handler.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct QueueQueryParams {
     pub cursor: Option<String>,
     pub limit: Option<u32>,
 }
 
+/// `GET /tenant/escalations/queue` — list queued escalations.
+#[utoipa::path(
+    get,
+    path = "/tenant/escalations/queue",
+    tag = "escalations",
+    operation_id = "list_escalation_queue",
+    summary = "List queued escalations",
+    description = "Return queued escalations for the current tenant, ordered by `escalatedAt` \
+                  ascending (oldest first). The response is the doc-only `{data, pagination}` \
+                  envelope (`QueueListResponse`); the `pagination.nextCursor` is opaque and should \
+                  be passed back verbatim on the next request. \
+                  Requires permission: conversations.view",
+    params(QueueQueryParams),
+    responses(
+        (status = 200, description = "Page of queued escalations (data + pagination).", body = QueueListResponse),
+        (status = 400, description = "Validation failed (invalid cursor).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_queue(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -336,6 +428,29 @@ pub async fn list_queue(
 // Claim
 // ---------------------------------------------------------------------------
 
+/// `POST /tenant/escalations/{id}/claim` — claim a queued escalation.
+#[utoipa::path(
+    post,
+    path = "/tenant/escalations/{id}/claim",
+    tag = "escalations",
+    operation_id = "claim_escalation",
+    summary = "Claim a queued escalation",
+    description = "Manually claim a queued escalation as the calling member, assigning it to \
+                  their membership. Returns 200 with the claimed `Escalation` (status \
+                  `assigned`). 409 is returned if the escalation has already been claimed (the \
+                  response includes the membership id of the current holder). \
+                  Requires permission: conversations.manage",
+    params(("id" = Uuid, Path, description = "Escalation identifier")),
+    responses(
+        (status = 200, description = "Escalation claimed.", body = Escalation),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Escalation or membership not found.", body = ErrorEnvelope),
+        (status = 409, description = "Escalation already claimed.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn claim(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -436,6 +551,25 @@ pub async fn claim(
 // Availability
 // ---------------------------------------------------------------------------
 
+/// `GET /tenant/availability/me` — current agent availability.
+#[utoipa::path(
+    get,
+    path = "/tenant/availability/me",
+    tag = "escalations",
+    operation_id = "get_my_availability",
+    summary = "Get my current availability",
+    description = "Return the calling member's current availability state. The default for a \
+                  member with no row is `away`. `stateChangedAt` is null when no row exists yet. \
+                  Requires permission: conversations.manage",
+    responses(
+        (status = 200, description = "Current availability.", body = Availability),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Membership not found in this tenant.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn get_my_availability(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -497,6 +631,31 @@ pub async fn get_my_availability(
     Json(json!(response)).into_response()
 }
 
+/// `PUT /tenant/availability/me` — toggle current agent availability.
+#[utoipa::path(
+    put,
+    path = "/tenant/availability/me",
+    tag = "escalations",
+    operation_id = "set_my_availability",
+    summary = "Set my availability",
+    description = "Set the calling member's availability to `available` or `away`. When toggling \
+                  to `available` the server attempts to drain one queued escalation for the \
+                  member (skill match first, then any queue entry) before responding; any \
+                  routed escalation is delivered via the SSE stream rather than the response \
+                  body. Returns 200 with the persisted `Availability`. \
+                  Requires permission: conversations.manage",
+    request_body = SetAvailabilityPayload,
+    responses(
+        (status = 200, description = "Availability set.", body = Availability),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Membership not found in this tenant.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (invalid state value).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn set_my_availability(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -646,6 +805,25 @@ pub async fn set_my_availability(
 // Skills CRUD
 // ---------------------------------------------------------------------------
 
+/// `GET /tenant/skills` — list tenant skills.
+#[utoipa::path(
+    get,
+    path = "/tenant/skills",
+    tag = "escalations",
+    operation_id = "list_skills",
+    summary = "List tenant skills",
+    description = "Return every skill in the tenant's catalog, ordered by id. Each skill carries \
+                  `agentCount` — the number of members currently assigned that skill. The response \
+                  is the doc-only `{data: Skill[]}` envelope (`SkillListResponse`). \
+                  Requires permission: members.view",
+    responses(
+        (status = 200, description = "All skills in the catalog.", body = SkillListResponse),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_skills(State(pool): State<PgPool>, ctx: TenantContext) -> Response {
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
@@ -671,6 +849,29 @@ pub async fn list_skills(State(pool): State<PgPool>, ctx: TenantContext) -> Resp
     Json(json!({ "data": skills })).into_response()
 }
 
+/// `POST /tenant/skills` — create a skill.
+#[utoipa::path(
+    post,
+    path = "/tenant/skills",
+    tag = "escalations",
+    operation_id = "create_skill",
+    summary = "Create a skill",
+    description = "Create a new skill in the tenant catalog. `name` is trimmed and must be \
+                  1..=50 characters; uniqueness is case-insensitive within the tenant. Returns \
+                  201 with the new `Skill`. 409 is returned if a skill with the same name \
+                  already exists. Requires permission: members.view",
+    request_body = CreateSkillPayload,
+    responses(
+        (status = 201, description = "Skill created.", body = Skill),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 409, description = "A skill with this name already exists.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (name length).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn create_skill(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -726,6 +927,32 @@ pub async fn create_skill(
     (StatusCode::CREATED, Json(json!(skill))).into_response()
 }
 
+/// `PATCH /tenant/skills/{id}` — rename a skill.
+#[utoipa::path(
+    patch,
+    path = "/tenant/skills/{id}",
+    tag = "escalations",
+    operation_id = "rename_skill",
+    summary = "Rename a skill",
+    description = "Rename an existing skill in the tenant catalog. `name` is trimmed and must \
+                  be 1..=50 characters; uniqueness is case-insensitive within the tenant. \
+                  Returns 200 with the renamed `Skill`. 404 is returned if no such skill exists \
+                  in this tenant. 409 is returned if another skill in the tenant already has \
+                  the requested name. Requires permission: members.manage",
+    params(("id" = Uuid, Path, description = "Skill identifier")),
+    request_body = RenameSkillPayload,
+    responses(
+        (status = 200, description = "Skill renamed.", body = Skill),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Skill not found.", body = ErrorEnvelope),
+        (status = 409, description = "A skill with this name already exists.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (name length).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn rename_skill(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -808,6 +1035,27 @@ pub async fn rename_skill(
     Json(json!(skill)).into_response()
 }
 
+/// `DELETE /tenant/skills/{id}` — delete a skill.
+#[utoipa::path(
+    delete,
+    path = "/tenant/skills/{id}",
+    tag = "escalations",
+    operation_id = "delete_skill",
+    summary = "Delete a skill",
+    description = "Hard-delete a skill from the tenant catalog (per R7, skills are not \
+                  soft-deleted; cascading `agent_skills` rows are removed in the same \
+                  transaction). Returns 204 on success. 404 if no such skill exists in this \
+                  tenant. Requires permission: members.manage",
+    params(("id" = Uuid, Path, description = "Skill identifier")),
+    responses(
+        (status = 204, description = "Skill deleted."),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Skill not found.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn delete_skill(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -863,6 +1111,32 @@ pub async fn delete_skill(
     StatusCode::NO_CONTENT.into_response()
 }
 
+/// `PUT /tenant/members/{membershipId}/skills` — replace a member's skills.
+#[utoipa::path(
+    put,
+    path = "/tenant/members/{membershipId}/skills",
+    tag = "escalations",
+    operation_id = "set_member_skills",
+    summary = "Set a member's skills",
+    description = "Replace the skill assignments for a member. `skillIds` is the full set of \
+                  skills the member should hold; existing rows are deleted and the supplied \
+                  ones inserted. The target membership must be agent-capable \
+                  (`owner | admin | manager | agent`). Returns 200 with the doc-only \
+                  `{data: Skill[]}` envelope (`MemberSkillsResponse`). \
+                  Requires permission: members.manage",
+    params(("membershipId" = Uuid, Path, description = "Membership identifier")),
+    request_body = SetMemberSkillsPayload,
+    responses(
+        (status = 200, description = "Member skills updated.", body = MemberSkillsResponse),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Membership not found in this tenant.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (target membership is not agent-capable, or unknown skill id).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn set_member_skills(
     State(pool): State<PgPool>,
     ctx: TenantContext,

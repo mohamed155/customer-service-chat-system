@@ -21,11 +21,14 @@ rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
+conversations = { path = "../conversations" }
+escalations = { path = "../escalations" }
 tenancy = { path = "../tenancy" }
 tokio.workspace = true
 tokio-stream = { version = "0.1", features = ["sync"] }
 tracing.workspace = true
 uuid.workspace = true
+utoipa.workspace = true
 
 [dev-dependencies]
 ai-providers = { path = "../../ai-providers", features = ["test-providers"] }

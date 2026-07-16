@@ -27,6 +27,7 @@ pub async fn record_escalation_created(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn record_escalation_assigned(
     tx: &mut Transaction<'_, Postgres>,
     actor_user_id: Uuid,

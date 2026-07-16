@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum RoutingReason {
     #[serde(rename = "skill_match")]
@@ -17,14 +18,14 @@ pub enum RoutingReason {
     ManualReassignment,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RequiredSkillRef {
     pub id: Option<Uuid>,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RoutingInfo {
     pub reason: RoutingReason,
@@ -33,7 +34,7 @@ pub struct RoutingInfo {
     pub assigned_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum EscalationStatus {
     #[serde(rename = "queued")]
@@ -44,7 +45,7 @@ pub enum EscalationStatus {
     Closed,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Escalation {
     pub id: Uuid,
@@ -57,14 +58,14 @@ pub struct Escalation {
     pub closed_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomerRef {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct QueueEntryConversationRef {
     pub id: Uuid,
@@ -72,7 +73,7 @@ pub struct QueueEntryConversationRef {
     pub customer: CustomerRef,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct QueueEntry {
     pub escalation: Escalation,
@@ -80,7 +81,7 @@ pub struct QueueEntry {
     pub waiting_seconds: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Skill {
     pub id: Uuid,
@@ -88,7 +89,7 @@ pub struct Skill {
     pub agent_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum AvailabilityState {
     #[serde(rename = "available")]
@@ -97,7 +98,7 @@ pub enum AvailabilityState {
     Away,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Availability {
     pub membership_id: Uuid,
@@ -105,38 +106,38 @@ pub struct Availability {
     pub state_changed_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EscalatePayload {
     pub reason: String,
     pub required_skill_ids: Option<Vec<Uuid>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetAvailabilityPayload {
     pub state: AvailabilityState,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSkillPayload {
     pub name: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameSkillPayload {
     pub name: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetMemberSkillsPayload {
     pub skill_ids: Vec<Uuid>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EscalationAssignedEvent {
     pub v: u32,
@@ -148,7 +149,7 @@ pub struct EscalationAssignedEvent {
     pub assigned_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EscalationQueuedEvent {
     pub v: u32,
@@ -158,7 +159,7 @@ pub struct EscalationQueuedEvent {
     pub required_skills: Vec<RequiredSkillRef>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EscalationRemovedEvent {
     pub v: u32,
@@ -166,7 +167,7 @@ pub struct EscalationRemovedEvent {
     pub cause: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AvailabilityChangedEvent {
     pub v: u32,
@@ -175,14 +176,14 @@ pub struct AvailabilityChangedEvent {
     pub cause: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMemberSkill {
     pub id: Uuid,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMemberWithSkills {
     #[serde(flatten)]

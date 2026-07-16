@@ -1,10 +1,13 @@
 //! AI application module — configuration, credential management, usage
-//! tracking, and the [`AiService`] entry point.
+//! tracking, agent configuration, the outbox-driven agent responder, and the
+//! [`AiService`] entry point.
 //!
 //! # Purpose
 //! High-level AI orchestration layer that sits above the vendor-agnostic
 //! [`ai_providers`] adapters.  Handles per-tenant configuration and credential
-//! resolution, retry/failover policy, usage recording, and audited admin APIs.
+//! resolution, retry/failover policy, usage recording, audited admin APIs, and
+//! the configurable AI agent that responds to customer messages via an outbox
+//! worker.
 //!
 //! # Responsibilities
 //! - Per-tenant config / credential resolution (tenant → platform fallback)
@@ -12,12 +15,17 @@
 //! - Retry/failover policy (exponential back-off with jitter, fallback models)
 //! - Usage recording (token counts, latency, cost attribution)
 //! - Audited admin API ([`routes`] with `authz` RBAC enforcement)
+//! - Agent configuration ([`agent_config`], [`agent_routes`])
+//! - Deterministic prompt composition ([`agent_prompt`])
+//! - Escalation rule evaluation ([`agent_rules`])
+//! - Outbox-driven agent responder ([`agent_responder`])
 //!
 //! # Public Interfaces
 //! - [`AiService`] — main entry point for consuming modules
 //! - [`AiCallContext`], [`AiCallResult`], [`AiCallError`]
 //! - [`AiInput`], [`AiStreamEvent`], [`AiResultStream`]
 //! - [`routes`] — Axum router (mounted by the server)
+//! - [`agent_routes`] — agent configuration endpoints
 //! - [`crypto`] — encrypt / decrypt / `MasterKey`
 //! - [`model`] — row types, payloads, views
 //!
@@ -28,10 +36,12 @@
 //! - [`kernel`] — shared error types and response envelope
 //!
 //! # Data Model
-//! Migrations 0038–0040 create the supporting tables:
+//! Migrations 0038–0041 create the supporting tables:
 //! - `ai_configurations` — per-tenant or platform-wide AI config
 //! - `ai_credentials` — encrypted API keys (AES-256-GCM)
 //! - `ai_usage_records` — per-call usage ledger
+//! - `agent_configurations` — per-tenant AI agent settings
+//! - `agent_avatar_uploads` — uploaded avatar images
 //!
 //! # Extension Points
 //! - **KMS replacement**: swap `crypto.rs` for a cloud KMS while keeping
@@ -40,7 +50,15 @@
 //!   automatically through the uniform trait.
 //! - **Sidecar extraction**: the AI runtime (completions, streaming, retries)
 //!   can be extracted into its own crate with no changes to the public API.
+//! - **Multi-agent**: the schema is multi-agent-shaped; dropping the partial
+//!   unique index on `(tenant_id)` is the entire unlock.
 
+pub mod agent_audit;
+pub mod agent_config;
+pub mod agent_prompt;
+pub mod agent_responder;
+pub mod agent_routes;
+pub mod agent_rules;
 pub mod audit;
 pub mod crypto;
 pub mod model;

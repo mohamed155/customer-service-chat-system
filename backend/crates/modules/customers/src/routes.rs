@@ -6,18 +6,20 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use kernel::{ApiError, ErrorDetail};
-use serde::{Deserialize, Serialize};
+use kernel::{ApiError, ErrorDetail, ErrorEnvelope};
+use serde::Serialize;
 use serde_json::json;
 use sqlx::Row;
 use std::collections::BTreeMap;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::audit;
 use crate::model::{
     canonicalize_channel, normalize_phone_digits, validate_create, validate_update,
     ChannelIdentifier, ChannelIdentifierInput, CreateCustomerPayload, CustomerDetail,
-    CustomerListItem, TriState, UpdateCustomerPayload,
+    CustomerDetailResponse, CustomerListItem, CustomerListQuery, CustomerListResponse, TriState,
+    UpdateCustomerPayload,
 };
 
 type DateTimeUtc = sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>;
@@ -186,25 +188,7 @@ async fn try_insert_identifier(
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct CustomerListQuery {
-    pub q: Option<String>,
-    pub cursor: Option<String>,
-    pub limit: u32,
-}
-
-impl Default for CustomerListQuery {
-    fn default() -> Self {
-        Self {
-            q: None,
-            cursor: None,
-            limit: 25,
-        }
-    }
-}
-
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 struct Pagination {
     next_cursor: Option<String>,
     has_more: bool,
@@ -217,6 +201,28 @@ struct PaginatedResponse<T> {
 }
 
 /// Lists active customers belonging to the tenant resolved by middleware.
+#[utoipa::path(
+    get,
+    path = "/tenant/customers",
+    tag = "customers",
+    operation_id = "list_customers",
+    summary = "List tenant customers",
+    description = "List active (non soft-deleted) customers belonging to the current tenant with \
+                  cursor-based pagination and an optional free-text `q` filter over `display_name`, \
+                  `email`, `phone`, and channel identifier values. The response is the doc-only \
+                  `{data, pagination}` envelope (`CustomerListResponse`); the `next_cursor` is opaque \
+                  and should be passed back verbatim on the next request. \
+                  Requires permission: customers.view",
+    params(CustomerListQuery),
+    responses(
+        (status = 200, description = "Page of customers (data + pagination).", body = CustomerListResponse),
+        (status = 400, description = "Validation failed (malformed query string or invalid cursor).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_customers(
     State(pool): State<sqlx::PgPool>,
     ctx: tenancy::TenantContext,
@@ -343,6 +349,27 @@ pub async fn list_customers(
     .into_response()
 }
 
+/// Fetch a single customer by id, scoped to the resolved tenant.
+#[utoipa::path(
+    get,
+    path = "/tenant/customers/{id}",
+    tag = "customers",
+    operation_id = "get_customer",
+    summary = "Get a tenant customer by id",
+    description = "Fetch the full record for a single active customer, including channel \
+                  identifiers and metadata. Soft-deleted customers and customers belonging to \
+                  another tenant both return 404 not_found (no information leak). \
+                  Requires permission: customers.view",
+    params(("id" = Uuid, Path, description = "Customer identifier")),
+    responses(
+        (status = 200, description = "Customer found.", body = CustomerDetailResponse),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Customer not found.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn get_customer(
     State(pool): State<sqlx::PgPool>,
     ctx: tenancy::TenantContext,
@@ -472,6 +499,43 @@ pub async fn get_customer(
 /// On success returns `201 Created` with the rendered `CustomerDetail`
 /// (identical shape to `GET /tenant/customers/{id}` so the UI can reuse its
 /// detail view without an extra round trip).
+/// `create_customer` — `POST /tenant/customers`.
+///
+/// Validates the payload (T041 helpers), then inside a single transaction:
+///   1. INSERT the customer row (T043 / FR-007).
+///   2. INSERT every supplied channel-identifier row.
+///   3. Map a unique-index violation on a (tenant_id, channel, identifier)
+///      tuple to `409 conflict` whose `details[0]` names the holding
+///      customer's id and display name (FR-014 / FR-003).
+///   4. Write the `customer.created` audit row (T042 helper).
+///   5. Commit.
+///
+/// On success returns `201 Created` with the rendered `CustomerDetail`
+/// (identical shape to `GET /tenant/customers/{id}` so the UI can reuse its
+/// detail view without an extra round trip).
+#[utoipa::path(
+    post,
+    path = "/tenant/customers",
+    tag = "customers",
+    operation_id = "create_customer",
+    summary = "Create a tenant customer",
+    description = "Create a new customer profile for the current tenant. At least one of `email`, \
+                  `phone`, or a non-empty `identifiers` entry must be supplied (FR-007). A 409 is \
+                  returned when any (channel, identifier) pair is already held by another active \
+                  customer in this tenant. On success the response body is the same `CustomerDetail` \
+                  shape as `GET /tenant/customers/{id}`. Requires permission: customers.manage",
+    request_body = CreateCustomerPayload,
+    responses(
+        (status = 201, description = "Customer created.", body = CustomerDetailResponse),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 409, description = "Channel identifier is already held by another customer in this tenant.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (per-field, e.g. invalid email/phone, unknown channel, duplicate identifiers in payload, or no contact information supplied).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn create_customer(
     State(pool): State<sqlx::PgPool>,
     ctx: tenancy::TenantContext,
@@ -670,6 +734,48 @@ pub async fn create_customer(
 ///      fields that actually changed (no values, per FR-017).
 ///   6. Commit and re-render the row into a `CustomerDetail` for the
 ///      response.
+/// `update_customer` — `PATCH /tenant/customers/{customer_id}`.
+///
+/// Partial update.  Inside a single transaction:
+///   1. Look up the customer scoped to the resolved tenant (404 if missing,
+///      soft-deleted, or belonging to another tenant — FR-011 / SC-003).
+///   2. Compute the new state by overlaying the payload on the existing row.
+///   3. Run a dynamic UPDATE that touches only fields whose value actually
+///      changed, so `updated_at` is refreshed by the trigger precisely when
+///      the data moved (FR-008).
+///   4. If `identifiers` was supplied, replace the set in one DELETE+INSERT
+///      cycle.  A unique-index violation on the new tuple surfaces as `409`
+///      with the same holder-naming shape as the create handler.
+///   5. Write the `customer.updated` audit row carrying only the names of
+///      fields that actually changed (no values, per FR-017).
+///   6. Commit and re-render the row into a `CustomerDetail` for the
+///      response.
+#[utoipa::path(
+    patch,
+    path = "/tenant/customers/{id}",
+    tag = "customers",
+    operation_id = "update_customer",
+    summary = "Update a tenant customer",
+    description = "Partial update of a customer. Contact fields (`email`, `phone`) are tri-state: \
+                  omit the field to leave it unchanged, send `null` to clear it, or send a string \
+                  to set it. `identifiers` and `metadata` are replace-the-set: omit to leave them \
+                  alone, send an array/map to replace the entire set. On success the response body \
+                  is the same `CustomerDetail` shape as `GET /tenant/customers/{id}`. \
+                  Requires permission: customers.manage",
+    params(("id" = Uuid, Path, description = "Customer identifier")),
+    request_body = UpdateCustomerPayload,
+    responses(
+        (status = 200, description = "Customer updated.", body = CustomerDetailResponse),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Customer not found.", body = ErrorEnvelope),
+        (status = 409, description = "Channel identifier in the new set is already held by another customer in this tenant.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (per-field, e.g. invalid email/phone, unknown channel, or too many metadata keys).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn update_customer(
     State(pool): State<sqlx::PgPool>,
     ctx: tenancy::TenantContext,
@@ -1071,7 +1177,7 @@ fn decode_cursor(
     sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
     Uuid,
 )> {
-    if cursor.len() % 2 != 0 {
+    if !cursor.len().is_multiple_of(2) {
         return None;
     }
     let bytes: Option<Vec<u8>> = (0..cursor.len())

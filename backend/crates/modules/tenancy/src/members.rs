@@ -26,10 +26,11 @@ use axum::{
     Extension,
 };
 use identity::Principal;
-use kernel::{ApiError, ErrorDetail, Page};
+use kernel::{ApiError, ErrorDetail, ErrorEnvelope, Page};
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
 use std::str::FromStr;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{audit, TenantContext};
@@ -91,7 +92,8 @@ pub fn staff_effective_rank(permissions: &authz::PermissionSet) -> Option<u8> {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 #[serde(default, deny_unknown_fields)]
 pub struct TeamMemberQuery {
     pub q: Option<String>,
@@ -111,7 +113,7 @@ impl Default for TeamMemberQuery {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TeamMemberResponse {
     pub id: Uuid,
@@ -220,6 +222,25 @@ pub async fn list_members_rows_in_tx(
     Ok((rows.into_iter().take(limit as usize).collect(), has_more))
 }
 
+#[utoipa::path(
+    get,
+    path = "/tenant/members",
+    tag = "members",
+    operation_id = "list_team_members",
+    summary = "List tenant team members",
+    description = "List the roster of active and disabled team members for the current tenant \
+                  with cursor-based pagination and optional name/email `q` and `status` filters. \
+                  Requires permission: members.view",
+    params(TeamMemberQuery),
+    responses(
+        (status = 200, description = "Page of team members.", body = Page<TeamMemberResponse>),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (invalid `status` filter or `limit` range).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_members(
     State(pool): State<sqlx::PgPool>,
     ctx: TenantContext,
@@ -333,13 +354,36 @@ pub async fn list_members(
     .into_response()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateMemberPayload {
     pub role: Option<String>,
     pub status: Option<String>,
 }
 
+#[utoipa::path(
+    patch,
+    path = "/tenant/members/{id}",
+    tag = "members",
+    operation_id = "update_team_member",
+    summary = "Update a tenant team member",
+    description = "Update the role or status of a single team membership. Exactly one of `role` or \
+                  `status` must be supplied. Role rank rules (actor must outrank target) and the \
+                  last-active-Owner guard apply. Requires permission: members.manage",
+    params(("id" = Uuid, Path, description = "Membership identifier")),
+    request_body = UpdateMemberPayload,
+    responses(
+        (status = 200, description = "Member updated.", body = TeamMemberResponse),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required or insufficient rank.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions or rank to manage the target.", body = ErrorEnvelope),
+        (status = 404, description = "Membership not found.", body = ErrorEnvelope),
+        (status = 409, description = "Conflict (role/status unchanged, last active Owner guard, or self-action).", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (per-field, e.g. unknown role/status, or both/neither of role and status supplied).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn update_member(
     State(pool): State<sqlx::PgPool>,
     ctx: TenantContext,

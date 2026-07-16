@@ -1,46 +1,62 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { AvatarPickerComponent, AvatarValue } from './avatar-picker.component';
+import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
+import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
-import { PAGE_ROUTE, RoutedPageStore } from '../routed-page.store';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
-import { AgentPreviewCardComponent } from '../../../shared/components/ai/agent-preview-card/agent-preview-card.component';
-import { AiToolTimelineComponent } from '../../../shared/components/ai/ai-tool-timeline/ai-tool-timeline.component';
-import { PromptEditorShellComponent } from '../../../shared/components/ai/prompt-editor-shell/prompt-editor-shell.component';
-import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
+import { PromptEditorComponent } from './prompt-editor.component';
+import {
+  ProviderModelSelectorComponent,
+  ProviderModelValue,
+} from './provider-model-selector.component';
+import { RulesEditorComponent, EscalationRuleEdit } from './rules-editor.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
-import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { ToneSelectorComponent } from './tone-selector.component';
 import { AiAgentStore, AiAgentTab } from './ai-agent.store';
 
 @Component({
   selector: 'app-ai-agent',
   imports: [
-    AgentPreviewCardComponent,
-    AiToolTimelineComponent,
+    AvatarPickerComponent,
     DashboardCardComponent,
     EmptyStateComponent,
+    FormsModule,
+    InlineAlertComponent,
     LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,
-    PromptEditorShellComponent,
+    PromptEditorComponent,
+    ProviderModelSelectorComponent,
+    RulesEditorComponent,
     SectionHeaderComponent,
-    StatusBadgeComponent,
+    ToneSelectorComponent,
   ],
-  providers: [AiAgentStore, RoutedPageStore, { provide: PAGE_ROUTE, useValue: 'ai-agent' }],
+  providers: [AiAgentStore],
   template: `
     <app-page-container>
       <app-page-header title="AI Agent" [description]="'Configure how your assistant behaves'" />
-      @if (page.loading()) {
+
+      @if (store.loading() && !store.config()) {
         <app-loading-state />
-      } @else if (hasError()) {
+      } @else if (store.error() && !store.config()) {
         <app-empty-state
           icon="@tui.alert-circle"
           title="Something went wrong"
           description="We couldn't load this page. Please try again."
         >
-          <button type="button" (click)="retry()">Try again</button>
+          <button type="button" (click)="store.load()">Try again</button>
         </app-empty-state>
-      } @else if (hasData()) {
+      } @else {
         <div class="tabs" role="tablist" aria-label="AI Agent sections">
           @for (tab of tabs; track tab.id) {
             <button
@@ -55,6 +71,30 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
           }
         </div>
 
+        @if (store.hasConflict()) {
+          <div class="conflict-banner">
+            <app-inline-alert tone="error">
+              Updated since loaded. Please
+              <button
+                type="button"
+                class="link-btn"
+                (click)="store.load(); store.dismissConflict()"
+              >
+                reload
+              </button>
+              before saving.
+            </app-inline-alert>
+          </div>
+        }
+
+        @if (!store.isConfigured()) {
+          <app-inline-alert tone="info">Not yet configured — showing defaults</app-inline-alert>
+        }
+
+        @if ((store.config()?.agent?.enabledChannels?.length ?? 0) === 0) {
+          <app-inline-alert tone="info">Agent inactive — no channels enabled</app-inline-alert>
+        }
+
         @switch (store.activeTab()) {
           @case ('behavior') {
             <section class="grid two">
@@ -62,42 +102,63 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
                 <app-section-header
                   card-header
                   title="Agent profile"
-                  subtitle="Default behavior and response style"
+                  subtitle="Identity, tone, and avatar"
                 />
-                <label>Name<input value="Helix Assistant" /></label>
-                <label
-                  >Tone<select>
-                    <option>Calm and concise</option>
-                    <option>Warm</option>
-                  </select></label
-                >
-                <label
-                  >Language<select>
-                    <option>Match customer language</option>
-                    <option>English</option>
-                  </select></label
-                >
-                <label
-                  >Response length<select>
-                    <option>Brief</option>
-                    <option>Detailed</option>
-                  </select></label
-                >
+                <label class="field-label">
+                  Name
+                  <input
+                    [ngModel]="agentName()"
+                    (ngModelChange)="agentName.set($event)"
+                    placeholder="Agent name"
+                  />
+                </label>
+                @if (fieldError('name'); as errors) {
+                  @for (err of errors; track err) {
+                    <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+                  }
+                }
+                <app-avatar-picker
+                  [presets]="store.options()?.avatarPresets ?? []"
+                  [(value)]="agentAvatar"
+                />
+                <app-tone-selector [tones]="store.options()?.tones ?? []" [(value)]="agentTone" />
               </app-dashboard-card>
               <app-dashboard-card>
                 <app-section-header
                   card-header
-                  title="Behavior guardrails"
-                  subtitle="Visual configuration for safe answers"
+                  title="Provider & Model"
+                  subtitle="Select the AI provider and model"
                 />
-                <div class="chips">
-                  @for (topic of pageData()?.allowedTopics; track topic) {
-                    <app-status-badge [status]="topic" tone="green" />
+                <app-provider-model-selector
+                  [providers]="agentProviders()"
+                  [(value)]="agentProviderModel"
+                  [stale]="store.staleProviderSelection()"
+                />
+                @if (fieldError('providerSelection'); as errors) {
+                  @for (err of errors; track err) {
+                    <app-inline-alert tone="error">{{ err }}</app-inline-alert>
                   }
-                </div>
-                <div class="chips">
-                  @for (topic of pageData()?.blockedTopics; track topic) {
-                    <app-status-badge [status]="topic" tone="red" />
+                }
+              </app-dashboard-card>
+            </section>
+
+            <section class="grid">
+              <app-dashboard-card>
+                <app-section-header
+                  card-header
+                  title="Channels"
+                  subtitle="Enable channels for this agent"
+                />
+                <div class="channel-list">
+                  @for (ch of store.options()?.channels ?? []; track ch) {
+                    <label class="channel-toggle">
+                      <input
+                        type="checkbox"
+                        [checked]="agentEnabledChannels().includes(ch)"
+                        (change)="toggleChannel(ch)"
+                      />
+                      {{ ch }}
+                    </label>
                   }
                 </div>
               </app-dashboard-card>
@@ -108,52 +169,57 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
               <app-section-header
                 card-header
                 title="System prompt"
-                subtitle="Mono editor shell for future prompt versioning"
+                subtitle="The base instruction given to the AI for every conversation"
               />
-              <app-prompt-editor-shell [(value)]="prompt" />
+              <app-prompt-editor
+                [(value)]="agentPrompt"
+                [maxLength]="store.options()?.promptMaxLength ?? 8000"
+              />
+              @if (fieldError('systemPrompt'); as errors) {
+                @for (err of errors; track err) {
+                  <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+                }
+              }
             </app-dashboard-card>
           }
           @case ('escalation') {
             <app-dashboard-card>
               <app-section-header
                 card-header
-                title="Escalation triggers"
-                subtitle="Signals that move conversations to humans"
+                title="Escalation rules"
+                subtitle="Define when and how conversations escalate to humans"
               />
-              <div class="rules">
-                @for (rule of pageData()?.escalationRules; track rule) {
-                  <article>{{ rule }}</article>
+              <app-rules-editor
+                [(businessRules)]="agentBusinessRules"
+                [(escalationRules)]="agentEscalationRules"
+                [brokenSkillRefs]="store.brokenSkillRefs()"
+              />
+              @if (fieldError('businessRules'); as errors) {
+                @for (err of errors; track err) {
+                  <app-inline-alert tone="error">{{ err }}</app-inline-alert>
                 }
-              </div>
+              }
+              @if (fieldError('escalationRules'); as errors) {
+                @for (err of errors; track err) {
+                  <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+                }
+              }
             </app-dashboard-card>
           }
-          @case ('testing') {
-            <section class="grid two">
-              <app-dashboard-card>
-                <app-section-header
-                  card-header
-                  title="Test assistant"
-                  subtitle="Static transcript preview"
-                />
-                <app-agent-preview-card />
-              </app-dashboard-card>
-              <app-dashboard-card>
-                <app-section-header
-                  card-header
-                  title="Tool timeline"
-                  subtitle="Inspectable execution shape"
-                />
-                <app-ai-tool-timeline [steps]="pageData()?.timelineSteps ?? []" />
-              </app-dashboard-card>
-            </section>
-          }
         }
-      } @else {
-        <app-empty-state
-          icon="@tui.bot"
-          title="No agent configuration"
-          description="Configure your AI agent's behavior, knowledge sources, and escalation rules to get started."
-        />
+
+        <div class="actions-bar">
+          @if (store.saving()) {
+            <span class="saving-indicator">Saving…</span>
+          }
+          <button type="button" class="save-btn" [disabled]="store.saving()" (click)="save()">
+            Save
+          </button>
+        </div>
+
+        @if (store.error() && store.config()) {
+          <app-inline-alert tone="error">{{ store.error() }}</app-inline-alert>
+        }
       }
     </app-page-container>
   `,
@@ -186,43 +252,87 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
       .grid {
         display: grid;
         gap: var(--app-space-4);
+        margin-bottom: var(--app-space-4);
       }
       .two {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
-      label {
+      .field-label {
         display: grid;
         gap: 6px;
-        margin-bottom: var(--app-space-3);
         color: var(--app-text-2);
         font-size: var(--app-font-sm);
         font-weight: 650;
       }
-      input,
-      select {
+      .field-label input {
         height: 38px;
+        padding: 0 var(--app-space-3);
         border: 1px solid var(--app-border);
         border-radius: var(--app-radius-md);
         background: var(--app-panel-2);
         color: var(--app-text);
-        padding: 0 var(--app-space-3);
         font: inherit;
       }
-      .chips,
-      .rules {
+      .channel-list {
         display: flex;
-        gap: var(--app-space-2);
+        gap: var(--app-space-4);
         flex-wrap: wrap;
-        margin-bottom: var(--app-space-4);
       }
-      .rules {
-        display: grid;
-      }
-      .rules article {
-        padding: var(--app-space-3);
-        border-radius: var(--app-radius-md);
-        background: var(--app-panel-2);
+      .channel-toggle {
+        display: flex;
+        align-items: center;
+        gap: var(--app-space-2);
+        font-size: var(--app-font-sm);
         color: var(--app-text);
+        cursor: pointer;
+      }
+      .channel-toggle input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--app-accent);
+      }
+      .actions-bar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--app-space-3);
+        margin-top: var(--app-space-5);
+        padding-top: var(--app-space-4);
+        border-top: 1px solid var(--app-border);
+      }
+      .save-btn {
+        height: 38px;
+        padding: 0 var(--app-space-5);
+        border: 0;
+        border-radius: var(--app-radius-md);
+        background: var(--app-accent);
+        color: var(--app-accent-ink);
+        font-weight: 650;
+        font-size: var(--app-font-sm);
+        cursor: pointer;
+      }
+      .save-btn:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .save-btn:hover:not(:disabled) {
+        opacity: 0.92;
+      }
+      .saving-indicator {
+        font-size: var(--app-font-sm);
+        color: var(--app-text-2);
+      }
+      .conflict-banner {
+        margin-bottom: var(--app-space-3);
+      }
+      .link-btn {
+        background: none;
+        border: none;
+        color: inherit;
+        text-decoration: underline;
+        cursor: pointer;
+        font: inherit;
+        padding: 0;
       }
       @media (max-width: 900px) {
         .two {
@@ -234,27 +344,86 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AiAgentComponent {
-  protected readonly page = inject(RoutedPageStore);
-  protected readonly hasData = computed(() => this.page.data() !== undefined);
-  protected readonly hasError = computed(() => this.page.error() !== null);
-  protected readonly store = inject(AiAgentStore);
-  protected readonly prompt = signal(
-    'You are Helix, a concise AI support assistant.\nUse trusted knowledge citations.\nEscalate when confidence is low.',
-  );
+  readonly store = inject(AiAgentStore);
+
   protected readonly tabs: readonly { id: AiAgentTab; label: string }[] = [
     { id: 'behavior', label: 'Behavior' },
     { id: 'prompt', label: 'Prompt' },
     { id: 'escalation', label: 'Escalation' },
-    { id: 'testing', label: 'Testing' },
   ];
 
-  protected readonly pageData = computed(() => {
-    const data = this.page.data();
-    if (data?.page === 'ai-agent') return data.data;
-    return undefined;
+  protected readonly agentName = signal('');
+  protected readonly agentAvatar = signal<AvatarValue>(null);
+  protected readonly agentTone = signal('');
+  protected readonly agentPrompt = signal('');
+  protected readonly agentBusinessRules = signal<string[]>([]);
+  protected readonly agentEscalationRules = signal<EscalationRuleEdit[]>([]);
+  protected readonly agentEnabledChannels = signal<string[]>([]);
+  protected readonly agentProviderModel = signal<ProviderModelValue>({
+    providerId: null,
+    model: null,
   });
 
-  protected retry(): void {
-    this.page.retry();
+  protected readonly agentProviders = computed(() =>
+    (this.store.options()?.providers ?? []).map((p) => ({
+      id: p.provider,
+      name: p.provider,
+      credentialAvailable: p.credentialAvailable,
+      models: p.models,
+    })),
+  );
+
+  constructor() {
+    effect(() => {
+      const config = this.store.config();
+      if (config) {
+        this.agentName.set(config.agent.name);
+        this.agentTone.set(config.agent.tone);
+        this.agentPrompt.set(config.agent.systemPrompt);
+        this.agentBusinessRules.set(config.agent.businessRules);
+        this.agentEscalationRules.set(config.agent.escalationRules);
+        this.agentEnabledChannels.set(config.agent.enabledChannels);
+        this.agentAvatar.set(
+          config.agent.avatar.kind === 'preset' && config.agent.avatar.preset
+            ? { kind: 'preset', preset: config.agent.avatar.preset }
+            : { kind: 'upload' },
+        );
+        this.agentProviderModel.set({
+          providerId: config.agent.providerSelection.provider,
+          model: config.agent.providerSelection.model,
+        });
+      }
+    });
+  }
+
+  protected save(): void {
+    const avatar = this.agentAvatar();
+    this.store.save({
+      name: this.agentName(),
+      avatar:
+        avatar?.kind === 'preset' ? { kind: 'preset', preset: avatar.preset } : { kind: 'upload' },
+      tone: this.agentTone(),
+      systemPrompt: this.agentPrompt(),
+      businessRules: this.agentBusinessRules(),
+      escalationRules: this.agentEscalationRules(),
+      enabledChannels: this.agentEnabledChannels(),
+      providerSelection: this.agentProviderModel().providerId
+        ? {
+            provider: this.agentProviderModel().providerId!,
+            model: this.agentProviderModel().model ?? '',
+          }
+        : null,
+      version: this.store.config()?.agent.version ?? null,
+    });
+  }
+
+  protected toggleChannel(channel: string): void {
+    this.agentEnabledChannels.update((list) =>
+      list.includes(channel) ? list.filter((c) => c !== channel) : [...list, channel],
+    );
+  }
+
+  protected fieldError(field: string): string[] | null {
+    return this.store.fieldErrors()?.[field] ?? null;
   }
 }

@@ -30,6 +30,7 @@ fn test_config() -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        docs_enabled: false,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
@@ -110,6 +111,7 @@ async fn body_json(response: Response) -> serde_json::Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
+#[allow(dead_code)]
 async fn assert_error_has_request_id(headers: &HeaderMap, body: &serde_json::Value) {
     let request_id_header = headers
         .get("X-Request-Id")
@@ -403,6 +405,7 @@ async fn seed_inactive_member(
 // Helpers
 // ---------------------------------------------------------------------------
 
+#[allow(dead_code)]
 fn encode_query(value: &str) -> String {
     value
         .bytes()
@@ -416,6 +419,7 @@ fn encode_query(value: &str) -> String {
         .collect()
 }
 
+#[allow(dead_code)]
 fn encode_cursor(cursor: &str) -> String {
     encode_query(cursor)
 }

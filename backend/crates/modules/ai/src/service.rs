@@ -352,6 +352,118 @@ impl AiService {
         result
     }
 
+    pub async fn complete_with_override(
+        &self,
+        ctx: AiCallContext,
+        input: AiInput,
+        provider: &str,
+        model: &str,
+    ) -> Result<AiCallResult, AiCallError> {
+        let scope = Scope::Tenant(ctx.tenant_id);
+
+        let resolved = resolve_config(&self.0.pool, scope)
+            .await
+            .map_err(|e| AiCallError::Internal(e.to_string()))?
+            .ok_or(AiCallError::NotConfigured)?;
+
+        let master_key = self
+            .0
+            .master_key
+            .as_ref()
+            .ok_or(AiCallError::NotConfigured)?;
+
+        let key = resolve_credential(&self.0.pool, master_key, scope, provider)
+            .await
+            .map_err(AiCallError::Internal)?
+            .ok_or(AiCallError::NotConfigured)?
+            .0;
+
+        let attempts = vec![Attempt {
+            provider: provider.to_string(),
+            model: model.to_string(),
+            key,
+            max_output_tokens: None,
+            temperature: None,
+        }];
+
+        let started = Instant::now();
+        let capture_content = resolved.capture_content;
+        let request_content = capture_content.then(|| {
+            serde_json::json!({
+                "system": &input.system,
+                "messages": &input.messages,
+            })
+        });
+
+        let result = run_attempts_traced(
+            &self.0.registry,
+            &attempts,
+            ctx.request_id.as_deref(),
+            input.system,
+            input.messages,
+        )
+        .await;
+
+        let elapsed = started.elapsed();
+        let elapsed_millis = elapsed.as_millis();
+
+        match &result {
+            Ok(ai_result) => {
+                let w = usage::UsageWrite {
+                    tenant_id: ctx.tenant_id,
+                    provider: ai_result.provider.clone(),
+                    model: ai_result.model.clone(),
+                    input_tokens: ai_result.usage.input.map(|v| v as i32),
+                    output_tokens: ai_result.usage.output.map(|v| v as i32),
+                    status: "success",
+                    error_category: None,
+                    streamed: false,
+                    latency_ms: elapsed_millis as i32,
+                    request_id: ctx.request_id,
+                    request_content,
+                    response_content: if capture_content {
+                        Some(ai_result.content.clone())
+                    } else {
+                        None
+                    },
+                };
+                if let Err(e) = usage::insert(&self.0.pool, w).await {
+                    tracing::error!(%e, "failed to record successful AI usage");
+                }
+            }
+            Err(AiCallError::Provider {
+                category,
+                provider,
+                model,
+            }) => {
+                let w = usage::UsageWrite {
+                    tenant_id: ctx.tenant_id,
+                    provider: provider.clone(),
+                    model: model.clone(),
+                    input_tokens: None,
+                    output_tokens: None,
+                    status: "failure",
+                    error_category: Some(category.as_str()),
+                    streamed: false,
+                    latency_ms: elapsed_millis as i32,
+                    request_id: ctx.request_id,
+                    request_content: if capture_content {
+                        request_content
+                    } else {
+                        None
+                    },
+                    response_content: None,
+                };
+                if let Err(e) = usage::insert(&self.0.pool, w).await {
+                    tracing::error!(%e, "failed to record failed AI usage");
+                }
+            }
+            Err(AiCallError::NotConfigured) | Err(AiCallError::Internal(_)) => {}
+        }
+
+        result
+    }
+
     pub async fn stream(
         &self,
         ctx: AiCallContext,

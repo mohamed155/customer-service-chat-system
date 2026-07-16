@@ -31,6 +31,7 @@ fn test_config() -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        docs_enabled: false,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
@@ -1113,6 +1114,7 @@ async fn inbox_item_assignee_is_null_when_unassigned() {
 // Extended seed / request helpers (US2–US5)
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 async fn seed_message(
     pool: &sqlx::PgPool,
     tenant_id: Uuid,
@@ -2744,7 +2746,7 @@ async fn create_empty_message_422() {
     let details = body["error"]["details"].as_array().expect("details array");
     assert!(
         details.iter().any(|d| d["field"] == "message.body"
-            || d["field"].as_str().map_or(false, |f| f.contains("message"))),
+            || d["field"].as_str().is_some_and(|f| f.contains("message"))),
         "should report message validation, got {details:?}"
     );
 }

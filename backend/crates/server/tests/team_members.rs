@@ -76,6 +76,7 @@ fn test_config() -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        docs_enabled: false,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,

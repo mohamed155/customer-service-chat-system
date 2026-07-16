@@ -2,6 +2,7 @@ use kernel::{ApiError, ErrorDetail};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -16,14 +17,14 @@ pub struct Customer {
     pub updated_at: sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct ChannelIdentifier {
     pub id: Uuid,
     pub channel: String,
     pub identifier: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct CustomerListItem {
     pub id: Uuid,
     pub display_name: String,
@@ -34,7 +35,7 @@ pub struct CustomerListItem {
     pub updated_at: sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct CustomerDetail {
     pub id: Uuid,
     pub display_name: String,
@@ -45,6 +46,37 @@ pub struct CustomerDetail {
     pub updated_at: sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
     pub identifiers: Vec<ChannelIdentifier>,
     pub metadata: BTreeMap<String, String>,
+}
+
+// ---------------------------------------------------------------------------
+// OpenAPI doc-only response envelopes
+// ---------------------------------------------------------------------------
+//
+// These wrappers mirror the inline `json!({"data": ...})` shapes the handlers
+// emit. They are not used to serialize real responses — the handlers continue
+// to build their envelopes with the private `PaginatedResponse<T>` / inline
+// `json!` macros. The wrapper types exist so `#[utoipa::path]` can attach a
+// concrete `body = ...` schema to each operation (FR-005, FR-008).
+//
+// `CustomerListResponse` is the `{data, pagination}` shape produced by
+// `GET /tenant/customers` (research Decision 4). `PaginationEnvelope` uses
+// snake_case fields to match the existing `Pagination` struct in `routes.rs`.
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct PaginationEnvelope {
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CustomerDetailResponse {
+    pub data: CustomerDetail,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CustomerListResponse {
+    pub data: Vec<CustomerListItem>,
+    pub pagination: PaginationEnvelope,
 }
 
 // ---------------------------------------------------------------------------
@@ -68,7 +100,7 @@ pub const METADATA_VALUE_MAX: usize = 500;
 /// Raw channel-identifier entry as supplied on the wire.  The DB normalizes
 /// the value (trim + lowercase) but format checks happen before the round
 /// trip so the UI gets a clean `422 details[]` per channel.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct ChannelIdentifierInput {
     pub channel: String,
     pub identifier: String,
@@ -76,7 +108,7 @@ pub struct ChannelIdentifierInput {
 
 /// Body of `POST /tenant/customers`.  Mirrors the contract in
 /// `specs/012-customer-profiles/contracts/rest-api.md`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, ToSchema)]
 pub struct CreateCustomerPayload {
     pub display_name: String,
     #[serde(default)]
@@ -87,6 +119,35 @@ pub struct CreateCustomerPayload {
     pub identifiers: Vec<ChannelIdentifierInput>,
     #[serde(default)]
     pub metadata: BTreeMap<String, String>,
+}
+
+/// Query string for `GET /tenant/customers`.  Defined here (alongside the
+/// response/payload types) because it is a domain model — the route handler
+/// is the only consumer, and the `IntoParams` derive is part of the
+/// OpenAPI annotation surface (FR-005).
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(default, deny_unknown_fields)]
+pub struct CustomerListQuery {
+    /// Free-text search over `display_name`, `email`, `phone`, and channel
+    /// identifier values (case-insensitive substring match).
+    pub q: Option<String>,
+    /// Opaque pagination cursor from a prior `CustomerListResponse`'s
+    /// `pagination.next_cursor`.  Omit on the first page.
+    pub cursor: Option<String>,
+    /// Maximum number of items returned in this page.  Clamped to the
+    /// 1..=100 range by the handler.
+    pub limit: u32,
+}
+
+impl Default for CustomerListQuery {
+    fn default() -> Self {
+        Self {
+            q: None,
+            cursor: None,
+            limit: 25,
+        }
+    }
 }
 
 /// A three-state field that distinguishes an absent field, an explicit JSON
@@ -101,8 +162,9 @@ pub struct CreateCustomerPayload {
 /// | field absent (via `#[serde(default)]`) | `TriState::Absent` |
 /// | `null` | `TriState::Clear` |
 /// | `"value"` | `TriState::Value("value")` |
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum TriState<T> {
+    #[default]
     Absent,
     Clear,
     Value(T),
@@ -153,23 +215,28 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for TriState<T> {
     }
 }
 
-impl<T> Default for TriState<T> {
-    fn default() -> Self {
-        TriState::Absent
-    }
-}
-
 /// Body of `PATCH /tenant/customers/{id}`.  `TriState` for nullable contact
 /// fields distinguishes "absent" (no change) from explicit `null` (clear)
 /// from a present value.  Identifiers and metadata use replace-the-set
 /// semantics — they are present and become the new set.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+///
+/// OpenAPI note: `TriState<T>` is a Rust-only tri-state enum (no `ToSchema`
+/// derive is emitted by utoipa 5.x for the generic case).  The contact
+/// fields are documented as `Option<Option<String>>` — *optional and
+/// nullable* — via field-level `value_type` overrides, which is the
+/// faithful wire representation:
+///   * field omitted  → absent  → not in the JSON
+///   * `null`         → clear   → JSON `null`
+///   * `"value"`      → value   → JSON `"value"`
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, ToSchema)]
 pub struct UpdateCustomerPayload {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     #[serde(default, skip_serializing_if = "TriState::is_absent")]
+    #[schema(value_type = Option<Option<String>>)]
     pub email: TriState<String>,
     #[serde(default, skip_serializing_if = "TriState::is_absent")]
+    #[schema(value_type = Option<Option<String>>)]
     pub phone: TriState<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identifiers: Option<Vec<ChannelIdentifierInput>>,
@@ -868,7 +935,7 @@ mod tests {
                 .any(|d| d["code"].as_str() == Some("too_long")
                     && d["field"]
                         .as_str()
-                        .map_or(false, |f| f.starts_with("metadata["))),
+                        .is_some_and(|f| f.starts_with("metadata["))),
             "expected too_long on the offending key, got {:?}",
             error.details()
         );
@@ -888,7 +955,7 @@ mod tests {
                 .any(|d| d["code"].as_str() == Some("too_long")
                     && d["field"]
                         .as_str()
-                        .map_or(false, |f| f.starts_with("metadata["))),
+                        .is_some_and(|f| f.starts_with("metadata["))),
             "expected too_long on the offending value, got {:?}",
             error.details()
         );

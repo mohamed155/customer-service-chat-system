@@ -71,6 +71,7 @@ describe('ConversationDetailComponent', () => {
     addMessage: ReturnType<typeof vi.fn>;
     patchStatus: ReturnType<typeof vi.fn>;
     patchAssignment: ReturnType<typeof vi.fn>;
+    setAiHandling: ReturnType<typeof vi.fn>;
   };
 
   function createStoreMock() {
@@ -87,6 +88,7 @@ describe('ConversationDetailComponent', () => {
       addMessage: vi.fn(),
       patchStatus: vi.fn(),
       patchAssignment: vi.fn(),
+      setAiHandling: vi.fn(),
     };
   }
 

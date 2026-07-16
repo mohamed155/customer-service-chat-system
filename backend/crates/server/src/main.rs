@@ -85,6 +85,11 @@ async fn main() {
         state.db.clone(),
         state.escalations.clone(),
     ));
+    let agent_responder_worker = tokio::spawn(ai::agent_responder::run_agent_responder_worker(
+        state.db.clone(),
+        state.ai.clone(),
+        state.escalations.clone(),
+    ));
 
     let address = format!("{}:{}", state.config.bind_address, state.config.port);
     let listener = TcpListener::bind(&address)
@@ -102,6 +107,9 @@ async fn main() {
         }
         result = escalation_worker => {
             panic!("escalation outbox worker stopped unexpectedly: {result:?}");
+        }
+        result = agent_responder_worker => {
+            panic!("agent responder worker stopped unexpectedly: {result:?}");
         }
     }
 }

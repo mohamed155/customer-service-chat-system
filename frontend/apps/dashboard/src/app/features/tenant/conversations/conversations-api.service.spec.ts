@@ -256,6 +256,33 @@ describe('ConversationsApiService', () => {
     });
   });
 
+  describe('setConversationAiHandling', () => {
+    it('posts mode and maps response', async () => {
+      const detailWire: ConversationDetailWire = {
+        id: 'c1',
+        customer: { id: 'cu1', display_name: 'Maya Chen' },
+        channel: 'web_chat',
+        status: 'open',
+        assignee: null,
+        last_message: null,
+        last_activity_at: '2026-07-13T10:00:00Z',
+        created_at: '2026-07-13T09:00:00Z',
+        participants: [],
+        ai_handling: 'platform_ai',
+        awaiting_ai_decision: false,
+      };
+      api.post.mockReturnValue(of({ data: { data: detailWire }, requestId: 'req-ai' }));
+
+      const result = await firstValueFrom(service.setConversationAiHandling('c1', 'platform_ai'));
+
+      expect(api.post).toHaveBeenCalledWith('tenant/conversations/c1/ai-handling', {
+        mode: 'platform_ai',
+      });
+      expect(result.data).toEqual(conversationDetailFromWire(detailWire));
+      expect(result.requestId).toBe('req-ai');
+    });
+  });
+
   describe('create', () => {
     it('sends create payload and maps response', async () => {
       const payload: CreateConversationPayload = {

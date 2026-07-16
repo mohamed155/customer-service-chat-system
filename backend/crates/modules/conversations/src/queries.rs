@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::{Postgres, Transaction};
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use serde_json::Value;
@@ -194,6 +194,7 @@ pub struct InboxRow {
     pub last_message_preview: Option<String>,
     pub last_activity_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+    pub ai_handling: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +217,7 @@ pub struct DetailRow {
     pub last_message_preview: Option<String>,
     pub last_activity_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+    pub ai_handling: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -261,6 +263,7 @@ pub struct TimelineRow {
 ///
 /// Returns `(rows, has_more)` where `rows` is at most `limit` items, and
 /// `has_more` signals whether additional rows exist beyond this page.
+#[allow(clippy::too_many_arguments)]
 pub async fn inbox_query(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
@@ -285,7 +288,8 @@ pub async fn inbox_query(
                 (mu.status = 'active') AS assignee_active, \
                 preview.kind AS last_message_kind, \
                 LEFT(preview.body, 140) AS last_message_preview, \
-                c.last_activity_at, c.created_at \
+                c.last_activity_at, c.created_at, \
+                c.ai_handling \
          FROM conversations c \
          JOIN customers cu \
            ON cu.id = c.customer_id AND cu.tenant_id = c.tenant_id AND cu.deleted_at IS NULL \
@@ -419,6 +423,20 @@ fn timeline_row_to_message(row: TimelineRow) -> Message {
             display_name: row.customer_display_name.unwrap_or_default(),
             active: None,
         },
+        MessageKind::Ai => Participant {
+            participant_type: "ai_agent".into(),
+            id: None,
+            membership_id: None,
+            display_name: "<agent name>".into(),
+            active: None,
+        },
+        MessageKind::System => Participant {
+            participant_type: "system".into(),
+            id: None,
+            membership_id: None,
+            display_name: "Automated reply".into(),
+            active: None,
+        },
         _ => Participant {
             participant_type: "agent".into(),
             id: row.agent_user_id,
@@ -464,7 +482,8 @@ pub async fn detail_query_in_tx(
                 COALESCE(tm.status = 'active', false) AS assignee_active, \
                 preview.kind AS last_message_kind, \
                 LEFT(preview.body, 140) AS last_message_preview, \
-                cv.last_activity_at, cv.created_at \
+                cv.last_activity_at, cv.created_at, \
+                cv.ai_handling \
          FROM conversations cv \
          JOIN customers c \
            ON c.id = cv.customer_id AND c.tenant_id = cv.tenant_id AND c.deleted_at IS NULL \
@@ -517,6 +536,8 @@ pub async fn detail_query_in_tx(
         last_activity_at: row.last_activity_at,
         created_at: row.created_at,
         participants,
+        ai_handling: row.ai_handling,
+        awaiting_ai_decision: false,
     }))
 }
 
@@ -608,6 +629,7 @@ pub async fn timeline_query_in_tx(
 /// Insert a message into the conversation, bump `last_activity_at`, and
 /// auto-reopen when kind is customer/reply and status is resolved/closed.
 /// Returns the inserted message and the updated conversation status ref.
+#[allow(clippy::too_many_arguments)]
 pub async fn add_message_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
@@ -646,7 +668,7 @@ pub async fn add_message_in_tx(
     .await?;
 
     // 3. Auto-reopen when kind is customer/reply and status is resolved/closed
-    let final_status = if matches!(kind, "customer" | "reply")
+    let final_status = if matches!(kind, "customer" | "reply" | "ai")
         && matches!(current_status.as_str(), "resolved" | "closed")
     {
         let new_status: String = sqlx::query_scalar(
@@ -704,6 +726,20 @@ pub async fn add_message_in_tx(
             id: Some(customer_info.0),
             membership_id: None,
             display_name: customer_info.1,
+            active: None,
+        },
+        MessageKind::Ai => Participant {
+            participant_type: "ai_agent".into(),
+            id: None,
+            membership_id: None,
+            display_name: "<agent name>".into(),
+            active: None,
+        },
+        MessageKind::System => Participant {
+            participant_type: "system".into(),
+            id: None,
+            membership_id: None,
+            display_name: "Automated reply".into(),
             active: None,
         },
         _ => {
@@ -816,9 +852,9 @@ pub async fn assign_in_tx(
 
     if let Some(mid) = assigned_membership_id {
         if !active_membership_exists_in_tx(tx, tenant_id, mid).await? {
-            return Err(sqlx::Error::Protocol(
-                format!("Membership {mid} is not active in tenant {tenant_id}").into(),
-            ));
+            return Err(sqlx::Error::Protocol(format!(
+                "Membership {mid} is not active in tenant {tenant_id}"
+            )));
         }
     }
 
@@ -992,9 +1028,9 @@ pub async fn create_conversation_in_tx(
     // 1. Check customer exists
     let customer_ok = customers::customer_exists_in_tx(tx, tenant_id, customer_id).await?;
     if !customer_ok {
-        return Err(sqlx::Error::Protocol(
-            format!("Customer {customer_id} not found in tenant {tenant_id}").into(),
-        ));
+        return Err(sqlx::Error::Protocol(format!(
+            "Customer {customer_id} not found in tenant {tenant_id}"
+        )));
     }
 
     // 2. Insert conversation
@@ -1047,4 +1083,191 @@ pub async fn create_conversation_in_tx(
         .expect("just-created conversation must exist");
 
     Ok(detail)
+}
+
+// ---------------------------------------------------------------------------
+// AI Agent responder helpers
+// ---------------------------------------------------------------------------
+
+pub async fn conversation_ai_state(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+) -> sqlx::Result<Option<(String, Option<String>)>> {
+    sqlx::query_as::<_, (String, Option<String>)>(
+        "SELECT status, ai_handling \
+         FROM conversations \
+         WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn has_system_message(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+) -> sqlx::Result<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS( \
+         SELECT 1 FROM messages \
+         WHERE tenant_id = $1 AND conversation_id = $2 AND kind = 'system' \
+         )",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn has_system_message_batch(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    conversation_ids: &[Uuid],
+) -> sqlx::Result<Vec<(Uuid, bool)>> {
+    if conversation_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows: Vec<(Uuid, bool)> = sqlx::query_as(
+        "SELECT conversation_id, EXISTS( \
+         SELECT 1 FROM messages m \
+         WHERE m.tenant_id = $1 \
+         AND m.conversation_id = ANY($2) \
+         AND m.kind = 'system' \
+         ) AS has_ack \
+         FROM unnest($2::uuid[]) AS conversation_id",
+    )
+    .bind(tenant_id)
+    .bind(conversation_ids)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+pub async fn insert_auto_ack_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    body: &str,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
+         VALUES ($1, $2, 'system', $3)",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .bind(body)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE conversations SET last_activity_at = now() \
+         WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn insert_ai_reply_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    body: &str,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
+         VALUES ($1, $2, 'ai', $3)",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .bind(body)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE conversations SET last_activity_at = now() \
+         WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn has_ai_reply_since(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    since_message_id: Uuid,
+) -> sqlx::Result<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS( \
+         SELECT 1 FROM messages \
+         WHERE tenant_id = $1 AND conversation_id = $2 AND kind = 'ai' \
+         AND created_at > (SELECT created_at FROM messages WHERE id = $3 AND tenant_id = $1) \
+         )",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .bind(since_message_id)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn message_body(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    message_id: Uuid,
+) -> sqlx::Result<Option<String>> {
+    sqlx::query_scalar("SELECT body FROM messages WHERE tenant_id = $1 AND id = $2")
+        .bind(tenant_id)
+        .bind(message_id)
+        .fetch_optional(pool)
+        .await
+}
+
+pub async fn set_ai_handling_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    mode: &str,
+) -> sqlx::Result<bool> {
+    let row: Option<(Uuid,)> = sqlx::query_as(
+        "UPDATE conversations SET ai_handling = $1 \
+         WHERE tenant_id = $2 AND id = $3 AND ai_handling IS DISTINCT FROM 'human' \
+         RETURNING id",
+    )
+    .bind(mode)
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.is_some())
+}
+
+pub async fn recent_history(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    limit: i64,
+) -> sqlx::Result<Vec<(String, String)>> {
+    sqlx::query_as::<_, (String, String)>(
+        "SELECT kind, body FROM messages \
+         WHERE tenant_id = $1 AND conversation_id = $2 AND kind IN ('customer', 'reply', 'ai') \
+         ORDER BY created_at ASC, seq ASC \
+         LIMIT $3",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
 }

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{Path, Query, State},
     response::{IntoResponse, Json, Response},
@@ -9,15 +11,16 @@ use identity::Principal;
 use kernel::{ApiError, ErrorDetail, Page};
 use serde::Serialize;
 use tenancy::{members, TenantContext};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
 // T062 — list_members_with_skills
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct TeamMemberWithSkills {
+pub struct TeamMemberWithSkills {
     pub id: Uuid,
     pub user_id: Uuid,
     pub display_name: String,
@@ -29,6 +32,21 @@ struct TeamMemberWithSkills {
     pub availability: AvailabilityState,
 }
 
+#[utoipa::path(
+    get,
+    path = "/tenant/members",
+    tag = "members",
+    params(members::TeamMemberQuery),
+    responses(
+        (status = 200, description = "Paginated list of team members with their skills and availability. Requires permission: members.view.", body = Page<TeamMemberWithSkills>),
+        (status = 400, description = "Invalid query parameters", body = kernel::ErrorEnvelope),
+        (status = 401, description = "Authentication required", body = kernel::ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions", body = kernel::ErrorEnvelope),
+        (status = 422, description = "Validation failed", body = kernel::ErrorEnvelope),
+        (status = 500, description = "Internal server error", body = kernel::ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_members_with_skills(
     State(pool): State<sqlx::PgPool>,
     ctx: TenantContext,
@@ -177,7 +195,7 @@ pub async fn list_members_with_skills(
 // T072 — get_conversation_with_escalation
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ConversationDetailWithEscalation {
     #[serde(flatten)]
@@ -185,10 +203,31 @@ struct ConversationDetailWithEscalation {
     escalation: Option<Escalation>,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct ConversationDetailEnvelope {
+    data: ConversationDetailWithEscalation,
+}
+
+#[utoipa::path(
+    get,
+    path = "/tenant/conversations/{id}",
+    tag = "conversations",
+    params(("id" = Uuid, Path, description = "Conversation identifier")),
+    responses(
+        (status = 200, description = "Conversation detail merged with the latest escalation context (when present). Requires permission: conversations.view.", body = ConversationDetailEnvelope),
+        (status = 401, description = "Authentication required", body = kernel::ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions", body = kernel::ErrorEnvelope),
+        (status = 404, description = "Conversation not found", body = kernel::ErrorEnvelope),
+        (status = 500, description = "Internal server error", body = kernel::ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn get_conversation_with_escalation(
     State(pool): State<sqlx::PgPool>,
     ctx: TenantContext,
     Extension(_principal): Extension<Principal>,
+    Extension(ai_status): Extension<Arc<dyn conversations::AiAgentStatus>>,
     Path(conversation_id): Path<Uuid>,
 ) -> Response {
     let mut tx = match pool.begin().await {
@@ -244,6 +283,24 @@ pub async fn get_conversation_with_escalation(
             .with_request_id(&ctx.request_id)
             .into_response();
     }
+
+    let agent_configured = ai_status.agent_configured(ctx.tenant_id).await;
+    let platform_available = ai_status.platform_ai_available(ctx.tenant_id).await;
+
+    let has_system_ack =
+        conversations::queries::has_system_message(&pool, ctx.tenant_id, conversation_id)
+            .await
+            .unwrap_or(false);
+
+    let mut detail = detail;
+    detail.awaiting_ai_decision = !agent_configured
+        && has_system_ack
+        && match detail.ai_handling.as_deref() {
+            None => true,
+            Some("platform_ai") => !platform_available,
+            Some("human") => false,
+            _ => true,
+        };
 
     let detail_with_esc = ConversationDetailWithEscalation { detail, escalation };
 

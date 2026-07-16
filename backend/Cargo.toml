@@ -11,6 +11,9 @@ license = "UNLICENSED"
 
 [workspace.dependencies]
 axum = "0.8"
+utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid", "openapi_extensions"] }
+utoipa-axum = "0.2"
+utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 chrono = { version = "0.4", features = ["serde"] }
 http = "1"
 serde = { version = "1", features = ["derive"] }

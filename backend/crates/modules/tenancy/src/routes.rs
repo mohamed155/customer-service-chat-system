@@ -5,17 +5,18 @@ use axum::{
 };
 use config::AppConfig;
 use identity::Principal;
-use kernel::{ApiError, Page, PageParams};
+use kernel::{ApiError, ErrorEnvelope, Page, PageParams};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::Row;
 use std::str::FromStr;
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{audit, TenantContext};
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct TenantSummary {
     pub id: Uuid,
     pub name: String,
@@ -25,7 +26,7 @@ pub struct TenantSummary {
 }
 
 /// `PlatformTenantDetail` — full record returned by create/get/update handlers
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlatformTenantDetail {
     pub id: Uuid,
@@ -70,7 +71,7 @@ pub const TENANT_STATUSES: &[&str] = &["active", "suspended"];
 ///   * Field absent → `None` → default to "trial".
 ///   * Explicit JSON `null` → `Some(None)` → 422.
 ///   * Supplied value → `Some(Some(s))` → validate.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct CreateTenantRequest {
     pub name: Option<String>,
@@ -95,7 +96,7 @@ pub struct CreateTenantRequest {
 ///
 /// `contact_name` and `contact_email` use the same three-state encoding
 /// but the handler treats `Some(None)` and `Some(Some(""))` as a clear.
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct UpdateTenantRequest {
     #[serde(default, deserialize_with = "deserialize_optional_nullable_string")]
@@ -323,7 +324,8 @@ mod tests {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 #[serde(deny_unknown_fields)]
 pub struct ListTenantsParams {
     pub q: Option<String>,
@@ -332,6 +334,24 @@ pub struct ListTenantsParams {
     pub cursor: Option<String>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/platform/tenants",
+    tag = "platform-tenants",
+    operation_id = "list_platform_tenants",
+    summary = "List platform tenants",
+    description = "List all platform tenants with cursor-based pagination and optional name/slug \
+                  `q` and `status` filters. Requires permission: platform.tenants.list",
+    params(ListTenantsParams),
+    responses(
+        (status = 200, description = "Page of platform tenants.", body = Page<TenantSummary>),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (invalid `status` filter).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_tenants(
     _principal: Principal,
     Query(params): Query<ListTenantsParams>,
@@ -439,7 +459,7 @@ fn hex_to_uuid(hex_str: &str) -> Option<Uuid> {
     Some(Uuid::from_u64_pair(hi, lo))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MeResponse {
     pub id: Uuid,
@@ -451,7 +471,7 @@ pub struct MeResponse {
     pub memberships: Vec<MembershipSummary>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MembershipSummary {
     pub tenant_id: Uuid,
@@ -461,6 +481,17 @@ pub struct MembershipSummary {
     pub permissions: Vec<String>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/me",
+    tag = "identity",
+    responses(
+        (status = 200, description = "Current user principal and tenant membership summary. Requires an authenticated session.", body = MeResponse),
+        (status = 401, description = "Authentication required", body = kernel::ErrorEnvelope),
+        (status = 500, description = "Internal server error", body = kernel::ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn me(
     principal: Principal,
     State(pool): State<sqlx::PgPool>,
@@ -543,6 +574,17 @@ fn permission_codes(permissions: &[authz::Permission]) -> Vec<String> {
     permissions.iter().map(ToString::to_string).collect()
 }
 
+#[utoipa::path(
+    get,
+    path = "/tenant",
+    tag = "tenant",
+    responses(
+        (status = 200, description = "Current tenant profile. Requires permission: overview.view.", body = serde_json::Value),
+        (status = 401, description = "Authentication required", body = kernel::ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions", body = kernel::ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn get_tenant(State(pool): State<sqlx::PgPool>, ctx: TenantContext) -> Response {
     let row = match sqlx::query_as::<_, (Uuid, String, String, String, String)>(
         "SELECT id, name, slug, status, plan \
@@ -578,6 +620,24 @@ pub async fn get_tenant(State(pool): State<sqlx::PgPool>, ctx: TenantContext) ->
 /// Returns the full `PlatformTenantDetail` (including contact fields) for any
 /// platform role holding `Permission::PlatformTenantsList`. Soft-deleted rows
 /// (`deleted_at IS NOT NULL`) and unknown ids both return 404 `not_found`.
+#[utoipa::path(
+    get,
+    path = "/platform/tenants/{id}",
+    tag = "platform-tenants",
+    operation_id = "get_platform_tenant",
+    summary = "Get a platform tenant by id",
+    description = "Fetch the full record for a single platform tenant, including contact fields \
+                  and timestamps. Requires permission: platform.tenants.list",
+    params(("id" = Uuid, Path, description = "Tenant identifier")),
+    responses(
+        (status = 200, description = "Tenant found.", body = PlatformTenantDetail),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Tenant not found.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn get_tenant_detail(
     _principal: Principal,
     Path(id): Path<Uuid>,
@@ -632,6 +692,24 @@ pub async fn get_tenant_detail(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/platform/tenants/{id}/switch",
+    tag = "platform-tenants",
+    operation_id = "switch_platform_tenant",
+    summary = "Record a platform tenant switch",
+    description = "Record that the current platform user is switching to a different platform \
+                  tenant context. Returns the target tenant summary. Requires permission: \
+                  platform.tenants.switch",
+    params(("id" = Uuid, Path, description = "Tenant identifier")),
+    responses(
+        (status = 200, description = "Switch recorded; returns target tenant summary.", body = TenantSummary),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Access denied (tenant not found or insufficient permissions).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn switch_tenant(
     principal: Principal,
     Path(id): Path<uuid::Uuid>,
@@ -680,6 +758,26 @@ pub async fn switch_tenant(
 /// Requires `Permission::PlatformTenantsManage` (enforced by the router).
 /// Returns `201 Created` with the new tenant's full record, or a 4xx with
 /// a per-field `ErrorDetail` envelope on validation/conflict.
+#[utoipa::path(
+    post,
+    path = "/platform/tenants",
+    tag = "platform-tenants",
+    operation_id = "create_platform_tenant",
+    summary = "Create a platform tenant",
+    description = "Create a new customer organization. Returns 201 with the full record. \
+                  Requires permission: platform.tenants.manage",
+    request_body = CreateTenantRequest,
+    responses(
+        (status = 201, description = "Tenant created.", body = PlatformTenantDetail),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 409, description = "Slug is already in use.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (per-field).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn create_tenant(
     principal: Principal,
     State(pool): State<sqlx::PgPool>,
@@ -940,6 +1038,30 @@ pub async fn create_tenant(
 /// Requires `Permission::PlatformTenantsManage` (enforced by the router).
 /// Returns 200 with the updated `PlatformTenantDetail`, 404 if unknown,
 /// 409 on slug collision, 422 on validation failure.
+#[utoipa::path(
+    patch,
+    path = "/platform/tenants/{id}",
+    tag = "platform-tenants",
+    operation_id = "update_platform_tenant",
+    summary = "Update a platform tenant",
+    description = "Partially update a platform tenant. Each field uses the absent-vs-null \
+                  convention: omit a field to leave it unchanged; send `null` to clear a \
+                  nullable field; supply a value to set it. Returns 200 with the full record. \
+                  Requires permission: platform.tenants.manage",
+    params(("id" = Uuid, Path, description = "Tenant identifier")),
+    request_body = UpdateTenantRequest,
+    responses(
+        (status = 200, description = "Tenant updated.", body = PlatformTenantDetail),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Tenant not found.", body = ErrorEnvelope),
+        (status = 409, description = "Slug is already in use.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (per-field).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn update_tenant(
     principal: Principal,
     Path(id): Path<Uuid>,

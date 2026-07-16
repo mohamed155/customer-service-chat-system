@@ -198,6 +198,24 @@ export const ConversationDetailStore = signalStore(
           },
         });
       },
+      setAiHandling(conversationId: string, mode: 'platform_ai' | 'human'): void {
+        api.setConversationAiHandling(conversationId, mode).subscribe({
+          next: (response) => {
+            const current = store.conversation();
+            patchState(store, {
+              conversation: current
+                ? { ...current, ...response.data }
+                : (response.data as ConversationDetailEscalation),
+            });
+          },
+          error: (err: unknown) => {
+            patchState(store, {
+              error: (err as Error)?.message ?? 'Failed to set AI handling',
+            });
+          },
+        });
+      },
+
       patchAssignment(id: string, membershipId: string | null): void {
         api.patch(id, { assignedMembershipId: membershipId }).subscribe({
           next: (response) => {

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -27,7 +28,7 @@ pub struct UsageWrite {
 // Read models
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct UsageListItem {
     pub id: Uuid,
     pub provider: String,
@@ -42,7 +43,7 @@ pub struct UsageListItem {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UsageSummary {
     pub from: Option<DateTime<Utc>>,
     pub to: Option<DateTime<Utc>>,
@@ -52,7 +53,7 @@ pub struct UsageSummary {
     pub unreported_calls: i64,
 }
 
-#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, ToSchema)]
 pub struct UsageDetailRow {
     pub id: Uuid,
     pub tenant_id: Uuid,
@@ -74,13 +75,13 @@ pub struct UsageDetailRow {
 // Response envelope
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Pagination {
     pub next_cursor: Option<String>,
     pub has_more: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PaginatedResponse<T: Serialize> {
     pub data: Vec<T>,
     pub pagination: Pagination,

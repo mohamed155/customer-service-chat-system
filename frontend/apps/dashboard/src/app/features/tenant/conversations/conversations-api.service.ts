@@ -135,6 +135,23 @@ export class ConversationsApiService {
       );
   }
 
+  setConversationAiHandling(
+    conversationId: string,
+    mode: 'platform_ai' | 'human',
+  ): Observable<ApiResponse<ConversationDetail>> {
+    return this.api
+      .post<{ data: ConversationDetailWire }>(
+        `tenant/conversations/${conversationId}/ai-handling`,
+        { mode },
+      )
+      .pipe(
+        map(({ data, ...response }) => ({
+          ...response,
+          data: conversationDetailFromWire(data.data),
+        })),
+      );
+  }
+
   create(payload: CreateConversationPayload): Observable<ApiResponse<ConversationDetail>> {
     const wirePayload = createConversationPayloadToWire(payload);
     return this.api

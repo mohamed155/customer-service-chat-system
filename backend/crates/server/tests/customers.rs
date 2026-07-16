@@ -31,6 +31,7 @@ fn test_config() -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        docs_enabled: false,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
@@ -565,7 +566,7 @@ async fn name_search_stays_within_the_sc_002_budget_at_ten_thousand_customers() 
         elapsed_name,
     );
     assert!(
-        item_ids(&body).len() >= 1,
+        !item_ids(&body).is_empty(),
         "name search must return at least one match"
     );
 
@@ -3390,7 +3391,7 @@ async fn volume_search_performs_under_one_second_at_ten_thousand_customers() {
         elapsed,
     );
     assert!(
-        item_ids(&body).len() >= 1,
+        !item_ids(&body).is_empty(),
         "search should return at least one match"
     );
 
@@ -3583,7 +3584,7 @@ async fn search_at_10k_volume_under_one_second() {
 
     let ids = item_ids(&body);
     assert!(
-        ids.len() >= 1,
+        !ids.is_empty(),
         "search must return at least one matching customer"
     );
     assert!(
@@ -4585,7 +4586,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let tenant_a = seed_tenant(&pool, "T148 Tenant A").await;
     let tenant_b = seed_tenant(&pool, "T148 Tenant B").await;
     let user_a = seed_admin(&pool, tenant_a, "t148-a@example.com").await;
-    let user_b = seed_admin(&pool, tenant_b, "t148-b@example.com").await;
+    let _user_b = seed_admin(&pool, tenant_b, "t148-b@example.com").await;
 
     let customer_a_id = seed_customer(
         &pool,

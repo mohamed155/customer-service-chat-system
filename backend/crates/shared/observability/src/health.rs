@@ -3,22 +3,23 @@ use axum::response::{IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct HealthReport {
     pub status: HealthStatus,
     pub checks: Vec<CheckResult>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HealthStatus {
     Ready,
     NotReady,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct CheckResult {
     pub name: String,
     pub status: CheckStatus,
@@ -26,7 +27,7 @@ pub struct CheckResult {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
     Ok,
@@ -47,10 +48,6 @@ impl IntoResponse for HealthReport {
         };
         (status, Json(self)).into_response()
     }
-}
-
-pub async fn liveness() -> Json<serde_json::Value> {
-    Json(serde_json::json!({"status": "ok"}))
 }
 
 pub async fn readiness(checks: Vec<Arc<dyn HealthCheck>>, probe_timeout: Duration) -> HealthReport {

@@ -87,6 +87,29 @@ impl Stream for GuardedStream {
     }
 }
 
+/// Server-Sent Events stream of real-time escalations and availability
+/// changes scoped to the caller's tenant.
+///
+/// # Event payload schemas
+///
+/// Each event's `data` field is the JSON serialization of one of:
+/// - [`crate::model::EscalationAssignedEvent`] (SSE event `escalation.assigned`)
+/// - [`crate::model::EscalationQueuedEvent`]   (SSE event `escalation.queued`)
+/// - [`crate::model::EscalationRemovedEvent`]  (SSE event `escalation.removed`)
+/// - [`crate::model::AvailabilityChangedEvent`] (SSE event `availability.changed`)
+///
+/// Keep-alive comments are emitted every 20 seconds.
+#[utoipa::path(
+    get,
+    path = "/tenant/events",
+    tag = "escalations",
+    responses(
+        (status = 200, description = "Server-Sent Events stream of escalations and availability changes. Content-Type: text/event-stream. Each event's data is a JSON object — see schema components for the event payload shapes.", content_type = "text/event-stream", body = String),
+        (status = 401, description = "Authentication required", body = kernel::ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions", body = kernel::ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn stream_events(
     State(pool): State<sqlx::PgPool>,
     ctx: TenantContext,

@@ -85,6 +85,9 @@ async fn run_migrations_succeeds() {
         (38, "ai configurations"),
         (39, "ai credentials"),
         (40, "ai usage records"),
+        (41, "ai agent configurations"),
+        (42, "message kinds extension"),
+        (43, "conversation ai handling"),
     ];
     assert_eq!(
         rows.len(),
@@ -1297,7 +1300,7 @@ async fn explain_routing_candidate_selection_uses_index() {
     )
     .bind(tid)
     .bind(&[] as &[uuid::Uuid])
-    .bind(&[mid])
+    .bind([mid])
     .fetch_one(&mut *tx)
     .await
     .unwrap();
@@ -4310,5 +4313,911 @@ async fn migration_0040_ai_usage_records() {
     assert!(
         idx.contains("tenant_id, created_at"),
         "index must cover tenant_id, created_at DESC"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 017 — Migration 0041: agent_configurations + agent_avatar_uploads
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn agent_configurations_empty_name_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("")
+        .execute(&pool)
+        .await;
+    assert!(result.is_err(), "empty name should be rejected");
+}
+
+#[tokio::test]
+async fn agent_configurations_overlong_name_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let name = "a".repeat(81);
+    let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind(&name)
+        .execute(&pool)
+        .await;
+    assert!(result.is_err(), "name over 80 chars should be rejected");
+}
+
+#[tokio::test]
+async fn agent_configurations_invalid_tone_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result =
+        sqlx::query("INSERT INTO agent_configurations (tenant_id, name, tone) VALUES ($1, $2, $3)")
+            .bind(tid)
+            .bind("Test Agent")
+            .bind("aggressive")
+            .execute(&pool)
+            .await;
+    assert!(
+        result.is_err(),
+        "tone outside the 5-value catalog should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn agent_configurations_system_prompt_too_long_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let long = "x".repeat(8001);
+    let result = sqlx::query(
+        "INSERT INTO agent_configurations (tenant_id, name, system_prompt) VALUES ($1, $2, $3)",
+    )
+    .bind(tid)
+    .bind("Test Agent")
+    .bind(&long)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "system_prompt over 8000 chars should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn agent_configurations_provider_without_model_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result = sqlx::query(
+        "INSERT INTO agent_configurations (tenant_id, name, provider, model) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind("Test Agent")
+    .bind("openai")
+    .bind(Option::<String>::None)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "provider without model should fail the pair CHECK"
+    );
+}
+
+#[tokio::test]
+async fn agent_configurations_model_without_provider_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result = sqlx::query(
+        "INSERT INTO agent_configurations (tenant_id, name, model, provider) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind("Test Agent")
+    .bind("gpt-4")
+    .bind(Option::<String>::None)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "model without provider should fail the pair CHECK"
+    );
+}
+
+#[tokio::test]
+async fn agent_configurations_second_live_row_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("Agent One")
+        .execute(&pool)
+        .await
+        .expect("insert first agent");
+    let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("Agent Two")
+        .execute(&pool)
+        .await;
+    assert!(
+        result.is_err(),
+        "second live row for same tenant should be rejected by single_live_uq"
+    );
+}
+
+#[tokio::test]
+async fn agent_configurations_second_default_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    // Insert first agent with is_default=false so it doesn't enter default_uq
+    let id_a: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_configurations (tenant_id, name, is_default) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(tid)
+    .bind("Agent A")
+    .bind(false)
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent with is_default=false");
+    // Soft-delete it to clear single_live_uq
+    sqlx::query("UPDATE agent_configurations SET deleted_at = now() WHERE id = $1")
+        .bind(id_a)
+        .execute(&pool)
+        .await
+        .expect("soft-delete agent A");
+    // Insert second agent with is_default=true — this enters default_uq
+    sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("Agent B")
+        .execute(&pool)
+        .await
+        .expect("insert default agent");
+    // Third agent with is_default=true should fail on default_uq
+    let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("Agent C")
+        .execute(&pool)
+        .await;
+    assert!(
+        result.is_err(),
+        "second is_default=true live row should be rejected by default_uq"
+    );
+}
+
+#[tokio::test]
+async fn agent_configurations_duplicate_name_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    // Insert an agent with a name
+    let id_a: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tid)
+    .bind("SupportBot")
+    .fetch_one(&pool)
+    .await
+    .expect("insert first agent");
+    // Soft-delete to clear single_live_uq
+    sqlx::query("UPDATE agent_configurations SET deleted_at = now() WHERE id = $1")
+        .bind(id_a)
+        .execute(&pool)
+        .await
+        .expect("soft-delete agent A");
+    // Insert a new live agent — this enters name_uq as 'supportbot'
+    sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("supportbot")
+        .execute(&pool)
+        .await
+        .expect("insert second agent with case-different name");
+    // Try to insert another with the same lower(name) — should fail on name_uq
+    let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("SUPPORTBOT")
+        .execute(&pool)
+        .await;
+    assert!(
+        result.is_err(),
+        "duplicate lower(name) should be rejected by name_uq"
+    );
+}
+
+#[tokio::test]
+async fn agent_avatar_uploads_invalid_content_type_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let agent_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tid)
+    .bind("Avatar Agent")
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent");
+    let bytes = vec![0u8; 100];
+    let result = sqlx::query(
+        "INSERT INTO agent_avatar_uploads (tenant_id, agent_id, content_type, bytes) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind(agent_id)
+    .bind("application/pdf")
+    .bind(&bytes)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "content_type 'application/pdf' should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn agent_avatar_uploads_oversized_bytes_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let agent_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tid)
+    .bind("Avatar Bytes Agent")
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent");
+    let bytes = vec![0u8; 262145]; // 1 over the limit
+    let result = sqlx::query(
+        "INSERT INTO agent_avatar_uploads (tenant_id, agent_id, content_type, bytes) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind(agent_id)
+    .bind("image/png")
+    .bind(&bytes)
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "bytes over 262144 should be rejected");
+}
+
+#[tokio::test]
+async fn agent_avatar_uploads_second_live_row_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let agent_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tid)
+    .bind("Avatar Dupe Agent")
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent");
+    let bytes = vec![0u8; 100];
+    sqlx::query(
+        "INSERT INTO agent_avatar_uploads (tenant_id, agent_id, content_type, bytes) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind(agent_id)
+    .bind("image/png")
+    .bind(&bytes)
+    .execute(&pool)
+    .await
+    .expect("insert first avatar");
+    let result = sqlx::query(
+        "INSERT INTO agent_avatar_uploads (tenant_id, agent_id, content_type, bytes) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind(agent_id)
+    .bind("image/jpeg")
+    .bind(&bytes)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "second live avatar row for same agent should be rejected"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 017 — Migration 0042: message kinds 'ai' and 'system'
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn messages_kind_ai_with_membership_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let cid = seed_customer(&pool, tid, "MsgAI").await;
+    let conv_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status, last_activity_at) \
+         VALUES ($1, $2, 'web_chat', 'open', now()) RETURNING id",
+    )
+    .bind(tid)
+    .bind(cid)
+    .fetch_one(&pool)
+    .await
+    .expect("insert conversation");
+    let result = sqlx::query(
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body, sender_membership_id) \
+         VALUES ($1, $2, 'ai', 'hello', $3)",
+    )
+    .bind(tid)
+    .bind(conv_id)
+    .bind(uuid::Uuid::nil())
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "kind='ai' with non-NULL sender_membership_id should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn messages_kind_system_null_membership_succeeds() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let cid = seed_customer(&pool, tid, "MsgSys").await;
+    let conv_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status, last_activity_at) \
+         VALUES ($1, $2, 'web_chat', 'open', now()) RETURNING id",
+    )
+    .bind(tid)
+    .bind(cid)
+    .fetch_one(&pool)
+    .await
+    .expect("insert conversation");
+    let result = sqlx::query(
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body, sender_membership_id, logged_by_membership_id) \
+         VALUES ($1, $2, 'system', 'auto-message', $3, $4)",
+    )
+    .bind(tid)
+    .bind(conv_id)
+    .bind(Option::<uuid::Uuid>::None)
+    .bind(Option::<uuid::Uuid>::None)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_ok(),
+        "kind='system' with NULL membership ids should succeed: {:?}",
+        result.err()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 017 — Migration 0043: conversations.ai_handling
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn conversations_ai_handling_accepts_valid_values() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let cid = seed_customer(&pool, tid, "AIHandling").await;
+    // 'platform_ai'
+    let r1 = sqlx::query(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status, ai_handling, last_activity_at) \
+         VALUES ($1, $2, 'web_chat', 'open', 'platform_ai', now())",
+    )
+    .bind(tid)
+    .bind(cid)
+    .execute(&pool)
+    .await;
+    assert!(r1.is_ok(), "ai_handling='platform_ai' should be accepted");
+    // 'human'
+    let r2 = sqlx::query(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status, ai_handling, last_activity_at) \
+         VALUES ($1, $2, 'web_chat', 'open', 'human', now())",
+    )
+    .bind(tid)
+    .bind(cid)
+    .execute(&pool)
+    .await;
+    assert!(r2.is_ok(), "ai_handling='human' should be accepted");
+    // NULL
+    let r3 = sqlx::query(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status, ai_handling, last_activity_at) \
+         VALUES ($1, $2, 'web_chat', 'open', $3, now())",
+    )
+    .bind(tid)
+    .bind(cid)
+    .bind(Option::<String>::None)
+    .execute(&pool)
+    .await;
+    assert!(r3.is_ok(), "ai_handling=NULL should be accepted");
+}
+
+#[tokio::test]
+async fn conversations_ai_handling_invalid_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let cid = seed_customer(&pool, tid, "AIHandlingBad").await;
+    let result = sqlx::query(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status, ai_handling, last_activity_at) \
+         VALUES ($1, $2, 'web_chat', 'open', 'ai', now())",
+    )
+    .bind(tid)
+    .bind(cid)
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "ai_handling='ai' should be rejected");
+}
+
+// ---------------------------------------------------------------------------
+// T017 — Migrations 0041–0043: AI agent configurations, message kinds,
+//        conversation ai_handling
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0041_agent_configurations_empty_name_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("")
+        .execute(&pool)
+        .await;
+    assert!(result.is_err(), "empty name should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0041_agent_configurations_invalid_tone_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result =
+        sqlx::query("INSERT INTO agent_configurations (tenant_id, name, tone) VALUES ($1, $2, $3)")
+            .bind(tid)
+            .bind("Test Agent")
+            .bind("aggressive")
+            .execute(&pool)
+            .await;
+    assert!(result.is_err(), "invalid tone should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0041_agent_configurations_long_system_prompt_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let long_prompt = "x".repeat(8001);
+    let result = sqlx::query(
+        "INSERT INTO agent_configurations (tenant_id, name, system_prompt) VALUES ($1, $2, $3)",
+    )
+    .bind(tid)
+    .bind("Test Agent")
+    .bind(&long_prompt)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "system_prompt over 8000 chars should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0041_agent_configurations_provider_model_mismatch_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result = sqlx::query(
+        "INSERT INTO agent_configurations (tenant_id, name, provider, model) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind("Test Agent")
+    .bind("openai")
+    .bind(Option::<String>::None)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "provider without model should be rejected by pair CHECK"
+    );
+}
+
+#[tokio::test]
+async fn migration_0041_agent_configurations_second_live_row_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("Agent One")
+        .execute(&pool)
+        .await
+        .expect("first agent insert should succeed");
+    let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("Agent Two")
+        .execute(&pool)
+        .await;
+    assert!(
+        result.is_err(),
+        "second live row for same tenant should be rejected on single_live_uq"
+    );
+}
+
+#[tokio::test]
+async fn migration_0041_agent_configurations_second_default_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("Default One")
+        .execute(&pool)
+        .await
+        .expect("first agent with is_default should succeed");
+    let result = sqlx::query(
+        "INSERT INTO agent_configurations (tenant_id, name, is_default) VALUES ($1, $2, $3)",
+    )
+    .bind(tid)
+    .bind("Default Two")
+    .bind(true)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "second is_default = true row for same tenant should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0041_agent_configurations_duplicate_name_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("Test Agent")
+        .execute(&pool)
+        .await
+        .expect("first agent insert should succeed");
+    let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("test agent")
+        .execute(&pool)
+        .await;
+    assert!(
+        result.is_err(),
+        "duplicate name (case-insensitive) should be rejected on name_uq"
+    );
+}
+
+#[tokio::test]
+async fn migration_0041_agent_avatar_uploads_invalid_content_type_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let agent_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tid)
+    .bind("Test Agent")
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent config");
+    let result = sqlx::query(
+        "INSERT INTO agent_avatar_uploads (tenant_id, agent_id, content_type, bytes) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind(agent_id)
+    .bind("application/pdf")
+    .bind(&[0u8; 100][..])
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "invalid content_type should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0041_agent_avatar_uploads_oversized_bytes_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let agent_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tid)
+    .bind("Test Agent")
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent config");
+    let big_bytes = vec![0u8; 300000];
+    let result = sqlx::query(
+        "INSERT INTO agent_avatar_uploads (tenant_id, agent_id, content_type, bytes) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind(agent_id)
+    .bind("image/png")
+    .bind(&big_bytes[..])
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "oversized bytes should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0041_agent_avatar_uploads_second_live_row_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let agent_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tid)
+    .bind("Test Agent")
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent config");
+    sqlx::query(
+        "INSERT INTO agent_avatar_uploads (tenant_id, agent_id, content_type, bytes) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind(agent_id)
+    .bind("image/png")
+    .bind(&[0u8; 100][..])
+    .execute(&pool)
+    .await
+    .expect("first avatar upload should succeed");
+    let result = sqlx::query(
+        "INSERT INTO agent_avatar_uploads (tenant_id, agent_id, content_type, bytes) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(tid)
+    .bind(agent_id)
+    .bind("image/jpeg")
+    .bind(&[0u8; 100][..])
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "second live avatar upload for same agent should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0042_messages_ai_kind_with_sender_membership_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let uid = seed_user(&pool).await;
+    let mid: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, 'agent') \
+         RETURNING id",
+    )
+    .bind(tid)
+    .bind(uid)
+    .fetch_one(&pool)
+    .await
+    .expect("seed membership");
+    let cid = seed_customer(&pool, tid, "AI Kind Test").await;
+    let conv_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status, last_activity_at) \
+         VALUES ($1, $2, 'web_chat', 'open', now()) RETURNING id",
+    )
+    .bind(tid)
+    .bind(cid)
+    .fetch_one(&pool)
+    .await
+    .expect("seed conversation");
+    let result = sqlx::query(
+        "INSERT INTO messages (tenant_id, conversation_id, kind, sender_membership_id, body) \
+         VALUES ($1, $2, 'ai', $3, 'Hello')",
+    )
+    .bind(tid)
+    .bind(conv_id)
+    .bind(mid)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "kind='ai' with non-NULL sender_membership_id should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0042_messages_system_kind_with_null_memberships_succeeds() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let cid = seed_customer(&pool, tid, "System Kind Test").await;
+    let conv_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status, last_activity_at) \
+         VALUES ($1, $2, 'web_chat', 'open', now()) RETURNING id",
+    )
+    .bind(tid)
+    .bind(cid)
+    .fetch_one(&pool)
+    .await
+    .expect("seed conversation");
+    let result = sqlx::query(
+        "INSERT INTO messages (tenant_id, conversation_id, kind, \
+         sender_membership_id, logged_by_membership_id, body) \
+         VALUES ($1, $2, 'system', $3, $4, 'Auto-acknowledgment')",
+    )
+    .bind(tid)
+    .bind(conv_id)
+    .bind(Option::<uuid::Uuid>::None)
+    .bind(Option::<uuid::Uuid>::None)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_ok(),
+        "kind='system' with NULL membership ids should succeed: {:?}",
+        result.err()
+    );
+}
+
+#[tokio::test]
+async fn migration_0043_conversation_ai_handling_constraint() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let cid = seed_customer(&pool, tid, "AI Handling Test").await;
+    let conv_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status, last_activity_at) \
+         VALUES ($1, $2, 'web_chat', 'open', now()) RETURNING id",
+    )
+    .bind(tid)
+    .bind(cid)
+    .fetch_one(&pool)
+    .await
+    .expect("seed conversation");
+
+    // NULL is accepted (default)
+    let result = sqlx::query("UPDATE conversations SET ai_handling = $1 WHERE id = $2")
+        .bind(Option::<&str>::None)
+        .bind(conv_id)
+        .execute(&pool)
+        .await;
+    assert!(result.is_ok(), "ai_handling NULL should be accepted");
+
+    // 'platform_ai' is accepted
+    let result = sqlx::query("UPDATE conversations SET ai_handling = $1 WHERE id = $2")
+        .bind("platform_ai")
+        .bind(conv_id)
+        .execute(&pool)
+        .await;
+    assert!(
+        result.is_ok(),
+        "ai_handling 'platform_ai' should be accepted"
+    );
+
+    // 'human' is accepted
+    let result = sqlx::query("UPDATE conversations SET ai_handling = $1 WHERE id = $2")
+        .bind("human")
+        .bind(conv_id)
+        .execute(&pool)
+        .await;
+    assert!(result.is_ok(), "ai_handling 'human' should be accepted");
+
+    // 'unknown' is rejected
+    let result = sqlx::query("UPDATE conversations SET ai_handling = $1 WHERE id = $2")
+        .bind("unknown")
+        .bind(conv_id)
+        .execute(&pool)
+        .await;
+    assert!(result.is_err(), "ai_handling 'unknown' should be rejected");
+}
+
+// ---------------------------------------------------------------------------
+// T097 — Migration 0044: outbox_customer_message_claimable_idx
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0044_outbox_customer_message_idx() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    let idx: String = sqlx::query_scalar(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'outbox_customer_message_claimable_idx'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("outbox_customer_message_claimable_idx");
+    assert!(
+        idx.contains("claimed_at IS NULL"),
+        "outbox customer message claimable index must be partial on claimed_at IS NULL"
+    );
+    assert!(
+        idx.contains("event_type"),
+        "outbox customer message claimable index must cover event_type"
     );
 }

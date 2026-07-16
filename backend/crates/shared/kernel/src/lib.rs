@@ -26,13 +26,14 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 
 pub use idempotency::{
     idempotency_middleware, CachedResponse, IdempotencyKey, IdempotencyStore,
     InMemoryIdempotencyStore,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct ErrorDetail {
     pub field: String,
     pub code: String,
@@ -45,7 +46,7 @@ impl From<ErrorDetail> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct ErrorBody {
     pub code: String,
     pub message: String,
@@ -53,7 +54,7 @@ pub struct ErrorBody {
     pub request_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct ErrorEnvelope {
     pub error: ErrorBody,
 }
@@ -358,7 +359,8 @@ mod extractor_tests {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, IntoParams)]
+#[into_params(parameter_in = Query)]
 #[serde(default, deny_unknown_fields)]
 pub struct PageParams {
     pub limit: u32,
@@ -381,7 +383,7 @@ impl PageParams {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Page<T> {
     pub items: Vec<T>,

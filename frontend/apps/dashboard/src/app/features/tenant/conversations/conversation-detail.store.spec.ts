@@ -15,6 +15,7 @@ describe('ConversationDetailStore', () => {
     getTimeline: ReturnType<typeof vi.fn>;
     addMessage: ReturnType<typeof vi.fn>;
     patch: ReturnType<typeof vi.fn>;
+    setConversationAiHandling: ReturnType<typeof vi.fn>;
   };
 
   const mockConversation: ConversationDetail = {
@@ -65,6 +66,7 @@ describe('ConversationDetailStore', () => {
       getTimeline: vi.fn(),
       addMessage: vi.fn(),
       patch: vi.fn(),
+      setConversationAiHandling: vi.fn(),
     };
     TestBed.configureTestingModule({
       providers: [ConversationDetailStore, { provide: ConversationsApiService, useValue: api }],

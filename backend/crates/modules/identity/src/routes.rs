@@ -8,6 +8,7 @@ use config::AppConfig;
 use kernel::{ApiError, ErrorDetail};
 use serde::Deserialize;
 use sqlx::PgPool;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{audit, password, session, Principal};
@@ -61,10 +62,14 @@ pub fn validate_account_creation(
     })
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LoginRequest {
+    /// Email address of the user attempting to authenticate.
     pub email: String,
+    /// Plain-text password supplied by the caller. Never echoed back in any
+    /// response; the OpenAPI schema marks this field as `writeOnly`.
+    #[schema(value_type = String, write_only, example = "********")]
     pub password: String,
 }
 
@@ -136,6 +141,35 @@ pub async fn authenticate_login(
     })
 }
 
+/// Logout the current session.
+///
+/// On success the response clears the `app_session` cookie by setting an
+/// already-expired `Set-Cookie` header, and the session's JWT ID (JTI) is
+/// recorded in `revoked_sessions` so it cannot be reused.
+///
+/// # OpenAPI
+///
+/// Documented as `POST /auth/logout` under the `auth` tag with cookie-based
+/// security. The full response shape is omitted here because the endpoint
+/// returns no body — the contract is captured in the `Set-Cookie` header
+/// behaviour and the 204 status code (FR-011 / spec 016).
+#[utoipa::path(
+    post,
+    path = "/auth/logout",
+    tag = "auth",
+    operation_id = "auth_logout",
+    summary = "Logout and clear session cookie",
+    description = "Revokes the current session's JTI and clears the `app_session` cookie. \
+                  Returns 204 No Content on success. The `Set-Cookie` response header sets \
+                  `app_session=; Path=/; HttpOnly; Max-Age=0` (or an already-expired date) so \
+                  clients can drop the cookie. Requires a valid `app_session` cookie; \
+                  unauthenticated requests are rejected with 401.",
+    responses(
+        (status = 204, description = "Session revoked; `app_session` cookie cleared."),
+        (status = 401, description = "Unauthenticated.", body = kernel::ErrorEnvelope),
+    ),
+    security(("session_cookie" = [])),
+)]
 pub async fn logout(
     State(pool): State<PgPool>,
     principal: Principal,

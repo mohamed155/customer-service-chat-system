@@ -33,6 +33,7 @@ fn test_config() -> config::AppConfig {
         db_acquire_timeout_ms: 5000,
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
+        docs_enabled: false,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
@@ -189,6 +190,7 @@ fn anthropic_response(content: &str) -> serde_json::Value {
     })
 }
 
+#[allow(dead_code)]
 fn gemini_response(content: &str) -> serde_json::Value {
     serde_json::json!({
         "candidates": [{"content": {"parts": [{"text": content}]}, "finishReason": "STOP"}],
@@ -224,6 +226,7 @@ async fn mock_anthropic(mock: &MockServer, api_key: &str, body: serde_json::Valu
         .await;
 }
 
+#[allow(dead_code)]
 async fn mock_gemini(mock: &MockServer, api_key: &str, body: serde_json::Value) {
     Mock::given(method("POST"))
         .and(path("/v1beta/models/gemini-2.0-flash:generateContent"))
@@ -777,7 +780,7 @@ fn auth_get(uri: &str, user_id: Uuid, tenant_id: Uuid) -> Request<Body> {
         .unwrap()
 }
 
-async fn seed_user(pool: &sqlx::PgPool, email: &str, role: &str) -> Uuid {
+async fn seed_user(pool: &sqlx::PgPool, email: &str, _role: &str) -> Uuid {
     let user_id: Uuid =
         sqlx::query_scalar("INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id")
             .bind(email)
@@ -1150,6 +1153,7 @@ async fn cross_tenant_isolation() {
 
 // ── Additional Helpers ─────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 fn app_state(pool: sqlx::PgPool, config: config::AppConfig) -> AppState {
     let cfg = Arc::new(config);
     AppState {
@@ -1706,6 +1710,7 @@ async fn cross_tenant_credential_isolation() {
 // ── T038: US4 Usage Recording + Capture ───────────────────────────────────
 
 #[tokio::test]
+#[allow(clippy::type_complexity)]
 async fn usage_recording_success() {
     let pool = match get_pool().await {
         Some(p) => p,
@@ -1772,6 +1777,7 @@ async fn usage_recording_success() {
 }
 
 #[tokio::test]
+#[allow(clippy::type_complexity)]
 async fn usage_recording_failure() {
     let pool = match get_pool().await {
         Some(p) => p,
@@ -2033,7 +2039,7 @@ async fn usage_list_pagination() {
         .bind(tenant_a)
         .bind(10 + i)
         .bind(5 + i)
-        .bind(i as i32)
+        .bind(i)
         .execute(&pool)
         .await
         .unwrap();
@@ -2045,7 +2051,7 @@ async fn usage_list_pagination() {
              VALUES ($1, 'anthropic', 'claude', 15, 8, 'success', false, 200, now() - interval '1 second' * $2)",
         )
         .bind(tenant_b)
-        .bind(i as i32)
+        .bind(i)
         .execute(&pool)
         .await
         .unwrap();
@@ -2603,6 +2609,7 @@ async fn streaming_deltas_arrive_before_done() {
 }
 
 #[tokio::test]
+#[allow(clippy::type_complexity)]
 async fn streaming_success_writes_usage_row() {
     let pool = match get_pool().await {
         Some(p) => p,

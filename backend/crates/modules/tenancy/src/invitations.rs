@@ -7,7 +7,7 @@ use axum::{
 use chrono::{Duration, Utc};
 use config::AppConfig;
 use identity::{password, session, OptionalPrincipal, Principal};
-use kernel::{ApiError, ErrorDetail, Page};
+use kernel::{ApiError, ErrorDetail, ErrorEnvelope, Page};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -15,6 +15,7 @@ use sqlx::Row;
 use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use crate::{audit, members, routes, TenantContext};
@@ -55,17 +56,18 @@ fn role_rank(role: &authz::TenantRole) -> u8 {
 // Payloads
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct CreateInvitationPayload {
     pub email: String,
     pub role: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AcceptInvitationPayload {
     pub display_name: Option<String>,
+    #[schema(value_type = Option<String>, write_only)]
     pub password: Option<String>,
 }
 
@@ -73,7 +75,7 @@ pub struct AcceptInvitationPayload {
 // Response types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationResponse {
     pub id: Uuid,
@@ -82,20 +84,22 @@ pub struct InvitationResponse {
     pub status: String,
     pub expires_at: chrono::DateTime<chrono::Utc>,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    #[schema(value_type = String, example = "queued")]
     pub email_delivery_status: notifications::EmailDeliveryStatus,
     pub invited_by_name: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateInvitationResponse {
     pub invitation: InvitationResponse,
     pub accept_url: String,
     pub email_sent: bool,
+    #[schema(value_type = String, example = "queued")]
     pub email_delivery_status: notifications::EmailDeliveryStatus,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationListItem {
     pub id: Uuid,
@@ -105,15 +109,35 @@ pub struct InvitationListItem {
     pub invited_by_name: String,
     pub expires_at: chrono::DateTime<chrono::Utc>,
     pub created_at: chrono::DateTime<chrono::Utc>,
+    #[schema(value_type = String, example = "queued")]
     pub email_delivery_status: notifications::EmailDeliveryStatus,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationDeliveryResponse {
+    #[schema(value_type = String, example = "queued")]
     pub email_delivery_status: notifications::EmailDeliveryStatus,
 }
 
+#[utoipa::path(
+    get,
+    path = "/tenant/members/invitations/{id}/delivery",
+    tag = "members",
+    operation_id = "get_member_invitation_delivery",
+    summary = "Get the email delivery status of a team-member invitation",
+    description = "Return the latest email delivery status (`unconfigured`, `queued`, `sent`, or \
+                  `failed`) recorded for the invitation. Requires permission: members.view",
+    params(("id" = Uuid, Path, description = "Invitation identifier")),
+    responses(
+        (status = 200, description = "Delivery status returned.", body = InvitationDeliveryResponse),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Invitation not found.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn get_invitation_delivery(
     State(pool): State<sqlx::PgPool>,
     ctx: TenantContext,
@@ -149,7 +173,8 @@ pub async fn get_invitation_delivery(
     .into_response()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 #[serde(default, deny_unknown_fields)]
 pub struct InvitationQuery {
     pub status: Option<String>,
@@ -195,7 +220,7 @@ enum InvitationStatusFilter {
     Exact(&'static str),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewInvitationResponse {
     pub tenant_name: String,
@@ -205,7 +230,7 @@ pub struct PreviewInvitationResponse {
     pub account_exists: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AcceptInvitationResponse {
     pub user_id: Uuid,
@@ -219,6 +244,29 @@ pub struct AcceptInvitationResponse {
 // POST /tenant/members/invitations
 // ---------------------------------------------------------------------------
 
+#[utoipa::path(
+    post,
+    path = "/tenant/members/invitations",
+    tag = "members",
+    operation_id = "create_member_invitation",
+    summary = "Create a team-member invitation",
+    description = "Invite a new user to join the current tenant at the given role. A signed accept \
+                  URL is generated and the invitation email is enqueued via the outbox. Rank-based \
+                  rules apply: the actor must be able to assign the target role; assigning the owner \
+                  role additionally requires the `owner.assign` permission. \
+                  Requires permission: members.manage",
+    request_body = CreateInvitationPayload,
+    responses(
+        (status = 201, description = "Invitation created.", body = CreateInvitationResponse),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required or insufficient rank.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 409, description = "A pending invitation already exists for this email, or the user is already a member.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (per-field, e.g. invalid email or unknown role).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn create_invitation(
     State(pool): State<sqlx::PgPool>,
     Extension(sender): Extension<Arc<dyn notifications::EmailSender>>,
@@ -718,6 +766,26 @@ async fn send_invitation_email(
 // GET /tenant/members/invitations
 // ---------------------------------------------------------------------------
 
+#[utoipa::path(
+    get,
+    path = "/tenant/members/invitations",
+    tag = "members",
+    operation_id = "list_member_invitations",
+    summary = "List team-member invitations",
+    description = "List the invitations issued by the current tenant with cursor-based pagination \
+                  and an optional `status` filter (`pending`, `accepted`, `revoked`, or `expired`; \
+                  the default is `pending` which also surfaces not-yet-swept expired entries). \
+                  Requires permission: members.view",
+    params(InvitationQuery),
+    responses(
+        (status = 200, description = "Page of invitations.", body = Page<InvitationListItem>),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (invalid `status` filter or `limit` range).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_invitations(
     State(pool): State<sqlx::PgPool>,
     ctx: TenantContext,
@@ -884,6 +952,27 @@ pub async fn list_invitations(
 // DELETE /tenant/members/invitations/{id}
 // ---------------------------------------------------------------------------
 
+#[utoipa::path(
+    delete,
+    path = "/tenant/members/invitations/{id}",
+    tag = "members",
+    operation_id = "revoke_member_invitation",
+    summary = "Revoke a team-member invitation",
+    description = "Mark a pending (or not-yet-swept expired) invitation as `revoked`. The \
+                  invitation's role must be assignable by the actor's rank. Accepted and already \
+                  revoked invitations are terminal and cannot be revoked. \
+                  Requires permission: members.manage",
+    params(("id" = Uuid, Path, description = "Invitation identifier")),
+    responses(
+        (status = 204, description = "Invitation revoked."),
+        (status = 401, description = "Authentication required or insufficient rank.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Invitation not found.", body = ErrorEnvelope),
+        (status = 409, description = "Invitation is not in a revocable state.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn revoke_invitation(
     State(pool): State<sqlx::PgPool>,
     ctx: TenantContext,
@@ -993,6 +1082,25 @@ pub async fn revoke_invitation(
 // GET /invitations/{token}  (public)
 // ---------------------------------------------------------------------------
 
+#[utoipa::path(
+    get,
+    path = "/invitations/{token}",
+    tag = "invitations",
+    operation_id = "preview_invitation",
+    summary = "Preview an invitation",
+    description = "Public endpoint that returns a non-revealing preview of a pending invitation \
+                  (tenant name, invitee email, role, and expiry) so the accept page can render \
+                  before sign-in. Returns 404 for unknown tokens, soft-deleted or suspended tenants, \
+                  and accepted/revoked invitations; returns 410 for expired invitations.",
+    params(("token" = String, Path, description = "Invitation token")),
+    responses(
+        (status = 200, description = "Invitation preview returned.", body = PreviewInvitationResponse),
+        (status = 404, description = "Invitation not found (or the tenant is not active).", body = ErrorEnvelope),
+        (status = 410, description = "Invitation has expired.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(())
+)]
 pub async fn preview_invitation(
     State(pool): State<sqlx::PgPool>,
     Path(token): Path<String>,
@@ -1065,6 +1173,32 @@ pub async fn preview_invitation(
 // POST /invitations/{token}/accept  (public)
 // ---------------------------------------------------------------------------
 
+#[utoipa::path(
+    post,
+    path = "/invitations/{token}/accept",
+    tag = "invitations",
+    operation_id = "accept_invitation",
+    summary = "Accept an invitation",
+    description = "Public endpoint that accepts a pending invitation. If the caller is signed in \
+                  and the principal's email matches the invitation, a membership is created for the \
+                  existing user. Otherwise an anonymous accept creates a new user account (supplying \
+                  `displayName` and `password`) and signs them in via a new `app_session` cookie. \
+                  Returns 404 for unknown tokens, soft-deleted or suspended tenants, and \
+                  accepted/revoked invitations; returns 410 for expired or already-used tokens.",
+    params(("token" = String, Path, description = "Invitation token")),
+    request_body = AcceptInvitationPayload,
+    responses(
+        (status = 200, description = "Invitation accepted. The response body is the same `MeResponse` shape returned by `GET /me`.", body = serde_json::Value),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Signed-in principal email does not match the invitation email.", body = ErrorEnvelope),
+        (status = 404, description = "Invitation not found (or the tenant is not active).", body = ErrorEnvelope),
+        (status = 409, description = "Already a member of this tenant, or an account with this email already exists.", body = ErrorEnvelope),
+        (status = 410, description = "Invitation has expired or has already been used.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (per-field, e.g. invalid display name or password).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(())
+)]
 pub async fn accept_invitation(
     State(pool): State<sqlx::PgPool>,
     Extension(config): Extension<Arc<AppConfig>>,
@@ -1531,7 +1665,7 @@ mod tests {
         )
         .bind(tenant_id)
         .bind(&email)
-        .bind(&Uuid::new_v4().to_string())
+        .bind(Uuid::new_v4().to_string())
         .bind(inviter_id)
         .execute(&pool)
         .await

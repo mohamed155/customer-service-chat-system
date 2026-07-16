@@ -295,6 +295,8 @@ export interface Participant {
 
 export interface ConversationDetail extends Conversation {
   readonly participants: readonly Participant[];
+  readonly aiHandling?: string | null;
+  readonly awaitingAiDecision?: boolean;
 }
 
 export interface RequiredSkillRef {
@@ -447,6 +449,8 @@ export interface ParticipantWire {
 
 export interface ConversationDetailWire extends ConversationWire {
   readonly participants: readonly ParticipantWire[];
+  readonly ai_handling?: string | null;
+  readonly awaiting_ai_decision?: boolean;
 }
 
 export interface MessageWire {
@@ -594,6 +598,8 @@ export function conversationDetailFromWire(wire: ConversationDetailWire): Conver
   return {
     ...conversationFromWire(wire),
     participants: wire.participants.map(participantFromWire),
+    aiHandling: wire.ai_handling ?? null,
+    awaitingAiDecision: wire.awaiting_ai_decision ?? false,
   };
 }
 

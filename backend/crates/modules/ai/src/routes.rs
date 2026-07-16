@@ -3,19 +3,23 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use axum::Extension;
 use identity::Principal;
-use kernel::{ApiError, ApiJson};
+use kernel::{ApiError, ApiJson, ErrorEnvelope};
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
+use utoipa::IntoParams;
 use uuid::Uuid;
 
 use tenancy::TenantContext;
 
 use crate::audit;
 use crate::crypto;
-use crate::model::{AiConfigurationView, ConfigPayload, CredentialPayload, FallbackEntry};
+use crate::model::{
+    AiConfigurationView, ConfigPayload, CredentialPayload, CredentialView, FallbackEntry,
+    TestConfigResult, UsageDetailResponse,
+};
 use crate::resolution::{resolve_config, resolve_credential, resolve_credential_view, Scope};
-use crate::usage;
+use crate::usage::{self, PaginatedResponse, UsageListItem, UsageSummary};
 use std::time::Instant;
 
 use ai_providers::{ChatRequest, Message, ProviderKind, Role};
@@ -71,6 +75,32 @@ fn view_response(view: AiConfigurationView) -> Response {
 
 // ── Tenant Config ──────────────────────────────────────────────────────────
 
+/// `GET /tenant/ai/config` — effective AI configuration for the current tenant.
+///
+/// Returns the tenant's own configuration when present, otherwise the
+/// platform-wide default. The `scope` field on the response distinguishes the
+/// two cases (`tenant` vs `platform_default`).
+#[utoipa::path(
+    get,
+    path = "/tenant/ai/config",
+    tag = "tenant-ai",
+    operation_id = "get_tenant_ai_config",
+    summary = "Get the effective tenant AI configuration",
+    description = "Return the AI configuration in effect for the current tenant. When the \
+                  tenant has its own row, the response's `scope` is `tenant` and all fields \
+                  reflect the tenant row; otherwise the platform default is returned with \
+                  `scope` set to `platform_default`. The associated `credential` view (if any) \
+                  indicates the source — `tenant`, `platform`, or `none`. Requires permission: \
+                  ai_agent.view",
+    responses(
+        (status = 200, description = "Effective AI configuration for this tenant.", body = AiConfigurationView),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "AI is not configured at any level.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn get_tenant_config(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -110,6 +140,30 @@ pub async fn get_tenant_config(
     }
 }
 
+/// `PUT /tenant/ai/config` — upsert the tenant's AI configuration.
+#[utoipa::path(
+    put,
+    path = "/tenant/ai/config",
+    tag = "tenant-ai",
+    operation_id = "put_tenant_ai_config",
+    summary = "Upsert the tenant AI configuration",
+    description = "Create or update the AI configuration for the current tenant. The `provider` \
+                  must be a known provider; `model` must be non-empty; `max_output_tokens` must \
+                  be positive; `temperature` must be in the 0..=2 range. At most three fallbacks \
+                  are allowed and no fallback may duplicate the primary provider/model or any \
+                  other fallback. The `capture_content` flag is a tenant-level toggle and is \
+                  audited when changed. Requires permission: ai_agent.manage",
+    request_body = ConfigPayload,
+    responses(
+        (status = 200, description = "Updated AI configuration.", body = AiConfigurationView),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (e.g. unknown provider, bad temperature).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn put_tenant_config(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -275,6 +329,28 @@ pub async fn put_tenant_config(
     view_response(view)
 }
 
+/// `DELETE /tenant/ai/config` — soft-delete the tenant's AI configuration.
+///
+/// After this call the effective configuration for the tenant falls back to
+/// the platform default.
+#[utoipa::path(
+    delete,
+    path = "/tenant/ai/config",
+    tag = "tenant-ai",
+    operation_id = "delete_tenant_ai_config",
+    summary = "Delete the tenant AI configuration",
+    description = "Soft-delete the AI configuration for the current tenant. The tenant then \
+                  inherits the platform default configuration (if any). Requires permission: \
+                  ai_agent.manage",
+    responses(
+        (status = 204, description = "Configuration deleted."),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "AI config not found for this tenant.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn delete_tenant_config(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -348,6 +424,25 @@ pub async fn delete_tenant_config(
 
 // ── Platform Config ────────────────────────────────────────────────────────
 
+/// `GET /platform/ai/config` — platform-wide default AI configuration.
+#[utoipa::path(
+    get,
+    path = "/platform/ai/config",
+    tag = "platform-ai",
+    operation_id = "get_platform_ai_config",
+    summary = "Get the platform-wide AI configuration",
+    description = "Return the platform's default AI configuration. The response's `scope` is \
+                  always `platform_default`. `capture_content` is not surfaced here because it \
+                  is a tenant-level setting. Requires permission: platform.admin",
+    responses(
+        (status = 200, description = "Platform AI configuration.", body = AiConfigurationView),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "AI is not configured.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn get_platform_config(
     State(pool): State<PgPool>,
     Extension(_principal): Extension<Principal>,
@@ -381,6 +476,29 @@ pub async fn get_platform_config(
     }
 }
 
+/// `PUT /platform/ai/config` — upsert the platform's default AI configuration.
+///
+/// `capture_content` is rejected here; it is a tenant-only field.
+#[utoipa::path(
+    put,
+    path = "/platform/ai/config",
+    tag = "platform-ai",
+    operation_id = "put_platform_ai_config",
+    summary = "Upsert the platform-wide AI configuration",
+    description = "Create or update the AI configuration used as the default for every tenant \
+                  that has not set its own override. `capture_content` is rejected with 400 \
+                  because it is a tenant-level setting. Requires permission: platform.admin",
+    request_body = ConfigPayload,
+    responses(
+        (status = 200, description = "Updated platform AI configuration.", body = AiConfigurationView),
+        (status = 400, description = "Validation failed (e.g. `capture_content` is a tenant-level setting).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (e.g. unknown provider, bad temperature).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn put_platform_config(
     State(pool): State<PgPool>,
     Extension(principal): Extension<Principal>,
@@ -497,6 +615,29 @@ pub async fn put_platform_config(
 
 // ── Tenant Credentials ─────────────────────────────────────────────────────
 
+/// `PUT /tenant/ai/credentials/{provider}` — set the tenant's API key for `provider`.
+#[utoipa::path(
+    put,
+    path = "/tenant/ai/credentials/{provider}",
+    tag = "tenant-ai",
+    operation_id = "put_tenant_ai_credential",
+    summary = "Set the tenant AI credential for a provider",
+    description = "Encrypt and store the API key for the given provider at the tenant scope. \
+                  If a credential already exists for `(tenant, provider)`, it is rotated in \
+                  place. The plaintext key is never echoed back — the response only includes \
+                  a `key_hint` derived from the plaintext. Requires permission: ai_agent.manage",
+    params(("provider" = String, Path, description = "Provider identifier (e.g. `openai`, `anthropic`, `gemini`).")),
+    request_body = CredentialPayload,
+    responses(
+        (status = 200, description = "Credential stored.", body = CredentialView),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (e.g. unknown provider or empty/oversized key).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error (e.g. encryption not configured).", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn put_tenant_credential(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -650,6 +791,26 @@ pub async fn put_tenant_credential(
         .into_response()
 }
 
+/// `DELETE /tenant/ai/credentials/{provider}` — remove the tenant's API key for `provider`.
+#[utoipa::path(
+    delete,
+    path = "/tenant/ai/credentials/{provider}",
+    tag = "tenant-ai",
+    operation_id = "delete_tenant_ai_credential",
+    summary = "Delete the tenant AI credential for a provider",
+    description = "Soft-delete the tenant's API key for `provider`. After this call the tenant \
+                  resolves credentials at the platform scope (if present) or has no credential \
+                  for that provider. Requires permission: ai_agent.manage",
+    params(("provider" = String, Path, description = "Provider identifier (e.g. `openai`, `anthropic`, `gemini`).")),
+    responses(
+        (status = 204, description = "Credential deleted."),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "No credential found for this provider.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn delete_tenant_credential(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -733,6 +894,29 @@ pub async fn delete_tenant_credential(
 
 // ── Platform Credentials ────────────────────────────────────────────────────
 
+/// `PUT /platform/ai/credentials/{provider}` — set the platform's API key for `provider`.
+#[utoipa::path(
+    put,
+    path = "/platform/ai/credentials/{provider}",
+    tag = "platform-ai",
+    operation_id = "put_platform_ai_credential",
+    summary = "Set the platform AI credential for a provider",
+    description = "Encrypt and store the API key for the given provider at the platform scope. \
+                  If a credential already exists for `(null tenant, provider)`, it is rotated \
+                  in place. The plaintext key is never echoed back — the response only includes \
+                  a `key_hint` derived from the plaintext. Requires permission: platform.admin",
+    params(("provider" = String, Path, description = "Provider identifier (e.g. `openai`, `anthropic`, `gemini`).")),
+    request_body = CredentialPayload,
+    responses(
+        (status = 200, description = "Credential stored.", body = CredentialView),
+        (status = 400, description = "Validation failed (request body is not valid JSON).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 422, description = "Validation failed (e.g. unknown provider or empty/oversized key).", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error (e.g. encryption not configured).", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn put_platform_credential(
     State(pool): State<PgPool>,
     Extension(principal): Extension<Principal>,
@@ -863,6 +1047,27 @@ pub async fn put_platform_credential(
         .into_response()
 }
 
+/// `DELETE /platform/ai/credentials/{provider}` — remove the platform's API key for `provider`.
+#[utoipa::path(
+    delete,
+    path = "/platform/ai/credentials/{provider}",
+    tag = "platform-ai",
+    operation_id = "delete_platform_ai_credential",
+    summary = "Delete the platform AI credential for a provider",
+    description = "Soft-delete the platform's API key for `provider`. After this call, no \
+                  platform-level credential exists for that provider, and any tenant that \
+                  relied on the platform fallback will have no resolved credential until it \
+                  sets one of its own. Requires permission: platform.admin",
+    params(("provider" = String, Path, description = "Provider identifier (e.g. `openai`, `anthropic`, `gemini`).")),
+    responses(
+        (status = 204, description = "Credential deleted."),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "No credential found for this provider.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn delete_platform_credential(
     State(pool): State<PgPool>,
     Extension(principal): Extension<Principal>,
@@ -926,6 +1131,31 @@ pub async fn delete_platform_credential(
 
 // ── Config Test ────────────────────────────────────────────────────────────
 
+/// `POST /tenant/ai/config/test` — resolve the tenant's effective
+/// configuration + credential and make a low-cost chat completion against
+/// the provider to verify connectivity.
+#[utoipa::path(
+    post,
+    path = "/tenant/ai/config/test",
+    tag = "tenant-ai",
+    operation_id = "test_tenant_ai_config",
+    summary = "Test the tenant AI configuration end-to-end",
+    description = "Resolve the tenant's effective AI configuration and credential, then issue \
+                  a one-token `ping` chat completion against the provider. On success the \
+                  response is `TestConfigResult` with `ok: true` plus `provider`, `model`, and \
+                  `latency_ms`. On failure the response is 422 with `ok: false`, \
+                  `error_category`, and a sanitized `detail`. The `ping` request is not \
+                  recorded in the usage ledger. Requires permission: ai_agent.manage",
+    responses(
+        (status = 200, description = "Test succeeded.", body = TestConfigResult),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "AI is not configured or no credential resolves.", body = ErrorEnvelope),
+        (status = 422, description = "Provider rejected the test call.", body = TestConfigResult),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn test_tenant_config(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -1031,6 +1261,30 @@ pub async fn test_tenant_config(
     }
 }
 
+/// `POST /platform/ai/config/test` — verify the platform's AI configuration
+/// end-to-end with a low-cost chat completion.
+#[utoipa::path(
+    post,
+    path = "/platform/ai/config/test",
+    tag = "platform-ai",
+    operation_id = "test_platform_ai_config",
+    summary = "Test the platform AI configuration end-to-end",
+    description = "Resolve the platform's AI configuration and credential, then issue a \
+                  one-token `ping` chat completion against the provider. On success the \
+                  response is `TestConfigResult` with `ok: true` plus `provider`, `model`, and \
+                  `latency_ms`. On failure the response is 422 with `ok: false`, \
+                  `error_category`, and a sanitized `detail`. The `ping` request is not \
+                  recorded in the usage ledger. Requires permission: platform.admin",
+    responses(
+        (status = 200, description = "Test succeeded.", body = TestConfigResult),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "AI is not configured or no credential resolves.", body = ErrorEnvelope),
+        (status = 422, description = "Provider rejected the test call.", body = TestConfigResult),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn test_platform_config(
     State(pool): State<PgPool>,
     Extension(ai): Extension<AiService>,
@@ -1125,7 +1379,8 @@ pub async fn test_platform_config(
 
 // ── Usage ──────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 #[serde(default, deny_unknown_fields)]
 pub struct UsageQueryParams {
     pub from: Option<String>,
@@ -1145,7 +1400,8 @@ impl Default for UsageQueryParams {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
 #[serde(default, deny_unknown_fields)]
 pub struct UsageRangeParams {
     pub from: Option<String>,
@@ -1166,6 +1422,28 @@ fn parse_rfc3339_opt(s: Option<String>) -> Result<Option<chrono::DateTime<chrono
     }
 }
 
+/// `GET /tenant/ai/usage` — cursor-paginated usage ledger for the current tenant.
+#[utoipa::path(
+    get,
+    path = "/tenant/ai/usage",
+    tag = "tenant-ai",
+    operation_id = "list_tenant_ai_usage",
+    summary = "List tenant AI usage records",
+    description = "Return one page of AI usage records for the current tenant, ordered by \
+                  `created_at DESC, id DESC`. The list contains metadata only — request and \
+                  response content are exposed only via `GET /tenant/ai/usage/{id}`. The \
+                  `next_cursor` from a previous page is opaque; pass it back verbatim to fetch \
+                  the next page. Requires permission: ai_agent.view",
+    params(UsageQueryParams),
+    responses(
+        (status = 200, description = "Page of usage records (data + pagination).", body = PaginatedResponse<UsageListItem>),
+        (status = 400, description = "Validation failed (e.g. invalid `from`/`to` format).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn list_tenant_usage(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -1193,6 +1471,26 @@ pub async fn list_tenant_usage(
     }
 }
 
+/// `GET /tenant/ai/usage/summary` — aggregate usage counts for the tenant.
+#[utoipa::path(
+    get,
+    path = "/tenant/ai/usage/summary",
+    tag = "tenant-ai",
+    operation_id = "tenant_ai_usage_summary",
+    summary = "Summarize tenant AI usage",
+    description = "Return aggregate call/token counts for the current tenant over an optional \
+                  `[from, to)` RFC 3339 time window. `unreported_calls` counts rows where the \
+                  provider did not report token usage. Requires permission: ai_agent.view",
+    params(UsageRangeParams),
+    responses(
+        (status = 200, description = "Aggregate usage summary.", body = UsageSummary),
+        (status = 400, description = "Validation failed (e.g. invalid `from`/`to` format).", body = ErrorEnvelope),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn tenant_usage_summary(
     State(pool): State<PgPool>,
     ctx: TenantContext,
@@ -1219,6 +1517,28 @@ pub async fn tenant_usage_summary(
     }
 }
 
+/// `GET /tenant/ai/usage/{id}` — full detail (including request/response
+/// content) for a single usage record belonging to the tenant.
+#[utoipa::path(
+    get,
+    path = "/tenant/ai/usage/{id}",
+    tag = "tenant-ai",
+    operation_id = "get_tenant_ai_usage_detail",
+    summary = "Get a single tenant AI usage record",
+    description = "Return the full record for a single usage row, including captured request \
+                  and response content (when `capture_content` is enabled for the tenant at the \
+                  time the call was made). Cross-tenant and missing ids both return 404. \
+                  Requires permission: ai_agent.manage",
+    params(("id" = Uuid, Path, description = "Usage record identifier.")),
+    responses(
+        (status = 200, description = "Usage record detail.", body = UsageDetailResponse),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Usage record not found.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
 pub async fn get_tenant_usage_detail(
     State(pool): State<PgPool>,
     ctx: TenantContext,

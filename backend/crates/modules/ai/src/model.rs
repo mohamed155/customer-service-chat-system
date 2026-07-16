@@ -1,9 +1,10 @@
 use ai_providers::ProviderKind;
 use kernel::ApiError;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct FallbackEntry {
     pub provider: String,
     pub model: String,
@@ -24,7 +25,7 @@ pub struct AiConfigRow {
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ConfigPayload {
     pub provider: String,
     pub model: String,
@@ -102,8 +103,11 @@ impl ConfigPayload {
     }
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, ToSchema)]
 pub struct CredentialPayload {
+    /// Provider API key. Accepted on input only; never echoed back in any
+    /// response. The OpenAPI schema marks this field as `writeOnly`.
+    #[schema(value_type = String, write_only, example = "********")]
     pub api_key: String,
 }
 
@@ -127,15 +131,19 @@ impl CredentialPayload {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CredentialView {
     pub source: String,
     pub provider: String,
     pub key_hint: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AiConfigurationView {
+    /// Distinguishes the effective scope of the configuration: `platform_default`
+    /// when the response is the platform-wide default, or `tenant` when the
+    /// tenant has its own override (or — for a tenant GET — is being returned
+    /// with the platform fallback applied).
     pub scope: String,
     pub provider: String,
     pub model: String,
@@ -149,6 +157,44 @@ pub struct AiConfigurationView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub credential: Option<CredentialView>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+// ---------------------------------------------------------------------------
+// OpenAPI doc-only response types
+// ---------------------------------------------------------------------------
+//
+// These wrappers mirror the inline `json!({...})` shapes emitted by the
+// `test_*_config` and `usage_detail` handlers. The handlers continue to
+// build their bodies with `json!` — the wrapper types exist so
+// `#[utoipa::path]` can attach a concrete `body = ...` schema to each
+// operation (FR-005, FR-007).
+
+/// Result of `POST /platform/ai/config/test` and `POST /tenant/ai/config/test`.
+///
+/// On success (`ok: true`) the response includes `provider`, `model`, and
+/// `latency_ms`; on failure (`ok: false`, HTTP 422) the response includes
+/// `error_category` and a sanitized `detail` string. The optional fields
+/// are always absent on the opposite side of the success/failure split.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TestConfigResult {
+    pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_category: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+/// Response envelope for `GET /tenant/ai/usage/{id}`. The handler returns
+/// `{"data": <row>}`; the wrapper makes that contract explicit in the schema.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct UsageDetailResponse {
+    pub data: crate::usage::UsageDetailRow,
 }
 
 #[cfg(test)]
