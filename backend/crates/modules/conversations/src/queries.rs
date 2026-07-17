@@ -1389,3 +1389,66 @@ pub async fn recent_history(
     .fetch_all(pool)
     .await
 }
+
+pub async fn insert_fallback_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    body: &str,
+) -> sqlx::Result<Uuid> {
+    let id: Uuid = sqlx::query_scalar(
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
+         VALUES ($1, $2, 'system', $3) RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .bind(body)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE conversations SET last_activity_at = now() \
+         WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(id)
+}
+
+pub async fn has_customer_message_after(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    after_message_id: Uuid,
+) -> sqlx::Result<bool> {
+    let created_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+        "SELECT created_at FROM messages WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(tenant_id)
+    .bind(after_message_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let after = match created_at {
+        Some(t) => t,
+        None => return Ok(false),
+    };
+
+    sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS ( \
+         SELECT 1 FROM messages \
+         WHERE tenant_id = $1 AND conversation_id = $2 \
+         AND kind = 'customer' \
+         AND created_at > $3 \
+         LIMIT 1 \
+         )",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .bind(after)
+    .fetch_one(pool)
+    .await
+}

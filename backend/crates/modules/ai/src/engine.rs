@@ -1,12 +1,12 @@
+use rand::Rng;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::agent_config::{self, AgentConfigurationRow};
 use crate::agent_prompt;
-use crate::confidence;
 use crate::generation_record::{self, GenerationOutcome, GenerationRecord};
 use crate::prompt_store;
 use crate::prompt_validate;
@@ -182,6 +182,14 @@ pub async fn assemble_context(
     })
 }
 
+const RETRY_BASE_MS: &[u64] = &[200, 1000];
+
+fn retry_delay(retry: u32) -> Duration {
+    let base_ms = RETRY_BASE_MS[retry as usize];
+    let jitter_factor: f64 = rand::thread_rng().gen_range(0.75..=1.25);
+    Duration::from_millis((base_ms as f64 * jitter_factor) as u64)
+}
+
 /// Output of [`generate`] — the full provider response content plus metadata.
 pub struct GenerationOutput {
     pub content: String,
@@ -196,6 +204,13 @@ pub struct GenerationOutput {
 /// Call the streaming provider, collect the full response, and return the
 /// assembled output. Uses `stream_with_override` when `provider_override` is
 /// `Some`, otherwise uses the platform-resolved `stream`.
+///
+/// Retry/fallback behaviour (US2):
+/// - Up to 3 provider attempts total, only on retriable errors
+/// - Exponential backoff with jitter between retries
+/// - 45-second outer deadline (returns `AiCallError::Provider` with `Timeout`)
+/// - On mid-stream retriable failure after partial content: continuation request
+/// - Empty/whitespace-only content is treated as non-retriable failure
 pub async fn generate(
     ai: &AiService,
     ctx: AiCallContext,
@@ -203,51 +218,141 @@ pub async fn generate(
     provider_override: Option<(&str, &str)>,
 ) -> Result<GenerationOutput, AiCallError> {
     use futures::StreamExt;
-
-    let mut stream = if let Some((provider, model)) = provider_override {
-        ai.stream_with_override(ctx, input, provider, model).await?
-    } else {
-        ai.stream(ctx, input).await?
-    };
+    let system = input.system.clone();
+    let base_messages = input.messages;
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(45);
 
     let mut content = String::new();
-    let mut provider = String::new();
-    let mut model = String::new();
-    let mut usage = ai_providers::TokenUsage {
-        input: None,
-        output: None,
-    };
+    let mut final_provider = String::new();
+    let mut final_model = String::new();
+    let mut final_usage = ai_providers::TokenUsage::default();
     let mut finish_length = false;
+    let mut continuation_used = false;
+    let mut last_error_category: Option<ai_providers::ErrorCategory> = None;
 
-    while let Some(event) = stream.next().await {
-        match event {
-            crate::AiStreamEvent::Delta(text) => {
-                content.push_str(&text);
+    for attempt in 0..3 {
+        if tokio::time::Instant::now() >= deadline {
+            return Err(AiCallError::Provider {
+                category: ai_providers::ErrorCategory::Timeout,
+                provider: final_provider.clone(),
+                model: final_model.clone(),
+            });
+        }
+
+        // Build messages — add continuation context if we have partial content
+        let attempt_messages = if continuation_used && !content.trim().is_empty() {
+            let mut msgs = base_messages.clone();
+            msgs.push(ai_providers::Message {
+                role: ai_providers::Role::Assistant,
+                content: content.clone(),
+            });
+            msgs.push(ai_providers::Message {
+                role: ai_providers::Role::User,
+                content: "Continue the previous assistant message exactly where it stopped. Do not repeat any text already written. Do not add any preamble.".into(),
+            });
+            msgs
+        } else {
+            base_messages.clone()
+        };
+
+        // Reset per-attempt accumulation
+        let mut chunk = String::new();
+
+        let attempt_input = AiInput {
+            system: system.clone(),
+            messages: attempt_messages,
+        };
+
+        let mut stream = if let Some((provider, model)) = provider_override {
+            ai.stream_with_override(ctx.clone(), attempt_input, provider, model)
+                .await?
+        } else {
+            ai.stream(ctx.clone(), attempt_input).await?
+        };
+
+        let mut stream_failed = false;
+        let mut had_partial = false;
+
+        while let Some(event) = stream.next().await {
+            match event {
+                crate::AiStreamEvent::Delta(text) => {
+                    chunk.push_str(&text);
+                    had_partial = true;
+                }
+                crate::AiStreamEvent::Done(result) => {
+                    final_provider = result.provider;
+                    final_model = result.model;
+                    final_usage = result.usage;
+                    finish_length =
+                        matches!(result.finish, ai_providers::FinishReason::Length);
+                }
+                crate::AiStreamEvent::Error { category } => {
+                    stream_failed = true;
+                    last_error_category = Some(category);
+                    break;
+                }
             }
-            crate::AiStreamEvent::Done(result) => {
-                provider = result.provider;
-                model = result.model;
-                usage = result.usage;
-                finish_length = matches!(result.finish, ai_providers::FinishReason::Length);
+        }
+
+        if !stream_failed {
+            // Success — stitch partial content if continuation was used
+            if continuation_used && had_partial {
+                content.push_str(&chunk);
+            } else if !continuation_used {
+                content = chunk;
             }
-            crate::AiStreamEvent::Error { category } => {
+
+            // Empty/whitespace-only is non-retriable failure
+            let trimmed = content.trim();
+            if trimmed.is_empty() {
                 return Err(AiCallError::Provider {
-                    category,
-                    provider,
-                    model,
+                    category: ai_providers::ErrorCategory::InvalidRequest,
+                    provider: final_provider,
+                    model: final_model,
                 });
             }
+
+            return Ok(GenerationOutput {
+                content,
+                provider: final_provider,
+                model: final_model,
+                usage: final_usage,
+                finish_length,
+                continuation_used,
+                usage_record_id: None,
+            });
+        }
+
+        // Stream failed — decide next step
+        let category = last_error_category.unwrap_or(ai_providers::ErrorCategory::Unavailable);
+
+        if !category.retriable() {
+            return Err(AiCallError::Provider {
+                category,
+                provider: final_provider,
+                model: final_model,
+            });
+        }
+
+        // Retriable — save partial content for continuation
+        if continuation_used {
+            // Continuation also failed — discard and fall through to exhaustion
+            content.push_str(&chunk);
+        } else if had_partial {
+            content = chunk;
+            continuation_used = true;
+        }
+
+        // Apply backoff before next attempt (except last)
+        if attempt < 2 {
+            tokio::time::sleep(retry_delay(attempt)).await;
         }
     }
 
-    Ok(GenerationOutput {
-        content,
-        provider,
-        model,
-        usage,
-        finish_length,
-        continuation_used: false,
-        usage_record_id: None,
+    Err(AiCallError::Provider {
+        category: last_error_category.unwrap_or(ai_providers::ErrorCategory::Unavailable),
+        provider: final_provider,
+        model: final_model,
     })
 }
 
@@ -260,7 +365,7 @@ pub async fn generate(
 pub async fn run_generation(
     pool: &PgPool,
     ai: &AiService,
-    _presence: &Arc<escalations::presence::Runtime>,
+    presence: &Arc<escalations::presence::Runtime>,
     tenant_id: Uuid,
     conversation_id: Uuid,
     trigger_message_id: Uuid,
@@ -417,8 +522,84 @@ pub async fn run_generation(
                 .execute(pool)
                 .await?;
         }
+        Err(AiCallError::Provider {
+            category,
+            provider: _provider_name,
+            model: _model_name,
+        }) => {
+            // Provider retries exhausted — fallback + escalation
+            let fallback_body = "I'm sorry — I'm having trouble responding right now. A team member will follow up shortly.";
+            let last_category = Some(category.as_str().to_string());
+
+            let fallback_result: Result<(), sqlx::Error> = async {
+                let mut tx = pool.begin().await?;
+                conversations::queries::insert_fallback_in_tx(
+                    &mut tx,
+                    tenant_id,
+                    conversation_id,
+                    fallback_body,
+                )
+                .await?;
+
+                let present_ids = presence.present_membership_ids_async(tenant_id).await;
+                let _ = escalations::routing::route_new_escalation_in_tx(
+                    &mut tx,
+                    pool,
+                    tenant_id,
+                    conversation_id,
+                    "AI assistant unavailable",
+                    &[],
+                    &[],
+                    &present_ids,
+                    Uuid::nil(),
+                )
+                .await;
+
+                tx.commit().await.map_err(|e| {
+                    tracing::error!(%e, "engine: fallback tx commit failed");
+                    e
+                })
+            }
+            .await;
+
+            let (outcome, error_category) = match fallback_result {
+                Ok(()) => (GenerationOutcome::Fallback, last_category),
+                Err(e) => {
+                    tracing::error!(%e, "engine: fallback insert itself failed");
+                    (GenerationOutcome::Failed, Some(format!("fallback_error: {e}")))
+                }
+            };
+
+            let rec = GenerationRecord {
+                id: generation_id,
+                tenant_id,
+                conversation_id,
+                trigger_message_id,
+                response_message_id: None,
+                usage_record_id: None,
+                provider: None,
+                model: None,
+                outcome,
+                error_category,
+                attempts: 1,
+                continuation_used: false,
+                retrieval_chunk_count: assembled.retrieved_chunks.len() as i16,
+                retrieval_top_similarity: assembled.retrieved_chunks.first().map(|c| c.similarity as f32),
+                retrieval_degraded: assembled.retrieval_degraded,
+                confidence_score: None,
+                latency_ms,
+                request_id: None,
+                created_at: Some(chrono::Utc::now()),
+            };
+            let _ = generation_record::insert(pool, &rec).await;
+
+            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                .bind(event_id)
+                .execute(pool)
+                .await?;
+        }
         Err(e) => {
-            tracing::warn!(?e, "engine: generation failed");
+            tracing::warn!(?e, "engine: unexpected generation error");
             sqlx::query("DELETE FROM outbox_events WHERE id = $1")
                 .bind(event_id)
                 .execute(pool)

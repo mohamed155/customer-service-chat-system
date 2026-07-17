@@ -99,7 +99,9 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **IF EXISTS**: Read .specify/memory/constitution.md for governance constraints
    - **IF EXISTS**: Read quickstart.md for integration scenarios
 
-4. **Project Setup Verification**:
+4. **Load engineering discipline skill (MANDATORY, every run, no exceptions)**: Invoke the `solid` skill now, before writing or editing a single line of implementation code. It governs SOLID principles, TDD (red-green-refactor), clean-code naming/structure, code-smell detection, and the pre/during/post-code checklists for **every** task in **every** phase of this run — it stays in effect through step 10, not just at this one point. Re-apply its checklists at each task boundary, not only once at the start. If the `Skill` tool cannot find `solid` in this environment, read `.claude/skills/solid/SKILL.md` (or `.agents/skills/solid/SKILL.md`) and its `references/` directory directly and hold yourself to the same standard. Do not skip this for tasks that look small, mechanical, or "just plumbing" — those are exactly the tasks where undisciplined code accumulates.
+
+5. **Project Setup Verification**:
    - **REQUIRED**: Create/verify ignore files based on actual project setup:
 
    **Detection & Creation Logic**:
@@ -143,27 +145,27 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **Terraform**: `.terraform/`, `*.tfstate*`, `*.tfvars`, `.terraform.lock.hcl`
    - **Kubernetes/k8s**: `*.secret.yaml`, `secrets/`, `.kube/`, `kubeconfig*`, `*.key`, `*.crt`
 
-5. Parse tasks.md structure and extract:
+6. Parse tasks.md structure and extract:
    - **Task phases**: Setup, Tests, Core, Integration, Polish
    - **Task dependencies**: Sequential vs parallel execution rules
    - **Task details**: ID, description, file paths, parallel markers [P]
    - **Execution flow**: Order and dependency requirements
 
-6. Execute implementation following the task plan:
+7. Execute implementation following the task plan, with the `solid` skill (step 4) governing every task:
    - **Phase-by-phase execution**: Complete each phase before moving to the next
    - **Respect dependencies**: Run sequential tasks in order, parallel tasks [P] can run together  
-   - **Follow TDD approach**: Execute test tasks before their corresponding implementation tasks
+   - **Follow TDD approach**: Execute test tasks before their corresponding implementation tasks — this is the `solid` skill's Red-Green-Refactor cycle (see `solid` skill's `references/tdd.md`), not a separate concern from it
    - **File-based coordination**: Tasks affecting the same files must run sequentially
-   - **Validation checkpoints**: Verify each phase completion before proceeding
+   - **Validation checkpoints**: Verify each phase completion before proceeding, including a quick pass of the `solid` skill's Post-Code Checklist for the tasks just completed
 
-7. Implementation execution rules:
+8. Implementation execution rules:
    - **Setup first**: Initialize project structure, dependencies, configuration
    - **Tests before code**: If you need to write tests for contracts, entities, and integration scenarios
-   - **Core development**: Implement models, services, CLI commands, endpoints
+   - **Core development**: Implement models, services, CLI commands, endpoints — apply the `solid` skill's SOLID principles, naming rules, and code-smell checklist to every new or modified class/function, not only to code flagged as complex
    - **Integration work**: Database connections, middleware, logging, external services
    - **Polish and validation**: Unit tests, performance optimization, documentation
 
-8. Progress tracking and error handling:
+9. Progress tracking and error handling:
    - Report progress after each completed task
    - Halt execution if any non-parallel task fails
    - For parallel tasks [P], continue with successful tasks, report failed ones
@@ -171,11 +173,12 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Suggest next steps if implementation cannot proceed
    - **IMPORTANT** For completed tasks, make sure to mark the task off as [X] in the tasks file.
 
-9. Completion validation:
-   - Verify all required tasks are completed
-   - Check that implemented features match the original specification
-   - Validate that tests pass and coverage meets requirements
-   - Confirm the implementation follows the technical plan
+10. Completion validation:
+    - Verify all required tasks are completed
+    - Check that implemented features match the original specification
+    - Validate that tests pass and coverage meets requirements
+    - Confirm the implementation follows the technical plan
+    - Confirm the `solid` skill's discipline was actually applied (not just invoked): no untested production code, no obvious SOLID/code-smell violations left unaddressed in the code written this run
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/speckit-tasks` first to regenerate the task list.
 
@@ -220,6 +223,7 @@ Report final status with summary of completed work.
 
 ## Done When
 
+- [ ] The `solid` skill was invoked at the start of this run (step 4) and applied throughout — not skipped, not treated as optional
 - [ ] All tasks in tasks.md completed and marked `[X]`
 - [ ] Implementation validated against specification, plan, and test coverage
 - [ ] Extension hooks dispatched or skipped according to the rules in Mandatory Post-Execution Hooks above
