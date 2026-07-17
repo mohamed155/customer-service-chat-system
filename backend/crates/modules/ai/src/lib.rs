@@ -83,6 +83,7 @@ pub mod agent_rules;
 pub mod audit;
 pub mod confidence;
 pub mod crypto;
+pub mod engine;
 pub mod generation_record;
 pub mod model;
 pub mod prompt_routes;
