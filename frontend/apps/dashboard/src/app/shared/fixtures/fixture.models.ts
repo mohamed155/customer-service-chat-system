@@ -2,8 +2,6 @@ export type Channel = 'web' | 'whatsapp' | 'telegram' | 'mobile-sdk' | 'email' |
 export type ConversationStatus = 'open' | 'escalated' | 'closed';
 export type Sentiment = 'positive' | 'neutral' | 'angry';
 export type MessageAuthor = 'customer' | 'ai' | 'human' | 'system';
-export type ArticleStatus = 'draft' | 'published' | 'archived';
-export type ArticleSource = 'article' | 'faq' | 'pdf' | 'url';
 export type IntegrationStatus = 'connected' | 'not-connected' | 'coming-soon';
 export type DeltaDirection = 'up' | 'down';
 
@@ -75,17 +73,6 @@ export interface TopArticleFixture {
   category: string;
   uses: number;
   resolutionRate: number;
-}
-
-export interface KnowledgeArticleFixture {
-  id: string;
-  title: string;
-  category: string;
-  status: ArticleStatus;
-  source: ArticleSource;
-  updatedAt: string;
-  indexed: boolean;
-  excerpt: string;
 }
 
 export interface IntegrationFixture {

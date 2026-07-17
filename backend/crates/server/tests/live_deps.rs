@@ -59,6 +59,7 @@ async fn live_readiness_with_real_deps() {
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
+        s3: None,
     };
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     let state = AppState {

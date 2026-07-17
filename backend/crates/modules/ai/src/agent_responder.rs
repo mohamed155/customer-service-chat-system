@@ -3,9 +3,13 @@ use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
 
+use std::collections::HashMap;
+
 use crate::agent_config::{self, AgentConfigurationRow, EscalationRule};
 use crate::agent_prompt;
 use crate::agent_rules::{self, RuleMatch, BASELINE_ESCALATION_REASON};
+use crate::prompt_store;
+use crate::prompt_validate;
 
 pub async fn process_agent_responder_once(
     pool: &PgPool,
@@ -112,7 +116,6 @@ pub async fn process_agent_responder_once(
                 avatar_kind: "none".into(),
                 avatar_preset: None,
                 tone: "professional".into(),
-                system_prompt: String::new(),
                 business_rules: serde_json::Value::Array(Vec::new()),
                 escalation_rules: serde_json::Value::Array(Vec::new()),
                 enabled_channels: serde_json::Value::Array(Vec::new()),
@@ -235,17 +238,46 @@ pub async fn process_agent_responder_once(
 
     // Phase B — Vendor call (no transaction, no lock)
 
-    // 5. Compose system message
+    // 5. Load prompt content
+    let prompt_bootstrap = prompt_store::load_bootstrap(pool, tenant_id).await?;
+    let (prompt_content, prompt_version) = match &prompt_bootstrap {
+        Some((p, v)) => (v.content.clone(), p.active_version),
+        None => (String::new(), 0_i32),
+    };
+
+    // 6. Compose system message with variable substitution
     let business_rules: Vec<String> =
         serde_json::from_value(row.business_rules.clone()).unwrap_or_default();
+
+    let system_content = if is_platform_persona || prompt_content.is_empty() {
+        prompt_content
+    } else {
+        let tenant_name = tenancy::authorize::fetch_tenant(pool, tenant_id)
+            .await
+            .map(|t| t.name)
+            .unwrap_or_default();
+        let customer_name =
+            conversations::queries::customer_display_name(pool, tenant_id, conversation_id)
+                .await?
+                .unwrap_or_else(|| "the customer".to_string());
+
+        let mut vars = HashMap::new();
+        vars.insert("agent_name", row.name.clone());
+        vars.insert("tenant_name", tenant_name);
+        vars.insert("customer_name", customer_name);
+        vars.insert("channel", channel.clone());
+
+        prompt_validate::render_prompt(&prompt_content, &vars)
+    };
+
     let system_message = agent_prompt::compose_system_message(
         &row.name,
-        &row.system_prompt,
+        &system_content,
         &row.tone,
         &business_rules,
     );
 
-    // 6. Get recent history
+    // 7. Get recent history
     let history =
         conversations::queries::recent_history(pool, tenant_id, conversation_id, 20).await?;
     let messages: Vec<ai_providers::Message> = history
@@ -272,7 +304,7 @@ pub async fn process_agent_responder_once(
         request_id: None,
     };
 
-    // 7. Resolve provider/model and call AI
+    // 8. Resolve provider/model and call AI
     let vendor_result = if let (Some(provider), Some(model)) = (&row.provider, &row.model) {
         if agent_config::credential_resolves(pool, tenant_id, provider).await {
             ai.complete_with_override(ctx, input, provider, model).await
@@ -320,7 +352,7 @@ pub async fn process_agent_responder_once(
 
     // Phase C — Insert reply (short transaction)
 
-    // 8. Idempotency check
+    // 9. Idempotency check
     let already_replied =
         conversations::queries::has_ai_reply_since(pool, tenant_id, conversation_id, message_id)
             .await?;
@@ -343,6 +375,7 @@ pub async fn process_agent_responder_once(
         .execute(pool)
         .await?;
 
+    tracing::info!(prompt_version, "agent responder: reply sent");
     Ok(true)
 }
 

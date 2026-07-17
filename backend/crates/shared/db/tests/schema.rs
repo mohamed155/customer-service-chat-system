@@ -4373,30 +4373,6 @@ async fn agent_configurations_invalid_tone_rejected() {
         "tone outside the 5-value catalog should be rejected"
     );
 }
-
-#[tokio::test]
-async fn agent_configurations_system_prompt_too_long_rejected() {
-    let pool = match get_pool().await {
-        Some(p) => p,
-        None => return,
-    };
-    db::run_migrations(&pool).await.unwrap();
-    let tid = seed_tenant(&pool).await;
-    let long = "x".repeat(8001);
-    let result = sqlx::query(
-        "INSERT INTO agent_configurations (tenant_id, name, system_prompt) VALUES ($1, $2, $3)",
-    )
-    .bind(tid)
-    .bind("Test Agent")
-    .bind(&long)
-    .execute(&pool)
-    .await;
-    assert!(
-        result.is_err(),
-        "system_prompt over 8000 chars should be rejected"
-    );
-}
-
 #[tokio::test]
 async fn agent_configurations_provider_without_model_rejected() {
     let pool = match get_pool().await {
@@ -4834,29 +4810,6 @@ async fn migration_0041_agent_configurations_invalid_tone_rejected() {
 }
 
 #[tokio::test]
-async fn migration_0041_agent_configurations_long_system_prompt_rejected() {
-    let pool = match get_pool().await {
-        Some(p) => p,
-        None => return,
-    };
-    db::run_migrations(&pool).await.unwrap();
-    let tid = seed_tenant(&pool).await;
-    let long_prompt = "x".repeat(8001);
-    let result = sqlx::query(
-        "INSERT INTO agent_configurations (tenant_id, name, system_prompt) VALUES ($1, $2, $3)",
-    )
-    .bind(tid)
-    .bind("Test Agent")
-    .bind(&long_prompt)
-    .execute(&pool)
-    .await;
-    assert!(
-        result.is_err(),
-        "system_prompt over 8000 chars should be rejected"
-    );
-}
-
-#[tokio::test]
 async fn migration_0041_agent_configurations_provider_model_mismatch_rejected() {
     let pool = match get_pool().await {
         Some(p) => p,
@@ -5219,5 +5172,836 @@ async fn migration_0044_outbox_customer_message_idx() {
     assert!(
         idx.contains("event_type"),
         "outbox customer message claimable index must cover event_type"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// T002 — Migration 0045: agent_prompts + agent_prompt_versions + system_prompt drop
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0045_agent_prompts_invalid_prompt_kind_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result = sqlx::query(
+        "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3)",
+    )
+    .bind(tid)
+    .bind("custom")
+    .bind(1)
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "prompt_kind 'custom' should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0045_agent_prompt_versions_empty_content_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let prompt_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(tid)
+    .bind("system")
+    .bind(1)
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent_prompts should succeed");
+    let result = sqlx::query(
+        "INSERT INTO agent_prompt_versions (tenant_id, prompt_id, version_number, content, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(tid)
+    .bind(prompt_id)
+    .bind(1)
+    .bind("")
+    .bind("test")
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "empty content should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0045_agent_prompt_versions_content_over_8000_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let prompt_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(tid)
+    .bind("system")
+    .bind(1)
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent_prompts should succeed");
+    let long_content = "x".repeat(8001);
+    let result = sqlx::query(
+        "INSERT INTO agent_prompt_versions (tenant_id, prompt_id, version_number, content, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(tid)
+    .bind(prompt_id)
+    .bind(1)
+    .bind(&long_content)
+    .bind("test")
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "content over 8000 chars should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0045_agent_prompt_versions_change_note_over_500_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let prompt_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(tid)
+    .bind("system")
+    .bind(1)
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent_prompts should succeed");
+    let long_note = "x".repeat(501);
+    let result = sqlx::query(
+        "INSERT INTO agent_prompt_versions (tenant_id, prompt_id, version_number, content, change_note, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(tid)
+    .bind(prompt_id)
+    .bind(1)
+    .bind("hello")
+    .bind(&long_note)
+    .bind("test")
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "change_note over 500 chars should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0045_agent_prompts_second_live_row_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    sqlx::query(
+        "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3)",
+    )
+    .bind(tid)
+    .bind("system")
+    .bind(1)
+    .execute(&pool)
+    .await
+    .expect("first agent_prompts insert should succeed");
+    let result = sqlx::query(
+        "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3)",
+    )
+    .bind(tid)
+    .bind("system")
+    .bind(2)
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "second live row for same tenant should be rejected on agent_prompts_tenant_kind_uq"
+    );
+}
+
+#[tokio::test]
+async fn migration_0045_agent_prompt_versions_duplicate_version_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let prompt_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(tid)
+    .bind("system")
+    .bind(1)
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent_prompts should succeed");
+    sqlx::query(
+        "INSERT INTO agent_prompt_versions (tenant_id, prompt_id, version_number, content, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(tid)
+    .bind(prompt_id)
+    .bind(1)
+    .bind("first version")
+    .bind("test")
+    .execute(&pool)
+    .await
+    .expect("first version insert should succeed");
+    let result = sqlx::query(
+        "INSERT INTO agent_prompt_versions (tenant_id, prompt_id, version_number, content, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(tid)
+    .bind(prompt_id)
+    .bind(1)
+    .bind("duplicate version")
+    .bind("test")
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "duplicate version_number for same prompt_id should be rejected on agent_prompt_versions_prompt_version_uq"
+    );
+}
+
+#[tokio::test]
+async fn migration_0045_agent_prompt_versions_update_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let prompt_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(tid)
+    .bind("system")
+    .bind(1)
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent_prompts should succeed");
+    let version_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_prompt_versions (tenant_id, prompt_id, version_number, content, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(tid)
+    .bind(prompt_id)
+    .bind(1)
+    .bind("valid content")
+    .bind("test")
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent_prompt_versions should succeed");
+    let result = sqlx::query("UPDATE agent_prompt_versions SET content = 'changed' WHERE id = $1")
+        .bind(version_id)
+        .execute(&pool)
+        .await;
+    assert!(
+        result.is_err(),
+        "UPDATE on agent_prompt_versions should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0045_agent_prompt_versions_delete_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let prompt_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(tid)
+    .bind("system")
+    .bind(1)
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent_prompts should succeed");
+    let version_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO agent_prompt_versions (tenant_id, prompt_id, version_number, content, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(tid)
+    .bind(prompt_id)
+    .bind(1)
+    .bind("valid content")
+    .bind("test")
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent_prompt_versions should succeed");
+    let result = sqlx::query("DELETE FROM agent_prompt_versions WHERE id = $1")
+        .bind(version_id)
+        .execute(&pool)
+        .await;
+    assert!(
+        result.is_err(),
+        "DELETE on agent_prompt_versions should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0045_agent_configurations_no_system_prompt() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let result = sqlx::query("SELECT system_prompt FROM agent_configurations")
+        .execute(&pool)
+        .await;
+    assert!(
+        result.is_err(),
+        "system_prompt column should have been dropped"
+    );
+}
+
+#[tokio::test]
+async fn migration_0045_agent_prompt_versions_user_delete_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+
+    let tenant_id = sqlx::query_scalar::<_, uuid::Uuid>(
+        "INSERT INTO tenants (id, name, slug) VALUES (gen_random_uuid(), 'Test Tenant', 'test-tenant-0045-user-delete') RETURNING id"
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("insert tenant should succeed");
+
+    let user_id = sqlx::query_scalar::<_, uuid::Uuid>(
+        "INSERT INTO users (id, email, display_name) VALUES (gen_random_uuid(), 'test@userdelete-0045.com', 'Test User') RETURNING id"
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("insert user should succeed");
+
+    let prompt_id = sqlx::query_scalar::<_, uuid::Uuid>(
+        "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, 'system', 1) RETURNING id",
+    )
+    .bind(tenant_id)
+    .fetch_one(&pool)
+    .await
+    .expect("insert agent_prompts should succeed");
+
+    sqlx::query(
+        "INSERT INTO agent_prompt_versions (tenant_id, prompt_id, version_number, content, created_by_user_id, created_by_display) VALUES ($1, $2, 1, 'test content', $3, 'Test User')",
+    )
+    .bind(tenant_id)
+    .bind(prompt_id)
+    .bind(user_id)
+    .execute(&pool)
+    .await
+    .expect("insert agent_prompt_versions should succeed");
+
+    let result = sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(user_id)
+        .execute(&pool)
+        .await;
+
+    assert!(
+        result.is_err(),
+        "DELETE on a user referenced by agent_prompt_versions should be rejected"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// migration 0046 — knowledge_base
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0046_knowledge_items_invalid_item_type_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result = sqlx::query(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(tid)
+    .bind("invalid_type")
+    .bind("Test Title")
+    .bind("authored")
+    .bind("test")
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "item_type 'invalid_type' should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_items_invalid_status_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result = sqlx::query(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, status, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(tid)
+    .bind("article")
+    .bind("Test Title")
+    .bind("deleted")
+    .bind("authored")
+    .bind("test")
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "status 'deleted' should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_items_empty_title_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result = sqlx::query(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(tid)
+    .bind("article")
+    .bind("")
+    .bind("authored")
+    .bind("test")
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "empty title should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_items_title_over_200_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let long_title = "x".repeat(201);
+    let result = sqlx::query(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(tid)
+    .bind("article")
+    .bind(&long_title)
+    .bind("authored")
+    .bind("test")
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "title over 200 chars should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_items_body_over_100000_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let long_body = "x".repeat(100_001);
+    let result = sqlx::query(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, body, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(tid)
+    .bind("article")
+    .bind("Test Title")
+    .bind(&long_body)
+    .bind("authored")
+    .bind("test")
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "body over 100000 chars should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_items_document_with_body_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let result = sqlx::query(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, body, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(tid)
+    .bind("document")
+    .bind("Test Document")
+    .bind("should not be allowed")
+    .bind("uploaded")
+    .bind("test")
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "document-type item with non-NULL body should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_categories_case_insensitive_unique() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    sqlx::query("INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("Support")
+        .execute(&pool)
+        .await
+        .expect("first category insert should succeed");
+    let result = sqlx::query("INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid)
+        .bind("support")
+        .execute(&pool)
+        .await;
+    assert!(
+        result.is_err(),
+        "duplicate case-insensitive name should be rejected"
+    );
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_categories_diff_tenant_same_name_succeeds() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid1 = seed_tenant(&pool).await;
+    let tid2 = seed_tenant(&pool).await;
+    sqlx::query("INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid1)
+        .bind("Support")
+        .execute(&pool)
+        .await
+        .expect("first tenant category should succeed");
+    sqlx::query("INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2)")
+        .bind(tid2)
+        .bind("Support")
+        .execute(&pool)
+        .await
+        .expect("same name in different tenant should succeed");
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_categories_delete_sets_category_id_null() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let cat_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tid)
+    .bind("Category")
+    .fetch_one(&pool)
+    .await
+    .expect("category insert should succeed");
+    sqlx::query(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, category_id, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(tid)
+    .bind("article")
+    .bind("Test Article")
+    .bind(cat_id)
+    .bind("authored")
+    .bind("test")
+    .execute(&pool)
+    .await
+    .expect("item insert should succeed");
+    sqlx::query("DELETE FROM knowledge_categories WHERE id = $1")
+        .bind(cat_id)
+        .execute(&pool)
+        .await
+        .expect("category delete should succeed");
+    let category_id: Option<uuid::Uuid> =
+        sqlx::query_scalar("SELECT category_id FROM knowledge_items WHERE tenant_id = $1")
+            .bind(tid)
+            .fetch_one(&pool)
+            .await
+            .expect("query should succeed");
+    assert!(
+        category_id.is_none(),
+        "category_id should be NULL after category deletion"
+    );
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_documents_size_bytes_zero_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let item_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(tid)
+    .bind("document")
+    .bind("Test Document")
+    .bind("uploaded")
+    .bind("test")
+    .fetch_one(&pool)
+    .await
+    .expect("item insert should succeed");
+    let result = sqlx::query(
+        "INSERT INTO knowledge_documents \
+         (item_id, tenant_id, storage_key, original_filename, content_type, size_bytes) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(item_id)
+    .bind(tid)
+    .bind("key1")
+    .bind("doc.pdf")
+    .bind("application/pdf")
+    .bind(0_i64)
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "size_bytes = 0 should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_documents_size_bytes_over_max_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let item_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(tid)
+    .bind("document")
+    .bind("Test Document")
+    .bind("uploaded")
+    .bind("test")
+    .fetch_one(&pool)
+    .await
+    .expect("item insert should succeed");
+    let result = sqlx::query(
+        "INSERT INTO knowledge_documents \
+         (item_id, tenant_id, storage_key, original_filename, content_type, size_bytes) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(item_id)
+    .bind(tid)
+    .bind("key2")
+    .bind("doc.pdf")
+    .bind("application/pdf")
+    .bind(20_971_521_i64)
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "size_bytes = 20971521 should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_documents_storage_key_unique() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let item1_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(tid)
+    .bind("document")
+    .bind("Doc One")
+    .bind("uploaded")
+    .bind("test")
+    .fetch_one(&pool)
+    .await
+    .expect("first item insert should succeed");
+    let item2_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(tid)
+    .bind("document")
+    .bind("Doc Two")
+    .bind("uploaded")
+    .bind("test")
+    .fetch_one(&pool)
+    .await
+    .expect("second item insert should succeed");
+    sqlx::query(
+        "INSERT INTO knowledge_documents \
+         (item_id, tenant_id, storage_key, original_filename, content_type, size_bytes) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(item1_id)
+    .bind(tid)
+    .bind("unique-key")
+    .bind("doc1.pdf")
+    .bind("application/pdf")
+    .bind(100_i64)
+    .execute(&pool)
+    .await
+    .expect("first document insert should succeed");
+    let result = sqlx::query(
+        "INSERT INTO knowledge_documents \
+         (item_id, tenant_id, storage_key, original_filename, content_type, size_bytes) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(item2_id)
+    .bind(tid)
+    .bind("unique-key")
+    .bind("doc2.pdf")
+    .bind("application/pdf")
+    .bind(200_i64)
+    .execute(&pool)
+    .await;
+    assert!(result.is_err(), "duplicate storage_key should be rejected");
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_items_delete_cascades_to_documents_and_tags() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let item_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(tid)
+    .bind("document")
+    .bind("Test Document")
+    .bind("uploaded")
+    .bind("test")
+    .fetch_one(&pool)
+    .await
+    .expect("item insert should succeed");
+    sqlx::query(
+        "INSERT INTO knowledge_documents \
+         (item_id, tenant_id, storage_key, original_filename, content_type, size_bytes) \
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(item_id)
+    .bind(tid)
+    .bind("cascade-key")
+    .bind("doc.pdf")
+    .bind("application/pdf")
+    .bind(100_i64)
+    .execute(&pool)
+    .await
+    .expect("document insert should succeed");
+    sqlx::query("INSERT INTO knowledge_item_tags (item_id, tenant_id, tag) VALUES ($1, $2, $3)")
+        .bind(item_id)
+        .bind(tid)
+        .bind("important")
+        .execute(&pool)
+        .await
+        .expect("tag insert should succeed");
+    sqlx::query("DELETE FROM knowledge_items WHERE id = $1")
+        .bind(item_id)
+        .execute(&pool)
+        .await
+        .expect("item delete should succeed");
+    let doc_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM knowledge_documents WHERE item_id = $1")
+            .bind(item_id)
+            .fetch_one(&pool)
+            .await
+            .expect("query should succeed");
+    assert_eq!(
+        doc_count, 0,
+        "knowledge_documents should be cascade-deleted"
+    );
+    let tag_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM knowledge_item_tags WHERE item_id = $1")
+            .bind(item_id)
+            .fetch_one(&pool)
+            .await
+            .expect("query should succeed");
+    assert_eq!(
+        tag_count, 0,
+        "knowledge_item_tags should be cascade-deleted"
+    );
+}
+
+#[tokio::test]
+async fn migration_0046_knowledge_item_tags_duplicate_pk_rejected() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    db::run_migrations(&pool).await.unwrap();
+    let tid = seed_tenant(&pool).await;
+    let item_id: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
+         VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    )
+    .bind(tid)
+    .bind("article")
+    .bind("Test Article")
+    .bind("authored")
+    .bind("test")
+    .fetch_one(&pool)
+    .await
+    .expect("item insert should succeed");
+    sqlx::query("INSERT INTO knowledge_item_tags (item_id, tenant_id, tag) VALUES ($1, $2, $3)")
+        .bind(item_id)
+        .bind(tid)
+        .bind("support")
+        .execute(&pool)
+        .await
+        .expect("first tag insert should succeed");
+    let result = sqlx::query(
+        "INSERT INTO knowledge_item_tags (item_id, tenant_id, tag) VALUES ($1, $2, $3)",
+    )
+    .bind(item_id)
+    .bind(tid)
+    .bind("support")
+    .execute(&pool)
+    .await;
+    assert!(
+        result.is_err(),
+        "duplicate (item_id, tag) should be rejected"
     );
 }

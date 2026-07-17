@@ -1,0 +1,12 @@
+[package]
+name = "storage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+aws-config.workspace = true
+aws-sdk-s3.workspace = true
+config = { path = "../config" }
+tokio.workspace = true
+tracing.workspace = true

@@ -22,6 +22,7 @@ use crate::agent_config::AgentConfigurationRow;
 use crate::agent_config::{
     validate_payload, AgentConfigPayload, EscalationRule, EscalationTrigger,
 };
+use crate::prompt_store;
 
 // ── Agent Options types ─────────────────────────────────────────────────────
 
@@ -70,19 +71,28 @@ pub struct AgentConfigResponse {
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct ActivePromptSummary {
+    pub version: i32,
+    pub updated_at: DateTime<Utc>,
+    pub updated_by: String,
+    pub excerpt: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentDetail {
     pub id: Option<Uuid>,
     pub name: String,
     pub is_default: bool,
     pub avatar: AvatarInfo,
     pub tone: String,
-    pub system_prompt: String,
     pub business_rules: Vec<String>,
     pub escalation_rules: Vec<EscalationRuleDetail>,
     pub enabled_channels: Vec<String>,
     pub provider_selection: ProviderSelectionInfo,
     pub version: Option<i32>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub active_prompt: Option<ActivePromptSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -134,7 +144,6 @@ fn default_agent_config() -> AgentConfigResponse {
                 upload_url: None,
             },
             tone: "professional".into(),
-            system_prompt: String::new(),
             business_rules: Vec::new(),
             escalation_rules: Vec::new(),
             enabled_channels: vec!["web_chat".into()],
@@ -145,6 +154,7 @@ fn default_agent_config() -> AgentConfigResponse {
             },
             version: None,
             updated_at: None,
+            active_prompt: None,
         },
     }
 }
@@ -206,6 +216,28 @@ async fn build_agent_response(
         None
     };
 
+    let active_prompt = match prompt_store::load_bootstrap(pool, tenant_id).await {
+        Ok(Some((p_row, v_row))) => {
+            let excerpt: String = v_row
+                .content
+                .chars()
+                .take(120)
+                .collect::<String>()
+                .lines()
+                .next()
+                .unwrap_or("")
+                .to_string()
+                .replace('\n', " ");
+            Some(ActivePromptSummary {
+                version: p_row.active_version,
+                updated_at: v_row.created_at,
+                updated_by: v_row.created_by_display,
+                excerpt,
+            })
+        }
+        _ => None,
+    };
+
     AgentConfigResponse {
         configured: true,
         agent: AgentDetail {
@@ -218,7 +250,6 @@ async fn build_agent_response(
                 upload_url,
             },
             tone: row.tone.clone(),
-            system_prompt: row.system_prompt.clone(),
             business_rules,
             escalation_rules: escalation_rule_details,
             enabled_channels,
@@ -229,6 +260,7 @@ async fn build_agent_response(
             },
             version: Some(row.version),
             updated_at: Some(row.updated_at),
+            active_prompt,
         },
     }
 }
@@ -579,7 +611,6 @@ pub async fn put_agent_config(
                 "name",
                 "avatar",
                 "tone",
-                "system_prompt",
                 "business_rules",
                 "escalation_rules",
                 "enabled_channels",

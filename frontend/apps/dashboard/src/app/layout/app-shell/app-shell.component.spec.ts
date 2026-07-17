@@ -30,6 +30,8 @@ describe('AppShellComponent', () => {
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(AppShellComponent);
     fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
     const element: HTMLElement = fixture.nativeElement;
     expect(element.querySelector('aside')).toBeTruthy();
     expect(element.querySelector('header')).toBeTruthy();

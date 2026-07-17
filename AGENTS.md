@@ -19,10 +19,11 @@
 
 - 006-multi-tenancy-foundation: tenant isolation (identity/tenancy modules, tenant-context middleware, X-Tenant-ID contract, 4 endpoints, 25 integration tests, audit) + frontend (NgRx tenantContext feature, interceptors, CurrentUserService, TenantContextService, tenant switcher, area guards, dev identity header). See `specs/006-multi-tenancy-foundation/plan.md`.
 - 002-angular-frontend-foundation: frontend foundation plan (Angular 22 modernization, Taiga UI, NgRx, layered structure) — see `specs/002-angular-frontend-foundation/plan.md`.
+- 019-knowledge-base: knowledge module activation, S3-compatible document storage, draft/published/archived lifecycle, only published items are the AI-available set. See `specs/019-knowledge-base/plan.md`.
 - 001-ai-customer-service-platform: platform-wide spec/plan/tasks; backend scaffolding and original frontend workspace.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/017-ai-agent-config/plan.md
+at specs/018-prompt-management/plan.md
 <!-- SPECKIT END -->

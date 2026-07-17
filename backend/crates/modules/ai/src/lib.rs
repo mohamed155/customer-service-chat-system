@@ -1,6 +1,6 @@
 //! AI application module — configuration, credential management, usage
-//! tracking, agent configuration, the outbox-driven agent responder, and the
-//! [`AiService`] entry point.
+//! tracking, agent configuration, prompt management, the outbox-driven agent
+//! responder, and the [`AiService`] entry point.
 //!
 //! # Purpose
 //! High-level AI orchestration layer that sits above the vendor-agnostic
@@ -16,6 +16,7 @@
 //! - Usage recording (token counts, latency, cost attribution)
 //! - Audited admin API ([`routes`] with `authz` RBAC enforcement)
 //! - Agent configuration ([`agent_config`], [`agent_routes`])
+//! - Versioned prompt management ([`prompt_store`], [`prompt_validate`], [`prompt_routes`])
 //! - Deterministic prompt composition ([`agent_prompt`])
 //! - Escalation rule evaluation ([`agent_rules`])
 //! - Outbox-driven agent responder ([`agent_responder`])
@@ -26,6 +27,9 @@
 //! - [`AiInput`], [`AiStreamEvent`], [`AiResultStream`]
 //! - [`routes`] — Axum router (mounted by the server)
 //! - [`agent_routes`] — agent configuration endpoints
+//! - [`prompt_routes`] — versioned prompt CRUD endpoints
+//! - [`prompt_store`] — prompt and version persistence
+//! - [`prompt_validate`] — prompt content validation
 //! - [`crypto`] — encrypt / decrypt / `MasterKey`
 //! - [`model`] — row types, payloads, views
 //!
@@ -36,12 +40,14 @@
 //! - [`kernel`] — shared error types and response envelope
 //!
 //! # Data Model
-//! Migrations 0038–0041 create the supporting tables:
+//! Migrations 0038–0045 create the supporting tables:
 //! - `ai_configurations` — per-tenant or platform-wide AI config
 //! - `ai_credentials` — encrypted API keys (AES-256-GCM)
 //! - `ai_usage_records` — per-call usage ledger
-//! - `agent_configurations` — per-tenant AI agent settings
+//! - `agent_configurations` — per-tenant AI agent settings (system_prompt dropped in 0045)
 //! - `agent_avatar_uploads` — uploaded avatar images
+//! - `agent_prompts` — tenant-level prompt object (one per tenant, prompt_kind = 'system')
+//! - `agent_prompt_versions` — append-only, immutable version snapshots
 //!
 //! # Extension Points
 //! - **KMS replacement**: swap `crypto.rs` for a cloud KMS while keeping
@@ -62,6 +68,9 @@ pub mod agent_rules;
 pub mod audit;
 pub mod crypto;
 pub mod model;
+pub mod prompt_routes;
+pub mod prompt_store;
+pub mod prompt_validate;
 pub mod resolution;
 pub mod routes;
 pub mod service;

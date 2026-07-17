@@ -49,6 +49,7 @@ fn make_state() -> AppState {
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
+        s3: None,
     };
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     AppState {
@@ -241,10 +242,14 @@ fn agent_config_paths_are_documented() {
     let paths = json["paths"]
         .as_object()
         .expect("OpenAPI doc must contain paths");
-    let expected: [&str; 3] = [
+    let expected: [&str; 7] = [
         "/tenant/ai/agent",
+        "/tenant/ai/agent/prompt",
         "/tenant/ai/agent/options",
         "/tenant/ai/agent/avatar",
+        "/tenant/ai/agent/prompt/versions",
+        "/tenant/ai/agent/prompt/versions/{number}",
+        "/tenant/ai/agent/prompt/versions/{number}/restore",
     ];
     for path in &expected {
         assert!(
@@ -253,7 +258,7 @@ fn agent_config_paths_are_documented() {
         );
     }
     // Verify GET and PUT are documented for each path
-    for path in &expected {
+    for path in &expected[..4] {
         let ops = paths[*path]
             .as_object()
             .unwrap_or_else(|| panic!("path {path} must have operations"));
@@ -276,6 +281,83 @@ fn agent_config_paths_are_documented() {
             .unwrap()
             .contains_key("put"),
         "/tenant/ai/agent must have PUT"
+    );
+    // GET /tenant/ai/agent/prompt must exist
+    assert!(
+        paths["/tenant/ai/agent/prompt"]
+            .as_object()
+            .unwrap()
+            .contains_key("get"),
+        "/tenant/ai/agent/prompt must have GET"
+    );
+    assert!(
+        paths["/tenant/ai/agent/prompt"]
+            .as_object()
+            .unwrap()
+            .contains_key("put"),
+        "/tenant/ai/agent/prompt must have PUT"
+    );
+    // Prompt version history endpoints
+    assert!(
+        paths["/tenant/ai/agent/prompt/versions"]
+            .as_object()
+            .unwrap()
+            .contains_key("get"),
+        "/tenant/ai/agent/prompt/versions must have GET"
+    );
+    assert!(
+        paths["/tenant/ai/agent/prompt/versions/{number}"]
+            .as_object()
+            .unwrap()
+            .contains_key("get"),
+        "/tenant/ai/agent/prompt/versions/{{number}} must have GET"
+    );
+    assert!(
+        paths["/tenant/ai/agent/prompt/versions/{number}/restore"]
+            .as_object()
+            .unwrap()
+            .contains_key("post"),
+        "/tenant/ai/agent/prompt/versions/{{number}}/restore must have POST"
+    );
+}
+
+#[test]
+fn knowledge_base_paths_are_documented() {
+    let doc = documented_openapi(false);
+    let json = serde_json::to_value(doc).unwrap();
+    let paths = json["paths"]
+        .as_object()
+        .expect("OpenAPI doc must contain paths");
+    let expected: [&str; 2] = ["/tenant/knowledge/items", "/tenant/knowledge/items/{id}"];
+    for path in &expected {
+        assert!(
+            paths.contains_key(*path),
+            "OpenAPI doc must document path {path}"
+        );
+    }
+    // GET and POST on /tenant/knowledge/items
+    let items_ops = paths["/tenant/knowledge/items"]
+        .as_object()
+        .expect("/tenant/knowledge/items must have operations");
+    assert!(
+        items_ops.contains_key("get"),
+        "/tenant/knowledge/items must have GET"
+    );
+    assert!(
+        items_ops.contains_key("post"),
+        "/tenant/knowledge/items must have POST"
+    );
+    // GET and PATCH on /tenant/knowledge/items/{id}
+    let item_ops = paths["/tenant/knowledge/items/{id}"]
+        .as_object()
+        .expect("/tenant/knowledge/items/{id} must have operations");
+    assert!(
+        item_ops.contains_key("get"),
+        "/tenant/knowledge/items/{{id}} must have GET"
+    );
+    assert!(
+        item_ops.contains_key("patch"),
+        "/tenant/knowledge/items/{{id}} must have PATCH"
     );
 }
 

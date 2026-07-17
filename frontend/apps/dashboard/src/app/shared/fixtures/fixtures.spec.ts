@@ -3,7 +3,6 @@ import { CHANNEL_BREAKDOWN } from './analytics.fixtures';
 import { CONVERSATION_FIXTURES } from './conversation.fixtures';
 import { CUSTOMER_FIXTURES } from './customer.fixtures';
 import { INTEGRATION_FIXTURES } from './integration.fixtures';
-import { KNOWLEDGE_FIXTURES } from './knowledge.fixtures';
 
 describe('fixture integrity', () => {
   it('resolves every conversation customerId', () => {
@@ -70,13 +69,7 @@ describe('fixture integrity', () => {
     expect(CHANNEL_BREAKDOWN.reduce((sum, item) => sum + item.percentage, 0)).toBe(100);
   });
 
-  it('covers knowledge article and integration variants', () => {
-    expect(new Set(KNOWLEDGE_FIXTURES.map((article) => article.status))).toEqual(
-      new Set(['draft', 'published', 'archived']),
-    );
-    expect(new Set(KNOWLEDGE_FIXTURES.map((article) => article.source))).toEqual(
-      new Set(['article', 'faq', 'pdf', 'url']),
-    );
+  it('covers integration variants', () => {
     expect(new Set(INTEGRATION_FIXTURES.map((integration) => integration.status))).toEqual(
       new Set(['connected', 'not-connected', 'coming-soon']),
     );

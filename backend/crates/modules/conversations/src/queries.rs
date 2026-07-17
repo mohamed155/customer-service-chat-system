@@ -1222,6 +1222,22 @@ pub async fn has_ai_reply_since(
     .await
 }
 
+pub async fn customer_display_name(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+) -> sqlx::Result<Option<String>> {
+    sqlx::query_scalar(
+        "SELECT c.display_name FROM conversations conv \
+         JOIN customers c ON c.id = conv.customer_id \
+         WHERE conv.tenant_id = $1 AND conv.id = $2 AND conv.deleted_at IS NULL",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .fetch_optional(pool)
+    .await
+}
+
 pub async fn message_body(
     pool: &PgPool,
     tenant_id: Uuid,

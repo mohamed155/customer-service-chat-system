@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { provideTaiga } from '@taiga-ui/core';
 import { of, Subject, throwError } from 'rxjs';
 import { AgentConfigResponse, AgentOptionsResponse } from '../../../core/api/ai-agent.models';
@@ -21,7 +22,12 @@ describe('AiAgentComponent', () => {
       isDefault: false,
       avatar: { kind: 'preset', preset: 'bot-1', uploadUrl: null },
       tone: 'professional',
-      systemPrompt: 'You are a helpful assistant.',
+      activePrompt: {
+        version: 4,
+        updatedAt: '2026-07-16T10:12:00Z',
+        updatedBy: 'Dana Ops',
+        excerpt: 'You are {{agent_name}}.',
+      },
       businessRules: ['Be polite'],
       escalationRules: [],
       enabledChannels: ['web_chat'],
@@ -46,6 +52,7 @@ describe('AiAgentComponent', () => {
     TestBed.configureTestingModule({
       imports: [AiAgentComponent],
       providers: [
+        provideRouter([]),
         provideTaiga(),
         provideZonelessChangeDetection(),
         { provide: AiAgentApiService, useValue: mockApi },
@@ -106,7 +113,7 @@ describe('AiAgentComponent', () => {
   it('shows not-configured notice when configured is false', async () => {
     const unconfiguredConfig: AgentConfigResponse = {
       configured: false,
-      agent: { ...defaultConfig.agent, name: '', systemPrompt: 'Default prompt' },
+      agent: { ...defaultConfig.agent, name: '', activePrompt: null },
     };
 
     mockApi.getAgent.mockReturnValue(of({ data: unconfiguredConfig }));
@@ -159,7 +166,7 @@ describe('AiAgentComponent', () => {
     fixture.detectChanges();
 
     await vi.waitFor(() => {
-      expect(fixture.nativeElement.textContent).toContain('System prompt');
+      expect(fixture.nativeElement.textContent).toContain('Manage prompt');
     });
   });
 });

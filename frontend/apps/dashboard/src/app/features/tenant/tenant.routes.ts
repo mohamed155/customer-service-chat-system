@@ -70,20 +70,75 @@ export const TENANT_ROUTES: Routes = [
   {
     path: APP_PATHS.tenant.aiAgent,
     canMatch: [permissionGuard],
-    loadComponent: () => import('./ai-agent/ai-agent.component').then((m) => m.AiAgentComponent),
     data: { pageTitle: 'aiAgent', requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.aiAgent] },
     title: PAGE_TITLES.aiAgent.title,
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./ai-agent/ai-agent.component').then((m) => m.AiAgentComponent),
+      },
+      {
+        path: 'prompt',
+        canMatch: [permissionGuard],
+        loadComponent: () =>
+          import('./ai-agent/prompt/prompt-page.component').then((m) => m.PromptPageComponent),
+        data: {
+          pageTitle: 'aiAgentPrompt',
+          requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.aiAgentPrompt],
+        },
+        title: PAGE_TITLES.aiAgentPrompt.title,
+      },
+    ],
   },
   {
     path: APP_PATHS.tenant.knowledgeBase,
     canMatch: [permissionGuard],
-    loadComponent: () =>
-      import('./knowledge-base/knowledge-base.component').then((m) => m.KnowledgeBaseComponent),
     data: {
       pageTitle: 'knowledgeBase',
       requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase],
     },
     title: PAGE_TITLES.knowledgeBase.title,
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./knowledge-base/knowledge-base.component').then((m) => m.KnowledgeBaseComponent),
+      },
+      {
+        path: 'new',
+        canMatch: [permissionGuard],
+        loadComponent: () =>
+          import('./knowledge-base/article-editor.component').then((m) => m.ArticleEditorComponent),
+        data: {
+          pageTitle: 'knowledgeBaseNew',
+          requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase],
+        },
+        title: PAGE_TITLES.knowledgeBaseNew.title,
+      },
+      {
+        path: ':id',
+        canMatch: [permissionGuard],
+        loadComponent: () =>
+          import('./knowledge-base/article-detail.component').then((m) => m.ArticleDetailComponent),
+        data: {
+          pageTitle: 'knowledgeBaseDetail',
+          requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase],
+        },
+        title: PAGE_TITLES.knowledgeBaseDetail.title,
+      },
+      {
+        path: ':id/edit',
+        canMatch: [permissionGuard],
+        loadComponent: () =>
+          import('./knowledge-base/article-editor.component').then((m) => m.ArticleEditorComponent),
+        data: {
+          pageTitle: 'knowledgeBaseEdit',
+          requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase],
+        },
+        title: PAGE_TITLES.knowledgeBaseEdit.title,
+      },
+    ],
   },
   {
     path: APP_PATHS.tenant.integrations,

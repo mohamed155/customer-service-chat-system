@@ -95,6 +95,7 @@ pub struct AppConfig {
     pub ai_openai_base_url: Option<String>,
     pub ai_anthropic_base_url: Option<String>,
     pub ai_gemini_base_url: Option<String>,
+    pub s3: Option<S3Config>,
     pub db_max_connections: u32,
     pub db_acquire_timeout_ms: u64,
     pub ready_probe_timeout_ms: u64,
@@ -133,6 +134,30 @@ impl fmt::Debug for AppConfig {
             .field("ai_openai_base_url", &self.ai_openai_base_url)
             .field("ai_anthropic_base_url", &self.ai_anthropic_base_url)
             .field("ai_gemini_base_url", &self.ai_gemini_base_url)
+            .field("s3", &self.s3)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct S3Config {
+    pub endpoint: String,
+    pub region: String,
+    pub bucket: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub force_path_style: bool,
+}
+
+impl std::fmt::Debug for S3Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("S3Config")
+            .field("endpoint", &self.endpoint)
+            .field("region", &self.region)
+            .field("bucket", &self.bucket)
+            .field("access_key_id", &"[REDACTED]")
+            .field("secret_access_key", &"[REDACTED]")
+            .field("force_path_style", &self.force_path_style)
             .finish()
     }
 }
@@ -248,6 +273,27 @@ impl AppConfig {
         let ai_anthropic_base_url = env::var("APP_AI_ANTHROPIC_BASE_URL").ok();
         let ai_gemini_base_url = env::var("APP_AI_GEMINI_BASE_URL").ok();
 
+        let s3_endpoint = env::var("APP_S3_ENDPOINT").ok();
+        let s3_region = env::var("APP_S3_REGION").ok();
+        let s3_bucket = env::var("APP_S3_BUCKET").ok();
+        let s3_access_key_id = env::var("APP_S3_ACCESS_KEY_ID").ok();
+        let s3_secret_access_key = env::var("APP_S3_SECRET_ACCESS_KEY").ok();
+
+        let s3 = match (s3_endpoint, s3_region, s3_bucket, s3_access_key_id, s3_secret_access_key) {
+            (Some(endpoint), Some(region), Some(bucket), Some(access_key_id), Some(secret_access_key)) => {
+                Some(S3Config {
+                    endpoint,
+                    region,
+                    bucket,
+                    access_key_id,
+                    secret_access_key,
+                    force_path_style: env::var("APP_S3_FORCE_PATH_STYLE").map(|v| v == "true").unwrap_or(true),
+                })
+            }
+            (None, None, None, None, None) => None,
+            _ => return Err(ConfigError("APP_S3_* configuration is incomplete: set all of APP_S3_ENDPOINT, APP_S3_REGION, APP_S3_BUCKET, APP_S3_ACCESS_KEY_ID, APP_S3_SECRET_ACCESS_KEY, or none".into())),
+        };
+
         let public_dashboard_url =
             env::var("PUBLIC_DASHBOARD_URL").unwrap_or_else(|_| match environment {
                 Environment::Production | Environment::Staging => {
@@ -281,6 +327,7 @@ impl AppConfig {
             ai_openai_base_url,
             ai_anthropic_base_url,
             ai_gemini_base_url,
+            s3,
             port,
             bind_address,
             environment,
@@ -344,6 +391,12 @@ mod tests {
                 "APP_AI_OPENAI_BASE_URL",
                 "APP_AI_ANTHROPIC_BASE_URL",
                 "APP_AI_GEMINI_BASE_URL",
+                "APP_S3_ENDPOINT",
+                "APP_S3_REGION",
+                "APP_S3_BUCKET",
+                "APP_S3_ACCESS_KEY_ID",
+                "APP_S3_SECRET_ACCESS_KEY",
+                "APP_S3_FORCE_PATH_STYLE",
             ] {
                 env::remove_var(key);
             }
@@ -672,5 +725,107 @@ mod tests {
         let err = AppConfig::from_env().unwrap_err();
         assert!(err.0.contains("APP_DOCS_ENABLED"));
         assert!(err.0.contains("boolean"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn s3_all_unset_returns_none() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+        ]);
+        let config = AppConfig::from_env().unwrap();
+        assert_eq!(config.s3, None);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn s3_all_set_returns_populated_config() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+            ("APP_S3_ENDPOINT", "https://s3.example.com"),
+            ("APP_S3_REGION", "us-east-1"),
+            ("APP_S3_BUCKET", "my-bucket"),
+            ("APP_S3_ACCESS_KEY_ID", "AKID123"),
+            ("APP_S3_SECRET_ACCESS_KEY", "secret123"),
+        ]);
+        let config = AppConfig::from_env().unwrap();
+        let s3 = config.s3.expect("s3 should be Some");
+        assert_eq!(s3.endpoint, "https://s3.example.com");
+        assert_eq!(s3.region, "us-east-1");
+        assert_eq!(s3.bucket, "my-bucket");
+        assert_eq!(s3.access_key_id, "AKID123");
+        assert_eq!(s3.secret_access_key, "secret123");
+        assert!(s3.force_path_style);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn s3_partial_set_returns_error() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+            ("APP_S3_ENDPOINT", "https://s3.example.com"),
+            ("APP_S3_REGION", "us-east-1"),
+            // deliberately missing APP_S3_BUCKET, APP_S3_ACCESS_KEY_ID, APP_S3_SECRET_ACCESS_KEY
+        ]);
+        let err = AppConfig::from_env().unwrap_err();
+        assert!(
+            err.0.contains("APP_S3_*"),
+            "Expected S3 partial error, got: {err}"
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn s3_debug_redacts_secrets() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+            ("APP_S3_ENDPOINT", "https://s3.example.com"),
+            ("APP_S3_REGION", "us-east-1"),
+            ("APP_S3_BUCKET", "my-bucket"),
+            ("APP_S3_ACCESS_KEY_ID", "AKID123"),
+            ("APP_S3_SECRET_ACCESS_KEY", "secret123"),
+        ]);
+        let config = AppConfig::from_env().unwrap();
+        let debug_str = format!("{config:?}");
+        assert!(
+            !debug_str.contains("AKID123"),
+            "Debug output leaked s3 access_key_id: {debug_str}"
+        );
+        assert!(
+            !debug_str.contains("secret123"),
+            "Debug output leaked s3 secret_access_key: {debug_str}"
+        );
     }
 }

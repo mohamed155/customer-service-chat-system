@@ -118,6 +118,25 @@ const EXPECTED: &[(&str, &str)] = &[
     ("PUT", "/tenant/ai/agent/avatar"),
     ("GET", "/tenant/ai/agent/options"),
     ("POST", "/tenant/conversations/{id}/ai-handling"),
+    // Tenant AI Agent Prompt (prompt management)
+    ("GET", "/tenant/ai/agent/prompt"),
+    ("PUT", "/tenant/ai/agent/prompt"),
+    ("GET", "/tenant/ai/agent/prompt/versions"),
+    ("GET", "/tenant/ai/agent/prompt/versions/{number}"),
+    ("POST", "/tenant/ai/agent/prompt/versions/{number}/restore"),
+    // Tenant Knowledge Base (US1)
+    ("GET", "/tenant/knowledge/items"),
+    ("POST", "/tenant/knowledge/items"),
+    ("GET", "/tenant/knowledge/items/{id}"),
+    ("PATCH", "/tenant/knowledge/items/{id}"),
+    ("POST", "/tenant/knowledge/items/{id}/status"),
+    ("GET", "/tenant/knowledge/items/{id}/file"),
+    ("POST", "/tenant/knowledge/documents"),
+    // Tenant Knowledge Base (US4 categories)
+    ("GET", "/tenant/knowledge/categories"),
+    ("POST", "/tenant/knowledge/categories"),
+    ("PATCH", "/tenant/knowledge/categories/{category_id}"),
+    ("DELETE", "/tenant/knowledge/categories/{category_id}"),
     // Operational
     ("GET", "/health"),
     ("GET", "/ready"),

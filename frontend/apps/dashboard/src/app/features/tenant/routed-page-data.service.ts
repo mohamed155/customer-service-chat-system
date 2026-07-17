@@ -18,7 +18,6 @@ import {
   CustomerFixture,
   IntegrationFixture,
   InvoiceFixture,
-  KnowledgeArticleFixture,
   MetricFixture,
   SessionFixture,
   TeamMemberFixture,
@@ -28,7 +27,6 @@ import {
   WorkspaceProfileFixture,
 } from '../../shared/fixtures/fixture.models';
 import { INTEGRATION_FIXTURES } from '../../shared/fixtures/integration.fixtures';
-import { KNOWLEDGE_FIXTURES } from '../../shared/fixtures/knowledge.fixtures';
 import {
   API_KEY_FIXTURE,
   INVOICE_FIXTURES,
@@ -84,7 +82,6 @@ export type PagePayload =
   | { page: 'customers'; data: readonly CustomerFixture[] }
   | { page: 'conversations'; data: ConversationsPayload }
   | { page: 'ai-agent'; data: AiAgentPayload }
-  | { page: 'knowledge-base'; data: readonly KnowledgeArticleFixture[] }
   | { page: 'integrations'; data: readonly IntegrationFixture[] }
   | { page: 'analytics'; data: AnalyticsPayload }
   | { page: 'settings'; data: SettingsPayload };
@@ -145,8 +142,6 @@ export class RoutedPageDataService {
             ],
           },
         };
-      case 'knowledge-base':
-        return { page: 'knowledge-base', data: KNOWLEDGE_FIXTURES };
       case 'integrations':
         return { page: 'integrations', data: INTEGRATION_FIXTURES };
       case 'analytics':
@@ -209,8 +204,6 @@ export class RoutedPageDataService {
             timelineSteps: [{ label: 'Classify intent', detail: 'Support request' }],
           },
         };
-      case 'knowledge-base':
-        return { page: 'knowledge-base', data: KNOWLEDGE_FIXTURES.slice(0, 2) };
       case 'integrations':
         return { page: 'integrations', data: INTEGRATION_FIXTURES.slice(0, 1) };
       case 'analytics':
@@ -267,8 +260,6 @@ export class RoutedPageDataService {
             timelineSteps: [],
           },
         };
-      case 'knowledge-base':
-        return { page: 'knowledge-base', data: [] };
       case 'integrations':
         return { page: 'integrations', data: [] };
       case 'analytics':

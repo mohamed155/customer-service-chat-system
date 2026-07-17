@@ -29,7 +29,6 @@ pub struct AgentConfigurationRow {
     pub avatar_kind: String,
     pub avatar_preset: Option<String>,
     pub tone: String,
-    pub system_prompt: String,
     pub business_rules: serde_json::Value,
     pub escalation_rules: serde_json::Value,
     pub enabled_channels: serde_json::Value,
@@ -88,7 +87,6 @@ pub struct AgentConfigPayload {
     pub name: String,
     pub avatar: AvatarPayload,
     pub tone: String,
-    pub system_prompt: String,
     pub business_rules: Vec<String>,
     pub escalation_rules: Vec<EscalationRulePayload>,
     pub enabled_channels: Vec<String>,
@@ -121,14 +119,6 @@ pub fn validate_payload(payload: &AgentConfigPayload) -> Result<(), Vec<Validati
             field: "tone".into(),
             code: "invalid_value".into(),
             message: format!("tone must be one of: {}", TONES.join(", ")),
-        });
-    }
-
-    if payload.system_prompt.len() > 8000 {
-        issues.push(ValidationIssue {
-            field: "systemPrompt".into(),
-            code: "too_long".into(),
-            message: "system prompt must not exceed 8000 characters".into(),
         });
     }
 
@@ -283,9 +273,9 @@ pub async fn create_in_tx(
 ) -> sqlx::Result<AgentConfigurationRow> {
     sqlx::query_as::<_, AgentConfigurationRow>(
         "INSERT INTO agent_configurations \
-         (tenant_id, name, is_default, avatar_kind, avatar_preset, tone, system_prompt, \
+         (tenant_id, name, is_default, avatar_kind, avatar_preset, tone, \
           business_rules, escalation_rules, enabled_channels, provider, model, version) \
-         VALUES ($1, $2, true, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1) \
+         VALUES ($1, $2, true, $3, $4, $5, $6, $7, $8, $9, $10, 1) \
          RETURNING *",
     )
     .bind(tenant_id)
@@ -293,7 +283,6 @@ pub async fn create_in_tx(
     .bind(&payload.avatar.kind)
     .bind(&payload.avatar.preset)
     .bind(&payload.tone)
-    .bind(&payload.system_prompt)
     .bind(serde_json::to_value(&payload.business_rules).unwrap_or_default())
     .bind(serde_json::to_value(&payload.escalation_rules).unwrap_or_default())
     .bind(serde_json::to_value(&payload.enabled_channels).unwrap_or_default())
@@ -312,17 +301,16 @@ pub async fn update_in_tx(
 ) -> sqlx::Result<Option<AgentConfigurationRow>> {
     sqlx::query_as::<_, AgentConfigurationRow>(
         "UPDATE agent_configurations \
-         SET name = $1, avatar_kind = $2, avatar_preset = $3, tone = $4, system_prompt = $5, \
-             business_rules = $6, escalation_rules = $7, enabled_channels = $8, \
-             provider = $9, model = $10, version = version + 1 \
-         WHERE tenant_id = $11 AND id = $12 AND version = $13 AND deleted_at IS NULL \
+          SET name = $1, avatar_kind = $2, avatar_preset = $3, tone = $4, \
+              business_rules = $5, escalation_rules = $6, enabled_channels = $7, \
+              provider = $8, model = $9, version = version + 1 \
+          WHERE tenant_id = $10 AND id = $11 AND version = $12 AND deleted_at IS NULL \
          RETURNING *",
     )
     .bind(&payload.name)
     .bind(&payload.avatar.kind)
     .bind(&payload.avatar.preset)
     .bind(&payload.tone)
-    .bind(&payload.system_prompt)
     .bind(serde_json::to_value(&payload.business_rules).unwrap_or_default())
     .bind(serde_json::to_value(&payload.escalation_rules).unwrap_or_default())
     .bind(serde_json::to_value(&payload.enabled_channels).unwrap_or_default())
@@ -401,7 +389,7 @@ pub async fn credential_resolves(pool: &PgPool, tenant_id: Uuid, provider: &str)
 mod tests {
     use super::*;
 
-    fn make_payload(name: &str, tone: &str, prompt: &str) -> AgentConfigPayload {
+    fn make_payload(name: &str, tone: &str) -> AgentConfigPayload {
         AgentConfigPayload {
             name: name.into(),
             avatar: AvatarPayload {
@@ -409,7 +397,6 @@ mod tests {
                 preset: Some("spark".into()),
             },
             tone: tone.into(),
-            system_prompt: prompt.into(),
             business_rules: vec![],
             escalation_rules: vec![],
             enabled_channels: vec!["web_chat".into()],
@@ -420,7 +407,7 @@ mod tests {
 
     #[test]
     fn empty_name_fails() {
-        let payload = make_payload("   ", "professional", "");
+        let payload = make_payload("   ", "professional");
         let result = validate_payload(&payload);
         assert!(result.is_err());
         let issues = result.unwrap_err();
@@ -430,7 +417,7 @@ mod tests {
     #[test]
     fn name_81_chars_fails() {
         let long_name = "a".repeat(81);
-        let payload = make_payload(&long_name, "professional", "");
+        let payload = make_payload(&long_name, "professional");
         let result = validate_payload(&payload);
         assert!(result.is_err());
         let issues = result.unwrap_err();
@@ -440,14 +427,14 @@ mod tests {
     #[test]
     fn name_80_chars_passes() {
         let name_80 = "a".repeat(80);
-        let payload = make_payload(&name_80, "professional", "");
+        let payload = make_payload(&name_80, "professional");
         let result = validate_payload(&payload);
         assert!(result.is_ok());
     }
 
     #[test]
     fn invalid_tone_fails() {
-        let payload = make_payload("test agent", "nonexistent_tone", "");
+        let payload = make_payload("test agent", "nonexistent_tone");
         let result = validate_payload(&payload);
         assert!(result.is_err());
         let issues = result.unwrap_err();
@@ -455,18 +442,8 @@ mod tests {
     }
 
     #[test]
-    fn system_prompt_8001_fails() {
-        let long_prompt = "x".repeat(8001);
-        let payload = make_payload("test agent", "professional", &long_prompt);
-        let result = validate_payload(&payload);
-        assert!(result.is_err());
-        let issues = result.unwrap_err();
-        assert!(issues.iter().any(|i| i.field == "systemPrompt"));
-    }
-
-    #[test]
     fn minimal_payload_passes() {
-        let payload = make_payload("My Agent", "casual", "");
+        let payload = make_payload("My Agent", "casual");
         let result = validate_payload(&payload);
         assert!(result.is_ok());
     }

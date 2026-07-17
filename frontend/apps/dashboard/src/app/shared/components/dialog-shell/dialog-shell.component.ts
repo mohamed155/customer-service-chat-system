@@ -24,6 +24,7 @@ import {
       <section
         #panel
         class="dialog"
+        [class.dialog--drawer]="variant() === 'drawer-right'"
         [attr.role]="role()"
         aria-modal="true"
         [attr.aria-labelledby]="ariaLabelledby()"
@@ -69,6 +70,15 @@ import {
         outline: 3px solid var(--app-accent-soft);
         outline-offset: 2px;
       }
+      .dialog--drawer {
+        inset: 0 0 0 auto;
+        width: min(560px, 100vw);
+        max-height: 100dvh;
+        border-radius: 0;
+        transform: none;
+        top: 0;
+        left: auto;
+      }
     `,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -76,6 +86,7 @@ import {
 export class DialogShellComponent {
   readonly open = input(false);
   readonly role = input<'dialog' | 'alertdialog'>('dialog');
+  readonly variant = input<'center' | 'drawer-right'>('center');
   readonly ariaLabelledby = input<string | null>(null);
   readonly ariaDescribedby = input<string | null>(null);
   readonly dismissDisabled = input(false);

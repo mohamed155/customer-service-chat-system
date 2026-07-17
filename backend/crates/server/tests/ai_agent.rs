@@ -39,6 +39,7 @@ fn test_config() -> config::AppConfig {
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
+        s3: None,
     }
 }
 
@@ -389,7 +390,6 @@ async fn first_save_creates_and_activates_agent() {
         "name": "My Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -444,7 +444,6 @@ async fn stale_version_conflicts_without_overwriting() {
         "name": "Agent V1",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -465,7 +464,6 @@ async fn stale_version_conflicts_without_overwriting() {
         "name": "Agent V2",
         "avatar": { "kind": "preset", "preset": "nova" },
         "tone": "friendly",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -488,7 +486,6 @@ async fn stale_version_conflicts_without_overwriting() {
         "name": "Agent Stale",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -537,7 +534,6 @@ async fn save_round_trips_on_reload() {
         "name": "Roundtrip Agent",
         "avatar": { "kind": "preset", "preset": "nova" },
         "tone": "friendly",
-        "system_prompt": "You are a helpful test agent.",
         "business_rules": ["Be concise", "Use emoji sparingly"],
         "escalation_rules": [
             {
@@ -574,10 +570,6 @@ async fn save_round_trips_on_reload() {
     assert_eq!(json["configured"], true);
     assert_eq!(json["agent"]["name"], "Roundtrip Agent");
     assert_eq!(json["agent"]["tone"], "friendly");
-    assert_eq!(
-        json["agent"]["system_prompt"],
-        "You are a helpful test agent."
-    );
     assert_eq!(
         json["agent"]["business_rules"],
         serde_json::json!(["Be concise", "Use emoji sparingly"])
@@ -624,7 +616,6 @@ async fn save_rejects_invalid_payload_atomically() {
         "name": "   ",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -685,7 +676,6 @@ async fn cross_tenant_isolation() {
         "name": "Tenant-A Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "Only for tenant A",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -710,12 +700,6 @@ async fn cross_tenant_isolation() {
     assert_eq!(json_b["configured"], false);
     assert_eq!(json_b["agent"]["name"], "AI Assistant");
     assert_ne!(json_b["agent"]["name"], "Tenant-A Agent");
-
-    // Tenant B cannot see tenant A's prompt
-    assert_ne!(
-        json_b["agent"]["system_prompt"].as_str().unwrap_or(""),
-        "Only for tenant A"
-    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -747,7 +731,6 @@ async fn configured_agent_drives_ai_reply() {
         "name": "AgentX",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "friendly",
-        "system_prompt": "Custom prompt text",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -891,7 +874,6 @@ async fn avatar_preset_select_and_upload() {
         "name": "Avatar Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -962,7 +944,6 @@ async fn avatar_preset_select_and_upload() {
         "name": "Avatar Agent",
         "avatar": { "kind": "preset", "preset": "orbit" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -1513,7 +1494,6 @@ async fn ai_handling_rejects_once_agent_configured() {
         "name": "T042 Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -1827,7 +1807,6 @@ async fn business_rule_appears_in_composed_prompt() {
         "name": "RuleAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": ["never promise refunds"],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -1945,7 +1924,6 @@ async fn keyword_rule_escalates_with_rule_name_reason() {
         "name": "EscalateAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [
             {
@@ -2082,7 +2060,6 @@ async fn baseline_escalation_survives_zero_tenant_rules() {
         "name": "BaselineAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -2196,7 +2173,6 @@ async fn broken_skill_ref_surfaced_on_read() {
         "name": "BrokenRefAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [
             {
@@ -2262,7 +2238,6 @@ async fn save_rejects_unknown_skill_reference() {
         "name": "BadRefAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [
             {
@@ -2321,7 +2296,6 @@ async fn save_rejects_malformed_rules() {
         "name": "EmptyKwAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [
             {
@@ -2355,7 +2329,6 @@ async fn save_rejects_malformed_rules() {
         "name": "NonemptyKwAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [
             {
@@ -2420,7 +2393,6 @@ async fn disabled_channel_blocks_ai_reply() {
         "name": "Disabled Channel Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": [],
@@ -2557,7 +2529,6 @@ async fn re_enabled_channel_resumes_replies() {
         "name": "ReEnabled Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -2669,7 +2640,6 @@ async fn all_channels_disabled_save_succeeds() {
         "name": "All Disabled Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": [],
@@ -2712,7 +2682,6 @@ fn empty_enabled_channels_passes_validation() {
             preset: Some("spark".into()),
         },
         tone: "professional".into(),
-        system_prompt: String::new(),
         business_rules: vec![],
         escalation_rules: vec![],
         enabled_channels: vec![],
@@ -2737,7 +2706,6 @@ fn invalid_channel_fails_validation() {
             preset: Some("spark".into()),
         },
         tone: "professional".into(),
-        system_prompt: String::new(),
         business_rules: vec![],
         escalation_rules: vec![],
         enabled_channels: vec!["invalid_channel".into()],
@@ -2779,7 +2747,6 @@ async fn every_write_is_audited() {
         "name": "Audited Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -2818,7 +2785,6 @@ async fn every_write_is_audited() {
         "name": "Audited Agent Updated",
         "avatar": { "kind": "preset", "preset": "nova" },
         "tone": "friendly",
-        "system_prompt": "Updated prompt",
         "business_rules": ["Be nice"],
         "escalation_rules": [],
         "enabled_channels": ["web_chat", "email"],
@@ -2856,7 +2822,6 @@ async fn every_write_is_audited() {
     assert!(changed_fields.contains(&"name".to_string()));
     assert!(changed_fields.contains(&"avatar".to_string()));
     assert!(changed_fields.contains(&"tone".to_string()));
-    assert!(changed_fields.contains(&"system_prompt".to_string()));
     assert!(changed_fields.contains(&"business_rules".to_string()));
     assert!(changed_fields.contains(&"enabled_channels".to_string()));
 
@@ -2928,7 +2893,6 @@ async fn unauthorized_roles_get_403() {
             "name": "Role Test",
             "avatar": { "kind": "preset", "preset": "spark" },
             "tone": "professional",
-            "system_prompt": "",
             "business_rules": [],
             "escalation_rules": [],
             "enabled_channels": ["web_chat"],
@@ -2968,7 +2932,6 @@ async fn unauthorized_roles_get_403() {
                 "name": "Owner Agent",
                 "avatar": { "kind": "preset", "preset": "spark" },
                 "tone": "professional",
-                "system_prompt": "",
                 "business_rules": [],
                 "escalation_rules": [],
                 "enabled_channels": ["web_chat"],
@@ -3001,7 +2964,6 @@ async fn unauthorized_roles_get_403() {
                 "name": "Admin Agent",
                 "avatar": { "kind": "preset", "preset": "spark" },
                 "tone": "professional",
-                "system_prompt": "",
                 "business_rules": [],
                 "escalation_rules": [],
                 "enabled_channels": ["web_chat"],
@@ -3046,7 +3008,6 @@ async fn platform_actor_attribution_via_tenant_switch() {
         "name": "Platform-Modified Agent",
         "avatar": { "kind": "preset", "preset": "orbit" },
         "tone": "friendly",
-        "system_prompt": "Modified by platform user",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -3169,7 +3130,6 @@ async fn provider_override_serves_ai_reply() {
         "name": "OverrideAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -3296,7 +3256,6 @@ async fn stale_override_falls_back() {
         "name": "StaleAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],
@@ -3436,7 +3395,6 @@ async fn save_rejects_unresolvable_provider() {
         "name": "NoCredAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "system_prompt": "",
         "business_rules": [],
         "escalation_rules": [],
         "enabled_channels": ["web_chat"],

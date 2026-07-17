@@ -14,7 +14,8 @@ import { InlineAlertComponent } from '../../../shared/components/inline-alert/in
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
-import { PromptEditorComponent } from './prompt-editor.component';
+import { RouterLink } from '@angular/router';
+import { APP_PATHS } from '../../../core/router/app-paths';
 import {
   ProviderModelSelectorComponent,
   ProviderModelValue,
@@ -35,8 +36,8 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
     LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,
-    PromptEditorComponent,
     ProviderModelSelectorComponent,
+    RouterLink,
     RulesEditorComponent,
     SectionHeaderComponent,
     ToneSelectorComponent,
@@ -171,15 +172,34 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
                 title="System prompt"
                 subtitle="The base instruction given to the AI for every conversation"
               />
-              <app-prompt-editor
-                [(value)]="agentPrompt"
-                [maxLength]="store.options()?.promptMaxLength ?? 8000"
-              />
-              @if (fieldError('systemPrompt'); as errors) {
-                @for (err of errors; track err) {
-                  <app-inline-alert tone="error">{{ err }}</app-inline-alert>
-                }
+              @if (store.config()?.agent?.activePrompt; as active) {
+                <div class="prompt-summary">
+                  <div class="prompt-meta">
+                    <span class="meta-label">Version</span>
+                    <span class="meta-value">v{{ active.version }}</span>
+                  </div>
+                  @if (active.updatedAt) {
+                    <div class="prompt-meta">
+                      <span class="meta-label">Updated</span>
+                      <span class="meta-value">{{ active.updatedAt }}</span>
+                    </div>
+                  }
+                  @if (active.updatedBy) {
+                    <div class="prompt-meta">
+                      <span class="meta-label">By</span>
+                      <span class="meta-value">{{ active.updatedBy }}</span>
+                    </div>
+                  }
+                  <div class="prompt-excerpt">{{ active.excerpt }}</div>
+                </div>
+              } @else {
+                <p class="prompt-unset">No prompt set — using system default.</p>
               }
+              <div class="prompt-actions">
+                <a class="manage-link" [routerLink]="APP_PATHS.tenant.aiAgentPrompt">
+                  Manage prompt
+                </a>
+              </div>
             </app-dashboard-card>
           }
           @case ('escalation') {
@@ -334,6 +354,65 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
         font: inherit;
         padding: 0;
       }
+      .prompt-summary {
+        display: grid;
+        gap: var(--app-space-2);
+        margin-bottom: var(--app-space-3);
+      }
+      .prompt-meta {
+        display: flex;
+        gap: var(--app-space-2);
+        font-size: var(--app-font-sm);
+      }
+      .meta-label {
+        color: var(--app-text-2);
+        font-weight: 650;
+        min-width: 72px;
+      }
+      .meta-value {
+        color: var(--app-text);
+      }
+      .prompt-excerpt {
+        padding: var(--app-space-3);
+        border: 1px solid var(--app-border);
+        border-radius: var(--app-radius-md);
+        background: var(--app-panel-2);
+        color: var(--app-text-2);
+        font-size: var(--app-font-sm);
+        font-family: monospace;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 120px;
+        overflow-y: auto;
+      }
+      .prompt-unset {
+        color: var(--app-text-2);
+        font-size: var(--app-font-sm);
+        font-style: italic;
+        margin-bottom: var(--app-space-3);
+      }
+      .prompt-actions {
+        display: flex;
+        gap: var(--app-space-3);
+      }
+      .manage-link {
+        display: inline-flex;
+        align-items: center;
+        height: 38px;
+        padding: 0 var(--app-space-5);
+        border: 0;
+        border-radius: var(--app-radius-md);
+        background: var(--app-accent);
+        color: var(--app-accent-ink);
+        font-weight: 650;
+        font-size: var(--app-font-sm);
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .manage-link:hover {
+        opacity: 0.92;
+      }
       @media (max-width: 900px) {
         .two {
           grid-template-columns: 1fr;
@@ -345,6 +424,7 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
 })
 export class AiAgentComponent {
   readonly store = inject(AiAgentStore);
+  protected readonly APP_PATHS = APP_PATHS;
 
   protected readonly tabs: readonly { id: AiAgentTab; label: string }[] = [
     { id: 'behavior', label: 'Behavior' },
@@ -355,7 +435,6 @@ export class AiAgentComponent {
   protected readonly agentName = signal('');
   protected readonly agentAvatar = signal<AvatarValue>(null);
   protected readonly agentTone = signal('');
-  protected readonly agentPrompt = signal('');
   protected readonly agentBusinessRules = signal<string[]>([]);
   protected readonly agentEscalationRules = signal<EscalationRuleEdit[]>([]);
   protected readonly agentEnabledChannels = signal<string[]>([]);
@@ -379,7 +458,6 @@ export class AiAgentComponent {
       if (config) {
         this.agentName.set(config.agent.name);
         this.agentTone.set(config.agent.tone);
-        this.agentPrompt.set(config.agent.systemPrompt);
         this.agentBusinessRules.set(config.agent.businessRules);
         this.agentEscalationRules.set(config.agent.escalationRules);
         this.agentEnabledChannels.set(config.agent.enabledChannels);
@@ -403,7 +481,6 @@ export class AiAgentComponent {
       avatar:
         avatar?.kind === 'preset' ? { kind: 'preset', preset: avatar.preset } : { kind: 'upload' },
       tone: this.agentTone(),
-      systemPrompt: this.agentPrompt(),
       businessRules: this.agentBusinessRules(),
       escalationRules: this.agentEscalationRules(),
       enabledChannels: this.agentEnabledChannels(),

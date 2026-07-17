@@ -22,6 +22,9 @@ services:
   minio:
     image: minio/minio
     command: server /data --console-address :9001
+    # Note: the MinIO bucket named by APP_S3_BUCKET must be created manually
+    # (e.g. via mc, the MinIO console at port 9001, or an init script).
+    # The application does not auto-create buckets.
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}

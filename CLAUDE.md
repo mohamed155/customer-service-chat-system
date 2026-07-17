@@ -10,6 +10,7 @@ See `frontend/CLAUDE.md` for frontend-specific conventions (layering, state mana
 
 ## Recent Changes
 
+- 019-knowledge-base: knowledge module activation, S3-compatible document storage, draft/published/archived lifecycle, only published items are the AI-available set. See `specs/019-knowledge-base/plan.md`.
 - 014-human-handoff-routing: AI→human escalation + routing (escalations module: skills catalog, agent availability with presence auto-revert, skill→load→queue routing under per-tenant advisory locks, claimable auto-draining queue, `GET /tenant/events` SSE + fetch-based realtime client, escalation banner/routing reason, topbar availability toggle) — see `specs/014-human-handoff-routing/plan.md`.
 - 007-authentication: real sign-in (Argon2id password hashing, 8h JWT in httpOnly `app_session` cookie, revocation table, CSRF origin check, `POST /auth/login|logout`, login page, authGuard/guestGuard, credentials interceptor) — see `specs/007-authentication/plan.md`.
 - 006-multi-tenancy-foundation: tenant isolation runtime (identity/tenancy modules, tenant-context middleware, `X-Tenant-ID` contract, switch audit, dashboard tenant context store, topbar switcher, dev identity header) — see `specs/006-multi-tenancy-foundation/plan.md`.

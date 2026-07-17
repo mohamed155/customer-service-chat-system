@@ -135,6 +135,7 @@ fn test_config(environment: Environment) -> config::AppConfig {
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
+        s3: None,
     }
 }
 

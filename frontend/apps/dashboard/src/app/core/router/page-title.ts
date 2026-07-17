@@ -11,7 +11,11 @@ export type PageTitleKey =
   | 'customers'
   | 'customerProfile'
   | 'aiAgent'
+  | 'aiAgentPrompt'
   | 'knowledgeBase'
+  | 'knowledgeBaseNew'
+  | 'knowledgeBaseDetail'
+  | 'knowledgeBaseEdit'
   | 'integrations'
   | 'analytics'
   | 'settings'
@@ -61,9 +65,25 @@ export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
     subtitle: 'Contact, identifiers, and conversation history',
   },
   aiAgent: { title: 'AI Agent', subtitle: 'Configure how your assistant behaves' },
+  aiAgentPrompt: {
+    title: 'System Prompt',
+    subtitle: 'Manage the base instruction given to the AI',
+  },
   knowledgeBase: {
     title: 'Knowledge Base',
     subtitle: 'Train your AI with trusted company knowledge',
+  },
+  knowledgeBaseNew: {
+    title: 'New Article',
+    subtitle: 'Create a knowledge article',
+  },
+  knowledgeBaseDetail: {
+    title: 'Article',
+    subtitle: 'Knowledge article details',
+  },
+  knowledgeBaseEdit: {
+    title: 'Edit Article',
+    subtitle: 'Update the knowledge article',
   },
   integrations: { title: 'Integrations', subtitle: 'Connect channels and business systems' },
   analytics: { title: 'Analytics', subtitle: 'Trends across every channel' },

@@ -1,0 +1,16 @@
+[
+  { "content": "Hello {{agent_name}} from {{tenant_name}}", "expected": [] },
+  { "content": "", "expected": [{ "code": "required" }] },
+  { "content": "   ", "expected": [{ "code": "required" }] },
+  { "contentRepeat": { "unit": "X", "count": 8001 }, "expected": [{ "code": "too_long" }] },
+  { "content": "{{agent_name", "expected": [{ "code": "malformed_placeholder" }] },
+  { "content": "}}", "expected": [{ "code": "malformed_placeholder" }] },
+  { "content": "{{}}", "expected": [{ "code": "malformed_placeholder" }] },
+  { "content": "{{Agent_Name}}", "expected": [{ "code": "malformed_placeholder" }] },
+  { "content": "{{ agent_name }}", "expected": [{ "code": "malformed_placeholder" }] },
+  { "content": "{{business_hours}}", "expected": [{ "code": "unknown_variable" }] },
+  { "content": "{{agent_name}} {{bad}}", "expected": [{ "code": "unknown_variable" }] },
+  { "content": "Hello {agent_name}", "expected": [] },
+  { "content": "{{agent_name}} from {{business_hours}}", "expected": [{ "code": "unknown_variable" }] },
+  { "contentRepeat": { "unit": "🥰", "count": 4001 }, "expected": [] }
+]

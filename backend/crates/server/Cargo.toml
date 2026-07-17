@@ -21,6 +21,8 @@ serde = { workspace = true }
 sqlx = { workspace = true, features = ["postgres"] }
 tenancy = { path = "../modules/tenancy" }
 ai = { path = "../modules/ai" }
+knowledge = { path = "../modules/knowledge" }
+storage = { path = "../shared/storage" }
 uuid = { workspace = true }
 tokio.workspace = true
 serde_json.workspace = true

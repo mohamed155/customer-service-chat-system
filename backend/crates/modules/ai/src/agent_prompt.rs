@@ -23,14 +23,14 @@ const TONE_DIRECTIVES: [(&str, &str); 5] = [
 
 pub fn compose_system_message(
     agent_name: &str,
-    system_prompt: &str,
+    prompt_content: &str,
     tone: &str,
     business_rules: &[String],
 ) -> String {
     let mut parts: Vec<String> = Vec::new();
 
-    if !system_prompt.is_empty() {
-        parts.push(system_prompt.to_string());
+    if !prompt_content.is_empty() {
+        parts.push(prompt_content.to_string());
     }
 
     let tone_directive = TONE_DIRECTIVES
@@ -74,7 +74,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_system_prompt_omits_section() {
+    fn empty_prompt_content_omits_section() {
         let result = compose_system_message("Bob", "", "formal", &[]);
         assert!(!result.contains("You are helpful"));
         assert!(!result.starts_with("\n\n"));
@@ -84,6 +84,21 @@ mod tests {
     fn empty_business_rules_omits_header() {
         let result = compose_system_message("Carol", "Hello", "casual", &[]);
         assert!(!result.contains("You must always follow these rules:"));
+    }
+
+    #[test]
+    fn composed_rendered_prompt_is_deterministic() {
+        let content = "You are {{agent_name}}, helping {{customer_name}}.";
+        let mut vars = std::collections::HashMap::new();
+        vars.insert("agent_name", "SupportBot".to_string());
+        vars.insert("customer_name", "Jane".to_string());
+        let rendered = crate::prompt_validate::render_prompt(content, &vars);
+        let rules = vec!["Be kind.".to_string()];
+        let a = compose_system_message("Assistant", &rendered, "friendly", &rules);
+        let b = compose_system_message("Assistant", &rendered, "friendly", &rules);
+        assert_eq!(a, b);
+        assert!(a.contains("SupportBot"));
+        assert!(a.contains("Jane"));
     }
 
     #[test]

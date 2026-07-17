@@ -1,10 +1,11 @@
 use authz::{platform_permission_middleware, require_permission, Permission};
+use axum::extract::{DefaultBodyLimit, Request};
 use axum::http::{header, header::SET_COOKIE, HeaderName, Method, StatusCode};
 use axum::middleware::from_fn_with_state;
 use axum::response::{IntoResponse, Response};
 use axum::routing::MethodRouter;
 use axum::Extension;
-use axum::{extract::Request, middleware, routing, Router};
+use axum::{middleware, routing, Router};
 use config::{AppConfig, Environment};
 use identity::{principal_middleware, IdentityConfig, Principal};
 use kernel::ApiError;
@@ -15,6 +16,7 @@ use observability::trace::trace_middleware;
 use observability::{liveness, metrics};
 use std::sync::Arc;
 use std::time::Duration;
+use storage::{InMemoryStorage, ObjectStorage, S3Storage};
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use utoipa::OpenApi;
@@ -547,6 +549,31 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             }),
         )
         .routes(
+            routes!(
+                ai::prompt_routes::get_prompt_bootstrap,
+                ai::prompt_routes::put_prompt
+            )
+            .map(|_| {
+                let get = routing::get(ai::prompt_routes::get_prompt_bootstrap)
+                    .route_layer(require_permission(Permission::AiAgentView));
+                let put = routing::put(ai::prompt_routes::put_prompt)
+                    .route_layer(require_permission(Permission::AiAgentManage));
+                get.merge(put)
+            }),
+        )
+        .routes(
+            routes!(ai::prompt_routes::list_prompt_versions)
+                .layer(require_permission(Permission::AiAgentView)),
+        )
+        .routes(
+            routes!(ai::prompt_routes::get_prompt_version)
+                .layer(require_permission(Permission::AiAgentView)),
+        )
+        .routes(
+            routes!(ai::prompt_routes::restore_prompt_version)
+                .layer(require_permission(Permission::AiAgentManage)),
+        )
+        .routes(
             routes!(ai::agent_routes::get_agent_options)
                 .layer(require_permission(Permission::AiAgentView)),
         )
@@ -562,6 +589,62 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
                     .route_layer(require_permission(Permission::AiAgentManage));
                 get.merge(put)
             }),
+        )
+        .routes(
+            routes!(
+                knowledge::routes::list_items,
+                knowledge::routes::create_item
+            )
+            .map(|_| {
+                merge_with_permissions(
+                    routing::get(knowledge::routes::list_items),
+                    Permission::KnowledgeBaseView,
+                    routing::post(knowledge::routes::create_item),
+                    Permission::KnowledgeBaseManage,
+                )
+            }),
+        )
+        .routes(
+            routes!(knowledge::routes::get_item, knowledge::routes::update_item).map(|_| {
+                merge_with_permissions(
+                    routing::get(knowledge::routes::get_item),
+                    Permission::KnowledgeBaseView,
+                    routing::patch(knowledge::routes::update_item),
+                    Permission::KnowledgeBaseManage,
+                )
+            }),
+        )
+        // T025: Knowledge item status
+        .routes(
+            routes!(knowledge::routes::set_item_status)
+                .layer(require_permission(Permission::KnowledgeBaseManage)),
+        )
+        // T031: Knowledge document upload and file download
+        .routes(
+            routes!(knowledge::routes::upload_document)
+                .layer(DefaultBodyLimit::max(25 * 1024 * 1024))
+                .layer(require_permission(Permission::KnowledgeBaseManage)),
+        )
+        .routes(
+            routes!(knowledge::routes::download_file)
+                .layer(require_permission(Permission::KnowledgeBaseView)),
+        )
+        // T035: Knowledge categories CRUD
+        .routes(
+            routes!(knowledge::routes::list_knowledge_categories)
+                .layer(require_permission(Permission::KnowledgeBaseView)),
+        )
+        .routes(
+            routes!(knowledge::routes::create_knowledge_category)
+                .layer(require_permission(Permission::KnowledgeBaseManage)),
+        )
+        .routes(
+            routes!(knowledge::routes::rename_knowledge_category)
+                .layer(require_permission(Permission::KnowledgeBaseManage)),
+        )
+        .routes(
+            routes!(knowledge::routes::delete_knowledge_category)
+                .layer(require_permission(Permission::KnowledgeBaseManage)),
         );
     if include_test_routes {
         // Test routes are closures, not function paths, so they cannot use the
@@ -663,6 +746,7 @@ fn api_routes(
     state: &AppState,
     include_test_routes: bool,
     email_sender: Option<Arc<dyn EmailSender>>,
+    storage: Option<Arc<dyn ObjectStorage>>,
 ) -> (Router<sqlx::PgPool>, utoipa::openapi::OpenApi) {
     let identity_config = IdentityConfig {
         pool: state.db.clone(),
@@ -686,6 +770,20 @@ fn api_routes(
             }
         } else {
             Arc::new(LogEmailSender)
+        }
+    });
+
+    let storage: Arc<dyn ObjectStorage> = storage.unwrap_or_else(|| {
+        if let Some(s3_config) = &state.config.s3 {
+            match tokio::runtime::Handle::current().block_on(S3Storage::new(s3_config)) {
+                Ok(s) => Arc::new(s),
+                Err(e) => {
+                    tracing::warn!(error = %e, "failed to create S3 storage, falling back to in-memory");
+                    Arc::new(InMemoryStorage::default())
+                }
+            }
+        } else {
+            Arc::new(InMemoryStorage::default())
         }
     });
 
@@ -714,6 +812,7 @@ fn api_routes(
             ApiError::not_found("Route not found").with_request_id(request_id)
         })
         .layer(Extension(email_sender))
+        .layer(Extension(storage.clone()))
         .layer(Extension(state.config.clone()))
         .layer(Extension(state.escalations.clone()))
         .layer(Extension(state.ai.clone()))
@@ -774,9 +873,10 @@ fn build_app(
     state: AppState,
     include_test_routes: bool,
     email_sender: Option<Arc<dyn EmailSender>>,
+    storage: Option<Arc<dyn ObjectStorage>>,
 ) -> Router {
     let config = state.config.clone();
-    let (api_router, openapi_doc) = api_routes(&state, include_test_routes, email_sender);
+    let (api_router, openapi_doc) = api_routes(&state, include_test_routes, email_sender, storage);
     let expose_docs = docs_surface_enabled(&config);
 
     let mut router: Router<AppState> = Router::new()
@@ -822,22 +922,33 @@ fn build_app(
 }
 
 pub fn app(state: AppState) -> Router {
-    build_app(state, false, None)
+    build_app(state, false, None, None)
 }
 
 pub fn app_with_email_sender(state: AppState, email_sender: Arc<dyn EmailSender>) -> Router {
-    build_app(state, false, Some(email_sender))
+    build_app(state, false, Some(email_sender), None)
 }
 
 pub fn app_with_test_routes(state: AppState) -> Router {
-    build_app(state, true, None)
+    build_app(state, true, None, None)
 }
 
 pub fn app_with_test_routes_and_email_sender(
     state: AppState,
     email_sender: Arc<dyn EmailSender>,
 ) -> Router {
-    build_app(state, true, Some(email_sender))
+    build_app(state, true, Some(email_sender), None)
+}
+
+pub fn app_with_storage(state: AppState, storage: Arc<dyn ObjectStorage>) -> Router {
+    build_app(state, false, None, Some(storage))
+}
+
+pub fn app_with_test_routes_and_storage(
+    state: AppState,
+    storage: Arc<dyn ObjectStorage>,
+) -> Router {
+    build_app(state, true, None, Some(storage))
 }
 
 #[cfg(test)]
@@ -871,6 +982,7 @@ mod tests {
             ai_openai_base_url: None,
             ai_anthropic_base_url: None,
             ai_gemini_base_url: None,
+            s3: None,
             db_max_connections: 0,
             db_acquire_timeout_ms: 0,
             ready_probe_timeout_ms: 0,

@@ -43,6 +43,7 @@ fn test_state() -> AppState {
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
+        s3: None,
     };
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     AppState {

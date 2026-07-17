@@ -26,6 +26,7 @@
     "@ngrx/store": "21.1.1",
     "@taiga-ui/cdk": "^5.13.0",
     "@taiga-ui/core": "^5.13.0",
+    "@taiga-ui/editor": "^5.4.1",
     "@taiga-ui/event-plugins": "^5.0.0",
     "@taiga-ui/icons": "^5.13.0",
     "@taiga-ui/kit": "^5.13.0",

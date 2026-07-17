@@ -25,7 +25,12 @@ describe('AiAgentStore', () => {
       isDefault: false,
       avatar: { kind: 'preset', preset: 'bot-1', uploadUrl: null },
       tone: 'professional',
-      systemPrompt: 'You are a helpful assistant.',
+      activePrompt: {
+        version: 4,
+        updatedAt: '2026-07-16T10:12:00Z',
+        updatedBy: 'Dana Ops',
+        excerpt: 'You are {{agent_name}}.',
+      },
       businessRules: ['Be polite'],
       escalationRules: [
         {
@@ -124,7 +129,6 @@ describe('AiAgentStore', () => {
       name: 'Helix',
       avatar: { kind: 'preset', preset: 'bot-1' },
       tone: 'professional',
-      systemPrompt: 'You are a helpful assistant.',
       businessRules: ['Be polite'],
       escalationRules: [],
       enabledChannels: ['web_chat'],
@@ -156,7 +160,6 @@ describe('AiAgentStore', () => {
       name: 'Helix',
       avatar: { kind: 'preset', preset: 'bot-1' },
       tone: 'professional',
-      systemPrompt: 'You are a helpful assistant.',
       businessRules: [],
       escalationRules: [],
       enabledChannels: [],
@@ -194,7 +197,6 @@ describe('AiAgentStore', () => {
       name: '',
       avatar: { kind: 'preset', preset: 'bot-1' },
       tone: 'invalid',
-      systemPrompt: '',
       businessRules: [],
       escalationRules: [],
       enabledChannels: [],

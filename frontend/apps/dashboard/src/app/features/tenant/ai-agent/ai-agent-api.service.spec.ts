@@ -51,7 +51,6 @@ describe('AiAgentApiService', () => {
         name: 'Test Agent',
         avatar: { kind: 'preset' as const, preset: 'bot-1' },
         tone: 'professional',
-        systemPrompt: 'You are a helpful assistant',
         businessRules: ['Be polite'],
         escalationRules: [],
         enabledChannels: ['web_chat'],

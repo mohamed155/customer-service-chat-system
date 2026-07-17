@@ -42,3 +42,22 @@ test servers:
 
 These are unset by default in production; set them to point at a local proxy
 or mock in development / CI.
+
+## Environment — Object Storage (Knowledge Base)
+
+The knowledge base feature stores uploaded documents in S3-compatible object
+storage. Configure it via these environment variables (all or none):
+
+```
+APP_S3_ENDPOINT=http://localhost:9000
+APP_S3_REGION=us-east-1
+APP_S3_BUCKET=app-dev
+APP_S3_ACCESS_KEY_ID=minioadmin
+APP_S3_SECRET_ACCESS_KEY=minioadmin
+APP_S3_FORCE_PATH_STYLE=true
+```
+
+`APP_S3_FORCE_PATH_STYLE` defaults to `true` (required for MinIO). The bucket
+named by `APP_S3_BUCKET` must exist before the first upload — the application
+does not create it. If no `APP_S3_*` variables are set, the server falls back
+to ephemeral in-memory storage (useful for development and CI).
