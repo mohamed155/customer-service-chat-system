@@ -30,6 +30,7 @@ pub struct AiCallResult {
     pub provider: String,
     pub model: String,
     pub usage: TokenUsage,
+    pub finish: ai_providers::FinishReason,
 }
 
 #[derive(Clone, Debug)]
@@ -129,6 +130,7 @@ pub async fn run_attempts_traced(
                         provider: attempt.provider.clone(),
                         model: completion.model,
                         usage: completion.usage,
+                        finish: completion.finish,
                     });
                 }
                 Err(err) if !err.retriable => {
@@ -786,13 +788,14 @@ impl AiService {
                                     Ok(ai_providers::StreamEvent::Done {
                                         usage,
                                         model,
-                                        finish: _,
+                                        finish,
                                     }) => {
                                         let call_result = AiCallResult {
                                             content: content_accumulated.clone(),
                                             provider: attempt.provider.clone(),
                                             model: model.clone(),
                                             usage: usage.clone(),
+                                            finish,
                                         };
 
                                         let w = usage::UsageWrite {
@@ -955,6 +958,316 @@ impl AiService {
                     let _ = tx
                         .send(AiStreamEvent::Error {
                             category: ai_providers::ErrorCategory::Unavailable,
+                        })
+                        .await;
+                }
+            }
+        });
+
+        Ok(Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)) as AiResultStream)
+    }
+
+    pub async fn stream_with_override(
+        &self,
+        ctx: AiCallContext,
+        input: AiInput,
+        provider: &str,
+        model: &str,
+    ) -> Result<AiResultStream, AiCallError> {
+        let scope = Scope::Tenant(ctx.tenant_id);
+
+        let resolved = resolve_config(&self.0.pool, scope)
+            .await
+            .map_err(|e| AiCallError::Internal(e.to_string()))?
+            .ok_or(AiCallError::NotConfigured)?;
+
+        let master_key = self
+            .0
+            .master_key
+            .as_ref()
+            .ok_or(AiCallError::NotConfigured)?;
+
+        let key = resolve_credential(&self.0.pool, master_key, scope, provider)
+            .await
+            .map_err(AiCallError::Internal)?
+            .ok_or(AiCallError::NotConfigured)?
+            .0;
+
+        let attempt = Attempt {
+            provider: provider.to_string(),
+            model: model.to_string(),
+            key,
+            max_output_tokens: None,
+            temperature: None,
+        };
+
+        let pool = self.0.pool.clone();
+        let capture_content = resolved.capture_content;
+        let request_id = ctx.request_id.clone();
+        let provider_kind = ai_providers::ProviderKind::from_str(provider)
+            .unwrap_or(ai_providers::ProviderKind::OpenAi);
+
+        if !provider_kind.supports_streaming() {
+            let request_content = if capture_content {
+                Some(serde_json::json!({"system": &input.system, "messages": &input.messages}))
+            } else {
+                None
+            };
+
+            let started = Instant::now();
+            let complete_result = run_attempts_traced(
+                &self.0.registry,
+                &[attempt],
+                ctx.request_id.as_deref(),
+                input.system,
+                input.messages,
+            )
+            .await?;
+            let elapsed = started.elapsed();
+
+            let w = usage::UsageWrite {
+                tenant_id: ctx.tenant_id,
+                provider: complete_result.provider.clone(),
+                model: complete_result.model.clone(),
+                input_tokens: complete_result.usage.input.map(|v| v as i32),
+                output_tokens: complete_result.usage.output.map(|v| v as i32),
+                status: "success",
+                error_category: None,
+                streamed: true,
+                latency_ms: elapsed.as_millis() as i32,
+                request_id,
+                request_content,
+                response_content: if capture_content {
+                    Some(complete_result.content.clone())
+                } else {
+                    None
+                },
+            };
+            if let Err(e) = usage::insert(&pool, w).await {
+                tracing::error!(%e, "failed to record streaming AI usage (non-streaming fallback)");
+            }
+
+            let content = complete_result.content.clone();
+            let events = vec![
+                AiStreamEvent::Delta(content),
+                AiStreamEvent::Done(complete_result),
+            ];
+            return Ok(Box::pin(futures::stream::iter(events)));
+        }
+
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
+        let capture = capture_content;
+        let pool = pool.clone();
+        let registry = self.0.registry.clone();
+        let ctx_tenant_id = ctx.tenant_id;
+        let ctx_request_id = request_id;
+        let input_system = input.system.clone();
+        let input_messages = input.messages.clone();
+
+        tokio::spawn(async move {
+            use futures::StreamExt;
+
+            let mut content_accumulated = String::new();
+            let started = Instant::now();
+
+            let provider_obj = match registry.resolve(&attempt.provider) {
+                Some(p) => p,
+                None => {
+                    tracing::warn!(provider = %attempt.provider, "stream_with_override: unknown provider");
+                    let _ = tx
+                        .send(AiStreamEvent::Error {
+                            category: ai_providers::ErrorCategory::Unavailable,
+                        })
+                        .await;
+                    return;
+                }
+            };
+
+            let stream_req = ai_providers::ChatRequest {
+                system: input_system.clone(),
+                messages: input_messages.clone(),
+                model: attempt.model.clone(),
+                max_output_tokens: attempt.max_output_tokens,
+                temperature: attempt.temperature,
+                request_id: ctx_request_id.clone(),
+            };
+
+            let attempt_start = started;
+            match provider_obj.stream(&attempt.key, &stream_req).await {
+                Ok(mut vendor_stream) => {
+                    while let Some(event) = vendor_stream.next().await {
+                        match event {
+                            Ok(ai_providers::StreamEvent::Delta(text)) => {
+                                content_accumulated.push_str(&text);
+                                if tx.send(AiStreamEvent::Delta(text)).await.is_err() {
+                                    let w = usage::UsageWrite {
+                                        tenant_id: ctx_tenant_id,
+                                        provider: attempt.provider.clone(),
+                                        model: attempt.model.clone(),
+                                        input_tokens: None,
+                                        output_tokens: None,
+                                        status: "failure",
+                                        error_category: Some("unavailable"),
+                                        streamed: true,
+                                        latency_ms: started.elapsed().as_millis() as i32,
+                                        request_id: ctx_request_id.clone(),
+                                        request_content: if capture {
+                                            Some(serde_json::json!({"system": &input_system, "messages": &input_messages}))
+                                        } else {
+                                            None
+                                        },
+                                        response_content: if capture {
+                                            Some(content_accumulated.clone())
+                                        } else {
+                                            None
+                                        },
+                                    };
+                                    let _ = usage::insert(&pool, w).await;
+                                    return;
+                                }
+                            }
+                            Ok(ai_providers::StreamEvent::Done {
+                                usage,
+                                model,
+                                finish,
+                            }) => {
+                                let call_result = AiCallResult {
+                                    content: content_accumulated.clone(),
+                                    provider: attempt.provider.clone(),
+                                    model: model.clone(),
+                                    usage: usage.clone(),
+                                    finish,
+                                };
+
+                                let w = usage::UsageWrite {
+                                    tenant_id: ctx_tenant_id,
+                                    provider: attempt.provider.clone(),
+                                    model,
+                                    input_tokens: usage.input.map(|v| v as i32),
+                                    output_tokens: usage.output.map(|v| v as i32),
+                                    status: "success",
+                                    error_category: None,
+                                    streamed: true,
+                                    latency_ms: started.elapsed().as_millis() as i32,
+                                    request_id: ctx_request_id.clone(),
+                                    request_content: if capture {
+                                        Some(serde_json::json!({"system": input_system, "messages": input_messages}))
+                                    } else {
+                                        None
+                                    },
+                                    response_content: if capture {
+                                        Some(content_accumulated.clone())
+                                    } else {
+                                        None
+                                    },
+                                };
+                                if let Err(e) = usage::insert(&pool, w).await {
+                                    tracing::error!(%e, "failed to record streaming AI usage");
+                                }
+
+                                let _ = tx.send(AiStreamEvent::Done(call_result)).await;
+                                return;
+                            }
+                            Err(err) => {
+                                let w = usage::UsageWrite {
+                                    tenant_id: ctx_tenant_id,
+                                    provider: attempt.provider.clone(),
+                                    model: attempt.model.clone(),
+                                    input_tokens: None,
+                                    output_tokens: None,
+                                    status: "failure",
+                                    error_category: Some(err.category.as_str()),
+                                    streamed: true,
+                                    latency_ms: started.elapsed().as_millis() as i32,
+                                    request_id: ctx_request_id.clone(),
+                                    request_content: if capture {
+                                        Some(serde_json::json!({"system": &input_system, "messages": &input_messages}))
+                                    } else {
+                                        None
+                                    },
+                                    response_content: if capture {
+                                        Some(content_accumulated.clone())
+                                    } else {
+                                        None
+                                    },
+                                };
+                                if let Err(e) = usage::insert(&pool, w).await {
+                                    tracing::error!(%e, "failed to record streaming AI usage error");
+                                }
+                                let _ = tx
+                                    .send(AiStreamEvent::Error {
+                                        category: err.category,
+                                    })
+                                    .await;
+                                return;
+                            }
+                        }
+                    }
+
+                    let w = usage::UsageWrite {
+                        tenant_id: ctx_tenant_id,
+                        provider: attempt.provider.clone(),
+                        model: attempt.model.clone(),
+                        input_tokens: None,
+                        output_tokens: None,
+                        status: "failure",
+                        error_category: Some("unavailable"),
+                        streamed: true,
+                        latency_ms: started.elapsed().as_millis() as i32,
+                        request_id: ctx_request_id.clone(),
+                        request_content: if capture {
+                            Some(serde_json::json!({"system": &input_system, "messages": &input_messages}))
+                        } else {
+                            None
+                        },
+                        response_content: if capture {
+                            Some(content_accumulated.clone())
+                        } else {
+                            None
+                        },
+                    };
+                    let _ = usage::insert(&pool, w).await;
+                    let _ = tx
+                        .send(AiStreamEvent::Error {
+                            category: ai_providers::ErrorCategory::Unavailable,
+                        })
+                        .await;
+                }
+                Err(err) => {
+                    let latency = attempt_start.elapsed();
+                    tracing::info!(
+                        provider = %attempt.provider,
+                        model = %attempt.model,
+                        outcome = "stream_start_error",
+                        category = %err.category.as_str(),
+                        latency_ms = latency.as_millis() as u64,
+                        request_id = ctx_request_id.as_deref().unwrap_or(""),
+                        "stream_with_override start failed"
+                    );
+                    let w = usage::UsageWrite {
+                        tenant_id: ctx_tenant_id,
+                        provider: attempt.provider.clone(),
+                        model: attempt.model.clone(),
+                        input_tokens: None,
+                        output_tokens: None,
+                        status: "failure",
+                        error_category: Some(err.category.as_str()),
+                        streamed: true,
+                        latency_ms: started.elapsed().as_millis() as i32,
+                        request_id: ctx_request_id.clone(),
+                        request_content: if capture {
+                            Some(serde_json::json!({"system": &input_system, "messages": &input_messages}))
+                        } else {
+                            None
+                        },
+                        response_content: None,
+                    };
+                    if let Err(e) = usage::insert(&pool, w).await {
+                        tracing::error!(%e, "failed to record streaming AI usage error");
+                    }
+                    let _ = tx
+                        .send(AiStreamEvent::Error {
+                            category: err.category,
                         })
                         .await;
                 }
