@@ -1,6 +1,21 @@
 export type KnowledgeItemType = 'article' | 'faq' | 'document';
 export type KnowledgeItemStatus = 'draft' | 'published' | 'archived';
 
+export type IndexStatusValue =
+  'not_indexed' | 'pending' | 'indexing' | 'indexed' | 'failed' | 'not_indexable';
+
+export interface IndexStatus {
+  status: IndexStatusValue;
+  failureReason?: string;
+  lastIndexedAt?: string;
+  chunkCount: number;
+}
+
+export interface ReindexResponse {
+  id: string;
+  indexStatus: IndexStatus;
+}
+
 export interface KnowledgeItemSummary {
   id: string;
   itemType: KnowledgeItemType;
@@ -12,6 +27,7 @@ export interface KnowledgeItemSummary {
   createdAt: string;
   updatedAt: string;
   tags: string[];
+  indexStatus?: IndexStatus;
 }
 
 export interface DocumentMeta {
@@ -26,6 +42,7 @@ export interface KnowledgeItemDetail extends KnowledgeItemSummary {
   source: 'authored' | 'uploaded';
   createdByUserId: string | null;
   document: DocumentMeta | null;
+  indexStatus?: IndexStatus;
 }
 
 export interface ItemListResponse {

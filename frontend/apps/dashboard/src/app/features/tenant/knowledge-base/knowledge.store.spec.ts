@@ -23,6 +23,7 @@ describe('KnowledgeStore', () => {
     createCategory: ReturnType<typeof vi.fn>;
     renameCategory: ReturnType<typeof vi.fn>;
     deleteCategory: ReturnType<typeof vi.fn>;
+    reindex: ReturnType<typeof vi.fn>;
   };
 
   const mockItems: KnowledgeItemSummary[] = [
@@ -37,6 +38,7 @@ describe('KnowledgeStore', () => {
       createdAt: '2026-07-01T00:00:00Z',
       updatedAt: '2026-07-10T00:00:00Z',
       tags: [],
+      indexStatus: { status: 'indexed', chunkCount: 12 },
     },
     {
       id: 'kb-2',
@@ -87,6 +89,7 @@ describe('KnowledgeStore', () => {
       createCategory: vi.fn(),
       renameCategory: vi.fn(),
       deleteCategory: vi.fn(),
+      reindex: vi.fn(),
     };
   });
 
@@ -346,5 +349,161 @@ describe('KnowledgeStore', () => {
     store.deleteCategory('cat-1');
     expect(store.saving()).toBe(false);
     expect(mockApi.deleteCategory).toHaveBeenCalledWith('cat-1');
+  });
+
+  describe('reindex', () => {
+    it('calls api.reindex and updates item index status', () => {
+      mockApi.listItems.mockReturnValue(
+        of({ data: { items: mockItems, hasMore: false, nextCursor: null } }),
+      );
+      mockApi.listCategories.mockReturnValue(new Subject());
+      mockApi.reindex.mockReturnValue(
+        of({
+          data: {
+            id: 'kb-1',
+            indexStatus: { status: 'pending' as const, chunkCount: 0 },
+          },
+        }),
+      );
+      const store = configureStore();
+      TestBed.flushEffects();
+      expect(store.items()[0].indexStatus?.status).toBe('indexed');
+
+      store.reindex('kb-1');
+
+      expect(mockApi.reindex).toHaveBeenCalledWith('kb-1');
+      expect(store.items()[0].indexStatus?.status).toBe('pending');
+    });
+
+    it('handles error on reindex', () => {
+      mockApi.listItems.mockReturnValue(new Subject());
+      mockApi.listCategories.mockReturnValue(new Subject());
+      const store = configureStore();
+      TestBed.flushEffects();
+
+      const error = { message: 'Reindex failed', code: 'ERR', status: 500 };
+      const reindexSubject = new Subject();
+      mockApi.reindex.mockReturnValue(reindexSubject);
+      store.reindex('kb-1');
+      reindexSubject.error(error);
+
+      expect(store.saving()).toBe(false);
+      expect(store.error()).toBe('Reindex failed');
+    });
+  });
+
+  describe('hasNonTerminalIndexStatus', () => {
+    it('returns true when any item has pending status', () => {
+      mockApi.listItems.mockReturnValue(
+        of({
+          data: {
+            items: [
+              {
+                ...mockItems[0],
+                indexStatus: { status: 'pending' as const, chunkCount: 0 },
+              },
+            ],
+            hasMore: false,
+            nextCursor: null,
+          },
+        }),
+      );
+      mockApi.listCategories.mockReturnValue(of({ data: [] }));
+      const store = configureStore();
+      TestBed.flushEffects();
+
+      expect(store.hasNonTerminalIndexStatus()).toBe(true);
+    });
+
+    it('returns false when all items have terminal status', () => {
+      mockApi.listItems.mockReturnValue(
+        of({ data: { items: mockItems, hasMore: false, nextCursor: null } }),
+      );
+      mockApi.listCategories.mockReturnValue(of({ data: [] }));
+      const store = configureStore();
+      TestBed.flushEffects();
+
+      expect(store.hasNonTerminalIndexStatus()).toBe(false);
+    });
+  });
+
+  describe('polling', () => {
+    it('starts polling when loadList returns items with non-terminal status', () => {
+      vi.useFakeTimers();
+      mockApi.listItems
+        .mockReturnValueOnce(
+          of({
+            data: {
+              items: [
+                {
+                  ...mockItems[0],
+                  indexStatus: { status: 'pending' as const, chunkCount: 0 },
+                },
+              ],
+              hasMore: false,
+              nextCursor: null,
+            },
+          }),
+        )
+        .mockReturnValue(
+          of({
+            data: { items: mockItems, hasMore: false, nextCursor: null },
+          }),
+        );
+      mockApi.listCategories.mockReturnValue(of({ data: [] }));
+      const store = configureStore();
+      TestBed.flushEffects();
+
+      expect(store.pollingActive()).toBe(true);
+
+      vi.advanceTimersByTime(5000);
+      expect(mockApi.listItems).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
+
+    it('stops polling when all items reach terminal status', () => {
+      vi.useFakeTimers();
+      mockApi.listItems
+        .mockReturnValueOnce(
+          of({
+            data: {
+              items: [
+                {
+                  ...mockItems[0],
+                  indexStatus: { status: 'pending' as const, chunkCount: 0 },
+                },
+              ],
+              hasMore: false,
+              nextCursor: null,
+            },
+          }),
+        )
+        .mockReturnValue(
+          of({
+            data: {
+              items: [
+                {
+                  ...mockItems[0],
+                  indexStatus: { status: 'indexed' as const, chunkCount: 5 },
+                },
+              ],
+              hasMore: false,
+              nextCursor: null,
+            },
+          }),
+        );
+      mockApi.listCategories.mockReturnValue(of({ data: [] }));
+      const store = configureStore();
+      TestBed.flushEffects();
+
+      expect(store.pollingActive()).toBe(true);
+
+      vi.advanceTimersByTime(5000);
+      expect(mockApi.listItems).toHaveBeenCalledTimes(2);
+
+      vi.advanceTimersByTime(5000);
+      expect(mockApi.listItems).toHaveBeenCalledTimes(2);
+      vi.useRealTimers();
+    });
   });
 });

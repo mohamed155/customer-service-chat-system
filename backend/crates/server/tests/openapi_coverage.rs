@@ -130,6 +130,7 @@ const EXPECTED: &[(&str, &str)] = &[
     ("GET", "/tenant/knowledge/items/{id}"),
     ("PATCH", "/tenant/knowledge/items/{id}"),
     ("POST", "/tenant/knowledge/items/{id}/status"),
+    ("POST", "/tenant/knowledge/items/{id}/reindex"),
     ("GET", "/tenant/knowledge/items/{id}/file"),
     ("POST", "/tenant/knowledge/documents"),
     // Tenant Knowledge Base (US4 categories)

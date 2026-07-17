@@ -93,6 +93,17 @@ For destructive changes:
 3. The PR must be approved by a second reviewer familiar with the
    affected tables.
 
+## pgvector Requirements
+
+The `vector` extension (pgvector) is required for embedding storage and similarity search.
+
+- **Minimum version:** ≥ 0.8.0
+- **Check version:**
+  ```sql
+  SELECT extversion FROM pg_extension WHERE extname = 'vector';
+  ```
+- **Why 0.8.0:** Earlier versions lack `hnsw.iterative_scan` support, which is required for filtered-ANN queries (combining vector similarity with metadata filters in a single index scan).
+
 ## CI
 
 `.github/workflows/backend.yml` (when present) applies the full migration

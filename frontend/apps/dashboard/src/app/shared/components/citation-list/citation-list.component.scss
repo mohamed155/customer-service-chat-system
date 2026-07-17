@@ -1,0 +1,71 @@
+:host {
+  display: block;
+}
+
+.citations {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  flex-wrap: wrap;
+  padding: var(--app-space-2) 0;
+}
+
+.citations-label {
+  color: var(--app-text-3);
+  font-size: var(--app-font-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: var(--app-space-1);
+}
+
+.citation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  font-size: var(--app-font-xs);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.citation-chip:not(.unavailable) {
+  background: var(--app-panel-2);
+  color: var(--app-accent-strong);
+}
+
+.citation-chip:not(.unavailable):hover {
+  background: var(--app-accent-soft);
+  border-color: var(--app-accent);
+}
+
+.citation-chip.unavailable {
+  background: var(--app-panel);
+  color: var(--app-text-3);
+  cursor: default;
+}
+
+.citation-title {
+  font-weight: 600;
+}
+
+.unavailable-badge {
+  display: inline-flex;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--app-red-soft);
+  color: var(--app-red);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+tui-icon {
+  font-size: 12px;
+}

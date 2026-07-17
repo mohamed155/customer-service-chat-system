@@ -16,6 +16,7 @@ import { SectionHeaderComponent } from '../../../shared/components/section-heade
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { ToolbarComponent } from '../../../shared/components/toolbar/toolbar.component';
 import { CategoryManagerComponent } from './category-manager.component';
+import { IndexStatusBadgeComponent } from './index-status-badge.component';
 import { KnowledgeStore } from './knowledge.store';
 import { UploadDocumentComponent } from './upload-document.component';
 
@@ -27,6 +28,7 @@ import { UploadDocumentComponent } from './upload-document.component';
     DatePipe,
     EmptyStateComponent,
     FormsModule,
+    IndexStatusBadgeComponent,
     LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,
@@ -138,6 +140,12 @@ import { UploadDocumentComponent } from './upload-document.component';
                       [tone]="statusTone(article.status)"
                     />
                     <app-status-badge [status]="typeLabel(article.itemType)" tone="neutral" />
+                    @if (article.indexStatus) {
+                      <app-index-status-badge
+                        [indexStatus]="article.indexStatus"
+                        [title]="indexTooltip(article.indexStatus)"
+                      />
+                    }
                     @if (article.tags.length) {
                       <span class="tag-count">{{ article.tags.length }} tag(s)</span>
                     }
@@ -151,6 +159,19 @@ import { UploadDocumentComponent } from './upload-document.component';
                         <tui-icon icon="@tui.edit" />
                         Edit
                       </a>
+                      <button
+                        type="button"
+                        class="action-link"
+                        [disabled]="
+                          article.status === 'draft' ||
+                          article.status === 'archived' ||
+                          store.saving()
+                        "
+                        (click)="store.reindex(article.id)"
+                      >
+                        <tui-icon icon="@tui.refresh-ccw" />
+                        Re-index
+                      </button>
                     </div>
                   }
                 </app-dashboard-card>
@@ -386,5 +407,11 @@ export class KnowledgeBaseComponent {
 
   protected typeLabel(type: KnowledgeItemType): string {
     return type === 'faq' ? 'FAQ' : type === 'document' ? 'Document' : 'Article';
+  }
+
+  protected indexTooltip(status: { status: string; failureReason?: string }): string {
+    if (status.status === 'failed' && status.failureReason) return status.failureReason;
+    if (status.status === 'not_indexable' && status.failureReason) return status.failureReason;
+    return '';
   }
 }

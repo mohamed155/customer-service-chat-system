@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use serde_json::json;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -411,4 +412,63 @@ pub async fn get_document(
     .bind(tenant_id)
     .fetch_optional(pool)
     .await
+}
+
+pub async fn enqueue_index_requested_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    item_id: Uuid,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'knowledge_item', $2, $3, 'knowledge.index_requested', $4, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(item_id)
+    .bind(tenant_id)
+    .bind(json!({
+        "tenantId": tenant_id,
+        "itemId": item_id,
+    }))
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO knowledge_index_state (item_id, tenant_id, status) \
+         VALUES ($1, $2, 'pending') \
+         ON CONFLICT (item_id) DO UPDATE \
+         SET status = 'pending', attempts = 0, failure_reason = NULL, updated_at = now()",
+    )
+    .bind(item_id)
+    .bind(tenant_id)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn clear_index_data_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    item_id: Uuid,
+) -> sqlx::Result<()> {
+    sqlx::query("DELETE FROM knowledge_chunks WHERE item_id = $1")
+        .bind(item_id)
+        .execute(&mut **tx)
+        .await?;
+
+    sqlx::query(
+        "INSERT INTO knowledge_index_state (item_id, tenant_id, status) \
+         VALUES ($1, $2, 'not_indexed') \
+         ON CONFLICT (item_id) DO UPDATE \
+         SET status = 'not_indexed', chunk_count = 0, attempts = 0, \
+             indexed_content_hash = NULL, failure_reason = NULL, \
+             last_indexed_at = NULL, updated_at = now()",
+    )
+    .bind(item_id)
+    .bind(tenant_id)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(())
 }

@@ -19,6 +19,7 @@ describe('ArticleDetailComponent', () => {
     createCategory: ReturnType<typeof vi.fn>;
     renameCategory: ReturnType<typeof vi.fn>;
     deleteCategory: ReturnType<typeof vi.fn>;
+    reindex: ReturnType<typeof vi.fn>;
   };
   let permissions: { has: ReturnType<typeof vi.fn> };
 
@@ -38,6 +39,7 @@ describe('ArticleDetailComponent', () => {
       source: 'authored',
       createdByUserId: 'user-1',
       document: null,
+      indexStatus: { status: 'indexed', chunkCount: 12 },
     };
   }
 
@@ -70,6 +72,7 @@ describe('ArticleDetailComponent', () => {
       createCategory: vi.fn(),
       renameCategory: vi.fn(),
       deleteCategory: vi.fn(),
+      reindex: vi.fn(),
     };
     mockApi.listItems.mockReturnValue(new Subject());
     permissions = { has: vi.fn() };
@@ -133,6 +136,59 @@ describe('ArticleDetailComponent', () => {
       expect(fixture.nativeElement.textContent).not.toContain('Publish');
       expect(fixture.nativeElement.textContent).not.toContain('Archive');
       expect(fixture.nativeElement.textContent).not.toContain('Restore');
+    });
+  });
+
+  it('shows index status badge', async () => {
+    permissions.has.mockReturnValue(true);
+    const fixture = await createFixture(mockDetailWithStatus('published'));
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const badge = (fixture.nativeElement as HTMLElement).querySelector('app-index-status-badge');
+      expect(badge).toBeTruthy();
+      expect(badge?.textContent).toContain('Indexed');
+    });
+  });
+
+  it('shows re-index button for manage user on published item', async () => {
+    permissions.has.mockReturnValue(true);
+    const fixture = await createFixture(mockDetailWithStatus('published'));
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const buttons = (fixture.nativeElement as HTMLElement).querySelectorAll('button');
+      const reindexBtn = Array.from(buttons).find((b) => b.textContent?.includes('Re-index'));
+      expect(reindexBtn).toBeTruthy();
+    });
+  });
+
+  it('hides re-index button for view-only user', async () => {
+    permissions.has.mockReturnValue(false);
+    const fixture = await createFixture(mockDetailWithStatus('published'));
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const buttons = (fixture.nativeElement as HTMLElement).querySelectorAll('button');
+      const reindexBtn = Array.from(buttons).find((b) => b.textContent?.includes('Re-index'));
+      expect(reindexBtn).toBeFalsy();
+    });
+  });
+
+  it('disables re-index button for draft/archived items', async () => {
+    permissions.has.mockReturnValue(true);
+    const fixture = await createFixture(mockDetailWithStatus('draft'));
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const buttons = (fixture.nativeElement as HTMLElement).querySelectorAll('button');
+      const reindexBtn = Array.from(buttons).find((b) => b.textContent?.includes('Re-index')) as
+        HTMLButtonElement | undefined;
+      expect(reindexBtn?.disabled).toBe(true);
     });
   });
 

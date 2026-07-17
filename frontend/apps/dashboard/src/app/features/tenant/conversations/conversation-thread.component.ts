@@ -1,11 +1,12 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
+import { CitationListComponent } from '../../../shared/components/citation-list/citation-list.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import { Message } from '../../../core/api/tenant-api.models';
 
 @Component({
   selector: 'app-conversation-thread',
-  imports: [AvatarComponent, LoadingStateComponent],
+  imports: [AvatarComponent, CitationListComponent, LoadingStateComponent],
   template: `
     <div class="messages" #scrollContainer>
       @if (hasMore()) {
@@ -32,6 +33,9 @@ import { Message } from '../../../core/api/tenant-api.models';
               }
             </div>
             <p>{{ message.body }}</p>
+            @if (message.citations?.length) {
+              <app-citation-list [citations]="message.citations" />
+            }
           </div>
         </article>
       } @empty {

@@ -26,6 +26,7 @@ describe('KnowledgeBaseComponent', () => {
       deleteCategory: vi.fn(),
       uploadDocument: vi.fn(),
       fileDownloadUrl: vi.fn(),
+      reindex: vi.fn(),
     };
   }
 
@@ -43,6 +44,7 @@ describe('KnowledgeBaseComponent', () => {
           createdAt: '2026-07-01T00:00:00Z',
           updatedAt: '2026-07-10T00:00:00Z',
           tags: [],
+          indexStatus: { status: 'indexed' as const, chunkCount: 12 },
         },
         {
           id: 'kb-2',
@@ -203,6 +205,61 @@ describe('KnowledgeBaseComponent', () => {
       const btn = (fixture.nativeElement as HTMLElement).querySelector('.manage-cats-btn');
       expect(btn).toBeTruthy();
       expect(btn?.textContent).toContain('Categories');
+    });
+  });
+
+  it('shows index status badge on published items', async () => {
+    mockApi.listItems.mockReturnValue(of(mockResponse));
+    const fixture = await createFixture();
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const badge = (fixture.nativeElement as HTMLElement).querySelector('app-index-status-badge');
+      expect(badge).toBeTruthy();
+      expect(badge?.textContent).toContain('Indexed');
+    });
+  });
+
+  it('shows re-index button for manage users on published items', async () => {
+    mockApi.listItems.mockReturnValue(of(mockResponse));
+    const fixture = await createFixture();
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const buttons = (fixture.nativeElement as HTMLElement).querySelectorAll('.action-link');
+      const reindexBtns = Array.from(buttons).filter((b) => b.textContent?.includes('Re-index'));
+      expect(reindexBtns.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('hides re-index button for view-only users', async () => {
+    mockPermissions.has.mockReturnValue(false);
+    mockApi.listItems.mockReturnValue(of(mockResponse));
+    const fixture = await createFixture();
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const buttons = (fixture.nativeElement as HTMLElement).querySelectorAll('.action-link');
+      const reindexBtns = Array.from(buttons).filter((b) => b.textContent?.includes('Re-index'));
+      expect(reindexBtns.length).toBe(0);
+    });
+  });
+
+  it('disables re-index button for draft items', async () => {
+    mockApi.listItems.mockReturnValue(of(mockResponse));
+    const fixture = await createFixture();
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const buttons = (fixture.nativeElement as HTMLElement).querySelectorAll('.action-link');
+      const reindexBtns = Array.from(buttons).filter((b) =>
+        b.textContent?.includes('Re-index'),
+      ) as HTMLButtonElement[];
+      expect(reindexBtns.length).toBeGreaterThan(0);
     });
   });
 

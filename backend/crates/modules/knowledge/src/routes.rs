@@ -20,6 +20,7 @@ use tenancy::TenantContext;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
+use crate::index_state;
 use crate::store;
 use crate::upload;
 use crate::validate;
@@ -39,6 +40,18 @@ pub struct KnowledgeItemSummaryDto {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub tags: Vec<String>,
+    pub index_status: Option<IndexStatusDto>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct IndexStatusDto {
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_indexed_at: Option<DateTime<Utc>>,
+    pub chunk_count: i32,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -67,6 +80,7 @@ pub struct KnowledgeItemDetailDto {
     pub source: String,
     pub created_by_user_id: Option<Uuid>,
     pub document: Option<DocumentMetaDto>,
+    pub index_status: Option<IndexStatusDto>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -142,6 +156,13 @@ pub struct RenameCategoryPayload {
     pub name: String,
 }
 
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReindexResponse {
+    pub id: Uuid,
+    pub index_status: IndexStatusDto,
+}
+
 #[derive(Debug, Clone, Default, Deserialize, IntoParams)]
 #[into_params(parameter_in = Query)]
 #[serde(default)]
@@ -207,6 +228,15 @@ async fn load_tags_for_item(pool: &PgPool, item_id: Uuid) -> sqlx::Result<Vec<St
             .fetch_all(pool)
             .await?;
     Ok(rows.into_iter().map(|r| r.0).collect())
+}
+
+fn to_index_status_dto(state: &index_state::IndexState) -> IndexStatusDto {
+    IndexStatusDto {
+        status: state.status.clone(),
+        failure_reason: state.failure_reason.clone(),
+        last_indexed_at: state.last_indexed_at,
+        chunk_count: state.chunk_count,
+    }
 }
 
 // ── T014: list_items ──────────────────────────────────────────────────────
@@ -298,6 +328,17 @@ pub async fn list_items(
         }
     };
 
+    let item_ids: Vec<Uuid> = items.iter().map(|i| i.id).collect();
+    let index_states = match index_state::get_many(&pool, &item_ids).await {
+        Ok(states) => states,
+        Err(e) => {
+            tracing::error!(%e, "list_items: load index states failed");
+            return ApiError::internal_error("Failed to list items")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
     let next_cursor = if has_more {
         items.last().map(|item| {
             PaginationCursor {
@@ -327,6 +368,7 @@ pub async fn list_items(
                 created_at: item.created_at,
                 updated_at: item.updated_at,
                 tags,
+                index_status: index_states.get(&item.id).map(to_index_status_dto),
             }
         })
         .collect();
@@ -522,6 +564,16 @@ pub async fn create_item(
         "knowledge item created"
     );
 
+    let index_state = match index_state::get(&pool, ctx.tenant_id, item.id).await {
+        Ok(state) => state,
+        Err(e) => {
+            tracing::error!(%e, "create_item: load index state failed");
+            return ApiError::internal_error("Failed to create item")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
     let dto = KnowledgeItemDetailDto {
         id: item.id,
         item_type: item.item_type,
@@ -537,6 +589,7 @@ pub async fn create_item(
         source: item.source,
         created_by_user_id: item.created_by_user_id,
         document: None,
+        index_status: index_state.as_ref().map(to_index_status_dto),
     };
 
     (StatusCode::CREATED, Json(dto)).into_response()
@@ -614,6 +667,16 @@ pub async fn get_item(
         None
     };
 
+    let index_state = match index_state::get(&pool, ctx.tenant_id, item_id).await {
+        Ok(state) => state,
+        Err(e) => {
+            tracing::error!(%e, "get_item: load index state failed");
+            return ApiError::internal_error("Failed to get item")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
     let dto = KnowledgeItemDetailDto {
         id: item.id,
         item_type: item.item_type,
@@ -629,6 +692,7 @@ pub async fn get_item(
         source: item.source,
         created_by_user_id: item.created_by_user_id,
         document,
+        index_status: index_state.as_ref().map(to_index_status_dto),
     };
 
     (StatusCode::OK, Json(dto)).into_response()
@@ -841,6 +905,18 @@ pub async fn update_item(
         }
     }
 
+    if existing.status == "published" {
+        if let Err(e) =
+            store::enqueue_index_requested_in_tx(&mut tx, ctx.tenant_id, item_id).await
+        {
+            tracing::error!(%e, "update_item: enqueue_index_requested_in_tx failed");
+            let _ = tx.rollback().await;
+            return ApiError::internal_error("Failed to update item")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    }
+
     let details = json!({
         "itemId": updated.id,
         "itemType": updated.item_type,
@@ -878,6 +954,16 @@ pub async fn update_item(
         "knowledge item updated"
     );
 
+    let index_state = match index_state::get(&pool, ctx.tenant_id, item_id).await {
+        Ok(state) => state,
+        Err(e) => {
+            tracing::error!(%e, "update_item: load index state failed");
+            return ApiError::internal_error("Failed to load index state")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
     let updated_tags = match load_tags_for_item(&pool, item_id).await {
         Ok(t) => t,
         Err(e) => {
@@ -903,6 +989,7 @@ pub async fn update_item(
         source: updated.source,
         created_by_user_id: updated.created_by_user_id,
         document: None,
+        index_status: index_state.as_ref().map(to_index_status_dto),
     };
 
     (StatusCode::OK, Json(dto)).into_response()
@@ -1042,6 +1129,28 @@ pub async fn set_item_status(
             }
         };
 
+    if new_status == validate::ItemStatus::Published {
+        if let Err(e) =
+            store::enqueue_index_requested_in_tx(&mut tx, ctx.tenant_id, item_id).await
+        {
+            tracing::error!(%e, "set_item_status: enqueue_index_requested_in_tx failed");
+            let _ = tx.rollback().await;
+            return ApiError::internal_error("Failed to update item status")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    } else if current_status == validate::ItemStatus::Published {
+        if let Err(e) =
+            store::clear_index_data_in_tx(&mut tx, ctx.tenant_id, item_id).await
+        {
+            tracing::error!(%e, "set_item_status: clear_index_data_in_tx failed");
+            let _ = tx.rollback().await;
+            return ApiError::internal_error("Failed to update item status")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    }
+
     let audit_action = match new_status {
         validate::ItemStatus::Published => "knowledge_item.published",
         validate::ItemStatus::Archived => "knowledge_item.archived",
@@ -1091,6 +1200,201 @@ pub async fn set_item_status(
             status: updated.status,
             changed: true,
             updated_at: updated.updated_at,
+        }),
+    )
+        .into_response()
+}
+
+// ── T042: reindex_item ────────────────────────────────────────────────────
+
+/// `POST /tenant/knowledge/items/{id}/reindex` — trigger re-indexing
+#[utoipa::path(
+    post,
+    path = "/tenant/knowledge/items/{id}/reindex",
+    tag = "tenant-knowledge",
+    operation_id = "reindex_knowledge_item",
+    summary = "Trigger re-indexing of a knowledge item",
+    params(
+        ("id" = Uuid, Path, description = "Knowledge item ID"),
+    ),
+    responses(
+        (status = 202, description = "Reindex accepted.", body = ReindexResponse),
+        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
+        (status = 403, description = "Insufficient permissions.", body = ErrorEnvelope),
+        (status = 404, description = "Item not found.", body = ErrorEnvelope),
+        (status = 409, description = "Item is not published.", body = ErrorEnvelope),
+        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
+    ),
+    security(("session_cookie" = []))
+)]
+pub async fn reindex_item(
+    State(pool): State<PgPool>,
+    ctx: TenantContext,
+    Extension(principal): Extension<Principal>,
+    Path(item_id): Path<Uuid>,
+) -> Response {
+    let start = std::time::Instant::now();
+
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            tracing::error!(%e, "reindex_item: begin tx failed");
+            return ApiError::internal_error("Failed to reindex item")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
+    let item = match sqlx::query_as::<_, store::KnowledgeItemRow>(
+        "SELECT * FROM knowledge_items WHERE id = $1 AND tenant_id = $2 FOR UPDATE",
+    )
+    .bind(item_id)
+    .bind(ctx.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    {
+        Ok(Some(item)) => item,
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            return ApiError::not_found("Item not found")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!(%e, "reindex_item: fetch item failed");
+            let _ = tx.rollback().await;
+            return ApiError::internal_error("Failed to reindex item")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
+    if item.status != "published" {
+        let _ = tx.rollback().await;
+        return ApiError::conflict("Only published items can be reindexed")
+            .with_request_id(&ctx.request_id)
+            .into_response();
+    }
+
+    // Idempotency check: if the item is already pending or indexing, return 202
+    // without enqueuing a duplicate outbox event (T053, Constitution V).
+    let current_status = sqlx::query_scalar::<_, String>(
+        "SELECT status FROM knowledge_index_state WHERE item_id = $1 AND tenant_id = $2",
+    )
+    .bind(item_id)
+    .bind(ctx.tenant_id)
+    .fetch_optional(&mut *tx)
+    .await;
+
+    let already_active = match current_status {
+        Ok(Some(status)) => status == "pending" || status == "indexing",
+        Ok(None) => false,
+        Err(e) => {
+            tracing::error!(%e, "reindex_item: check index state failed");
+            let _ = tx.rollback().await;
+            return ApiError::internal_error("Failed to reindex item")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
+    if already_active {
+        let _ = tx.rollback().await;
+        let index_state = match index_state::get(&pool, ctx.tenant_id, item_id).await {
+            Ok(Some(state)) => state,
+            Ok(None) => {
+                return ApiError::internal_error("Index state not found")
+                    .with_request_id(&ctx.request_id)
+                    .into_response();
+            }
+            Err(e) => {
+                tracing::error!(%e, "reindex_item: load index state failed");
+                return ApiError::internal_error("Failed to load index state")
+                    .with_request_id(&ctx.request_id)
+                    .into_response();
+            }
+        };
+        tracing::info!(
+            item_id = %item_id,
+            action = "knowledge_item.reindex_skipped",
+            status = %index_state.status,
+            request_id = %ctx.request_id,
+            latency_us = %start.elapsed().as_micros(),
+            "knowledge item reindex skipped: already pending or indexing"
+        );
+        return (
+            StatusCode::ACCEPTED,
+            Json(ReindexResponse {
+                id: item_id,
+                index_status: to_index_status_dto(&index_state),
+            }),
+        )
+            .into_response();
+    }
+
+    if let Err(e) = store::enqueue_index_requested_in_tx(&mut tx, ctx.tenant_id, item_id).await {
+        tracing::error!(%e, "reindex_item: enqueue_index_requested_in_tx failed");
+        let _ = tx.rollback().await;
+        return ApiError::internal_error("Failed to reindex item")
+            .with_request_id(&ctx.request_id)
+            .into_response();
+    }
+
+    if let Err(e) = audit::record_in_tx(
+        &mut tx,
+        "knowledge_item.reindex_requested",
+        Some(principal.user_id),
+        Some(ctx.tenant_id),
+        "knowledge_item",
+        Some(&item_id.to_string()),
+        &json!({
+            "itemId": item_id,
+        }),
+    )
+    .await
+    {
+        tracing::error!(%e, "reindex_item: audit failed");
+        let _ = tx.rollback().await;
+        return ApiError::internal_error("Failed to reindex item")
+            .with_request_id(&ctx.request_id)
+            .into_response();
+    }
+
+    if let Err(e) = tx.commit().await {
+        tracing::error!(%e, "reindex_item: commit failed");
+        return ApiError::internal_error("Failed to reindex item")
+            .with_request_id(&ctx.request_id)
+            .into_response();
+    }
+
+    tracing::info!(
+        item_id = %item_id,
+        action = "knowledge_item.reindex_requested",
+        request_id = %ctx.request_id,
+        latency_us = %start.elapsed().as_micros(),
+        "knowledge item reindex requested"
+    );
+
+    let index_state = match index_state::get(&pool, ctx.tenant_id, item_id).await {
+        Ok(Some(state)) => state,
+        Ok(None) => {
+            return ApiError::internal_error("Index state not found after enqueue")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!(%e, "reindex_item: load index state failed");
+            return ApiError::internal_error("Failed to load index state")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
+    (
+        StatusCode::ACCEPTED,
+        Json(ReindexResponse {
+            id: item_id,
+            index_status: to_index_status_dto(&index_state),
         }),
     )
         .into_response()
@@ -1186,6 +1490,10 @@ pub async fn upload_document(
                         .await?;
                 }
 
+                if status == validate::ItemStatus::Published {
+                    store::enqueue_index_requested_in_tx(&mut tx, ctx.tenant_id, item.id).await?;
+                }
+
                 audit::record_in_tx(
                     &mut tx,
                     "knowledge_item.created",
@@ -1231,6 +1539,16 @@ pub async fn upload_document(
         "knowledge document uploaded"
     );
 
+    let index_state = match index_state::get(&pool, ctx.tenant_id, item.id).await {
+        Ok(state) => state,
+        Err(e) => {
+            tracing::error!(%e, "upload_document: load index state failed");
+            return ApiError::internal_error("Failed to upload document")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
     let dto = KnowledgeItemDetailDto {
         id: item.id,
         item_type: item.item_type,
@@ -1251,6 +1569,7 @@ pub async fn upload_document(
             size_bytes: file_size,
             created_at: item.created_at,
         }),
+        index_status: index_state.as_ref().map(to_index_status_dto),
     };
 
     (StatusCode::CREATED, Json(dto)).into_response()

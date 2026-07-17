@@ -1,13 +1,14 @@
 //! AI application module — configuration, credential management, usage
-//! tracking, agent configuration, prompt management, the outbox-driven agent
-//! responder, and the [`AiService`] entry point.
+//! tracking, agent configuration, prompt management, embedding, the outbox-
+//! driven agent responder with RAG support, and the [`AiService`] entry point.
 //!
 //! # Purpose
 //! High-level AI orchestration layer that sits above the vendor-agnostic
 //! [`ai_providers`] adapters.  Handles per-tenant configuration and credential
-//! resolution, retry/failover policy, usage recording, audited admin APIs, and
-//! the configurable AI agent that responds to customer messages via an outbox
-//! worker.
+//! resolution, retry/failover policy, usage recording, audited admin APIs,
+//! platform-wide embedding via [`AiService::embed_platform`], the configurable
+//! AI agent that responds to customer messages via an outbox worker, and RAG
+//! retrieval/citation persistence.
 //!
 //! # Responsibilities
 //! - Per-tenant config / credential resolution (tenant → platform fallback)
@@ -19,7 +20,11 @@
 //! - Versioned prompt management ([`prompt_store`], [`prompt_validate`], [`prompt_routes`])
 //! - Deterministic prompt composition ([`agent_prompt`])
 //! - Escalation rule evaluation ([`agent_rules`])
-//! - Outbox-driven agent responder ([`agent_responder`])
+//! - Outbox-driven agent responder ([`agent_responder`]) with RAG support
+//! - Platform-wide embedding via [`AiService::embed_platform`]
+//! - RAG retrieval step: embed query → [`knowledge::retrieval::search`] →
+//!   inject context into the system prompt
+//! - Citation persistence ([`conversations::queries::insert_citations_in_tx`])
 //!
 //! # Public Interfaces
 //! - [`AiService`] — main entry point for consuming modules
@@ -34,14 +39,16 @@
 //! - [`model`] — row types, payloads, views
 //!
 //! # Dependencies
-//! - [`ai_providers`] — vendor adapters (OpenAI, Anthropic, Gemini)
+//! - [`ai_providers`] — vendor adapters (OpenAI, Anthropic, Gemini) and
+//!   [`EmbeddingProvider`] trait for vector generation
 //! - [`authz`] — RBAC middleware and policy checks
 //! - [`tenancy`] — multi-tenant context and scope resolution
 //! - [`kernel`] — shared error types and response envelope
 //!
 //! # Data Model
 //! Migrations 0038–0045 create the supporting tables:
-//! - `ai_configurations` — per-tenant or platform-wide AI config
+//! - `ai_configurations` — per-tenant or platform-wide AI config (including
+//!   `embedding_model` column added in 0047)
 //! - `ai_credentials` — encrypted API keys (AES-256-GCM)
 //! - `ai_usage_records` — per-call usage ledger
 //! - `agent_configurations` — per-tenant AI agent settings (system_prompt dropped in 0045)
@@ -49,11 +56,19 @@
 //! - `agent_prompts` — tenant-level prompt object (one per tenant, prompt_kind = 'system')
 //! - `agent_prompt_versions` — append-only, immutable version snapshots
 //!
+//!  Migration 0047 also adds:
+//! - `message_citations` — records which knowledge items were cited in an AI reply
+//! - `ai_configurations.embedding_model` — nullable column identifying the
+//!   embedding model used for RAG
+//!
 //! # Extension Points
 //! - **KMS replacement**: swap `crypto.rs` for a cloud KMS while keeping
 //!   the `MasterKey` / `seal` / `open` interface.
 //! - **New provider**: add to [`ai_providers`] — this module picks it up
 //!   automatically through the uniform trait.
+//! - **New embedding provider**: implement [`EmbeddingProvider`] in
+//!   [`ai_providers`] — [`AiService::embed_platform`] picks it up via
+//!   the configured `embedding_model`.
 //! - **Sidecar extraction**: the AI runtime (completions, streaming, retries)
 //!   can be extracted into its own crate with no changes to the public API.
 //! - **Multi-agent**: the schema is multi-agent-shaped; dropping the partial

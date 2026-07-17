@@ -18,10 +18,12 @@
 //! - Register additional health checks in `health_checks` vec.
 
 use config::AppConfig;
+use knowledge;
 use server::router;
 use server::state::AppState;
 use std::sync::Arc;
 use std::time::Duration;
+use storage::{InMemoryStorage, ObjectStorage, S3Storage};
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -77,6 +79,19 @@ async fn main() {
 
     let email_sender = router::configured_email_sender(&state.config);
     let app = router::app_with_email_sender(state.clone(), email_sender.clone());
+
+    let storage: Arc<dyn ObjectStorage> = if let Some(s3_config) = &state.config.s3 {
+        match S3Storage::new(s3_config).await {
+            Ok(s) => Arc::new(s),
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to create S3 storage, falling back to in-memory");
+                Arc::new(InMemoryStorage::default())
+            }
+        }
+    } else {
+        Arc::new(InMemoryStorage::default())
+    };
+
     let delivery_worker = tokio::spawn(tenancy::invitations::run_invitation_delivery_worker(
         state.db.clone(),
         email_sender,
@@ -89,6 +104,11 @@ async fn main() {
         state.db.clone(),
         state.ai.clone(),
         state.escalations.clone(),
+    ));
+    let knowledge_indexer_worker = tokio::spawn(knowledge::indexer::run_knowledge_indexer_worker(
+        state.db.clone(),
+        Arc::new(state.ai.clone()) as Arc<dyn knowledge::indexer::Embedder>,
+        storage.clone(),
     ));
 
     let address = format!("{}:{}", state.config.bind_address, state.config.port);
@@ -110,6 +130,9 @@ async fn main() {
         }
         result = agent_responder_worker => {
             panic!("agent responder worker stopped unexpectedly: {result:?}");
+        }
+        result = knowledge_indexer_worker => {
+            panic!("knowledge indexer worker stopped unexpectedly: {result:?}");
         }
     }
 }

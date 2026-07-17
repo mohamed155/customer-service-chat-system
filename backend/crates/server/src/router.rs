@@ -619,6 +619,11 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             routes!(knowledge::routes::set_item_status)
                 .layer(require_permission(Permission::KnowledgeBaseManage)),
         )
+        // T042: Knowledge item reindex
+        .routes(
+            routes!(knowledge::routes::reindex_item)
+                .layer(require_permission(Permission::KnowledgeBaseManage)),
+        )
         // T031: Knowledge document upload and file download
         .routes(
             routes!(knowledge::routes::upload_document)

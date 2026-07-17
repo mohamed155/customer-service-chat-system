@@ -81,6 +81,7 @@ pub struct Registry {
     client: reqwest::Client,
     providers: Vec<Registered>,
     overrides: HashMap<String, Arc<dyn ChatProvider>>,
+    embedding_providers: HashMap<String, Arc<dyn EmbeddingProvider>>,
 }
 
 impl Registry {
@@ -109,7 +110,7 @@ impl Registry {
             providers: vec![
                 Registered {
                     kind: ProviderKind::OpenAi,
-                    provider: Arc::new(OpenAiAdapter::new(client.clone(), openai_base_url)),
+                    provider: Arc::new(OpenAiAdapter::new(client.clone(), openai_base_url.clone())),
                 },
                 Registered {
                     kind: ProviderKind::Anthropic,
@@ -117,10 +118,22 @@ impl Registry {
                 },
                 Registered {
                     kind: ProviderKind::Gemini,
-                    provider: Arc::new(GeminiAdapter::new(client.clone(), gemini_base_url)),
+                    provider: Arc::new(GeminiAdapter::new(client.clone(), gemini_base_url.clone())),
                 },
             ],
             overrides: HashMap::new(),
+            embedding_providers: HashMap::from([
+                (
+                    "openai".to_string(),
+                    Arc::new(OpenAiAdapter::new(client.clone(), openai_base_url))
+                        as Arc<dyn EmbeddingProvider>,
+                ),
+                (
+                    "gemini".to_string(),
+                    Arc::new(GeminiAdapter::new(client.clone(), gemini_base_url))
+                        as Arc<dyn EmbeddingProvider>,
+                ),
+            ]),
         }
     }
 
@@ -152,5 +165,9 @@ impl Registry {
 
     pub fn provider_by_name(&self, name: &str) -> Option<&dyn ChatProvider> {
         self.overrides.get(name).map(|p| p.as_ref())
+    }
+
+    pub fn embedding_provider(&self, name: &str) -> Option<&dyn EmbeddingProvider> {
+        self.embedding_providers.get(name).map(|p| p.as_ref())
     }
 }

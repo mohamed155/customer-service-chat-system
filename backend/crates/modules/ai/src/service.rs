@@ -464,6 +464,111 @@ impl AiService {
         result
     }
 
+    pub async fn embed_platform(
+        &self,
+        ctx: AiCallContext,
+        inputs: Vec<String>,
+    ) -> Result<Vec<Vec<f32>>, AiCallError> {
+        let scope = Scope::Platform;
+
+        let resolved = resolve_config(&self.0.pool, scope)
+            .await
+            .map_err(|e| AiCallError::Internal(e.to_string()))?
+            .ok_or(AiCallError::NotConfigured)?;
+
+        let config = &resolved.row;
+        let embedding_model = config
+            .embedding_model
+            .clone()
+            .ok_or(AiCallError::NotConfigured)?;
+        let provider_name = config.provider.clone();
+
+        let master_key = self
+            .0
+            .master_key
+            .as_ref()
+            .ok_or(AiCallError::NotConfigured)?;
+
+        let (key, _source_is_tenant) = resolve_credential(&self.0.pool, master_key, scope, &provider_name)
+            .await
+            .map_err(AiCallError::Internal)?
+            .ok_or(AiCallError::NotConfigured)?;
+
+        let embedding_provider = self.0.registry.embedding_provider(&provider_name).ok_or_else(|| {
+            tracing::warn!(provider = %provider_name, "provider does not support embeddings");
+            AiCallError::NotConfigured
+        })?;
+
+        let req = ai_providers::EmbeddingRequest {
+            model: embedding_model,
+            inputs,
+            request_id: ctx.request_id.clone(),
+        };
+
+        let started = Instant::now();
+        let result = embedding_provider.embed(&key, &req).await;
+        let elapsed = started.elapsed();
+        let elapsed_millis = elapsed.as_millis();
+
+        match result {
+            Ok(response) => {
+                for (i, vec) in response.embeddings.iter().enumerate() {
+                    if vec.len() != 1536 {
+                        return Err(AiCallError::Internal(format!(
+                            "embedding dimension mismatch at index {i}: expected 1536, got {}",
+                            vec.len()
+                        )));
+                    }
+                }
+
+                let w = usage::UsageWrite {
+                    tenant_id: ctx.tenant_id,
+                    provider: provider_name,
+                    model: response.model.clone(),
+                    input_tokens: response.usage.input.map(|v| v as i32),
+                    output_tokens: response.usage.output.map(|v| v as i32),
+                    status: "success",
+                    error_category: None,
+                    streamed: false,
+                    latency_ms: elapsed_millis as i32,
+                    request_id: ctx.request_id,
+                    request_content: None,
+                    response_content: None,
+                };
+                if let Err(e) = usage::insert(&self.0.pool, w).await {
+                    tracing::error!(%e, "failed to record successful embedding usage");
+                }
+
+                Ok(response.embeddings)
+            }
+            Err(err) => {
+                let w = usage::UsageWrite {
+                    tenant_id: ctx.tenant_id,
+                    provider: provider_name.clone(),
+                    model: req.model.clone(),
+                    input_tokens: None,
+                    output_tokens: None,
+                    status: "failure",
+                    error_category: Some(err.category.as_str()),
+                    streamed: false,
+                    latency_ms: elapsed_millis as i32,
+                    request_id: ctx.request_id,
+                    request_content: None,
+                    response_content: None,
+                };
+                if let Err(e) = usage::insert(&self.0.pool, w).await {
+                    tracing::error!(%e, "failed to record failed embedding usage");
+                }
+
+                Err(AiCallError::Provider {
+                    category: err.category,
+                    provider: provider_name,
+                    model: req.model,
+                })
+            }
+        }
+    }
+
     pub async fn stream(
         &self,
         ctx: AiCallContext,
@@ -865,6 +970,40 @@ impl AiService {
 
     pub fn master_key(&self) -> Option<&crypto::MasterKey> {
         self.0.master_key.as_ref()
+    }
+}
+
+#[async_trait::async_trait]
+impl knowledge::indexer::Embedder for AiService {
+    async fn embed(
+        &self,
+        tenant_id: Uuid,
+        texts: Vec<String>,
+        request_id: String,
+    ) -> Result<Vec<Vec<f32>>, knowledge::indexer::EmbedError> {
+        let ctx = AiCallContext {
+            tenant_id,
+            request_id: Some(request_id),
+        };
+        match self.embed_platform(ctx, texts).await {
+            Ok(embeddings) => Ok(embeddings),
+            Err(AiCallError::Provider { category, .. }) if category.retriable() => {
+                Err(knowledge::indexer::EmbedError::Retriable(
+                    category.as_str().to_string(),
+                ))
+            }
+            Err(AiCallError::Provider { category, .. }) => {
+                Err(knowledge::indexer::EmbedError::Permanent(
+                    category.as_str().to_string(),
+                ))
+            }
+            Err(AiCallError::NotConfigured) => {
+                Err(knowledge::indexer::EmbedError::NotConfigured)
+            }
+            Err(AiCallError::Internal(e)) => {
+                Err(knowledge::indexer::EmbedError::Permanent(e))
+            }
+        }
     }
 }
 

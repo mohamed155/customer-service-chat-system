@@ -12,6 +12,7 @@ import {
   KnowledgeCategory,
   KnowledgeItemDetail,
   RenameCategoryPayload,
+  ReindexResponse,
   SetStatusPayload,
   SetStatusResponse,
   UpdateItemPayload,
@@ -70,6 +71,10 @@ export class KnowledgeApiService {
 
   uploadDocument(formData: FormData): Observable<ApiResponse<KnowledgeItemDetail>> {
     return this.api.post('tenant/knowledge/documents', formData);
+  }
+
+  reindex(id: string): Observable<ApiResponse<ReindexResponse>> {
+    return this.api.post(`tenant/knowledge/items/${id}/reindex`, {});
   }
 
   fileDownloadUrl(id: string): string {

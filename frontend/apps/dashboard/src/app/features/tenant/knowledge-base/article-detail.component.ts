@@ -10,6 +10,7 @@ import { LoadingStateComponent } from '../../../shared/components/loading-state/
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { IndexStatusBadgeComponent } from './index-status-badge.component';
 import { KnowledgeStore } from './knowledge.store';
 
 @Component({
@@ -18,6 +19,7 @@ import { KnowledgeStore } from './knowledge.store';
     DashboardCardComponent,
     DatePipe,
     EmptyStateComponent,
+    IndexStatusBadgeComponent,
     LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,
@@ -85,6 +87,19 @@ import { KnowledgeStore } from './knowledge.store';
               </button>
             }
           }
+          @if (canManage()) {
+            <button
+              class="action-btn"
+              type="button"
+              [disabled]="
+                article.status === 'draft' || article.status === 'archived' || store.saving()
+              "
+              (click)="reindex()"
+            >
+              <tui-icon icon="@tui.refresh-ccw" />
+              Re-index
+            </button>
+          }
           <a class="edit-link" [routerLink]="editPath()">
             <tui-icon icon="@tui.edit" />
             Edit
@@ -106,6 +121,15 @@ import { KnowledgeStore } from './knowledge.store';
                 <div class="meta-item">
                   <span class="meta-label">Category</span>
                   <span class="meta-value">{{ article.categoryName }}</span>
+                </div>
+              }
+              @if (article.indexStatus) {
+                <div class="meta-item">
+                  <span class="meta-label">Index</span>
+                  <app-index-status-badge
+                    [indexStatus]="article.indexStatus"
+                    [title]="indexTooltip(article.indexStatus)"
+                  />
                 </div>
               }
               @if (article.tags.length) {
@@ -265,6 +289,17 @@ export class ArticleDetailComponent {
   protected restore(): void {
     const id = this.item()?.id;
     if (id) this.store.setStatus(id, { status: 'draft' });
+  }
+
+  protected reindex(): void {
+    const id = this.item()?.id;
+    if (id) this.store.reindex(id);
+  }
+
+  protected indexTooltip(status: { status: string; failureReason?: string }): string {
+    if (status.status === 'failed' && status.failureReason) return status.failureReason;
+    if (status.status === 'not_indexable' && status.failureReason) return status.failureReason;
+    return '';
   }
 
   protected typeLabel(type: string): string {

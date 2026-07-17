@@ -98,6 +98,7 @@ fn every_documented_path_has_a_valid_operation() {
             assert!(
                 responses.contains_key("200")
                     || responses.contains_key("201")
+                    || responses.contains_key("202")
                     || responses.contains_key("204"),
                 "paths['{path}'].{method} must declare a success response"
             );

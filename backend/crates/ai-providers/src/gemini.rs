@@ -93,6 +93,36 @@ struct GeminiErrorDetail {
     message: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiBatchEmbedRequest {
+    requests: Vec<GeminiEmbedRequestItem>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiEmbedRequestItem {
+    model: String,
+    content: GeminiEmbedContent,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiEmbedContent {
+    parts: Vec<GeminiPart>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GeminiBatchEmbedResponse {
+    embeddings: Vec<GeminiEmbeddingValue>,
+}
+
+#[derive(serde::Deserialize)]
+struct GeminiEmbeddingValue {
+    values: Vec<f32>,
+}
+
 fn role_to_gemini(role: &Role) -> &'static str {
     match role {
         Role::System => "user",
@@ -375,6 +405,121 @@ impl ChatProvider for GeminiAdapter {
             gemini_sse_to_events(frame_stream, req.model.clone()).boxed()
                 as BoxStream<'static, Result<StreamEvent, ProviderError>>,
         )
+    }
+}
+
+#[async_trait::async_trait]
+impl EmbeddingProvider for GeminiAdapter {
+    async fn embed(
+        &self,
+        key: &SecretKey,
+        req: &EmbeddingRequest,
+    ) -> Result<EmbeddingResponse, ProviderError> {
+        let model_path = format!("models/{}", req.model);
+        let url = format!(
+            "{}/v1beta/models/{}:batchEmbedContents",
+            self.base_url.trim_end_matches('/'),
+            req.model
+        );
+
+        let requests: Vec<GeminiEmbedRequestItem> = req
+            .inputs
+            .iter()
+            .map(|text| GeminiEmbedRequestItem {
+                model: model_path.clone(),
+                content: GeminiEmbedContent {
+                    parts: vec![GeminiPart {
+                        text: text.clone(),
+                    }],
+                },
+            })
+            .collect();
+
+        let body = GeminiBatchEmbedRequest { requests };
+
+        let elapsed = std::time::Instant::now();
+
+        let mut req_builder = self
+            .client
+            .post(&url)
+            .header("x-goog-api-key", key.expose())
+            .json(&body);
+        if let Some(ref rid) = req.request_id {
+            req_builder = req_builder.header("X-Request-ID", rid);
+        }
+
+        let response = req_builder.send().await.map_err(|e| {
+            if e.is_timeout() {
+                ProviderError {
+                    category: ErrorCategory::Timeout,
+                    retriable: true,
+                    detail: "request timed out".into(),
+                }
+            } else if e.is_connect() {
+                ProviderError {
+                    category: ErrorCategory::Unavailable,
+                    retriable: true,
+                    detail: "connection error".into(),
+                }
+            } else {
+                ProviderError {
+                    category: ErrorCategory::Unavailable,
+                    retriable: true,
+                    detail: "request failed".into(),
+                }
+            }
+        })?;
+
+        let status = response.status();
+        tracing::info!(
+            provider = "gemini",
+            model = %req.model,
+            request_id = req.request_id.as_deref().unwrap_or(""),
+            status = %status.as_u16(),
+            "gemini embed response"
+        );
+
+        let bytes = response.bytes().await.map_err(|_| ProviderError {
+            category: ErrorCategory::Unavailable,
+            retriable: true,
+            detail: "failed to read response body".into(),
+        })?;
+
+        if !status.is_success() {
+            let detail = extract_error_detail(&bytes);
+            return Err(normalize_error(status, detail));
+        }
+
+        let embed_resp: GeminiBatchEmbedResponse =
+            serde_json::from_slice(&bytes).map_err(|e| ProviderError {
+                category: ErrorCategory::InvalidRequest,
+                retriable: false,
+                detail: format!("failed to parse response: {}", e),
+            })?;
+
+        let embeddings: Vec<Vec<f32>> = embed_resp
+            .embeddings
+            .into_iter()
+            .map(|e| e.values)
+            .collect();
+
+        tracing::info!(
+            provider = "gemini",
+            model = %req.model,
+            request_id = req.request_id.as_deref().unwrap_or(""),
+            latency_ms = elapsed.elapsed().as_millis() as u64,
+            count = embeddings.len(),
+            "gemini embed succeeded"
+        );
+
+        Ok(EmbeddingResponse {
+            embeddings,
+            model: req.model.clone(),
+            usage: TokenUsage {
+                input: None,
+                output: None,
+            },
+        })
     }
 }
 
@@ -705,6 +850,119 @@ data: {\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptT
 
         let third = stream.next().await;
         assert!(third.is_none());
+    }
+
+    fn make_embed_request() -> EmbeddingRequest {
+        EmbeddingRequest {
+            model: "text-embedding-004".into(),
+            inputs: vec!["Hello world".into()],
+            request_id: None,
+        }
+    }
+
+    fn make_embed_response_body() -> serde_json::Value {
+        serde_json::json!({
+            "embeddings": [{
+                "values": [0.1, 0.2, 0.3]
+            }]
+        })
+    }
+
+    #[tokio::test]
+    async fn embed_happy_path() {
+        let mock = MockServer::start().await;
+        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+
+        let response_body = make_embed_response_body();
+
+        Mock::given(method("POST"))
+            .and(path(
+                "/v1beta/models/text-embedding-004:batchEmbedContents",
+            ))
+            .and(header("x-goog-api-key", "test-gemini-key-123"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response_body))
+            .expect(1)
+            .mount(&mock)
+            .await;
+
+        let result = adapter.embed(&test_key(), &make_embed_request()).await;
+
+        assert!(result.is_ok());
+        let resp = result.unwrap();
+        assert_eq!(resp.embeddings.len(), 1);
+        assert_eq!(resp.embeddings[0], vec![0.1, 0.2, 0.3]);
+        assert_eq!(resp.model, "text-embedding-004");
+
+        let requests = mock.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert_eq!(body["requests"][0]["model"], "models/text-embedding-004");
+        assert_eq!(
+            body["requests"][0]["content"]["parts"][0]["text"],
+            "Hello world"
+        );
+    }
+
+    #[tokio::test]
+    async fn embed_multiple_inputs() {
+        let mock = MockServer::start().await;
+        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+
+        let response_body = serde_json::json!({
+            "embeddings": [
+                {"values": [0.1, 0.2]},
+                {"values": [0.3, 0.4]}
+            ]
+        });
+
+        Mock::given(method("POST"))
+            .and(path(
+                "/v1beta/models/text-embedding-004:batchEmbedContents",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response_body))
+            .mount(&mock)
+            .await;
+
+        let req = EmbeddingRequest {
+            model: "text-embedding-004".into(),
+            inputs: vec!["first".into(), "second".into()],
+            request_id: None,
+        };
+
+        let result = adapter.embed(&test_key(), &req).await;
+
+        assert!(result.is_ok());
+        let resp = result.unwrap();
+        assert_eq!(resp.embeddings.len(), 2);
+        assert_eq!(resp.embeddings[0], vec![0.1, 0.2]);
+        assert_eq!(resp.embeddings[1], vec![0.3, 0.4]);
+    }
+
+    #[tokio::test]
+    async fn embed_unauthorized_returns_authentication() {
+        let mock = MockServer::start().await;
+        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+
+        let error_body = serde_json::json!({
+            "error": {
+                "message": "API key not valid"
+            }
+        });
+
+        Mock::given(method("POST"))
+            .and(path(
+                "/v1beta/models/text-embedding-004:batchEmbedContents",
+            ))
+            .respond_with(ResponseTemplate::new(401).set_body_json(&error_body))
+            .mount(&mock)
+            .await;
+
+        let result = adapter.embed(&test_key(), &make_embed_request()).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.category, ErrorCategory::Authentication);
+        assert!(!err.retriable);
     }
 
     #[tokio::test]

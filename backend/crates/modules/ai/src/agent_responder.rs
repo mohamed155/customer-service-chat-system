@@ -280,6 +280,20 @@ pub async fn process_agent_responder_once(
     // 7. Get recent history
     let history =
         conversations::queries::recent_history(pool, tenant_id, conversation_id, 20).await?;
+
+    // T024: Build context-aware search query from customer messages
+    let query_string: String = history
+        .iter()
+        .rev()
+        .filter(|(kind, _)| kind == "customer")
+        .take(4)
+        .map(|(_, body)| body.as_str())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join("\n");
+
     let messages: Vec<ai_providers::Message> = history
         .into_iter()
         .map(|(kind, body)| {
@@ -294,10 +308,85 @@ pub async fn process_agent_responder_once(
         })
         .collect();
 
-    let input = crate::AiInput {
+    let mut input = crate::AiInput {
         system: Some(system_message),
         messages,
     };
+
+    // T025: Insert retrieval step
+    let mut degraded = false;
+    let mut retrieved_chunks: Vec<knowledge::retrieval::RetrievedChunk> = Vec::new();
+
+    if !query_string.is_empty() {
+        let retrieval_start = std::time::Instant::now();
+        let embed_ctx = crate::AiCallContext {
+            tenant_id,
+            request_id: None,
+        };
+        let query_len = query_string.len();
+
+        let retrieval_result = tokio::time::timeout(
+            std::time::Duration::from_millis(800),
+            async move {
+                let embeddings = ai.embed_platform(embed_ctx, vec![query_string]).await?;
+                let embedding = embeddings.into_iter().next().ok_or_else(|| {
+                    crate::AiCallError::Internal("empty embedding result".into())
+                })?;
+                knowledge::retrieval::search(pool, tenant_id, &embedding, 5, 0.70)
+                    .await
+                    .map_err(|e| crate::AiCallError::Internal(e.to_string()))
+            },
+        )
+        .await;
+
+        let elapsed_ms = retrieval_start.elapsed().as_millis() as u64;
+
+        match retrieval_result {
+            Ok(Ok(chunks)) => {
+                retrieved_chunks = chunks;
+            }
+            _ => {
+                degraded = true;
+            }
+        }
+
+        // T026: Inject passages as system message block
+        if !retrieved_chunks.is_empty() {
+            let mut knowledge_block =
+                String::from("\n\n=== Knowledge Context ===\n");
+            for chunk in &retrieved_chunks {
+                knowledge_block.push_str(&format!(
+                    "Source: \"{}\" (relevance: {:.2})\n{}\n\n",
+                    chunk.item_title, chunk.similarity, chunk.content
+                ));
+            }
+            knowledge_block.push_str("=== End Knowledge Context ===");
+
+            if let Some(ref mut system) = input.system {
+                system.push_str(&knowledge_block);
+            }
+        }
+
+        // T027: Emit rag.retrieve tracing span
+        let candidates = retrieved_chunks.len();
+        let top_score = retrieved_chunks
+            .first()
+            .map(|c| c.similarity)
+            .unwrap_or(0.0);
+        tracing::info!(
+            target: "rag",
+            tenant_id = %tenant_id,
+            conversation_id = %conversation_id,
+            message_id = %message_id,
+            query_len = query_len,
+            candidates = candidates,
+            returned = candidates,
+            top_score = top_score,
+            elapsed_ms = elapsed_ms,
+            degraded = degraded,
+            "rag.retrieve"
+        );
+    }
 
     let ctx = crate::AiCallContext {
         tenant_id,
@@ -359,13 +448,36 @@ pub async fn process_agent_responder_once(
 
     if !already_replied {
         let mut tx = pool.begin().await?;
-        conversations::queries::insert_ai_reply_in_tx(
+        let ai_message_id = conversations::queries::insert_ai_reply_in_tx(
             &mut tx,
             tenant_id,
             conversation_id,
             &reply_body,
         )
         .await?;
+
+        // T032: Persist citations when retrieval produced chunks
+        if !retrieved_chunks.is_empty() {
+            let citations: Vec<conversations::model::CitationToInsert> = retrieved_chunks
+                .iter()
+                .enumerate()
+                .map(|(i, chunk)| conversations::model::CitationToInsert {
+                    knowledge_item_id: chunk.item_id,
+                    item_title: chunk.item_title.clone(),
+                    passage_text: chunk.content.clone(),
+                    relevance_score: chunk.similarity as f32,
+                    ordinal: i as i32,
+                })
+                .collect();
+            conversations::queries::insert_citations_in_tx(
+                &mut tx,
+                tenant_id,
+                ai_message_id,
+                &citations,
+            )
+            .await?;
+        }
+
         tx.commit().await?;
     }
 

@@ -8,7 +8,7 @@ import {
   withState,
 } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { EMPTY, pipe, switchMap, tap } from 'rxjs';
+import { EMPTY, finalize, interval, pipe, switchMap, takeWhile, tap } from 'rxjs';
 import { ApiError } from '../../../core/api/api.models';
 import {
   CreateItemPayload,
@@ -31,6 +31,7 @@ interface KnowledgeState {
   loading: boolean;
   saving: boolean;
   error: string | null;
+  pollingActive: boolean;
 }
 
 const initialState: KnowledgeState = {
@@ -43,6 +44,7 @@ const initialState: KnowledgeState = {
   loading: false,
   saving: false,
   error: null,
+  pollingActive: false,
 };
 
 export const KnowledgeStore = signalStore(
@@ -54,6 +56,44 @@ export const KnowledgeStore = signalStore(
       if (!selectedItem?.categoryId) return null;
       return store.categories().find((c) => c.id === selectedItem.categoryId)?.name ?? null;
     }),
+    hasNonTerminalIndexStatus: computed(() =>
+      store
+        .items()
+        .some(
+          (item) =>
+            item.indexStatus?.status === 'pending' || item.indexStatus?.status === 'indexing',
+        ),
+    ),
+  })),
+  withMethods((store, api = inject(KnowledgeApiService)) => ({
+    startPolling: rxMethod<void>(
+      pipe(
+        switchMap(() => {
+          if (!store.hasNonTerminalIndexStatus()) return EMPTY;
+          patchState(store, { pollingActive: true });
+          return interval(5000).pipe(
+            switchMap(() =>
+              api.listItems(store.filters(), store.cursor() ?? undefined).pipe(
+                tap({
+                  next: (res) =>
+                    patchState(store, {
+                      items: res.data.items,
+                      cursor: res.data.nextCursor,
+                      hasMore: res.data.hasMore,
+                    }),
+                  error: () => {},
+                }),
+              ),
+            ),
+            takeWhile(() => store.hasNonTerminalIndexStatus()),
+          );
+        }),
+        finalize(() => patchState(store, { pollingActive: false })),
+      ),
+    ),
+    stopPolling(): void {
+      patchState(store, { pollingActive: false });
+    },
   })),
   withMethods((store, api = inject(KnowledgeApiService)) => ({
     loadList: rxMethod<void>(
@@ -62,13 +102,15 @@ export const KnowledgeStore = signalStore(
         switchMap(() =>
           api.listItems(store.filters(), store.cursor() ?? undefined).pipe(
             tap({
-              next: (res) =>
+              next: (res) => {
                 patchState(store, {
                   items: res.data.items,
                   cursor: res.data.nextCursor,
                   hasMore: res.data.hasMore,
                   loading: false,
-                }),
+                });
+                store.startPolling();
+              },
               error: (err: unknown) =>
                 patchState(store, { loading: false, error: (err as ApiError).message }),
             }),
@@ -145,6 +187,32 @@ export const KnowledgeStore = signalStore(
           patchState(store, { saving: false, error: (err as ApiError).message }),
       });
     },
+    reindex(id: string): void {
+      patchState(store, { saving: true, error: null });
+      api.reindex(id).subscribe({
+        next: (res) => {
+          const current = store.items();
+          const idx = current.findIndex((i) => i.id === id);
+          if (idx !== -1) {
+            const updated = [...current];
+            updated[idx] = { ...updated[idx], indexStatus: res.data.indexStatus };
+            patchState(store, { items: updated, saving: false });
+          } else {
+            patchState(store, { saving: false });
+          }
+          const selectedItem = store.selectedItem();
+          if (selectedItem?.id === id) {
+            patchState(store, {
+              selectedItem: { ...selectedItem, indexStatus: res.data.indexStatus },
+            });
+          }
+          store.startPolling();
+        },
+        error: (err: unknown) =>
+          patchState(store, { saving: false, error: (err as ApiError).message }),
+      });
+    },
+
     setStatus(id: string, payload: SetStatusPayload): void {
       patchState(store, { saving: true, error: null });
       api.setStatus(id, payload).subscribe({

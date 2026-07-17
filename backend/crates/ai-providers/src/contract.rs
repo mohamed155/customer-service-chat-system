@@ -166,6 +166,29 @@ pub trait ChatProvider: Send + Sync {
         -> Result<ChatStream, ProviderError>;
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EmbeddingRequest {
+    pub model: String,
+    pub inputs: Vec<String>,
+    pub request_id: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EmbeddingResponse {
+    pub embeddings: Vec<Vec<f32>>,
+    pub model: String,
+    pub usage: TokenUsage,
+}
+
+#[async_trait::async_trait]
+pub trait EmbeddingProvider: Send + Sync {
+    async fn embed(
+        &self,
+        key: &SecretKey,
+        req: &EmbeddingRequest,
+    ) -> Result<EmbeddingResponse, ProviderError>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

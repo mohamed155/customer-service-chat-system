@@ -5,9 +5,10 @@ use uuid::Uuid;
 use serde_json::Value;
 
 use crate::model::{
-    Assignee, ConversationDetail, ConversationStatus, ConversationStatusRef, CustomerRef,
-    LastMessagePreview, Message, MessageKind, Participant,
+    Assignee, CitationToInsert, CitationView, ConversationDetail, ConversationStatus,
+    ConversationStatusRef, CustomerRef, LastMessagePreview, Message, MessageKind, Participant,
 };
+use std::collections::HashMap;
 
 /// Raw row from the `conversations` table, used by `conversation_row_in_tx`
 /// for 404-safe reuse across detail / patch / add-message handlers.
@@ -459,6 +460,7 @@ fn timeline_row_to_message(row: TimelineRow) -> Message {
         logged_by,
         body: row.body,
         created_at: row.created_at,
+        citations: Vec::new(),
     }
 }
 
@@ -551,6 +553,7 @@ pub async fn detail_query_in_tx(
 /// encoding `(created_at, seq)`. Over-fetches by one to determine `has_more`.
 pub async fn timeline_query_in_tx(
     tx: &mut Transaction<'_, Postgres>,
+    pool: &PgPool,
     tenant_id: Uuid,
     conversation_id: Uuid,
     cursor: Option<String>,
@@ -619,7 +622,22 @@ pub async fn timeline_query_in_tx(
         .map(timeline_row_to_message)
         .collect();
 
-    Ok((data, has_more, next_cursor))
+    // T034: Batch-load citations for the returned messages
+    let message_ids: Vec<Uuid> = data.iter().map(|m| m.id).collect();
+    let mut citation_map = if message_ids.is_empty() {
+        HashMap::new()
+    } else {
+        load_citations_for_messages(pool, tenant_id, &message_ids).await?
+    };
+    let mut data_with_citations: Vec<Message> = Vec::with_capacity(data.len());
+    for mut message in data {
+        if let Some(citations) = citation_map.remove(&message.id) {
+            message.citations = citations;
+        }
+        data_with_citations.push(message);
+    }
+
+    Ok((data_with_citations, has_more, next_cursor))
 }
 
 // ---------------------------------------------------------------------------
@@ -812,6 +830,7 @@ pub async fn add_message_in_tx(
             logged_by,
             body: inserted.2,
             created_at: inserted.3,
+            citations: Vec::new(),
         },
         ConversationStatusRef {
             status: status_enum,
@@ -1179,15 +1198,16 @@ pub async fn insert_ai_reply_in_tx(
     tenant_id: Uuid,
     conversation_id: Uuid,
     body: &str,
-) -> sqlx::Result<()> {
-    sqlx::query(
+) -> sqlx::Result<Uuid> {
+    let message_id: Uuid = sqlx::query_scalar(
         "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
-         VALUES ($1, $2, 'ai', $3)",
+         VALUES ($1, $2, 'ai', $3) \
+         RETURNING id",
     )
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(body)
-    .execute(&mut **tx)
+    .fetch_one(&mut **tx)
     .await?;
 
     sqlx::query(
@@ -1199,7 +1219,89 @@ pub async fn insert_ai_reply_in_tx(
     .execute(&mut **tx)
     .await?;
 
+    Ok(message_id)
+}
+
+pub async fn insert_citations_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    message_id: Uuid,
+    citations: &[CitationToInsert],
+) -> sqlx::Result<()> {
+    if citations.is_empty() {
+        return Ok(());
+    }
+    for citation in citations {
+        sqlx::query(
+            "INSERT INTO message_citations \
+                (tenant_id, message_id, knowledge_item_id, item_title, \
+                 passage_text, relevance_score, ordinal) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        )
+        .bind(tenant_id)
+        .bind(message_id)
+        .bind(citation.knowledge_item_id)
+        .bind(&citation.item_title)
+        .bind(&citation.passage_text)
+        .bind(citation.relevance_score)
+        .bind(citation.ordinal)
+        .execute(&mut **tx)
+        .await?;
+    }
     Ok(())
+}
+
+pub async fn load_citations_for_messages(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    message_ids: &[Uuid],
+) -> sqlx::Result<HashMap<Uuid, Vec<CitationView>>> {
+    if message_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let rows: Vec<(Uuid, Uuid, String, String, f32)> = sqlx::query_as(
+        "SELECT message_id, knowledge_item_id, item_title, passage_text, relevance_score \
+         FROM message_citations \
+         WHERE tenant_id = $1 AND message_id = ANY($2) \
+         ORDER BY ordinal ASC",
+    )
+    .bind(tenant_id)
+    .bind(message_ids)
+    .fetch_all(pool)
+    .await?;
+
+    let mut item_ids: Vec<Uuid> = rows.iter().map(|r| r.1).collect();
+    item_ids.sort();
+    item_ids.dedup();
+
+    let available: std::collections::HashSet<Uuid> = if item_ids.is_empty() {
+        std::collections::HashSet::new()
+    } else {
+        let existing: Vec<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM knowledge_items \
+             WHERE id = ANY($1) AND deleted_at IS NULL",
+        )
+        .bind(&item_ids)
+        .fetch_all(pool)
+        .await?;
+        existing.into_iter().map(|r| r.0).collect()
+    };
+
+    let mut map: HashMap<Uuid, Vec<CitationView>> = HashMap::new();
+    for (message_id, knowledge_item_id, item_title, passage_text, relevance_score) in rows {
+        let item_available = available.contains(&knowledge_item_id);
+        map.entry(message_id)
+            .or_default()
+            .push(CitationView {
+                knowledge_item_id,
+                item_title,
+                passage_text,
+                relevance_score,
+                item_available,
+            });
+    }
+    Ok(map)
 }
 
 pub async fn has_ai_reply_since(

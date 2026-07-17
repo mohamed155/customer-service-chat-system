@@ -540,6 +540,7 @@ pub async fn get_timeline(
 
     let (messages, has_more, next_cursor) = match queries::timeline_query_in_tx(
         &mut tx,
+        &pool,
         ctx.tenant_id,
         conversation_id,
         params.cursor,

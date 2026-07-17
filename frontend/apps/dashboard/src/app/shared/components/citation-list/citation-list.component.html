@@ -1,0 +1,26 @@
+@if (citations().length) {
+  <div class="citations">
+    <span class="citations-label">Sources</span>
+    @for (citation of citations(); track citation.knowledgeItemId) {
+      @if (citation.itemAvailable) {
+        <a
+          class="citation-chip"
+          [routerLink]="[
+            '/',
+            appPaths.tenant.base,
+            appPaths.tenant.knowledgeBaseDetail(citation.knowledgeItemId),
+          ]"
+        >
+          <tui-icon icon="@tui.book-open" />
+          <span class="citation-title">{{ citation.itemTitle }}</span>
+        </a>
+      } @else {
+        <span class="citation-chip unavailable">
+          <tui-icon icon="@tui.ban" />
+          <span class="citation-title">{{ citation.itemTitle }}</span>
+          <span class="unavailable-badge">No longer available</span>
+        </span>
+      }
+    }
+  </div>
+}

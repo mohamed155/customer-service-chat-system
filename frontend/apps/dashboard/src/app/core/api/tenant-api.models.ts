@@ -389,6 +389,14 @@ export interface AvailabilityChangedEvent {
   readonly state: AvailabilityState;
 }
 
+export interface Citation {
+  readonly knowledgeItemId: string;
+  readonly itemTitle: string;
+  readonly passageText: string;
+  readonly relevanceScore: number;
+  readonly itemAvailable: boolean;
+}
+
 export interface Message {
   readonly id: string;
   readonly kind: MessageKind;
@@ -400,6 +408,7 @@ export interface Message {
   readonly loggedBy: { readonly membershipId: string; readonly displayName: string } | null;
   readonly body: string;
   readonly createdAt: string;
+  readonly citations?: readonly Citation[];
 }
 
 export interface AddMessageResponse {
@@ -453,6 +462,14 @@ export interface ConversationDetailWire extends ConversationWire {
   readonly awaiting_ai_decision?: boolean;
 }
 
+export interface CitationWire {
+  readonly knowledge_item_id: string;
+  readonly item_title: string;
+  readonly passage_text: string;
+  readonly relevance_score: number;
+  readonly item_available: boolean;
+}
+
 export interface MessageWire {
   readonly id: string;
   readonly kind: string;
@@ -464,6 +481,7 @@ export interface MessageWire {
   readonly logged_by: { readonly membership_id: string; readonly display_name: string } | null;
   readonly body: string;
   readonly created_at: string;
+  readonly citations?: readonly CitationWire[];
 }
 
 export interface AddMessageResponseWire {
@@ -612,6 +630,16 @@ export function conversationDetailEscalationFromWire(
   };
 }
 
+export function citationFromWire(wire: CitationWire): Citation {
+  return {
+    knowledgeItemId: wire.knowledge_item_id,
+    itemTitle: wire.item_title,
+    passageText: wire.passage_text,
+    relevanceScore: wire.relevance_score,
+    itemAvailable: wire.item_available,
+  };
+}
+
 export function messageFromWire(wire: MessageWire): Message {
   return {
     id: wire.id,
@@ -626,6 +654,7 @@ export function messageFromWire(wire: MessageWire): Message {
       : null,
     body: wire.body,
     createdAt: wire.created_at,
+    ...(wire.citations ? { citations: wire.citations.map(citationFromWire) } : {}),
   };
 }
 

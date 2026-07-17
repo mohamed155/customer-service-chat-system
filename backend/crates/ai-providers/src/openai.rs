@@ -192,6 +192,97 @@ impl ChatProvider for OpenAiAdapter {
     }
 }
 
+#[async_trait::async_trait]
+impl EmbeddingProvider for OpenAiAdapter {
+    async fn embed(
+        &self,
+        key: &SecretKey,
+        req: &EmbeddingRequest,
+    ) -> Result<EmbeddingResponse, ProviderError> {
+        let url = format!("{}/v1/embeddings", self.base_url);
+
+        let model = if req.model.is_empty() {
+            "text-embedding-3-small"
+        } else {
+            &req.model
+        };
+
+        let body = serde_json::json!({
+            "model": model,
+            "input": req.inputs,
+        });
+
+        let elapsed = std::time::Instant::now();
+
+        let mut req_builder = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", key.expose()))
+            .json(&body);
+        if let Some(ref rid) = req.request_id {
+            req_builder = req_builder.header("X-Request-ID", rid);
+        }
+
+        let response = req_builder
+            .send()
+            .await
+            .map_err(|e| normalize_error(e, "request failed"))?;
+
+        let status = response.status();
+        tracing::info!(
+            provider = "openai",
+            model = %model,
+            request_id = req.request_id.as_deref().unwrap_or(""),
+            status = %status.as_u16(),
+            "openai embed response"
+        );
+
+        if !status.is_success() {
+            let detail = response.text().await.unwrap_or_default();
+            return Err(normalize_http_error(status, &detail));
+        }
+
+        let json: serde_json::Value = response.json().await.map_err(|e| ProviderError {
+            category: ErrorCategory::Unavailable,
+            retriable: true,
+            detail: format!("response parse: {e}"),
+        })?;
+
+        let embeddings: Vec<Vec<f32>> = json["data"]
+            .as_array()
+            .map(|data| {
+                data.iter()
+                    .map(|entry| {
+                        entry["embedding"]
+                            .as_array()
+                            .map(|arr| arr.iter().filter_map(|v| v.as_f64().map(|f| f as f32)).collect())
+                            .unwrap_or_default()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let response_model = json["model"].as_str().unwrap_or(model).to_string();
+        let input = json["usage"]["prompt_tokens"].as_u64().map(|v| v as u32);
+        let output = json["usage"]["total_tokens"].as_u64().map(|v| v as u32);
+
+        tracing::info!(
+            provider = "openai",
+            model = %response_model,
+            request_id = req.request_id.as_deref().unwrap_or(""),
+            latency_ms = elapsed.elapsed().as_millis() as u64,
+            num_embeddings = embeddings.len(),
+            "openai embed succeeded"
+        );
+
+        Ok(EmbeddingResponse {
+            embeddings,
+            model: response_model,
+            usage: TokenUsage { input, output },
+        })
+    }
+}
+
 fn normalize_error(e: reqwest::Error, context: &str) -> ProviderError {
     if e.is_timeout() {
         ProviderError {
@@ -576,5 +667,124 @@ mod tests {
         let err = adapter.complete(&key, &req).await.unwrap_err();
         assert!(matches!(err.category, ErrorCategory::Authentication));
         assert!(!err.retriable);
+    }
+
+    #[tokio::test]
+    async fn embed_happy_path() {
+        let (client, mock) = test_client().await;
+        let adapter = OpenAiAdapter::new(client, mock.uri());
+
+        Mock::given(method("POST"))
+            .and(path("/v1/embeddings"))
+            .and(header("Authorization", "Bearer sk-test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "object": "list",
+                "data": [
+                    {"object": "embedding", "index": 0, "embedding": [0.1, 0.2, 0.3]},
+                    {"object": "embedding", "index": 1, "embedding": [0.4, 0.5, 0.6]}
+                ],
+                "model": "text-embedding-3-small",
+                "usage": {"prompt_tokens": 5, "total_tokens": 5}
+            })))
+            .mount(&mock)
+            .await;
+
+        let key = SecretKey::new("sk-test-key".into());
+        let req = EmbeddingRequest {
+            model: "text-embedding-3-small".into(),
+            inputs: vec!["hello".into(), "world".into()],
+            request_id: None,
+        };
+
+        let result = adapter.embed(&key, &req).await.unwrap();
+        assert_eq!(result.embeddings.len(), 2);
+        assert_eq!(result.embeddings[0], vec![0.1f32, 0.2, 0.3]);
+        assert_eq!(result.embeddings[1], vec![0.4f32, 0.5, 0.6]);
+        assert_eq!(result.model, "text-embedding-3-small");
+        assert_eq!(result.usage.input, Some(5));
+        assert_eq!(result.usage.output, Some(5));
+    }
+
+    #[tokio::test]
+    async fn embed_default_model() {
+        let (client, mock) = test_client().await;
+        let adapter = OpenAiAdapter::new(client, mock.uri());
+
+        Mock::given(method("POST"))
+            .and(path("/v1/embeddings"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "object": "list",
+                "data": [
+                    {"object": "embedding", "index": 0, "embedding": [0.1, 0.2, 0.3]}
+                ],
+                "model": "text-embedding-3-small",
+                "usage": {"prompt_tokens": 3, "total_tokens": 3}
+            })))
+            .mount(&mock)
+            .await;
+
+        let key = SecretKey::new("sk-test".into());
+        let req = EmbeddingRequest {
+            model: "".into(),
+            inputs: vec!["test".into()],
+            request_id: None,
+        };
+
+        let result = adapter.embed(&key, &req).await.unwrap();
+        assert_eq!(result.model, "text-embedding-3-small");
+    }
+
+    #[tokio::test]
+    async fn embed_error_401_authentication() {
+        let (client, mock) = test_client().await;
+        let adapter = OpenAiAdapter::new(client, mock.uri());
+
+        Mock::given(method("POST"))
+            .and(path("/v1/embeddings"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("unauthorized"))
+            .mount(&mock)
+            .await;
+
+        let key = SecretKey::new("sk-bad".into());
+        let req = EmbeddingRequest {
+            model: "text-embedding-3-small".into(),
+            inputs: vec!["hello".into()],
+            request_id: None,
+        };
+
+        let err = adapter.embed(&key, &req).await.unwrap_err();
+        assert!(matches!(err.category, ErrorCategory::Authentication));
+        assert!(!err.retriable);
+    }
+
+    #[tokio::test]
+    async fn embed_request_id_header() {
+        let (client, mock) = test_client().await;
+        let adapter = OpenAiAdapter::new(client, mock.uri());
+
+        Mock::given(method("POST"))
+            .and(path("/v1/embeddings"))
+            .and(header("Authorization", "Bearer sk-test-key"))
+            .and(header("X-Request-ID", "req-123"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "object": "list",
+                "data": [
+                    {"object": "embedding", "index": 0, "embedding": [0.1, 0.2, 0.3]}
+                ],
+                "model": "text-embedding-3-small",
+                "usage": {"prompt_tokens": 3, "total_tokens": 3}
+            })))
+            .mount(&mock)
+            .await;
+
+        let key = SecretKey::new("sk-test-key".into());
+        let req = EmbeddingRequest {
+            model: "text-embedding-3-small".into(),
+            inputs: vec!["hello".into()],
+            request_id: Some("req-123".into()),
+        };
+
+        let result = adapter.embed(&key, &req).await.unwrap();
+        assert_eq!(result.embeddings.len(), 1);
     }
 }

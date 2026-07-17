@@ -126,6 +126,29 @@ pub struct Message {
     pub logged_by: Option<Assignee>,
     pub body: String,
     pub created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub citations: Vec<CitationView>,
+}
+
+/// A citation linking an AI message to a knowledge-base passage at the
+/// time the reply was generated.  Snapshotted so the citation remains
+/// readable even if the source item is later deleted or updated.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CitationView {
+    pub knowledge_item_id: Uuid,
+    pub item_title: String,
+    pub passage_text: String,
+    pub relevance_score: f32,
+    pub item_available: bool,
+}
+
+/// Input type for inserting a batch of citations inside a transaction.
+pub struct CitationToInsert {
+    pub knowledge_item_id: Uuid,
+    pub item_title: String,
+    pub passage_text: String,
+    pub relevance_score: f32,
+    pub ordinal: i32,
 }
 
 /// Updated conversation status + activity timestamp returned alongside an

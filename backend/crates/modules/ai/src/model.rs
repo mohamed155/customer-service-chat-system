@@ -20,6 +20,7 @@ pub struct AiConfigRow {
     pub temperature: Option<f32>,
     pub fallbacks: serde_json::Value,
     pub capture_content: bool,
+    pub embedding_model: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,

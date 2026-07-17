@@ -190,6 +190,20 @@ describe('KnowledgeApiService', () => {
     });
   });
 
+  describe('reindex', () => {
+    it('calls api.post with tenant/knowledge/items/{id}/reindex', async () => {
+      const response = {
+        data: { id: 'item-1', indexStatus: { status: 'pending' as const, chunkCount: 0 } },
+      };
+      api.post.mockReturnValue(of(response));
+
+      const result = await firstValueFrom(service.reindex('item-1'));
+
+      expect(api.post).toHaveBeenCalledWith('tenant/knowledge/items/item-1/reindex', {});
+      expect(result).toEqual(response);
+    });
+  });
+
   describe('fileDownloadUrl', () => {
     it('constructs download URL from apiBaseUrl', () => {
       const url = service.fileDownloadUrl('doc-1');

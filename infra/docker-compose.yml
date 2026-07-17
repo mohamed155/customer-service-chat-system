@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    # pgvector >= 0.8.0 required for hnsw.iterative_scan support
+    image: pgvector/pgvector:0.8.5-pg16
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-customer_service}
       POSTGRES_USER: ${POSTGRES_USER:-customer_service}
