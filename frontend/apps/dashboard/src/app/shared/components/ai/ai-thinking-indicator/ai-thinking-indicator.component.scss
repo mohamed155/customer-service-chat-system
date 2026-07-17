@@ -1,0 +1,38 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: var(--app-space-2) var(--app-space-3);
+  border-radius: 999px;
+  background: var(--app-panel-2);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--app-accent);
+  animation: pulse 900ms ease-in-out infinite;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.label {
+  margin-left: var(--app-space-1);
+  font-size: var(--app-font-sm);
+  color: var(--app-text-3);
+  font-weight: 500;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+    transform: translateY(-2px);
+  }
+}

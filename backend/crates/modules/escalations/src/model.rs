@@ -192,6 +192,76 @@ pub struct TeamMemberWithSkills {
     pub availability: AvailabilityState,
 }
 
+// ── AI conversation SSE event payloads ────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub enum ConversationAiEvent {
+    Started(ConversationAiStarted),
+    Delta(ConversationAiDelta),
+    Completed(ConversationAiCompleted),
+    Superseded(ConversationAiSuperseded),
+    Failed(ConversationAiFailed),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationAiStarted {
+    pub conversation_id: Uuid,
+    pub generation_id: Uuid,
+    pub trigger_message_id: Uuid,
+    pub started_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationAiDelta {
+    pub conversation_id: Uuid,
+    pub generation_id: Uuid,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationAiCompleted {
+    pub conversation_id: Uuid,
+    pub generation_id: Uuid,
+    pub message: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SupersededReason {
+    NewerMessage,
+    Escalated,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationAiSuperseded {
+    pub conversation_id: Uuid,
+    pub generation_id: Uuid,
+    pub reason: SupersededReason,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum FailureCategory {
+    Unavailable,
+    Timeout,
+    RateLimited,
+    Authentication,
+    InvalidRequest,
+    Internal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationAiFailed {
+    pub conversation_id: Uuid,
+    pub generation_id: Uuid,
+    pub category: FailureCategory,
+}
+
 pub mod sql {
     use sqlx::Postgres;
     use uuid::Uuid;

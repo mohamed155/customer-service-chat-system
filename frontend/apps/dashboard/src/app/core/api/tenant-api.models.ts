@@ -389,6 +389,38 @@ export interface AvailabilityChangedEvent {
   readonly state: AvailabilityState;
 }
 
+// AI conversation SSE event types (from contracts/ai-events-sse.md)
+export interface AiMessageStarted {
+  readonly conversationId: string;
+  readonly generationId: string;
+  readonly triggerMessageId: string;
+  readonly startedAt: string;
+}
+
+export interface AiMessageDelta {
+  readonly conversationId: string;
+  readonly generationId: string;
+  readonly text: string;
+}
+
+export interface AiMessageCompleted {
+  readonly conversationId: string;
+  readonly generationId: string;
+  readonly message: Message;
+}
+
+export interface AiMessageSuperseded {
+  readonly conversationId: string;
+  readonly generationId: string;
+  readonly reason: 'newer_message' | 'escalated';
+}
+
+export interface AiMessageFailed {
+  readonly conversationId: string;
+  readonly generationId: string;
+  readonly category: 'unavailable' | 'timeout' | 'rate_limited' | 'authentication' | 'invalid_request' | 'internal';
+}
+
 export interface Citation {
   readonly knowledgeItemId: string;
   readonly itemTitle: string;

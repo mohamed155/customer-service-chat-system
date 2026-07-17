@@ -14,6 +14,7 @@ pub enum Event {
     EscalationQueued(crate::model::EscalationQueuedEvent),
     EscalationRemoved(crate::model::EscalationRemovedEvent),
     AvailabilityChanged(AvailabilityChangedEvent),
+    ConversationAi(crate::model::ConversationAiEvent),
 }
 
 struct TenantPresence {

@@ -49,7 +49,21 @@ pub async fn process_agent_responder_once(
 
     let channel: String = payload["channel"].as_str().unwrap_or("").to_string();
 
-    // 2. Load live agent config
+    // 2a. Claim-time coalescing: delete older unclaimed events for the same
+    // conversation (their content is already in the history the engine loads)
+    let _ = sqlx::query(
+        "DELETE FROM outbox_events \
+         WHERE event_type = 'conversation.customer_message' \
+         AND claimed_at IS NULL \
+         AND payload->>'conversation_id' = $1::text \
+         AND id != $2",
+    )
+    .bind(conversation_id.to_string())
+    .bind(event_id)
+    .execute(pool)
+    .await;
+
+    // 2b. Load live agent config
     let live_config = agent_config::load_live(pool, tenant_id).await?;
 
     let (row, is_platform_persona) = match live_config {
