@@ -1,11 +1,14 @@
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
+import { provideRouter } from '@angular/router';
+import { provideZonelessChangeDetection } from '@angular/core';
 import {
   AddMessagePayload,
   ConversationDetail,
   ConversationStatus,
   Message,
 } from '../../../core/api/tenant-api.models';
+import { RealtimeService, SseEvent } from '../../../core/realtime/realtime.service';
 import { ConversationsApiService } from './conversations-api.service';
 import { ConversationDetailStore } from './conversation-detail.store';
 
@@ -60,7 +63,10 @@ describe('ConversationDetailStore', () => {
     },
   ];
 
+  let events$: Subject<SseEvent>;
+
   beforeEach(() => {
+    events$ = new Subject<SseEvent>();
     api = {
       get: vi.fn(),
       getTimeline: vi.fn(),
@@ -69,7 +75,16 @@ describe('ConversationDetailStore', () => {
       setConversationAiHandling: vi.fn(),
     };
     TestBed.configureTestingModule({
-      providers: [ConversationDetailStore, { provide: ConversationsApiService, useValue: api }],
+      providers: [
+        provideRouter([]),
+        provideZonelessChangeDetection(),
+        ConversationDetailStore,
+        { provide: ConversationsApiService, useValue: api },
+        {
+          provide: RealtimeService,
+          useValue: { events: () => events$.asObservable() },
+        },
+      ],
     });
   });
 

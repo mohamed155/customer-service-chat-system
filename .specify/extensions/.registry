@@ -17,6 +17,26 @@
       },
       "registered_skills": [],
       "installed_at": "2026-07-07T13:23:00.354897+00:00"
+    },
+    "solid": {
+      "version": "1.0.0",
+      "source": "local",
+      "manifest_hash": "sha256:ec6a394892d1dcbe4d78cf69d2d61bae77cdd67346cbabcfd6fa52ef5d126c97",
+      "enabled": true,
+      "priority": 10,
+      "registered_commands": {
+        "agy": [
+          "speckit.solid.apply"
+        ],
+        "claude": [
+          "speckit.solid.apply"
+        ],
+        "codex": [
+          "speckit.solid.apply"
+        ]
+      },
+      "registered_skills": [],
+      "installed_at": "2026-07-17T23:55:26.537765+00:00"
     }
   }
 }

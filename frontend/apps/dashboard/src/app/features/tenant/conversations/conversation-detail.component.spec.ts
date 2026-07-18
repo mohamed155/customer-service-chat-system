@@ -66,12 +66,14 @@ describe('ConversationDetailComponent', () => {
     hasMoreTimeline: ReturnType<typeof vi.fn>;
     submitting: ReturnType<typeof vi.fn>;
     error: ReturnType<typeof vi.fn>;
+    activeGeneration: ReturnType<typeof vi.fn>;
     load: ReturnType<typeof vi.fn>;
     loadOlder: ReturnType<typeof vi.fn>;
     addMessage: ReturnType<typeof vi.fn>;
     patchStatus: ReturnType<typeof vi.fn>;
     patchAssignment: ReturnType<typeof vi.fn>;
     setAiHandling: ReturnType<typeof vi.fn>;
+    openConversation: ReturnType<typeof vi.fn>;
   };
 
   function createStoreMock() {
@@ -83,12 +85,14 @@ describe('ConversationDetailComponent', () => {
       hasMoreTimeline: vi.fn(() => false),
       submitting: vi.fn(() => false),
       error: vi.fn(() => null),
+      activeGeneration: vi.fn(() => null),
       load: vi.fn(),
       loadOlder: vi.fn(),
       addMessage: vi.fn(),
       patchStatus: vi.fn(),
       patchAssignment: vi.fn(),
       setAiHandling: vi.fn(),
+      openConversation: vi.fn(),
     };
   }
 

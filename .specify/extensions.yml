@@ -1,5 +1,6 @@
 installed:
 - agent-context
+- solid
 settings:
   auto_execute_hooks: true
 hooks:
@@ -20,4 +21,13 @@ hooks:
     priority: 10
     prompt: Execute speckit.agent-context.update?
     description: Refresh agent context after planning
+    condition: null
+  before_implement:
+  - extension: solid
+    command: speckit.solid.apply
+    enabled: true
+    optional: false
+    prompt: Execute speckit.solid.apply?
+    description: 'Mandatory: apply SOLID/TDD/clean-code discipline before any implementation
+      task runs'
     condition: null

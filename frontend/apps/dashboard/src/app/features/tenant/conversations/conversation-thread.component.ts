@@ -3,10 +3,12 @@ import { AvatarComponent } from '../../../shared/components/avatar/avatar.compon
 import { CitationListComponent } from '../../../shared/components/citation-list/citation-list.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import { Message } from '../../../core/api/tenant-api.models';
+import { ActiveGeneration } from './conversation-detail.store';
+import { AiThinkingIndicatorComponent } from '../../../shared/components/ai/ai-thinking-indicator/ai-thinking-indicator.component';
 
 @Component({
   selector: 'app-conversation-thread',
-  imports: [AvatarComponent, CitationListComponent, LoadingStateComponent],
+  imports: [AvatarComponent, CitationListComponent, LoadingStateComponent, AiThinkingIndicatorComponent],
   template: `
     <div class="messages" #scrollContainer>
       @if (hasMore()) {
@@ -38,10 +40,27 @@ import { Message } from '../../../core/api/tenant-api.models';
             }
           </div>
         </article>
-      } @empty {
-        @if (!loading()) {
-          <div class="empty-timeline">No messages yet</div>
+      }
+
+      @if (activeGeneration(); as gen) {
+        @if (gen.phase === 'thinking') {
+          <app-ai-thinking-indicator />
+        } @else if (gen.phase === 'streaming') {
+          <article class="member ai-streaming">
+            <app-avatar initials="AI" size="sm" />
+            <div class="bubble">
+              <div class="bubble-header">
+                <span class="sender-name">AI Assistant</span>
+                <span class="message-time">streaming…</span>
+              </div>
+              <p>{{ gen.buffer }}</p>
+            </div>
+          </article>
         }
+      }
+
+      @if (messages().length === 0 && !activeGeneration() && !loading()) {
+        <div class="empty-timeline">No messages yet</div>
       }
     </div>
   `,
@@ -92,6 +111,11 @@ import { Message } from '../../../core/api/tenant-api.models';
       article.note-message {
         max-width: 100%;
         justify-self: center;
+      }
+      article.ai-streaming .bubble {
+        background: var(--app-accent-soft);
+        border-color: var(--app-accent);
+        opacity: 0.85;
       }
       article.note-message .bubble {
         background: var(--app-amber-soft);
@@ -162,6 +186,7 @@ export class ConversationThreadComponent {
   readonly messages = input.required<readonly Message[]>();
   readonly loading = input(false);
   readonly hasMore = input(false);
+  readonly activeGeneration = input<ActiveGeneration | null>(null);
   readonly loadOlder = output<void>();
 
   protected senderClass(message: Message): string {

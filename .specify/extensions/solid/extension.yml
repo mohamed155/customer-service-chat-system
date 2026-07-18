@@ -1,0 +1,30 @@
+schema_version: "1.0"
+
+extension:
+  id: solid
+  name: "SOLID Engineering Discipline"
+  version: "1.0.0"
+  description: "Applies SOLID principles, TDD, and clean-code discipline automatically before every implementation run, across all coding agents"
+  author: "project"
+  license: "MIT"
+
+requires:
+  speckit_version: ">=0.2.0"
+
+provides:
+  commands:
+    - name: speckit.solid.apply
+      file: commands/speckit.solid.apply.md
+      description: "Load and apply the SOLID/TDD/clean-code engineering discipline for the current run"
+
+hooks:
+  before_implement:
+    command: speckit.solid.apply
+    optional: false
+    description: "Mandatory: apply SOLID/TDD/clean-code discipline before any implementation task runs"
+
+tags:
+  - "quality"
+  - "tdd"
+  - "solid"
+  - "core"

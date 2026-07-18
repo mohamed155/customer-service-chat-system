@@ -116,6 +116,7 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
           [messages]="store.timeline()"
           [loading]="store.loadingTimeline()"
           [hasMore]="store.hasMoreTimeline()"
+          [activeGeneration]="store.activeGeneration()"
           (loadOlder)="store.loadOlder(conv.id)"
         />
 
@@ -281,7 +282,7 @@ export class ConversationDetailComponent implements OnInit {
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
-    if (id) this.store.load(id);
+    if (id) this.store.openConversation(id);
   }
 
   protected goBack(): void {

@@ -1,15 +1,29 @@
 import { computed, inject } from '@angular/core';
-import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
+import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { pipe, switchMap, tap } from 'rxjs';
+import { filter, pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
 import {
   AddMessagePayload,
+  AiMessageCompleted,
+  AiMessageDelta,
+  AiMessageStarted,
+  AiMessageSuperseded,
+  AiMessageFailed,
   ConversationDetailEscalation,
   ConversationStatus,
   Message,
 } from '../../../core/api/tenant-api.models';
+import { RealtimeService, SseEvent } from '../../../core/realtime/realtime.service';
 import { ConversationsApiService } from './conversations-api.service';
+
+export type GenerationPhase = 'idle' | 'thinking' | 'streaming';
+
+export interface ActiveGeneration {
+  readonly generationId: string;
+  readonly phase: GenerationPhase;
+  readonly buffer: string;
+}
 
 export interface TimelinePage {
   readonly items: Message[];
@@ -25,6 +39,8 @@ interface ConversationDetailState {
   readonly submitting: boolean;
   readonly error: string | null;
   readonly timelineError: string | null;
+  readonly activeGeneration: ActiveGeneration | null;
+  readonly openConversationId: string | null;
 }
 
 export const ConversationDetailStore = signalStore(
@@ -36,6 +52,8 @@ export const ConversationDetailStore = signalStore(
     submitting: false,
     error: null,
     timelineError: null,
+    activeGeneration: null,
+    openConversationId: null,
   }),
   withComputed(({ timelinePages }) => ({
     timeline: computed(() =>
@@ -53,7 +71,7 @@ export const ConversationDetailStore = signalStore(
       return pages.length > 0 ? (pages[pages.length - 1]?.cursor ?? null) : null;
     }),
   })),
-  withMethods((store, api = inject(ConversationsApiService)) => {
+  withMethods((store, api = inject(ConversationsApiService), realtime = inject(RealtimeService)) => {
     const loadDetail = rxMethod<string>(
       pipe(
         tap(() => patchState(store, { loading: true, error: null })),
@@ -198,6 +216,82 @@ export const ConversationDetailStore = signalStore(
           },
         });
       },
+      setConversationId(id: string | null): void {
+        patchState(store, { openConversationId: id });
+        if (id) {
+          loadDetail(id);
+          loadTimeline(id);
+        } else {
+          patchState(store, { activeGeneration: null });
+        }
+      },
+
+      openConversation(id: string): void {
+        const prev = store.openConversationId();
+        if (prev !== id) {
+          patchState(store, { openConversationId: id, activeGeneration: null });
+          loadDetail(id);
+          loadTimeline(id);
+        }
+      },
+
+      handleAiEvent(event: SseEvent): void {
+        const convId = store.openConversationId();
+        if (!convId) return;
+
+        const parsed = tryParseJson(event.data);
+        if (!parsed) return;
+        const data = parsed as { conversationId?: string };
+        if (!data.conversationId || data.conversationId !== convId) return;
+
+        switch (event.event) {
+          case 'ai.message.started': {
+            const payload = data as unknown as AiMessageStarted;
+            patchState(store, {
+              activeGeneration: {
+                generationId: payload.generationId,
+                phase: 'thinking',
+                buffer: '',
+              },
+            });
+            break;
+          }
+          case 'ai.message.delta': {
+            const payload = data as unknown as AiMessageDelta;
+            const current = store.activeGeneration();
+            if (current?.generationId === payload.generationId) {
+              patchState(store, {
+                activeGeneration: {
+                  ...current,
+                  phase: 'streaming',
+                  buffer: current.buffer + payload.text,
+                },
+              });
+            }
+            break;
+          }
+          case 'ai.message.completed': {
+            const payload = data as unknown as AiMessageCompleted;
+            const current = store.activeGeneration();
+            if (current?.generationId === payload.generationId) {
+              patchState(store, {
+                timelinePages: [
+                  ...store.timelinePages(),
+                  { items: [payload.message], cursor: null, hasMore: false },
+                ],
+                activeGeneration: null,
+              });
+            }
+            break;
+          }
+          case 'ai.message.superseded':
+          case 'ai.message.failed': {
+            patchState(store, { activeGeneration: null });
+            break;
+          }
+        }
+      },
+
       setAiHandling(conversationId: string, mode: 'platform_ai' | 'human'): void {
         api.setConversationAiHandling(conversationId, mode).subscribe({
           next: (response) => {
@@ -235,4 +329,29 @@ export const ConversationDetailStore = signalStore(
       },
     };
   }),
+  withHooks({
+    onInit(store, realtime = inject(RealtimeService)) {
+      const sub = realtime
+        .events()
+        .pipe(
+          filter(
+            (e) =>
+              e.event.startsWith('ai.message.') && store.openConversationId() != null,
+          ),
+        )
+        .subscribe((e) => store.handleAiEvent(e));
+      (store as unknown as { realtimeSub: { unsubscribe: () => void } }).realtimeSub = sub;
+    },
+    onDestroy(store) {
+      (store as unknown as { realtimeSub?: { unsubscribe: () => void } }).realtimeSub?.unsubscribe();
+    },
+  }),
 );
+
+function tryParseJson(text: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
