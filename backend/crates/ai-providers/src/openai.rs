@@ -255,7 +255,11 @@ impl EmbeddingProvider for OpenAiAdapter {
                     .map(|entry| {
                         entry["embedding"]
                             .as_array()
-                            .map(|arr| arr.iter().filter_map(|v| v.as_f64().map(|f| f as f32)).collect())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_f64().map(|f| f as f32))
+                                    .collect()
+                            })
                             .unwrap_or_default()
                     })
                     .collect()

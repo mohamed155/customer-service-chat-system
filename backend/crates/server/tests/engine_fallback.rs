@@ -315,7 +315,10 @@ async fn engine_retry_exhaustion_triggers_fallback() {
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    assert!(processed_any, "agent responder should have processed at least one event");
+    assert!(
+        processed_any,
+        "agent responder should have processed at least one event"
+    );
 
     // ==================== Assertions ====================
 
@@ -328,7 +331,10 @@ async fn engine_retry_exhaustion_triggers_fallback() {
     .fetch_all(&pool)
     .await
     .unwrap();
-    assert!(!system_messages.is_empty(), "expected at least one system (fallback) message");
+    assert!(
+        !system_messages.is_empty(),
+        "expected at least one system (fallback) message"
+    );
     let (_sys_id, sys_body) = &system_messages[0];
     assert!(
         sys_body.contains("having trouble responding") || sys_body.contains("team member"),
@@ -336,13 +342,10 @@ async fn engine_retry_exhaustion_triggers_fallback() {
     );
 
     // (b) An open escalation exists
-    let open_esc: bool = escalations::routing::has_open_escalation(
-        &pool,
-        tenant_id,
-        conversation_id,
-    )
-    .await
-    .unwrap();
+    let open_esc: bool =
+        escalations::routing::has_open_escalation(&pool, tenant_id, conversation_id)
+            .await
+            .unwrap();
     assert!(open_esc, "expected an open escalation for the conversation");
 
     // Also confirm via raw SQL

@@ -106,7 +106,10 @@ pub async fn assemble_context(
                 "customer" => ai_providers::Role::User,
                 _ => ai_providers::Role::Assistant,
             };
-            ai_providers::Message { role, content: body }
+            ai_providers::Message {
+                role,
+                content: body,
+            }
         })
         .collect();
 
@@ -126,19 +129,18 @@ pub async fn assemble_context(
         };
         let query_len = query_string.len();
 
-        let retrieval_result = tokio::time::timeout(
-            std::time::Duration::from_millis(800),
-            async move {
+        let retrieval_result =
+            tokio::time::timeout(std::time::Duration::from_millis(800), async move {
                 let embeddings = ai.embed_platform(embed_ctx, vec![query_string]).await?;
-                let embedding = embeddings.into_iter().next().ok_or_else(|| {
-                    AiCallError::Internal("empty embedding result".into())
-                })?;
+                let embedding = embeddings
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| AiCallError::Internal("empty embedding result".into()))?;
                 knowledge::retrieval::search(pool, tenant_id, &embedding, 5, 0.70)
                     .await
                     .map_err(|e| AiCallError::Internal(e.to_string()))
-            },
-        )
-        .await;
+            })
+            .await;
 
         let elapsed_ms = retrieval_start.elapsed().as_millis() as u64;
 
@@ -152,8 +154,7 @@ pub async fn assemble_context(
         }
 
         if !retrieved_chunks.is_empty() {
-            let mut knowledge_block =
-                String::from("\n\n=== Knowledge Context ===\n");
+            let mut knowledge_block = String::from("\n\n=== Knowledge Context ===\n");
             for chunk in &retrieved_chunks {
                 knowledge_block.push_str(&format!(
                     "Source: \"{}\" (relevance: {:.2})\n{}\n\n",
@@ -270,8 +271,7 @@ pub async fn generate(
                 },
             ),
         );
-        bc.presence
-            .broadcast(bc.tenant_id, started_ev);
+        bc.presence.broadcast(bc.tenant_id, started_ev);
     }
 
     for attempt in 0..3 {
@@ -343,8 +343,7 @@ pub async fn generate(
                                     },
                                 ),
                             );
-                            bc.presence
-                                .broadcast(bc.tenant_id, delta_ev);
+                            bc.presence.broadcast(bc.tenant_id, delta_ev);
                         }
 
                         // Mid-stream supersede checks (~1/s)
@@ -382,8 +381,7 @@ pub async fn generate(
                     final_provider = result.provider;
                     final_model = result.model;
                     final_usage = result.usage;
-                    finish_length =
-                        matches!(result.finish, ai_providers::FinishReason::Length);
+                    finish_length = matches!(result.finish, ai_providers::FinishReason::Length);
                 }
                 crate::AiStreamEvent::Error { category } => {
                     stream_failed = true;
@@ -461,6 +459,7 @@ pub async fn generate(
 /// Returns `Ok(())` even when the generation fails (fallback paths are handled
 /// internally). Errors that prevent deletion of the outbox event are
 /// propagated.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_generation(
     pool: &PgPool,
     ai: &AiService,
@@ -523,31 +522,49 @@ pub async fn run_generation(
     };
 
     // 4. Call the provider
-    let gen_result = generate(ai, ctx, assembled.input, provider_override, Some(&broadcast_ctx)).await;
+    let gen_result = generate(
+        ai,
+        ctx,
+        assembled.input,
+        provider_override,
+        Some(&broadcast_ctx),
+    )
+    .await;
 
     let latency_ms = start.elapsed().as_millis() as i32;
 
     // Pre-commit re-check: if a newer message arrived or escalation opened
     // during generation, discard the result
     let has_newer = conversations::queries::has_customer_message_after(
-        pool, tenant_id, conversation_id, trigger_message_id,
+        pool,
+        tenant_id,
+        conversation_id,
+        trigger_message_id,
     )
     .await
     .unwrap_or(false);
     let has_esc = escalations::routing::has_open_escalation(pool, tenant_id, conversation_id)
         .await
         .unwrap_or(false);
-    let already_replied =
-        conversations::queries::has_ai_reply_since(pool, tenant_id, conversation_id, trigger_message_id)
-            .await
-            .unwrap_or(false);
+    let already_replied = conversations::queries::has_ai_reply_since(
+        pool,
+        tenant_id,
+        conversation_id,
+        trigger_message_id,
+    )
+    .await
+    .unwrap_or(false);
 
     let superseded = has_newer || has_esc || already_replied;
 
     match gen_result {
         Ok(output) if !superseded => {
             let confidence_inputs = crate::confidence::ConfidenceInputs {
-                top_chunk_similarity: assembled.retrieved_chunks.first().map(|c| c.similarity as f32).unwrap_or(0.0),
+                top_chunk_similarity: assembled
+                    .retrieved_chunks
+                    .first()
+                    .map(|c| c.similarity as f32)
+                    .unwrap_or(0.0),
                 chunk_count: assembled.retrieved_chunks.len() as u32,
                 finish_length: output.finish_length,
                 retrieval_degraded: assembled.retrieval_degraded,
@@ -558,7 +575,11 @@ pub async fn run_generation(
             let mid = {
                 let mut tx = pool.begin().await?;
                 let mid = conversations::queries::insert_ai_reply_in_tx(
-                    &mut tx, tenant_id, conversation_id, &output.content, Some(confidence_score),
+                    &mut tx,
+                    tenant_id,
+                    conversation_id,
+                    &output.content,
+                    Some(confidence_score),
                 )
                 .await?;
 
@@ -584,10 +605,17 @@ pub async fn run_generation(
                 mid
             };
 
-            let retrieval_top = assembled.retrieved_chunks.first().map(|c| c.similarity as f32);
-            let confidence_band_label = if confidence_score >= 0.70 { "high" }
-                else if confidence_score >= 0.40 { "medium" }
-                else { "low" };
+            let retrieval_top = assembled
+                .retrieved_chunks
+                .first()
+                .map(|c| c.similarity as f32);
+            let confidence_band_label = if confidence_score >= 0.70 {
+                "high"
+            } else if confidence_score >= 0.40 {
+                "medium"
+            } else {
+                "low"
+            };
             let rec = GenerationRecord {
                 id: generation_id,
                 tenant_id,
@@ -642,9 +670,13 @@ pub async fn run_generation(
             let reason = match &gen_result {
                 Err(GenerateError::Superseded { reason }) => reason.clone(),
                 _ => {
-                    if has_newer { "newer_message".into() }
-                    else if has_esc { "escalated".into() }
-                    else { "already_replied".into() }
+                    if has_newer {
+                        "newer_message".into()
+                    } else if has_esc {
+                        "escalated".into()
+                    } else {
+                        "already_replied".into()
+                    }
                 }
             };
             let outcome = if has_esc || reason == "escalated" {
@@ -667,7 +699,10 @@ pub async fn run_generation(
                 attempts: 1,
                 continuation_used: false,
                 retrieval_chunk_count: assembled.retrieved_chunks.len() as i16,
-                retrieval_top_similarity: assembled.retrieved_chunks.first().map(|c| c.similarity as f32),
+                retrieval_top_similarity: assembled
+                    .retrieved_chunks
+                    .first()
+                    .map(|c| c.similarity as f32),
                 retrieval_degraded: assembled.retrieval_degraded,
                 confidence_score: None,
                 latency_ms,
@@ -706,7 +741,9 @@ pub async fn run_generation(
                 if !has_ack {
                     let mut tx = pool.begin().await?;
                     conversations::queries::insert_auto_ack_in_tx(
-                        &mut tx, tenant_id, conversation_id,
+                        &mut tx,
+                        tenant_id,
+                        conversation_id,
                         "Thank you for your message. A team member will be with you shortly.",
                     )
                     .await?;
@@ -718,26 +755,36 @@ pub async fn run_generation(
                 .execute(pool)
                 .await?;
         }
-        Err(GenerateError::Provider(AiCallError::Provider {
-            category,
-            ..
-        })) => {
+        Err(GenerateError::Provider(AiCallError::Provider { category, .. })) => {
             let fallback_body = "I'm sorry — I'm having trouble responding right now. A team member will follow up shortly.";
             let last_category = Some(category.as_str().to_string());
 
             let fallback_ok = match async {
                 let mut tx = pool.begin().await?;
                 conversations::queries::insert_fallback_in_tx(
-                    &mut tx, tenant_id, conversation_id, fallback_body,
+                    &mut tx,
+                    tenant_id,
+                    conversation_id,
+                    fallback_body,
                 )
                 .await?;
                 let present_ids = presence.present_membership_ids_async(tenant_id).await;
                 let _ = escalations::routing::route_new_escalation_in_tx(
-                    &mut tx, pool, tenant_id, conversation_id,
-                    "AI assistant unavailable", &[], &[], &present_ids, Uuid::nil(),
+                    &mut tx,
+                    pool,
+                    tenant_id,
+                    conversation_id,
+                    "AI assistant unavailable",
+                    &[],
+                    &[],
+                    &present_ids,
+                    Uuid::nil(),
                 )
                 .await;
-                tx.commit().await.map_err(|e| { tracing::error!(%e, "engine: fallback tx commit failed"); e })
+                tx.commit().await.map_err(|e| {
+                    tracing::error!(%e, "engine: fallback tx commit failed");
+                    e
+                })
             }
             .await
             {
@@ -751,20 +798,35 @@ pub async fn run_generation(
             let (outcome, error_category) = if fallback_ok {
                 (GenerationOutcome::Fallback, last_category)
             } else {
-                (GenerationOutcome::Failed, Some("fallback_insert_failed".into()))
+                (
+                    GenerationOutcome::Failed,
+                    Some("fallback_insert_failed".into()),
+                )
             };
 
             let rec = GenerationRecord {
                 id: generation_id,
-                tenant_id, conversation_id, trigger_message_id,
-                response_message_id: None, usage_record_id: None,
-                provider: None, model: None, outcome, error_category,
-                attempts: 1, continuation_used: false,
+                tenant_id,
+                conversation_id,
+                trigger_message_id,
+                response_message_id: None,
+                usage_record_id: None,
+                provider: None,
+                model: None,
+                outcome,
+                error_category,
+                attempts: 1,
+                continuation_used: false,
                 retrieval_chunk_count: assembled.retrieved_chunks.len() as i16,
-                retrieval_top_similarity: assembled.retrieved_chunks.first().map(|c| c.similarity as f32),
+                retrieval_top_similarity: assembled
+                    .retrieved_chunks
+                    .first()
+                    .map(|c| c.similarity as f32),
                 retrieval_degraded: assembled.retrieval_degraded,
-                confidence_score: None, latency_ms,
-                request_id: None, created_at: Some(chrono::Utc::now()),
+                confidence_score: None,
+                latency_ms,
+                request_id: None,
+                created_at: Some(chrono::Utc::now()),
             };
             let _ = generation_record::insert(pool, &rec).await;
 
@@ -776,11 +838,21 @@ pub async fn run_generation(
                             conversation_id,
                             generation_id,
                             category: match category {
-                                ai_providers::ErrorCategory::Authentication => escalations::model::FailureCategory::Authentication,
-                                ai_providers::ErrorCategory::RateLimited => escalations::model::FailureCategory::RateLimited,
-                                ai_providers::ErrorCategory::Unavailable => escalations::model::FailureCategory::Unavailable,
-                                ai_providers::ErrorCategory::Timeout => escalations::model::FailureCategory::Timeout,
-                                ai_providers::ErrorCategory::InvalidRequest => escalations::model::FailureCategory::InvalidRequest,
+                                ai_providers::ErrorCategory::Authentication => {
+                                    escalations::model::FailureCategory::Authentication
+                                }
+                                ai_providers::ErrorCategory::RateLimited => {
+                                    escalations::model::FailureCategory::RateLimited
+                                }
+                                ai_providers::ErrorCategory::Unavailable => {
+                                    escalations::model::FailureCategory::Unavailable
+                                }
+                                ai_providers::ErrorCategory::Timeout => {
+                                    escalations::model::FailureCategory::Timeout
+                                }
+                                ai_providers::ErrorCategory::InvalidRequest => {
+                                    escalations::model::FailureCategory::InvalidRequest
+                                }
                             },
                         },
                     ),

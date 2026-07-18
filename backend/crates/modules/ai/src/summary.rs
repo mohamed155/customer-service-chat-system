@@ -67,7 +67,10 @@ pub async fn handle_summary(
 
     // Load conversation history
     let history = match conversations::queries::summary_history(
-        &pool, tenant_id, conversation_id, 50,
+        &pool,
+        tenant_id,
+        conversation_id,
+        50,
     )
     .await
     {
@@ -123,17 +126,18 @@ pub async fn handle_summary(
                 generated_at: chrono::Utc::now(),
                 message_count: history.len(),
             };
-            (axum::http::StatusCode::OK, Json(serde_json::to_value(&response).unwrap_or_default()))
-        }
-        Err(AiCallError::NotConfigured) => {
             (
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({
-                    "error": "ai_not_configured",
-                    "message": "AI is not configured for this tenant"
-                })),
+                axum::http::StatusCode::OK,
+                Json(serde_json::to_value(&response).unwrap_or_default()),
             )
         }
+        Err(AiCallError::NotConfigured) => (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({
+                "error": "ai_not_configured",
+                "message": "AI is not configured for this tenant"
+            })),
+        ),
         Err(e) => {
             tracing::warn!(?e, "summary generation failed");
             (

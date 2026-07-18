@@ -79,21 +79,26 @@ impl Stream for GuardedStream {
             Poll::Ready(Some(Ok(presence::Event::ConversationAi(ev)))) => {
                 self.seq += 1;
                 let (event_type, data) = match ev {
-                    crate::model::ConversationAiEvent::Started(payload) => {
-                        ("ai.message.started", serde_json::to_string(&payload).unwrap_or_default())
-                    }
-                    crate::model::ConversationAiEvent::Delta(payload) => {
-                        ("ai.message.delta", serde_json::to_string(&payload).unwrap_or_default())
-                    }
-                    crate::model::ConversationAiEvent::Completed(payload) => {
-                        ("ai.message.completed", serde_json::to_string(&payload).unwrap_or_default())
-                    }
-                    crate::model::ConversationAiEvent::Superseded(payload) => {
-                        ("ai.message.superseded", serde_json::to_string(&payload).unwrap_or_default())
-                    }
-                    crate::model::ConversationAiEvent::Failed(payload) => {
-                        ("ai.message.failed", serde_json::to_string(&payload).unwrap_or_default())
-                    }
+                    crate::model::ConversationAiEvent::Started(payload) => (
+                        "ai.message.started",
+                        serde_json::to_string(&payload).unwrap_or_default(),
+                    ),
+                    crate::model::ConversationAiEvent::Delta(payload) => (
+                        "ai.message.delta",
+                        serde_json::to_string(&payload).unwrap_or_default(),
+                    ),
+                    crate::model::ConversationAiEvent::Completed(payload) => (
+                        "ai.message.completed",
+                        serde_json::to_string(&payload).unwrap_or_default(),
+                    ),
+                    crate::model::ConversationAiEvent::Superseded(payload) => (
+                        "ai.message.superseded",
+                        serde_json::to_string(&payload).unwrap_or_default(),
+                    ),
+                    crate::model::ConversationAiEvent::Failed(payload) => (
+                        "ai.message.failed",
+                        serde_json::to_string(&payload).unwrap_or_default(),
+                    ),
                 };
                 Poll::Ready(Some(Ok(Event::default()
                     .event(event_type)

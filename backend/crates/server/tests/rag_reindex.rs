@@ -114,9 +114,7 @@ fn test_config() -> config::AppConfig {
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
         docs_enabled: false,
-        ai_key_encryption_key: Some(
-            "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into(),
-        ),
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
@@ -303,8 +301,7 @@ async fn reindex_published_item_returns_202() {
     );
     let json = body_json(reindex_resp).await;
     assert_eq!(
-        json["data"]["index_status"]["status"],
-        "pending",
+        json["data"]["index_status"]["status"], "pending",
         "status should reset to pending"
     );
 }
@@ -534,7 +531,8 @@ async fn reindex_while_pending_is_noop() {
     .await;
 
     // Record the baseline outbox event count (one from publishing)
-    let events_before = count_pending_outbox_events(&pool, Uuid::parse_str(&item_id).unwrap()).await;
+    let events_before =
+        count_pending_outbox_events(&pool, Uuid::parse_str(&item_id).unwrap()).await;
     assert_eq!(events_before, 1, "publishing should enqueue one event");
 
     // Reindex while already pending
@@ -676,9 +674,7 @@ async fn document_no_extractable_text_resolves_to_not_indexable() {
     );
 
     // 4. The indexer calls set_not_indexable with a descriptive reason
-    let reason = format!(
-        "No extractable text from content type: {content_type}"
-    );
+    let reason = format!("No extractable text from content type: {content_type}");
     knowledge::index_state::set_not_indexable(&pool, item_id, &reason)
         .await
         .unwrap();
@@ -741,13 +737,9 @@ async fn authored_article_empty_body_resolves_to_not_indexable() {
     );
 
     // The indexer calls set_not_indexable
-    knowledge::index_state::set_not_indexable(
-        &pool,
-        item_id,
-        "No extractable text content",
-    )
-    .await
-    .unwrap();
+    knowledge::index_state::set_not_indexable(&pool, item_id, "No extractable text content")
+        .await
+        .unwrap();
 
     let result = knowledge::index_state::get(&pool, tenant_id, item_id)
         .await

@@ -340,7 +340,10 @@ async fn ai_message_has_confidence_customer_message_does_not() {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    assert!(processed, "agent responder should have processed at least one event");
+    assert!(
+        processed,
+        "agent responder should have processed at least one event"
+    );
 
     // ── GET the conversation timeline ───────────────────────────────────────
     let timeline_resp = send(
@@ -365,7 +368,11 @@ async fn ai_message_has_confidence_customer_message_does_not() {
         .iter()
         .filter(|m| m["kind"].as_str() == Some("ai"))
         .collect();
-    assert_eq!(ai_msgs.len(), 1, "expected exactly one AI message in the timeline");
+    assert_eq!(
+        ai_msgs.len(),
+        1,
+        "expected exactly one AI message in the timeline"
+    );
     let ai_msg = ai_msgs[0];
 
     // Assert AI message has confidence.score (number in [0,1])
@@ -396,8 +403,7 @@ async fn ai_message_has_confidence_customer_message_does_not() {
         .collect();
     for msg in &customer_msgs {
         assert!(
-            msg.get("confidence").is_none()
-                || msg["confidence"].is_null(),
+            msg.get("confidence").is_none() || msg["confidence"].is_null(),
             "customer message should not have confidence"
         );
     }
@@ -409,8 +415,7 @@ async fn ai_message_has_confidence_customer_message_does_not() {
         .collect();
     for msg in &system_msgs {
         assert!(
-            msg.get("confidence").is_none()
-                || msg["confidence"].is_null(),
+            msg.get("confidence").is_none() || msg["confidence"].is_null(),
             "system message should not have confidence"
         );
     }

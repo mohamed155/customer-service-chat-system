@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct ChunkResult {
@@ -122,8 +122,7 @@ fn build_base_chunks(text: &str) -> Vec<String> {
         };
 
         let fits = candidate.len() <= CHUNK_MAX_CHARS
-            || (current.len() < CHUNK_MIN_CHARS
-                && candidate.len() <= CHUNK_MAX_CHARS * 2);
+            || (current.len() < CHUNK_MIN_CHARS && candidate.len() <= CHUNK_MAX_CHARS * 2);
 
         if fits {
             current = candidate;

@@ -1,5 +1,12 @@
 import { computed, inject } from '@angular/core';
-import { patchState, signalStore, withComputed, withHooks, withMethods, withState } from '@ngrx/signals';
+import {
+  patchState,
+  signalStore,
+  withComputed,
+  withHooks,
+  withMethods,
+  withState,
+} from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { filter, pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
@@ -8,8 +15,6 @@ import {
   AiMessageCompleted,
   AiMessageDelta,
   AiMessageStarted,
-  AiMessageSuperseded,
-  AiMessageFailed,
   ConversationDetailEscalation,
   ConversationStatus,
   Message,
@@ -71,7 +76,7 @@ export const ConversationDetailStore = signalStore(
       return pages.length > 0 ? (pages[pages.length - 1]?.cursor ?? null) : null;
     }),
   })),
-  withMethods((store, api = inject(ConversationsApiService), realtime = inject(RealtimeService)) => {
+  withMethods((store, api = inject(ConversationsApiService)) => {
     const loadDetail = rxMethod<string>(
       pipe(
         tap(() => patchState(store, { loading: true, error: null })),
@@ -330,20 +335,19 @@ export const ConversationDetailStore = signalStore(
     };
   }),
   withHooks({
-    onInit(store, realtime = inject(RealtimeService)) {
-      const sub = realtime
+    onInit(store, _realtime = inject(RealtimeService)) {
+      const sub = _realtime
         .events()
         .pipe(
-          filter(
-            (e) =>
-              e.event.startsWith('ai.message.') && store.openConversationId() != null,
-          ),
+          filter((e) => e.event.startsWith('ai.message.') && store.openConversationId() != null),
         )
         .subscribe((e) => store.handleAiEvent(e));
       (store as unknown as { realtimeSub: { unsubscribe: () => void } }).realtimeSub = sub;
     },
     onDestroy(store) {
-      (store as unknown as { realtimeSub?: { unsubscribe: () => void } }).realtimeSub?.unsubscribe();
+      (
+        store as unknown as { realtimeSub?: { unsubscribe: () => void } }
+      ).realtimeSub?.unsubscribe();
     },
   }),
 );

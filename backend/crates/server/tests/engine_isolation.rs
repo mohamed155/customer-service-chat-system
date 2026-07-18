@@ -5,9 +5,9 @@ use ai::agent_responder::process_agent_responder_once;
 use ai::crypto::{self, MasterKey};
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
+use serde_json::json;
 use server::router;
 use server::state::AppState;
-use serde_json::json;
 use tower::ServiceExt;
 use uuid::Uuid;
 use wiremock::matchers::{method, path};
@@ -138,7 +138,12 @@ async fn seed_ai_config(pool: &sqlx::PgPool, provider: &str, model: &str) {
     .unwrap();
 }
 
-async fn seed_ai_credential(pool: &sqlx::PgPool, provider: &str, api_key: &str, master: &MasterKey) {
+async fn seed_ai_credential(
+    pool: &sqlx::PgPool,
+    provider: &str,
+    api_key: &str,
+    master: &MasterKey,
+) {
     let aad = crypto::aad(None, provider);
     let (ciphertext, nonce) = crypto::seal(master, &aad, api_key).unwrap();
     let hint = crypto::hint(api_key);
@@ -470,5 +475,8 @@ async fn engine_cross_tenant_isolation() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(b_gen_outcome, "success", "B's generation outcome must be success");
+    assert_eq!(
+        b_gen_outcome, "success",
+        "B's generation outcome must be success"
+    );
 }

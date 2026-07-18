@@ -906,8 +906,7 @@ pub async fn update_item(
     }
 
     if existing.status == "published" {
-        if let Err(e) =
-            store::enqueue_index_requested_in_tx(&mut tx, ctx.tenant_id, item_id).await
+        if let Err(e) = store::enqueue_index_requested_in_tx(&mut tx, ctx.tenant_id, item_id).await
         {
             tracing::error!(%e, "update_item: enqueue_index_requested_in_tx failed");
             let _ = tx.rollback().await;
@@ -1130,8 +1129,7 @@ pub async fn set_item_status(
         };
 
     if new_status == validate::ItemStatus::Published {
-        if let Err(e) =
-            store::enqueue_index_requested_in_tx(&mut tx, ctx.tenant_id, item_id).await
+        if let Err(e) = store::enqueue_index_requested_in_tx(&mut tx, ctx.tenant_id, item_id).await
         {
             tracing::error!(%e, "set_item_status: enqueue_index_requested_in_tx failed");
             let _ = tx.rollback().await;
@@ -1140,9 +1138,7 @@ pub async fn set_item_status(
                 .into_response();
         }
     } else if current_status == validate::ItemStatus::Published {
-        if let Err(e) =
-            store::clear_index_data_in_tx(&mut tx, ctx.tenant_id, item_id).await
-        {
+        if let Err(e) = store::clear_index_data_in_tx(&mut tx, ctx.tenant_id, item_id).await {
             tracing::error!(%e, "set_item_status: clear_index_data_in_tx failed");
             let _ = tx.rollback().await;
             return ApiError::internal_error("Failed to update item status")

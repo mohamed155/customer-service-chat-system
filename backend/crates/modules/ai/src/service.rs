@@ -491,15 +491,20 @@ impl AiService {
             .as_ref()
             .ok_or(AiCallError::NotConfigured)?;
 
-        let (key, _source_is_tenant) = resolve_credential(&self.0.pool, master_key, scope, &provider_name)
-            .await
-            .map_err(AiCallError::Internal)?
-            .ok_or(AiCallError::NotConfigured)?;
+        let (key, _source_is_tenant) =
+            resolve_credential(&self.0.pool, master_key, scope, &provider_name)
+                .await
+                .map_err(AiCallError::Internal)?
+                .ok_or(AiCallError::NotConfigured)?;
 
-        let embedding_provider = self.0.registry.embedding_provider(&provider_name).ok_or_else(|| {
-            tracing::warn!(provider = %provider_name, "provider does not support embeddings");
-            AiCallError::NotConfigured
-        })?;
+        let embedding_provider = self
+            .0
+            .registry
+            .embedding_provider(&provider_name)
+            .ok_or_else(|| {
+                tracing::warn!(provider = %provider_name, "provider does not support embeddings");
+                AiCallError::NotConfigured
+            })?;
 
         let req = ai_providers::EmbeddingRequest {
             model: embedding_model,
@@ -1112,7 +1117,9 @@ impl AiService {
                                         latency_ms: started.elapsed().as_millis() as i32,
                                         request_id: ctx_request_id.clone(),
                                         request_content: if capture {
-                                            Some(serde_json::json!({"system": &input_system, "messages": &input_messages}))
+                                            Some(
+                                                serde_json::json!({"system": &input_system, "messages": &input_messages}),
+                                            )
                                         } else {
                                             None
                                         },
@@ -1151,7 +1158,9 @@ impl AiService {
                                     latency_ms: started.elapsed().as_millis() as i32,
                                     request_id: ctx_request_id.clone(),
                                     request_content: if capture {
-                                        Some(serde_json::json!({"system": input_system, "messages": input_messages}))
+                                        Some(
+                                            serde_json::json!({"system": input_system, "messages": input_messages}),
+                                        )
                                     } else {
                                         None
                                     },
@@ -1181,7 +1190,9 @@ impl AiService {
                                     latency_ms: started.elapsed().as_millis() as i32,
                                     request_id: ctx_request_id.clone(),
                                     request_content: if capture {
-                                        Some(serde_json::json!({"system": &input_system, "messages": &input_messages}))
+                                        Some(
+                                            serde_json::json!({"system": &input_system, "messages": &input_messages}),
+                                        )
                                     } else {
                                         None
                                     },
@@ -1216,7 +1227,9 @@ impl AiService {
                         latency_ms: started.elapsed().as_millis() as i32,
                         request_id: ctx_request_id.clone(),
                         request_content: if capture {
-                            Some(serde_json::json!({"system": &input_system, "messages": &input_messages}))
+                            Some(
+                                serde_json::json!({"system": &input_system, "messages": &input_messages}),
+                            )
                         } else {
                             None
                         },
@@ -1256,7 +1269,9 @@ impl AiService {
                         latency_ms: started.elapsed().as_millis() as i32,
                         request_id: ctx_request_id.clone(),
                         request_content: if capture {
-                            Some(serde_json::json!({"system": &input_system, "messages": &input_messages}))
+                            Some(
+                                serde_json::json!({"system": &input_system, "messages": &input_messages}),
+                            )
                         } else {
                             None
                         },
@@ -1300,22 +1315,14 @@ impl knowledge::indexer::Embedder for AiService {
         };
         match self.embed_platform(ctx, texts).await {
             Ok(embeddings) => Ok(embeddings),
-            Err(AiCallError::Provider { category, .. }) if category.retriable() => {
-                Err(knowledge::indexer::EmbedError::Retriable(
-                    category.as_str().to_string(),
-                ))
-            }
-            Err(AiCallError::Provider { category, .. }) => {
-                Err(knowledge::indexer::EmbedError::Permanent(
-                    category.as_str().to_string(),
-                ))
-            }
-            Err(AiCallError::NotConfigured) => {
-                Err(knowledge::indexer::EmbedError::NotConfigured)
-            }
-            Err(AiCallError::Internal(e)) => {
-                Err(knowledge::indexer::EmbedError::Permanent(e))
-            }
+            Err(AiCallError::Provider { category, .. }) if category.retriable() => Err(
+                knowledge::indexer::EmbedError::Retriable(category.as_str().to_string()),
+            ),
+            Err(AiCallError::Provider { category, .. }) => Err(
+                knowledge::indexer::EmbedError::Permanent(category.as_str().to_string()),
+            ),
+            Err(AiCallError::NotConfigured) => Err(knowledge::indexer::EmbedError::NotConfigured),
+            Err(AiCallError::Internal(e)) => Err(knowledge::indexer::EmbedError::Permanent(e)),
         }
     }
 }

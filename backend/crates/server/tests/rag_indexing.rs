@@ -5,8 +5,8 @@ use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use http_body_util::BodyExt;
 use knowledge::index_state::{get, set_failed, set_indexed, upsert_status, IndexStatus};
-use server::state::AppState;
 use server::router;
+use server::state::AppState;
 use sqlx::PgPool;
 use storage::InMemoryStorage;
 use tower::ServiceExt;
@@ -215,10 +215,7 @@ async fn publish_to_indexed_lifecycle() {
         .expect("index state row should exist");
     assert_eq!(state_row.status, "indexed");
     assert_eq!(state_row.chunk_count, 3);
-    assert_eq!(
-        state_row.indexed_content_hash.as_deref(),
-        Some("abc123")
-    );
+    assert_eq!(state_row.indexed_content_hash.as_deref(), Some("abc123"));
     assert!(state_row.last_indexed_at.is_some());
     assert!(state_row.failure_reason.is_none());
 }
@@ -254,11 +251,13 @@ async fn edit_published_item_resets_index_status() {
     set_indexed(&pool, item_id, "old_hash", 2).await.unwrap();
 
     // Simulate editing the published item by changing its content
-    sqlx::query("UPDATE knowledge_items SET body = 'edited content', updated_at = now() WHERE id = $1")
-        .bind(item_id)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "UPDATE knowledge_items SET body = 'edited content', updated_at = now() WHERE id = $1",
+    )
+    .bind(item_id)
+    .execute(&pool)
+    .await
+    .unwrap();
 
     // The store layer should reset index_state to pending and enqueue a new outbox event.
     // Since the indexer isn't running, we simulate the store's publish-edit path:
@@ -299,7 +298,11 @@ async fn archive_published_removes_chunks_and_resets_status() {
         .await
         .unwrap();
     set_indexed(&pool, item_id, "hash_v1", 3).await.unwrap();
-    assert_eq!(count_chunks(&pool, item_id).await, 3, "chunks exist before archive");
+    assert_eq!(
+        count_chunks(&pool, item_id).await,
+        3,
+        "chunks exist before archive"
+    );
 
     // Simulate archiving: the store layer should delete chunks and reset status
     sqlx::query("DELETE FROM knowledge_chunks WHERE item_id = $1")
@@ -316,7 +319,11 @@ async fn archive_published_removes_chunks_and_resets_status() {
         .await
         .unwrap();
 
-    assert_eq!(count_chunks(&pool, item_id).await, 0, "chunks removed after archive");
+    assert_eq!(
+        count_chunks(&pool, item_id).await,
+        0,
+        "chunks removed after archive"
+    );
     let state_row = get(&pool, tenant_id, item_id)
         .await
         .unwrap()
@@ -346,7 +353,11 @@ async fn revert_to_draft_removes_chunks_and_resets_status() {
         .await
         .unwrap();
     set_indexed(&pool, item_id, "hash_v2", 2).await.unwrap();
-    assert_eq!(count_chunks(&pool, item_id).await, 2, "chunks exist before revert");
+    assert_eq!(
+        count_chunks(&pool, item_id).await,
+        2,
+        "chunks exist before revert"
+    );
 
     // Simulate revert-to-draft: the store should go published → archived → draft
     // (two-step transition), but only the final status matters for chunk cleanup.
@@ -365,7 +376,11 @@ async fn revert_to_draft_removes_chunks_and_resets_status() {
         .await
         .unwrap();
 
-    assert_eq!(count_chunks(&pool, item_id).await, 0, "chunks removed after revert to draft");
+    assert_eq!(
+        count_chunks(&pool, item_id).await,
+        0,
+        "chunks removed after revert to draft"
+    );
     let state_row = get(&pool, tenant_id, item_id)
         .await
         .unwrap()
@@ -400,7 +415,10 @@ async fn failed_embed_preserves_prior_chunks() {
         .unwrap();
     set_indexed(&pool, item_id, "stable_hash", 3).await.unwrap();
     let chunk_count_before = count_chunks(&pool, item_id).await;
-    assert_eq!(chunk_count_before, 3, "chunks should be present before failure");
+    assert_eq!(
+        chunk_count_before, 3,
+        "chunks should be present before failure"
+    );
 
     // Simulate a re-index attempt that fails before DELETE+INSERT completes.
     // FR-015 requires that a failed embed in the "atomic replace" transaction
@@ -416,7 +434,10 @@ async fn failed_embed_preserves_prior_chunks() {
 
     // Prior chunks must still be present
     let chunk_count_after = count_chunks(&pool, item_id).await;
-    assert_eq!(chunk_count_after, 3, "prior chunks must survive a failed embed");
+    assert_eq!(
+        chunk_count_after, 3,
+        "prior chunks must survive a failed embed"
+    );
 
     // Status is 'failed' with reason, but chunks remain
     let state_row = get(&pool, tenant_id, item_id)
@@ -428,7 +449,10 @@ async fn failed_embed_preserves_prior_chunks() {
         state_row.failure_reason.as_deref(),
         Some("embedding failed: provider timeout")
     );
-    assert_eq!(state_row.chunk_count, 3, "chunk_count should still reflect prior indexed state");
+    assert_eq!(
+        state_row.chunk_count, 3,
+        "chunk_count should still reflect prior indexed state"
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -498,10 +522,7 @@ async fn seed_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid, role: &s
         .unwrap();
 }
 
-async fn send(
-    state: &AppState,
-    request: Request<Body>,
-) -> axum::response::Response {
+async fn send(state: &AppState, request: Request<Body>) -> axum::response::Response {
     router::app_with_test_routes_and_storage(state.clone(), Arc::new(InMemoryStorage::default()))
         .oneshot(request)
         .await
@@ -513,12 +534,7 @@ async fn body_json(response: axum::response::Response) -> serde_json::Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
-fn json_post(
-    uri: &str,
-    user_id: Uuid,
-    tenant_id: Uuid,
-    body: serde_json::Value,
-) -> Request<Body> {
+fn json_post(uri: &str, user_id: Uuid, tenant_id: Uuid, body: serde_json::Value) -> Request<Body> {
     let bytes = serde_json::to_vec(&body).unwrap();
     Request::builder()
         .uri(uri)

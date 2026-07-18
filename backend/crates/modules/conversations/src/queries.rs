@@ -454,12 +454,12 @@ fn timeline_row_to_message(row: TimelineRow) -> Message {
         active: row.logged_by_active.unwrap_or(false),
     });
 
-    let confidence = row.ai_confidence_score.map(|score| {
-        crate::model::ConfidenceView {
+    let confidence = row
+        .ai_confidence_score
+        .map(|score| crate::model::ConfidenceView {
             score,
             band: crate::model::confidence_band(score).to_string(),
-        }
-    });
+        });
 
     Message {
         id: row.id,
@@ -1304,15 +1304,13 @@ pub async fn load_citations_for_messages(
     let mut map: HashMap<Uuid, Vec<CitationView>> = HashMap::new();
     for (message_id, knowledge_item_id, item_title, passage_text, relevance_score) in rows {
         let item_available = available.contains(&knowledge_item_id);
-        map.entry(message_id)
-            .or_default()
-            .push(CitationView {
-                knowledge_item_id,
-                item_title,
-                passage_text,
-                relevance_score,
-                item_available,
-            });
+        map.entry(message_id).or_default().push(CitationView {
+            knowledge_item_id,
+            item_title,
+            passage_text,
+            relevance_score,
+            item_available,
+        });
     }
     Ok(map)
 }
@@ -1456,13 +1454,12 @@ pub async fn has_customer_message_after(
     conversation_id: Uuid,
     after_message_id: Uuid,
 ) -> sqlx::Result<bool> {
-    let created_at: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
-        "SELECT created_at FROM messages WHERE tenant_id = $1 AND id = $2",
-    )
-    .bind(tenant_id)
-    .bind(after_message_id)
-    .fetch_optional(pool)
-    .await?;
+    let created_at: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT created_at FROM messages WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant_id)
+            .bind(after_message_id)
+            .fetch_optional(pool)
+            .await?;
 
     let after = match created_at {
         Some(t) => t,

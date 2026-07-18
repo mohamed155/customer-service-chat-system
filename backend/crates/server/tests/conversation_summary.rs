@@ -116,7 +116,9 @@ fn auth_post_empty(uri: &str, user_id: Uuid, tenant_id: Uuid) -> Request<Body> {
         .header("X-Dev-User-Id", user_id.to_string())
         .header("X-Tenant-ID", tenant_id.to_string())
         .header("content-type", "application/json")
-        .body(Body::from(serde_json::to_vec(&serde_json::json!({})).unwrap()))
+        .body(Body::from(
+            serde_json::to_vec(&serde_json::json!({})).unwrap(),
+        ))
         .unwrap()
 }
 
@@ -342,9 +344,17 @@ async fn populated_conversation_returns_summary() {
         "generatedAt must be a valid RFC 3339 date"
     );
 
-    let message_count = body["messageCount"].as_u64().expect("messageCount must be a number");
-    assert!(message_count > 0, "messageCount must be > 0 for a populated conversation");
-    assert_eq!(message_count, 4, "messageCount should match the number of messages inserted");
+    let message_count = body["messageCount"]
+        .as_u64()
+        .expect("messageCount must be a number");
+    assert!(
+        message_count > 0,
+        "messageCount must be > 0 for a populated conversation"
+    );
+    assert_eq!(
+        message_count, 4,
+        "messageCount should match the number of messages inserted"
+    );
 }
 
 #[tokio::test]

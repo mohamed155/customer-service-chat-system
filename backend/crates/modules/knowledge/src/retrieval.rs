@@ -33,9 +33,8 @@ pub async fn search(
         .collect::<Vec<_>>()
         .join(",");
 
-    sqlx::query_as::<_, RetrievedChunk>(
-        &format!(
-            "SELECT kc.id AS chunk_id, \
+    sqlx::query_as::<_, RetrievedChunk>(&format!(
+        "SELECT kc.id AS chunk_id, \
                     kc.item_id, \
                     kc.tenant_id, \
                     kc.content, \
@@ -51,9 +50,8 @@ pub async fn search(
                AND (1 - (kc.embedding <=> '[{v}]'::vector)) >= $2 \
              ORDER BY similarity DESC \
              LIMIT $3",
-            v = vec_str
-        ),
-    )
+        v = vec_str
+    ))
     .bind(tenant_id)
     .bind(threshold)
     .bind(top_k)

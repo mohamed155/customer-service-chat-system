@@ -106,9 +106,8 @@ async fn retrieve_for_tenant(
     limit: i32,
 ) -> Vec<(Uuid, Uuid, Uuid, f64)> {
     let v = make_vec(query_vec_val);
-    sqlx::query_as::<_, (Uuid, Uuid, Uuid, f64)>(
-        &format!(
-            "SELECT kc.id, kc.item_id, kc.tenant_id, \
+    sqlx::query_as::<_, (Uuid, Uuid, Uuid, f64)>(&format!(
+        "SELECT kc.id, kc.item_id, kc.tenant_id, \
              (1 - (kc.embedding <=> '[{v}]'::vector)) AS similarity \
              FROM knowledge_chunks kc \
              JOIN knowledge_items ki \
@@ -119,9 +118,8 @@ async fn retrieve_for_tenant(
                AND (1 - (kc.embedding <=> '[{v}]'::vector)) >= $2 \
              ORDER BY similarity DESC \
              LIMIT $3",
-            v = v
-        ),
-    )
+        v = v
+    ))
     .bind(tenant_id)
     .bind(threshold)
     .bind(limit)

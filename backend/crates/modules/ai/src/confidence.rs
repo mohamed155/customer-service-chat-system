@@ -16,9 +16,7 @@ fn clamp01(x: f32) -> f32 {
 /// retrieval failures, and continuation stitching.
 pub fn confidence_score(i: &ConfidenceInputs) -> f32 {
     clamp01(
-        0.35
-            + 0.45 * i.top_chunk_similarity
-            + 0.10 * (i.chunk_count.min(3) as f32) / 3.0
+        0.35 + 0.45 * i.top_chunk_similarity + 0.10 * (i.chunk_count.min(3) as f32) / 3.0
             - 0.25 * (i.finish_length as u32 as f32)
             - 0.15 * (i.retrieval_degraded as u32 as f32)
             - 0.10 * (i.continuation_used as u32 as f32),
@@ -80,7 +78,8 @@ mod tests {
             continuation_used: false,
         };
         let score = confidence_score(&i);
-        let expected: f32 = (0.35_f32 + 0.45_f32 * 0.9_f32 + 0.10_f32 * 3.0_f32 / 3.0_f32).clamp(0.0, 1.0);
+        let expected: f32 =
+            (0.35_f32 + 0.45_f32 * 0.9_f32 + 0.10_f32 * 3.0_f32 / 3.0_f32).clamp(0.0, 1.0);
         assert!((score - expected).abs() < f32::EPSILON);
         assert_eq!(confidence_band(score), Band::High);
     }

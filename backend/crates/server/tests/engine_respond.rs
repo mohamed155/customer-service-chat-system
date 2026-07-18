@@ -329,7 +329,10 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    assert!(processed, "agent responder should have processed at least one event");
+    assert!(
+        processed,
+        "agent responder should have processed at least one event"
+    );
 
     // Assert at least one AI message was stored in the conversation
     let ai_messages: Vec<(Uuid, String)> = sqlx::query_as(
@@ -343,7 +346,8 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
     assert!(!ai_messages.is_empty(), "expected at least one AI reply");
     let (ai_message_id, ai_body) = &ai_messages[0];
     assert_eq!(
-        ai_body, "Hello! I'm your AI assistant. How can I help you today?"
+        ai_body,
+        "Hello! I'm your AI assistant. How can I help you today?"
     );
 
     // Assert exactly one ai_generations row with outcome='success'

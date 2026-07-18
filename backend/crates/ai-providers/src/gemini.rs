@@ -428,9 +428,7 @@ impl EmbeddingProvider for GeminiAdapter {
             .map(|text| GeminiEmbedRequestItem {
                 model: model_path.clone(),
                 content: GeminiEmbedContent {
-                    parts: vec![GeminiPart {
-                        text: text.clone(),
-                    }],
+                    parts: vec![GeminiPart { text: text.clone() }],
                 },
             })
             .collect();
@@ -876,9 +874,7 @@ data: {\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptT
         let response_body = make_embed_response_body();
 
         Mock::given(method("POST"))
-            .and(path(
-                "/v1beta/models/text-embedding-004:batchEmbedContents",
-            ))
+            .and(path("/v1beta/models/text-embedding-004:batchEmbedContents"))
             .and(header("x-goog-api-key", "test-gemini-key-123"))
             .respond_with(ResponseTemplate::new(200).set_body_json(&response_body))
             .expect(1)
@@ -916,9 +912,7 @@ data: {\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptT
         });
 
         Mock::given(method("POST"))
-            .and(path(
-                "/v1beta/models/text-embedding-004:batchEmbedContents",
-            ))
+            .and(path("/v1beta/models/text-embedding-004:batchEmbedContents"))
             .respond_with(ResponseTemplate::new(200).set_body_json(&response_body))
             .mount(&mock)
             .await;
@@ -950,9 +944,7 @@ data: {\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptT
         });
 
         Mock::given(method("POST"))
-            .and(path(
-                "/v1beta/models/text-embedding-004:batchEmbedContents",
-            ))
+            .and(path("/v1beta/models/text-embedding-004:batchEmbedContents"))
             .respond_with(ResponseTemplate::new(401).set_body_json(&error_body))
             .mount(&mock)
             .await;

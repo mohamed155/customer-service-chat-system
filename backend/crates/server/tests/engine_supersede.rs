@@ -346,7 +346,10 @@ async fn engine_supersede_rapid_second_message() {
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    assert!(processed, "agent responder should have processed at least one event");
+    assert!(
+        processed,
+        "agent responder should have processed at least one event"
+    );
 
     // ════════════════════════ Assertions ════════════════════════
 
@@ -366,10 +369,7 @@ async fn engine_supersede_rapid_second_message() {
         "expected exactly one AI reply (second message should produce a response, \
          first should be superseded)"
     );
-    assert_eq!(
-        ai_messages[0].1,
-        "AI response after supersede."
-    );
+    assert_eq!(ai_messages[0].1, "AI response after supersede.");
 
     // ai_generations has exactly 2 rows: one superseded, one success
     let gen_rows: Vec<(Uuid, String, Option<Uuid>)> = sqlx::query_as(
@@ -383,7 +383,11 @@ async fn engine_supersede_rapid_second_message() {
     .await
     .unwrap();
 
-    assert_eq!(gen_rows.len(), 2, "expected exactly two ai_generations rows");
+    assert_eq!(
+        gen_rows.len(),
+        2,
+        "expected exactly two ai_generations rows"
+    );
 
     let (_gen_id_1, outcome_1, resp_msg_id_1) = &gen_rows[0];
     let (_gen_id_2, outcome_2, resp_msg_id_2) = &gen_rows[1];
@@ -413,10 +417,7 @@ async fn engine_supersede_rapid_second_message() {
     );
 
     // The superseded row has a null response_message_id
-    let superseded_row = gen_rows
-        .iter()
-        .find(|(_, o, _)| o == "superseded")
-        .unwrap();
+    let superseded_row = gen_rows.iter().find(|(_, o, _)| o == "superseded").unwrap();
     assert!(
         superseded_row.2.is_none(),
         "superseded generation should have null response_message_id"
@@ -548,7 +549,10 @@ async fn engine_supersede_escalation_cancels_generation() {
     let processed = process_agent_responder_once(&pool, &state.ai, &state.escalations)
         .await
         .expect("agent responder should not panic");
-    assert!(processed, "responder should have processed the outbox event");
+    assert!(
+        processed,
+        "responder should have processed the outbox event"
+    );
 
     // ════════════════════════ Assertions ════════════════════════
 
@@ -578,11 +582,7 @@ async fn engine_supersede_escalation_cancels_generation() {
     .await
     .unwrap();
 
-    assert_eq!(
-        gen_rows.len(),
-        1,
-        "expected exactly one ai_generations row"
-    );
+    assert_eq!(gen_rows.len(), 1, "expected exactly one ai_generations row");
     let (_gen_id, outcome, resp_msg_id) = &gen_rows[0];
     assert_eq!(
         outcome.as_str(),

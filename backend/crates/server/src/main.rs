@@ -18,7 +18,7 @@
 //! - Register additional health checks in `health_checks` vec.
 
 use config::AppConfig;
-use knowledge;
+use knowledge::indexer;
 use server::router;
 use server::state::AppState;
 use std::sync::Arc;
@@ -105,7 +105,7 @@ async fn main() {
         state.ai.clone(),
         state.escalations.clone(),
     ));
-    let knowledge_indexer_worker = tokio::spawn(knowledge::indexer::run_knowledge_indexer_worker(
+    let knowledge_indexer_worker = tokio::spawn(indexer::run_knowledge_indexer_worker(
         state.db.clone(),
         Arc::new(state.ai.clone()) as Arc<dyn knowledge::indexer::Embedder>,
         storage.clone(),

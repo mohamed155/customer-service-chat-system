@@ -996,9 +996,9 @@ async fn prompt_version_history_pagination() {
     for i in 1..=count {
         let content = format!("Version {} content {{agent_name}}.", i);
         let base_version = if i == 1 { 0 } else { i - 1 };
-    let resp = send(
-        &state,
-        json_put(
+        let resp = send(
+            &state,
+            json_put(
                 "/api/v1/tenant/ai/agent/prompt",
                 user_id,
                 tenant_id,

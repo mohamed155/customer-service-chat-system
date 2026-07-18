@@ -133,7 +133,10 @@ async fn get_returns_none_when_no_row() {
     let result = knowledge::index_state::get(&pool, tenant_id, other_item_id)
         .await
         .unwrap();
-    assert!(result.is_none(), "expected None for non-existent index state");
+    assert!(
+        result.is_none(),
+        "expected None for non-existent index state"
+    );
 }
 
 #[tokio::test]
@@ -215,13 +218,12 @@ async fn upsert_status_creates_new_row() {
         .await
         .unwrap();
 
-    let row: (String,) = sqlx::query_as(
-        "SELECT status FROM knowledge_index_state WHERE item_id = $1",
-    )
-    .bind(item_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let row: (String,) =
+        sqlx::query_as("SELECT status FROM knowledge_index_state WHERE item_id = $1")
+            .bind(item_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(row.0, "pending");
 }
 
@@ -243,13 +245,12 @@ async fn upsert_status_updates_existing_row() {
         .await
         .unwrap();
 
-    let row: (String,) = sqlx::query_as(
-        "SELECT status FROM knowledge_index_state WHERE item_id = $1",
-    )
-    .bind(item_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let row: (String,) =
+        sqlx::query_as("SELECT status FROM knowledge_index_state WHERE item_id = $1")
+            .bind(item_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(row.0, "indexing");
 }
 

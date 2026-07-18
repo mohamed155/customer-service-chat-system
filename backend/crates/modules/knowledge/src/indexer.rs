@@ -145,13 +145,9 @@ async fn process_one_event(
         let (body_bytes, content_type) = match storage.get(&doc.storage_key).await {
             Ok(result) => result,
             Err(storage::StorageError::NotFound) => {
-                index_state::set_not_indexable(
-                    pool,
-                    item_id,
-                    "Document file not found in storage",
-                )
-                .await
-                .map_err(|e| format!("set_not_indexable: {e}"))?;
+                index_state::set_not_indexable(pool, item_id, "Document file not found in storage")
+                    .await
+                    .map_err(|e| format!("set_not_indexable: {e}"))?;
                 sqlx::query("DELETE FROM outbox_events WHERE id = $1")
                     .bind(event.id)
                     .execute(pool)
@@ -226,13 +222,13 @@ async fn process_one_event(
         .collect();
     let chunk_count = texts.len() as i32;
 
-    match embedder.embed(tenant_id, texts, format!("knowledge-indexer/{item_id}")).await {
+    match embedder
+        .embed(tenant_id, texts, format!("knowledge-indexer/{item_id}"))
+        .await
+    {
         // 9a. Success — atomic replace
         Ok(embeddings) => {
-            let mut tx = pool
-                .begin()
-                .await
-                .map_err(|e| format!("begin tx: {e}"))?;
+            let mut tx = pool.begin().await.map_err(|e| format!("begin tx: {e}"))?;
 
             sqlx::query("DELETE FROM knowledge_chunks WHERE item_id = $1")
                 .bind(item_id)
@@ -286,9 +282,7 @@ async fn process_one_event(
                 .await
                 .map_err(|e| format!("delete outbox: {e}"))?;
 
-            tx.commit()
-                .await
-                .map_err(|e| format!("commit tx: {e}"))?;
+            tx.commit().await.map_err(|e| format!("commit tx: {e}"))?;
 
             tracing::info!(
                 tenant_id = %tenant_id,
@@ -306,9 +300,7 @@ async fn process_one_event(
                 .map_err(|e| format!("increment attempts: {e}"))?;
 
             if attempts >= MAX_RETRIES {
-                let reason = format!(
-                    "embedding failed after {MAX_RETRIES} attempts: {reason}",
-                );
+                let reason = format!("embedding failed after {MAX_RETRIES} attempts: {reason}",);
                 index_state::set_failed(pool, item_id, &reason)
                     .await
                     .map_err(|e| format!("set_failed: {e}"))?;
@@ -325,10 +317,8 @@ async fn process_one_event(
                     "rag.index"
                 );
             } else {
-                let backoff_secs =
-                    (5i64 * 2i64.pow(attempts as u32 - 1)).min(300);
-                let available_at = Utc::now()
-                    + chrono::Duration::seconds(backoff_secs);
+                let backoff_secs = (5i64 * 2i64.pow(attempts as u32 - 1)).min(300);
+                let available_at = Utc::now() + chrono::Duration::seconds(backoff_secs);
 
                 sqlx::query(
                     "UPDATE outbox_events \

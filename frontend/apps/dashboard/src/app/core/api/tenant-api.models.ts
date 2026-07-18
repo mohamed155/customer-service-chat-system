@@ -418,7 +418,8 @@ export interface AiMessageSuperseded {
 export interface AiMessageFailed {
   readonly conversationId: string;
   readonly generationId: string;
-  readonly category: 'unavailable' | 'timeout' | 'rate_limited' | 'authentication' | 'invalid_request' | 'internal';
+  readonly category:
+    'unavailable' | 'timeout' | 'rate_limited' | 'authentication' | 'invalid_request' | 'internal';
 }
 
 export interface Citation {
@@ -689,7 +690,14 @@ export function messageFromWire(wire: MessageWire): Message {
     body: wire.body,
     createdAt: wire.created_at,
     ...(wire.citations ? { citations: wire.citations.map(citationFromWire) } : {}),
-    ...(wire.confidence ? { confidence: { score: wire.confidence.score, band: wire.confidence.band as 'high' | 'medium' | 'low' } } : {}),
+    ...(wire.confidence
+      ? {
+          confidence: {
+            score: wire.confidence.score,
+            band: wire.confidence.band as 'high' | 'medium' | 'low',
+          },
+        }
+      : {}),
   };
 }
 

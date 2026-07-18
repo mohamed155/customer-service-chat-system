@@ -253,13 +253,12 @@ async fn recall_target_tenant_chunk_among_noise() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    let target_count: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM knowledge_chunks WHERE tenant_id = $1",
-    )
-    .bind(target_tenant)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let target_count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM knowledge_chunks WHERE tenant_id = $1")
+            .bind(target_tenant)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert!(
         (target_count.0 as f64) / (total.0 as f64) < 0.05,
         "target tenant must own < 5 % of chunks (got {}/{})",
@@ -280,9 +279,8 @@ async fn recall_target_tenant_chunk_among_noise() {
 
     let q = fmt_vec(&query_vector());
 
-    let results: Vec<RetrievedChunk> = sqlx::query_as(
-        &format!(
-            "SELECT kc.id AS chunk_id, \
+    let results: Vec<RetrievedChunk> = sqlx::query_as(&format!(
+        "SELECT kc.id AS chunk_id, \
                     kc.item_id, \
                     kc.tenant_id, \
                     kc.content, \
@@ -298,9 +296,8 @@ async fn recall_target_tenant_chunk_among_noise() {
                AND (1 - (kc.embedding <=> '[{}]'::vector)) >= $2 \
              ORDER BY similarity DESC \
              LIMIT $3",
-            q, q
-        ),
-    )
+        q, q
+    ))
     .bind(target_tenant)
     .bind(THRESHOLD)
     .bind(TOP_K)

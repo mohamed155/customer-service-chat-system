@@ -9,7 +9,13 @@ import { AiConfidenceBadgeComponent } from '../../../shared/components/ai-confid
 
 @Component({
   selector: 'app-conversation-thread',
-  imports: [AvatarComponent, CitationListComponent, LoadingStateComponent, AiThinkingIndicatorComponent, AiConfidenceBadgeComponent],
+  imports: [
+    AvatarComponent,
+    CitationListComponent,
+    LoadingStateComponent,
+    AiThinkingIndicatorComponent,
+    AiConfidenceBadgeComponent,
+  ],
   template: `
     <div class="messages" #scrollContainer>
       @if (hasMore()) {
