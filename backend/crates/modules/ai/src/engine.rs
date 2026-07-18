@@ -546,10 +546,19 @@ pub async fn run_generation(
 
     match gen_result {
         Ok(output) if !superseded => {
+            let confidence_inputs = crate::confidence::ConfidenceInputs {
+                top_chunk_similarity: assembled.retrieved_chunks.first().map(|c| c.similarity as f32).unwrap_or(0.0),
+                chunk_count: assembled.retrieved_chunks.len() as u32,
+                finish_length: output.finish_length,
+                retrieval_degraded: assembled.retrieval_degraded,
+                continuation_used: output.continuation_used,
+            };
+            let confidence_score = crate::confidence::confidence_score(&confidence_inputs);
+
             let mid = {
                 let mut tx = pool.begin().await?;
                 let mid = conversations::queries::insert_ai_reply_in_tx(
-                    &mut tx, tenant_id, conversation_id, &output.content,
+                    &mut tx, tenant_id, conversation_id, &output.content, Some(confidence_score),
                 )
                 .await?;
 
@@ -576,6 +585,9 @@ pub async fn run_generation(
             };
 
             let retrieval_top = assembled.retrieved_chunks.first().map(|c| c.similarity as f32);
+            let confidence_band_label = if confidence_score >= 0.70 { "high" }
+                else if confidence_score >= 0.40 { "medium" }
+                else { "low" };
             let rec = GenerationRecord {
                 id: generation_id,
                 tenant_id,
@@ -592,7 +604,7 @@ pub async fn run_generation(
                 retrieval_chunk_count: assembled.retrieved_chunks.len() as i16,
                 retrieval_top_similarity: retrieval_top,
                 retrieval_degraded: assembled.retrieval_degraded,
-                confidence_score: None,
+                confidence_score: Some(confidence_score),
                 latency_ms,
                 request_id: None,
                 created_at: Some(chrono::Utc::now()),
@@ -605,7 +617,11 @@ pub async fn run_generation(
                 .await?;
 
             let completed_msg = serde_json::json!({
-                "id": mid, "kind": "ai", "body": output.content, "confidence": null,
+                "id": mid, "kind": "ai", "body": output.content,
+                "confidence": {
+                    "score": confidence_score,
+                    "band": confidence_band_label,
+                },
             });
             presence.broadcast(
                 tenant_id,

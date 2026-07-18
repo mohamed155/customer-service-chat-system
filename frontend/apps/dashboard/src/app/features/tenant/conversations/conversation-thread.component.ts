@@ -5,10 +5,11 @@ import { LoadingStateComponent } from '../../../shared/components/loading-state/
 import { Message } from '../../../core/api/tenant-api.models';
 import { ActiveGeneration } from './conversation-detail.store';
 import { AiThinkingIndicatorComponent } from '../../../shared/components/ai/ai-thinking-indicator/ai-thinking-indicator.component';
+import { AiConfidenceBadgeComponent } from '../../../shared/components/ai-confidence-badge/ai-confidence-badge.component';
 
 @Component({
   selector: 'app-conversation-thread',
-  imports: [AvatarComponent, CitationListComponent, LoadingStateComponent, AiThinkingIndicatorComponent],
+  imports: [AvatarComponent, CitationListComponent, LoadingStateComponent, AiThinkingIndicatorComponent, AiConfidenceBadgeComponent],
   template: `
     <div class="messages" #scrollContainer>
       @if (hasMore()) {
@@ -37,6 +38,9 @@ import { AiThinkingIndicatorComponent } from '../../../shared/components/ai/ai-t
             <p>{{ message.body }}</p>
             @if (message.citations?.length) {
               <app-citation-list [citations]="message.citations" />
+            }
+            @if (message.kind === 'ai' && message.confidence; as conf) {
+              <app-ai-confidence-badge [band]="conf.band" />
             }
           </div>
         </article>

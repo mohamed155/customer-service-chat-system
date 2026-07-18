@@ -283,7 +283,7 @@ export function customerDetailFromWire(wire: CustomerDetailWire): CustomerDetail
 }
 
 export type ConversationStatus = 'open' | 'pending' | 'resolved' | 'closed';
-export type MessageKind = 'customer' | 'reply' | 'note';
+export type MessageKind = 'customer' | 'reply' | 'note' | 'ai';
 
 export interface Participant {
   readonly type: 'customer' | 'member';
@@ -441,6 +441,7 @@ export interface Message {
   readonly body: string;
   readonly createdAt: string;
   readonly citations?: readonly Citation[];
+  readonly confidence?: { readonly score: number; readonly band: 'high' | 'medium' | 'low' };
 }
 
 export interface AddMessageResponse {
@@ -514,6 +515,7 @@ export interface MessageWire {
   readonly body: string;
   readonly created_at: string;
   readonly citations?: readonly CitationWire[];
+  readonly confidence?: { readonly score: number; readonly band: string };
 }
 
 export interface AddMessageResponseWire {
@@ -687,6 +689,7 @@ export function messageFromWire(wire: MessageWire): Message {
     body: wire.body,
     createdAt: wire.created_at,
     ...(wire.citations ? { citations: wire.citations.map(citationFromWire) } : {}),
+    ...(wire.confidence ? { confidence: { score: wire.confidence.score, band: wire.confidence.band as 'high' | 'medium' | 'low' } } : {}),
   };
 }
 

@@ -1,0 +1,30 @@
+:host {
+  display: inline-flex;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--app-space-2);
+  border-radius: 999px;
+  font-size: var(--app-font-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge.high {
+  background: var(--app-green-soft);
+  color: var(--app-green);
+}
+
+.badge.medium {
+  background: var(--app-amber-soft);
+  color: var(--app-amber);
+}
+
+.badge.low {
+  background: var(--app-red-soft);
+  color: var(--app-red);
+  font-weight: 700;
+}

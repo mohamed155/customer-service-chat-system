@@ -245,6 +245,7 @@ pub struct TimelineRow {
     pub logged_by_user_id: Option<Uuid>,
     pub logged_by_display_name: Option<String>,
     pub logged_by_active: Option<bool>,
+    pub ai_confidence_score: Option<f32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -453,6 +454,13 @@ fn timeline_row_to_message(row: TimelineRow) -> Message {
         active: row.logged_by_active.unwrap_or(false),
     });
 
+    let confidence = row.ai_confidence_score.map(|score| {
+        crate::model::ConfidenceView {
+            score,
+            band: crate::model::confidence_band(score).to_string(),
+        }
+    });
+
     Message {
         id: row.id,
         kind,
@@ -461,6 +469,7 @@ fn timeline_row_to_message(row: TimelineRow) -> Message {
         body: row.body,
         created_at: row.created_at,
         citations: Vec::new(),
+        confidence,
     }
 }
 
@@ -570,7 +579,8 @@ pub async fn timeline_query_in_tx(
                 m.logged_by_membership_id, \
                 lbu.id AS logged_by_user_id, \
                 COALESCE(lbu.display_name, '') AS logged_by_display_name, \
-                COALESCE(lbtm.status = 'active', false) AS logged_by_active \
+                COALESCE(lbtm.status = 'active', false) AS logged_by_active, \
+                m.ai_confidence_score \
          FROM messages m \
          JOIN conversations cv \
            ON cv.id = m.conversation_id AND cv.tenant_id = m.tenant_id \
@@ -831,6 +841,7 @@ pub async fn add_message_in_tx(
             body: inserted.2,
             created_at: inserted.3,
             citations: Vec::new(),
+            confidence: None,
         },
         ConversationStatusRef {
             status: status_enum,
@@ -1198,15 +1209,17 @@ pub async fn insert_ai_reply_in_tx(
     tenant_id: Uuid,
     conversation_id: Uuid,
     body: &str,
+    confidence_score: Option<f32>,
 ) -> sqlx::Result<Uuid> {
     let message_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
-         VALUES ($1, $2, 'ai', $3) \
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body, ai_confidence_score) \
+         VALUES ($1, $2, 'ai', $3, $4) \
          RETURNING id",
     )
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(body)
+    .bind(confidence_score)
     .fetch_one(&mut **tx)
     .await?;
 

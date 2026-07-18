@@ -128,6 +128,28 @@ pub struct Message {
     pub created_at: DateTime<Utc>,
     #[serde(default)]
     pub citations: Vec<CitationView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<ConfidenceView>,
+}
+
+/// Deterministic confidence metadata attached to AI messages.
+/// Band is derived server-side using a local 3-line function (see
+/// `confidence_band`) — intentionally duplicated from `ai::confidence`
+/// to avoid a circular crate dependency.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ConfidenceView {
+    pub score: f32,
+    pub band: String,
+}
+
+pub fn confidence_band(score: f32) -> &'static str {
+    if score >= 0.70 {
+        "high"
+    } else if score >= 0.40 {
+        "medium"
+    } else {
+        "low"
+    }
 }
 
 /// A citation linking an AI message to a knowledge-base passage at the
