@@ -262,6 +262,34 @@ pub struct ConversationAiFailed {
     pub category: FailureCategory,
 }
 
+// ── Tool request SSE event payloads ──────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolRequestCreated {
+    pub id: Uuid,
+    pub conversation_id: Uuid,
+    pub tool_name: String,
+    pub tool_source: String,
+    pub arguments: serde_json::Value,
+    pub approval_required: bool,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub chain_index: i16,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolRequestUpdated {
+    pub id: Uuid,
+    pub conversation_id: Uuid,
+    pub status: String,
+    pub decided_by_display_name: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub has_result: bool,
+    pub error: Option<String>,
+}
+
 pub mod sql {
     use sqlx::Postgres;
     use uuid::Uuid;

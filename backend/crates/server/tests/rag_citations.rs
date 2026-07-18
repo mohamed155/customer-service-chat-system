@@ -1,7 +1,10 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use sqlx::PgPool;
 use uuid::Uuid;
+
+type CitationTuple<'a> = &'a (Uuid, String, String, f32, i32, Option<Uuid>);
 
 fn require_db_tests() -> bool {
     std::env::var("REQUIRE_DB_TESTS").as_deref() == Ok("1")
@@ -695,10 +698,7 @@ async fn batch_load_citations_for_multiple_messages_in_single_query() {
     );
 
     // Verify each message has exactly 1 citation loaded by the batch
-    let mut msg_citation_map: std::collections::HashMap<
-        Uuid,
-        Vec<&(Uuid, String, String, f32, i32, Option<Uuid>)>,
-    > = std::collections::HashMap::new();
+    let mut msg_citation_map: HashMap<Uuid, Vec<CitationTuple<'_>>> = HashMap::new();
     for row in &rows {
         msg_citation_map.entry(row.0).or_default().push(row);
     }
@@ -862,7 +862,7 @@ async fn batch_load_respects_tenant_isolation() {
          FROM message_citations mc \
          WHERE mc.message_id = ANY($1) AND mc.tenant_id = $2",
     )
-    .bind(&vec![msg_a, msg_b])
+    .bind(vec![msg_a, msg_b])
     .bind(tenant_a)
     .fetch_all(&pool)
     .await
@@ -877,7 +877,7 @@ async fn batch_load_respects_tenant_isolation() {
          FROM message_citations mc \
          WHERE mc.message_id = ANY($1) AND mc.tenant_id = $2",
     )
-    .bind(&vec![msg_a, msg_b])
+    .bind(vec![msg_a, msg_b])
     .bind(tenant_b)
     .fetch_all(&pool)
     .await

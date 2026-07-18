@@ -6,12 +6,31 @@ pub enum Role {
     System,
     User,
     Assistant,
+    Tool,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ToolSpec {
+    pub name: String,
+    pub description: String,
+    pub input_schema: serde_json::Value,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: serde_json::Value,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Message {
     pub role: Role,
     pub content: String,
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -22,6 +41,9 @@ pub struct ChatRequest {
     pub max_output_tokens: Option<u32>,
     pub temperature: Option<f32>,
     pub request_id: Option<String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<ToolSpec>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -34,6 +56,7 @@ pub struct TokenUsage {
 pub enum FinishReason {
     Stop,
     Length,
+    ToolUse,
     Other,
 }
 
@@ -43,11 +66,14 @@ pub struct ChatCompletion {
     pub model: String,
     pub usage: TokenUsage,
     pub finish: FinishReason,
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum StreamEvent {
     Delta(String),
+    ToolCall(ToolCall),
     Done {
         usage: TokenUsage,
         model: String,

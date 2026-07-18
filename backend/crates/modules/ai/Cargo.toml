@@ -25,6 +25,7 @@ conversations = { path = "../conversations" }
 escalations = { path = "../escalations" }
 knowledge = { path = "../knowledge" }
 tenancy = { path = "../tenancy" }
+tools = { path = "../tools" }
 tokio.workspace = true
 tokio-stream = { version = "0.1", features = ["sync"] }
 tracing.workspace = true

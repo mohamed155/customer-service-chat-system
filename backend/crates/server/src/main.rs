@@ -105,6 +105,25 @@ async fn main() {
         state.ai.clone(),
         state.escalations.clone(),
     ));
+    let tool_expiry_sweeper = {
+        let pool = state.db.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(30));
+            loop {
+                interval.tick().await;
+                match tools::approval::sweep_expired(&pool).await {
+                    Ok(count) => {
+                        if count > 0 {
+                            tracing::info!(count, "tool expiry sweep: expired tool requests");
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(%e, "tool expiry sweep failed");
+                    }
+                }
+            }
+        })
+    };
     let knowledge_indexer_worker = tokio::spawn(indexer::run_knowledge_indexer_worker(
         state.db.clone(),
         Arc::new(state.ai.clone()) as Arc<dyn knowledge::indexer::Embedder>,
@@ -130,6 +149,9 @@ async fn main() {
         }
         result = agent_responder_worker => {
             panic!("agent responder worker stopped unexpectedly: {result:?}");
+        }
+        result = tool_expiry_sweeper => {
+            panic!("tool expiry sweeper stopped unexpectedly: {result:?}");
         }
         result = knowledge_indexer_worker => {
             panic!("knowledge indexer worker stopped unexpectedly: {result:?}");

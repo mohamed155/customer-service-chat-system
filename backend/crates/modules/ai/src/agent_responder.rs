@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::agent_config::{self, AgentConfigurationRow, EscalationRule};
 use crate::agent_rules::{self, RuleMatch, BASELINE_ESCALATION_REASON};
+use tools::approval::cancel_pending_for_conversation;
 
 pub async fn process_agent_responder_once(
     pool: &PgPool,
@@ -15,27 +16,63 @@ pub async fn process_agent_responder_once(
 
     // 1. Claim one unprocessed outbox_events row
     let claim_token = Uuid::new_v4();
-    let maybe_row: Option<(i64, Uuid, String, serde_json::Value)> = sqlx::query_as(
+    let maybe_row: Option<(i64, Uuid, String, String, serde_json::Value)> = sqlx::query_as(
         "UPDATE outbox_events \
          SET claimed_at = now(), claim_token = $1 \
          WHERE id = ( \
              SELECT id FROM outbox_events \
-             WHERE event_type = 'conversation.customer_message' \
+             WHERE event_type IN ('conversation.customer_message', 'ai.tool_decision') \
              AND claimed_at IS NULL \
              ORDER BY created_at ASC \
              LIMIT 1 \
              FOR UPDATE SKIP LOCKED \
          ) \
-         RETURNING id, tenant_id, aggregate_id, payload",
+         RETURNING id, tenant_id, aggregate_id, event_type, payload",
     )
     .bind(claim_token)
     .fetch_optional(pool)
     .await?;
 
-    let (event_id, tenant_id, _aggregate_id, payload) = match maybe_row {
+    let (event_id, tenant_id, _aggregate_id, event_type, payload) = match maybe_row {
         Some(row) => row,
         None => return Ok(false),
     };
+
+    // Handle ai.tool_decision events — dispatch to follow-up generation
+    if event_type.as_str() == "ai.tool_decision" {
+        let conversation_id: Uuid = payload["conversationId"]
+            .as_str()
+            .and_then(|s| Uuid::parse_str(s).ok())
+            .ok_or_else(|| {
+                sqlx::Error::Protocol("missing conversationId in ai.tool_decision payload".into())
+            })?;
+
+        let tool_request_id: Uuid = payload["toolRequestId"]
+            .as_str()
+            .and_then(|s| Uuid::parse_str(s).ok())
+            .ok_or_else(|| {
+                sqlx::Error::Protocol("missing toolRequestId in ai.tool_decision payload".into())
+            })?;
+
+        let outcome: String = payload["outcome"].as_str().unwrap_or("").to_string();
+
+        crate::engine::run_followup_generation(
+            pool,
+            ai,
+            presence,
+            tenant_id,
+            conversation_id,
+            tool_request_id,
+            &outcome,
+        )
+        .await?;
+
+        sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            .bind(event_id)
+            .execute(pool)
+            .await?;
+        return Ok(true);
+    }
 
     let conversation_id: Uuid = payload["conversation_id"]
         .as_str()
@@ -208,6 +245,28 @@ pub async fn process_agent_responder_once(
                     Uuid::nil(),
                 )
                 .await;
+                // Cancel any pending tool requests for this conversation
+                if let Ok(ids) =
+                    cancel_pending_for_conversation(&mut tx, tenant_id, conversation_id).await
+                {
+                    for id in &ids {
+                        let updated_ev = escalations::model::ToolRequestUpdated {
+                            id: *id,
+                            conversation_id,
+                            status: "cancelled".into(),
+                            decided_by_display_name: None,
+                            duration_ms: None,
+                            has_result: false,
+                            error: None,
+                        };
+                        presence.broadcast(
+                            tenant_id,
+                            escalations::presence::Event::ConversationTool(
+                                escalations::presence::ConversationToolEvent::Updated(updated_ev),
+                            ),
+                        );
+                    }
+                }
                 handle_routing_outcome(outcome, tx, pool).await;
                 sqlx::query("DELETE FROM outbox_events WHERE id = $1")
                     .bind(event_id)
@@ -234,6 +293,28 @@ pub async fn process_agent_responder_once(
                     Uuid::nil(),
                 )
                 .await;
+                // Cancel any pending tool requests for this conversation
+                if let Ok(ids) =
+                    cancel_pending_for_conversation(&mut tx, tenant_id, conversation_id).await
+                {
+                    for id in &ids {
+                        let updated_ev = escalations::model::ToolRequestUpdated {
+                            id: *id,
+                            conversation_id,
+                            status: "cancelled".into(),
+                            decided_by_display_name: None,
+                            duration_ms: None,
+                            has_result: false,
+                            error: None,
+                        };
+                        presence.broadcast(
+                            tenant_id,
+                            escalations::presence::Event::ConversationTool(
+                                escalations::presence::ConversationToolEvent::Updated(updated_ev),
+                            ),
+                        );
+                    }
+                }
                 handle_routing_outcome(outcome, tx, pool).await;
                 sqlx::query("DELETE FROM outbox_events WHERE id = $1")
                     .bind(event_id)

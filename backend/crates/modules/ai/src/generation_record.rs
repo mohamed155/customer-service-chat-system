@@ -8,6 +8,7 @@ pub enum GenerationOutcome {
     CancelledEscalation,
     Failed,
     Fallback,
+    AwaitingToolApproval,
 }
 
 impl GenerationOutcome {
@@ -18,6 +19,7 @@ impl GenerationOutcome {
             Self::CancelledEscalation => "cancelled_escalation",
             Self::Failed => "failed",
             Self::Fallback => "fallback",
+            Self::AwaitingToolApproval => "awaiting_tool_approval",
         }
     }
 }
@@ -93,5 +95,9 @@ mod tests {
         );
         assert_eq!(GenerationOutcome::Failed.as_str(), "failed");
         assert_eq!(GenerationOutcome::Fallback.as_str(), "fallback");
+        assert_eq!(
+            GenerationOutcome::AwaitingToolApproval.as_str(),
+            "awaiting_tool_approval"
+        );
     }
 }

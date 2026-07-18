@@ -199,6 +199,7 @@ async fn send(state: &AppState, request: Request<Body>) -> axum::response::Respo
         .expect("request should complete")
 }
 
+#[allow(dead_code)]
 async fn body_json(response: axum::response::Response) -> serde_json::Value {
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     serde_json::from_slice(&bytes).unwrap()

@@ -18,10 +18,11 @@ pub struct AiCallContext {
     pub request_id: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AiInput {
     pub system: Option<String>,
     pub messages: Vec<ai_providers::Message>,
+    pub tools: Vec<ai_providers::ToolSpec>,
 }
 
 #[derive(Clone, Debug)]
@@ -31,6 +32,7 @@ pub struct AiCallResult {
     pub model: String,
     pub usage: TokenUsage,
     pub finish: ai_providers::FinishReason,
+    pub tool_calls: Vec<ai_providers::ToolCall>,
 }
 
 #[derive(Clone, Debug)]
@@ -46,6 +48,7 @@ pub enum AiCallError {
 
 pub enum AiStreamEvent {
     Delta(String),
+    ToolCall(ai_providers::ToolCall),
     Done(AiCallResult),
     Error {
         category: ai_providers::ErrorCategory,
@@ -79,8 +82,9 @@ pub async fn run_attempts(
     attempts: &[Attempt],
     system: Option<String>,
     messages: Vec<ai_providers::Message>,
+    tools: Vec<ai_providers::ToolSpec>,
 ) -> Result<AiCallResult, AiCallError> {
-    run_attempts_traced(registry, attempts, None, system, messages).await
+    run_attempts_traced(registry, attempts, None, system, messages, tools).await
 }
 
 #[doc(hidden)]
@@ -90,6 +94,7 @@ pub async fn run_attempts_traced(
     request_id: Option<&str>,
     system: Option<String>,
     messages: Vec<ai_providers::Message>,
+    tools: Vec<ai_providers::ToolSpec>,
 ) -> Result<AiCallResult, AiCallError> {
     let mut last_error: Option<AiCallError> = None;
 
@@ -109,6 +114,7 @@ pub async fn run_attempts_traced(
             max_output_tokens: attempt.max_output_tokens,
             temperature: attempt.temperature,
             request_id: request_id.map(String::from),
+            tools: tools.clone(),
         };
 
         for retry in 0..=2 {
@@ -131,6 +137,7 @@ pub async fn run_attempts_traced(
                         model: completion.model,
                         usage: completion.usage,
                         finish: completion.finish,
+                        tool_calls: completion.tool_calls,
                     });
                 }
                 Err(err) if !err.retriable => {
@@ -291,6 +298,7 @@ impl AiService {
             ctx.request_id.as_deref(),
             input.system,
             input.messages,
+            input.tools,
         )
         .await;
 
@@ -403,6 +411,7 @@ impl AiService {
             ctx.request_id.as_deref(),
             input.system,
             input.messages,
+            input.tools,
         )
         .await;
 
@@ -670,6 +679,7 @@ impl AiService {
                 ctx.request_id.as_deref(),
                 input.system,
                 input.messages,
+                input.tools,
             )
             .await?;
 
@@ -715,6 +725,7 @@ impl AiService {
         let ctx_request_id = request_id;
         let input_system = input.system.clone();
         let input_messages = input.messages.clone();
+        let input_tools = input.tools.clone();
 
         let ctx_request_id_clone = ctx_request_id.clone();
 
@@ -722,6 +733,7 @@ impl AiService {
             use futures::StreamExt;
 
             let mut content_accumulated = String::new();
+            let mut tool_calls_accumulated: Vec<ai_providers::ToolCall> = Vec::new();
             let started = Instant::now();
             let mut first_delta_sent = false;
             let mut last_error: Option<AiCallError> = None;
@@ -746,6 +758,7 @@ impl AiService {
                     max_output_tokens: attempt.max_output_tokens,
                     temperature: attempt.temperature,
                     request_id: ctx_request_id_clone.clone(),
+                    tools: input_tools.clone(),
                 };
 
                 for retry in 0..=2 {
@@ -758,6 +771,12 @@ impl AiService {
                         Ok(mut vendor_stream) => {
                             'stream_loop: while let Some(event) = vendor_stream.next().await {
                                 match event {
+                                    Ok(ai_providers::StreamEvent::ToolCall(tc)) => {
+                                        tool_calls_accumulated.push(tc.clone());
+                                        if tx.send(AiStreamEvent::ToolCall(tc)).await.is_err() {
+                                            return;
+                                        }
+                                    }
                                     Ok(ai_providers::StreamEvent::Delta(text)) => {
                                         first_delta_sent = true;
                                         content_accumulated.push_str(&text);
@@ -801,6 +820,7 @@ impl AiService {
                                             model: model.clone(),
                                             usage: usage.clone(),
                                             finish,
+                                            tool_calls: tool_calls_accumulated.clone(),
                                         };
 
                                         let w = usage::UsageWrite {
@@ -1026,6 +1046,7 @@ impl AiService {
                 ctx.request_id.as_deref(),
                 input.system,
                 input.messages,
+                input.tools,
             )
             .await?;
             let elapsed = started.elapsed();
@@ -1068,11 +1089,13 @@ impl AiService {
         let ctx_request_id = request_id;
         let input_system = input.system.clone();
         let input_messages = input.messages.clone();
+        let input_tools = input.tools.clone();
 
         tokio::spawn(async move {
             use futures::StreamExt;
 
             let mut content_accumulated = String::new();
+            let mut tool_calls_accumulated: Vec<ai_providers::ToolCall> = Vec::new();
             let started = Instant::now();
 
             let provider_obj = match registry.resolve(&attempt.provider) {
@@ -1095,6 +1118,7 @@ impl AiService {
                 max_output_tokens: attempt.max_output_tokens,
                 temperature: attempt.temperature,
                 request_id: ctx_request_id.clone(),
+                tools: input_tools.clone(),
             };
 
             let attempt_start = started;
@@ -1102,6 +1126,12 @@ impl AiService {
                 Ok(mut vendor_stream) => {
                     while let Some(event) = vendor_stream.next().await {
                         match event {
+                            Ok(ai_providers::StreamEvent::ToolCall(tc)) => {
+                                tool_calls_accumulated.push(tc.clone());
+                                if tx.send(AiStreamEvent::ToolCall(tc)).await.is_err() {
+                                    return;
+                                }
+                            }
                             Ok(ai_providers::StreamEvent::Delta(text)) => {
                                 content_accumulated.push_str(&text);
                                 if tx.send(AiStreamEvent::Delta(text)).await.is_err() {
@@ -1144,6 +1174,7 @@ impl AiService {
                                     model: model.clone(),
                                     usage: usage.clone(),
                                     finish,
+                                    tool_calls: tool_calls_accumulated.clone(),
                                 };
 
                                 let w = usage::UsageWrite {
@@ -1393,6 +1424,7 @@ mod tests {
                 output: Some(5),
             },
             finish: FinishReason::Stop,
+            tool_calls: vec![],
         }
     }
 
@@ -1417,9 +1449,15 @@ mod tests {
         });
         let registry = make_registry(openai, anthropic);
 
-        let result = run_attempts(&registry, &[make_attempt("openai", "gpt-4")], None, vec![])
-            .await
-            .unwrap();
+        let result = run_attempts(
+            &registry,
+            &[make_attempt("openai", "gpt-4")],
+            None,
+            vec![],
+            vec![],
+        )
+        .await
+        .unwrap();
         assert_eq!(result.content, "hello");
         assert_eq!(result.provider, "openai");
         assert_eq!(count.load(Ordering::SeqCst), 1);
@@ -1451,6 +1489,7 @@ mod tests {
                     make_attempt("anthropic", "claude-3"),
                 ],
                 None,
+                vec![],
                 vec![],
             )
             .await
@@ -1485,6 +1524,7 @@ mod tests {
                 make_attempt("anthropic", "claude-3"),
             ],
             None,
+            vec![],
             vec![],
         )
         .await
@@ -1529,6 +1569,7 @@ mod tests {
                 ],
                 None,
                 vec![],
+                vec![],
             )
             .await
         });
@@ -1564,9 +1605,15 @@ mod tests {
             }),
         );
 
-        let result = run_attempts(&registry, &[make_attempt("openai", "gpt-4")], None, vec![])
-            .await
-            .unwrap();
+        let result = run_attempts(
+            &registry,
+            &[make_attempt("openai", "gpt-4")],
+            None,
+            vec![],
+            vec![],
+        )
+        .await
+        .unwrap();
         assert_eq!(result.content, "direct");
         assert_eq!(result.model, "test-model");
     }
@@ -1628,6 +1675,7 @@ mod tests {
             max_output_tokens: None,
             temperature: None,
             request_id: None,
+            tools: vec![],
         };
 
         let resolved = registry.resolve("openai").unwrap();
@@ -1639,6 +1687,7 @@ mod tests {
             match event.unwrap() {
                 StreamEvent::Delta(text) => deltas.push(text),
                 StreamEvent::Done { usage: u, .. } => usage = Some(u),
+                StreamEvent::ToolCall(_) => {}
             }
         }
 
@@ -1668,6 +1717,7 @@ mod tests {
             max_output_tokens: None,
             temperature: None,
             request_id: None,
+            tools: vec![],
         };
 
         let resolved = registry.resolve("openai").unwrap();

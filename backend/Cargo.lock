@@ -88,6 +88,7 @@ dependencies = [
  "tenancy",
  "tokio",
  "tokio-stream",
+ "tools",
  "tracing",
  "utoipa",
  "uuid",
@@ -98,7 +99,9 @@ dependencies = [
 name = "ai-providers"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "async-trait",
+ "base64",
  "bytes",
  "futures",
  "reqwest",
@@ -107,6 +110,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "uuid",
  "wiremock",
  "zeroize",
 ]
@@ -1330,6 +1334,7 @@ dependencies = [
  "tenancy",
  "tokio",
  "tokio-stream",
+ "tools",
  "tracing",
  "utoipa",
  "uuid",
@@ -3422,10 +3427,12 @@ name = "server"
 version = "0.1.0"
 dependencies = [
  "ai",
+ "ai-providers",
  "argon2",
  "async-trait",
  "authz",
  "axum",
+ "base64",
  "cache",
  "chrono",
  "config",
@@ -3451,6 +3458,7 @@ dependencies = [
  "storage",
  "tenancy",
  "tokio",
+ "tools",
  "tower",
  "tower-http",
  "tracing",
@@ -4111,6 +4119,28 @@ dependencies = [
 [[package]]
 name = "tools"
 version = "0.1.0"
+dependencies = [
+ "ai-providers",
+ "async-trait",
+ "axum",
+ "base64",
+ "chrono",
+ "config",
+ "conversations",
+ "customers",
+ "identity",
+ "kernel",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tenancy",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+ "uuid",
+]
 
 [[package]]
 name = "tower"

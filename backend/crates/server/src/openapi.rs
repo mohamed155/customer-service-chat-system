@@ -206,6 +206,10 @@ impl Modify for TagDescriptionsAddon {
                 "Tenant-scoped AI provider and configuration with usage telemetry.",
             ),
             (
+                "tools",
+                "Tenant-scoped tool definitions, policies, activity, and approvals.",
+            ),
+            (
                 "ops",
                 "Operational endpoints (liveness, readiness, metrics).",
             ),

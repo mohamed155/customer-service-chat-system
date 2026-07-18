@@ -123,6 +123,7 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
           [loading]="store.loadingTimeline()"
           [hasMore]="store.hasMoreTimeline()"
           [activeGeneration]="store.activeGeneration()"
+          [toolActivity]="store.toolActivity()"
           (loadOlder)="store.loadOlder(conv.id)"
         />
 

@@ -165,12 +165,29 @@ export const TENANT_ROUTES: Routes = [
   {
     path: APP_PATHS.tenant.settings,
     canMatch: [permissionGuard],
-    loadComponent: () => import('./settings/settings.component').then((m) => m.SettingsComponent),
     data: {
       pageTitle: 'settings',
       requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.settings],
     },
     title: PAGE_TITLES.settings.title,
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('./settings/settings.component').then((m) => m.SettingsComponent),
+      },
+      {
+        path: 'tools',
+        canMatch: [permissionGuard],
+        loadComponent: () =>
+          import('./settings/tools/tools-settings.component').then((m) => m.ToolsSettingsComponent),
+        data: {
+          pageTitle: 'toolsSettings',
+          requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.settingsTools],
+        },
+        title: PAGE_TITLES.toolsSettings.title,
+      },
+    ],
   },
   {
     path: APP_PATHS.tenant.escalations,

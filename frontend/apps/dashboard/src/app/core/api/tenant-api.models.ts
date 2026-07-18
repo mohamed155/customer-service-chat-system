@@ -716,6 +716,96 @@ export function patchPayloadToWire(
   };
 }
 
+export interface ToolRequest {
+  readonly id: string;
+  readonly toolName: string;
+  readonly toolSource: 'builtin' | 'tenant';
+  readonly arguments: unknown;
+  readonly status: string;
+  readonly approvalRequired: boolean;
+  readonly chainIndex: number;
+  readonly createdAt: string;
+  readonly expiresAt?: string;
+  readonly durationMs?: number;
+  readonly result?: unknown;
+  readonly error?: string;
+  readonly decidedByDisplayName?: string;
+}
+
+export interface ToolRequestCreatedEvent {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly toolName: string;
+  readonly toolSource: string;
+  readonly arguments: unknown;
+  readonly approvalRequired: boolean;
+  readonly expiresAt?: string;
+  readonly chainIndex: number;
+  readonly createdAt: string;
+}
+
+export interface ToolRequestUpdatedEvent {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly status: string;
+  readonly decidedByDisplayName?: string;
+  readonly durationMs?: number;
+  readonly hasResult: boolean;
+  readonly error?: string;
+}
+
+export interface DecideToolRequestRequest {
+  readonly decision: 'approve' | 'deny';
+}
+
+// Tool settings types (US4 — tenant tool settings page)
+export interface BuiltinToolSetting {
+  readonly name: string;
+  readonly description: string;
+  readonly classification: 'auto' | 'approval';
+  readonly enabled: boolean;
+  readonly requireApproval: boolean;
+  readonly effectiveApproval: boolean;
+}
+
+export interface TenantDefinedTool {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema: Record<string, unknown>;
+  readonly endpointUrl: string;
+  readonly hasCredential: boolean;
+  readonly classification: 'auto' | 'approval';
+  readonly enabled: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CreateTenantToolPayload {
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema: Record<string, unknown>;
+  readonly endpointUrl: string;
+  readonly credential?: string | null;
+  readonly classification?: 'auto' | 'approval';
+  readonly enabled?: boolean;
+}
+
+export interface UpdateTenantToolPayload {
+  readonly name?: string;
+  readonly description?: string;
+  readonly inputSchema?: Record<string, unknown>;
+  readonly endpointUrl?: string;
+  readonly credential?: string | null;
+  readonly classification?: 'auto' | 'approval';
+  readonly enabled?: boolean;
+}
+
+export interface ToolsSettingsResponse {
+  readonly builtin: readonly BuiltinToolSetting[];
+  readonly tenantDefined: readonly TenantDefinedTool[];
+}
+
 export function createConversationPayloadToWire(
   payload: CreateConversationPayload,
 ): CreateConversationPayloadWire {

@@ -18,6 +18,8 @@ import {
   ConversationDetailEscalation,
   ConversationStatus,
   Message,
+  ToolRequest,
+  ToolRequestUpdatedEvent,
 } from '../../../core/api/tenant-api.models';
 import { RealtimeService, SseEvent } from '../../../core/realtime/realtime.service';
 import { ConversationsApiService } from './conversations-api.service';
@@ -46,6 +48,7 @@ interface ConversationDetailState {
   readonly timelineError: string | null;
   readonly activeGeneration: ActiveGeneration | null;
   readonly openConversationId: string | null;
+  readonly toolActivity: Record<string, ToolRequest>;
 }
 
 export const ConversationDetailStore = signalStore(
@@ -59,6 +62,7 @@ export const ConversationDetailStore = signalStore(
     timelineError: null,
     activeGeneration: null,
     openConversationId: null,
+    toolActivity: {},
   }),
   withComputed(({ timelinePages }) => ({
     timeline: computed(() =>
@@ -131,6 +135,24 @@ export const ConversationDetailStore = signalStore(
       ),
     );
 
+    const loadToolActivity = rxMethod<string>(
+      pipe(
+        switchMap((id) =>
+          api.getToolActivity(id).pipe(
+            map(({ data }) => data),
+            catchError(() => of({ items: [] as ToolRequest[] })),
+          ),
+        ),
+        tap((result) => {
+          const map: Record<string, ToolRequest> = {};
+          for (const item of result.items) {
+            map[item.id] = item;
+          }
+          patchState(store, { toolActivity: map });
+        }),
+      ),
+    );
+
     const loadOlderRx = rxMethod<{ id: string; cursor: string }>(
       pipe(
         tap(() => patchState(store, { loadingTimeline: true, timelineError: null })),
@@ -164,6 +186,7 @@ export const ConversationDetailStore = signalStore(
       load(id: string): void {
         loadDetail(id);
         loadTimeline(id);
+        loadToolActivity(id);
       },
       loadOlder(id: string): void {
         const cursor = store.oldestCursor();
@@ -226,8 +249,9 @@ export const ConversationDetailStore = signalStore(
         if (id) {
           loadDetail(id);
           loadTimeline(id);
+          loadToolActivity(id);
         } else {
-          patchState(store, { activeGeneration: null });
+          patchState(store, { activeGeneration: null, toolActivity: {} });
         }
       },
 
@@ -237,6 +261,7 @@ export const ConversationDetailStore = signalStore(
           patchState(store, { openConversationId: id, activeGeneration: null });
           loadDetail(id);
           loadTimeline(id);
+          loadToolActivity(id);
         }
       },
 
@@ -297,6 +322,47 @@ export const ConversationDetailStore = signalStore(
         }
       },
 
+      handleToolEvent(event: SseEvent): void {
+        const convId = store.openConversationId();
+        if (!convId) return;
+
+        const parsed = tryParseJson(event.data);
+        if (!parsed) return;
+
+        const wrapped = parsed as { payload?: Record<string, unknown> };
+        const payload = wrapped.payload;
+        if (!payload) return;
+
+        const data = payload as { conversationId?: string };
+        if (!data.conversationId || data.conversationId !== convId) return;
+
+        switch (event.event) {
+          case 'tool.request.created': {
+            const entry = payload as unknown as ToolRequest;
+            patchState(store, {
+              toolActivity: { ...store.toolActivity(), [entry.id]: entry },
+            });
+            break;
+          }
+          case 'tool.request.updated': {
+            const update = payload as unknown as ToolRequestUpdatedEvent;
+            const current = store.toolActivity()[update.id];
+            if (current) {
+              const merged: ToolRequest = {
+                ...current,
+                status: update.status,
+                durationMs: update.durationMs,
+                error: update.error,
+              };
+              patchState(store, {
+                toolActivity: { ...store.toolActivity(), [update.id]: merged },
+              });
+            }
+            break;
+          }
+        }
+      },
+
       setAiHandling(conversationId: string, mode: 'platform_ai' | 'human'): void {
         api.setConversationAiHandling(conversationId, mode).subscribe({
           next: (response) => {
@@ -342,12 +408,34 @@ export const ConversationDetailStore = signalStore(
           filter((e) => e.event.startsWith('ai.message.') && store.openConversationId() != null),
         )
         .subscribe((e) => store.handleAiEvent(e));
-      (store as unknown as { realtimeSub: { unsubscribe: () => void } }).realtimeSub = sub;
+
+      const toolSub = _realtime
+        .events()
+        .pipe(
+          filter((e) => e.event.startsWith('tool.request.') && store.openConversationId() != null),
+        )
+        .subscribe((e) => store.handleToolEvent(e));
+
+      (
+        store as unknown as {
+          realtimeSub: { unsubscribe: () => void };
+          toolRealtimeSub: { unsubscribe: () => void };
+        }
+      ).realtimeSub = sub;
+      (
+        store as unknown as {
+          realtimeSub: { unsubscribe: () => void };
+          toolRealtimeSub: { unsubscribe: () => void };
+        }
+      ).toolRealtimeSub = toolSub;
     },
     onDestroy(store) {
       (
         store as unknown as { realtimeSub?: { unsubscribe: () => void } }
       ).realtimeSub?.unsubscribe();
+      (
+        store as unknown as { toolRealtimeSub?: { unsubscribe: () => void } }
+      ).toolRealtimeSub?.unsubscribe();
     },
   }),
 );

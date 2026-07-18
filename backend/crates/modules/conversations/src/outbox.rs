@@ -83,3 +83,28 @@ pub async fn emit_customer_message_in_tx(
     .await?;
     Ok(())
 }
+
+pub async fn emit_tool_decision_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    tool_request_id: Uuid,
+    outcome: &str,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'ai.tool_decision', $4, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(conversation_id)
+    .bind(tenant_id)
+    .bind(json!({
+        "tenantId": tenant_id,
+        "conversationId": conversation_id,
+        "toolRequestId": tool_request_id,
+        "outcome": outcome,
+    }))
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}

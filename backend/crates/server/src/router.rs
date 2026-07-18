@@ -532,6 +532,38 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
                 .layer(require_permission(Permission::AiAgentView)),
         )
         .routes(
+            routes!(tools::routes::tool_activity)
+                .layer(require_permission(Permission::ConversationsView)),
+        )
+        .routes(
+            routes!(tools::routes::decide_tool_request)
+                .layer(require_permission(Permission::ConversationsManage)),
+        )
+        .routes(
+            routes!(tools::routes::list_pending_tool_requests)
+                .layer(require_permission(Permission::ConversationsView)),
+        )
+        // T057: Tool settings
+        .routes(
+            routes!(tools::routes::list_tools).layer(require_permission(Permission::AiAgentView)),
+        )
+        .routes(
+            routes!(tools::routes::update_builtin_policy)
+                .layer(require_permission(Permission::AiAgentManage)),
+        )
+        .routes(
+            routes!(tools::routes::create_tenant_tool)
+                .layer(require_permission(Permission::AiAgentManage)),
+        )
+        .routes(
+            routes!(tools::routes::update_tenant_tool_route)
+                .layer(require_permission(Permission::AiAgentManage)),
+        )
+        .routes(
+            routes!(tools::routes::delete_tenant_tool_route)
+                .layer(require_permission(Permission::AiAgentManage)),
+        )
+        .routes(
             routes!(ai::routes::tenant_usage_summary)
                 .layer(require_permission(Permission::AiAgentView)),
         )

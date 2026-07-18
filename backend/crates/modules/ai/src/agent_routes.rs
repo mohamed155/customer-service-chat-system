@@ -1063,6 +1063,22 @@ pub async fn set_conversation_ai_handling(
                 }
             }
 
+            // T034: Cancel any pending tool requests for this conversation
+            let pending_tools = tools::approval::fetch_awaiting_approval_for_conversation(
+                &pool,
+                ctx.tenant_id,
+                conversation_id,
+            )
+            .await
+            .unwrap_or_default();
+            let cancelled_ids = tools::approval::cancel_pending_for_conversation(
+                &mut tx,
+                ctx.tenant_id,
+                conversation_id,
+            )
+            .await
+            .unwrap_or_default();
+
             let escalation = match escalations::routing::route_new_escalation_in_tx(
                 &mut tx,
                 &pool,
@@ -1110,6 +1126,29 @@ pub async fn set_conversation_ai_handling(
                 return ApiError::internal_error("Failed to set AI handling mode")
                     .with_request_id(&ctx.request_id)
                     .into_response();
+            }
+
+            // Broadcast cancelled tool requests
+            if !cancelled_ids.is_empty() {
+                for tool in &pending_tools {
+                    if cancelled_ids.contains(&tool.id) {
+                        let updated_ev = escalations::model::ToolRequestUpdated {
+                            id: tool.id,
+                            conversation_id: tool.conversation_id,
+                            status: "cancelled".into(),
+                            decided_by_display_name: None,
+                            duration_ms: None,
+                            has_result: false,
+                            error: None,
+                        };
+                        presence.broadcast(
+                            ctx.tenant_id,
+                            escalations::presence::Event::ConversationTool(
+                                escalations::presence::ConversationToolEvent::Updated(updated_ev),
+                            ),
+                        );
+                    }
+                }
             }
 
             let detail =

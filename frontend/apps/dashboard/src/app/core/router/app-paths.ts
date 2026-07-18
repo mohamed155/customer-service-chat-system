@@ -30,6 +30,7 @@ export const APP_PATHS = {
     integrations: 'integrations',
     analytics: 'analytics',
     settings: 'settings',
+    settingsTools: 'settings/tools',
     team: 'team',
     escalations: 'escalations',
   },

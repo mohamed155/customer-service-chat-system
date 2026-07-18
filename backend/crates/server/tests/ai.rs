@@ -205,7 +205,10 @@ fn ai_input() -> ai::AiInput {
         messages: vec![ai::Message {
             role: ai::Role::User,
             content: "Hello".into(),
+            tool_calls: vec![],
+            tool_call_id: None,
         }],
+        tools: vec![],
     }
 }
 
@@ -2593,6 +2596,7 @@ async fn streaming_deltas_arrive_before_done() {
     while let Some(event) = stream.next().await {
         match event {
             ai::AiStreamEvent::Delta(t) => deltas.push(t),
+            ai::AiStreamEvent::ToolCall(_) => {}
             ai::AiStreamEvent::Done(_) => {
                 got_done = true;
                 break;
@@ -2721,6 +2725,7 @@ async fn streaming_interrupted_mid_frame() {
     while let Some(event) = stream.next().await {
         match event {
             ai::AiStreamEvent::Delta(_) => got_delta = true,
+            ai::AiStreamEvent::ToolCall(_) => {}
             ai::AiStreamEvent::Error { .. } => got_error = true,
             ai::AiStreamEvent::Done(_) => {}
         }
@@ -2867,7 +2872,10 @@ async fn live_vendor() {
                 messages: vec![ai::Message {
                     role: ai::Role::User,
                     content: "Say hello in one word".into(),
+                    tool_calls: vec![],
+                    tool_call_id: None,
                 }],
+                tools: vec![],
             },
         )
         .await

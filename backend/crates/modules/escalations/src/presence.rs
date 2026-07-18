@@ -9,12 +9,19 @@ use tracing::error;
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
+pub enum ConversationToolEvent {
+    Created(crate::model::ToolRequestCreated),
+    Updated(crate::model::ToolRequestUpdated),
+}
+
+#[derive(Debug, Clone)]
 pub enum Event {
     EscalationAssigned(crate::model::EscalationAssignedEvent),
     EscalationQueued(crate::model::EscalationQueuedEvent),
     EscalationRemoved(crate::model::EscalationRemovedEvent),
     AvailabilityChanged(AvailabilityChangedEvent),
     ConversationAi(crate::model::ConversationAiEvent),
+    ConversationTool(ConversationToolEvent),
 }
 
 struct TenantPresence {

@@ -1,0 +1,24 @@
+@if (hasContent) {
+  <div class="result-viewer">
+    <button class="toggle-btn" (click)="toggle()" type="button">
+      <span class="toggle-icon">{{ expanded ? '▾' : '▸' }}</span>
+      <span>{{ expanded ? 'Hide details' : 'Show details' }}</span>
+    </button>
+    @if (expanded) {
+      <div class="content">
+        @if (error(); as err) {
+          <div class="error-section">
+            <strong>Error:</strong>
+            <pre class="error-text">{{ err }}</pre>
+          </div>
+        }
+        @if (result(); as res) {
+          <div class="result-section">
+            <strong>Result:</strong>
+            <pre class="result-json">{{ prettyPrint(res) }}</pre>
+          </div>
+        }
+      </div>
+    }
+  </div>
+}

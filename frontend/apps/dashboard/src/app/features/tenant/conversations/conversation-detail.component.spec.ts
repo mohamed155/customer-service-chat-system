@@ -67,6 +67,7 @@ describe('ConversationDetailComponent', () => {
     submitting: ReturnType<typeof vi.fn>;
     error: ReturnType<typeof vi.fn>;
     activeGeneration: ReturnType<typeof vi.fn>;
+    toolActivity: ReturnType<typeof vi.fn>;
     load: ReturnType<typeof vi.fn>;
     loadOlder: ReturnType<typeof vi.fn>;
     addMessage: ReturnType<typeof vi.fn>;
@@ -86,6 +87,7 @@ describe('ConversationDetailComponent', () => {
       submitting: vi.fn(() => false),
       error: vi.fn(() => null),
       activeGeneration: vi.fn(() => null),
+      toolActivity: vi.fn(() => ({})),
       load: vi.fn(),
       loadOlder: vi.fn(),
       addMessage: vi.fn(),

@@ -5,12 +5,11 @@ use ai::agent_responder::process_agent_responder_once;
 use ai::crypto::{self, MasterKey};
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
-use http_body_util::BodyExt;
 use server::router;
 use server::state::AppState;
 use tower::ServiceExt;
 use uuid::Uuid;
-use wiremock::matchers::{header as wm_header, method as wm_method, path as wm_path};
+use wiremock::matchers::{method as wm_method, path as wm_path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 const TEST_ENV: config::Environment = config::Environment::Test;
@@ -389,8 +388,8 @@ async fn engine_supersede_rapid_second_message() {
         "expected exactly two ai_generations rows"
     );
 
-    let (_gen_id_1, outcome_1, resp_msg_id_1) = &gen_rows[0];
-    let (_gen_id_2, outcome_2, resp_msg_id_2) = &gen_rows[1];
+    let (_gen_id_1, _outcome_1, _resp_msg_id_1) = &gen_rows[0];
+    let (_gen_id_2, _outcome_2, _resp_msg_id_2) = &gen_rows[1];
 
     // First generation (triggered by the first customer message) should be superseded
     // Second generation (triggered by the second customer message) should succeed

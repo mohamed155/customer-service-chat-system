@@ -1448,6 +1448,22 @@ pub async fn summary_history(
     .await
 }
 
+pub async fn customer_id_for_conversation(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+) -> sqlx::Result<Uuid> {
+    sqlx::query_scalar(
+        "SELECT customer_id FROM conversations \
+         WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| sqlx::Error::Protocol("Conversation not found or soft-deleted".into()))
+}
+
 pub async fn has_customer_message_after(
     pool: &PgPool,
     tenant_id: Uuid,

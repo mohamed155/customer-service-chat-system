@@ -1,0 +1,49 @@
+<article
+  class="tool-entry"
+  [class.approval-required]="request().approvalRequired"
+  [class.entry-success]="isSuccess()"
+  [class.entry-error]="isError()"
+>
+  <div class="entry-header">
+    <span class="tool-name">{{ request().toolName }}</span>
+    <span class="chain-badge">#{{ request().chainIndex }}</span>
+    <span
+      class="status-chip"
+      [class.status-success]="statusChipVariant() === 'success'"
+      [class.status-error]="statusChipVariant() === 'error'"
+      [class.status-info]="statusChipVariant() === 'info'"
+      [class.status-warning]="statusChipVariant() === 'warning'"
+      [class.status-neutral]="statusChipVariant() === 'neutral'"
+    >
+      {{ request().status }}
+    </span>
+  </div>
+  <div class="entry-meta">
+    @if (formattedDuration(); as dur) {
+      <span class="duration">{{ dur }}</span>
+    }
+    @if (request().toolSource === 'tenant') {
+      <span class="source-badge">tenant</span>
+    }
+    @if (request().decidedByDisplayName; as decider) {
+      <span class="decider-name">by {{ decider }}</span>
+    }
+  </div>
+  @if (request().error; as err) {
+    <p class="error-detail">{{ err }}</p>
+  }
+  @if (hasArguments()) {
+    <div class="args-viewer">
+      <button class="args-toggle" (click)="toggleArguments()" type="button">
+        <span class="toggle-icon">{{ argumentsExpanded ? '▾' : '▸' }}</span>
+        <span>{{ argumentsExpanded ? 'Hide arguments' : 'Show arguments' }}</span>
+      </button>
+      @if (argumentsExpanded) {
+        <div class="args-content">
+          <pre class="args-json">{{ prettyPrint(request().arguments) }}</pre>
+        </div>
+      }
+    </div>
+  }
+  <app-tool-result-viewer [result]="request().result" [error]="request().error" />
+</article>

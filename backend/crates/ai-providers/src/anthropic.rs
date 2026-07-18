@@ -83,7 +83,16 @@ fn provider_error_from_body(status: StatusCode, body: &str) -> ProviderError {
 #[derive(serde::Serialize)]
 struct AnthropicMessage {
     role: String,
-    content: String,
+    #[serde(skip_serializing_if = "serde_json::Value::is_null")]
+    content: serde_json::Value,
+}
+
+#[derive(serde::Serialize)]
+struct AnthropicTool {
+    name: String,
+    description: String,
+    #[serde(rename = "input_schema")]
+    input_schema: serde_json::Value,
 }
 
 #[derive(serde::Serialize)]
@@ -98,6 +107,8 @@ struct AnthropicRequest {
     temperature: Option<f32>,
     #[serde(skip_serializing_if = "is_false")]
     stream: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tools: Vec<AnthropicTool>,
 }
 
 fn is_false(v: &bool) -> bool {
@@ -105,8 +116,16 @@ fn is_false(v: &bool) -> bool {
 }
 
 #[derive(serde::Deserialize)]
-struct AnthropicContent {
-    text: String,
+#[serde(tag = "type")]
+enum AnthropicContentBlock {
+    #[serde(rename = "text")]
+    Text { text: String },
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
 }
 
 #[derive(serde::Deserialize)]
@@ -117,7 +136,7 @@ struct AnthropicUsage {
 
 #[derive(serde::Deserialize)]
 struct AnthropicResponse {
-    content: Vec<AnthropicContent>,
+    content: Vec<AnthropicContentBlock>,
     model: String,
     usage: AnthropicUsage,
     stop_reason: Option<String>,
@@ -134,13 +153,50 @@ impl ChatProvider for AnthropicAdapter {
             .messages
             .iter()
             .filter(|m| m.role != Role::System)
-            .map(|m| AnthropicMessage {
-                role: match m.role {
+            .map(|m| {
+                let role = match m.role {
                     Role::User => "user".to_string(),
                     Role::Assistant => "assistant".to_string(),
                     Role::System => unreachable!(),
-                },
-                content: m.content.clone(),
+                    Role::Tool => "user".to_string(),
+                };
+                let content = if m.role == Role::Assistant && !m.tool_calls.is_empty() {
+                    let mut blocks = Vec::new();
+                    if !m.content.is_empty() {
+                        blocks.push(serde_json::json!({
+                            "type": "text",
+                            "text": m.content
+                        }));
+                    }
+                    for tc in &m.tool_calls {
+                        blocks.push(serde_json::json!({
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": tc.arguments
+                        }));
+                    }
+                    serde_json::Value::Array(blocks)
+                } else if m.role == Role::Tool {
+                    serde_json::Value::Array(vec![serde_json::json!({
+                        "type": "tool_result",
+                        "tool_use_id": m.tool_call_id,
+                        "content": m.content
+                    })])
+                } else {
+                    serde_json::Value::String(m.content.clone())
+                };
+                AnthropicMessage { role, content }
+            })
+            .collect();
+
+        let tools: Vec<AnthropicTool> = req
+            .tools
+            .iter()
+            .map(|t| AnthropicTool {
+                name: t.name.clone(),
+                description: t.description.clone(),
+                input_schema: t.input_schema.clone(),
             })
             .collect();
 
@@ -151,6 +207,7 @@ impl ChatProvider for AnthropicAdapter {
             max_tokens: req.max_output_tokens.unwrap_or(4096),
             temperature: req.temperature,
             stream: false,
+            tools,
         };
 
         let elapsed = std::time::Instant::now();
@@ -191,8 +248,26 @@ impl ChatProvider for AnthropicAdapter {
         let finish = match anthropic_resp.stop_reason.as_deref() {
             Some("end_turn") => FinishReason::Stop,
             Some("max_tokens") => FinishReason::Length,
+            Some("tool_use") => FinishReason::ToolUse,
             _ => FinishReason::Other,
         };
+
+        let mut content = String::new();
+        let mut tool_calls = Vec::new();
+        for block in anthropic_resp.content {
+            match block {
+                AnthropicContentBlock::Text { text } => {
+                    content.push_str(&text);
+                }
+                AnthropicContentBlock::ToolUse { id, name, input } => {
+                    tool_calls.push(ToolCall {
+                        id,
+                        name,
+                        arguments: input,
+                    });
+                }
+            }
+        }
 
         tracing::info!(
             provider = "anthropic",
@@ -203,18 +278,14 @@ impl ChatProvider for AnthropicAdapter {
         );
 
         Ok(ChatCompletion {
-            content: anthropic_resp
-                .content
-                .into_iter()
-                .next()
-                .map(|c| c.text)
-                .unwrap_or_default(),
+            content,
             model: anthropic_resp.model,
             usage: TokenUsage {
                 input: anthropic_resp.usage.input_tokens,
                 output: anthropic_resp.usage.output_tokens,
             },
             finish,
+            tool_calls,
         })
     }
 
@@ -227,13 +298,50 @@ impl ChatProvider for AnthropicAdapter {
             .messages
             .iter()
             .filter(|m| m.role != Role::System)
-            .map(|m| AnthropicMessage {
-                role: match m.role {
+            .map(|m| {
+                let role = match m.role {
                     Role::User => "user".to_string(),
                     Role::Assistant => "assistant".to_string(),
                     Role::System => unreachable!(),
-                },
-                content: m.content.clone(),
+                    Role::Tool => "user".to_string(),
+                };
+                let content = if m.role == Role::Assistant && !m.tool_calls.is_empty() {
+                    let mut blocks = Vec::new();
+                    if !m.content.is_empty() {
+                        blocks.push(serde_json::json!({
+                            "type": "text",
+                            "text": m.content
+                        }));
+                    }
+                    for tc in &m.tool_calls {
+                        blocks.push(serde_json::json!({
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": tc.arguments
+                        }));
+                    }
+                    serde_json::Value::Array(blocks)
+                } else if m.role == Role::Tool {
+                    serde_json::Value::Array(vec![serde_json::json!({
+                        "type": "tool_result",
+                        "tool_use_id": m.tool_call_id,
+                        "content": m.content
+                    })])
+                } else {
+                    serde_json::Value::String(m.content.clone())
+                };
+                AnthropicMessage { role, content }
+            })
+            .collect();
+
+        let tools: Vec<AnthropicTool> = req
+            .tools
+            .iter()
+            .map(|t| AnthropicTool {
+                name: t.name.clone(),
+                description: t.description.clone(),
+                input_schema: t.input_schema.clone(),
             })
             .collect();
 
@@ -244,6 +352,7 @@ impl ChatProvider for AnthropicAdapter {
             max_tokens: req.max_output_tokens.unwrap_or(4096),
             temperature: req.temperature,
             stream: true,
+            tools,
         };
 
         let mut req_builder = self
@@ -285,102 +394,184 @@ fn anthropic_sse_to_events(
         + Send
         + 'static,
 ) -> impl futures::Stream<Item = Result<StreamEvent, ProviderError>> + Send + 'static {
+    #[derive(Default)]
+    struct ToolCallAccum {
+        id: String,
+        name: String,
+        arguments: String,
+    }
+
     let input_tokens = std::sync::Arc::new(std::sync::Mutex::new(None::<u32>));
     let output_tokens = std::sync::Arc::new(std::sync::Mutex::new(None::<u32>));
     let model = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
     let finish = std::sync::Arc::new(std::sync::Mutex::new(FinishReason::Other));
+    let tc_accs: std::sync::Arc<
+        std::sync::Mutex<std::collections::BTreeMap<usize, ToolCallAccum>>,
+    > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::BTreeMap::new()));
 
-    frame_stream.filter_map(move |frame_result| {
+    frame_stream.flat_map(move |frame_result| {
         let input_tokens = std::sync::Arc::clone(&input_tokens);
         let output_tokens = std::sync::Arc::clone(&output_tokens);
         let model = std::sync::Arc::clone(&model);
         let finish = std::sync::Arc::clone(&finish);
-        async move {
-            let frame = match frame_result {
-                Ok(f) => f,
-                Err(e) => return Some(Err(e)),
-            };
+        let tc_accs = std::sync::Arc::clone(&tc_accs);
 
-            let event_type = frame.event.as_deref().unwrap_or("");
+        let events: Vec<Result<StreamEvent, ProviderError>> = match frame_result {
+            Ok(frame) => {
+                let event_type = frame.event.as_deref().unwrap_or("").to_string();
 
-            match event_type {
-                "message_start" => {
-                    match serde_json::from_str::<serde_json::Value>(&frame.data) {
-                        Ok(json) => {
-                            if let Some(msg) = json.get("message") {
-                                *input_tokens.lock().unwrap() =
-                                    msg["usage"]["input_tokens"].as_u64().map(|v| v as u32);
-                                *model.lock().unwrap() = msg["model"].as_str().map(|s| s.to_string());
-                            }
-                            None
-                        }
-                        Err(e) => Some(Err(ProviderError {
-                            category: ErrorCategory::InvalidRequest,
-                            retriable: false,
-                            detail: format!("malformed message_start frame: {e}"),
-                        })),
-                    }
-                }
-                "content_block_delta" => {
-                    match serde_json::from_str::<serde_json::Value>(&frame.data) {
-                        Ok(json) => {
-                            match json["delta"]["text"].as_str() {
-                                Some(text) if !text.is_empty() => {
-                                    Some(Ok(StreamEvent::Delta(text.to_string())))
+                match event_type.as_str() {
+                    "message_start" => {
+                        match serde_json::from_str::<serde_json::Value>(&frame.data) {
+                            Ok(json) => {
+                                if let Some(msg) = json.get("message") {
+                                    *input_tokens.lock().unwrap() =
+                                        msg["usage"]["input_tokens"].as_u64().map(|v| v as u32);
+                                    *model.lock().unwrap() =
+                                        msg["model"].as_str().map(|s| s.to_string());
                                 }
-                                Some(_) => None,
-                                None => Some(Err(ProviderError {
-                                    category: ErrorCategory::InvalidRequest,
-                                    retriable: false,
-                                    detail: "malformed content_block_delta frame: missing or non-string delta.text".into(),
-                                })),
+                                vec![]
                             }
+                            Err(e) => vec![Err(ProviderError {
+                                category: ErrorCategory::InvalidRequest,
+                                retriable: false,
+                                detail: format!("malformed message_start frame: {e}"),
+                            })],
                         }
-                        Err(e) => Some(Err(ProviderError {
-                            category: ErrorCategory::InvalidRequest,
-                            retriable: false,
-                            detail: format!("malformed content_block_delta frame: {e}"),
-                        })),
                     }
-                }
-                "message_delta" => {
-                    match serde_json::from_str::<serde_json::Value>(&frame.data) {
-                        Ok(json) => {
-                            *output_tokens.lock().unwrap() =
-                                json["usage"]["output_tokens"].as_u64().map(|v| v as u32);
-                            if let Some(stop) = json["delta"]["stop_reason"].as_str() {
-                                *finish.lock().unwrap() = match stop {
-                                    "end_turn" => FinishReason::Stop,
-                                    "max_tokens" => FinishReason::Length,
-                                    _ => FinishReason::Other,
-                                };
+                    "content_block_start" => {
+                        match serde_json::from_str::<serde_json::Value>(&frame.data) {
+                            Ok(json) => {
+                                if json["content_block"]["type"].as_str() == Some("tool_use") {
+                                    let index = json["index"].as_i64().unwrap_or(0) as usize;
+                                    let id = json["content_block"]["id"]
+                                        .as_str()
+                                        .unwrap_or("")
+                                        .to_string();
+                                    let name = json["content_block"]["name"]
+                                        .as_str()
+                                        .unwrap_or("")
+                                        .to_string();
+                                    tc_accs.lock().unwrap().insert(
+                                        index,
+                                        ToolCallAccum {
+                                            id,
+                                            name,
+                                            arguments: String::new(),
+                                        },
+                                    );
+                                }
+                                vec![]
                             }
-                            None
+                            Err(e) => vec![Err(ProviderError {
+                                category: ErrorCategory::InvalidRequest,
+                                retriable: false,
+                                detail: format!("malformed content_block_start frame: {e}"),
+                            })],
                         }
-                        Err(e) => Some(Err(ProviderError {
-                            category: ErrorCategory::InvalidRequest,
-                            retriable: false,
-                            detail: format!("malformed message_delta frame: {e}"),
-                        })),
                     }
+                    "content_block_delta" => {
+                        match serde_json::from_str::<serde_json::Value>(&frame.data) {
+                            Ok(json) => {
+                                let delta_type = json["delta"]["type"].as_str().unwrap_or("");
+                                if delta_type == "input_json_delta" {
+                                    let index = json["index"].as_i64().unwrap_or(0) as usize;
+                                    if let Some(partial) =
+                                        json["delta"]["partial_delta_json"].as_str()
+                                    {
+                                        let mut accs = tc_accs.lock().unwrap();
+                                        if let Some(acc) = accs.get_mut(&index) {
+                                            acc.arguments.push_str(partial);
+                                        }
+                                    }
+                                    vec![]
+                                } else if delta_type == "text_delta" {
+                                    match json["delta"]["text"].as_str() {
+                                        Some(text) if !text.is_empty() => {
+                                            vec![Ok(StreamEvent::Delta(text.to_string()))]
+                                        }
+                                        _ => vec![],
+                                    }
+                                } else {
+                                    vec![]
+                                }
+                            }
+                            Err(e) => vec![Err(ProviderError {
+                                category: ErrorCategory::InvalidRequest,
+                                retriable: false,
+                                detail: format!("malformed content_block_delta frame: {e}"),
+                            })],
+                        }
+                    }
+                    "content_block_stop" => {
+                        match serde_json::from_str::<serde_json::Value>(&frame.data) {
+                            Ok(json) => {
+                                let index = json["index"].as_i64().unwrap_or(0) as usize;
+                                let acc_opt = tc_accs.lock().unwrap().remove(&index);
+                                if let Some(acc) = acc_opt {
+                                    let arguments = serde_json::from_str(&acc.arguments)
+                                        .unwrap_or_else(|_| {
+                                            serde_json::Value::Object(serde_json::Map::new())
+                                        });
+                                    vec![Ok(StreamEvent::ToolCall(ToolCall {
+                                        id: acc.id,
+                                        name: acc.name,
+                                        arguments,
+                                    }))]
+                                } else {
+                                    vec![]
+                                }
+                            }
+                            Err(e) => vec![Err(ProviderError {
+                                category: ErrorCategory::InvalidRequest,
+                                retriable: false,
+                                detail: format!("malformed content_block_stop frame: {e}"),
+                            })],
+                        }
+                    }
+                    "message_delta" => {
+                        match serde_json::from_str::<serde_json::Value>(&frame.data) {
+                            Ok(json) => {
+                                *output_tokens.lock().unwrap() =
+                                    json["usage"]["output_tokens"].as_u64().map(|v| v as u32);
+                                if let Some(stop) = json["delta"]["stop_reason"].as_str() {
+                                    *finish.lock().unwrap() = match stop {
+                                        "end_turn" => FinishReason::Stop,
+                                        "max_tokens" => FinishReason::Length,
+                                        "tool_use" => FinishReason::ToolUse,
+                                        _ => FinishReason::Other,
+                                    };
+                                }
+                                vec![]
+                            }
+                            Err(e) => vec![Err(ProviderError {
+                                category: ErrorCategory::InvalidRequest,
+                                retriable: false,
+                                detail: format!("malformed message_delta frame: {e}"),
+                            })],
+                        }
+                    }
+                    "message_stop" => {
+                        let it = input_tokens.lock().unwrap().take();
+                        let ot = output_tokens.lock().unwrap().take();
+                        let m = model.lock().unwrap().take().unwrap_or_default();
+                        let f = finish.lock().unwrap().clone();
+                        vec![Ok(StreamEvent::Done {
+                            usage: TokenUsage {
+                                input: it,
+                                output: ot,
+                            },
+                            model: m,
+                            finish: f,
+                        })]
+                    }
+                    _ => vec![],
                 }
-                "message_stop" => {
-                    let it = input_tokens.lock().unwrap().take();
-                    let ot = output_tokens.lock().unwrap().take();
-                    let m = model.lock().unwrap().take().unwrap_or_default();
-                    let f = finish.lock().unwrap().clone();
-                    Some(Ok(StreamEvent::Done {
-                        usage: TokenUsage {
-                            input: it,
-                            output: ot,
-                        },
-                        model: m,
-                        finish: f,
-                    }))
-                }
-                _ => None,
             }
-        }
+            Err(e) => vec![Err(e)],
+        };
+
+        futures::stream::iter(events)
     })
 }
 
@@ -399,16 +590,21 @@ mod tests {
                 Message {
                     role: Role::System,
                     content: "ignore this system message".into(),
+                    tool_calls: vec![],
+                    tool_call_id: None,
                 },
                 Message {
                     role: Role::User,
                     content: "Hello".into(),
+                    tool_calls: vec![],
+                    tool_call_id: None,
                 },
             ],
             model: "claude-sonnet-4-20250514".into(),
             max_output_tokens: None,
             temperature: Some(0.7),
             request_id: None,
+            tools: vec![],
         }
     }
 
@@ -746,5 +942,203 @@ data: {\"type\":\"message_stop\"}
         let key = SecretKey::new("sk-test-key".into());
         let req = test_request(); // max_output_tokens: None
         adapter.complete(&key, &req).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_tool_call_complete() {
+        let mock = MockServer::start().await;
+        let adapter = test_adapter(&mock);
+
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .and(header("x-api-key", "sk-test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "content": [
+                    {"type": "text", "text": "Let me check the weather..."},
+                    {"type": "tool_use", "id": "toolu_abc123", "name": "get_weather", "input": {"location": "NYC"}}
+                ],
+                "id": "msg_01",
+                "model": "claude-sonnet-4-20250514",
+                "role": "assistant",
+                "stop_reason": "tool_use",
+                "stop_sequence": null,
+                "type": "message",
+                "usage": {"input_tokens": 15, "output_tokens": 10}
+            })))
+            .expect(1)
+            .mount(&mock)
+            .await;
+
+        let key = SecretKey::new("sk-test-key".into());
+        let req = ChatRequest {
+            system: Some("You are helpful.".into()),
+            messages: vec![Message {
+                role: Role::User,
+                content: "What's the weather in NYC?".into(),
+                tool_calls: vec![],
+                tool_call_id: None,
+            }],
+            model: "claude-sonnet-4-20250514".into(),
+            max_output_tokens: None,
+            temperature: None,
+            request_id: None,
+            tools: vec![ToolSpec {
+                name: "get_weather".into(),
+                description: "Get weather for a location".into(),
+                input_schema: serde_json::json!({"type": "object"}),
+            }],
+        };
+
+        let result = adapter.complete(&key, &req).await.unwrap();
+
+        assert_eq!(result.content, "Let me check the weather...");
+        assert_eq!(result.finish, FinishReason::ToolUse);
+        assert_eq!(result.tool_calls.len(), 1);
+        assert_eq!(result.tool_calls[0].id, "toolu_abc123");
+        assert_eq!(result.tool_calls[0].name, "get_weather");
+        assert_eq!(
+            result.tool_calls[0].arguments,
+            serde_json::json!({"location": "NYC"})
+        );
+
+        // Verify tools were sent in the request body
+        let requests = mock.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert!(body.get("tools").is_some());
+        assert_eq!(body["tools"][0]["name"], "get_weather");
+        assert_eq!(body["tools"][0]["input_schema"]["type"], "object");
+    }
+
+    #[tokio::test]
+    async fn test_tool_call_stream() {
+        use futures::StreamExt;
+
+        let mock = MockServer::start().await;
+        let adapter = test_adapter(&mock);
+
+        let sse_body = "\
+event: message_start
+data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"model\":\"claude-sonnet-4-20250514\",\"role\":\"assistant\",\"content\":[],\"usage\":{\"input_tokens\":15,\"output_tokens\":0}}}
+
+event: content_block_start
+data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}
+
+event: content_block_delta
+data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Let me check the weather...\"}}
+
+event: content_block_stop
+data: {\"type\":\"content_block_stop\",\"index\":0}
+
+event: content_block_start
+data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_abc\",\"name\":\"get_weather\",\"input\":{}}}
+
+event: content_block_delta
+data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_delta_json\":\"{\\\"location\\\":\"}}
+
+event: content_block_delta
+data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_delta_json\":\" \\\"NYC\\\"}\"}}
+
+event: content_block_stop
+data: {\"type\":\"content_block_stop\",\"index\":1}
+
+event: message_delta
+data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":10},\"delta\":{\"stop_reason\":\"tool_use\"}}
+
+event: message_stop
+data: {\"type\":\"message_stop\"}
+
+";
+
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .and(header("x-api-key", "sk-test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(sse_body))
+            .mount(&mock)
+            .await;
+
+        let key = SecretKey::new("sk-test-key".into());
+        let req = ChatRequest {
+            system: None,
+            messages: vec![Message {
+                role: Role::User,
+                content: "What's the weather?".into(),
+                tool_calls: vec![],
+                tool_call_id: None,
+            }],
+            model: "claude-sonnet-4-20250514".into(),
+            max_output_tokens: None,
+            temperature: None,
+            request_id: None,
+            tools: vec![],
+        };
+
+        let mut stream = adapter.stream(&key, &req).await.unwrap();
+        let mut delta_found = false;
+        let mut tool_call_found = false;
+        let mut done_found = false;
+
+        while let Some(event) = stream.next().await {
+            let event = event.unwrap();
+            match event {
+                StreamEvent::Delta(text) => {
+                    assert_eq!(text, "Let me check the weather...");
+                    delta_found = true;
+                }
+                StreamEvent::ToolCall(tc) => {
+                    assert!(!tool_call_found, "only one ToolCall expected");
+                    tool_call_found = true;
+                    assert_eq!(tc.id, "toolu_abc");
+                    assert_eq!(tc.name, "get_weather");
+                    assert_eq!(tc.arguments, serde_json::json!({"location": "NYC"}));
+                }
+                StreamEvent::Done { finish, .. } => {
+                    assert_eq!(finish, FinishReason::ToolUse);
+                    done_found = true;
+                }
+            }
+        }
+
+        assert!(delta_found, "should have received a Delta event");
+        assert!(tool_call_found, "should have received a ToolCall event");
+        assert!(done_found, "should have received a Done event");
+    }
+
+    #[tokio::test]
+    async fn test_empty_tools_omits_tools_key() {
+        let mock = MockServer::start().await;
+        let adapter = test_adapter(&mock);
+
+        Mock::given(method("POST"))
+            .and(path("/v1/messages"))
+            .and(header("x-api-key", "sk-test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(success_body()))
+            .mount(&mock)
+            .await;
+
+        let key = SecretKey::new("sk-test-key".into());
+        let req = ChatRequest {
+            system: None,
+            messages: vec![Message {
+                role: Role::User,
+                content: "Hi".into(),
+                tool_calls: vec![],
+                tool_call_id: None,
+            }],
+            model: "claude-sonnet-4-20250514".into(),
+            max_output_tokens: None,
+            temperature: None,
+            request_id: None,
+            tools: vec![],
+        };
+
+        adapter.complete(&key, &req).await.unwrap();
+
+        let requests = mock.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert!(
+            body.get("tools").is_none(),
+            "empty tools should not produce tools key"
+        );
     }
 }

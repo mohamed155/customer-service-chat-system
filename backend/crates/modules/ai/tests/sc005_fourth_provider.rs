@@ -31,6 +31,7 @@ impl ChatProvider for EchoProvider {
                 output: Some(1),
             },
             finish: FinishReason::Stop,
+            tool_calls: vec![],
         })
     }
 
@@ -69,7 +70,7 @@ async fn fourth_provider_works_through_run_attempts() {
         temperature: None,
     }];
 
-    let result = run_attempts(&registry, &attempts, None, vec![])
+    let result = run_attempts(&registry, &attempts, None, vec![], vec![])
         .await
         .unwrap();
 

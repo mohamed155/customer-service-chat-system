@@ -1,11 +1,15 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { CitationListComponent } from '../../../shared/components/citation-list/citation-list.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
-import { Message } from '../../../core/api/tenant-api.models';
+import { ToolApprovalCardComponent } from '../../../shared/components/tool-approval-card/tool-approval-card.component';
+import { ToolTimelineEntryComponent } from '../../../shared/components/tool-timeline-entry/tool-timeline-entry.component';
+import { Message, ToolRequest } from '../../../core/api/tenant-api.models';
 import { ActiveGeneration } from './conversation-detail.store';
 import { AiThinkingIndicatorComponent } from '../../../shared/components/ai/ai-thinking-indicator/ai-thinking-indicator.component';
 import { AiConfidenceBadgeComponent } from '../../../shared/components/ai-confidence-badge/ai-confidence-badge.component';
+
+type TimelineItem = { kind: 'message'; message: Message } | { kind: 'tool'; tool: ToolRequest };
 
 @Component({
   selector: 'app-conversation-thread',
@@ -15,6 +19,8 @@ import { AiConfidenceBadgeComponent } from '../../../shared/components/ai-confid
     LoadingStateComponent,
     AiThinkingIndicatorComponent,
     AiConfidenceBadgeComponent,
+    ToolTimelineEntryComponent,
+    ToolApprovalCardComponent,
   ],
   template: `
     <div class="messages" #scrollContainer>
@@ -30,26 +36,38 @@ import { AiConfidenceBadgeComponent } from '../../../shared/components/ai-confid
         <app-loading-state label="Loading messages" />
       }
 
-      @for (message of messages(); track message.id) {
-        <article [class]="senderClass(message)" [class.note-message]="message.kind === 'note'">
-          <app-avatar [initials]="avatarInitials(message)" size="sm" />
-          <div class="bubble">
-            <div class="bubble-header">
-              <span class="sender-name">{{ message.sender.displayName }}</span>
-              <span class="message-time">{{ formatTime(message.createdAt) }}</span>
-              @if (message.kind === 'note') {
-                <span class="note-badge">Note</span>
+      @for (
+        item of timelineEntries();
+        track item.kind + '-' + (item.kind === 'message' ? item.message.id : item.tool.id)
+      ) {
+        @if (item.kind === 'message') {
+          <article
+            [class]="senderClass(item.message)"
+            [class.note-message]="item.message.kind === 'note'"
+          >
+            <app-avatar [initials]="avatarInitials(item.message)" size="sm" />
+            <div class="bubble">
+              <div class="bubble-header">
+                <span class="sender-name">{{ item.message.sender.displayName }}</span>
+                <span class="message-time">{{ formatTime(item.message.createdAt) }}</span>
+                @if (item.message.kind === 'note') {
+                  <span class="note-badge">Note</span>
+                }
+              </div>
+              <p>{{ item.message.body }}</p>
+              @if (item.message.citations?.length) {
+                <app-citation-list [citations]="item.message.citations" />
+              }
+              @if (item.message.kind === 'ai' && item.message.confidence; as conf) {
+                <app-ai-confidence-badge [band]="conf.band" />
               }
             </div>
-            <p>{{ message.body }}</p>
-            @if (message.citations?.length) {
-              <app-citation-list [citations]="message.citations" />
-            }
-            @if (message.kind === 'ai' && message.confidence; as conf) {
-              <app-ai-confidence-badge [band]="conf.band" />
-            }
-          </div>
-        </article>
+          </article>
+        } @else if (item.tool.status === 'awaiting_approval') {
+          <app-tool-approval-card [request]="item.tool" />
+        } @else {
+          <app-tool-timeline-entry [request]="item.tool" />
+        }
       }
 
       @if (activeGeneration(); as gen) {
@@ -197,7 +215,32 @@ export class ConversationThreadComponent {
   readonly loading = input(false);
   readonly hasMore = input(false);
   readonly activeGeneration = input<ActiveGeneration | null>(null);
+  readonly toolActivity = input<Record<string, ToolRequest>>({});
   readonly loadOlder = output<void>();
+
+  protected readonly timelineEntries = computed<TimelineItem[]>(() => {
+    const msgs = this.messages();
+    const tools = Object.values(this.toolActivity());
+    const all: TimelineItem[] = [
+      ...msgs.map((m) => ({ kind: 'message' as const, message: m })),
+      ...tools.map((t) => ({ kind: 'tool' as const, tool: t })),
+    ];
+    all.sort((a, b) => {
+      const aTime = new Date(
+        a.kind === 'message' ? a.message.createdAt : a.tool.createdAt,
+      ).getTime();
+      const bTime = new Date(
+        b.kind === 'message' ? b.message.createdAt : b.tool.createdAt,
+      ).getTime();
+      const diff = aTime - bTime;
+      if (diff !== 0) return diff;
+      if (a.kind === 'tool' && b.kind === 'tool') {
+        return a.tool.chainIndex - b.tool.chainIndex;
+      }
+      return a.kind === 'tool' ? -1 : 1;
+    });
+    return all;
+  });
 
   protected senderClass(message: Message): string {
     return message.sender.type;

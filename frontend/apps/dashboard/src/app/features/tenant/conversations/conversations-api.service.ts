@@ -18,12 +18,14 @@ import {
   ConversationWire,
   CreateConversationPayload,
   createConversationPayloadToWire,
+  DecideToolRequestRequest,
   Message,
   messageFromWire,
   MessageWire,
   PatchConversationPayload,
   patchPayloadToWire,
   TeamMember,
+  ToolRequest,
 } from '../../../core/api/tenant-api.models';
 
 interface ConversationListWireResponse {
@@ -57,6 +59,20 @@ export class ConversationsApiService {
 
   listAssignableMembers(): Observable<ApiResponse<TeamMember[]>> {
     return this.api.get<TeamMember[]>('/tenant/members');
+  }
+
+  getToolActivity(conversationId: string): Observable<ApiResponse<{ items: ToolRequest[] }>> {
+    return this.api.get<{ items: ToolRequest[] }>(
+      `/tenant/conversations/${conversationId}/tool-activity`,
+    );
+  }
+
+  decideToolRequest(
+    id: string,
+    decision: 'approve' | 'deny',
+  ): Observable<ApiResponse<ToolRequest>> {
+    const payload: DecideToolRequestRequest = { decision };
+    return this.api.post<ToolRequest>(`/tenant/tool-requests/${id}/decide`, payload);
   }
 
   get(id: string): Observable<ApiResponse<ConversationDetailEscalation>> {

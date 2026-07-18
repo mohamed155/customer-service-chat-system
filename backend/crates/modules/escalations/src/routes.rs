@@ -22,7 +22,7 @@ use crate::model::{
     Availability, AvailabilityState, CreateSkillPayload, CustomerRef, EscalatePayload, Escalation,
     EscalationAssignedEvent, EscalationQueuedEvent, EscalationRemovedEvent, EscalationStatus,
     QueueEntry, QueueEntryConversationRef, RenameSkillPayload, RequiredSkillRef,
-    SetAvailabilityPayload, SetMemberSkillsPayload, Skill,
+    SetAvailabilityPayload, SetMemberSkillsPayload, Skill, ToolRequestUpdated,
 };
 use crate::presence;
 use crate::queries;
@@ -501,6 +501,38 @@ pub async fn claim(
     .await
     {
         Ok(escalation) => {
+            // Cancel any pending tool requests for this conversation
+            match tools::approval::cancel_pending_for_conversation(
+                &mut tx,
+                ctx.tenant_id,
+                escalation.conversation_id,
+            )
+            .await
+            {
+                Ok(ids) => {
+                    for id in &ids {
+                        let updated_ev = ToolRequestUpdated {
+                            id: *id,
+                            conversation_id: escalation.conversation_id,
+                            status: "cancelled".into(),
+                            decided_by_display_name: None,
+                            duration_ms: None,
+                            has_result: false,
+                            error: None,
+                        };
+                        runtime.broadcast(
+                            ctx.tenant_id,
+                            presence::Event::ConversationTool(
+                                presence::ConversationToolEvent::Updated(updated_ev),
+                            ),
+                        );
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(%e, "claim: failed to cancel pending tool requests");
+                }
+            }
+
             if let Err(e) = tx.commit().await {
                 tracing::error!(%e, "claim: commit failed");
                 return ApiError::internal_error("Failed to claim escalation")

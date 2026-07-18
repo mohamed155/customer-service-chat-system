@@ -105,6 +105,23 @@ impl Stream for GuardedStream {
                     .data(data)
                     .id(self.seq.to_string()))))
             }
+            Poll::Ready(Some(Ok(presence::Event::ConversationTool(ev)))) => {
+                self.seq += 1;
+                let (event_type, data) = match ev {
+                    presence::ConversationToolEvent::Created(payload) => (
+                        "tool.request.created",
+                        serde_json::to_string(&payload).unwrap_or_default(),
+                    ),
+                    presence::ConversationToolEvent::Updated(payload) => (
+                        "tool.request.updated",
+                        serde_json::to_string(&payload).unwrap_or_default(),
+                    ),
+                };
+                Poll::Ready(Some(Ok(Event::default()
+                    .event(event_type)
+                    .data(data)
+                    .id(self.seq.to_string()))))
+            }
             Poll::Ready(Some(Err(BroadcastStreamRecvError::Lagged(n)))) => {
                 info!(%n, "SSE stream lagged, skipping");
                 cx.waker().wake_by_ref();

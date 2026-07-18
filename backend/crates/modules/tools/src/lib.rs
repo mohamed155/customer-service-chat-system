@@ -1,1 +1,8 @@
-//! Placeholder module crate for the M0 workspace skeleton.
+pub mod approval;
+pub mod audit;
+pub mod executor;
+pub mod model;
+pub mod policy;
+pub mod queries;
+pub mod registry;
+pub mod routes;

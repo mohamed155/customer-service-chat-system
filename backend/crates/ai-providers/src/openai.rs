@@ -33,17 +33,43 @@ impl ChatProvider for OpenAiAdapter {
                 Role::System => "system",
                 Role::User => "user",
                 Role::Assistant => "assistant",
+                Role::Tool => "tool",
             };
-            messages.push(serde_json::json!({
+            let mut m = serde_json::json!({
                 "role": role,
                 "content": msg.content
-            }));
+            });
+            if !msg.tool_calls.is_empty() {
+                m["tool_calls"] = serde_json::to_value(&msg.tool_calls).unwrap_or_default();
+            }
+            if let Some(ref tcid) = msg.tool_call_id {
+                m["tool_call_id"] = serde_json::json!(tcid);
+            }
+            messages.push(m);
         }
 
         let mut body = serde_json::json!({
             "model": req.model,
             "messages": messages,
         });
+        if !req.tools.is_empty() {
+            body["tools"] = serde_json::to_value(
+                req.tools
+                    .iter()
+                    .map(|t| {
+                        serde_json::json!({
+                            "type": "function",
+                            "function": {
+                                "name": t.name,
+                                "description": t.description,
+                                "parameters": t.input_schema,
+                            }
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap_or_default();
+        }
         if let Some(ref max_tokens) = req.max_output_tokens {
             body["max_tokens"] = serde_json::json!(max_tokens);
         }
@@ -99,8 +125,29 @@ impl ChatProvider for OpenAiAdapter {
         let finish = match json["choices"][0]["finish_reason"].as_str() {
             Some("stop") => FinishReason::Stop,
             Some("length") => FinishReason::Length,
+            Some("tool_calls") => FinishReason::ToolUse,
             _ => FinishReason::Other,
         };
+
+        let tool_calls = json["choices"][0]["message"]["tool_calls"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|tc| {
+                        let id = tc["id"].as_str()?.to_string();
+                        let name = tc["function"]["name"].as_str()?.to_string();
+                        let args_str = tc["function"]["arguments"].as_str().unwrap_or("{}");
+                        let arguments = serde_json::from_str(args_str)
+                            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                        Some(ToolCall {
+                            id,
+                            name,
+                            arguments,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
 
         tracing::info!(
             provider = "openai",
@@ -115,6 +162,7 @@ impl ChatProvider for OpenAiAdapter {
             model,
             usage: TokenUsage { input, output },
             finish,
+            tool_calls,
         })
     }
 
@@ -137,11 +185,19 @@ impl ChatProvider for OpenAiAdapter {
                 Role::System => "system",
                 Role::User => "user",
                 Role::Assistant => "assistant",
+                Role::Tool => "tool",
             };
-            messages.push(serde_json::json!({
+            let mut m = serde_json::json!({
                 "role": role,
                 "content": msg.content
-            }));
+            });
+            if !msg.tool_calls.is_empty() {
+                m["tool_calls"] = serde_json::to_value(&msg.tool_calls).unwrap_or_default();
+            }
+            if let Some(ref tcid) = msg.tool_call_id {
+                m["tool_call_id"] = serde_json::json!(tcid);
+            }
+            messages.push(m);
         }
 
         let mut body = serde_json::json!({
@@ -150,6 +206,24 @@ impl ChatProvider for OpenAiAdapter {
             "stream": true,
             "stream_options": {"include_usage": true},
         });
+        if !req.tools.is_empty() {
+            body["tools"] = serde_json::to_value(
+                req.tools
+                    .iter()
+                    .map(|t| {
+                        serde_json::json!({
+                            "type": "function",
+                            "function": {
+                                "name": t.name,
+                                "description": t.description,
+                                "parameters": t.input_schema,
+                            }
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap_or_default();
+        }
         if let Some(ref max_tokens) = req.max_output_tokens {
             body["max_tokens"] = serde_json::json!(max_tokens);
         }
@@ -315,77 +389,179 @@ fn openai_sse_to_events(
         + 'static,
     request_model: String,
 ) -> impl futures::Stream<Item = Result<StreamEvent, ProviderError>> + Send + 'static {
+    #[derive(Default)]
+    struct ToolCallAccumulator {
+        id: String,
+        name: String,
+        arguments: String,
+    }
+
     let recorded_usage = std::sync::Arc::new(std::sync::Mutex::new(None::<TokenUsage>));
     let response_model = std::sync::Arc::new(std::sync::Mutex::new(None::<String>));
     let finish = std::sync::Arc::new(std::sync::Mutex::new(FinishReason::Other));
+    let tool_call_accs: std::sync::Arc<
+        std::sync::Mutex<std::collections::BTreeMap<usize, ToolCallAccumulator>>,
+    > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::BTreeMap::new()));
 
-    frame_stream.filter_map(move |frame_result| {
+    frame_stream.flat_map(move |frame_result| {
         let req_model = request_model.clone();
         let recorded_usage = std::sync::Arc::clone(&recorded_usage);
         let response_model = std::sync::Arc::clone(&response_model);
         let finish = std::sync::Arc::clone(&finish);
-        async move {
-            match frame_result {
-                Ok(frame) => {
-                    if frame.data.trim() == "[DONE]" {
-                        let usage = recorded_usage.lock().unwrap().take().unwrap_or_default();
-                        let model = response_model.lock().unwrap().take().unwrap_or(req_model);
-                        let fin = finish.lock().unwrap().clone();
-                        return Some(Ok(StreamEvent::Done {
-                            usage,
-                            model,
-                            finish: fin,
-                        }));
-                    }
+        let tool_call_accs = std::sync::Arc::clone(&tool_call_accs);
 
+        let events: Vec<Result<StreamEvent, ProviderError>> = match frame_result {
+            Ok(frame) => {
+                if frame.data.trim() == "[DONE]" {
+                    let usage = recorded_usage.lock().unwrap().take().unwrap_or_default();
+                    let model = response_model.lock().unwrap().take().unwrap_or(req_model);
+                    let fin = finish.lock().unwrap().clone();
+                    vec![Ok(StreamEvent::Done {
+                        usage,
+                        model,
+                        finish: fin,
+                    })]
+                } else {
                     match serde_json::from_str::<serde_json::Value>(&frame.data) {
-                        Ok(json) => {
-                            if let Some(choices) = json["choices"].as_array() {
-                                if let Some(choice) = choices.first() {
-                                    if let Some(delta) = choice["delta"].as_object() {
-                                        if let Some(content) =
-                                            delta.get("content").and_then(|c| c.as_str())
-                                        {
-                                            if !content.is_empty() {
-                                                return Some(Ok(StreamEvent::Delta(
-                                                    content.to_string(),
-                                                )));
+                    Ok(json) => {
+                        let mut result: Vec<Result<StreamEvent, ProviderError>> = Vec::new();
+
+                        if let Some(choices) = json["choices"].as_array() {
+                            if let Some(choice) = choices.first() {
+                                if let Some(delta) = choice["delta"].as_object() {
+                                    if let Some(content) =
+                                        delta.get("content").and_then(|c| c.as_str())
+                                    {
+                                        if !content.is_empty() {
+                                            result.push(Ok(StreamEvent::Delta(
+                                                content.to_string(),
+                                            )));
+                                        }
+                                    }
+                                    if let Some(tool_calls_deltas) = delta
+                                        .get("tool_calls")
+                                        .and_then(|t| t.as_array())
+                                    {
+                                        for tc_delta in tool_calls_deltas {
+                                            let idx = tc_delta["index"]
+                                                .as_i64()
+                                                .unwrap_or(0) as usize;
+                                            if let Some(id) =
+                                                tc_delta["id"].as_str()
+                                            {
+                                                tool_call_accs
+                                                    .lock()
+                                                    .unwrap()
+                                                    .entry(idx)
+                                                    .or_insert_with(|| {
+                                                        ToolCallAccumulator::default()
+                                                    })
+                                                    .id = id.to_string();
+                                            }
+                                            if let Some(name) = tc_delta["function"]
+                                                ["name"]
+                                                .as_str()
+                                            {
+                                                tool_call_accs
+                                                    .lock()
+                                                    .unwrap()
+                                                    .entry(idx)
+                                                    .or_insert_with(|| {
+                                                        ToolCallAccumulator::default()
+                                                    })
+                                                    .name = name.to_string();
+                                            }
+                                            if let Some(args) = tc_delta["function"]
+                                                ["arguments"]
+                                                .as_str()
+                                            {
+                                                tool_call_accs
+                                                    .lock()
+                                                    .unwrap()
+                                                    .entry(idx)
+                                                    .or_insert_with(|| {
+                                                        ToolCallAccumulator::default()
+                                                    })
+                                                    .arguments
+                                                    .push_str(args);
                                             }
                                         }
                                     }
-                                    if let Some(fr) = choice["finish_reason"].as_str() {
-                                        *finish.lock().unwrap() = match fr {
-                                            "stop" => FinishReason::Stop,
-                                            "length" => FinishReason::Length,
-                                            _ => FinishReason::Other,
-                                        };
+                                }
+                                if let Some(fr) = choice["finish_reason"].as_str() {
+                                    *finish.lock().unwrap() = match fr {
+                                        "stop" => FinishReason::Stop,
+                                        "length" => FinishReason::Length,
+                                        "tool_calls" => FinishReason::ToolUse,
+                                        _ => FinishReason::Other,
+                                    };
+                                    if fr == "tool_calls" {
+                                        let accs = std::mem::take(
+                                            &mut *tool_call_accs.lock().unwrap(),
+                                        );
+                                        for (_key, acc) in
+                                            accs.into_iter()
+                                        {
+                                            match serde_json::from_str(
+                                                &acc.arguments,
+                                            ) {
+                                                Ok(arguments) => {
+                                                    result.push(Ok(
+                                                        StreamEvent::ToolCall(
+                                                            ToolCall {
+                                                                id: acc.id,
+                                                                name: acc.name,
+                                                                arguments,
+                                                            },
+                                                        ),
+                                                    ));
+                                                }
+                                                Err(e) => {
+                                                    result.push(Err(
+                                                        ProviderError {
+                                                            category:
+                                                                ErrorCategory::InvalidRequest,
+                                                            retriable: false,
+                                                            detail: format!(
+                                                                "malformed tool call arguments for {}: {e}",
+                                                                acc.name
+                                                            ),
+                                                        },
+                                                    ));
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            if json.get("usage").is_some() {
-                                let input =
-                                    json["usage"]["prompt_tokens"].as_u64().map(|v| v as u32);
-                                let output = json["usage"]["completion_tokens"]
-                                    .as_u64()
-                                    .map(|v| v as u32);
-                                *recorded_usage.lock().unwrap() =
-                                    Some(TokenUsage { input, output });
-                            }
-                            if let Some(model) = json["model"].as_str() {
-                                *response_model.lock().unwrap() = Some(model.to_string());
-                            }
-                            None
                         }
-                        Err(e) => Some(Err(ProviderError {
-                            category: ErrorCategory::InvalidRequest,
-                            retriable: false,
-                            detail: format!("malformed stream frame: {e}"),
-                        })),
+                        if json.get("usage").is_some() {
+                            let input = json["usage"]["prompt_tokens"]
+                                .as_u64()
+                                .map(|v| v as u32);
+                            let output = json["usage"]["completion_tokens"]
+                                .as_u64()
+                                .map(|v| v as u32);
+                            *recorded_usage.lock().unwrap() =
+                                Some(TokenUsage { input, output });
+                        }
+                        if let Some(model) = json["model"].as_str() {
+                            *response_model.lock().unwrap() = Some(model.to_string());
+                        }
+                        result
                     }
+                    Err(e) => vec![Err(ProviderError {
+                        category: ErrorCategory::InvalidRequest,
+                        retriable: false,
+                        detail: format!("malformed stream frame: {e}"),
+                    })],
                 }
-                Err(e) => Some(Err(e)),
+                }
             }
-        }
+            Err(e) => vec![Err(e)],
+        };
+
+        futures::stream::iter(events)
     })
 }
 
@@ -474,11 +650,14 @@ mod tests {
             messages: vec![Message {
                 role: Role::User,
                 content: "Hello".into(),
+                tool_calls: vec![],
+                tool_call_id: None,
             }],
             model: "gpt-4".into(),
             max_output_tokens: Some(100),
             temperature: Some(0.7),
             request_id: None,
+            tools: vec![],
         };
 
         let key = SecretKey::new("sk-test-key".into());
@@ -510,11 +689,14 @@ mod tests {
             messages: vec![Message {
                 role: Role::User,
                 content: "Hi".into(),
+                tool_calls: vec![],
+                tool_call_id: None,
             }],
             model: "gpt-4".into(),
             max_output_tokens: None,
             temperature: None,
             request_id: None,
+            tools: vec![],
         };
         let result = adapter.complete(&key, &req).await.unwrap();
         assert_eq!(result.usage.input, None);
@@ -540,6 +722,7 @@ mod tests {
             max_output_tokens: None,
             temperature: None,
             request_id: None,
+            tools: vec![],
         };
         let err = adapter.complete(&key, &req).await.unwrap_err();
         assert!(matches!(err.category, ErrorCategory::Authentication));
@@ -565,6 +748,7 @@ mod tests {
             max_output_tokens: None,
             temperature: None,
             request_id: None,
+            tools: vec![],
         };
         let err = adapter.complete(&key, &req).await.unwrap_err();
         assert!(matches!(err.category, ErrorCategory::RateLimited));
@@ -590,6 +774,7 @@ mod tests {
             max_output_tokens: None,
             temperature: None,
             request_id: None,
+            tools: vec![],
         };
         let err = adapter.complete(&key, &req).await.unwrap_err();
         assert!(matches!(err.category, ErrorCategory::Unavailable));
@@ -615,6 +800,7 @@ mod tests {
             max_output_tokens: None,
             temperature: None,
             request_id: None,
+            tools: vec![],
         };
         let err = adapter.complete(&key, &req).await.unwrap_err();
         assert!(matches!(err.category, ErrorCategory::InvalidRequest));
@@ -642,6 +828,7 @@ mod tests {
             max_output_tokens: None,
             temperature: None,
             request_id: None,
+            tools: vec![],
         };
         let err = adapter.complete(&key, &req).await.unwrap_err();
         assert!(matches!(err.category, ErrorCategory::InvalidRequest));
@@ -667,6 +854,7 @@ mod tests {
             max_output_tokens: None,
             temperature: None,
             request_id: None,
+            tools: vec![],
         };
         let err = adapter.complete(&key, &req).await.unwrap_err();
         assert!(matches!(err.category, ErrorCategory::Authentication));
@@ -790,5 +978,204 @@ mod tests {
 
         let result = adapter.embed(&key, &req).await.unwrap();
         assert_eq!(result.embeddings.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_tool_call_complete() {
+        let (client, mock) = test_client().await;
+        let adapter = OpenAiAdapter::new(client, mock.uri());
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .and(header("Authorization", "Bearer sk-test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "choices": [{
+                    "message": {
+                        "content": "",
+                        "tool_calls": [{
+                            "id": "call_abc123",
+                            "type": "function",
+                            "function": {
+                                "name": "get_weather",
+                                "arguments": "{\"location\": \"NYC\"}"
+                            }
+                        }]
+                    },
+                    "finish_reason": "tool_calls"
+                }],
+                "model": "gpt-4",
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5}
+            })))
+            .mount(&mock)
+            .await;
+
+        let key = SecretKey::new("sk-test-key".into());
+        let req = ChatRequest {
+            system: None,
+            messages: vec![],
+            model: "gpt-4".into(),
+            max_output_tokens: None,
+            temperature: None,
+            request_id: None,
+            tools: vec![ToolSpec {
+                name: "get_weather".into(),
+                description: "Get weather for a location".into(),
+                input_schema: serde_json::json!({"type": "object", "properties": {"location": {"type": "string"}}}),
+            }],
+        };
+
+        let result = adapter.complete(&key, &req).await.unwrap();
+        assert_eq!(result.content, "");
+        assert_eq!(result.finish, FinishReason::ToolUse);
+        assert_eq!(result.tool_calls.len(), 1);
+        assert_eq!(result.tool_calls[0].id, "call_abc123");
+        assert_eq!(result.tool_calls[0].name, "get_weather");
+        assert_eq!(
+            result.tool_calls[0].arguments,
+            serde_json::json!({"location": "NYC"})
+        );
+
+        // Verify tools were sent in the request body
+        let requests = mock.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 1);
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert!(body.get("tools").is_some());
+        assert_eq!(body["tools"][0]["type"], "function");
+        assert_eq!(body["tools"][0]["function"]["name"], "get_weather");
+    }
+
+    #[tokio::test]
+    async fn test_tool_call_stream() {
+        let (client, mock) = test_client().await;
+        let adapter = OpenAiAdapter::new(client, mock.uri());
+
+        // Build SSE frames for a tool call streaming scenario
+        let frame1 = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [{"index": 0, "id": "call_abc", "type": "function", "function": {"name": "get_weather", "arguments": ""}}]
+                },
+                "finish_reason": null
+            }],
+            "model": "gpt-4"
+        });
+        let frame2 = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "tool_calls": [{"index": 0, "function": {"arguments": "{\"location\":"}}]
+                },
+                "finish_reason": null
+            }],
+            "model": "gpt-4"
+        });
+        let frame3 = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "tool_calls": [{"index": 0, "function": {"arguments": " \"NYC\"}"}}]
+                },
+                "finish_reason": null
+            }],
+            "model": "gpt-4"
+        });
+        let frame4 = serde_json::json!({
+            "choices": [{
+                "index": 0,
+                "delta": {},
+                "finish_reason": "tool_calls"
+            }],
+            "model": "gpt-4"
+        });
+
+        let sse_body = format!(
+            "data: {}\n\ndata: {}\n\ndata: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
+            frame1.to_string(),
+            frame2.to_string(),
+            frame3.to_string(),
+            frame4.to_string(),
+        );
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(sse_body))
+            .mount(&mock)
+            .await;
+
+        use futures::StreamExt;
+        let key = SecretKey::new("sk-test-key".into());
+        let req = ChatRequest {
+            system: None,
+            messages: vec![],
+            model: "gpt-4".into(),
+            max_output_tokens: None,
+            temperature: None,
+            request_id: None,
+            tools: vec![],
+        };
+
+        let mut stream = adapter.stream(&key, &req).await.unwrap();
+        let mut tool_call_found = false;
+        let mut done_found = false;
+
+        while let Some(event) = stream.next().await {
+            let event = event.unwrap();
+            match event {
+                StreamEvent::ToolCall(tc) => {
+                    assert!(!tool_call_found, "only one ToolCall expected");
+                    tool_call_found = true;
+                    assert_eq!(tc.id, "call_abc");
+                    assert_eq!(tc.name, "get_weather");
+                    assert_eq!(tc.arguments, serde_json::json!({"location": "NYC"}));
+                }
+                StreamEvent::Done { finish, .. } => {
+                    assert_eq!(finish, FinishReason::ToolUse);
+                    done_found = true;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(tool_call_found, "should have received a ToolCall event");
+        assert!(done_found, "should have received a Done event");
+    }
+
+    #[tokio::test]
+    async fn test_empty_tools_omits_tools_key() {
+        let (client, mock) = test_client().await;
+        let adapter = OpenAiAdapter::new(client, mock.uri());
+
+        Mock::given(method("POST"))
+            .and(path("/v1/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "choices": [{"message": {"content": "OK"}, "finish_reason": "stop"}],
+                "model": "gpt-4",
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1}
+            })))
+            .mount(&mock)
+            .await;
+
+        let key = SecretKey::new("sk-test-key".into());
+        let req = ChatRequest {
+            system: None,
+            messages: vec![],
+            model: "gpt-4".into(),
+            max_output_tokens: None,
+            temperature: None,
+            request_id: None,
+            tools: vec![],
+        };
+
+        adapter.complete(&key, &req).await.unwrap();
+
+        let requests = mock.received_requests().await.unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+        assert!(
+            body.get("tools").is_none(),
+            "empty tools should not produce tools key"
+        );
     }
 }

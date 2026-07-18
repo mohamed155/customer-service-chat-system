@@ -127,6 +127,7 @@ fn api_doc_declares_all_required_tag_groups() {
         "escalations",
         "members",
         "tenant-ai",
+        "tools",
         "ops",
     ] {
         assert!(

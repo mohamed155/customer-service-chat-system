@@ -342,8 +342,7 @@ mod tests {
     #[test]
     fn chunk_text_max_chunks() {
         let para = "This is a short paragraph. ".repeat(50);
-        let many: String = std::iter::repeat(para.as_str())
-            .take(MAX_CHUNKS + 50)
+        let many: String = std::iter::repeat_n(para.as_str(), MAX_CHUNKS + 50)
             .collect::<Vec<_>>()
             .join("\n\n");
         let result = chunk_text(&many);

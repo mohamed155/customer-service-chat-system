@@ -1219,11 +1219,14 @@ pub async fn test_tenant_config(
         messages: vec![Message {
             role: Role::User,
             content: "ping".into(),
+            tool_calls: vec![],
+            tool_call_id: None,
         }],
         model: model.clone(),
         max_output_tokens: Some(16),
         temperature: None,
         request_id: Some(ctx.request_id.clone()),
+        tools: vec![],
     };
 
     let start = Instant::now();
@@ -1335,11 +1338,14 @@ pub async fn test_platform_config(
         messages: vec![Message {
             role: Role::User,
             content: "ping".into(),
+            tool_calls: vec![],
+            tool_call_id: None,
         }],
         model: model.clone(),
         max_output_tokens: Some(16),
         temperature: None,
         request_id: None,
+        tools: vec![],
     };
 
     let start = Instant::now();

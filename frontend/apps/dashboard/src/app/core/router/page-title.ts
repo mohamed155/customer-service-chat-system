@@ -19,6 +19,7 @@ export type PageTitleKey =
   | 'integrations'
   | 'analytics'
   | 'settings'
+  | 'toolsSettings'
   | 'team'
   | 'inviteAccept'
   | 'platform'
@@ -88,6 +89,10 @@ export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
   integrations: { title: 'Integrations', subtitle: 'Connect channels and business systems' },
   analytics: { title: 'Analytics', subtitle: 'Trends across every channel' },
   settings: { title: 'Settings', subtitle: 'Workspace preferences and security' },
+  toolsSettings: {
+    title: 'AI Tool Settings',
+    subtitle: 'Manage built-in and custom AI tools',
+  },
   team: { title: 'Team', subtitle: 'Manage team members and invitations' },
   inviteAccept: { title: 'Accept invitation', subtitle: 'Join your team' },
   platform: { title: 'Platform', subtitle: 'Platform administration' },

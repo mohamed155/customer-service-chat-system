@@ -16,6 +16,7 @@ describe('ConversationDetailStore', () => {
   let api: {
     get: ReturnType<typeof vi.fn>;
     getTimeline: ReturnType<typeof vi.fn>;
+    getToolActivity: ReturnType<typeof vi.fn>;
     addMessage: ReturnType<typeof vi.fn>;
     patch: ReturnType<typeof vi.fn>;
     setConversationAiHandling: ReturnType<typeof vi.fn>;
@@ -70,6 +71,7 @@ describe('ConversationDetailStore', () => {
     api = {
       get: vi.fn(),
       getTimeline: vi.fn(),
+      getToolActivity: vi.fn(),
       addMessage: vi.fn(),
       patch: vi.fn(),
       setConversationAiHandling: vi.fn(),
@@ -110,6 +112,7 @@ describe('ConversationDetailStore', () => {
         },
       }),
     );
+    api.getToolActivity.mockReturnValue(of({ data: { items: [] } }));
 
     const store = TestBed.inject(ConversationDetailStore);
     store.load('c1');
@@ -130,6 +133,7 @@ describe('ConversationDetailStore', () => {
         data: { items: mockMessages, nextCursor: 'cursor-next', hasMore: true },
       }),
     );
+    api.getToolActivity.mockReturnValue(of({ data: { items: [] } }));
 
     const store = TestBed.inject(ConversationDetailStore);
     store.load('c1');
@@ -160,6 +164,7 @@ describe('ConversationDetailStore', () => {
           },
         }),
       );
+    api.getToolActivity.mockReturnValue(of({ data: { items: [] } }));
 
     const store = TestBed.inject(ConversationDetailStore);
     store.load('c1');
@@ -187,6 +192,7 @@ describe('ConversationDetailStore', () => {
   it('track submitting state during addMessage', async () => {
     api.get.mockReturnValue(of({ data: mockConversation }));
     api.getTimeline.mockReturnValue(of({ data: { items: [], nextCursor: null, hasMore: false } }));
+    api.getToolActivity.mockReturnValue(of({ data: { items: [] } }));
     api.addMessage.mockReturnValue(
       of({
         data: {
@@ -220,6 +226,7 @@ describe('ConversationDetailStore', () => {
   it('sets error when addMessage fails', async () => {
     api.get.mockReturnValue(of({ data: mockConversation }));
     api.getTimeline.mockReturnValue(of({ data: { items: [], nextCursor: null, hasMore: false } }));
+    api.getToolActivity.mockReturnValue(of({ data: { items: [] } }));
     api.addMessage.mockReturnValue(throwError(() => new Error('Send failed')));
 
     const store = TestBed.inject(ConversationDetailStore);

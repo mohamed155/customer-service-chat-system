@@ -95,6 +95,7 @@
 
 pub mod audit;
 pub mod model;
+pub mod queries;
 pub mod routes;
 
 /// Returns whether an active customer belongs to the supplied tenant.

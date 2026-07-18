@@ -5,7 +5,6 @@ use ai::agent_responder::process_agent_responder_once;
 use ai::crypto::{self, MasterKey};
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
-use http_body_util::BodyExt;
 use server::router;
 use server::state::AppState;
 use tower::ServiceExt;
@@ -180,11 +179,6 @@ async fn send(state: &AppState, request: Request<Body>) -> axum::response::Respo
         .oneshot(request)
         .await
         .expect("request should complete")
-}
-
-async fn body_json(response: axum::response::Response) -> serde_json::Value {
-    let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    serde_json::from_slice(&bytes).unwrap()
 }
 
 fn json_put(uri: &str, user_id: Uuid, tenant_id: Uuid, body: serde_json::Value) -> Request<Body> {

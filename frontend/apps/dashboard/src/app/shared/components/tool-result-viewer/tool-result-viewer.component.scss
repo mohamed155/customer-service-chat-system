@@ -1,0 +1,59 @@
+:host {
+  display: block;
+}
+
+.result-viewer {
+  margin-top: var(--app-space-2);
+}
+
+.toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-1);
+  padding: 2px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-panel);
+  color: var(--app-text-3);
+  font-size: var(--app-font-xs);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.toggle-btn:hover {
+  background: var(--app-panel-2);
+}
+
+.toggle-icon {
+  font-size: 10px;
+}
+
+.content {
+  margin-top: var(--app-space-2);
+  padding: var(--app-space-2);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-panel);
+}
+
+.error-section {
+  margin-bottom: var(--app-space-2);
+}
+
+.error-text {
+  margin: var(--app-space-1) 0 0;
+  color: var(--app-red);
+  font-size: var(--app-font-xs);
+  font-family: var(--app-font-mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.result-json {
+  margin: var(--app-space-1) 0 0;
+  color: var(--app-text);
+  font-size: var(--app-font-xs);
+  font-family: var(--app-font-mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -109,7 +109,10 @@ pub async fn handle_summary(
         messages: vec![ai_providers::Message {
             role: ai_providers::Role::User,
             content: turns,
+            tool_calls: vec![],
+            tool_call_id: None,
         }],
+        tools: vec![],
     };
 
     let call_ctx = AiCallContext {
