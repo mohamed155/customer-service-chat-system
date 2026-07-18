@@ -152,6 +152,33 @@ export class ConversationsApiService {
       );
   }
 
+  requestSummary(conversationId: string): Observable<
+    ApiResponse<{
+      summary: string;
+      generatedAt: string;
+      messageCount: number;
+    }>
+  > {
+    return this.api
+      .post<{
+        data: {
+          summary: string;
+          generated_at: string;
+          message_count: number;
+        };
+      }>(`/tenant/conversations/${conversationId}/summary`, undefined)
+      .pipe(
+        map(({ data, ...response }) => ({
+          ...response,
+          data: {
+            summary: data.data.summary,
+            generatedAt: data.data.generated_at,
+            messageCount: data.data.message_count,
+          },
+        })),
+      );
+  }
+
   create(payload: CreateConversationPayload): Observable<ApiResponse<ConversationDetail>> {
     const wirePayload = createConversationPayloadToWire(payload);
     return this.api

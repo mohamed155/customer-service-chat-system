@@ -92,6 +92,7 @@ pub mod prompt_validate;
 pub mod resolution;
 pub mod routes;
 pub mod service;
+pub mod summary;
 pub mod usage;
 #[doc(hidden)]
 pub use service::{run_attempts, Attempt};

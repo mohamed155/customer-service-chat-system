@@ -18,6 +18,7 @@ import { EscalationBannerComponent } from '../escalations/escalation-banner.comp
 import { AiHandlingBannerComponent } from './ai-handling-banner.component';
 import { ConversationsApiService } from './conversations-api.service';
 import { ConversationDetailStore } from './conversation-detail.store';
+import { ConversationSummaryComponent } from './conversation-summary.component';
 import { ConversationThreadComponent } from './conversation-thread.component';
 import { ComposerComponent } from './composer.component';
 
@@ -37,6 +38,7 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
     ConversationThreadComponent,
     EmptyStateComponent,
     AiHandlingBannerComponent,
+    ConversationSummaryComponent,
     EscalationBannerComponent,
     LoadingStateComponent,
     SelectFilterComponent,
@@ -110,6 +112,10 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
               </span>
             }
           </div>
+        }
+
+        @if (hasManagePerm()) {
+          <app-conversation-summary [conversationId]="conv.id" />
         }
 
         <app-conversation-thread

@@ -1431,6 +1431,25 @@ pub async fn insert_fallback_in_tx(
     Ok(id)
 }
 
+pub async fn summary_history(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    limit: i64,
+) -> sqlx::Result<Vec<(String, String)>> {
+    sqlx::query_as::<_, (String, String)>(
+        "SELECT kind, body FROM messages \
+         WHERE tenant_id = $1 AND conversation_id = $2 AND kind IN ('customer', 'ai', 'reply', 'system') \
+         ORDER BY created_at ASC, seq ASC \
+         LIMIT $3",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}
+
 pub async fn has_customer_message_after(
     pool: &PgPool,
     tenant_id: Uuid,

@@ -283,6 +283,33 @@ describe('ConversationsApiService', () => {
     });
   });
 
+  describe('requestSummary', () => {
+    it('posts to summary endpoint and returns summary response', async () => {
+      api.post.mockReturnValue(
+        of({
+          data: {
+            data: {
+              summary: 'The customer wants a refund for order #1234.',
+              generated_at: '2026-07-18T10:00:00Z',
+              message_count: 23,
+            },
+          },
+          requestId: 'req-summary',
+        }),
+      );
+
+      const result = await firstValueFrom(service.requestSummary('c1'));
+
+      expect(api.post).toHaveBeenCalledWith('/tenant/conversations/c1/summary', undefined);
+      expect(result.data).toEqual({
+        summary: 'The customer wants a refund for order #1234.',
+        generatedAt: '2026-07-18T10:00:00Z',
+        messageCount: 23,
+      });
+      expect(result.requestId).toBe('req-summary');
+    });
+  });
+
   describe('create', () => {
     it('sends create payload and maps response', async () => {
       const payload: CreateConversationPayload = {

@@ -405,6 +405,10 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             routes!(ai::agent_routes::set_conversation_ai_handling)
                 .layer(require_permission(Permission::ConversationsManage)),
         )
+        .route(
+            "/api/v1/tenant/conversations/{id}/summary",
+            routing::post(ai::summary::handle_summary),
+        )
         .routes(
             routes!(escalations::routes::list_queue)
                 .layer(require_permission(Permission::ConversationsView)),
