@@ -12,6 +12,7 @@ import { ConversationsApiService } from './conversations-api.service';
 import { ConversationsStore } from './conversations.store';
 import { InboxListComponent } from './inbox-list.component';
 import { NewConversationDialogComponent } from './new-conversation-dialog.component';
+import { SatisfactionSummaryComponent } from './satisfaction-summary.component';
 
 @Component({
   selector: 'app-conversations',
@@ -22,6 +23,7 @@ import { NewConversationDialogComponent } from './new-conversation-dialog.compon
     NewConversationDialogComponent,
     PageContainerComponent,
     PageHeaderComponent,
+    SatisfactionSummaryComponent,
   ],
   providers: [ConversationsStore],
   template: `
@@ -33,6 +35,11 @@ import { NewConversationDialogComponent } from './new-conversation-dialog.compon
           </button>
         }
       </app-page-header>
+
+      <app-satisfaction-summary
+        [averageRating]="store.averageRating()"
+        [feedbackCount]="store.feedbackCount()"
+      />
 
       @if (store.loading() && !store.items().length) {
         <app-loading-state />

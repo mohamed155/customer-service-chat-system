@@ -51,7 +51,6 @@ const TENANT_VIEWER: &[Permission] = &[
     Permission::CustomersView,
     Permission::KnowledgeBaseView,
     Permission::IntegrationsView,
-    Permission::AnalyticsView,
     Permission::WidgetsView,
 ];
 

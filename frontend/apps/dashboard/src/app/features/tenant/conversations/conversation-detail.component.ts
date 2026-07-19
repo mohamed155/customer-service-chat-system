@@ -13,6 +13,7 @@ import {
   SelectFilterComponent,
   SelectFilterOption,
 } from '../../../shared/components/select-filter/select-filter.component';
+import { SatisfactionBadgeComponent } from '../../../shared/components/satisfaction-badge/satisfaction-badge.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { EscalationBannerComponent } from '../escalations/escalation-banner.component';
 import { AiHandlingBannerComponent } from './ai-handling-banner.component';
@@ -41,6 +42,7 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
     ConversationSummaryComponent,
     EscalationBannerComponent,
     LoadingStateComponent,
+    SatisfactionBadgeComponent,
     SelectFilterComponent,
     StatusBadgeComponent,
   ],
@@ -104,6 +106,23 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
         @if (conv.escalation) {
           <app-escalation-banner [escalation]="conv.escalation" />
         }
+
+        <section class="feedback-section">
+          <header class="feedback-header">
+            <span class="feedback-label">Customer Feedback</span>
+            @if (conv.feedback; as fb) {
+              <app-satisfaction-badge [rating]="fb.rating" />
+            }
+          </header>
+          @if (conv.feedback; as fb) {
+            @if (fb.comment; as comment) {
+              <p class="feedback-comment">{{ comment }}</p>
+            }
+            <time class="feedback-time">{{ formatDate(fb.submittedAt) }}</time>
+          } @else {
+            <p class="no-rating">No rating</p>
+          }
+        </section>
 
         @if (conv.participants.length) {
           <div class="participants-bar">
@@ -253,9 +272,44 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
         font-weight: 600;
         white-space: nowrap;
       }
-      .participant-chip.inactive {
+      .participant-chip .inactive {
         color: var(--app-text-3);
         text-decoration: line-through;
+      }
+      .feedback-section {
+        padding: var(--app-space-3) var(--app-space-4);
+        border-bottom: 1px solid var(--app-border);
+        background: var(--app-panel-2);
+      }
+      .feedback-header {
+        display: flex;
+        align-items: center;
+        gap: var(--app-space-2);
+        margin-bottom: var(--app-space-1);
+      }
+      .feedback-label {
+        color: var(--app-text-3);
+        font-size: var(--app-font-xs);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .feedback-comment {
+        margin: var(--app-space-1) 0;
+        color: var(--app-text);
+        font-size: var(--app-font-sm);
+        line-height: 1.4;
+      }
+      .feedback-time {
+        display: block;
+        color: var(--app-text-3);
+        font-size: var(--app-font-xs);
+      }
+      .no-rating {
+        margin: 0;
+        color: var(--app-text-3);
+        font-size: var(--app-font-xs);
+        font-style: italic;
       }
       .participant-type {
         color: var(--app-text-3);
@@ -341,5 +395,9 @@ export class ConversationDetailComponent implements OnInit {
 
   protected onAssigneeChange(id: string, membershipId: string): void {
     this.store.patchAssignment(id, membershipId || null);
+  }
+
+  protected formatDate(iso: string): string {
+    return new Date(iso).toLocaleString();
   }
 }

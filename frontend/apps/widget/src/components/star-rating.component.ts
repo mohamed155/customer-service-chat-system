@@ -5,11 +5,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
   selector: 'wgt-star-rating',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div
-      role="radiogroup"
-      class="stars"
-      [attr.aria-label]="'Rating: ' + value() + ' out of 5'"
-    >
+    <div role="radiogroup" class="stars" [attr.aria-label]="'Rating: ' + value() + ' out of 5'">
       @for (star of [1, 2, 3, 4, 5]; track star) {
         <button
           type="button"
@@ -21,7 +17,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
           [disabled]="readonly()"
           (click)="onRate(star)"
         >
-          {{ star <= value() ? '\u2605' : '\u2606' }}
+          {{ star <= value() ? '★' : '☆' }}
         </button>
       }
     </div>

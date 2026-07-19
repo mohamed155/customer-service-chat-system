@@ -44,7 +44,6 @@ const VIEWER_PERMISSIONS: &[&str] = &[
     "customers.view",
     "knowledge_base.view",
     "integrations.view",
-    "analytics.view",
 ];
 
 const TENANT_OPERATIONS: &[(&str, &str)] = &[
@@ -87,6 +86,8 @@ const TENANT_OPERATIONS: &[(&str, &str)] = &[
     ("/api/v1/test/tenant/ai/view", "ai_agent.view"),
     ("/api/v1/tenant/ai/usage", "ai_agent.view"),
     ("/api/v1/tenant/ai/usage/summary", "ai_agent.view"),
+    ("/api/v1/tenant/analytics/summary", "analytics.view"),
+    ("/api/v1/tenant/analytics/timeseries", "analytics.view"),
 ];
 
 const PLATFORM_OPERATIONS: &[&str] = &[

@@ -4,12 +4,18 @@ import {
   ChannelBadgeComponent,
   ChannelBadgeChannel,
 } from '../../../shared/components/channel-badge/channel-badge.component';
+import { SatisfactionBadgeComponent } from '../../../shared/components/satisfaction-badge/satisfaction-badge.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { Conversation, ConversationListQuery } from '../../../core/api/tenant-api.models';
 
 @Component({
   selector: 'app-inbox-list',
-  imports: [AvatarComponent, ChannelBadgeComponent, StatusBadgeComponent],
+  imports: [
+    AvatarComponent,
+    ChannelBadgeComponent,
+    SatisfactionBadgeComponent,
+    StatusBadgeComponent,
+  ],
   template: `
     <div class="filters" aria-label="Conversation status filters">
       @for (filter of filters; track filter) {
@@ -43,6 +49,9 @@ import { Conversation, ConversationListQuery } from '../../../core/api/tenant-ap
               />
               @if (conversation.widgetInstance; as wgt) {
                 <span class="widget-badge" title="Chat Widget: {{ wgt.name }}">Widget</span>
+              }
+              @if (conversation.rating; as rating) {
+                <app-satisfaction-badge [rating]="rating" />
               }
             </span>
           </span>

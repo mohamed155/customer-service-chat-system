@@ -205,6 +205,7 @@ pub struct InboxRow {
     pub ai_handling: Option<String>,
     pub widget_instance_id: Option<Uuid>,
     pub widget_instance_name: Option<String>,
+    pub feedback_rating: Option<i16>,
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +231,9 @@ pub struct DetailRow {
     pub ai_handling: Option<String>,
     pub widget_instance_id: Option<Uuid>,
     pub widget_instance_name: Option<String>,
+    pub feedback_rating: Option<i16>,
+    pub feedback_comment: Option<String>,
+    pub feedback_submitted_at: Option<DateTime<Utc>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -304,7 +308,8 @@ pub async fn inbox_query(
                 c.last_activity_at, c.created_at, \
                 c.ai_handling, \
                 wi.id AS widget_instance_id, \
-                wi.name AS widget_instance_name \
+                 wi.name AS widget_instance_name, \
+                 f.rating AS feedback_rating \
          FROM conversations c \
          JOIN customers cu \
            ON cu.id = c.customer_id AND cu.tenant_id = c.tenant_id AND cu.deleted_at IS NULL \
@@ -313,12 +318,15 @@ pub async fn inbox_query(
          LEFT JOIN users mu ON mu.id = tm.user_id \
          LEFT JOIN widget_instances wi \
            ON wi.id = c.widget_instance_id AND wi.deleted_at IS NULL \
+         LEFT JOIN conversation_feedback f \
+           ON f.conversation_id = c.id AND f.tenant_id = c.tenant_id \
          LEFT JOIN LATERAL ( \
              SELECT kind, body FROM messages \
              WHERE tenant_id = c.tenant_id AND conversation_id = c.id \
              ORDER BY created_at DESC, seq DESC \
              LIMIT 1 \
-         ) preview ON TRUE",
+         ) preview ON TRUE \
+         WHERE c.tenant_id = $1 AND c.deleted_at IS NULL",
     );
 
     let mut next_bind = 2u16;
@@ -510,23 +518,28 @@ pub async fn detail_query_in_tx(
                 LEFT(preview.body, 140) AS last_message_preview, \
                 cv.last_activity_at, cv.created_at, \
                 cv.ai_handling, \
-                wi.id AS widget_instance_id, \
-                wi.name AS widget_instance_name \
-         FROM conversations cv \
-         JOIN customers c \
-           ON c.id = cv.customer_id AND c.tenant_id = cv.tenant_id AND c.deleted_at IS NULL \
-         LEFT JOIN tenant_memberships tm \
-           ON tm.id = cv.assigned_membership_id AND tm.tenant_id = cv.tenant_id AND tm.deleted_at IS NULL \
-         LEFT JOIN users mu ON mu.id = tm.user_id \
-         LEFT JOIN widget_instances wi \
-           ON wi.id = cv.widget_instance_id AND wi.deleted_at IS NULL \
-         LEFT JOIN LATERAL ( \
-             SELECT kind, body FROM messages \
-             WHERE tenant_id = cv.tenant_id AND conversation_id = cv.id \
-             ORDER BY created_at DESC, seq DESC \
-             LIMIT 1 \
-         ) preview ON TRUE \
-         WHERE cv.tenant_id = $1 AND cv.id = $2 AND cv.deleted_at IS NULL",
+                 wi.id AS widget_instance_id, \
+                 wi.name AS widget_instance_name, \
+                 f.rating AS feedback_rating, \
+                 f.comment AS feedback_comment, \
+                 f.submitted_at AS feedback_submitted_at \
+          FROM conversations cv \
+          JOIN customers c \
+            ON c.id = cv.customer_id AND c.tenant_id = cv.tenant_id AND c.deleted_at IS NULL \
+          LEFT JOIN tenant_memberships tm \
+            ON tm.id = cv.assigned_membership_id AND tm.tenant_id = cv.tenant_id AND tm.deleted_at IS NULL \
+          LEFT JOIN users mu ON mu.id = tm.user_id \
+          LEFT JOIN widget_instances wi \
+            ON wi.id = cv.widget_instance_id AND wi.deleted_at IS NULL \
+          LEFT JOIN conversation_feedback f \
+            ON f.conversation_id = cv.id AND f.tenant_id = cv.tenant_id \
+          LEFT JOIN LATERAL ( \
+              SELECT kind, body FROM messages \
+              WHERE tenant_id = cv.tenant_id AND conversation_id = cv.id \
+              ORDER BY created_at DESC, seq DESC \
+              LIMIT 1 \
+          ) preview ON TRUE \
+          WHERE cv.tenant_id = $1 AND cv.id = $2 AND cv.deleted_at IS NULL",
     )
     .bind(tenant_id)
     .bind(id)
@@ -560,6 +573,16 @@ pub async fn detail_query_in_tx(
             name: row.widget_instance_name.unwrap_or_default(),
         });
 
+    let feedback = row
+        .feedback_rating
+        .map(|rating| crate::model::TenantFeedbackDto {
+            rating,
+            comment: row.feedback_comment,
+            submitted_at: row
+                .feedback_submitted_at
+                .expect("feedback_submitted_at must be present when feedback_rating is Some"),
+        });
+
     Ok(Some(ConversationDetail {
         id: row.id,
         customer: CustomerRef {
@@ -576,6 +599,7 @@ pub async fn detail_query_in_tx(
         ai_handling: row.ai_handling,
         awaiting_ai_decision: false,
         widget_instance,
+        feedback,
     }))
 }
 

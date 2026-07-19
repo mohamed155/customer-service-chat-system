@@ -52,13 +52,14 @@ pub async fn submit_feedback(
 
     // Validate and normalize comment
     let comment = payload.comment.as_deref().map(|c| c.trim().to_owned());
-    let comment = comment.as_deref().filter(|c| !c.is_empty()).map(|c| c.to_owned());
+    let comment = comment
+        .as_deref()
+        .filter(|c| !c.is_empty())
+        .map(|c| c.to_owned());
     if let Some(ref c) = comment {
         if c.chars().count() > 2000 {
-            return ApiError::unprocessable_entity(
-                "Comment must be 2000 characters or fewer",
-            )
-            .into_response();
+            return ApiError::unprocessable_entity("Comment must be 2000 characters or fewer")
+                .into_response();
         }
     }
 
@@ -224,11 +225,7 @@ pub async fn get_pending_feedback(
     let customer_id = match session.customer_id {
         Some(id) => id,
         None => {
-            return (
-                StatusCode::OK,
-                Json(PendingFeedbackResponse { data: None }),
-            )
-                .into_response();
+            return (StatusCode::OK, Json(PendingFeedbackResponse { data: None })).into_response();
         }
     };
 
@@ -241,8 +238,7 @@ pub async fn get_pending_feedback(
         Ok(None) => None,
         Err(e) => {
             tracing::error!(%e, "get_pending_feedback: db error");
-            return ApiError::internal_error("Failed to look up pending feedback")
-                .into_response();
+            return ApiError::internal_error("Failed to look up pending feedback").into_response();
         }
     };
 

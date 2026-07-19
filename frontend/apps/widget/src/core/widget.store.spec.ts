@@ -155,6 +155,25 @@ describe('WidgetStore', () => {
     });
   });
 
+  describe('submitFeedback', () => {
+    it('forwards comment to WidgetApiService.submitFeedback', () => {
+      const apiService = TestBed.inject(WidgetApiService);
+      const submitSpy = vi
+        .spyOn(apiService, 'submitFeedback')
+        .mockReturnValue(of({ rating: 5, comment: 'Great!', submittedAt: '2026-07-19T12:00:00Z' }));
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (store as any).pendingFeedbackSignal.set({
+        conversationId: 'conv1',
+        endedAt: '2026-07-19T12:00:00Z',
+      } as PendingFeedback);
+
+      store.submitFeedback(5, 'Great!');
+
+      expect(submitSpy).toHaveBeenCalledWith('test-token', 'conv1', 5, 'Great!');
+    });
+  });
+
   describe('409 handling triggers checkPendingFeedback', () => {
     it('calls checkPendingFeedback when sendMessage returns 409', () => {
       const apiService = TestBed.inject(WidgetApiService);

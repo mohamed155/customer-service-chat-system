@@ -168,6 +168,7 @@ fn row_to_conversation(row: queries::InboxRow) -> model::Conversation {
         ai_handling: row.ai_handling,
         awaiting_ai_decision: false,
         widget_instance,
+        rating: row.feedback_rating,
     }
 }
 

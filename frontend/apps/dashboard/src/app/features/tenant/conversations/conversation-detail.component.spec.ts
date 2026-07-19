@@ -238,6 +238,35 @@ describe('ConversationDetailComponent', () => {
     expect(composer).toBeFalsy();
   });
 
+  it('renders populated feedback section with rating, comment, and badge', async () => {
+    const feedback = {
+      rating: 4,
+      comment: 'Great support!',
+      submittedAt: '2026-07-13T10:30:00Z',
+    };
+    storeMock.conversation.mockReturnValue({ ...mockConversation, feedback });
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(ConversationDetailComponent);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement;
+    expect(el.textContent).toContain('Customer Feedback');
+    expect(el.textContent).toContain('Great support!');
+    expect(el.querySelector('app-satisfaction-badge')).toBeTruthy();
+  });
+
+  it('renders "No rating" empty state when feedback is null', async () => {
+    storeMock.conversation.mockReturnValue({ ...mockConversation, feedback: null });
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(ConversationDetailComponent);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement;
+    expect(el.textContent).toContain('Customer Feedback');
+    expect(el.textContent).toContain('No rating');
+    expect(el.querySelector('app-satisfaction-badge')).toBeFalsy();
+  });
+
   it('safely renders unusual text in messages', async () => {
     const unusualMessages: Message[] = [
       {

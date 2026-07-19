@@ -1,12 +1,9 @@
 import { Injectable, InjectionToken } from '@angular/core';
 import { Observable, of } from 'rxjs';
 import {
-  ANALYTICS_CHARTS,
-  ANALYTICS_METRICS,
   CHANNEL_BREAKDOWN,
   OVERVIEW_METRICS,
   OVERVIEW_TREND_SERIES,
-  TOP_ARTICLES,
 } from '../../shared/fixtures/analytics.fixtures';
 import { CONVERSATION_FIXTURES } from '../../shared/fixtures/conversation.fixtures';
 import { CUSTOMER_FIXTURES } from '../../shared/fixtures/customer.fixtures';
@@ -21,7 +18,6 @@ import {
   MetricFixture,
   SessionFixture,
   TeamMemberFixture,
-  TopArticleFixture,
   TrendSeriesFixture,
   UsageFixture,
   WorkspaceProfileFixture,
@@ -57,12 +53,6 @@ export type AiAgentPayload = {
   timelineSteps: { label: string; detail: string }[];
 };
 
-export type AnalyticsPayload = {
-  metrics: readonly MetricFixture[];
-  charts: readonly TrendSeriesFixture[];
-  topArticles: readonly TopArticleFixture[];
-};
-
 export type SettingsPayload = {
   profile: WorkspaceProfileFixture;
   team: readonly TeamMemberFixture[];
@@ -83,7 +73,6 @@ export type PagePayload =
   | { page: 'conversations'; data: ConversationsPayload }
   | { page: 'ai-agent'; data: AiAgentPayload }
   | { page: 'integrations'; data: readonly IntegrationFixture[] }
-  | { page: 'analytics'; data: AnalyticsPayload }
   | { page: 'settings'; data: SettingsPayload };
 
 @Injectable({ providedIn: 'root' })
@@ -144,15 +133,6 @@ export class RoutedPageDataService {
         };
       case 'integrations':
         return { page: 'integrations', data: INTEGRATION_FIXTURES };
-      case 'analytics':
-        return {
-          page: 'analytics',
-          data: {
-            metrics: ANALYTICS_METRICS.slice(0, 6),
-            charts: ANALYTICS_CHARTS,
-            topArticles: TOP_ARTICLES,
-          },
-        };
       case 'settings':
         return {
           page: 'settings',
@@ -206,15 +186,6 @@ export class RoutedPageDataService {
         };
       case 'integrations':
         return { page: 'integrations', data: INTEGRATION_FIXTURES.slice(0, 1) };
-      case 'analytics':
-        return {
-          page: 'analytics',
-          data: {
-            metrics: ANALYTICS_METRICS.slice(0, 3),
-            charts: ANALYTICS_CHARTS.slice(0, 1),
-            topArticles: TOP_ARTICLES.slice(0, 2),
-          },
-        };
       case 'settings':
         return {
           page: 'settings',
@@ -262,8 +233,6 @@ export class RoutedPageDataService {
         };
       case 'integrations':
         return { page: 'integrations', data: [] };
-      case 'analytics':
-        return { page: 'analytics', data: { metrics: [], charts: [], topArticles: [] } };
       case 'settings':
         return {
           page: 'settings',

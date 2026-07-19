@@ -1,9 +1,4 @@
-import {
-  ChannelBreakdownFixture,
-  MetricFixture,
-  TopArticleFixture,
-  TrendSeriesFixture,
-} from './fixture.models';
+import { ChannelBreakdownFixture, MetricFixture, TrendSeriesFixture } from './fixture.models';
 
 export const OVERVIEW_METRICS: readonly MetricFixture[] = [
   {
@@ -84,78 +79,4 @@ export const CHANNEL_BREAKDOWN: readonly ChannelBreakdownFixture[] = [
   { channel: 'whatsapp', label: 'WhatsApp', percentage: 28 },
   { channel: 'telegram', label: 'Telegram', percentage: 18 },
   { channel: 'mobile-sdk', label: 'Mobile SDK', percentage: 10 },
-];
-
-export const ANALYTICS_METRICS: readonly MetricFixture[] = [
-  ...OVERVIEW_METRICS,
-  {
-    id: 'handoff-rate',
-    label: 'Human handoffs',
-    value: '104',
-    delta: '-9.0%',
-    deltaDirection: 'down',
-    deltaPositive: true,
-    icon: '@tui.user-check',
-    trend: [36, 34, 31, 30, 28, 24, 22, 21, 19],
-  },
-];
-
-export const ANALYTICS_CHARTS: readonly TrendSeriesFixture[] = [
-  {
-    id: 'volume',
-    label: 'Conversation volume',
-    colorToken: 'accent',
-    points: [48, 54, 62, 70, 74, 88, 94, 103],
-  },
-  {
-    id: 'resolution',
-    label: 'AI resolution',
-    colorToken: 'green',
-    points: [60, 65, 68, 72, 76, 81, 88, 92],
-  },
-  { id: 'csat', label: 'CSAT', colorToken: 'amber', points: [80, 82, 83, 86, 84, 89, 91, 94] },
-  {
-    id: 'handoff',
-    label: 'Handoff rate',
-    colorToken: 'red',
-    points: [18, 16, 17, 15, 13, 12, 11, 9],
-  },
-];
-
-export const TOP_ARTICLES: readonly TopArticleFixture[] = [
-  {
-    id: 'top-001',
-    title: 'Returns and exchanges policy',
-    category: 'Orders',
-    uses: 482,
-    resolutionRate: 94,
-  },
-  {
-    id: 'top-002',
-    title: 'Shipping address changes',
-    category: 'Shipping',
-    uses: 361,
-    resolutionRate: 91,
-  },
-  {
-    id: 'top-003',
-    title: 'Warranty eligibility rules',
-    category: 'Support',
-    uses: 244,
-    resolutionRate: 83,
-  },
-  {
-    id: 'top-004',
-    title: 'Billing profile settings',
-    category: 'Billing',
-    uses: 198,
-    resolutionRate: 89,
-  },
-  {
-    id: 'top-005',
-    title: 'Notification settings guide',
-    category: 'Account',
-    uses: 156,
-    resolutionRate: 96,
-  },
 ];

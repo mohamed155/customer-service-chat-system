@@ -716,6 +716,16 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             routes!(feedback::tenant_routes::get_feedback_summary)
                 .layer(require_permission(Permission::ConversationsView)),
         )
+        // Analytics summary (spec 025)
+        .routes(
+            routes!(analytics::routes::get_analytics_summary)
+                .layer(require_permission(Permission::AnalyticsView)),
+        )
+        // Analytics timeseries (spec 025)
+        .routes(
+            routes!(analytics::routes::get_analytics_timeseries)
+                .layer(require_permission(Permission::AnalyticsView)),
+        )
         // ── Widgets admin CRUD ─────────────────────────────────────────────
         .routes(
             routes!(

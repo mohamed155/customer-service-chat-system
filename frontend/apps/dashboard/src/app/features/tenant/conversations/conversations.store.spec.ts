@@ -11,6 +11,7 @@ describe('ConversationsStore', () => {
           provide: ConversationsApiService,
           useValue: {
             list: vi.fn(),
+            getFeedbackSummary: vi.fn(),
           },
         },
       ],

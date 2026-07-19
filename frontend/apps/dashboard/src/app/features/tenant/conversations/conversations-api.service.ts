@@ -19,6 +19,9 @@ import {
   CreateConversationPayload,
   createConversationPayloadToWire,
   DecideToolRequestRequest,
+  FeedbackSummary,
+  feedbackSummaryFromWire,
+  FeedbackSummaryWire,
   Message,
   messageFromWire,
   MessageWire,
@@ -59,6 +62,15 @@ export class ConversationsApiService {
 
   listAssignableMembers(): Observable<ApiResponse<TeamMember[]>> {
     return this.api.get<TeamMember[]>('/tenant/members');
+  }
+
+  getFeedbackSummary(): Observable<ApiResponse<FeedbackSummary>> {
+    return this.api.get<{ data: FeedbackSummaryWire }>('/tenant/feedback/summary').pipe(
+      map(({ data, ...response }) => ({
+        ...response,
+        data: feedbackSummaryFromWire(data.data),
+      })),
+    );
   }
 
   getToolActivity(conversationId: string): Observable<ApiResponse<{ items: ToolRequest[] }>> {

@@ -43,6 +43,16 @@ pub enum MessageKind {
 // Response DTOs
 // ---------------------------------------------------------------------------
 
+/// Feedback left by a customer on a conversation, rendered in the dashboard.
+/// Defined locally in the conversations crate to avoid a circular dependency
+/// with the feedback crate.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TenantFeedbackDto {
+    pub rating: i16,
+    pub comment: Option<String>,
+    pub submitted_at: DateTime<Utc>,
+}
+
 /// Staff assignee reference embedded in conversation and message responses.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Assignee {
@@ -103,6 +113,8 @@ pub struct Conversation {
     pub awaiting_ai_decision: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub widget_instance: Option<WidgetInstanceRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rating: Option<i16>,
 }
 
 /// Full conversation detail returned by the create / update / get handlers.
@@ -125,6 +137,8 @@ pub struct ConversationDetail {
     pub awaiting_ai_decision: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub widget_instance: Option<WidgetInstanceRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<TenantFeedbackDto>,
 }
 
 /// One message in a conversation, returned by the timeline endpoint and

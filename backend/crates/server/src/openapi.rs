@@ -87,6 +87,7 @@ use utoipa::{openapi, Modify, OpenApi};
         conversations::model::ConversationDetail,
         conversations::model::Message,
         conversations::model::AddMessageResponse,
+        conversations::model::TenantFeedbackDto,
         conversations::model::CreateConversationPayload,
         conversations::model::CreateMessagePayload,
         conversations::model::AddMessagePayload,
@@ -146,6 +147,12 @@ use utoipa::{openapi, Modify, OpenApi};
         feedback::model::PendingFeedbackDto,
         feedback::model::PendingFeedbackResponse,
         feedback::model::FeedbackSummaryDto,
+        // Analytics
+        analytics::model::DateRangeDto,
+        analytics::model::ChannelBreakdownItem,
+        analytics::model::AnalyticsSummaryDto,
+        analytics::model::TimeseriesDay,
+        analytics::model::AnalyticsTimeseriesDto,
         // Widgets
         widgets::model::PublicWidgetConfigDto,
         widgets::model::CreateSessionPayload,

@@ -97,10 +97,7 @@ pub async fn find_pending_feedback(
     .await
 }
 
-pub async fn feedback_summary(
-    pool: &PgPool,
-    tenant_id: Uuid,
-) -> sqlx::Result<(Option<f64>, i64)> {
+pub async fn feedback_summary(pool: &PgPool, tenant_id: Uuid) -> sqlx::Result<(Option<f64>, i64)> {
     sqlx::query_as::<_, (Option<f64>, i64)>(
         "SELECT AVG(rating)::float8, COUNT(*)::bigint \
          FROM conversation_feedback \

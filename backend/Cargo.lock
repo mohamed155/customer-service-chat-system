@@ -136,6 +136,17 @@ dependencies = [
 [[package]]
 name = "analytics"
 version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "kernel",
+ "serde",
+ "sqlx",
+ "tenancy",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
 
 [[package]]
 name = "android_system_properties"
@@ -3444,6 +3455,7 @@ version = "0.1.0"
 dependencies = [
  "ai",
  "ai-providers",
+ "analytics",
  "argon2",
  "async-trait",
  "authz",

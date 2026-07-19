@@ -17,6 +17,7 @@
 
 ## Recent Changes
 
+- 025-analytics-foundation: tenant analytics (summary + daily timeseries endpoints over existing conversation/feedback/usage tables, no rollup tables; metric cards, inline-SVG trend charts, date-range and channel filters; analytics.view restricted to Owner/Admin/Manager). See specs/025-analytics-foundation/plan.md.
 - 006-multi-tenancy-foundation: tenant isolation (identity/tenancy modules, tenant-context middleware, X-Tenant-ID contract, 4 endpoints, 25 integration tests, audit) + frontend (NgRx tenantContext feature, interceptors, CurrentUserService, TenantContextService, tenant switcher, area guards, dev identity header). See `specs/006-multi-tenancy-foundation/plan.md`.
 - 002-angular-frontend-foundation: frontend foundation plan (Angular 22 modernization, Taiga UI, NgRx, layered structure) — see `specs/002-angular-frontend-foundation/plan.md`.
 - 019-knowledge-base: knowledge module activation, S3-compatible document storage, draft/published/archived lifecycle, only published items are the AI-available set. See `specs/019-knowledge-base/plan.md`.
@@ -25,5 +26,5 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/021-ai-conversation-engine/plan.md
+at specs/024-customer-feedback/plan.md
 <!-- SPECKIT END -->

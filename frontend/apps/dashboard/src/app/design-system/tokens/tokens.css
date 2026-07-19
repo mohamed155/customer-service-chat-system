@@ -45,6 +45,13 @@
   --app-z-overlay: 100;
   --app-z-toast: 200;
 
+  /* Chart series colors (spec 025). Fixed order: series 1 then series 2 — never
+     reassigned by rank, so a filter that drops a series never repaints the others.
+     Validated for colorblind separation and >=3:1 contrast against both the light
+     (#ffffff) and dark (#13161d) card surfaces. */
+  --app-chart-1: #0284c7;
+  --app-chart-2: #d97706;
+
   /* Breakpoints */
   --app-bp-sm: 640px;
   --app-bp-md: 768px;

@@ -59,7 +59,11 @@ describe('ConversationsComponent', () => {
         provideZonelessChangeDetection(),
         {
           provide: ConversationsApiService,
-          useValue: { list: apiList, listAssignableMembers: apiMembers },
+          useValue: {
+            list: apiList,
+            listAssignableMembers: apiMembers,
+            getFeedbackSummary: vi.fn(),
+          },
         },
         { provide: Store, useValue: { selectSignal: () => activeTenant } },
         {

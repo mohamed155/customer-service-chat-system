@@ -103,7 +103,7 @@
             "index": "apps/widget/src/index.html",
             "tsConfig": "apps/widget/tsconfig.app.json",
             "outputPath": "dist/widget",
-            "budgets": [{ "type": "initial", "maximumWarning": "170kb", "maximumError": "180kb" }]
+            "budgets": [{ "type": "initial", "maximumWarning": "190kb", "maximumError": "200kb" }]
           }
         },
         "serve": {

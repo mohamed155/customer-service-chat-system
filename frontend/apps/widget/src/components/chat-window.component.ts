@@ -18,7 +18,12 @@ import { FeedbackPromptComponent } from './feedback-prompt.component';
   selector: 'hx-chat-window',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MessageListComponent, ComposerComponent, HandoffBannerComponent, FeedbackPromptComponent],
+  imports: [
+    MessageListComponent,
+    ComposerComponent,
+    HandoffBannerComponent,
+    FeedbackPromptComponent,
+  ],
   template: `
     <div class="window" role="dialog" aria-label="Chat window">
       <header class="window__header">
@@ -63,15 +68,17 @@ import { FeedbackPromptComponent } from './feedback-prompt.component';
 
       @if (store.feedbackState() !== 'none') {
         <wgt-feedback-prompt
-          [state]="store.feedbackState()"
+          [state]="feedbackPromptState()"
           [feedback]="store.feedback()"
-          (submitRating)="store.submitFeedback($event)"
+          (submitFeedback)="store.submitFeedback($event.rating, $event.comment)"
           (dismiss)="store.dismissFeedback()"
           (expand)="store.expandFeedback()"
         />
       }
 
-      @if (!isClosed() && store.feedbackState() !== 'prompt' && store.feedbackState() !== 'submitted') {
+      @if (
+        !isClosed() && store.feedbackState() !== 'prompt' && store.feedbackState() !== 'submitted'
+      ) {
         <hx-composer (sendMessage)="onSend($event)" />
       }
     </div>
@@ -208,6 +215,11 @@ export class ChatWindowComponent {
   });
 
   isClosed = computed(() => this.store.conversation()?.handling === 'closed');
+
+  feedbackPromptState = computed<'prompt' | 'collapsed' | 'submitted'>(() => {
+    const s = this.store.feedbackState();
+    return s === 'none' ? 'prompt' : s;
+  });
 
   onSend(body: string): void {
     const conv = this.store.conversation();

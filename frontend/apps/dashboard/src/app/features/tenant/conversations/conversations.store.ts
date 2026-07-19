@@ -30,6 +30,8 @@ interface ConversationsState {
   readonly loading: boolean;
   readonly error: string | null;
   readonly selectedId: string | null;
+  readonly averageRating: number | null;
+  readonly feedbackCount: number;
 }
 
 export const ConversationsStore = signalStore(
@@ -41,6 +43,8 @@ export const ConversationsStore = signalStore(
     loading: false,
     error: null,
     selectedId: null,
+    averageRating: null,
+    feedbackCount: 0,
   }),
   withComputed(({ items, selectedId, filters }) => ({
     filteredConversations: computed(() => items()),
@@ -93,6 +97,27 @@ export const ConversationsStore = signalStore(
         ),
       );
 
+      const loadFeedbackSummary = rxMethod<string | null>(
+        pipe(
+          tap(() => patchState(store, { averageRating: null, feedbackCount: 0 })),
+          switchMap((tenantId) => {
+            if (!tenantId) return of(null);
+            return api.getFeedbackSummary().pipe(
+              map(({ data }) => data),
+              catchError(() => of(null)),
+            );
+          }),
+          tap((result) => {
+            if (result) {
+              patchState(store, {
+                averageRating: result.averageRating,
+                feedbackCount: result.feedbackCount,
+              });
+            }
+          }),
+        ),
+      );
+
       return {
         loadInbox(): void {
           load({ tenantId: activeTenant()?.id ?? null, filters: store.filters(), cursor: '' });
@@ -119,6 +144,9 @@ export const ConversationsStore = signalStore(
         select(id: string): void {
           patchState(store, { selectedId: id });
         },
+        loadFeedbackSummary(): void {
+          loadFeedbackSummary(activeTenant()?.id ?? null);
+        },
       };
     },
   ),
@@ -127,7 +155,10 @@ export const ConversationsStore = signalStore(
     return {
       onInit(): void {
         effect(() => {
-          if (activeTenant()?.id) store.loadInbox();
+          if (activeTenant()?.id) {
+            store.loadInbox();
+            store.loadFeedbackSummary();
+          }
         });
       },
     };

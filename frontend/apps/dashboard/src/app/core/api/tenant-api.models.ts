@@ -297,6 +297,11 @@ export interface ConversationDetail extends Conversation {
   readonly participants: readonly Participant[];
   readonly aiHandling?: string | null;
   readonly awaitingAiDecision?: boolean;
+  readonly feedback?: {
+    readonly rating: number;
+    readonly comment: string | null;
+    readonly submittedAt: string;
+  } | null;
 }
 
 export interface RequiredSkillRef {
@@ -486,6 +491,7 @@ export interface ConversationWire {
   readonly last_activity_at: string;
   readonly created_at: string;
   readonly widget_instance?: WidgetInstanceRefWire | null;
+  readonly rating?: number | null;
 }
 
 export interface ParticipantWire {
@@ -500,6 +506,11 @@ export interface ConversationDetailWire extends ConversationWire {
   readonly participants: readonly ParticipantWire[];
   readonly ai_handling?: string | null;
   readonly awaiting_ai_decision?: boolean;
+  readonly feedback?: {
+    readonly rating: number;
+    readonly comment: string | null;
+    readonly submitted_at: string;
+  } | null;
 }
 
 export interface CitationWire {
@@ -565,6 +576,7 @@ export interface Conversation {
   readonly lastActivityAt: string;
   readonly createdAt: string;
   readonly widgetInstance?: WidgetInstanceRef | null;
+  readonly rating?: number | null;
 }
 
 export interface ConversationListQuery {
@@ -600,6 +612,7 @@ export function conversationFromWire(wire: ConversationWire): Conversation {
       : null,
     lastActivityAt: wire.last_activity_at,
     createdAt: wire.created_at,
+    rating: wire.rating !== undefined ? wire.rating : null,
     ...(wire.widget_instance
       ? { widgetInstance: { id: wire.widget_instance.id, name: wire.widget_instance.name } }
       : {}),
@@ -668,6 +681,13 @@ export function conversationDetailFromWire(wire: ConversationDetailWire): Conver
     participants: wire.participants.map(participantFromWire),
     aiHandling: wire.ai_handling ?? null,
     awaitingAiDecision: wire.awaiting_ai_decision ?? false,
+    feedback: wire.feedback
+      ? {
+          rating: wire.feedback.rating,
+          comment: wire.feedback.comment,
+          submittedAt: wire.feedback.submitted_at,
+        }
+      : null,
   };
 }
 
@@ -821,6 +841,23 @@ export interface ToolsSettingsResponse {
   readonly tenantDefined: readonly TenantDefinedTool[];
 }
 
+export interface FeedbackSummaryWire {
+  readonly average_rating: number | null;
+  readonly feedback_count: number;
+}
+
+export interface FeedbackSummary {
+  readonly averageRating: number | null;
+  readonly feedbackCount: number;
+}
+
+export function feedbackSummaryFromWire(wire: FeedbackSummaryWire): FeedbackSummary {
+  return {
+    averageRating: wire.average_rating,
+    feedbackCount: wire.feedback_count,
+  };
+}
+
 export function createConversationPayloadToWire(
   payload: CreateConversationPayload,
 ): CreateConversationPayloadWire {
@@ -828,5 +865,119 @@ export function createConversationPayloadToWire(
     customer_id: payload.customerId,
     channel: payload.channel,
     message: payload.message,
+  };
+}
+
+// ── Analytics models (spec 025) ──────────────────────────────────────────────
+
+export interface AnalyticsSummaryWire {
+  readonly range: { from: string; to: string };
+  readonly channel: string | null;
+  readonly conversation_volume: number;
+  readonly concluded_count: number;
+  readonly ai_resolution_rate: number | null;
+  readonly handoff_rate: number | null;
+  readonly avg_first_response_seconds: number | null;
+  readonly avg_response_seconds: number | null;
+  readonly satisfaction_avg: number | null;
+  readonly satisfaction_count: number;
+  readonly total_tokens: number;
+  readonly unattributed_tokens: number;
+  readonly channels: { channel: string; conversation_count: number; share: number }[];
+}
+
+export interface AnalyticsChannelShare {
+  readonly channel: string;
+  readonly conversationCount: number;
+  readonly share: number;
+}
+
+export interface AnalyticsSummary {
+  readonly range: { from: string; to: string };
+  readonly channel: string | null;
+  readonly conversationVolume: number;
+  readonly concludedCount: number;
+  readonly aiResolutionRate: number | null;
+  readonly handoffRate: number | null;
+  readonly avgFirstResponseSeconds: number | null;
+  readonly avgResponseSeconds: number | null;
+  readonly satisfactionAvg: number | null;
+  readonly satisfactionCount: number;
+  readonly totalTokens: number;
+  readonly unattributedTokens: number;
+  readonly channels: AnalyticsChannelShare[];
+}
+
+export interface AnalyticsTimeseriesWire {
+  readonly range: { from: string; to: string };
+  readonly channel: string | null;
+  readonly days: {
+    readonly date: string;
+    readonly conversation_volume: number;
+    readonly ai_resolved: number;
+    readonly handed_off: number;
+    readonly satisfaction_avg: number | null;
+    readonly satisfaction_count: number;
+    readonly total_tokens: number;
+  }[];
+}
+
+export interface AnalyticsTimeseriesDay {
+  readonly date: string;
+  readonly conversationVolume: number;
+  readonly aiResolved: number;
+  readonly handedOff: number;
+  readonly satisfactionAvg: number | null;
+  readonly satisfactionCount: number;
+  readonly totalTokens: number;
+}
+
+export interface AnalyticsTimeseries {
+  readonly range: { from: string; to: string };
+  readonly channel: string | null;
+  readonly days: AnalyticsTimeseriesDay[];
+}
+
+function mapChannelShares(
+  channels: { channel: string; conversation_count: number; share: number }[],
+): AnalyticsChannelShare[] {
+  return channels.map((c) => ({
+    channel: c.channel,
+    conversationCount: c.conversation_count,
+    share: c.share,
+  }));
+}
+
+export function analyticsSummaryFromWire(wire: AnalyticsSummaryWire): AnalyticsSummary {
+  return {
+    range: wire.range,
+    channel: wire.channel,
+    conversationVolume: wire.conversation_volume,
+    concludedCount: wire.concluded_count,
+    aiResolutionRate: wire.ai_resolution_rate,
+    handoffRate: wire.handoff_rate,
+    avgFirstResponseSeconds: wire.avg_first_response_seconds,
+    avgResponseSeconds: wire.avg_response_seconds,
+    satisfactionAvg: wire.satisfaction_avg,
+    satisfactionCount: wire.satisfaction_count,
+    totalTokens: wire.total_tokens,
+    unattributedTokens: wire.unattributed_tokens,
+    channels: mapChannelShares(wire.channels),
+  };
+}
+
+export function analyticsTimeseriesFromWire(wire: AnalyticsTimeseriesWire): AnalyticsTimeseries {
+  return {
+    range: wire.range,
+    channel: wire.channel,
+    days: wire.days.map((d) => ({
+      date: d.date,
+      conversationVolume: d.conversation_volume,
+      aiResolved: d.ai_resolved,
+      handedOff: d.handed_off,
+      satisfactionAvg: d.satisfaction_avg,
+      satisfactionCount: d.satisfaction_count,
+      totalTokens: d.total_tokens,
+    })),
   };
 }

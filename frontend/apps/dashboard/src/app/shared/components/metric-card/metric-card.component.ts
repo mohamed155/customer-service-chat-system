@@ -1,8 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
-import { MetricFixture } from '../../fixtures/fixture.models';
 import { DashboardCardComponent } from '../dashboard-card/dashboard-card.component';
 import { SparklineComponent } from '../sparkline/sparkline.component';
+
+export interface MetricCardData {
+  id: string;
+  label: string;
+  value: string;
+  icon: string;
+  delta?: string;
+  deltaPositive?: boolean;
+  trend?: readonly number[];
+}
 
 @Component({
   selector: 'app-metric-card',
@@ -11,11 +20,15 @@ import { SparklineComponent } from '../sparkline/sparkline.component';
     <app-dashboard-card>
       <div class="metric-head">
         <span class="icon"><tui-icon [icon]="metric().icon" /></span>
-        <span [class]="deltaClass()">{{ metric().delta }}</span>
+        @if (metric().delta) {
+          <span [class]="deltaClass()">{{ metric().delta }}</span>
+        }
       </div>
       <p>{{ metric().label }}</p>
       <strong>{{ metric().value }}</strong>
-      <app-sparkline [points]="metric().trend" [colorToken]="sparkColor()" />
+      @if (metric().trend?.length) {
+        <app-sparkline [points]="metric().trend ?? []" [colorToken]="sparkColor()" />
+      }
     </app-dashboard-card>
   `,
   styles: [
@@ -73,7 +86,7 @@ import { SparklineComponent } from '../sparkline/sparkline.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MetricCardComponent {
-  readonly metric = input.required<MetricFixture>();
+  readonly metric = input.required<MetricCardData>();
 
   protected readonly deltaClass = computed(() =>
     this.metric().deltaPositive ? 'delta positive' : 'delta negative',
