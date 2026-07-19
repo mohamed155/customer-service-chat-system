@@ -201,6 +201,16 @@ export const TENANT_ROUTES: Routes = [
     title: PAGE_TITLES.escalations.title,
   },
   {
+    path: APP_PATHS.tenant.widgets,
+    canMatch: [permissionGuard],
+    loadComponent: () => import('./widgets/widgets.component').then((m) => m.WidgetsComponent),
+    data: {
+      pageTitle: 'widgets',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.widgets],
+    },
+    title: PAGE_TITLES.widgets.title,
+  },
+  {
     path: APP_PATHS.tenant.team,
     canMatch: [permissionGuard],
     loadComponent: () => import('./team/team-list.component').then((m) => m.TeamListComponent),

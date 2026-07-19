@@ -63,6 +63,9 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
               <span class="header-channel">
                 <app-channel-badge [channel]="channelBadge(conv.channel)" />
                 <app-status-badge [status]="conv.status" [tone]="statusTone(conv.status)" />
+                @if (conv.widgetInstance; as wgt) {
+                  <span class="widget-badge">{{ wgt.name }}</span>
+                }
               </span>
             </div>
           </div>
@@ -191,6 +194,18 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
         display: flex;
         gap: 6px;
         flex-wrap: wrap;
+        align-items: center;
+      }
+      .widget-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: var(--app-accent-soft);
+        color: var(--app-accent-strong);
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
       }
       .header-right {
         display: flex;

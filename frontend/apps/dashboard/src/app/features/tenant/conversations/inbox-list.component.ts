@@ -41,6 +41,9 @@ import { Conversation, ConversationListQuery } from '../../../core/api/tenant-ap
                 [status]="conversation.status"
                 [tone]="statusTone(conversation.status)"
               />
+              @if (conversation.widgetInstance; as wgt) {
+                <span class="widget-badge" title="Chat Widget: {{ wgt.name }}">Widget</span>
+              }
             </span>
           </span>
           <span class="meta">
@@ -158,6 +161,17 @@ import { Conversation, ConversationListQuery } from '../../../core/api/tenant-ap
       time {
         color: var(--app-text-3);
         font-size: var(--app-font-xs);
+        white-space: nowrap;
+      }
+      .widget-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: var(--app-accent-soft);
+        color: var(--app-accent-strong);
+        font-size: 10px;
+        font-weight: 700;
         white-space: nowrap;
       }
       @media (max-width: 768px) {

@@ -6,8 +6,14 @@
 - State: global cross-feature → NgRx Store (`appUi` slice: themeMode/sidebarCollapsed); feature-local → NgRx SignalStore; component-temporary → `signal()`. Never duplicate state across mechanisms. Theme persists to localStorage; sidebar does not.
 - HTTP: typed `ApiResponse<T>`/`ApiError`/`PaginatedResponse<T>`/`ApiListQuery` aligned with `specs/001-ai-customer-service-platform/contracts/rest-api.md` (cursor pagination, error envelope, `X-Request-Id`). Functional interceptors only. No fake auth logic.
 - Route paths come from `APP_PATHS` constants in `core/router` — no string literals in features.
-- `apps/widget` and `libs/*` (Helix hx- components) are prior scaffolding — do not modify or use for the dashboard; Taiga UI only.
-- Quality gates (run in `frontend/`): `pnpm ng build dashboard`, `pnpm ng test dashboard`, `pnpm lint`, `pnpm format:check` — all must pass.
+- `apps/widget` is a standalone Angular application for the embeddable website chat widget:
+  - Standalone components, OnPush, signals
+  - No imports from `libs/*`, Taiga UI, or NgRx
+  - Own `--wgt-*` CSS tokens
+  - 97 KB initial budget (configured in angular.json)
+  - Loader build script: `pnpm build:widget-loader`
+  - Loader-vs-app split: loader owns launcher + iframe lifecycle, Angular app owns chat UI
+- Quality gates (run in `frontend/`): `pnpm ng build dashboard`, `pnpm ng test dashboard`, `pnpm ng build widget`, `pnpm build:widget-loader`, `pnpm lint`, `pnpm format:check` — all must pass.
 
 ## Frontend rules (from spec 003)
 

@@ -9,7 +9,7 @@ const ACTION_ASSIGNMENT_CHANGED: &str = "conversation.assignment_changed";
 
 pub async fn record_conversation_created(
     tx: &mut Transaction<'_, Postgres>,
-    actor_user_id: Uuid,
+    actor_user_id: Option<Uuid>,
     tenant_id: Uuid,
     conversation_id: Uuid,
     customer_id: Uuid,
@@ -18,7 +18,7 @@ pub async fn record_conversation_created(
     tenancy::audit::record_in_tx(
         tx,
         ACTION_CREATED,
-        Some(actor_user_id),
+        actor_user_id,
         Some(tenant_id),
         RESOURCE_TYPE,
         Some(&conversation_id.to_string()),
@@ -29,7 +29,7 @@ pub async fn record_conversation_created(
 
 pub async fn record_status_changed(
     tx: &mut Transaction<'_, Postgres>,
-    actor_user_id: Uuid,
+    actor_user_id: Option<Uuid>,
     tenant_id: Uuid,
     conversation_id: Uuid,
     from: &str,
@@ -39,7 +39,7 @@ pub async fn record_status_changed(
     tenancy::audit::record_in_tx(
         tx,
         ACTION_STATUS_CHANGED,
-        Some(actor_user_id),
+        actor_user_id,
         Some(tenant_id),
         RESOURCE_TYPE,
         Some(&conversation_id.to_string()),

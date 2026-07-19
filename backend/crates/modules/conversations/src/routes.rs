@@ -148,6 +148,11 @@ fn row_to_conversation(row: queries::InboxRow) -> model::Conversation {
         }
     });
 
+    let widget_instance = row.widget_instance_id.map(|id| model::WidgetInstanceRef {
+        id,
+        name: row.widget_instance_name.unwrap_or_default(),
+    });
+
     model::Conversation {
         id: row.id,
         customer: model::CustomerRef {
@@ -162,6 +167,7 @@ fn row_to_conversation(row: queries::InboxRow) -> model::Conversation {
         created_at: row.created_at,
         ai_handling: row.ai_handling,
         awaiting_ai_decision: false,
+        widget_instance,
     }
 }
 
@@ -262,7 +268,9 @@ pub async fn list_conversations(
 
     if let Some(ref channel) = params.channel {
         // Valid channels (from existing constraint)
-        let valid_channels = ["email", "phone", "web_chat", "whatsapp", "telegram"];
+        let valid_channels = [
+            "email", "phone", "web_chat", "whatsapp", "telegram", "widget",
+        ];
         if !valid_channels.contains(&channel.as_str()) {
             return ApiError::unprocessable_entity("Invalid channel filter")
                 .with_details(vec![json!({
@@ -716,7 +724,10 @@ pub async fn add_message(
         &body,
         sender_membership_id,
         logged_by_membership_id,
-        principal.user_id,
+        queries::ConversationActor::Staff {
+            user_id: principal.user_id,
+            membership_id,
+        },
     )
     .await
     {
@@ -935,7 +946,9 @@ pub async fn create_conversation(
         }));
     }
 
-    let valid_channels = ["email", "phone", "web_chat", "whatsapp", "telegram"];
+    let valid_channels = [
+        "email", "phone", "web_chat", "whatsapp", "telegram", "widget",
+    ];
     if !valid_channels.contains(&payload.channel.as_str()) {
         details.push(json!({
             "field": "channel",
@@ -1000,8 +1013,11 @@ pub async fn create_conversation(
         payload.customer_id,
         &payload.channel,
         &body,
-        principal.user_id,
-        membership_id,
+        queries::ConversationActor::Staff {
+            user_id: principal.user_id,
+            membership_id,
+        },
+        None,
     )
     .await
     {

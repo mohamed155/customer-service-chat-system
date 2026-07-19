@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
-use axum::http::{Method, Request, StatusCode};
+use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use server::router;
 use server::state::AppState;

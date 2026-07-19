@@ -4,6 +4,7 @@
   "packageManager": "pnpm@10.34.4",
   "scripts": {
     "build": "ng build",
+    "build:widget-loader": "node apps/widget/tools/build-loader.mjs",
     "start": "ng serve dashboard",
     "lint": "eslint \"apps/**/*.{ts,html}\" \"libs/**/*.{ts,html}\"",
     "test": "ng test dashboard",
@@ -45,6 +46,7 @@
     "@types/node": "^26.1.1",
     "@types/pg": "^8.20.0",
     "angular-eslint": "^22.0.0",
+    "esbuild": "^0.28.1",
     "eslint": "^10.0.0",
     "jsdom": "^26.1.0",
     "pg": "^8.22.0",

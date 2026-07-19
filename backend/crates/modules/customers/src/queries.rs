@@ -38,6 +38,38 @@ pub async fn fetch_profile_for_tool(
     })
 }
 
+pub async fn create_anonymous_customer_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tenant_id: Uuid,
+    display_name: &str,
+    channel: &str,
+    identifier: &str,
+) -> sqlx::Result<Uuid> {
+    let customer_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO customers (id, tenant_id, display_name, email, phone) \
+         VALUES ($1, $2, $3, '', '')",
+    )
+    .bind(customer_id)
+    .bind(tenant_id)
+    .bind(display_name)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO customer_channel_identifiers (customer_id, tenant_id, channel, identifier) \
+         VALUES ($1, $2, $3, $4)",
+    )
+    .bind(customer_id)
+    .bind(tenant_id)
+    .bind(channel)
+    .bind(identifier)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(customer_id)
+}
+
 pub async fn update_contact_field_in_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     tenant_id: Uuid,

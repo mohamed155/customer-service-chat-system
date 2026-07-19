@@ -17,6 +17,8 @@
 //! - Add new `ApiError` constructors as the status map grows.
 
 mod idempotency;
+pub mod rate_limit;
+pub use rate_limit::InMemoryRateLimitStore;
 
 use axum::{
     extract::{FromRequest, Request},
@@ -66,7 +68,11 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    fn new_with_code(status: StatusCode, code: &'static str, message: impl Into<String>) -> Self {
+    pub fn new_with_code(
+        status: StatusCode,
+        code: &'static str,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             status,
             envelope: ErrorEnvelope {

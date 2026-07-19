@@ -147,6 +147,20 @@ const EXPECTED: &[(&str, &str)] = &[
     ("POST", "/api/v1/tenant/tools"),
     ("PUT", "/api/v1/tenant/tools/{id}"),
     ("DELETE", "/api/v1/tenant/tools/{id}"),
+    // Widget public API (023)
+    ("GET", "/widget/v1/config"),
+    ("POST", "/widget/v1/sessions"),
+    ("GET", "/widget/v1/conversation"),
+    ("POST", "/widget/v1/conversations"),
+    ("POST", "/widget/v1/conversations/{conversationId}/messages"),
+    ("GET", "/widget/v1/conversations/{conversationId}/events"),
+    // Widget admin API (023)
+    ("GET", "/tenant/widgets"),
+    ("POST", "/tenant/widgets"),
+    ("GET", "/tenant/widgets/{id}"),
+    ("PUT", "/tenant/widgets/{id}"),
+    ("DELETE", "/tenant/widgets/{id}"),
+    ("GET", "/tenant/widgets/{id}/snippet"),
     // Operational
     ("GET", "/health"),
     ("GET", "/ready"),

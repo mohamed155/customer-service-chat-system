@@ -1,0 +1,27 @@
+[package]
+name = "widgets"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+config = { path = "../../shared/config" }
+conversations = { path = "../conversations" }
+customers = { path = "../customers" }
+escalations = { path = "../escalations" }
+futures.workspace = true
+hex.workspace = true
+kernel = { path = "../../shared/kernel" }
+identity = { path = "../identity" }
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
+tenancy = { path = "../tenancy" }
+tokio.workspace = true
+tokio-stream = { workspace = true, features = ["sync"] }
+tracing.workspace = true
+utoipa.workspace = true
+uuid.workspace = true

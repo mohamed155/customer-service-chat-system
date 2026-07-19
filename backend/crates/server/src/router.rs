@@ -87,6 +87,28 @@ async fn csrf_origin_middleware(
     next.run(request).await
 }
 
+fn widget_cors_layer() -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::any())
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_credentials(false)
+}
+
+fn widget_routes() -> OpenApiRouter<sqlx::PgPool> {
+    OpenApiRouter::new()
+        .routes(routes!(widgets::public_routes::get_config))
+        .routes(
+            routes!(widgets::public_routes::create_session).layer(middleware::from_fn(
+                crate::rate_limit::per_ip_creation_limit,
+            )),
+        )
+        .routes(routes!(widgets::public_routes::get_conversation))
+        .routes(routes!(widgets::public_routes::create_conversation))
+        .routes(routes!(widgets::public_routes::send_message))
+        .routes(routes!(widgets::public_events::stream_events))
+}
+
 fn cors_layer(config: &AppConfig) -> CorsLayer {
     let origins: Vec<_> = config
         .cors_allowed_origins
@@ -686,6 +708,43 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(knowledge::routes::delete_knowledge_category)
                 .layer(require_permission(Permission::KnowledgeBaseManage)),
+        )
+        // ── Widgets admin CRUD ─────────────────────────────────────────────
+        .routes(
+            routes!(
+                widgets::admin_routes::list_instances,
+                widgets::admin_routes::create_instance
+            )
+            .map(|_| {
+                merge_with_permissions(
+                    routing::get(widgets::admin_routes::list_instances),
+                    Permission::WidgetsView,
+                    routing::post(widgets::admin_routes::create_instance),
+                    Permission::WidgetsManage,
+                )
+            }),
+        )
+        .routes(
+            routes!(
+                widgets::admin_routes::get_instance,
+                widgets::admin_routes::update_instance
+            )
+            .map(|_| {
+                merge_with_permissions(
+                    routing::get(widgets::admin_routes::get_instance),
+                    Permission::WidgetsView,
+                    routing::put(widgets::admin_routes::update_instance),
+                    Permission::WidgetsManage,
+                )
+            }),
+        )
+        .routes(
+            routes!(widgets::admin_routes::delete_instance)
+                .layer(require_permission(Permission::WidgetsManage)),
+        )
+        .routes(
+            routes!(widgets::admin_routes::get_snippet)
+                .layer(require_permission(Permission::WidgetsView)),
         );
     if include_test_routes {
         // Test routes are closures, not function paths, so they cannot use the
@@ -778,6 +837,16 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
                 "/test/tenant/ai/view",
                 routing::get(|| async { StatusCode::OK })
                     .route_layer(require_permission(Permission::AiAgentView)),
+            )
+            .route(
+                "/test/tenant/widgets/view",
+                routing::get(|| async { StatusCode::OK })
+                    .route_layer(require_permission(Permission::WidgetsView)),
+            )
+            .route(
+                "/test/tenant/widgets/manage",
+                routing::get(|| async { StatusCode::OK })
+                    .route_layer(require_permission(Permission::WidgetsManage)),
             );
     }
     router
@@ -831,6 +900,12 @@ fn api_routes(
     let router: OpenApiRouter<sqlx::PgPool> =
         OpenApiRouter::with_openapi(ApiDoc::openapi()).merge(public_routes());
     let router = router.merge(authenticated_routes());
+    // Widget public routes — no authentication, permissive CORS, rate-limited
+    let rate_store = Arc::new(kernel::InMemoryRateLimitStore::default());
+    let widget_router = widget_routes()
+        .layer(Extension(rate_store))
+        .layer(widget_cors_layer());
+    let router = router.merge(widget_router);
     let platform = platform_routes(include_test_routes)
         .layer(middleware::from_fn(platform_permission_middleware))
         .layer(middleware::from_fn(authentication_middleware));
@@ -881,6 +956,7 @@ pub fn documented_openapi(include_test_routes: bool) -> utoipa::openapi::OpenApi
     let router = router.merge(authenticated_routes());
     let router = router.merge(platform_routes(include_test_routes));
     let router = router.merge(tenant_routes(include_test_routes));
+    let router = router.merge(widget_routes());
     router.into_openapi()
 }
 

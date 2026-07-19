@@ -81,6 +81,7 @@ use utoipa::{openapi, Modify, OpenApi};
         conversations::model::Assignee,
         conversations::model::CustomerRef,
         conversations::model::LastMessagePreview,
+        conversations::model::WidgetInstanceRef,
         conversations::model::Participant,
         conversations::model::Conversation,
         conversations::model::ConversationDetail,
@@ -137,6 +138,20 @@ use utoipa::{openapi, Modify, OpenApi};
         ai::usage::UsageSummary,
         ai::usage::UsageDetailRow,
         ai::usage::Pagination,
+        // Widgets
+        widgets::model::PublicWidgetConfigDto,
+        widgets::model::CreateSessionPayload,
+        widgets::model::SessionResponseDto,
+        widgets::model::SendMessagePayload,
+        widgets::model::WidgetMessageDto,
+        widgets::model::WidgetConversationDto,
+        widgets::model::WidgetConversationResponse,
+        widgets::model::WidgetMessageResponse,
+        widgets::model::WidgetMessageResponseData,
+        widgets::model::WidgetInstanceDto,
+        widgets::model::CreateWidgetInstancePayload,
+        widgets::model::UpdateWidgetInstancePayload,
+        widgets::model::WidgetSnippetResponse,
         // Observability
         observability::health::HealthReport,
         observability::health::HealthStatus,
@@ -208,6 +223,14 @@ impl Modify for TagDescriptionsAddon {
             (
                 "tools",
                 "Tenant-scoped tool definitions, policies, activity, and approvals.",
+            ),
+            (
+                "widget-public",
+                "Public widget endpoints (config, sessions). No authentication required.",
+            ),
+            (
+                "widgets",
+                "Tenant-scoped widget instance management (admin CRUD).",
             ),
             (
                 "ops",

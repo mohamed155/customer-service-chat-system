@@ -467,6 +467,11 @@ export interface CreateConversationPayload {
 }
 export type AssigneeFilter = 'me' | 'unassigned' | string;
 
+export interface WidgetInstanceRefWire {
+  readonly id: string;
+  readonly name: string;
+}
+
 export interface ConversationWire {
   readonly id: string;
   readonly customer: { readonly id: string; readonly display_name: string };
@@ -480,6 +485,7 @@ export interface ConversationWire {
   readonly last_message: { readonly kind: MessageKind; readonly preview: string } | null;
   readonly last_activity_at: string;
   readonly created_at: string;
+  readonly widget_instance?: WidgetInstanceRefWire | null;
 }
 
 export interface ParticipantWire {
@@ -540,6 +546,11 @@ export interface CreateConversationPayloadWire {
   readonly message: { readonly body: string };
 }
 
+export interface WidgetInstanceRef {
+  readonly id: string;
+  readonly name: string;
+}
+
 export interface Conversation {
   readonly id: string;
   readonly customer: { readonly id: string; readonly displayName: string };
@@ -553,6 +564,7 @@ export interface Conversation {
   readonly lastMessage: { readonly kind: MessageKind; readonly preview: string } | null;
   readonly lastActivityAt: string;
   readonly createdAt: string;
+  readonly widgetInstance?: WidgetInstanceRef | null;
 }
 
 export interface ConversationListQuery {
@@ -588,6 +600,9 @@ export function conversationFromWire(wire: ConversationWire): Conversation {
       : null,
     lastActivityAt: wire.last_activity_at,
     createdAt: wire.created_at,
+    ...(wire.widget_instance
+      ? { widgetInstance: { id: wire.widget_instance.id, name: wire.widget_instance.name } }
+      : {}),
   };
 }
 

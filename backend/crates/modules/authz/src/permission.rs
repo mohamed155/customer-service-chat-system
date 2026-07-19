@@ -56,10 +56,14 @@ pub enum Permission {
     PlatformBillingView,
     #[serde(rename = "platform.diagnostics.view")]
     PlatformDiagnosticsView,
+    #[serde(rename = "widgets.view")]
+    WidgetsView,
+    #[serde(rename = "widgets.manage")]
+    WidgetsManage,
 }
 
 impl Permission {
-    pub const TENANT: [Self; 20] = [
+    pub const TENANT: [Self; 22] = [
         Self::OverviewView,
         Self::ConversationsView,
         Self::ConversationsManage,
@@ -80,9 +84,11 @@ impl Permission {
         Self::BillingManage,
         Self::TenantDelete,
         Self::OwnerAssign,
+        Self::WidgetsView,
+        Self::WidgetsManage,
     ];
 
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 28] = [
         Self::OverviewView,
         Self::ConversationsView,
         Self::ConversationsManage,
@@ -109,6 +115,8 @@ impl Permission {
         Self::PlatformAdmin,
         Self::PlatformBillingView,
         Self::PlatformDiagnosticsView,
+        Self::WidgetsView,
+        Self::WidgetsManage,
     ];
 }
 
@@ -141,6 +149,8 @@ impl fmt::Display for Permission {
             Self::PlatformAdmin => "platform.admin",
             Self::PlatformBillingView => "platform.billing.view",
             Self::PlatformDiagnosticsView => "platform.diagnostics.view",
+            Self::WidgetsView => "widgets.view",
+            Self::WidgetsManage => "widgets.manage",
         };
         f.write_str(code)
     }
@@ -179,7 +189,7 @@ mod tests {
 
     #[test]
     fn catalog_parity_with_contract() {
-        let contract_codes: [&str; 26] = [
+        let contract_codes: [&str; 28] = [
             "overview.view",
             "conversations.view",
             "conversations.manage",
@@ -206,6 +216,8 @@ mod tests {
             "platform.admin",
             "platform.billing.view",
             "platform.diagnostics.view",
+            "widgets.view",
+            "widgets.manage",
         ];
         let mut implemented: Vec<String> = Permission::ALL.iter().map(|p| p.to_string()).collect();
         implemented.sort();

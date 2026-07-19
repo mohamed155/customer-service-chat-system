@@ -116,6 +116,8 @@ pub async fn customer_exists(
     .await
 }
 
+pub use queries::create_anonymous_customer_in_tx;
+
 /// Transaction-aware variant — same check but inside an existing transaction
 /// so callers can atomically verify the customer and read related data from
 /// one consistent snapshot.

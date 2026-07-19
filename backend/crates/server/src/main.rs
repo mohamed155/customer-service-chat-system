@@ -105,6 +105,25 @@ async fn main() {
         state.ai.clone(),
         state.escalations.clone(),
     ));
+    let widget_session_sweeper = {
+        let pool = state.db.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(6 * 3600));
+            loop {
+                interval.tick().await;
+                match widgets::queries::delete_expired_sessions(&pool).await {
+                    Ok(count) => {
+                        if count > 0 {
+                            tracing::info!(count, "widget session sweep: deleted expired sessions");
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(%e, "widget session sweep failed");
+                    }
+                }
+            }
+        })
+    };
     let tool_expiry_sweeper = {
         let pool = state.db.clone();
         tokio::spawn(async move {
@@ -149,6 +168,9 @@ async fn main() {
         }
         result = agent_responder_worker => {
             panic!("agent responder worker stopped unexpectedly: {result:?}");
+        }
+        result = widget_session_sweeper => {
+            panic!("widget session sweeper stopped unexpectedly: {result:?}");
         }
         result = tool_expiry_sweeper => {
             panic!("tool expiry sweeper stopped unexpectedly: {result:?}");

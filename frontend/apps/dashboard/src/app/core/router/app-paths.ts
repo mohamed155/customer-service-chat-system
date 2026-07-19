@@ -33,6 +33,7 @@ export const APP_PATHS = {
     settingsTools: 'settings/tools',
     team: 'team',
     escalations: 'escalations',
+    widgets: 'widgets',
   },
   invite: 'invite',
   notFound: '**',

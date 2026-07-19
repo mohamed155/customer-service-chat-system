@@ -3,7 +3,7 @@ import { TuiIcon } from '@taiga-ui/core';
 import { Channel as FixtureChannel } from '../../fixtures/fixture.models';
 
 export type ChannelBadgeChannel =
-  FixtureChannel | 'email' | 'phone' | 'web_chat' | 'whatsapp' | 'telegram';
+  FixtureChannel | 'email' | 'phone' | 'web_chat' | 'whatsapp' | 'telegram' | 'widget';
 
 const CHANNEL_LABELS: Record<ChannelBadgeChannel, string> = {
   web: 'Website',
@@ -13,6 +13,7 @@ const CHANNEL_LABELS: Record<ChannelBadgeChannel, string> = {
   'mobile-sdk': 'Mobile SDK',
   email: 'Email',
   phone: 'Phone',
+  widget: 'Widget',
 };
 
 const CHANNEL_ICONS: Partial<Record<ChannelBadgeChannel, string>> = {

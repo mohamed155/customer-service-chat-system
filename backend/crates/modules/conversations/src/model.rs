@@ -58,6 +58,13 @@ pub struct CustomerRef {
     pub display_name: String,
 }
 
+/// Reference to a widget instance that originated a conversation.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct WidgetInstanceRef {
+    pub id: Uuid,
+    pub name: String,
+}
+
 /// Preview snippet of the most recent message on a conversation.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct LastMessagePreview {
@@ -94,6 +101,8 @@ pub struct Conversation {
     pub created_at: DateTime<Utc>,
     pub ai_handling: Option<String>,
     pub awaiting_ai_decision: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub widget_instance: Option<WidgetInstanceRef>,
 }
 
 /// Full conversation detail returned by the create / update / get handlers.
@@ -114,6 +123,8 @@ pub struct ConversationDetail {
     pub participants: Vec<Participant>,
     pub ai_handling: Option<String>,
     pub awaiting_ai_decision: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub widget_instance: Option<WidgetInstanceRef>,
 }
 
 /// One message in a conversation, returned by the timeline endpoint and

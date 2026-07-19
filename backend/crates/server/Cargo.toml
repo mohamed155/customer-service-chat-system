@@ -23,6 +23,7 @@ tenancy = { path = "../modules/tenancy" }
 ai = { path = "../modules/ai" }
 knowledge = { path = "../modules/knowledge" }
 tools = { path = "../modules/tools" }
+widgets = { path = "../modules/widgets" }
 storage = { path = "../shared/storage" }
 uuid = { workspace = true }
 tokio.workspace = true

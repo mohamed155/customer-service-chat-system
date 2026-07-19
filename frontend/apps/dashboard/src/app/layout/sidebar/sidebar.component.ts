@@ -78,7 +78,8 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
         @if (
           permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.aiAgent]) ||
           permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase]) ||
-          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.integrations])
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.integrations]) ||
+          permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.widgets])
         ) {
           <app-sidebar-nav-group label="AI" [collapsed]="collapsed()">
             @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.aiAgent])) {
@@ -102,6 +103,14 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
                 icon="@tui.plug"
                 label="Integrations"
                 [link]="links.integrations"
+                [collapsed]="collapsed()"
+              />
+            }
+            @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.widgets])) {
+              <app-sidebar-nav-item
+                icon="@tui.message-square"
+                label="Chat Widget"
+                [link]="links.widgets"
                 [collapsed]="collapsed()"
               />
             }
@@ -221,5 +230,6 @@ export class SidebarComponent {
     analytics: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.analytics}`,
     settings: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.settings}`,
     team: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.team}`,
+    widgets: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.widgets}`,
   } as const;
 }

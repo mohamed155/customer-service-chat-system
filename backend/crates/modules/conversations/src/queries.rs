@@ -10,6 +10,13 @@ use crate::model::{
 };
 use std::collections::HashMap;
 
+/// Actor who performs a conversation write — either a staff user or a widget visitor.
+#[derive(Debug, Clone, Copy)]
+pub enum ConversationActor {
+    Staff { user_id: Uuid, membership_id: Uuid },
+    Visitor { customer_id: Uuid },
+}
+
 /// Raw row from the `conversations` table, used by `conversation_row_in_tx`
 /// for 404-safe reuse across detail / patch / add-message handlers.
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -196,6 +203,8 @@ pub struct InboxRow {
     pub last_activity_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub ai_handling: Option<String>,
+    pub widget_instance_id: Option<Uuid>,
+    pub widget_instance_name: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +228,8 @@ pub struct DetailRow {
     pub last_activity_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub ai_handling: Option<String>,
+    pub widget_instance_id: Option<Uuid>,
+    pub widget_instance_name: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -291,13 +302,17 @@ pub async fn inbox_query(
                 preview.kind AS last_message_kind, \
                 LEFT(preview.body, 140) AS last_message_preview, \
                 c.last_activity_at, c.created_at, \
-                c.ai_handling \
+                c.ai_handling, \
+                wi.id AS widget_instance_id, \
+                wi.name AS widget_instance_name \
          FROM conversations c \
          JOIN customers cu \
            ON cu.id = c.customer_id AND cu.tenant_id = c.tenant_id AND cu.deleted_at IS NULL \
          LEFT JOIN tenant_memberships tm \
            ON tm.id = c.assigned_membership_id AND tm.tenant_id = c.tenant_id AND tm.deleted_at IS NULL \
          LEFT JOIN users mu ON mu.id = tm.user_id \
+         LEFT JOIN widget_instances wi \
+           ON wi.id = c.widget_instance_id AND wi.deleted_at IS NULL \
          LEFT JOIN LATERAL ( \
              SELECT kind, body FROM messages \
              WHERE tenant_id = c.tenant_id AND conversation_id = c.id \
@@ -494,13 +509,17 @@ pub async fn detail_query_in_tx(
                 preview.kind AS last_message_kind, \
                 LEFT(preview.body, 140) AS last_message_preview, \
                 cv.last_activity_at, cv.created_at, \
-                cv.ai_handling \
+                cv.ai_handling, \
+                wi.id AS widget_instance_id, \
+                wi.name AS widget_instance_name \
          FROM conversations cv \
          JOIN customers c \
            ON c.id = cv.customer_id AND c.tenant_id = cv.tenant_id AND c.deleted_at IS NULL \
          LEFT JOIN tenant_memberships tm \
            ON tm.id = cv.assigned_membership_id AND tm.tenant_id = cv.tenant_id AND tm.deleted_at IS NULL \
          LEFT JOIN users mu ON mu.id = tm.user_id \
+         LEFT JOIN widget_instances wi \
+           ON wi.id = cv.widget_instance_id AND wi.deleted_at IS NULL \
          LEFT JOIN LATERAL ( \
              SELECT kind, body FROM messages \
              WHERE tenant_id = cv.tenant_id AND conversation_id = cv.id \
@@ -534,6 +553,13 @@ pub async fn detail_query_in_tx(
         LastMessagePreview { kind, preview }
     });
 
+    let widget_instance = row
+        .widget_instance_id
+        .map(|id| crate::model::WidgetInstanceRef {
+            id,
+            name: row.widget_instance_name.unwrap_or_default(),
+        });
+
     Ok(Some(ConversationDetail {
         id: row.id,
         customer: CustomerRef {
@@ -549,6 +575,7 @@ pub async fn detail_query_in_tx(
         participants,
         ai_handling: row.ai_handling,
         awaiting_ai_decision: false,
+        widget_instance,
     }))
 }
 
@@ -666,8 +693,13 @@ pub async fn add_message_in_tx(
     body: &str,
     sender_membership_id: Option<Uuid>,
     logged_by_membership_id: Option<Uuid>,
-    actor_user_id: Uuid,
+    actor: ConversationActor,
 ) -> sqlx::Result<(Message, ConversationStatusRef)> {
+    let actor_user_id: Option<Uuid> = match actor {
+        ConversationActor::Staff { user_id, .. } => Some(user_id),
+        ConversationActor::Visitor { .. } => None,
+    };
+
     // 1. Insert the message
     let inserted = sqlx::query_as::<_, (Uuid, String, String, DateTime<Utc>, i64)>(
         "INSERT INTO messages (tenant_id, conversation_id, kind, body, \
@@ -991,7 +1023,7 @@ pub async fn patch_conversation_in_tx(
 
             crate::audit::record_status_changed(
                 tx,
-                actor_user_id,
+                Some(actor_user_id),
                 tenant_id,
                 id,
                 &prior.0,
@@ -1052,8 +1084,8 @@ pub async fn create_conversation_in_tx(
     customer_id: Uuid,
     channel: &str,
     body: &str,
-    actor_user_id: Uuid,
-    actor_membership_id: Uuid,
+    actor: ConversationActor,
+    widget_instance_id: Option<Uuid>,
 ) -> sqlx::Result<ConversationDetail> {
     // 1. Check customer exists
     let customer_ok = customers::customer_exists_in_tx(tx, tenant_id, customer_id).await?;
@@ -1063,17 +1095,39 @@ pub async fn create_conversation_in_tx(
         )));
     }
 
-    // 2. Insert conversation
-    let conv_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO conversations (tenant_id, customer_id, channel, status) \
-         VALUES ($1, $2, $3, 'open') \
-         RETURNING id",
-    )
-    .bind(tenant_id)
-    .bind(customer_id)
-    .bind(channel)
-    .fetch_one(&mut **tx)
-    .await?;
+    let (actor_user_id, actor_membership_id) = match actor {
+        ConversationActor::Staff {
+            user_id,
+            membership_id,
+        } => (Some(user_id), Some(membership_id)),
+        ConversationActor::Visitor { .. } => (None, None),
+    };
+
+    // 2. Insert conversation (optionally with widget_instance_id)
+    let conv_id: Uuid = if let Some(wid) = widget_instance_id {
+        sqlx::query_scalar(
+            "INSERT INTO conversations (tenant_id, customer_id, channel, status, widget_instance_id) \
+             VALUES ($1, $2, $3, 'open', $4) \
+             RETURNING id",
+        )
+        .bind(tenant_id)
+        .bind(customer_id)
+        .bind(channel)
+        .bind(wid)
+        .fetch_one(&mut **tx)
+        .await?
+    } else {
+        sqlx::query_scalar(
+            "INSERT INTO conversations (tenant_id, customer_id, channel, status) \
+             VALUES ($1, $2, $3, 'open') \
+             RETURNING id",
+        )
+        .bind(tenant_id)
+        .bind(customer_id)
+        .bind(channel)
+        .fetch_one(&mut **tx)
+        .await?
+    };
 
     // 3. Insert first message (kind='reply', sender=actor)
     sqlx::query(

@@ -18,6 +18,8 @@ const TENANT_ADMIN: &[Permission] = &[
     Permission::MembersManage,
     Permission::SettingsView,
     Permission::SettingsManage,
+    Permission::WidgetsView,
+    Permission::WidgetsManage,
 ];
 const TENANT_MANAGER: &[Permission] = &[
     Permission::OverviewView,
@@ -32,6 +34,7 @@ const TENANT_MANAGER: &[Permission] = &[
     Permission::AnalyticsView,
     Permission::MembersView,
     Permission::MembersManage,
+    Permission::WidgetsView,
 ];
 const TENANT_AGENT: &[Permission] = &[
     Permission::OverviewView,
@@ -40,6 +43,7 @@ const TENANT_AGENT: &[Permission] = &[
     Permission::CustomersView,
     Permission::CustomersManage,
     Permission::KnowledgeBaseView,
+    Permission::WidgetsView,
 ];
 const TENANT_VIEWER: &[Permission] = &[
     Permission::OverviewView,
@@ -48,6 +52,7 @@ const TENANT_VIEWER: &[Permission] = &[
     Permission::KnowledgeBaseView,
     Permission::IntegrationsView,
     Permission::AnalyticsView,
+    Permission::WidgetsView,
 ];
 
 const PLATFORM_ALL: &[Permission] = &[
@@ -87,6 +92,7 @@ const STAFF_PRODUCTION_DEVELOPER: &[Permission] = &[
     Permission::AnalyticsView,
     Permission::MembersView,
     Permission::SettingsView,
+    Permission::WidgetsView,
 ];
 const STAFF_PRODUCTION_SUPPORT: &[Permission] = &[
     Permission::OverviewView,
@@ -95,6 +101,7 @@ const STAFF_PRODUCTION_SUPPORT: &[Permission] = &[
     Permission::CustomersView,
     Permission::CustomersManage,
     Permission::KnowledgeBaseView,
+    Permission::WidgetsView,
 ];
 const STAFF_PRODUCTION_SALES: &[Permission] = &[
     Permission::OverviewView,
