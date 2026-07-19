@@ -1,0 +1,16 @@
+[package]
+name = "feedback"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+kernel = { path = "../../shared/kernel" }
+serde.workspace = true
+sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
+tenancy = { path = "../tenancy" }
+tracing.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+widgets = { path = "../widgets" }

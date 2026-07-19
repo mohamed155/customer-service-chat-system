@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { WidgetStore, REPLY_TIMEOUT_MS } from './widget.store';
 import { WIDGET_API_BASE, WidgetApiService } from './widget-api.service';
 import { SessionStore } from './session.store';
-import { WidgetConfig, WidgetEvent } from './models';
-import { of } from 'rxjs';
+import { WidgetConfig, WidgetEvent, PendingFeedback, WidgetFeedback } from './models';
+import { of, throwError } from 'rxjs';
 
 function makeConfig(): WidgetConfig {
   return {
@@ -114,5 +114,67 @@ describe('WidgetStore', () => {
 
     vi.advanceTimersByTime(REPLY_TIMEOUT_MS + 1000);
     expect(store.uiState()).toBe('error');
+  });
+
+  describe('feedbackState', () => {
+    it('returns "none" when no pending feedback', () => {
+      expect(store.feedbackState()).toBe('none');
+    });
+
+    it('returns "prompt" when pending feedback and not dismissed', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (store as any).pendingFeedbackSignal.set({
+        conversationId: 'conv1',
+        endedAt: '2026-07-19T12:00:00Z',
+      } as PendingFeedback);
+
+      expect(store.feedbackState()).toBe('prompt');
+    });
+
+    it('returns "collapsed" when pending feedback is dismissed', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (store as any).pendingFeedbackSignal.set({
+        conversationId: 'conv1',
+        endedAt: '2026-07-19T12:00:00Z',
+      } as PendingFeedback);
+
+      store.dismissFeedback();
+
+      expect(store.feedbackState()).toBe('collapsed');
+    });
+
+    it('returns "submitted" after feedback is submitted', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (store as any).feedbackSignal.set({
+        rating: 4,
+        comment: null,
+        submittedAt: '2026-07-19T12:00:00Z',
+      } as WidgetFeedback);
+
+      expect(store.feedbackState()).toBe('submitted');
+    });
+  });
+
+  describe('409 handling triggers checkPendingFeedback', () => {
+    it('calls checkPendingFeedback when sendMessage returns 409', () => {
+      const apiService = TestBed.inject(WidgetApiService);
+      vi.spyOn(apiService, 'sendMessage').mockReturnValue(
+        throwError(() => new HttpErrorResponse({ status: 409 })),
+      );
+      vi.spyOn(apiService, 'getPendingFeedback').mockReturnValue(of(null));
+
+      store.setConfig(makeConfig());
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (store as any).conversationSignal.set({
+        id: 'conv1',
+        handling: 'ai',
+        teamOnline: true,
+        endedNote: false,
+        messages: [],
+      });
+
+      store.sendMessage('hello', 'conv1');
+      expect(apiService.getPendingFeedback).toHaveBeenCalled();
+    });
   });
 });

@@ -138,6 +138,14 @@ use utoipa::{openapi, Modify, OpenApi};
         ai::usage::UsageSummary,
         ai::usage::UsageDetailRow,
         ai::usage::Pagination,
+        // Feedback
+        feedback::model::SubmitFeedbackPayload,
+        feedback::model::WidgetFeedbackDto,
+        feedback::model::WidgetFeedbackResponse,
+        feedback::model::WidgetFeedbackResponseData,
+        feedback::model::PendingFeedbackDto,
+        feedback::model::PendingFeedbackResponse,
+        feedback::model::FeedbackSummaryDto,
         // Widgets
         widgets::model::PublicWidgetConfigDto,
         widgets::model::CreateSessionPayload,

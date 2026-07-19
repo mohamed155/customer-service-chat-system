@@ -1,9 +1,12 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { Subscription, timer } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   WidgetConfig,
   WidgetConversation,
   WidgetMessage,
+  WidgetFeedback,
+  PendingFeedback,
   WidgetEvent,
   RateLimitedError,
   SessionExpiredError,
@@ -11,6 +14,7 @@ import {
 import { WidgetApiService } from './widget-api.service';
 import { SessionStore } from './session.store';
 import { WidgetSseClient } from './widget-sse.client';
+import { FeedbackDismissalStore } from './feedback-dismissal.store';
 
 export const REPLY_TIMEOUT_MS = 45_000;
 
@@ -21,12 +25,16 @@ export class WidgetStore {
   private readonly api = inject(WidgetApiService);
   private readonly session = inject(SessionStore);
   private readonly sse = inject(WidgetSseClient);
+  private readonly feedbackDismissal = inject(FeedbackDismissalStore);
 
   private configSignal = signal<WidgetConfig | null>(null);
   private conversationSignal = signal<WidgetConversation | null>(null);
   private messagesSignal = signal<WidgetMessage[]>([]);
   private streamingTextSignal = signal('');
   private uiStateSignal = signal<UiState>('closed');
+  private pendingFeedbackSignal = signal<PendingFeedback | null>(null);
+  private feedbackSignal = signal<WidgetFeedback | null>(null);
+  private feedbackExpanded = false;
   private sseSubscription: Subscription | null = null;
   private replyTimer: Subscription | null = null;
   private initialized = false;
@@ -36,6 +44,18 @@ export class WidgetStore {
   readonly messages = this.messagesSignal.asReadonly();
   readonly streamingText = this.streamingTextSignal.asReadonly();
   readonly uiState = this.uiStateSignal.asReadonly();
+  readonly pendingFeedback = this.pendingFeedbackSignal.asReadonly();
+  readonly feedback = this.feedbackSignal.asReadonly();
+
+  readonly feedbackState = computed<'prompt' | 'collapsed' | 'submitted' | 'none'>(() => {
+    const feedback = this.feedbackSignal();
+    if (feedback) return 'submitted';
+    const pending = this.pendingFeedbackSignal();
+    if (!pending) return 'none';
+    if (this.feedbackExpanded) return 'prompt';
+    if (this.feedbackDismissal.isDismissed(pending.conversationId)) return 'collapsed';
+    return 'prompt';
+  });
 
   readonly isAiResponding = computed(() => {
     const state = this.uiStateSignal();
@@ -80,6 +100,8 @@ export class WidgetStore {
     } else {
       this.createConversation();
     }
+
+    this.checkPendingFeedback();
   }
 
   private createConversation(): void {
@@ -117,7 +139,10 @@ export class WidgetStore {
       },
       error: (err) => {
         this.messagesSignal.update((m) => m.filter((x) => x.id !== optimistic.id));
-        if (err instanceof RateLimitedError) {
+        if (err instanceof HttpErrorResponse && err.status === 409) {
+          this.handleClosedConversation();
+          this.checkPendingFeedback();
+        } else if (err instanceof RateLimitedError) {
           this.uiStateSignal.set('rate-limited');
         } else if (err instanceof SessionExpiredError) {
           this.session.handleExpired();
@@ -212,6 +237,40 @@ export class WidgetStore {
     this.messagesSignal.set([]);
     this.streamingTextSignal.set('');
     this.createConversation();
+  }
+
+  checkPendingFeedback(): void {
+    const token = this.session.getToken();
+    if (!token) return;
+
+    this.api.getPendingFeedback(token).subscribe({
+      next: (pending) => {
+        this.pendingFeedbackSignal.set(pending);
+      },
+    });
+  }
+
+  submitFeedback(rating: number, comment?: string | null): void {
+    const token = this.session.getToken();
+    const pending = this.pendingFeedbackSignal();
+    if (!token || !pending) return;
+
+    this.api.submitFeedback(token, pending.conversationId, rating, comment).subscribe({
+      next: (feedback) => {
+        this.feedbackSignal.set(feedback);
+        this.pendingFeedbackSignal.set(null);
+      },
+    });
+  }
+
+  dismissFeedback(): void {
+    const pending = this.pendingFeedbackSignal();
+    if (!pending) return;
+    this.feedbackDismissal.dismiss(pending.conversationId);
+  }
+
+  expandFeedback(): void {
+    this.feedbackExpanded = true;
   }
 
   destroy(): void {

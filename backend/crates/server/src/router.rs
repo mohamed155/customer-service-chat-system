@@ -106,6 +106,8 @@ fn widget_routes() -> OpenApiRouter<sqlx::PgPool> {
         .routes(routes!(widgets::public_routes::get_conversation))
         .routes(routes!(widgets::public_routes::create_conversation))
         .routes(routes!(widgets::public_routes::send_message))
+        .routes(routes!(feedback::public_routes::submit_feedback))
+        .routes(routes!(feedback::public_routes::get_pending_feedback))
         .routes(routes!(widgets::public_events::stream_events))
 }
 
@@ -708,6 +710,11 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(knowledge::routes::delete_knowledge_category)
                 .layer(require_permission(Permission::KnowledgeBaseManage)),
+        )
+        // T040: Feedback summary
+        .routes(
+            routes!(feedback::tenant_routes::get_feedback_summary)
+                .layer(require_permission(Permission::ConversationsView)),
         )
         // ── Widgets admin CRUD ─────────────────────────────────────────────
         .routes(

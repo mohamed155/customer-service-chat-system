@@ -12,6 +12,7 @@ config = { path = "../shared/config" }
 conversations = { path = "../modules/conversations" }
 customers = { path = "../modules/customers" }
 escalations = { path = "../modules/escalations" }
+feedback = { path = "../modules/feedback" }
 db = { path = "../shared/db" }
 identity = { path = "../modules/identity" }
 kernel = { path = "../shared/kernel" }

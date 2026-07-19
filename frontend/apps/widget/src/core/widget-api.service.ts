@@ -7,6 +7,8 @@ import {
   SessionResponse,
   WidgetConversation,
   WidgetMessage,
+  WidgetFeedback,
+  PendingFeedback,
   RateLimitedError,
   SessionExpiredError,
 } from './models';
@@ -82,6 +84,35 @@ export class WidgetApiService {
       )
       .pipe(
         map((r) => r.data.message),
+        catchError((err: HttpErrorResponse) => throwError(() => this.mapError(err))),
+      );
+  }
+
+  getPendingFeedback(token: string): Observable<PendingFeedback | null> {
+    return this.http
+      .get<{ data: PendingFeedback | null }>(`${this.base}/widget/v1/feedback/pending`, {
+        headers: this.headers(token),
+      })
+      .pipe(
+        map((r) => r.data),
+        catchError((err: HttpErrorResponse) => throwError(() => this.mapError(err))),
+      );
+  }
+
+  submitFeedback(
+    token: string,
+    conversationId: string,
+    rating: number,
+    comment?: string | null,
+  ): Observable<WidgetFeedback> {
+    return this.http
+      .post<{ data: { feedback: WidgetFeedback } }>(
+        `${this.base}/widget/v1/conversations/${conversationId}/feedback`,
+        { rating, comment: comment ?? null },
+        { headers: this.headers(token) },
+      )
+      .pipe(
+        map((r) => r.data.feedback),
         catchError((err: HttpErrorResponse) => throwError(() => this.mapError(err))),
       );
   }

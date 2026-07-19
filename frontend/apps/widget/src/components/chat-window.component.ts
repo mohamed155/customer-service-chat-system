@@ -12,12 +12,13 @@ import { WidgetStore } from '../core/widget.store';
 import { MessageListComponent } from './message-list.component';
 import { ComposerComponent } from './composer.component';
 import { HandoffBannerComponent } from './handoff-banner.component';
+import { FeedbackPromptComponent } from './feedback-prompt.component';
 
 @Component({
   selector: 'hx-chat-window',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MessageListComponent, ComposerComponent, HandoffBannerComponent],
+  imports: [MessageListComponent, ComposerComponent, HandoffBannerComponent, FeedbackPromptComponent],
   template: `
     <div class="window" role="dialog" aria-label="Chat window">
       <header class="window__header">
@@ -60,7 +61,17 @@ import { HandoffBannerComponent } from './handoff-banner.component';
         <hx-handoff-banner [teamOnline]="store.conversation()?.teamOnline ?? false" />
       }
 
-      @if (!isClosed()) {
+      @if (store.feedbackState() !== 'none') {
+        <wgt-feedback-prompt
+          [state]="store.feedbackState()"
+          [feedback]="store.feedback()"
+          (submitRating)="store.submitFeedback($event)"
+          (dismiss)="store.dismissFeedback()"
+          (expand)="store.expandFeedback()"
+        />
+      }
+
+      @if (!isClosed() && store.feedbackState() !== 'prompt' && store.feedbackState() !== 'submitted') {
         <hx-composer (sendMessage)="onSend($event)" />
       }
     </div>

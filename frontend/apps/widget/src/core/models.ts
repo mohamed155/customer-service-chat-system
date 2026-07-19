@@ -45,3 +45,19 @@ export class SessionExpiredError extends Error {
     super('Session expired');
   }
 }
+
+export interface WidgetFeedback {
+  rating: number;
+  comment: string | null;
+  submittedAt: string;
+}
+
+export interface PendingFeedback {
+  conversationId: string;
+  endedAt: string;
+}
+
+export interface SubmitFeedbackPayload {
+  rating: number;
+  comment?: string | null;
+}
