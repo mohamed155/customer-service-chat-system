@@ -692,6 +692,23 @@ pub async fn run_generation(
                                 )
                                 .await?;
 
+                                // T041: notify conversations.manage holders
+                                notifications::emit::emit_requested_on_pool(
+                                    pool,
+                                    &notifications::emit::NotificationRequest {
+                                        tenant_id,
+                                        kind: notifications::model::NotificationKind::ToolApprovalRequired,
+                                        subject_type: notifications::model::SubjectType::ToolRequest,
+                                        subject_id: req_id,
+                                        actor_membership_id: None,
+                                        target_membership_id: None,
+                                        dedupe_key: notifications::emit::dedupe_key_tool_approval(req_id),
+                                        title: "Tool approval required".into(),
+                                        body: Some("A tool action requires your approval.".into()),
+                                    },
+                                )
+                                .await;
+
                                 // T018: broadcast created
                                 let created_ev = escalations::model::ToolRequestCreated {
                                     id: req_id,
@@ -1276,6 +1293,25 @@ pub async fn run_generation(
             };
             let _ = generation_record::insert(pool, &rec).await;
 
+            if matches!(outcome, GenerationOutcome::Failed) {
+                let now = chrono::Utc::now();
+                notifications::emit::emit_requested_on_pool(
+                    pool,
+                    &notifications::emit::NotificationRequest {
+                        tenant_id,
+                        kind: notifications::model::NotificationKind::AiResponseFailed,
+                        subject_type: notifications::model::SubjectType::Conversation,
+                        subject_id: conversation_id,
+                        actor_membership_id: None,
+                        target_membership_id: None,
+                        dedupe_key: notifications::emit::dedupe_key_ai_failed(conversation_id, &now),
+                        title: "AI response failed".into(),
+                        body: Some("The AI was unable to generate a response for this conversation.".into()),
+                    },
+                )
+                .await;
+            }
+
             presence.broadcast(
                 tenant_id,
                 escalations::presence::Event::ConversationAi(
@@ -1535,6 +1571,24 @@ pub async fn run_followup_generation(
                 created_at: Some(chrono::Utc::now()),
             };
             let _ = generation_record::insert(pool, &rec).await;
+
+            let now = chrono::Utc::now();
+            notifications::emit::emit_requested_on_pool(
+                pool,
+                &notifications::emit::NotificationRequest {
+                    tenant_id,
+                    kind: notifications::model::NotificationKind::AiResponseFailed,
+                    subject_type: notifications::model::SubjectType::Conversation,
+                    subject_id: conversation_id,
+                    actor_membership_id: None,
+                    target_membership_id: None,
+                    dedupe_key: notifications::emit::dedupe_key_ai_failed(conversation_id, &now),
+                    title: "AI response failed".into(),
+                    body: Some("The AI was unable to generate a response for this conversation.".into()),
+                },
+            )
+            .await;
+
             return Ok(());
         }
     };

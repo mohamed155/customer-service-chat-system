@@ -173,6 +173,17 @@ pub async fn route_new_escalation_in_tx(
         )
         .await?;
 
+        let actor_mid = resolve_actor_membership_id_in_tx(tx, tenant_id, actor_user_id).await;
+        notify_escalation_assigned(
+            tx,
+            tenant_id,
+            escalation_id,
+            conversation_id,
+            cand.membership_id,
+            actor_mid,
+        )
+        .await;
+
         Ok(RouteOutcome::Assigned {
             escalation,
             assigned_membership_id: cand.membership_id,
@@ -205,6 +216,16 @@ pub async fn route_new_escalation_in_tx(
             None,
         )
         .await?;
+
+        let actor_mid = resolve_actor_membership_id_in_tx(tx, tenant_id, actor_user_id).await;
+        notify_escalation_queued(
+            tx,
+            tenant_id,
+            escalation_id,
+            conversation_id,
+            actor_mid,
+        )
+        .await;
 
         Ok(RouteOutcome::Queued { escalation })
     }
@@ -265,6 +286,16 @@ pub async fn claim_in_tx(
         )
         .await
         .map_err(|e| ClaimError::Internal(e.to_string()))?;
+
+        notify_escalation_assigned(
+            tx,
+            tenant_id,
+            escalation_id,
+            row.conversation_id,
+            claimant_membership_id,
+            Some(claimant_membership_id),
+        )
+        .await;
 
         audit::record_escalation_claimed(tx, actor_user_id, tenant_id, escalation_id)
             .await
@@ -366,6 +397,17 @@ pub async fn drain_one_for_membership_in_tx(
         )
         .await?;
 
+        let actor_mid = resolve_actor_membership_id_in_tx(tx, tenant_id, actor_user_id).await;
+        notify_escalation_assigned(
+            tx,
+            tenant_id,
+            escalation_id,
+            conv_id,
+            membership_id,
+            actor_mid,
+        )
+        .await;
+
         return Ok(Some(escalation_id));
     }
 
@@ -442,6 +484,17 @@ pub async fn drain_any_in_tx(
             )
             .await?;
 
+            let actor_mid = resolve_actor_membership_id_in_tx(tx, tenant_id, actor_user_id).await;
+            notify_escalation_assigned(
+                tx,
+                tenant_id,
+                escalation_id,
+                conv_id,
+                cand.membership_id,
+                actor_mid,
+            )
+            .await;
+
             return Ok(Some(escalation_id));
         }
     }
@@ -506,6 +559,110 @@ async fn build_escalation(
         escalated_at: Utc::now(),
         closed_at: None,
     })
+}
+
+async fn resolve_actor_membership_id_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    actor_user_id: Uuid,
+) -> Option<Uuid> {
+    sqlx::query_scalar(
+        "SELECT id FROM tenant_memberships \
+         WHERE tenant_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
+    )
+    .bind(tenant_id)
+    .bind(actor_user_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .unwrap_or(None)
+}
+
+async fn notify_escalation_queued(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    escalation_id: Uuid,
+    conversation_id: Uuid,
+    actor_membership_id: Option<Uuid>,
+) {
+    let dedupe_key = format!("escalation:{escalation_id}");
+    let payload = serde_json::json!({
+        "tenantId": tenant_id,
+        "kind": "escalation.new",
+        "subjectType": "escalation",
+        "subjectId": escalation_id,
+        "actorMembershipId": actor_membership_id,
+        "targetMembershipId": null,
+        "dedupeKey": dedupe_key,
+        "title": "Escalation queued",
+        "body": format!("Conversation {conversation_id} has been escalated"),
+    });
+    if let Err(e) = sqlx::query(
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'notification', $2, $3, 'notification.requested', $4, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(escalation_id)
+    .bind(tenant_id)
+    .bind(payload)
+    .execute(&mut **tx)
+    .await
+    {
+        tracing::error!(error = %e, %escalation_id, "failed to emit notification for queued escalation");
+    }
+}
+
+async fn notify_escalation_assigned(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    escalation_id: Uuid,
+    conversation_id: Uuid,
+    assignee_membership_id: Uuid,
+    actor_membership_id: Option<Uuid>,
+) {
+    let dedupe_key = format!("escalation:{escalation_id}");
+    let req_payload = serde_json::json!({
+        "tenantId": tenant_id,
+        "kind": "escalation.new",
+        "subjectType": "escalation",
+        "subjectId": escalation_id,
+        "actorMembershipId": actor_membership_id,
+        "targetMembershipId": assignee_membership_id,
+        "dedupeKey": dedupe_key,
+        "title": "Escalation assigned",
+        "body": format!("Conversation {conversation_id} has been escalated and assigned"),
+    });
+    if let Err(e) = sqlx::query(
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'notification', $2, $3, 'notification.requested', $4, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(escalation_id)
+    .bind(tenant_id)
+    .bind(req_payload)
+    .execute(&mut **tx)
+    .await
+    {
+        tracing::error!(error = %e, %escalation_id, "failed to emit requested notification for assigned escalation");
+    }
+    let resolve_payload = serde_json::json!({
+        "tenantId": tenant_id,
+        "subjectType": "escalation",
+        "subjectId": escalation_id,
+        "resolvedByMembershipId": assignee_membership_id,
+    });
+    if let Err(e) = sqlx::query(
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'notification', $2, $3, 'notification.resolved', $4, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(escalation_id)
+    .bind(tenant_id)
+    .bind(resolve_payload)
+    .execute(&mut **tx)
+    .await
+    {
+        tracing::error!(error = %e, %escalation_id, "failed to emit resolved notification for assigned escalation");
+    }
 }
 
 pub async fn has_open_escalation(

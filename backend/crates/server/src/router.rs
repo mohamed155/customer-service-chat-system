@@ -565,7 +565,7 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
                 .layer(require_permission(Permission::ConversationsView)),
         )
         .routes(
-            routes!(tools::routes::decide_tool_request)
+            routes!(crate::handlers::decide_tool_request)
                 .layer(require_permission(Permission::ConversationsManage)),
         )
         .routes(

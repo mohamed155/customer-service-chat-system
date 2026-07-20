@@ -10,6 +10,7 @@ use escalations::model::{AvailabilityState, Escalation, Skill};
 use identity::Principal;
 use kernel::{ApiError, ErrorDetail, Page};
 use serde::Serialize;
+use sqlx::PgPool;
 use tenancy::{members, TenantContext};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -305,4 +306,97 @@ pub async fn get_conversation_with_escalation(
     let detail_with_esc = ConversationDetailWithEscalation { detail, escalation };
 
     Json(serde_json::json!({ "data": detail_with_esc })).into_response()
+}
+
+// ── T043: Wrapper for decide_tool_request that emits notification.resolve ──
+
+#[derive(serde::Deserialize)]
+pub struct DecideRequest {
+    pub decision: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/tenant/tools/requests/{id}/decide",
+    tag = "tools",
+    operation_id = "decide_tool_request",
+    summary = "Decide (approve/deny) a pending tool request",
+    description = "Allows an authorized staff member to approve or deny an awaiting-approval tool request. Returns 200 on first decision, 409 with the settled state on a duplicate.",
+    params(
+        ("id" = Uuid, Path, description = "Tool request ID"),
+    ),
+    responses(
+        (status = 200, description = "Decision applied", body = serde_json::Value),
+        (status = 409, description = "Already settled", body = serde_json::Value),
+        (status = 422, description = "Invalid decision value", body = kernel::ErrorEnvelope),
+        (status = 500, description = "Internal error", body = kernel::ErrorEnvelope),
+    ),
+)]
+pub async fn decide_tool_request(
+    State(pool): State<PgPool>,
+    ctx: tenancy::TenantContext,
+    Extension(principal): Extension<identity::Principal>,
+    Path(id): Path<Uuid>,
+    kernel::ApiJson(payload): kernel::ApiJson<DecideRequest>,
+) -> Response {
+    let approve = match payload.decision.as_str() {
+        "approve" => true,
+        "deny" => false,
+        _ => {
+            return ApiError::unprocessable_entity("decision must be 'approve' or 'deny'")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
+    let membership_id = match sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM tenant_memberships \
+         WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    )
+    .bind(ctx.tenant_id)
+    .bind(principal.user_id)
+    .fetch_optional(&pool)
+    .await
+    {
+        Ok(Some(mid)) => mid,
+        Ok(None) => {
+            return ApiError::not_found("Membership not found in this tenant")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!(%e, "decide: resolve membership failed");
+            return ApiError::internal_error("Failed to resolve membership")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
+    match tools::approval::decide(&pool, ctx.tenant_id, id, membership_id, approve).await {
+        Ok(tools::approval::DecideOutcome::Applied(row)) => {
+            // T043: emit notification.resolve for other recipients
+            notifications::emit::emit_resolved_on_pool(
+                &pool,
+                ctx.tenant_id,
+                &notifications::model::SubjectType::ToolRequest,
+                id,
+                Some(membership_id),
+            )
+            .await;
+
+            Json(serde_json::json!(row)).into_response()
+        }
+        Ok(tools::approval::DecideOutcome::AlreadySettled(row)) => {
+            ApiError::conflict("Tool request has already been decided")
+                .with_details(vec![serde_json::json!(row)])
+                .with_request_id(&ctx.request_id)
+                .into_response()
+        }
+        Err(e) => {
+            tracing::error!(%e, "decide_tool_request failed");
+            ApiError::internal_error("Failed to decide tool request")
+                .with_request_id(&ctx.request_id)
+                .into_response()
+        }
+    }
 }

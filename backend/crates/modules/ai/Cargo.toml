@@ -24,6 +24,7 @@ sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
 conversations = { path = "../conversations" }
 escalations = { path = "../escalations" }
 knowledge = { path = "../knowledge" }
+notifications = { path = "../notifications" }
 tenancy = { path = "../tenancy" }
 tools = { path = "../tools" }
 tokio.workspace = true

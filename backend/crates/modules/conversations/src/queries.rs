@@ -977,6 +977,54 @@ pub async fn assign_in_tx(
     )
     .await?;
 
+    if origin != "escalations" {
+        if let (Some(assigned_mid), Some(actor_uid)) = (assigned_membership_id, actor_user_id) {
+            let actor_mid: Option<Uuid> = sqlx::query_scalar(
+                "SELECT id FROM tenant_memberships \
+                 WHERE tenant_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
+            )
+            .bind(tenant_id)
+            .bind(actor_uid)
+            .fetch_optional(&mut **tx)
+            .await
+            .unwrap_or(None);
+
+            if let Some(actor_mid) = actor_mid {
+                if actor_mid != assigned_mid {
+                    let dedupe_key = format!("assigned:{conversation_id}:{assigned_mid}");
+                    let payload = serde_json::json!({
+                        "tenantId": tenant_id,
+                        "kind": "conversation.assigned",
+                        "subjectType": "conversation",
+                        "subjectId": conversation_id,
+                        "actorMembershipId": actor_mid,
+                        "targetMembershipId": assigned_mid,
+                        "dedupeKey": dedupe_key,
+                        "title": "Conversation assigned",
+                        "body": null,
+                    });
+                    let result = sqlx::query(
+                        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+                         VALUES ($1, 'notification', $2, $3, 'notification.requested', $4, now())",
+                    )
+                    .bind(Uuid::new_v4())
+                    .bind(conversation_id)
+                    .bind(tenant_id)
+                    .bind(payload)
+                    .execute(&mut **tx)
+                    .await;
+                    if let Err(e) = result {
+                        tracing::error!(
+                            error = %e,
+                            %conversation_id,
+                            "failed to emit notification for conversation assignment"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }
 
