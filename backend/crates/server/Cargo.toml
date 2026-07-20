@@ -18,7 +18,7 @@ feedback = { path = "../modules/feedback" }
 db = { path = "../shared/db" }
 identity = { path = "../modules/identity" }
 kernel = { path = "../shared/kernel" }
-notifications = { path = "../modules/notifications" }
+email = { path = "../modules/email" }
 observability = { path = "../shared/observability" }
 serde = { workspace = true }
 sqlx = { workspace = true, features = ["postgres"] }

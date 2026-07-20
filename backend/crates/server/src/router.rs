@@ -9,7 +9,7 @@ use axum::{middleware, routing, Router};
 use config::{AppConfig, Environment};
 use identity::{principal_middleware, IdentityConfig, Principal};
 use kernel::ApiError;
-use notifications::{noop::LogEmailSender, smtp::SmtpEmailSender, EmailSender};
+use email::{noop::LogEmailSender, smtp::SmtpEmailSender, EmailSender};
 use observability::health::HealthReport;
 use observability::request_id::{request_id_middleware, REQUEST_ID_HEADER};
 use observability::trace::trace_middleware;

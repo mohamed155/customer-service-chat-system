@@ -23,35 +23,35 @@ struct BlockingEmailSender {
 }
 
 #[async_trait::async_trait]
-impl notifications::EmailSender for BlockingEmailSender {
+impl email::EmailSender for BlockingEmailSender {
     fn is_configured(&self) -> bool {
         true
     }
 
     async fn send(
         &self,
-        _message: notifications::EmailMessage,
-    ) -> notifications::EmailDeliveryStatus {
+        _message: email::EmailMessage,
+    ) -> email::EmailDeliveryStatus {
         self.started.notify_one();
         self.release.notified().await;
-        notifications::EmailDeliveryStatus::Sent
+        email::EmailDeliveryStatus::Sent
     }
 }
 
 #[async_trait::async_trait]
-impl notifications::EmailSender for DeterministicEmailSender {
+impl email::EmailSender for DeterministicEmailSender {
     fn is_configured(&self) -> bool {
         true
     }
 
     async fn send(
         &self,
-        _message: notifications::EmailMessage,
-    ) -> notifications::EmailDeliveryStatus {
+        _message: email::EmailMessage,
+    ) -> email::EmailDeliveryStatus {
         if self.succeeds {
-            notifications::EmailDeliveryStatus::Sent
+            email::EmailDeliveryStatus::Sent
         } else {
-            notifications::EmailDeliveryStatus::Failed("deterministic failure".into())
+            email::EmailDeliveryStatus::Failed("deterministic failure".into())
         }
     }
 }
@@ -826,7 +826,7 @@ async fn blocked_sender_does_not_block_invitation_creation() {
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
     let started = Arc::new(Notify::new());
-    let sender: Arc<dyn notifications::EmailSender> = Arc::new(BlockingEmailSender {
+    let sender: Arc<dyn email::EmailSender> = Arc::new(BlockingEmailSender {
         started: started.clone(),
         release: Arc::new(Notify::new()),
     });
@@ -1003,7 +1003,7 @@ async fn poison_delivery_is_terminal_and_does_not_starve_next_event() {
         ).bind(Uuid::new_v4()).bind(id.to_string()).bind(tenant_id.to_string()).bind(payload)
         .bind(created_offset).execute(&pool).await.unwrap();
     }
-    let sender: Arc<dyn notifications::EmailSender> =
+    let sender: Arc<dyn email::EmailSender> =
         Arc::new(DeterministicEmailSender { succeeds: true });
 
     assert_eq!(
@@ -1056,7 +1056,7 @@ async fn smtp_wait_does_not_hold_the_outbox_row_lock() {
     .execute(&pool).await.unwrap();
     let started = Arc::new(Notify::new());
     let release = Arc::new(Notify::new());
-    let sender: Arc<dyn notifications::EmailSender> = Arc::new(BlockingEmailSender {
+    let sender: Arc<dyn email::EmailSender> = Arc::new(BlockingEmailSender {
         started: started.clone(),
         release: release.clone(),
     });

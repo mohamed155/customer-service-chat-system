@@ -1301,6 +1301,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "email"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "lettre",
+ "percent-encoding",
+ "serde",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "email-encoding"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2499,19 +2512,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "notifications"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "lettre",
- "percent-encoding",
- "serde",
- "tracing",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3481,6 +3481,7 @@ dependencies = [
  "conversations",
  "customers",
  "db",
+ "email",
  "escalations",
  "feedback",
  "futures",
@@ -3490,7 +3491,6 @@ dependencies = [
  "identity",
  "kernel",
  "knowledge",
- "notifications",
  "observability",
  "rand 0.8.6",
  "serde",
@@ -3979,10 +3979,10 @@ dependencies = [
  "axum",
  "chrono",
  "config",
+ "email",
  "hex",
  "identity",
  "kernel",
- "notifications",
  "rand 0.8.6",
  "serde",
  "serde_json",

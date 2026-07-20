@@ -85,7 +85,7 @@ pub struct InvitationResponse {
     pub expires_at: chrono::DateTime<chrono::Utc>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     #[schema(value_type = String, example = "queued")]
-    pub email_delivery_status: notifications::EmailDeliveryStatus,
+    pub email_delivery_status: email::EmailDeliveryStatus,
     pub invited_by_name: String,
 }
 
@@ -96,7 +96,7 @@ pub struct CreateInvitationResponse {
     pub accept_url: String,
     pub email_sent: bool,
     #[schema(value_type = String, example = "queued")]
-    pub email_delivery_status: notifications::EmailDeliveryStatus,
+    pub email_delivery_status: email::EmailDeliveryStatus,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -110,14 +110,14 @@ pub struct InvitationListItem {
     pub expires_at: chrono::DateTime<chrono::Utc>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     #[schema(value_type = String, example = "queued")]
-    pub email_delivery_status: notifications::EmailDeliveryStatus,
+    pub email_delivery_status: email::EmailDeliveryStatus,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InvitationDeliveryResponse {
     #[schema(value_type = String, example = "queued")]
-    pub email_delivery_status: notifications::EmailDeliveryStatus,
+    pub email_delivery_status: email::EmailDeliveryStatus,
 }
 
 #[utoipa::path(
@@ -162,10 +162,10 @@ pub async fn get_invitation_delivery(
         return ApiError::not_found("Invitation not found").into_response();
     };
     let email_delivery_status = match status.as_str() {
-        "queued" => notifications::EmailDeliveryStatus::Queued,
-        "sent" => notifications::EmailDeliveryStatus::Sent,
-        "failed" => notifications::EmailDeliveryStatus::Failed("".into()),
-        _ => notifications::EmailDeliveryStatus::Unconfigured,
+        "queued" => email::EmailDeliveryStatus::Queued,
+        "sent" => email::EmailDeliveryStatus::Sent,
+        "failed" => email::EmailDeliveryStatus::Failed("".into()),
+        _ => email::EmailDeliveryStatus::Unconfigured,
     };
     Json(InvitationDeliveryResponse {
         email_delivery_status,
@@ -269,7 +269,7 @@ pub struct AcceptInvitationResponse {
 )]
 pub async fn create_invitation(
     State(pool): State<sqlx::PgPool>,
-    Extension(sender): Extension<Arc<dyn notifications::EmailSender>>,
+    Extension(sender): Extension<Arc<dyn email::EmailSender>>,
     Extension(config): Extension<Arc<AppConfig>>,
     ctx: TenantContext,
     principal: Principal,
@@ -444,9 +444,9 @@ pub async fn create_invitation(
     }
 
     let initial_delivery_status = if sender.is_configured() {
-        notifications::EmailDeliveryStatus::Queued
+        email::EmailDeliveryStatus::Queued
     } else {
-        notifications::EmailDeliveryStatus::Unconfigured
+        email::EmailDeliveryStatus::Unconfigured
     };
     let invitation_id: Uuid = match sqlx::query_scalar(
         "INSERT INTO tenant_invitations (tenant_id, email, role, token_hash, invited_by, expires_at, email_delivery_status) \
@@ -479,7 +479,7 @@ pub async fn create_invitation(
         }
     };
 
-    if initial_delivery_status == notifications::EmailDeliveryStatus::Queued {
+    if initial_delivery_status == email::EmailDeliveryStatus::Queued {
         let payload = serde_json::json!({
             "to": email,
             "acceptUrl": accept_url,
@@ -518,7 +518,7 @@ pub async fn create_invitation(
     }
 
     let email_delivery_status = initial_delivery_status;
-    let email_sent = email_delivery_status == notifications::EmailDeliveryStatus::Sent;
+    let email_sent = email_delivery_status == email::EmailDeliveryStatus::Sent;
     let invited_by_name: String =
         sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
             .bind(principal.user_id)
@@ -556,7 +556,7 @@ struct InvitationDeliveryPayload {
 
 pub async fn process_invitation_deliveries_once(
     pool: &sqlx::PgPool,
-    sender: Arc<dyn notifications::EmailSender>,
+    sender: Arc<dyn email::EmailSender>,
 ) -> Result<u64, sqlx::Error> {
     const MAX_ATTEMPTS: i32 = 3;
     let mut exhausted_tx = pool.begin().await?;
@@ -623,21 +623,21 @@ pub async fn process_invitation_deliveries_once(
                 send_invitation_email(sender, payload.to, payload.accept_url).await;
             let err_msg = delivery_status.error_message().map(|s| s.to_string());
             match delivery_status {
-                notifications::EmailDeliveryStatus::Sent => (
+                email::EmailDeliveryStatus::Sent => (
                     Some((
                         invitation_id,
                         tenant_id,
-                        notifications::EmailDeliveryStatus::Sent,
+                        email::EmailDeliveryStatus::Sent,
                     )),
                     None,
                 ),
-                notifications::EmailDeliveryStatus::Failed(_) => {
+                email::EmailDeliveryStatus::Failed(_) => {
                     if attempts >= MAX_ATTEMPTS {
                         (
                             Some((
                                 invitation_id,
                                 tenant_id,
-                                notifications::EmailDeliveryStatus::Failed(
+                                email::EmailDeliveryStatus::Failed(
                                     err_msg.clone().unwrap_or_default(),
                                 ),
                             )),
@@ -679,7 +679,7 @@ pub async fn process_invitation_deliveries_once(
                     (
                         i,
                         t,
-                        notifications::EmailDeliveryStatus::Failed(message.clone()),
+                        email::EmailDeliveryStatus::Failed(message.clone()),
                     )
                 }),
                 Some(message),
@@ -717,7 +717,7 @@ pub async fn process_invitation_deliveries_once(
 
 pub async fn run_invitation_delivery_worker(
     pool: sqlx::PgPool,
-    sender: Arc<dyn notifications::EmailSender>,
+    sender: Arc<dyn email::EmailSender>,
 ) {
     loop {
         match process_invitation_deliveries_once(&pool, sender.clone()).await {
@@ -737,15 +737,15 @@ fn build_accept_url(base_url: &str, raw_token: &str) -> Result<String, url::Pars
 }
 
 async fn send_invitation_email(
-    sender: Arc<dyn notifications::EmailSender>,
+    sender: Arc<dyn email::EmailSender>,
     to: String,
     accept_url: String,
-) -> notifications::EmailDeliveryStatus {
+) -> email::EmailDeliveryStatus {
     if !sender.is_configured() {
-        return notifications::EmailDeliveryStatus::Unconfigured;
+        return email::EmailDeliveryStatus::Unconfigured;
     }
 
-    let msg = notifications::EmailMessage {
+    let msg = email::EmailMessage {
         to,
         subject: "You've been invited to join a tenant".into(),
         body_text: format!("Click the link to accept:\n{}", accept_url),
@@ -756,7 +756,7 @@ async fn send_invitation_email(
     };
 
     let status = sender.send(msg).await;
-    if let notifications::EmailDeliveryStatus::Failed(ref e) = status {
+    if let email::EmailDeliveryStatus::Failed(ref e) = status {
         tracing::error!(error = %e, "failed to send invitation email");
     }
     status
@@ -923,13 +923,13 @@ pub async fn list_invitations(
                 created_at: row.get("created_at"),
                 email_delivery_status: match row.get::<String, _>("email_delivery_status").as_str()
                 {
-                    "queued" => notifications::EmailDeliveryStatus::Queued,
-                    "sent" => notifications::EmailDeliveryStatus::Sent,
-                    "failed" => notifications::EmailDeliveryStatus::Failed(
+                    "queued" => email::EmailDeliveryStatus::Queued,
+                    "sent" => email::EmailDeliveryStatus::Sent,
+                    "failed" => email::EmailDeliveryStatus::Failed(
                         row.get::<Option<String>, _>("email_delivery_error")
                             .unwrap_or_default(),
                     ),
-                    _ => notifications::EmailDeliveryStatus::Unconfigured,
+                    _ => email::EmailDeliveryStatus::Unconfigured,
                 },
             }
         })
@@ -1524,28 +1524,28 @@ mod tests {
     }
 
     #[async_trait]
-    impl notifications::EmailSender for FakeSender {
+    impl email::EmailSender for FakeSender {
         fn is_configured(&self) -> bool {
             self.configured
         }
 
         async fn send(
             &self,
-            _msg: notifications::EmailMessage,
-        ) -> notifications::EmailDeliveryStatus {
+            _msg: email::EmailMessage,
+        ) -> email::EmailDeliveryStatus {
             if !self.configured {
-                notifications::EmailDeliveryStatus::Unconfigured
+                email::EmailDeliveryStatus::Unconfigured
             } else if self.succeeds {
-                notifications::EmailDeliveryStatus::Sent
+                email::EmailDeliveryStatus::Sent
             } else {
-                notifications::EmailDeliveryStatus::Failed("smtp failed".into())
+                email::EmailDeliveryStatus::Failed("smtp failed".into())
             }
         }
     }
 
     #[tokio::test]
     async fn send_invitation_email_returns_unconfigured_when_unconfigured() {
-        let sender: Arc<dyn notifications::EmailSender> = Arc::new(FakeSender {
+        let sender: Arc<dyn email::EmailSender> = Arc::new(FakeSender {
             configured: false,
             succeeds: true,
         });
@@ -1557,13 +1557,13 @@ mod tests {
                 "https://app.test/invite/abc".into()
             )
             .await,
-            notifications::EmailDeliveryStatus::Unconfigured
+            email::EmailDeliveryStatus::Unconfigured
         );
     }
 
     #[tokio::test]
     async fn send_invitation_email_returns_sent_when_send_succeeds() {
-        let sender: Arc<dyn notifications::EmailSender> = Arc::new(FakeSender {
+        let sender: Arc<dyn email::EmailSender> = Arc::new(FakeSender {
             configured: true,
             succeeds: true,
         });
@@ -1575,13 +1575,13 @@ mod tests {
                 "https://app.test/invite/abc".into()
             )
             .await,
-            notifications::EmailDeliveryStatus::Sent
+            email::EmailDeliveryStatus::Sent
         );
     }
 
     #[tokio::test]
     async fn send_invitation_email_returns_failed_when_send_fails() {
-        let sender: Arc<dyn notifications::EmailSender> = Arc::new(FakeSender {
+        let sender: Arc<dyn email::EmailSender> = Arc::new(FakeSender {
             configured: true,
             succeeds: false,
         });
@@ -1594,14 +1594,14 @@ mod tests {
         .await;
         assert!(matches!(
             status,
-            notifications::EmailDeliveryStatus::Failed(_)
+            email::EmailDeliveryStatus::Failed(_)
         ));
         assert_eq!(status.error_message(), Some("smtp failed"));
     }
 
     #[tokio::test]
     async fn failed_status_carries_error_message() {
-        let sender: Arc<dyn notifications::EmailSender> = Arc::new(FakeSender {
+        let sender: Arc<dyn email::EmailSender> = Arc::new(FakeSender {
             configured: true,
             succeeds: false,
         });

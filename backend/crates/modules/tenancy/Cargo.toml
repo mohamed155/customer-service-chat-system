@@ -11,7 +11,7 @@ config = { path = "../../shared/config" }
 hex.workspace = true
 identity = { path = "../identity" }
 kernel = { path = "../../shared/kernel" }
-notifications = { path = "../notifications" }
+email = { path = "../email" }
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
