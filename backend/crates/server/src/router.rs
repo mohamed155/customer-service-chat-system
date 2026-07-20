@@ -311,6 +311,11 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(ai::routes::test_platform_config)
                 .layer(require_permission(Permission::PlatformAdmin)),
+        )
+        // Platform audit logs (spec 026)
+        .routes(
+            routes!(audit::routes::list_platform_audit_logs)
+                .layer(require_permission(Permission::PlatformAuditView)),
         );
     if include_test_routes {
         // Test routes are closures, not function paths, so they cannot use the
@@ -725,6 +730,11 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(analytics::routes::get_analytics_timeseries)
                 .layer(require_permission(Permission::AnalyticsView)),
+        )
+        // Audit logs (spec 026)
+        .routes(
+            routes!(audit::routes::list_tenant_audit_logs)
+                .layer(require_permission(Permission::AuditView)),
         )
         // ── Widgets admin CRUD ─────────────────────────────────────────────
         .routes(

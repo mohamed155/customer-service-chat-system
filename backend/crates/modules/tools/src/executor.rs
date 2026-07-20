@@ -90,59 +90,75 @@ pub enum ExecutionOutcome {
     TimedOut,
 }
 
+impl ExecutionOutcome {
+    pub fn outcome_str(&self) -> &'static str {
+        match self {
+            ExecutionOutcome::Succeeded(_) => "succeeded",
+            ExecutionOutcome::Failed(_) => "failed",
+            ExecutionOutcome::TimedOut => "timed_out",
+        }
+    }
+}
+
 pub async fn execute(
     ctx: &ToolExecutionCtx,
     resolved: &ResolvedTool,
     arguments: serde_json::Value,
     tool_request_id: Uuid,
 ) -> ExecutionOutcome {
-    match resolved.source {
+    let outcome = match resolved.source {
         ToolSource::Builtin => {
             let tools_list = catalog();
-            let builtin = match tools_list
-                .into_iter()
-                .find(|t| t.name() == resolved.spec.name)
-            {
-                Some(t) => t,
-                None => {
-                    return ExecutionOutcome::Failed(format!(
-                        "builtin tool '{}' not found in catalog",
-                        resolved.spec.name
-                    ))
-                }
-            };
-
-            match tokio::time::timeout(
-                Duration::from_secs(BUILTIN_TIMEOUT_SECS),
-                builtin.execute(ctx, arguments),
-            )
-            .await
-            {
-                Ok(Ok(result)) => ExecutionOutcome::Succeeded(result),
-                Ok(Err(msg)) => ExecutionOutcome::Failed(ai_providers::sanitize_error_detail(&msg)),
-                Err(_) => ExecutionOutcome::TimedOut,
+            match tools_list.into_iter().find(|t| t.name() == resolved.spec.name) {
+                None => ExecutionOutcome::Failed(format!(
+                    "builtin tool '{}' not found in catalog",
+                    resolved.spec.name
+                )),
+                Some(t) => match tokio::time::timeout(
+                    Duration::from_secs(BUILTIN_TIMEOUT_SECS),
+                    t.execute(ctx, arguments),
+                )
+                .await
+                {
+                    Ok(Ok(result)) => ExecutionOutcome::Succeeded(result),
+                    Ok(Err(msg)) => {
+                        ExecutionOutcome::Failed(ai_providers::sanitize_error_detail(&msg))
+                    }
+                    Err(_) => ExecutionOutcome::TimedOut,
+                },
             }
         }
         ToolSource::Tenant => {
-            let tenant_tool_id = match resolved.tenant_tool_id {
-                Some(id) => id,
-                None => return ExecutionOutcome::Failed("tenant tool has no id".into()),
-            };
-
-            match execute_tenant_endpoint(
-                ctx,
-                tenant_tool_id,
-                &resolved.spec.name,
-                arguments,
-                tool_request_id,
-            )
-            .await
-            {
-                Ok(result) => ExecutionOutcome::Succeeded(result),
-                Err(e) => ExecutionOutcome::Failed(ai_providers::sanitize_error_detail(&e)),
+            match resolved.tenant_tool_id {
+                None => ExecutionOutcome::Failed("tenant tool has no id".into()),
+                Some(id) => match execute_tenant_endpoint(
+                    ctx,
+                    id,
+                    &resolved.spec.name,
+                    arguments,
+                    tool_request_id,
+                )
+                .await
+                {
+                    Ok(result) => ExecutionOutcome::Succeeded(result),
+                    Err(e) => ExecutionOutcome::Failed(ai_providers::sanitize_error_detail(&e)),
+                },
             }
         }
-    }
+    };
+
+    crate::audit::record_execution(
+        &ctx.pool,
+        ctx.tenant_id,
+        ctx.conversation_id,
+        &resolved.spec.name,
+        tool_request_id,
+        &resolved.tenant_tool_id.map(|id| id.to_string()).unwrap_or_else(|| resolved.spec.name.to_string()),
+        outcome.outcome_str(),
+    )
+    .await;
+
+    outcome
 }
 
 async fn execute_tenant_endpoint(

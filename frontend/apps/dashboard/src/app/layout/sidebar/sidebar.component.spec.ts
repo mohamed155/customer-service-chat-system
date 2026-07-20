@@ -29,6 +29,7 @@ describe('SidebarComponent', () => {
       'knowledge_base.view',
       'integrations.view',
       'analytics.view',
+      'audit.view',
       'settings.view',
     ]);
     await TestBed.compileComponents();
@@ -36,11 +37,12 @@ describe('SidebarComponent', () => {
     fixture.detectChanges();
     const element: HTMLElement = fixture.nativeElement;
 
-    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(4);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(9);
+    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(5);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(10);
     expect(element.textContent).toContain('Workspace');
     expect(element.textContent).toContain('AI');
     expect(element.textContent).toContain('Insights');
+    expect(element.textContent).toContain('Security');
     expect(element.textContent).toContain('Settings');
     expect(element.textContent).toContain('Conversations');
     expect(element.textContent).toContain('6');
@@ -55,6 +57,7 @@ describe('SidebarComponent', () => {
       'knowledge_base.view',
       'integrations.view',
       'analytics.view',
+      'audit.view',
       'settings.view',
     ]);
     await TestBed.compileComponents();
@@ -144,6 +147,7 @@ describe('SidebarComponent', () => {
       'knowledge_base.view',
       'integrations.view',
       'analytics.view',
+      'audit.view',
       'settings.view',
     ]);
     await TestBed.compileComponents();
@@ -151,9 +155,32 @@ describe('SidebarComponent', () => {
     fixture.detectChanges();
     const element: HTMLElement = fixture.nativeElement;
 
-    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(4);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(9);
+    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(5);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(10);
     expect(element.textContent).toContain('Settings');
+    expect(element.textContent).toContain('Security');
+    expect(element.textContent).toContain('Audit Logs');
+  });
+
+  it('hides Audit Logs when analytics.view is granted but audit.view is not', async () => {
+    configure([
+      'overview.view',
+      'conversations.view',
+      'customers.view',
+      'ai_agent.view',
+      'knowledge_base.view',
+      'integrations.view',
+      'analytics.view',
+      'settings.view',
+    ]);
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(SidebarComponent);
+    fixture.detectChanges();
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.textContent).toContain('Analytics');
+    expect(element.textContent).not.toContain('Security');
+    expect(element.textContent).not.toContain('Audit Logs');
   });
 
   it('renders sidebar without error when collapsed input is true', async () => {
@@ -165,6 +192,18 @@ describe('SidebarComponent', () => {
       'knowledge_base.view',
       'integrations.view',
       'analytics.view',
+      'audit.view',
+      'settings.view',
+    ]);
+    configure([
+      'overview.view',
+      'conversations.view',
+      'customers.view',
+      'ai_agent.view',
+      'knowledge_base.view',
+      'integrations.view',
+      'analytics.view',
+      'audit.view',
       'settings.view',
     ]);
     await TestBed.compileComponents();

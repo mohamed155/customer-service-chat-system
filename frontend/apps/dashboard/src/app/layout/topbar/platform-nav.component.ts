@@ -27,6 +27,11 @@ const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
     permission: 'platform.tenants.list',
   },
   {
+    label: 'Audit Logs',
+    path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.auditLogs}`,
+    permission: 'platform.audit.view',
+  },
+  {
     label: 'Platform overview',
     path: `/${APP_PATHS.platform.base}`,
     permission: 'platform.admin',

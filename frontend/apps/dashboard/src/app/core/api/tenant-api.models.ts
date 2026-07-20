@@ -966,6 +966,97 @@ export function analyticsSummaryFromWire(wire: AnalyticsSummaryWire): AnalyticsS
   };
 }
 
+// ── Audit logs (spec 026) ──────────────────────────────────────────
+
+export interface AuditActorWire {
+  kind: string;
+  id: string | null;
+  display_name: string | null;
+  email: string | null;
+  is_platform_staff: boolean;
+  deleted: boolean;
+}
+
+export interface AuditEntryWire {
+  id: string;
+  action: string;
+  category: string;
+  actor: AuditActorWire;
+  resource_type: string;
+  resource_id: string;
+  tenant_id: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AuditPaginationWire {
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+export interface AuditListWire {
+  data: AuditEntryWire[];
+  pagination: AuditPaginationWire;
+}
+
+export interface AuditActor {
+  kind: string;
+  id: string | null;
+  displayName: string | null;
+  email: string | null;
+  isPlatformStaff: boolean;
+  deleted: boolean;
+}
+
+export interface AuditEntry {
+  id: string;
+  action: string;
+  category: string;
+  actor: AuditActor;
+  resourceType: string;
+  resourceId: string;
+  tenantId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AuditPagination {
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface AuditList {
+  data: AuditEntry[];
+  pagination: AuditPagination;
+}
+
+export function auditListFromWire(wire: AuditListWire): AuditList {
+  return {
+    data: wire.data.map((entry) => ({
+      id: entry.id,
+      action: entry.action,
+      category: entry.category,
+      actor: {
+        kind: entry.actor.kind,
+        id: entry.actor.id,
+        displayName: entry.actor.display_name,
+        email: entry.actor.email,
+        isPlatformStaff: entry.actor.is_platform_staff,
+        deleted: entry.actor.deleted,
+      },
+      resourceType: entry.resource_type,
+      resourceId: entry.resource_id,
+      tenantId: entry.tenant_id,
+      details: entry.details,
+      createdAt: entry.created_at,
+    })),
+    pagination: {
+      nextCursor: wire.pagination.next_cursor,
+      hasMore: wire.pagination.has_more,
+    },
+  };
+}
+
 export function analyticsTimeseriesFromWire(wire: AnalyticsTimeseriesWire): AnalyticsTimeseries {
   return {
     range: wire.range,

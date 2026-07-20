@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { permissionGuard } from '../../core/authz/permission.guard';
+import { PAGE_PERMISSIONS } from '../../core/authz/permissions';
 import { APP_PATHS } from '../../core/router/app-paths';
 
 export const PLATFORM_ROUTES: Routes = [
@@ -55,5 +56,17 @@ export const PLATFORM_ROUTES: Routes = [
     },
     loadComponent: () =>
       import('./tenants/tenant-detail.component').then((module) => module.TenantDetailComponent),
+  },
+  {
+    path: APP_PATHS.platform.auditLogs,
+    canMatch: [permissionGuard],
+    data: {
+      pageTitle: 'platformAuditLogs',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.platform.auditLogs],
+    },
+    loadComponent: () =>
+      import('./audit-logs/platform-audit-logs.component').then(
+        (m) => m.PlatformAuditLogsComponent,
+      ),
   },
 ];

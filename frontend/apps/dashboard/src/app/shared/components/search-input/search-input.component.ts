@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, model, output } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
 
 @Component({
@@ -13,6 +13,7 @@ import { TuiIcon } from '@taiga-ui/core';
         [placeholder]="placeholder()"
         [value]="value()"
         (input)="updateValue($event)"
+        (keydown.enter)="searchSubmit.emit(value())"
       />
       @if (shortcutHint()) {
         <kbd>{{ shortcutHint() }}</kbd>
@@ -79,6 +80,7 @@ export class SearchInputComponent {
   readonly placeholder = input('Search');
   readonly shortcutHint = input<string | undefined>();
   readonly value = model('');
+  readonly searchSubmit = output<string>();
 
   protected updateValue(event: Event): void {
     this.value.set((event.target as HTMLInputElement).value);

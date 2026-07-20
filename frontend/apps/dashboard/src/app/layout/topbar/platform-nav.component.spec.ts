@@ -93,9 +93,10 @@ describe('PlatformNavComponent', () => {
     // The first destination is "Tenants" (US2 added platform.tenants.list);
     // the second is the original "Platform overview" (Super Admin only).
     expect(options[0].textContent).toContain('Tenants');
-    expect(options[1].textContent).toContain('Platform overview');
+    expect(options[1].textContent).toContain('Audit Logs');
+    expect(options[2].textContent).toContain('Platform overview');
 
-    (options[1] as HTMLElement).click();
+    (options[2] as HTMLElement).click();
     fixture.detectChanges();
 
     expect(routerMock.navigate).toHaveBeenCalledWith(['/platform']);

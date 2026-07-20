@@ -56,6 +56,10 @@ pub enum Permission {
     PlatformBillingView,
     #[serde(rename = "platform.diagnostics.view")]
     PlatformDiagnosticsView,
+    #[serde(rename = "audit.view")]
+    AuditView,
+    #[serde(rename = "platform.audit.view")]
+    PlatformAuditView,
     #[serde(rename = "widgets.view")]
     WidgetsView,
     #[serde(rename = "widgets.manage")]
@@ -63,7 +67,7 @@ pub enum Permission {
 }
 
 impl Permission {
-    pub const TENANT: [Self; 22] = [
+    pub const TENANT: [Self; 23] = [
         Self::OverviewView,
         Self::ConversationsView,
         Self::ConversationsManage,
@@ -84,11 +88,12 @@ impl Permission {
         Self::BillingManage,
         Self::TenantDelete,
         Self::OwnerAssign,
+        Self::AuditView,
         Self::WidgetsView,
         Self::WidgetsManage,
     ];
 
-    pub const ALL: [Self; 28] = [
+    pub const ALL: [Self; 30] = [
         Self::OverviewView,
         Self::ConversationsView,
         Self::ConversationsManage,
@@ -115,6 +120,8 @@ impl Permission {
         Self::PlatformAdmin,
         Self::PlatformBillingView,
         Self::PlatformDiagnosticsView,
+        Self::AuditView,
+        Self::PlatformAuditView,
         Self::WidgetsView,
         Self::WidgetsManage,
     ];
@@ -149,6 +156,8 @@ impl fmt::Display for Permission {
             Self::PlatformAdmin => "platform.admin",
             Self::PlatformBillingView => "platform.billing.view",
             Self::PlatformDiagnosticsView => "platform.diagnostics.view",
+            Self::AuditView => "audit.view",
+            Self::PlatformAuditView => "platform.audit.view",
             Self::WidgetsView => "widgets.view",
             Self::WidgetsManage => "widgets.manage",
         };
@@ -189,7 +198,7 @@ mod tests {
 
     #[test]
     fn catalog_parity_with_contract() {
-        let contract_codes: [&str; 28] = [
+        let contract_codes: [&str; 30] = [
             "overview.view",
             "conversations.view",
             "conversations.manage",
@@ -216,6 +225,8 @@ mod tests {
             "platform.admin",
             "platform.billing.view",
             "platform.diagnostics.view",
+            "audit.view",
+            "platform.audit.view",
             "widgets.view",
             "widgets.manage",
         ];

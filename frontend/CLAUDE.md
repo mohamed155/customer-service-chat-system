@@ -21,3 +21,11 @@
 - Theme toggle cycles light → dark → system. Topbar search / notifications / "New" are purely visual (no handlers) until later specs.
 - Page data comes from typed fixtures in `shared/fixtures/` (no mock HTTP services, no network calls). Charts are hand-built inline SVG — no chart library.
 - Taiga UI components are wrapped inside project components in `shared/components/` and `layout/` — no raw Taiga styling in feature pages.
+
+## Audit Logs
+
+- Shared components: `shared/components/audit-log-table/` (table with Time/Actor/Action/Target/Tenant columns, clickable rows, empty/loading states), `shared/components/audit-detail-drawer/` (drawer-right dialog with definition list and pretty-printed JSON metadata).
+- Tenant feature: `features/tenant/audit-logs/` — API service, SignalStore, component with category/date/actor filters.
+- Platform feature: `features/platform/audit-logs/` — same layout plus tenant filter and `showTenantColumn="true"`.
+- Wire types and mapper in `core/api/tenant-api.models.ts` (`AuditEntryWire`, `AuditListWire`, `auditListFromWire`).
+- Fixtures in `shared/fixtures/audit.fixtures.ts`.

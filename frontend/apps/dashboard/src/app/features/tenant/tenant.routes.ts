@@ -163,6 +163,17 @@ export const TENANT_ROUTES: Routes = [
     title: PAGE_TITLES.analytics.title,
   },
   {
+    path: APP_PATHS.tenant.auditLogs,
+    canMatch: [permissionGuard],
+    loadComponent: () =>
+      import('./audit-logs/audit-logs.component').then((m) => m.AuditLogsComponent),
+    data: {
+      pageTitle: 'auditLogs',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.auditLogs],
+    },
+    title: PAGE_TITLES.auditLogs.title,
+  },
+  {
     path: APP_PATHS.tenant.settings,
     canMatch: [permissionGuard],
     data: {

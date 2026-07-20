@@ -128,6 +128,17 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
           </app-sidebar-nav-group>
         }
 
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.auditLogs])) {
+          <app-sidebar-nav-group label="Security" [collapsed]="collapsed()">
+            <app-sidebar-nav-item
+              icon="@tui.scroll-text"
+              label="Audit Logs"
+              [link]="links.auditLogs"
+              [collapsed]="collapsed()"
+            />
+          </app-sidebar-nav-group>
+        }
+
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.settings])) {
           <app-sidebar-nav-group label="Settings" [collapsed]="collapsed()">
             <app-sidebar-nav-item
@@ -228,6 +239,7 @@ export class SidebarComponent {
     knowledgeBase: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.knowledgeBase}`,
     integrations: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.integrations}`,
     analytics: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.analytics}`,
+    auditLogs: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.auditLogs}`,
     settings: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.settings}`,
     team: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.team}`,
     widgets: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.widgets}`,

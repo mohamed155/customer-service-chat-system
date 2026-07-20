@@ -12,6 +12,7 @@ export const APP_PATHS = {
     overviewPlaceholder: 'overview-placeholder',
     tenants: 'tenants',
     newTenant: 'new',
+    auditLogs: 'audit',
   },
   tenant: {
     base: 'tenant',
@@ -29,6 +30,7 @@ export const APP_PATHS = {
     knowledgeBaseEdit: (id: string) => `knowledge-base/${id}/edit`,
     integrations: 'integrations',
     analytics: 'analytics',
+    auditLogs: 'audit-logs',
     settings: 'settings',
     settingsTools: 'settings/tools',
     team: 'team',

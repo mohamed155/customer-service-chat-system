@@ -153,6 +153,11 @@ use utoipa::{openapi, Modify, OpenApi};
         analytics::model::AnalyticsSummaryDto,
         analytics::model::TimeseriesDay,
         analytics::model::AnalyticsTimeseriesDto,
+        // Audit (spec 026)
+        audit::model::AuditActorDto,
+        audit::model::AuditEntryDto,
+        audit::model::AuditPagination,
+        audit::model::AuditListResponse,
         // Widgets
         widgets::model::PublicWidgetConfigDto,
         widgets::model::CreateSessionPayload,

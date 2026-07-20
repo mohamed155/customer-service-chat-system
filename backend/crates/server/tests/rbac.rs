@@ -88,6 +88,7 @@ const TENANT_OPERATIONS: &[(&str, &str)] = &[
     ("/api/v1/tenant/ai/usage/summary", "ai_agent.view"),
     ("/api/v1/tenant/analytics/summary", "analytics.view"),
     ("/api/v1/tenant/analytics/timeseries", "analytics.view"),
+    ("/api/v1/tenant/audit-logs", "audit.view"),
 ];
 
 const PLATFORM_OPERATIONS: &[&str] = &[
@@ -96,6 +97,7 @@ const PLATFORM_OPERATIONS: &[&str] = &[
     "/api/v1/test/platform/billing/view",
     "/api/v1/test/platform/diagnostics/view",
     "/api/v1/platform/ai/config",
+    "/api/v1/platform/audit-logs",
 ];
 
 /// T047: deny-by-default sweep covering the create (POST), detail (GET),

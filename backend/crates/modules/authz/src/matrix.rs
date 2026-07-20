@@ -14,6 +14,7 @@ const TENANT_ADMIN: &[Permission] = &[
     Permission::IntegrationsView,
     Permission::IntegrationsManage,
     Permission::AnalyticsView,
+    Permission::AuditView,
     Permission::MembersView,
     Permission::MembersManage,
     Permission::SettingsView,
@@ -61,25 +62,30 @@ const PLATFORM_ALL: &[Permission] = &[
     Permission::PlatformAdmin,
     Permission::PlatformBillingView,
     Permission::PlatformDiagnosticsView,
+    Permission::PlatformAuditView,
 ];
 const PLATFORM_DEVELOPER: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
     Permission::PlatformDiagnosticsView,
+    Permission::PlatformAuditView,
 ];
 const PLATFORM_TENANT_ACCESS: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
+    Permission::PlatformAuditView,
 ];
 const PLATFORM_SUPPORT: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
     Permission::PlatformTenantsManage,
+    Permission::PlatformAuditView,
 ];
 const PLATFORM_FINANCE: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
     Permission::PlatformBillingView,
+    Permission::PlatformAuditView,
 ];
 
 const STAFF_PRODUCTION_DEVELOPER: &[Permission] = &[

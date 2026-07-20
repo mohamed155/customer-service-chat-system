@@ -161,9 +161,16 @@ const EXPECTED: &[(&str, &str)] = &[
     ("PUT", "/tenant/widgets/{id}"),
     ("DELETE", "/tenant/widgets/{id}"),
     ("GET", "/tenant/widgets/{id}/snippet"),
+    // Customer feedback (024)
+    ("GET", "/tenant/feedback/summary"),
+    ("GET", "/widget/v1/feedback/pending"),
+    ("POST", "/widget/v1/conversations/{conversationId}/feedback"),
     // Analytics (025)
     ("GET", "/tenant/analytics/summary"),
     ("GET", "/tenant/analytics/timeseries"),
+    // Audit logs (026)
+    ("GET", "/tenant/audit-logs"),
+    ("GET", "/platform/audit-logs"),
     // Operational
     ("GET", "/health"),
     ("GET", "/ready"),

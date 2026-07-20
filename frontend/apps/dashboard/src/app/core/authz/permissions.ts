@@ -13,6 +13,7 @@ export type Permission =
   | 'integrations.view'
   | 'integrations.manage'
   | 'analytics.view'
+  | 'audit.view'
   | 'members.view'
   | 'members.manage'
   | 'settings.view'
@@ -27,6 +28,7 @@ export type Permission =
   | 'platform.admin'
   | 'platform.billing.view'
   | 'platform.diagnostics.view'
+  | 'platform.audit.view'
   | 'widgets.view'
   | 'widgets.manage';
 
@@ -47,4 +49,6 @@ export const PAGE_PERMISSIONS = {
   [APP_PATHS.platform.base]: 'platform.admin',
   [APP_PATHS.tenant.escalations]: 'conversations.view',
   [APP_PATHS.tenant.widgets]: 'widgets.view',
+  [APP_PATHS.tenant.auditLogs]: 'audit.view',
+  [APP_PATHS.platform.auditLogs]: 'platform.audit.view',
 } as const satisfies Record<string, Permission>;
