@@ -231,4 +231,17 @@ export const TENANT_ROUTES: Routes = [
     },
     title: PAGE_TITLES.team.title,
   },
+  {
+    path: APP_PATHS.tenant.notifications,
+    canMatch: [permissionGuard],
+    loadComponent: () =>
+      import('./notifications/notifications-page.component').then(
+        (m) => m.NotificationsPageComponent,
+      ),
+    data: {
+      pageTitle: 'notifications',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.notifications],
+    },
+    title: PAGE_TITLES.notifications.title,
+  },
 ];

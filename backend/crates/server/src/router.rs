@@ -736,6 +736,11 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             routes!(audit::routes::list_tenant_audit_logs)
                 .layer(require_permission(Permission::AuditView)),
         )
+        // Notifications (spec 027) — no permission gate (FR-012a)
+        .routes(routes!(notifications::routes::list_notifications))
+        .routes(routes!(notifications::routes::get_unread_notification_count))
+        .routes(routes!(notifications::routes::mark_notification_read))
+        .routes(routes!(notifications::routes::mark_all_notifications_read))
         // ── Widgets admin CRUD ─────────────────────────────────────────────
         .routes(
             routes!(

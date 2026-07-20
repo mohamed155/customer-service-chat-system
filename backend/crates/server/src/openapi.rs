@@ -158,6 +158,12 @@ use utoipa::{openapi, Modify, OpenApi};
         audit::model::AuditEntryDto,
         audit::model::AuditPagination,
         audit::model::AuditListResponse,
+        // Notifications (spec 027)
+        notifications::model::NotificationDto,
+        notifications::model::NotificationActorDto,
+        notifications::model::NotificationListResponse,
+        notifications::model::UnreadCountResponse,
+        notifications::model::MarkedResponse,
         // Widgets
         widgets::model::PublicWidgetConfigDto,
         widgets::model::CreateSessionPayload,
@@ -255,6 +261,10 @@ impl Modify for TagDescriptionsAddon {
             (
                 "ops",
                 "Operational endpoints (liveness, readiness, metrics).",
+            ),
+            (
+                "notifications",
+                "Tenant-scoped notification inbox (list, unread count, mark read).",
             ),
         ];
         let mut out = Vec::with_capacity(tags.len());

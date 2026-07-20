@@ -1,11 +1,23 @@
-import { inject, Injectable, signal } from '@angular/core';
-import { RealtimeService } from './realtime.service';
+import { inject, Injectable } from '@angular/core';
 import { filter } from 'rxjs';
+import { NotificationsStore } from '../notifications/notifications.store';
+import { RealtimeService, SseEvent } from './realtime.service';
+
+interface NotificationCreatedPayload {
+  readonly membershipId: string;
+  readonly notificationId: string;
+  readonly unreadCount: number;
+}
+
+interface NotificationClearedPayload {
+  readonly membershipId: string;
+  readonly unreadCount: number;
+}
 
 @Injectable({ providedIn: 'root' })
 export class NotificationsService {
   private readonly realtime = inject(RealtimeService);
-  readonly inAppSignal = signal<number>(0);
+  private readonly store = inject(NotificationsStore);
 
   requestPermission(): void {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -16,9 +28,11 @@ export class NotificationsService {
   constructor() {
     this.realtime
       .events()
-      .pipe(filter((e) => e.event === 'escalation.assigned'))
+      .pipe(filter((e): e is SseEvent & { event: 'notification.created' } => e.event === 'notification.created'))
       .subscribe((event) => {
-        this.inAppSignal.update((n) => n + 1);
+        const payload = JSON.parse(event.data) as NotificationCreatedPayload;
+        this.store.setUnreadCount(payload.unreadCount);
+        this.store.loadFirstPage();
 
         if (
           typeof Notification !== 'undefined' &&
@@ -26,14 +40,21 @@ export class NotificationsService {
           document.hidden
         ) {
           try {
-            const data = JSON.parse(event.data) as Record<string, unknown>;
-            new Notification('Escalation assigned', {
-              body: (data['reason'] as string) ?? 'A new escalation has been assigned to you.',
+            new Notification('New notification', {
+              body: payload.notificationId,
             });
           } catch {
-            new Notification('Escalation assigned');
+            new Notification('New notification');
           }
         }
+      });
+
+    this.realtime
+      .events()
+      .pipe(filter((e): e is SseEvent & { event: 'notification.cleared' } => e.event === 'notification.cleared'))
+      .subscribe((event) => {
+        const payload = JSON.parse(event.data) as NotificationClearedPayload;
+        this.store.setUnreadCount(payload.unreadCount);
       });
   }
 }

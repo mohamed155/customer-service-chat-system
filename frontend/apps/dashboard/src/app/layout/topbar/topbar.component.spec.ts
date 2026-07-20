@@ -11,6 +11,8 @@ import { AuthService } from '../../core/auth/auth.service';
 import { appUiActions } from '../../core/state/app-ui.feature';
 import { CurrentUserService } from '../../core/tenant/current-user.service';
 import { LayoutStore } from '../../layout/app-shell/layout.store';
+import { NotificationsStore } from '../../core/notifications/notifications.store';
+import { NotificationsApiService } from '../../core/notifications/notifications.api';
 import { TopbarComponent } from './topbar.component';
 
 @Component({
@@ -74,7 +76,17 @@ describe('TopbarComponent', () => {
         },
         { provide: AuthService, useValue: auth },
         { provide: CurrentUserService, useValue: currentUser },
+        {
+          provide: NotificationsApiService,
+          useValue: {
+            list: () => of({ data: { items: [], hasMore: false, nextCursor: null } }),
+            unreadCount: () => of({ data: { count: 0 } }),
+            markRead: () => of({ data: {} }),
+            markAllRead: () => of({ data: { marked: 0 } }),
+          },
+        },
         LayoutStore,
+        NotificationsStore,
       ],
     });
     await TestBed.compileComponents();
@@ -105,7 +117,7 @@ describe('TopbarComponent', () => {
     expect(dispatch).toHaveBeenCalledWith(appUiActions.themeModeChanged({ themeMode: 'system' }));
   });
 
-  it('keeps search, notifications, and New as visual controls', async () => {
+  it('keeps search and New as visual controls', async () => {
     const { fixture, store } = await setup();
     const dispatch = vi.spyOn(store, 'dispatch');
     const element = fixture.nativeElement as HTMLElement;
@@ -113,10 +125,18 @@ describe('TopbarComponent', () => {
     (element.querySelector('input[type="search"]') as HTMLInputElement).dispatchEvent(
       new Event('input'),
     );
-    (element.querySelector('[aria-label="Notifications"]') as HTMLElement).click();
     (element.querySelector('.new-button') as HTMLButtonElement).click();
 
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('toggles notification panel on bell click', async () => {
+    const { fixture } = await setup('light', { authenticated: true });
+    const bell = fixture.nativeElement.querySelector('app-notification-bell');
+    const button = bell.querySelector('button');
+    button.click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.notification-dropdown')).toBeTruthy();
   });
 
   it('hides user menu for signed-out users', async () => {
@@ -188,30 +208,23 @@ describe('TopbarComponent', () => {
     const tools = el.querySelector('.tools') as HTMLElement;
     const header = el.querySelector('header') as HTMLElement;
 
-    // Verify the component includes the expected responsive breakpoint rules
     const styleTags = [...document.querySelectorAll('style')];
     expect(styleTags.some((s) => s.textContent?.includes('@media (max-width: 480px)'))).toBe(true);
 
-    // Simulate narrow viewport for LayoutStore (CSS media queries are evaluated
-    // by jsdom at style-computation time and use window.innerWidth)
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
     window.dispatchEvent(new Event('resize'));
     fixture.detectChanges();
 
-    // Regression: no horizontal overflow at 360px
     expect(tools.scrollWidth).toBeLessThanOrEqual(tools.clientWidth);
 
-    // Theme toggle remains reachable (no display:none hiding at any width)
     const themeToggle = header.querySelector('.theme-toggle') as HTMLElement;
     expect(themeToggle).not.toBeNull();
     expect(window.getComputedStyle(themeToggle).display).not.toBe('none');
 
-    // Critical controls must remain reachable at the narrowest breakpoint
     expect(header.querySelector('app-user-menu')).not.toBeNull();
     expect(header.querySelector('app-platform-nav')).not.toBeNull();
     expect(header.querySelector('app-tenant-switcher')).not.toBeNull();
 
-    // New button remains in the DOM (hidden via CSS media query at <480px)
     expect(header.querySelector('.new-button')).not.toBeNull();
   });
 });

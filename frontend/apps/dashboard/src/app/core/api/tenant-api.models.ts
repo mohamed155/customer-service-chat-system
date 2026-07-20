@@ -1072,3 +1072,78 @@ export function analyticsTimeseriesFromWire(wire: AnalyticsTimeseriesWire): Anal
     })),
   };
 }
+
+// ── Notifications (spec 027) ──────────────────────────────────────────
+
+export interface NotificationWire {
+  readonly id: string;
+  readonly kind: string;
+  readonly state: string;
+  readonly title: string;
+  readonly body: string | null;
+  readonly subject_type: string;
+  readonly subject_id: string;
+  readonly actor: { readonly membership_id: string; readonly display_name: string } | null;
+  readonly created_at: string;
+  readonly read_at: string | null;
+}
+
+export interface NotificationListPaginationWire {
+  readonly next_cursor: string | null;
+  readonly has_more: boolean;
+}
+
+export interface NotificationListWire {
+  readonly data: NotificationWire[];
+  readonly pagination: NotificationListPaginationWire;
+}
+
+export interface NotificationActor {
+  readonly membershipId: string;
+  readonly displayName: string;
+}
+
+export interface NotificationEntry {
+  readonly id: string;
+  readonly kind: string;
+  readonly state: string;
+  readonly title: string;
+  readonly body: string | null;
+  readonly subjectType: string;
+  readonly subjectId: string;
+  readonly actor: NotificationActor | null;
+  readonly createdAt: string;
+  readonly readAt: string | null;
+}
+
+export function notificationFromWire(wire: NotificationWire): NotificationEntry {
+  return {
+    id: wire.id,
+    kind: wire.kind,
+    state: wire.state,
+    title: wire.title,
+    body: wire.body,
+    subjectType: wire.subject_type,
+    subjectId: wire.subject_id,
+    actor: wire.actor
+      ? {
+          membershipId: wire.actor.membership_id,
+          displayName: wire.actor.display_name,
+        }
+      : null,
+    createdAt: wire.created_at,
+    readAt: wire.read_at,
+  };
+}
+
+export function notificationListFromWire(wire: NotificationListWire): {
+  items: NotificationEntry[];
+  hasMore: boolean;
+  nextCursor: string | null;
+} {
+  return {
+    items: wire.data.map(notificationFromWire),
+    hasMore: wire.pagination.has_more,
+    nextCursor: wire.pagination.next_cursor,
+  };
+}

@@ -31,7 +31,8 @@ export type PageTitleKey =
   | 'escalations'
   | 'widgets'
   | 'auditLogs'
-  | 'platformAuditLogs';
+  | 'platformAuditLogs'
+  | 'notifications';
 
 /** A page's resolved topbar title/subtitle. */
 export interface PageTitleData {
@@ -113,6 +114,10 @@ export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
   platformAuditLogs: {
     title: 'Audit Logs',
     subtitle: 'Platform-wide activity across all tenants',
+  },
+  notifications: {
+    title: 'Notifications',
+    subtitle: 'Your recent activity and alerts',
   },
 } as const;
 

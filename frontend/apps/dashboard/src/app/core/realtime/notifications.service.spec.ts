@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TestBed } from '@angular/core/testing';
-import { Subject } from 'rxjs';
+import { Subject, of } from 'rxjs';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { RealtimeService, SseEvent } from './realtime.service';
 import { NotificationsService } from './notifications.service';
+import { NotificationsStore } from '../notifications/notifications.store';
+import { NotificationsApiService } from '../notifications/notifications.api';
 
 describe('NotificationsService', () => {
   let origNotification: typeof Notification;
@@ -15,10 +17,20 @@ describe('NotificationsService', () => {
       providers: [
         provideZonelessChangeDetection(),
         NotificationsService,
+        NotificationsStore,
         { provide: RealtimeService, useValue: { events: () => subj.asObservable() } },
+        {
+          provide: NotificationsApiService,
+          useValue: {
+            list: () => of({ data: { items: [], hasMore: false, nextCursor: null } }),
+            unreadCount: () => of({ data: { count: 0 } }),
+            markRead: () => of({ data: {} as any }),
+            markAllRead: () => of({ data: { marked: 0 } }),
+          },
+        },
       ],
     });
-    return { service: TestBed.inject(NotificationsService), subject: subj };
+    return { service: TestBed.inject(NotificationsService), subject: subj, store: TestBed.inject(NotificationsStore) };
   }
 
   beforeEach(() => {
@@ -42,14 +54,25 @@ describe('NotificationsService', () => {
     expect(requestPermission).toHaveBeenCalledTimes(1);
   });
 
-  it('increments in-app signal on escalation.assigned regardless of Notification permission', () => {
-    (globalThis as any).Notification = { permission: 'denied' };
-    const { service, subject } = buildService();
-    expect(service.inAppSignal()).toBe(0);
-    subject.next({ event: 'escalation.assigned', id: '1', data: '{}' });
-    expect(service.inAppSignal()).toBe(1);
-    subject.next({ event: 'escalation.assigned', id: '2', data: '{}' });
-    expect(service.inAppSignal()).toBe(2);
+  it('updates store unreadCount on notification.created', () => {
+    const { subject, store } = buildService();
+    expect(store.unreadCount()).toBe(0);
+    subject.next({
+      event: 'notification.created',
+      id: '1',
+      data: JSON.stringify({ membershipId: 'mem-1', notificationId: 'n-1', unreadCount: 5 }),
+    });
+    expect(store.unreadCount()).toBe(5);
+  });
+
+  it('updates store unreadCount on notification.cleared', () => {
+    const { subject, store } = buildService();
+    subject.next({
+      event: 'notification.cleared',
+      id: '2',
+      data: JSON.stringify({ membershipId: 'mem-1', unreadCount: 2 }),
+    });
+    expect(store.unreadCount()).toBe(2);
   });
 
   it('sends browser notification only when permission granted and document is hidden', () => {
@@ -65,14 +88,11 @@ describe('NotificationsService', () => {
 
     const { subject } = buildService();
     subject.next({
-      event: 'escalation.assigned',
+      event: 'notification.created',
       id: '1',
-      data: JSON.stringify({ reason: 'skill match' }),
+      data: JSON.stringify({ membershipId: 'mem-1', notificationId: 'n-1', unreadCount: 1 }),
     });
-    expect(notify).toHaveBeenCalledWith(
-      'Escalation assigned',
-      expect.objectContaining({ body: 'skill match' }),
-    );
+    expect(notify).toHaveBeenCalledWith('New notification', expect.objectContaining({}));
   });
 
   it('does not send browser notification when document is visible', () => {
@@ -87,31 +107,29 @@ describe('NotificationsService', () => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: false });
 
     const { subject } = buildService();
-    subject.next({ event: 'escalation.assigned', id: '1', data: '{}' });
+    subject.next({
+      event: 'notification.created',
+      id: '1',
+      data: JSON.stringify({ membershipId: 'mem-1', notificationId: 'n-1', unreadCount: 1 }),
+    });
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it('does not throw when Notification is unsupported or permission is denied', () => {
+  it('does not throw when Notification is unsupported', () => {
     (globalThis as any).Notification = undefined;
     const { subject } = buildService();
     expect(() => {
-      subject.next({ event: 'escalation.assigned', id: '1', data: '{}' });
-    }).not.toThrow();
-
-    (globalThis as any).Notification = { permission: 'denied' };
-    expect(() => {
-      subject.next({ event: 'escalation.assigned', id: '2', data: '{}' });
+      subject.next({
+        event: 'notification.created',
+        id: '1',
+        data: JSON.stringify({ membershipId: 'mem-1', notificationId: 'n-1', unreadCount: 1 }),
+      });
     }).not.toThrow();
   });
 
-  it('does not throw when JSON.parse fails in browser notification path', () => {
-    (globalThis as any).Notification = function MockNotification() {};
-    (globalThis as any).Notification.permission = 'granted';
-    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
-
-    const { subject } = buildService();
-    expect(() => {
-      subject.next({ event: 'escalation.assigned', id: '1', data: 'not-json' });
-    }).not.toThrow();
+  it('ignores non-notification events', () => {
+    const { subject, store } = buildService();
+    subject.next({ event: 'escalation.assigned', id: '1', data: '{}' });
+    expect(store.unreadCount()).toBe(0);
   });
 });

@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 
 import { Store } from '@ngrx/store';
 import { TuiIcon } from '@taiga-ui/core';
+import { APP_PATHS } from '../../core/router/app-paths';
 import { injectPageTitle } from '../../core/router/page-title';
 import { CurrentUserService } from '../../core/tenant/current-user.service';
 import {
@@ -11,9 +13,12 @@ import {
   ThemeMode,
 } from '../../core/state/app-ui.feature';
 import { PermissionsService } from '../../core/authz/permissions.service';
-import { NotificationsService } from '../../core/realtime/notifications.service';
+import { NotificationsStore } from '../../core/notifications/notifications.store';
+import { NotificationEntry } from '../../core/api/tenant-api.models';
 import { IconButtonComponent } from '../../shared/components/icon-button/icon-button.component';
 import { SearchInputComponent } from '../../shared/components/search-input/search-input.component';
+import { NotificationBellComponent } from '../../shared/components/notification-bell/notification-bell.component';
+import { NotificationListComponent } from '../../shared/components/notification-list/notification-list.component';
 import { LayoutStore } from '../app-shell/layout.store';
 import { AvailabilityToggleComponent } from './availability-toggle.component';
 import { PlatformNavComponent } from './platform-nav.component';
@@ -29,6 +34,8 @@ import { UserMenuComponent } from './user-menu.component';
     PlatformNavComponent,
     TenantSwitcherComponent,
     UserMenuComponent,
+    NotificationBellComponent,
+    NotificationListComponent,
     TuiIcon,
   ],
   template: `
@@ -70,9 +77,21 @@ import { UserMenuComponent } from './user-menu.component';
           (click)="cycleTheme()"
         />
         <div class="notification-wrapper">
-          <app-icon-button class="notification-bell" icon="@tui.bell" label="Notifications" />
-          @if (notificationsService.inAppSignal()) {
-            <span class="badge">{{ notificationsService.inAppSignal() }}</span>
+          <app-notification-bell
+            [count]="notificationsStore.unreadCount()"
+            (toggle)="toggleNotificationPanel()"
+          />
+          @if (notificationPanelOpen()) {
+            <div class="notification-dropdown">
+              <app-notification-list
+                [items]="notificationsStore.items()"
+                [loading]="notificationsStore.loading()"
+                [hasMore]="notificationsStore.hasMore()"
+                (itemClick)="onNotificationClick($event)"
+                (markRead)="notificationsStore.markRead($event)"
+                (loadMore)="notificationsStore.loadMore()"
+              />
+            </div>
           }
         </div>
         @if (isAuthenticated()) {
@@ -146,21 +165,18 @@ import { UserMenuComponent } from './user-menu.component';
         position: relative;
         display: inline-flex;
       }
-      .badge {
+      .notification-dropdown {
         position: absolute;
-        top: -4px;
-        right: -4px;
-        min-width: 16px;
-        height: 16px;
-        padding: 0 4px;
-        border-radius: 999px;
-        background: var(--tui-status-danger, #dc2626);
-        color: #fff;
-        font-size: 10px;
-        font-weight: 700;
-        line-height: 16px;
-        text-align: center;
-        pointer-events: none;
+        top: calc(100% + 4px);
+        right: 0;
+        width: 380px;
+        max-height: 480px;
+        border: 1px solid var(--app-border);
+        border-radius: var(--app-radius-lg);
+        background: var(--app-panel);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        z-index: 100;
+        overflow: hidden;
       }
       @media (max-width: 900px) {
         .search {
@@ -206,11 +222,12 @@ import { UserMenuComponent } from './user-menu.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TopbarComponent {
+  private readonly router = inject(Router);
   private readonly store = inject(Store);
   private readonly layoutStore = inject(LayoutStore);
   private readonly currentUser = inject(CurrentUserService);
   private readonly permissions = inject(PermissionsService);
-  protected readonly notificationsService = inject(NotificationsService);
+  protected readonly notificationsStore = inject(NotificationsStore);
   protected readonly collapsed = this.store.selectSignal(selectSidebarCollapsed);
   protected readonly canManageConversations = () => this.permissions.has('conversations.manage');
   protected readonly isPlatformUser = this.currentUser.isPlatformUser;
@@ -218,6 +235,7 @@ export class TopbarComponent {
   protected readonly themeMode = this.store.selectSignal(selectThemeMode);
   protected readonly pageTitle = injectPageTitle();
   protected readonly search = signal('');
+  protected readonly notificationPanelOpen = signal(false);
   protected readonly themeIcon = computed(() => {
     const mode = this.themeMode();
     return mode === 'light' ? '@tui.sun' : mode === 'dark' ? '@tui.moon' : '@tui.monitor';
@@ -244,6 +262,36 @@ export class TopbarComponent {
     this.store.dispatch(
       appUiActions.themeModeChanged({ themeMode: this.nextThemeMode(this.themeMode()) }),
     );
+  }
+
+  protected toggleNotificationPanel(): void {
+    this.notificationPanelOpen.update((v) => !v);
+    if (this.notificationPanelOpen()) {
+      this.notificationsStore.loadFirstPage();
+    }
+  }
+
+  protected onNotificationClick(notification: NotificationEntry): void {
+    if (notification.state === 'unread') {
+      this.notificationsStore.markRead(notification.id);
+    }
+    this.notificationPanelOpen.set(false);
+
+    const route = this.routeForSubject(notification.subjectType, notification.subjectId);
+    if (route) {
+      void this.router.navigateByUrl(route);
+    }
+  }
+
+  private routeForSubject(subjectType: string, subjectId: string): string | null {
+    switch (subjectType) {
+      case 'conversation':
+      case 'escalation':
+      case 'tool_request':
+        return `/tenant/${APP_PATHS.tenant.conversationDetail(subjectId)}`;
+      default:
+        return null;
+    }
   }
 
   private nextThemeMode(themeMode: ThemeMode): ThemeMode {

@@ -36,6 +36,7 @@ export const APP_PATHS = {
     team: 'team',
     escalations: 'escalations',
     widgets: 'widgets',
+    notifications: 'notifications',
   },
   invite: 'invite',
   notFound: '**',
