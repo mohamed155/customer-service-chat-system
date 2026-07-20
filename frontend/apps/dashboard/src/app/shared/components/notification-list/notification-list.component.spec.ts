@@ -4,11 +4,13 @@ import { NOTIFICATION_FIXTURES } from '../../fixtures/notification.fixtures';
 import { NotificationListComponent } from './notification-list.component';
 
 describe('NotificationListComponent', () => {
-  async function setup(overrides: {
-    items?: typeof NOTIFICATION_FIXTURES;
-    loading?: boolean;
-    hasMore?: boolean;
-  } = {}) {
+  async function setup(
+    overrides: {
+      items?: typeof NOTIFICATION_FIXTURES;
+      loading?: boolean;
+      hasMore?: boolean;
+    } = {},
+  ) {
     TestBed.configureTestingModule({
       imports: [NotificationListComponent],
       providers: [provideTaiga()],

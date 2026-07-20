@@ -143,6 +143,29 @@ async fn main() {
             }
         })
     };
+    let notification_retention_sweeper = {
+        let pool = state.db.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(6 * 3600));
+            loop {
+                interval.tick().await;
+                match sqlx::query("DELETE FROM notifications WHERE created_at < now() - interval '90 days'")
+                    .execute(&pool)
+                    .await
+                {
+                    Ok(result) => {
+                        let count = result.rows_affected();
+                        if count > 0 {
+                            tracing::info!(count, "notification retention sweep: deleted expired notifications");
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(%e, "notification retention sweep failed");
+                    }
+                }
+            }
+        })
+    };
     let knowledge_indexer_worker = tokio::spawn(indexer::run_knowledge_indexer_worker(
         state.db.clone(),
         Arc::new(state.ai.clone()) as Arc<dyn knowledge::indexer::Embedder>,
@@ -186,6 +209,9 @@ async fn main() {
         }
         result = notifications_worker => {
             panic!("notifications outbox worker stopped unexpectedly: {result:?}");
+        }
+        result = notification_retention_sweeper => {
+            panic!("notification retention sweeper stopped unexpectedly: {result:?}");
         }
     }
 }

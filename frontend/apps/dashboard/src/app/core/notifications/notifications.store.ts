@@ -118,9 +118,13 @@ export const NotificationsStore = signalStore(
         api.markAllRead().subscribe({
           next: () => {
             patchState(store, {
-              items: store.items().map((i) =>
-                i.state === 'unread' ? { ...i, state: 'read', readAt: new Date().toISOString() } : i,
-              ),
+              items: store
+                .items()
+                .map((i) =>
+                  i.state === 'unread'
+                    ? { ...i, state: 'read', readAt: new Date().toISOString() }
+                    : i,
+                ),
             });
             api.unreadCount().subscribe({
               next: (res) => patchState(store, { unreadCount: res.data.count }),
@@ -139,4 +143,3 @@ export const NotificationsStore = signalStore(
     },
   })),
 );
-

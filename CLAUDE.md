@@ -10,6 +10,7 @@ See `frontend/CLAUDE.md` for frontend-specific conventions (layering, state mana
 
 ## Recent Changes
 
+- 027-notifications: tenant-scoped notification inbox with bell/badge, notification list/panel, SSE live updates, escalation/assignment/AI-failure/tool-approval triggers, auto-resolve on claim/decide, deduplication, 90-day retention, crate rename (notifications→email). See specs/027-notifications/plan.md.
 - 026-audit-logs: read-only audit surface over the existing append-only `audit_logs` table — activate the placeholder `audit` crate (`GET /tenant/audit-logs`, `GET /platform/audit-logs`, cursor pagination, category derived from action prefix), new `audit.view` (Owner/Admin) and `platform.audit.view` (all platform roles) permissions, `tool.executed` audit writer, tenant + platform dashboard pages with shared audit table/detail drawer. See `specs/026-audit-logs/plan.md`.
 - 023-website-chat-widget: first customer-facing channel — embeddable loader + iframe widget (`frontend/apps/widget`), new backend `widgets` module (widget instances with branding/position/theme/domain allowlist, anonymous hashed-token sessions, public `/widget/v1` config/conversation/SSE endpoints, in-process rate limiting), dashboard widget settings with live preview, AI replies via existing outbox→responder pipeline, handoff/away/closed states from 014/021 signals. See `specs/023-website-chat-widget/plan.md`.
 - 024-customer-feedback: Customer feedback feature (rating, comment, satisfaction badge, summary) — see `specs/024-customer-feedback/plan.md`

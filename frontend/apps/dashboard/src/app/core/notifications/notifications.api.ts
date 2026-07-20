@@ -18,7 +18,9 @@ export class NotificationsApiService {
   list(
     state?: string,
     cursor?: string,
-  ): Observable<ApiResponse<{ items: NotificationEntry[]; hasMore: boolean; nextCursor: string | null }>> {
+  ): Observable<
+    ApiResponse<{ items: NotificationEntry[]; hasMore: boolean; nextCursor: string | null }>
+  > {
     let params = new HttpParams();
     if (state) params = params.set('state', state);
     if (cursor) params = params.set('cursor', cursor);

@@ -17,6 +17,7 @@
 
 ## Recent Changes
 
+- 027-notifications: tenant-scoped notification inbox with bell/badge, notification list/panel, SSE live updates, escalation/assignment/AI-failure/tool-approval triggers, auto-resolve on claim/decide, deduplication, 90-day retention, crate rename (notifications→email). See specs/027-notifications/plan.md.
 - 025-analytics-foundation: tenant analytics (summary + daily timeseries endpoints over existing conversation/feedback/usage tables, no rollup tables; metric cards, inline-SVG trend charts, date-range and channel filters; analytics.view restricted to Owner/Admin/Manager). See specs/025-analytics-foundation/plan.md.
 - 006-multi-tenancy-foundation: tenant isolation (identity/tenancy modules, tenant-context middleware, X-Tenant-ID contract, 4 endpoints, 25 integration tests, audit) + frontend (NgRx tenantContext feature, interceptors, CurrentUserService, TenantContextService, tenant switcher, area guards, dev identity header). See `specs/006-multi-tenancy-foundation/plan.md`.
 - 002-angular-frontend-foundation: frontend foundation plan (Angular 22 modernization, Taiga UI, NgRx, layered structure) — see `specs/002-angular-frontend-foundation/plan.md`.

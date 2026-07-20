@@ -4,7 +4,7 @@ use std::time::Duration;
 use escalations::presence;
 use sqlx::PgPool;
 use sqlx::Row;
-use tracing::error;
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use crate::emit::NotificationRequest;
@@ -110,7 +110,7 @@ pub async fn process_notification_outbox_once(
     let _tenant_id = match Uuid::parse_str(&tenant_id_str) {
         Ok(id) => id,
         Err(_) => {
-            error!("notification outbox: invalid tenant_id in event {event_id}");
+            error!(event_id = %event_id, tenant_id_str = %tenant_id_str, "notification outbox: invalid tenant_id in event");
             sqlx::query("DELETE FROM outbox_events WHERE id = $1")
                 .bind(event_id)
                 .execute(pool)
@@ -139,6 +139,12 @@ pub async fn process_notification_outbox_once(
                 .await?;
 
                 if recipients.is_empty() {
+                    debug!(
+                        tenant_id = %req.tenant_id,
+                        kind = ?req.kind,
+                        subject_id = %req.subject_id,
+                        "notification.requested: no recipients resolved"
+                    );
                     return Ok(());
                 }
 
@@ -155,6 +161,14 @@ pub async fn process_notification_outbox_once(
                 };
 
                 let inserted = queries::fan_out(pool, &notification_req, &recipients).await?;
+
+                info!(
+                    count = inserted.len(),
+                    tenant_id = %req.tenant_id,
+                    kind = ?notification_req.kind,
+                    subject_id = %req.subject_id,
+                    "notification.requested: created notifications"
+                );
 
                 for (notification_id, membership_id) in inserted {
                     let count = queries::unread_count(pool, req.tenant_id, membership_id).await?;
@@ -180,6 +194,14 @@ pub async fn process_notification_outbox_once(
                     ev.resolved_by_membership_id,
                 )
                 .await?;
+
+                info!(
+                    count = affected.len(),
+                    tenant_id = %ev.tenant_id,
+                    subject_type = %ev.subject_type,
+                    subject_id = %ev.subject_id,
+                    "notification.resolved: resolved notifications"
+                );
 
                 for membership_id in affected {
                     let count = queries::unread_count(pool, ev.tenant_id, membership_id).await?;
@@ -237,7 +259,7 @@ pub async fn run_notification_outbox_worker(
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
             Err(e) => {
-                error!(error = %e, "notification outbox worker error");
+                error!(error = %e, "notification outbox worker error, will retry in 5s");
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         }

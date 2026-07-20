@@ -30,7 +30,11 @@ describe('NotificationsService', () => {
         },
       ],
     });
-    return { service: TestBed.inject(NotificationsService), subject: subj, store: TestBed.inject(NotificationsStore) };
+    return {
+      service: TestBed.inject(NotificationsService),
+      subject: subj,
+      store: TestBed.inject(NotificationsStore),
+    };
   }
 
   beforeEach(() => {

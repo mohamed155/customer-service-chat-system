@@ -44,6 +44,7 @@ function stateClass(state: string): string {
           <div
             class="item {{ stateClass(item.state) }}"
             role="option"
+            [attr.aria-selected]="false"
             tabindex="0"
             (click)="handleItemClick(item)"
             (keydown.enter)="handleItemClick(item)"
@@ -67,17 +68,12 @@ function stateClass(state: string): string {
                 </button>
               }
             </div>
-            <tui-icon
-              class="item-icon"
-              [icon]="iconForKind(item.kind)"
-            />
+            <tui-icon class="item-icon" [icon]="iconForKind(item.kind)" />
           </div>
         }
       </div>
       @if (hasMore()) {
-        <button type="button" class="load-more" (click)="loadMore.emit()">
-          Load more
-        </button>
+        <button type="button" class="load-more" (click)="loadMore.emit()">Load more</button>
       }
     }
   `,

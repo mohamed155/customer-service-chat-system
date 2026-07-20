@@ -3,7 +3,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { of } from 'rxjs';
 import { NotificationsStore } from './notifications.store';
 import { NotificationsApiService } from './notifications.api';
-import { NotificationEntry } from '../api/tenant-api.models';
 
 describe('NotificationsStore', () => {
   function createStore(mockApi?: Partial<NotificationsApiService>) {

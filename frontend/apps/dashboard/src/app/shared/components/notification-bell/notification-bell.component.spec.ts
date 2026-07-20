@@ -43,7 +43,7 @@ describe('NotificationBellComponent', () => {
   it('emits toggle on click', async () => {
     const { fixture } = await setup();
     const spy = vi.fn();
-    fixture.componentRef.instance.toggle.subscribe(spy);
+    fixture.componentRef.instance.togglePanel.subscribe(spy);
     fixture.nativeElement.querySelector('.bell-button').click();
     expect(spy).toHaveBeenCalledTimes(1);
   });

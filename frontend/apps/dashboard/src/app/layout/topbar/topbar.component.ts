@@ -79,7 +79,7 @@ import { UserMenuComponent } from './user-menu.component';
         <div class="notification-wrapper">
           <app-notification-bell
             [count]="notificationsStore.unreadCount()"
-            (toggle)="toggleNotificationPanel()"
+            (togglePanel)="toggleNotificationPanel()"
           />
           @if (notificationPanelOpen()) {
             <div class="notification-dropdown">

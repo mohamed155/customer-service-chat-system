@@ -1534,3 +1534,88 @@ async fn replay_dedup_produces_one_row_per_recipient() {
     .unwrap();
     assert_eq!(count_after, 1, "still expected exactly 1 notification row after replay");
 }
+
+// ── T046: Regression test for removed-then-re-added member ──────────────────
+
+#[tokio::test]
+async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+
+    let tenant_id = seed_tenant(&pool).await;
+    let user_id = seed_user(&pool, None).await;
+    let old_mem_id = seed_membership(&pool, tenant_id, user_id, "agent").await;
+
+    // Seed an unread notification for the active membership
+    let nid = seed_notification(
+        &pool, tenant_id, old_mem_id, "escalation.new", "unread",
+        "Old notification", "escalation", Uuid::new_v4(), None,
+        "2026-07-18T14:00:00Z",
+    )
+    .await;
+
+    // Deactivate membership
+    sqlx::query("UPDATE tenant_memberships SET status = 'invited' WHERE id = $1")
+        .bind(old_mem_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Inbox is unreachable (400)
+    let response = send(
+        pool.clone(),
+        Environment::Test,
+        authenticated_request(
+            "/api/v1/tenant/notifications",
+            Method::GET,
+            user_id,
+            Some(tenant_id),
+            Environment::Test,
+        ),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let json = body_json(response).await;
+    assert_eq!(json["error"]["code"], "validation_failed");
+
+    // Old notification still exists and is tied to old membership
+    let old_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM notifications WHERE recipient_membership_id = $1",
+    )
+    .bind(old_mem_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(old_count, 1, "old notification must remain bound to old membership id");
+
+    // Re-add the same user → new membership id
+    let new_mem_id = seed_membership(&pool, tenant_id, user_id, "agent").await;
+    assert_ne!(old_mem_id, new_mem_id, "re-add must produce a new membership id");
+
+    // Unread count for new membership is 0 (old notifications don't carry over)
+    let response = send(
+        pool.clone(),
+        Environment::Test,
+        authenticated_request(
+            "/api/v1/tenant/notifications/unread-count",
+            Method::GET,
+            user_id,
+            Some(tenant_id),
+            Environment::Test,
+        ),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let json = body_json(response).await;
+    assert_eq!(json["count"].as_i64().unwrap(), 0);
+
+    // Verify no notification rows point to the new membership
+    let new_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM notifications WHERE recipient_membership_id = $1",
+    )
+    .bind(new_mem_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(new_count, 0, "new membership must have zero notifications");
+}

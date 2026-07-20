@@ -18,9 +18,19 @@
 ## Frontend rules (from spec 003)
 
 - Helix visual system: `--app-*` tokens rewritten to the Helix palette/layout (sidebar 248/68px, topbar 60px, content max 1320px); light/dark values live in `design-system/theme/themes.css`, theme-independent values in `design-system/tokens/tokens.css`. Old `--app-color-*` names are gone. Reference design: `Helix Admin.html` at repo root (compare only — never copy markup/assets/fonts from it).
-- Theme toggle cycles light → dark → system. Topbar search / notifications / "New" are purely visual (no handlers) until later specs.
+- Theme toggle cycles light → dark → system. Topbar search and "New" are purely visual (no handlers) until later specs.
 - Page data comes from typed fixtures in `shared/fixtures/` (no mock HTTP services, no network calls). Charts are hand-built inline SVG — no chart library.
 - Taiga UI components are wrapped inside project components in `shared/components/` and `layout/` — no raw Taiga styling in feature pages.
+
+## Notifications
+
+- Shared components: `shared/components/notification-bell/` (bell icon with badge, `count` input, `toggle` output), `shared/components/notification-list/` (scrollable list with relative timestamps, mark-read, load-more, empty/loading states; `items`/`loading`/`hasMore` inputs, `itemClick`/`markRead`/`loadMore` outputs).
+- Core store: `core/notifications/notifications.store.ts` — NgRx SignalStore (`items`, `unreadCount`, `loading`, `nextCursor`, `hasMore`) with `loadFirstPage`, `loadMore`, `markRead`, `markAllRead`, `refreshUnreadCount`, `setUnreadCount` methods. Provided in root.
+- SSE live updates: `core/realtime/notifications.service.ts` — subscribes to `notification.created` / `notification.cleared` SSE events, updates store via `setUnreadCount`.
+- **Badge rule**: the badge is SET from `unreadCount` (absolute), never incremented. SSE events carry the authoritative count from the server.
+- Wire types and mapper in `core/api/tenant-api.models.ts` (`NotificationWire`, `NotificationEntry`, `notificationFromWire`, `notificationListFromWire`).
+- Fixtures in `shared/fixtures/notification.fixtures.ts`.
+- Tenant feature page: `features/tenant/notifications/notifications-page.component.ts`.
 
 ## Audit Logs
 

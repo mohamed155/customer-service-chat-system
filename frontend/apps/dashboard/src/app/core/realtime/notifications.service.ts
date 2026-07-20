@@ -28,7 +28,12 @@ export class NotificationsService {
   constructor() {
     this.realtime
       .events()
-      .pipe(filter((e): e is SseEvent & { event: 'notification.created' } => e.event === 'notification.created'))
+      .pipe(
+        filter(
+          (e): e is SseEvent & { event: 'notification.created' } =>
+            e.event === 'notification.created',
+        ),
+      )
       .subscribe((event) => {
         const payload = JSON.parse(event.data) as NotificationCreatedPayload;
         this.store.setUnreadCount(payload.unreadCount);
@@ -51,7 +56,12 @@ export class NotificationsService {
 
     this.realtime
       .events()
-      .pipe(filter((e): e is SseEvent & { event: 'notification.cleared' } => e.event === 'notification.cleared'))
+      .pipe(
+        filter(
+          (e): e is SseEvent & { event: 'notification.cleared' } =>
+            e.event === 'notification.cleared',
+        ),
+      )
       .subscribe((event) => {
         const payload = JSON.parse(event.data) as NotificationClearedPayload;
         this.store.setUnreadCount(payload.unreadCount);

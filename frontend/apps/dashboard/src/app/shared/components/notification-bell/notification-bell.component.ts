@@ -5,7 +5,12 @@ import { TuiIcon } from '@taiga-ui/core';
   selector: 'app-notification-bell',
   imports: [TuiIcon],
   template: `
-    <button type="button" class="bell-button" aria-label="Notifications" (click)="toggle.emit()">
+    <button
+      type="button"
+      class="bell-button"
+      aria-label="Notifications"
+      (click)="togglePanel.emit()"
+    >
       <tui-icon icon="@tui.bell" />
       @if (count() > 0) {
         <span class="badge">{{ count() > 99 ? '99+' : count() }}</span>
@@ -25,7 +30,10 @@ import { TuiIcon } from '@taiga-ui/core';
         background: var(--app-panel);
         color: var(--app-text-2);
         cursor: pointer;
-        transition: background var(--app-transition-fast), border-color var(--app-transition-fast), color var(--app-transition-fast);
+        transition:
+          background var(--app-transition-fast),
+          border-color var(--app-transition-fast),
+          color var(--app-transition-fast);
       }
       .bell-button:hover {
         background: var(--app-panel-2);
@@ -62,5 +70,5 @@ import { TuiIcon } from '@taiga-ui/core';
 })
 export class NotificationBellComponent {
   readonly count = input(0);
-  readonly toggle = output<void>();
+  readonly togglePanel = output<void>();
 }
