@@ -2520,6 +2520,7 @@ dependencies = [
  "axum",
  "chrono",
  "escalations",
+ "hex",
  "identity",
  "serde",
  "serde_json",

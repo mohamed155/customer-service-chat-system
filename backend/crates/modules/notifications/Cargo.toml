@@ -6,10 +6,11 @@ edition.workspace = true
 [dependencies]
 async-trait.workspace = true
 axum.workspace = true
-chrono.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sqlx = { workspace = true, features = ["postgres"] }
+sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
 tracing.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
