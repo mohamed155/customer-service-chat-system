@@ -122,6 +122,26 @@ impl Stream for GuardedStream {
                     .data(data)
                     .id(self.seq.to_string()))))
             }
+            Poll::Ready(Some(Ok(presence::Event::NotificationCreated(ev)))) => {
+                if ev.membership_id == self.membership_id {
+                    let data = serde_json::to_string(&ev).unwrap_or_default();
+                    return Poll::Ready(Some(Ok::<_, Infallible>(Event::default()
+                        .event("notification.created")
+                        .data(data))));
+                }
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+            Poll::Ready(Some(Ok(presence::Event::NotificationCleared(ev)))) => {
+                if ev.membership_id == self.membership_id {
+                    let data = serde_json::to_string(&ev).unwrap_or_default();
+                    return Poll::Ready(Some(Ok::<_, Infallible>(Event::default()
+                        .event("notification.cleared")
+                        .data(data))));
+                }
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
             Poll::Ready(Some(Err(BroadcastStreamRecvError::Lagged(n)))) => {
                 info!(%n, "SSE stream lagged, skipping");
                 cx.waker().wake_by_ref();

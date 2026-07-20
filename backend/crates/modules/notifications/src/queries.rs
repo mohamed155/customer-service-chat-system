@@ -27,12 +27,13 @@ pub async fn fan_out(
     pool: &PgPool,
     req: &super::emit::NotificationRequest,
     recipients: &[Uuid],
-) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query(
+) -> Result<Vec<(Uuid, Uuid)>, sqlx::Error> {
+    let rows = sqlx::query(
         "INSERT INTO notifications \
          (tenant_id, recipient_membership_id, kind, state, title, body, subject_type, subject_id, dedupe_key, actor_membership_id) \
          SELECT $1, UNNEST($2::uuid[]), $3, 'unread', $4, $5, $6, $7, $8, $9 \
-         ON CONFLICT (recipient_membership_id, dedupe_key) DO NOTHING",
+         ON CONFLICT (recipient_membership_id, dedupe_key) DO NOTHING \
+         RETURNING id, recipient_membership_id",
     )
     .bind(req.tenant_id)
     .bind(recipients)
@@ -43,10 +44,10 @@ pub async fn fan_out(
     .bind(req.subject_id)
     .bind(&req.dedupe_key)
     .bind(req.actor_membership_id)
-    .execute(pool)
+    .fetch_all(pool)
     .await?;
 
-    Ok(result.rows_affected())
+    Ok(rows.into_iter().map(|r| (r.get("id"), r.get("recipient_membership_id"))).collect())
 }
 
 pub async fn resolve_subject(

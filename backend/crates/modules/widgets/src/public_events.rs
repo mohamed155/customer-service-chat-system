@@ -136,7 +136,9 @@ impl WidgetEventStream {
             }
             escalations::presence::Event::ConversationTool(_)
             | escalations::presence::Event::EscalationRemoved(_)
-            | escalations::presence::Event::AvailabilityChanged(_) => None,
+            | escalations::presence::Event::AvailabilityChanged(_)
+            | escalations::presence::Event::NotificationCreated(_)
+            | escalations::presence::Event::NotificationCleared(_) => None,
         }
     }
 }

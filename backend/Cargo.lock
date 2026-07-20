@@ -2526,6 +2526,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tenancy",
+ "tokio",
  "tracing",
  "utoipa",
  "uuid",

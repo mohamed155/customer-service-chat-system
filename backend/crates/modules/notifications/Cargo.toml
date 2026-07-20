@@ -11,6 +11,7 @@ hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
+tokio.workspace = true
 tracing.workspace = true
 utoipa.workspace = true
 uuid.workspace = true

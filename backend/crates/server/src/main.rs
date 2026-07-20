@@ -148,6 +148,12 @@ async fn main() {
         Arc::new(state.ai.clone()) as Arc<dyn knowledge::indexer::Embedder>,
         storage.clone(),
     ));
+    let notifications_worker = tokio::spawn(
+        notifications::worker::run_notification_outbox_worker(
+            state.db.clone(),
+            state.escalations.clone(),
+        ),
+    );
 
     let address = format!("{}:{}", state.config.bind_address, state.config.port);
     let listener = TcpListener::bind(&address)
@@ -177,6 +183,9 @@ async fn main() {
         }
         result = knowledge_indexer_worker => {
             panic!("knowledge indexer worker stopped unexpectedly: {result:?}");
+        }
+        result = notifications_worker => {
+            panic!("notifications outbox worker stopped unexpectedly: {result:?}");
         }
     }
 }

@@ -1,5 +1,6 @@
 use crate::audit;
 use crate::model::AvailabilityChangedEvent;
+use serde::Serialize;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,6 +15,14 @@ pub enum ConversationToolEvent {
     Updated(crate::model::ToolRequestUpdated),
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationBadgeEvent {
+    pub membership_id: Uuid,
+    pub notification_id: Option<Uuid>,
+    pub unread_count: i64,
+}
+
 #[derive(Debug, Clone)]
 pub enum Event {
     EscalationAssigned(crate::model::EscalationAssignedEvent),
@@ -22,6 +31,8 @@ pub enum Event {
     AvailabilityChanged(AvailabilityChangedEvent),
     ConversationAi(crate::model::ConversationAiEvent),
     ConversationTool(ConversationToolEvent),
+    NotificationCreated(NotificationBadgeEvent),
+    NotificationCleared(NotificationBadgeEvent),
 }
 
 struct TenantPresence {
