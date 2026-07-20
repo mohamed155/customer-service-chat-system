@@ -2512,6 +2512,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "notifications"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "authz",
+ "axum",
+ "chrono",
+ "escalations",
+ "identity",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tenancy",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3491,6 +3510,7 @@ dependencies = [
  "identity",
  "kernel",
  "knowledge",
+ "notifications",
  "observability",
  "rand 0.8.6",
  "serde",

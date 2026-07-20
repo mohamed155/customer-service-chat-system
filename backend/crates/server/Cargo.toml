@@ -19,6 +19,7 @@ db = { path = "../shared/db" }
 identity = { path = "../modules/identity" }
 kernel = { path = "../shared/kernel" }
 email = { path = "../modules/email" }
+notifications = { path = "../modules/notifications" }
 observability = { path = "../shared/observability" }
 serde = { workspace = true }
 sqlx = { workspace = true, features = ["postgres"] }

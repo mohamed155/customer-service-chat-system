@@ -1,0 +1,21 @@
+[package]
+name = "notifications"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+axum.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx = { workspace = true, features = ["postgres"] }
+tracing.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+
+# Path dependencies
+authz = { path = "../authz" }
+identity = { path = "../identity" }
+tenancy = { path = "../tenancy" }
+escalations = { path = "../escalations" }
