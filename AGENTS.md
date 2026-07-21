@@ -23,9 +23,10 @@
 - 002-angular-frontend-foundation: frontend foundation plan (Angular 22 modernization, Taiga UI, NgRx, layered structure) — see `specs/002-angular-frontend-foundation/plan.md`.
 - 019-knowledge-base: knowledge module activation, S3-compatible document storage, draft/published/archived lifecycle, only published items are the AI-available set. See `specs/019-knowledge-base/plan.md`.
 - 001-ai-customer-service-platform: platform-wide spec/plan/tasks; backend scaffolding and original frontend workspace.
+- 027-notifications: tenant-scoped notification inbox with bell/badge, notification list/panel, SSE live updates, escalation/assignment/AI-failure/tool-approval triggers, auto-resolve on claim/decide, deduplication, 90-day retention, crate rename (notifications→email). Phase 7 convergence completed: T052 (frontend store test cleanup), T053 (assign with no-membership actor fix), T055 (tool-decision resolve moved into transaction), T056 (unrouted decide path closed). T051 (DB integration test execution) and T054 (performance test runnability) documented and awaiting PostgreSQL. See specs/027-notifications/plan.md.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/026-audit-logs/plan.md
+at specs/027-notifications/plan.md
 <!-- SPECKIT END -->

@@ -94,9 +94,36 @@ pub async fn decide(
     )
     .await?;
 
+    emit_tool_resolved_in_tx(&mut tx, tenant_id, tool_request_id, decided_by).await?;
+
     tx.commit().await?;
 
     Ok(DecideOutcome::Applied(row))
+}
+
+async fn emit_tool_resolved_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    tool_request_id: Uuid,
+    decided_by: Uuid,
+) -> sqlx::Result<()> {
+    let payload = serde_json::json!({
+        "tenantId": tenant_id,
+        "subjectType": "tool_request",
+        "subjectId": tool_request_id,
+        "resolvedByMembershipId": decided_by,
+    });
+    sqlx::query(
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'notification', $2, $3, 'notification.resolved', $4, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(tool_request_id)
+    .bind(tenant_id)
+    .bind(payload)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
 
 pub async fn sweep_expired(pool: &PgPool) -> sqlx::Result<u64> {

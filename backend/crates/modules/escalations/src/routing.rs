@@ -174,13 +174,16 @@ pub async fn route_new_escalation_in_tx(
         .await?;
 
         let actor_mid = resolve_actor_membership_id_in_tx(tx, tenant_id, actor_user_id).await;
+        // If the actor is also the assignee, suppress the actor for the assignment
+        // notification so the assignee is included as the recipient.
+        let notify_actor = actor_mid.filter(|m| *m != cand.membership_id);
         notify_escalation_assigned(
             tx,
             tenant_id,
             escalation_id,
             conversation_id,
             cand.membership_id,
-            actor_mid,
+            notify_actor,
         )
         .await;
 

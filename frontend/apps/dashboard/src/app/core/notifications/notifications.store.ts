@@ -100,6 +100,7 @@ export const NotificationsStore = signalStore(
       refreshUnreadCount(): void {
         api.unreadCount().subscribe({
           next: ({ data }) => patchState(store, { unreadCount: data.count }),
+          error: () => {},
         });
       },
       markRead(id: string): void {
@@ -110,8 +111,10 @@ export const NotificationsStore = signalStore(
             });
             api.unreadCount().subscribe({
               next: (res) => patchState(store, { unreadCount: res.data.count }),
+              error: () => {},
             });
           },
+          error: () => {},
         });
       },
       markAllRead(): void {
@@ -128,8 +131,10 @@ export const NotificationsStore = signalStore(
             });
             api.unreadCount().subscribe({
               next: (res) => patchState(store, { unreadCount: res.data.count }),
+              error: () => {},
             });
           },
+          error: () => {},
         });
       },
       setUnreadCount(n: number): void {

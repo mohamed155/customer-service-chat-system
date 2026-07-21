@@ -124,7 +124,7 @@ pub async fn escalate(
         }
     };
 
-    let conv = match sqlx::query_as::<_, (String, String)>(
+    let conv = match sqlx::query_as::<_, (String, Option<String>)>(
         "SELECT status, assigned_membership_id FROM conversations \
          WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
     )

@@ -2,13 +2,16 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideTaiga } from '@taiga-ui/core';
 import { provideMockStore } from '@ngrx/store/testing';
+import { of } from 'rxjs';
 import { environment } from '../environments/environment';
 import { APP_CONFIG } from './core/config/app-config';
 import { PermissionsService } from './core/authz/permissions.service';
 import { CurrentUserService } from './core/tenant/current-user.service';
 import { TenantContextService } from './core/tenant/tenant-context.service';
+import { NotificationsApiService } from './core/notifications/notifications.api';
 import { routes } from './app.routes';
 
 describe('application routes', () => {
@@ -45,6 +48,8 @@ describe('application routes', () => {
         },
         { provide: PermissionsService, useValue: permissions },
         provideZonelessChangeDetection(),
+        provideHttpClientTesting(),
+        { provide: NotificationsApiService, useValue: { unreadCount: () => of({ data: { count: 0 } }) } },
         { provide: APP_CONFIG, useValue: environment },
       ],
     });

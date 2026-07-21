@@ -9,8 +9,14 @@
 -- ===================================================================
 
 -- Composite UNIQUE for escalations FK target (mirrors 0033's tenant_memberships_tenant_id_id_uq)
-DROP INDEX IF EXISTS conversations_tenant_id_id_uq;
-ALTER TABLE conversations ADD CONSTRAINT conversations_tenant_id_id_uq UNIQUE (tenant_id, id);
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'conversations_tenant_id_id_uq'
+    ) THEN
+        ALTER TABLE conversations ADD CONSTRAINT conversations_tenant_id_id_uq UNIQUE (tenant_id, id);
+    END IF;
+END $$;
 
 -- Escalated-at flag (cleared when escalation closes)
 ALTER TABLE conversations ADD COLUMN escalated_at TIMESTAMPTZ NULL;

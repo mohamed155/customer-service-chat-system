@@ -1,12 +1,15 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { provideTaiga } from '@taiga-ui/core';
+import { of } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { APP_CONFIG } from '../../core/config/app-config';
 import { ApiErrorNotificationService } from '../../core/errors/api-error-notification.service';
 import { appUiActions } from '../../core/state/app-ui.feature';
+import { NotificationsApiService } from '../../core/notifications/notifications.api';
 import { AppShellComponent } from './app-shell.component';
 import { LayoutStore } from './layout.store';
 
@@ -18,6 +21,8 @@ describe('AppShellComponent', () => {
         provideRouter([]),
         provideTaiga(),
         provideZonelessChangeDetection(),
+        provideHttpClientTesting(),
+        { provide: NotificationsApiService, useValue: { unreadCount: () => of({ data: { count: 0 } }) } },
         provideMockStore({
           initialState: { appUi: { themeMode: 'system', sidebarCollapsed: true } },
         }),

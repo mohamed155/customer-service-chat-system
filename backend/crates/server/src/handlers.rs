@@ -374,16 +374,6 @@ pub async fn decide_tool_request(
 
     match tools::approval::decide(&pool, ctx.tenant_id, id, membership_id, approve).await {
         Ok(tools::approval::DecideOutcome::Applied(row)) => {
-            // T043: emit notification.resolve for other recipients
-            notifications::emit::emit_resolved_on_pool(
-                &pool,
-                ctx.tenant_id,
-                &notifications::model::SubjectType::ToolRequest,
-                id,
-                Some(membership_id),
-            )
-            .await;
-
             Json(serde_json::json!(row)).into_response()
         }
         Ok(tools::approval::DecideOutcome::AlreadySettled(row)) => {

@@ -9,13 +9,25 @@
 
 -- 1. UNIQUE constraints required for composite FK targets
 
-DROP INDEX IF EXISTS conversations_tenant_id_id_uq;
-ALTER TABLE conversations
-    ADD CONSTRAINT conversations_tenant_id_id_uq UNIQUE (tenant_id, id);
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'conversations_tenant_id_id_uq'
+    ) THEN
+        ALTER TABLE conversations
+            ADD CONSTRAINT conversations_tenant_id_id_uq UNIQUE (tenant_id, id);
+    END IF;
+END $$;
 
-DROP INDEX IF EXISTS tenant_memberships_tenant_id_id_uq;
-ALTER TABLE tenant_memberships
-    ADD CONSTRAINT tenant_memberships_tenant_id_id_uq UNIQUE (tenant_id, id);
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tenant_memberships_tenant_id_id_uq'
+    ) THEN
+        ALTER TABLE tenant_memberships
+            ADD CONSTRAINT tenant_memberships_tenant_id_id_uq UNIQUE (tenant_id, id);
+    END IF;
+END $$;
 
 -- 2. Messages table (append-only, no updated_at)
 

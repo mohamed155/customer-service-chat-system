@@ -2,6 +2,17 @@
 -- citations, and embedding model column for AI configurations.
 -- See specs/020-embeddings-rag/ for the full design.
 
+-- UNIQUE constraint for composite FK targets used in this migration
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'knowledge_items_tenant_id_id_uq'
+    ) THEN
+        ALTER TABLE knowledge_items
+            ADD CONSTRAINT knowledge_items_tenant_id_id_uq UNIQUE (tenant_id, id);
+    END IF;
+END $$;
+
 -- Table: knowledge_chunks — chunked content with vector embeddings for
 -- semantic search. Each knowledge item is split into ordered chunks of
 -- up to 8000 characters with a 1536-dimension OpenAI embedding.

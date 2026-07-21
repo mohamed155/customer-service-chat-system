@@ -246,10 +246,11 @@ async fn seed_conversation(
 }
 
 async fn seed_actor(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str, role: &str) -> SeededMembership {
+    let unique_email = format!("{}-{}", email, Uuid::new_v4().simple());
     let user_id: Uuid = sqlx::query_scalar(
         "INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id",
     )
-    .bind(email)
+    .bind(&unique_email)
     .bind("Notifications Test User")
     .fetch_one(pool)
     .await
@@ -654,8 +655,8 @@ async fn deactivated_membership_cannot_read_inbox() {
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
-    // status = 'invited' is not 'active'
-    seed_membership_with_status(&pool, tenant_id, user_id, "agent", "invited").await;
+    // status = 'disabled' is not 'active'
+    seed_membership_with_status(&pool, tenant_id, user_id, "agent", "disabled").await;
 
     let response = send(
         pool.clone(),
@@ -669,9 +670,9 @@ async fn deactivated_membership_cannot_read_inbox() {
         ),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    let json = body_json(response).await;
-    assert_eq!(json["error"]["code"], "validation_failed");
+    // The tenant-context middleware returns 403 when no active membership is found,
+    // before the request reaches the notification handler.
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
 // ── T020: Role-access test (FR-012a) ────────────────────────────────────────
@@ -1181,7 +1182,7 @@ async fn self_assignment_notifies_nobody() {
     // No notification.requested should be emitted for self-assignment
     let req_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'notification.requested'",
+         WHERE tenant_id = $1::text AND event_type = 'notification.requested'",
     )
     .bind(tenant_id)
     .fetch_one(&pool)
@@ -1220,6 +1221,24 @@ async fn escalation_routing_produces_one_notification() {
     .unwrap();
 
     let state = setup_state(pool.clone());
+
+    sqlx::query(
+        "INSERT INTO agent_availability (tenant_id, membership_id, state) \
+         VALUES ($1, $2, 'available') \
+         ON CONFLICT (tenant_id, membership_id) DO UPDATE SET state = 'available', state_changed_at = now()",
+    )
+    .bind(tenant_id)
+    .bind(agent.membership_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let (_guard, _rx) = tokio::task::spawn_blocking({
+        let rt = state.escalations.clone();
+        move || rt.connect(tenant_id, agent.membership_id)
+    })
+    .await
+    .unwrap();
 
     // Escalate with matching skill → routed directly to agent
     let response = send_state(
@@ -1263,8 +1282,15 @@ async fn queued_escalation_fans_out_to_manage_holders() {
 
     let state = setup_state(pool.clone());
 
-    // Escalate with a skill nobody has → queued
-    let no_skill_id = Uuid::new_v4();
+    // Create a real skill that no agent has → escalation should be queued
+    let no_skill_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO skills (tenant_id, name) VALUES ($1, 'unmatched') RETURNING id",
+    )
+    .bind(tenant_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
     let response = send_state(
         &state,
         json_post(
@@ -1306,7 +1332,13 @@ async fn claiming_resolves_others_rows() {
     let conv_id = seed_conversation(&pool, tenant_id, customer_id).await;
 
     // Escalate with no-match skill → queued
-    let no_skill_id = Uuid::new_v4();
+    let no_skill_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO skills (tenant_id, name) VALUES ($1, 'unmatched-claim') RETURNING id",
+    )
+    .bind(tenant_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     let state = setup_state(pool.clone());
     let response = send_state(
         &state,
@@ -1555,13 +1587,14 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     .await;
 
     // Deactivate membership
-    sqlx::query("UPDATE tenant_memberships SET status = 'invited' WHERE id = $1")
+    sqlx::query("UPDATE tenant_memberships SET status = 'disabled' WHERE id = $1")
         .bind(old_mem_id)
         .execute(&pool)
         .await
         .unwrap();
 
-    // Inbox is unreachable (400)
+    // Inbox is unreachable — tenant-context middleware returns 403 when the
+    // user has no active membership in the tenant.
     let response = send(
         pool.clone(),
         Environment::Test,
@@ -1574,9 +1607,7 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
         ),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    let json = body_json(response).await;
-    assert_eq!(json["error"]["code"], "validation_failed");
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 
     // Old notification still exists and is tied to old membership
     let old_count: i64 = sqlx::query_scalar(
@@ -1589,6 +1620,15 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     assert_eq!(old_count, 1, "old notification must remain bound to old membership id");
 
     // Re-add the same user → new membership id
+    // First soft-delete the old membership so the unique constraint allows
+    // a new active row for the same (tenant_id, user_id).
+    sqlx::query(
+        "UPDATE tenant_memberships SET deleted_at = now() WHERE id = $1",
+    )
+    .bind(old_mem_id)
+    .execute(&pool)
+    .await
+    .unwrap();
     let new_mem_id = seed_membership(&pool, tenant_id, user_id, "agent").await;
     assert_ne!(old_mem_id, new_mem_id, "re-add must produce a new membership id");
 
@@ -1618,4 +1658,62 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     .await
     .unwrap();
     assert_eq!(new_count, 0, "new membership must have zero notifications");
+}
+
+#[tokio::test]
+async fn assignment_by_actor_without_membership_notifies_assignee() {
+    let Some(pool) = get_pool().await else { return };
+    db::run_migrations(&pool).await.unwrap();
+
+    let tenant_id = seed_tenant(&pool).await;
+    let assignee_user_id = seed_user(&pool, None).await;
+    let assignee_mid = seed_membership(&pool, tenant_id, assignee_user_id, "agent").await;
+    // Actor is a platform user (super_admin) with NO tenant membership.
+    // The tenant_context_middleware grants staff_tenant_permissions to platform
+    // users, bypassing the membership check so the API call succeeds, while the
+    // notification path must still resolve actorMembershipId: null.
+    let actor_user_id = seed_user(&pool, Some("super_admin")).await;
+    let customer_id = seed_customer(&pool, tenant_id).await;
+    let conv_id = seed_conversation(&pool, tenant_id, customer_id).await;
+
+    let state = setup_state(pool.clone());
+
+    let payload = json!({"assigned_membership_id": assignee_mid});
+    let response = send_state(
+        &state,
+        json_patch(
+            &format!("/api/v1/tenant/conversations/{conv_id}"),
+            actor_user_id,
+            tenant_id,
+            payload,
+        ),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    drain_pending_notifications(&state).await;
+
+    let rows: Vec<(Uuid, String, Option<Uuid>)> = sqlx::query_as(
+        "SELECT n.recipient_membership_id, n.state, n.actor_membership_id FROM notifications n \
+         WHERE n.tenant_id = $1 AND n.subject_id = $2 AND n.kind = 'conversation.assigned'",
+    )
+    .bind(tenant_id)
+    .bind(conv_id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(rows.len(), 1, "expected exactly 1 notification for assignee");
+    assert_eq!(rows[0].0, assignee_mid, "notification must go to the assignee");
+    assert!(rows[0].2.is_none(), "actor_membership_id must be NULL when actor has no membership");
+
+    let req_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM outbox_events \
+         WHERE tenant_id = $1::text AND event_type = 'notification.requested'",
+    )
+    .bind(tenant_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(req_count, 0, "all notification.requested outbox events must be drained");
 }

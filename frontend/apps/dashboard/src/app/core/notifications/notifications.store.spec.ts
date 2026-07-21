@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { of } from 'rxjs';
 import { NotificationsStore } from './notifications.store';
 import { NotificationsApiService } from './notifications.api';
@@ -9,6 +10,7 @@ describe('NotificationsStore', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
+        provideHttpClientTesting(),
         NotificationsStore,
         {
           provide: NotificationsApiService,

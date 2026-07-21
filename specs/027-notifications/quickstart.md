@@ -12,11 +12,28 @@ Proves the feature end-to-end. Contracts: [contracts/notifications-api.md](contr
 
 ## Automated checks (all must pass)
 
-```bash
-# Backend
-cd backend && cargo test -p notifications -p email -p server
+### Backend (unit + integration w/ PostgreSQL)
 
-# Frontend
+```bash
+# Start services (Docker required):
+docker compose -f infra/docker-compose.yml up -d postgres redis
+
+# Run migrations:
+cd backend && DATABASE_URL="postgres://customer_service:customer_service_dev@localhost:5432/customer_service" sqlx migrate run
+
+# Run all backend tests (unit only, skips DB-gated tests):
+cargo test --workspace
+
+# Run with database integration (full coverage):
+REQUIRE_DB_TESTS=1 DATABASE_URL="postgres://customer_service:customer_service_dev@localhost:5432/customer_service" cargo test -p server --test notifications
+
+# Performance test (SC-004) — run separately, expects empty notifications table:
+REQUIRE_DB_TESTS=1 DATABASE_URL="..." cargo test -p server --test notifications list_under_one_second_with_one_thousand_notifications -- --ignored
+```
+
+### Frontend
+
+```bash
 cd frontend && pnpm ng test dashboard && pnpm ng build dashboard && pnpm lint && pnpm format:check
 ```
 
