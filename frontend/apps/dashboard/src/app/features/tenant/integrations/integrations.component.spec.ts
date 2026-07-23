@@ -1,31 +1,48 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, provideRouter } from '@angular/router';
 import { provideTaiga } from '@taiga-ui/core';
 import { of, throwError } from 'rxjs';
-import { PagePayload, RoutedPageDataService } from '../routed-page-data.service';
+import { ApiResponse } from '../../../core/api/api.models';
+import { IntegrationList, IntegrationListItem } from '../../../core/api/tenant-api.models';
+import { IntegrationsApiService } from './integrations-api.service';
 import { IntegrationsComponent } from './integrations.component';
+import { IntegrationsStore } from './integrations.store';
+
+const MOCK_ITEMS: IntegrationListItem[] = [
+  {
+    slug: 'generic-webhook',
+    name: 'Generic Webhook',
+    description: 'Receive events from any system that can send signed webhooks.',
+    category: 'automation',
+    isAvailable: true,
+    status: 'not_connected',
+  },
+];
+
+const MOCK_LIST: IntegrationList = { items: MOCK_ITEMS };
+const MOCK_RESPONSE: ApiResponse<IntegrationList> = { data: MOCK_LIST };
 
 describe('IntegrationsComponent', () => {
-  const loadIntegrations = vi.fn();
-  const MOCK_INTEGRATIONS: PagePayload = {
-    page: 'integrations',
-    data: [],
-  };
+  const list = vi.fn();
 
   beforeEach(() => {
-    loadIntegrations.mockReset();
+    list.mockReset();
     TestBed.configureTestingModule({
       imports: [IntegrationsComponent],
       providers: [
         provideTaiga(),
         provideZonelessChangeDetection(),
-        { provide: RoutedPageDataService, useValue: { load: loadIntegrations } },
+        provideRouter([]),
+        IntegrationsStore,
+        { provide: IntegrationsApiService, useValue: { list } },
+        { provide: ActivatedRoute, useValue: {} },
       ],
     });
   });
 
-  it('moves from pending to content', async () => {
-    loadIntegrations.mockReturnValue(of(MOCK_INTEGRATIONS));
+  it('moves from loading to content when items load', async () => {
+    list.mockReturnValue(of(MOCK_RESPONSE));
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(IntegrationsComponent);
     fixture.detectChanges();
@@ -33,11 +50,13 @@ describe('IntegrationsComponent', () => {
     await vi.waitFor(() => {
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelector('app-loading-state')).toBeFalsy();
+      const grid = fixture.nativeElement.querySelector('section.grid');
+      expect(grid).toBeTruthy();
     });
   });
 
-  it('moves from pending to empty state', async () => {
-    loadIntegrations.mockReturnValue(of(null));
+  it('shows the empty state when there are no items', async () => {
+    list.mockReturnValue(of({ data: { items: [] } } as ApiResponse<IntegrationList>));
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(IntegrationsComponent);
     fixture.detectChanges();
@@ -48,8 +67,8 @@ describe('IntegrationsComponent', () => {
     });
   });
 
-  it('moves from pending to error and retries', async () => {
-    loadIntegrations.mockReturnValue(throwError(() => new Error('fail')));
+  it('moves from loading to error and retries', async () => {
+    list.mockReturnValue(throwError(() => new Error('fail')));
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(IntegrationsComponent);
     fixture.detectChanges();
@@ -59,7 +78,7 @@ describe('IntegrationsComponent', () => {
       expect(fixture.nativeElement.textContent).toContain('Something went wrong');
     });
 
-    loadIntegrations.mockReturnValue(of(MOCK_INTEGRATIONS));
+    list.mockReturnValue(of(MOCK_RESPONSE));
     const retryBtn = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('button'),
     ).find((b) => b.textContent?.trim() === 'Try again')!;

@@ -38,6 +38,7 @@ serial_test = "3"
 hex = "0.4"
 getrandom = "0.3"
 sha2 = "0.10"
+hmac = "0.12"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 aes-gcm = "0.10"
 base64 = "0.22"

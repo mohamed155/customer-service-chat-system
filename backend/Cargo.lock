@@ -2153,6 +2153,28 @@ dependencies = [
 [[package]]
 name = "integrations"
 version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "axum",
+ "base64",
+ "chrono",
+ "config",
+ "db",
+ "hex",
+ "hmac 0.12.1",
+ "identity",
+ "kernel",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "tenancy",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
 
 [[package]]
 name = "ipnet"
@@ -3510,8 +3532,10 @@ dependencies = [
  "futures",
  "getrandom 0.3.4",
  "hex",
+ "hmac 0.12.1",
  "http-body-util",
  "identity",
+ "integrations",
  "kernel",
  "knowledge",
  "notifications",

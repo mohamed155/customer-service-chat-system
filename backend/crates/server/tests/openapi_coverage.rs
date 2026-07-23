@@ -176,6 +176,14 @@ const EXPECTED: &[(&str, &str)] = &[
     ("GET", "/tenant/notifications/unread-count"),
     ("POST", "/tenant/notifications/{id}/read"),
     ("POST", "/tenant/notifications/read-all"),
+    // Integrations (028)
+    ("GET", "/tenant/integrations"),
+    ("GET", "/tenant/integrations/{slug}"),
+    ("POST", "/tenant/integrations/{slug}/connect"),
+    ("PUT", "/tenant/integrations/{slug}/config"),
+    ("POST", "/tenant/integrations/{slug}/disconnect"),
+    ("GET", "/tenant/integrations/{slug}/events"),
+    ("POST", "/hooks/v1/{token}"),
     // Operational
     ("GET", "/health"),
     ("GET", "/ready"),

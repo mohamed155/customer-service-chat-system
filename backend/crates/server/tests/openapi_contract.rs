@@ -50,6 +50,7 @@ fn make_state() -> AppState {
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
         s3: None,
+        integration_secrets_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
     };
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     AppState {

@@ -92,6 +92,7 @@ pub struct AppConfig {
     pub smtp_from: Option<String>,
     pub public_dashboard_url: String,
     pub ai_key_encryption_key: Option<String>,
+    pub integration_secrets_key: Option<String>,
     pub ai_openai_base_url: Option<String>,
     pub ai_anthropic_base_url: Option<String>,
     pub ai_gemini_base_url: Option<String>,
@@ -112,6 +113,10 @@ impl fmt::Debug for AppConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let smtp_url = self.smtp_url.as_ref().map(|_| "[REDACTED]");
         let ai_key = self.ai_key_encryption_key.as_ref().map(|_| "[REDACTED]");
+        let integration_secrets_key = self
+            .integration_secrets_key
+            .as_ref()
+            .map(|_| "[REDACTED]");
         f.debug_struct("AppConfig")
             .field("database_url", &"[REDACTED]")
             .field("redis_url", &"[REDACTED]")
@@ -131,6 +136,7 @@ impl fmt::Debug for AppConfig {
             .field("public_dashboard_url", &self.public_dashboard_url)
             .field("shutdown_grace_seconds", &self.shutdown_grace_seconds)
             .field("ai_key_encryption_key", &ai_key)
+            .field("integration_secrets_key", &integration_secrets_key)
             .field("ai_openai_base_url", &self.ai_openai_base_url)
             .field("ai_anthropic_base_url", &self.ai_anthropic_base_url)
             .field("ai_gemini_base_url", &self.ai_gemini_base_url)
@@ -269,6 +275,23 @@ impl AppConfig {
                 ));
             }
         };
+        let integration_secrets_key = match env::var("APP_INTEGRATION_SECRETS_KEY") {
+            Ok(v) => {
+                use base64::Engine;
+                let decoded = base64::engine::general_purpose::STANDARD
+                    .decode(&v)
+                    .map_err(|_| {
+                        ConfigError("APP_INTEGRATION_SECRETS_KEY must be valid base64".into())
+                    })?;
+                if decoded.len() != 32 {
+                    return Err(ConfigError(
+                        "APP_INTEGRATION_SECRETS_KEY must be a base64-encoded string of exactly 32 bytes".into(),
+                    ));
+                }
+                Some(v)
+            }
+            Err(_) => None,
+        };
         let ai_openai_base_url = env::var("APP_AI_OPENAI_BASE_URL").ok();
         let ai_anthropic_base_url = env::var("APP_AI_ANTHROPIC_BASE_URL").ok();
         let ai_gemini_base_url = env::var("APP_AI_GEMINI_BASE_URL").ok();
@@ -324,6 +347,7 @@ impl AppConfig {
             smtp_from,
             public_dashboard_url,
             ai_key_encryption_key,
+            integration_secrets_key,
             ai_openai_base_url,
             ai_anthropic_base_url,
             ai_gemini_base_url,
@@ -388,6 +412,7 @@ mod tests {
                 "SMTP_FROM",
                 "PUBLIC_DASHBOARD_URL",
                 "APP_AI_KEY_ENCRYPTION_KEY",
+                "APP_INTEGRATION_SECRETS_KEY",
                 "APP_AI_OPENAI_BASE_URL",
                 "APP_AI_ANTHROPIC_BASE_URL",
                 "APP_AI_GEMINI_BASE_URL",

@@ -164,6 +164,18 @@ use utoipa::{openapi, Modify, OpenApi};
         notifications::model::NotificationListResponse,
         notifications::model::UnreadCountResponse,
         notifications::model::MarkedResponse,
+        // Integrations (spec 028)
+        integrations::model::ConfigFieldDto,
+        integrations::model::IntegrationListItemDto,
+        integrations::model::IntegrationListResponse,
+        integrations::model::IntegrationSecretRefDto,
+        integrations::model::IntegrationConnectionDto,
+        integrations::model::IntegrationDetailDto,
+        integrations::model::ConnectPayload,
+        integrations::model::UpdateConfigPayload,
+        integrations::model::IntegrationEventDto,
+        integrations::model::IntegrationEventListResponse,
+        integrations::model::PaginationInfo,
         // Widgets
         widgets::model::PublicWidgetConfigDto,
         widgets::model::CreateSessionPayload,

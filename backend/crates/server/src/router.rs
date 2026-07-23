@@ -111,6 +111,16 @@ fn widget_routes() -> OpenApiRouter<sqlx::PgPool> {
         .routes(routes!(widgets::public_events::stream_events))
 }
 
+/// Public inbound-webhook intake. Mounted outside the tenant middleware:
+/// no auth, no tenant context — the per-connection intake token in the URL
+/// is the credential. The 256 KB body cap (FR-014) is enforced here as the
+/// outermost layer on this router.
+fn hooks_routes() -> OpenApiRouter<sqlx::PgPool> {
+    OpenApiRouter::new()
+        .routes(routes!(integrations::webhook::receive_webhook))
+        .layer(DefaultBodyLimit::max(256 * 1024))
+}
+
 fn cors_layer(config: &AppConfig) -> CorsLayer {
     let origins: Vec<_> = config
         .cors_allowed_origins
@@ -736,6 +746,31 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             routes!(audit::routes::list_tenant_audit_logs)
                 .layer(require_permission(Permission::AuditView)),
         )
+        // Integrations (spec 028)
+        .routes(
+            routes!(integrations::routes::list_integrations)
+                .layer(require_permission(Permission::IntegrationsView)),
+        )
+        .routes(
+            routes!(integrations::routes::get_integration)
+                .layer(require_permission(Permission::IntegrationsView)),
+        )
+        .routes(
+            routes!(integrations::routes::connect_integration)
+                .layer(require_permission(Permission::IntegrationsManage)),
+        )
+        .routes(
+            routes!(integrations::routes::update_integration_config)
+                .layer(require_permission(Permission::IntegrationsManage)),
+        )
+        .routes(
+            routes!(integrations::routes::disconnect_integration)
+                .layer(require_permission(Permission::IntegrationsManage)),
+        )
+        .routes(
+            routes!(integrations::routes::list_integration_events)
+                .layer(require_permission(Permission::IntegrationsView)),
+        )
         // Notifications (spec 027) — no permission gate (FR-012a)
         .routes(routes!(notifications::routes::list_notifications))
         .routes(routes!(notifications::routes::get_unread_notification_count))
@@ -932,12 +967,16 @@ fn api_routes(
     let router: OpenApiRouter<sqlx::PgPool> =
         OpenApiRouter::with_openapi(ApiDoc::openapi()).merge(public_routes());
     let router = router.merge(authenticated_routes());
-    // Widget public routes — no authentication, permissive CORS, rate-limited
+    // Widget public routes — no authentication, permissive CORS, rate-limited.
+    // The same `rate_store` Arc is also injected onto the integration hooks
+    // router (FR-014 per-connection rate limit), so the two share budget.
     let rate_store = Arc::new(kernel::InMemoryRateLimitStore::default());
     let widget_router = widget_routes()
-        .layer(Extension(rate_store))
+        .layer(Extension(rate_store.clone()))
         .layer(widget_cors_layer());
     let router = router.merge(widget_router);
+    let hooks_router = hooks_routes().layer(Extension(rate_store));
+    let router = router.merge(hooks_router);
     let platform = platform_routes(include_test_routes)
         .layer(middleware::from_fn(platform_permission_middleware))
         .layer(middleware::from_fn(authentication_middleware));
@@ -989,6 +1028,7 @@ pub fn documented_openapi(include_test_routes: bool) -> utoipa::openapi::OpenApi
     let router = router.merge(platform_routes(include_test_routes));
     let router = router.merge(tenant_routes(include_test_routes));
     let router = router.merge(widget_routes());
+    let router = router.merge(hooks_routes());
     router.into_openapi()
 }
 
@@ -1128,6 +1168,7 @@ mod tests {
             smtp_from: None,
             public_dashboard_url: String::new(),
             ai_key_encryption_key: None,
+            integration_secrets_key: None,
             ai_openai_base_url: None,
             ai_anthropic_base_url: None,
             ai_gemini_base_url: None,

@@ -1,14 +1,18 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { TuiIcon } from '@taiga-ui/core';
+import { RouterLink } from '@angular/router';
+import { IntegrationListItem } from '../../../core/api/tenant-api.models';
+import { APP_PATHS } from '../../../core/router/app-paths';
+import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
-import { PAGE_ROUTE, RoutedPageStore } from '../routed-page.store';
+import {
+  BadgeTone,
+  StatusBadgeComponent,
+} from '../../../shared/components/status-badge/status-badge.component';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
-import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
-import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
-import { IntegrationStatus } from '../../../shared/fixtures/fixture.models';
+import { IntegrationsStore } from './integrations.store';
 
 @Component({
   selector: 'app-integrations',
@@ -18,48 +22,51 @@ import { IntegrationStatus } from '../../../shared/fixtures/fixture.models';
     LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,
+    RouterLink,
     SectionHeaderComponent,
     StatusBadgeComponent,
-    TuiIcon,
   ],
-  providers: [RoutedPageStore, { provide: PAGE_ROUTE, useValue: 'integrations' }],
   template: `
     <app-page-container>
       <app-page-header
         title="Integrations"
         [description]="'Connect channels and business systems'"
       />
-      @if (page.loading()) {
+      @if (loading() && items().length === 0) {
         <app-loading-state />
-      } @else if (hasError()) {
+      } @else if (error()) {
         <app-empty-state
           icon="@tui.alert-circle"
           title="Something went wrong"
-          description="We couldn't load this page. Please try again."
+          [description]="error() ?? ''"
         >
           <button type="button" (click)="retry()">Try again</button>
         </app-empty-state>
-      } @else if (hasData()) {
-        <app-section-header title="Integrations" subtitle="Connect channels and systems" />
-        <section class="grid">
-          @for (integration of integrations(); track integration.id) {
-            <app-dashboard-card>
-              <div class="head">
-                <span class="icon"><tui-icon [icon]="integration.icon" /></span>
-                <app-status-badge [status]="integration.status" [tone]="tone(integration.status)" />
-              </div>
-              <h2>{{ integration.name }}</h2>
-              <p>{{ integration.description }}</p>
-              <button type="button">{{ integration.actionLabel }}</button>
-            </app-dashboard-card>
-          }
-        </section>
-      } @else {
+      } @else if (items().length === 0) {
         <app-empty-state
           icon="@tui.plug"
           title="No integrations configured"
           description="Connect your channels and tools to extend the platform's capabilities."
         />
+      } @else {
+        <app-section-header title="Integrations" subtitle="Connect channels and systems" />
+        <section class="grid">
+          @for (integration of items(); track integration.slug) {
+            <app-dashboard-card>
+              <div class="head">
+                <app-status-badge [status]="integration.status" [tone]="tone(integration.status)" />
+                @if (!integration.isAvailable) {
+                  <span class="badge-soon">Coming soon</span>
+                }
+              </div>
+              <h2>{{ integration.name }}</h2>
+              <p>{{ integration.description }}</p>
+              <a class="action" [routerLink]="detailLink(integration.slug)">{{
+                integration.status === 'connected' ? 'Configure' : 'View'
+              }}</a>
+            </app-dashboard-card>
+          }
+        </section>
       }
     </app-page-container>
   `,
@@ -73,19 +80,21 @@ import { IntegrationStatus } from '../../../shared/fixtures/fixture.models';
       .head {
         display: flex;
         justify-content: space-between;
+        align-items: center;
         gap: var(--app-space-3);
+        margin-bottom: var(--app-space-2);
       }
-      .icon {
-        width: 38px;
-        height: 38px;
-        display: grid;
-        place-items: center;
-        border-radius: var(--app-radius-md);
-        background: var(--app-accent-soft);
-        color: var(--app-accent-strong);
+      .badge-soon {
+        display: inline-block;
+        padding: 2px var(--app-space-2);
+        border-radius: var(--app-radius-sm);
+        background: var(--app-panel-2);
+        color: var(--app-text-2);
+        font-size: var(--app-font-xs);
+        font-weight: 600;
       }
       h2 {
-        margin: var(--app-space-4) 0 var(--app-space-2);
+        margin: var(--app-space-2) 0 var(--app-space-2);
         color: var(--app-text);
         font-size: var(--app-font-lg);
       }
@@ -95,14 +104,17 @@ import { IntegrationStatus } from '../../../shared/fixtures/fixture.models';
         font-size: var(--app-font-sm);
         line-height: 1.5;
       }
-      button {
+      .action {
+        display: inline-block;
         height: 36px;
+        line-height: 34px;
         border: 1px solid var(--app-border);
         border-radius: var(--app-radius-md);
         background: var(--app-panel-2);
         color: var(--app-text);
         padding: 0 var(--app-space-3);
         font-weight: 650;
+        text-decoration: none;
       }
       @media (max-width: 1200px) {
         .grid {
@@ -119,21 +131,30 @@ import { IntegrationStatus } from '../../../shared/fixtures/fixture.models';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IntegrationsComponent {
-  protected readonly page = inject(RoutedPageStore);
-  protected readonly hasData = computed(() => this.page.data() !== undefined);
-  protected readonly hasError = computed(() => this.page.error() !== null);
+  protected readonly store = inject(IntegrationsStore);
+  protected readonly items = this.store.items;
+  protected readonly loading = this.store.loading;
+  protected readonly error = this.store.error;
+  protected readonly hasLoaded = computed(() => this.items().length > 0);
 
-  protected readonly integrations = computed(() => {
-    const data = this.page.data();
-    if (data?.page === 'integrations') return data.data;
-    return [];
-  });
+  protected tone(status: IntegrationListItem['status']): BadgeTone {
+    switch (status) {
+      case 'connected':
+        return 'green';
+      case 'error':
+        return 'red';
+      case 'disconnected':
+        return 'amber';
+      default:
+        return 'neutral';
+    }
+  }
 
-  protected tone(status: IntegrationStatus): 'green' | 'amber' | 'neutral' {
-    return status === 'connected' ? 'green' : status === 'coming-soon' ? 'amber' : 'neutral';
+  protected detailLink(slug: string): string[] {
+    return ['/', APP_PATHS.tenant.base, APP_PATHS.tenant.integrationDetail.replace(':slug', slug)];
   }
 
   protected retry(): void {
-    this.page.retry();
+    this.store.load();
   }
 }

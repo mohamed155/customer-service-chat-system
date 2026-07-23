@@ -1147,3 +1147,193 @@ export function notificationListFromWire(wire: NotificationListWire): {
     nextCursor: wire.pagination.next_cursor,
   };
 }
+
+export interface IntegrationConfigFieldWire {
+  key: string;
+  label: string;
+  kind: 'text' | 'secret';
+  required: boolean;
+}
+
+export interface IntegrationListItemWire {
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  is_available: boolean;
+  status: 'not_connected' | 'connected' | 'error' | 'disconnected';
+}
+
+export interface IntegrationListWire {
+  data: IntegrationListItemWire[];
+}
+
+export interface IntegrationSecretRefWire {
+  field_key: string;
+  hint: string;
+}
+
+export interface IntegrationConnectionWire {
+  config: Record<string, unknown>;
+  secrets: IntegrationSecretRefWire[];
+  webhook_url: string | null;
+  connected_at: string;
+  disconnected_at: string | null;
+}
+
+export interface IntegrationDetailWire {
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  is_available: boolean;
+  status: 'not_connected' | 'connected' | 'error' | 'disconnected';
+  config_schema: IntegrationConfigFieldWire[];
+  connection: IntegrationConnectionWire | null;
+}
+
+export interface IntegrationConfigField {
+  key: string;
+  label: string;
+  kind: 'text' | 'secret';
+  required: boolean;
+}
+
+export interface IntegrationListItem {
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  isAvailable: boolean;
+  status: 'not_connected' | 'connected' | 'error' | 'disconnected';
+}
+
+export interface IntegrationList {
+  items: IntegrationListItem[];
+}
+
+export interface IntegrationSecretRef {
+  fieldKey: string;
+  hint: string;
+}
+
+export interface IntegrationConnection {
+  config: Record<string, unknown>;
+  secrets: IntegrationSecretRef[];
+  webhookUrl: string | null;
+  connectedAt: string;
+  disconnectedAt: string | null;
+}
+
+export interface IntegrationDetail {
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  isAvailable: boolean;
+  status: 'not_connected' | 'connected' | 'error' | 'disconnected';
+  configSchema: IntegrationConfigField[];
+  connection: IntegrationConnection | null;
+}
+
+export function integrationListFromWire(wire: IntegrationListWire): IntegrationList {
+  return {
+    items: wire.data.map((i) => ({
+      slug: i.slug,
+      name: i.name,
+      description: i.description,
+      category: i.category,
+      isAvailable: i.is_available,
+      status: i.status,
+    })),
+  };
+}
+
+export function integrationDetailFromWire(wire: IntegrationDetailWire): IntegrationDetail {
+  return {
+    slug: wire.slug,
+    name: wire.name,
+    description: wire.description,
+    category: wire.category,
+    isAvailable: wire.is_available,
+    status: wire.status,
+    configSchema: wire.config_schema.map((f) => ({
+      key: f.key,
+      label: f.label,
+      kind: f.kind,
+      required: f.required,
+    })),
+    connection: wire.connection
+      ? {
+          config: wire.connection.config,
+          secrets: wire.connection.secrets.map((s) => ({
+            fieldKey: s.field_key,
+            hint: s.hint,
+          })),
+          webhookUrl: wire.connection.webhook_url,
+          connectedAt: wire.connection.connected_at,
+          disconnectedAt: wire.connection.disconnected_at,
+        }
+      : null,
+  };
+}
+
+// ── Integration events (spec 028 US3) ────────────────────────────────────────
+
+// Generic cursor-paginated envelope (used by audit-logs, integration events,
+// and future list endpoints). Mirrors the {data, pagination:{next_cursor,
+// has_more}} shape in the REST contract.
+export interface PaginationWire {
+  readonly next_cursor: string | null;
+  readonly has_more: boolean;
+}
+
+export interface Pagination {
+  readonly nextCursor: string | null;
+  readonly hasMore: boolean;
+}
+
+export interface IntegrationEventWire {
+  readonly id: string;
+  readonly event_type: string;
+  readonly outcome: string | null;
+  readonly reason: string | null;
+  readonly actor_membership_id: string | null;
+  readonly created_at: string;
+}
+
+export interface IntegrationEventListWire {
+  readonly data: readonly IntegrationEventWire[];
+  readonly pagination: PaginationWire;
+}
+
+export interface IntegrationEvent {
+  readonly id: string;
+  readonly eventType: string;
+  readonly outcome: string | null;
+  readonly reason: string | null;
+  readonly actorMembershipId: string | null;
+  readonly createdAt: string;
+}
+
+export interface IntegrationEventList {
+  readonly data: readonly IntegrationEvent[];
+  readonly pagination: Pagination;
+}
+
+export function integrationEventListFromWire(wire: IntegrationEventListWire): IntegrationEventList {
+  return {
+    data: wire.data.map((event) => ({
+      id: event.id,
+      eventType: event.event_type,
+      outcome: event.outcome,
+      reason: event.reason,
+      actorMembershipId: event.actor_membership_id,
+      createdAt: event.created_at,
+    })),
+    pagination: {
+      nextCursor: wire.pagination.next_cursor,
+      hasMore: wire.pagination.has_more,
+    },
+  };
+}

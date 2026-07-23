@@ -50,6 +50,7 @@ pub fn test_config() -> config::AppConfig {
         shutdown_grace_seconds: 1,
         docs_enabled: false,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
+        integration_secrets_key: None,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,

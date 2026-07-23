@@ -166,6 +166,25 @@ async fn main() {
             }
         })
     };
+    let integration_retention_sweeper = {
+        let pool = state.db.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(6 * 3600));
+            loop {
+                interval.tick().await;
+                match integrations::retention::sweep_expired(&pool).await {
+                    Ok(count) => {
+                        if count > 0 {
+                            tracing::info!(count, "integration retention sweep: deleted expired rows");
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(%e, "integration retention sweep failed");
+                    }
+                }
+            }
+        })
+    };
     let knowledge_indexer_worker = tokio::spawn(indexer::run_knowledge_indexer_worker(
         state.db.clone(),
         Arc::new(state.ai.clone()) as Arc<dyn knowledge::indexer::Embedder>,
@@ -212,6 +231,9 @@ async fn main() {
         }
         result = notification_retention_sweeper => {
             panic!("notification retention sweeper stopped unexpectedly: {result:?}");
+        }
+        result = integration_retention_sweeper => {
+            panic!("integration retention sweeper stopped unexpectedly: {result:?}");
         }
     }
 }

@@ -42,6 +42,7 @@ export const PAGE_PERMISSIONS = {
   [APP_PATHS.tenant.aiAgentPrompt]: 'ai_agent.view',
   [APP_PATHS.tenant.knowledgeBase]: 'knowledge_base.view',
   [APP_PATHS.tenant.integrations]: 'integrations.view',
+  [APP_PATHS.tenant.integrationDetail]: 'integrations.view',
   [APP_PATHS.tenant.analytics]: 'analytics.view',
   [APP_PATHS.tenant.settings]: 'settings.view',
   [APP_PATHS.tenant.settingsTools]: 'settings.view',

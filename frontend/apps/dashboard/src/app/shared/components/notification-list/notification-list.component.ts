@@ -1,24 +1,9 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { TuiIcon } from '@taiga-ui/core';
 import { NotificationEntry } from '../../../core/api/tenant-api.models';
 import { EmptyStateComponent } from '../empty-state/empty-state.component';
 import { LoadingStateComponent } from '../loading-state/loading-state.component';
-
-function relativeTime(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diffMs = now - then;
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return 'just now';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return new DatePipe('en-US').transform(dateStr, 'MMM d') ?? dateStr;
-}
+import { relativeTime } from '../../utils/relative-time';
 
 function stateClass(state: string): string {
   if (state === 'unread') return 'state-unread';

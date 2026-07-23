@@ -13,7 +13,6 @@ import {
   ChannelBreakdownFixture,
   ConversationFixture,
   CustomerFixture,
-  IntegrationFixture,
   InvoiceFixture,
   MetricFixture,
   SessionFixture,
@@ -22,7 +21,6 @@ import {
   UsageFixture,
   WorkspaceProfileFixture,
 } from '../../shared/fixtures/fixture.models';
-import { INTEGRATION_FIXTURES } from '../../shared/fixtures/integration.fixtures';
 import {
   API_KEY_FIXTURE,
   INVOICE_FIXTURES,
@@ -72,7 +70,6 @@ export type PagePayload =
   | { page: 'customers'; data: readonly CustomerFixture[] }
   | { page: 'conversations'; data: ConversationsPayload }
   | { page: 'ai-agent'; data: AiAgentPayload }
-  | { page: 'integrations'; data: readonly IntegrationFixture[] }
   | { page: 'settings'; data: SettingsPayload };
 
 @Injectable({ providedIn: 'root' })
@@ -131,8 +128,6 @@ export class RoutedPageDataService {
             ],
           },
         };
-      case 'integrations':
-        return { page: 'integrations', data: INTEGRATION_FIXTURES };
       case 'settings':
         return {
           page: 'settings',
@@ -184,8 +179,6 @@ export class RoutedPageDataService {
             timelineSteps: [{ label: 'Classify intent', detail: 'Support request' }],
           },
         };
-      case 'integrations':
-        return { page: 'integrations', data: INTEGRATION_FIXTURES.slice(0, 1) };
       case 'settings':
         return {
           page: 'settings',
@@ -231,8 +224,6 @@ export class RoutedPageDataService {
             timelineSteps: [],
           },
         };
-      case 'integrations':
-        return { page: 'integrations', data: [] };
       case 'settings':
         return {
           page: 'settings',

@@ -17,6 +17,7 @@ escalations = { path = "../modules/escalations" }
 feedback = { path = "../modules/feedback" }
 db = { path = "../shared/db" }
 identity = { path = "../modules/identity" }
+integrations = { path = "../modules/integrations" }
 kernel = { path = "../shared/kernel" }
 email = { path = "../modules/email" }
 notifications = { path = "../modules/notifications" }
@@ -48,6 +49,7 @@ chrono.workspace = true
 futures.workspace = true
 getrandom.workspace = true
 hex.workspace = true
+hmac.workspace = true
 http-body-util.workspace = true
 rand.workspace = true
 serial_test.workspace = true

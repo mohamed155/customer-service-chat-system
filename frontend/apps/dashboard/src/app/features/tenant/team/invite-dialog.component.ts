@@ -19,6 +19,7 @@ import { DialogShellComponent } from '../../../shared/components/dialog-shell/di
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { IconButtonComponent } from '../../../shared/components/icon-button/icon-button.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
+import { copyToClipboard } from '../../../shared/utils/clipboard';
 import { RoleSelectComponent } from './role-select.component';
 
 @Component({
@@ -208,7 +209,7 @@ export class InviteDialogComponent {
     const request = ++this.copyRequest;
     this.copyStatus.set(null);
     try {
-      await navigator.clipboard.writeText(acceptUrl);
+      await copyToClipboard(acceptUrl);
       if (request === this.copyRequest) this.copyStatus.set('copied');
     } catch {
       if (request === this.copyRequest) this.copyStatus.set('failed');

@@ -39,3 +39,11 @@
 - Platform feature: `features/platform/audit-logs/` — same layout plus tenant filter and `showTenantColumn="true"`.
 - Wire types and mapper in `core/api/tenant-api.models.ts` (`AuditEntryWire`, `AuditListWire`, `auditListFromWire`).
 - Fixtures in `shared/fixtures/audit.fixtures.ts`.
+
+## Integrations
+
+- Tenant feature: `features/tenant/integrations/` — `integrations-api.service.ts` (typed HTTP), `integrations.store.ts` (catalog list SignalStore), `integration-detail.store.ts` (detail store with `load` / `connect` / `updateConfig` / `disconnect` / `loadMoreEvents` rxMethods), `integration-detail.component.ts` (read-only detail + connect/update form + event log with "Load more").
+- Wire types and mappers in `core/api/tenant-api.models.ts` (`IntegrationListItemWire`, `IntegrationDetailWire`, `IntegrationEventWire` + camelCase models + `integrationListFromWire` / `integrationDetailFromWire` / `integrationEventListFromWire`).
+- Shared utilities: `shared/utils/clipboard.ts` (`copyToClipboard`, used by the webhook-URL copy button) and `shared/utils/relative-time.ts` (`relativeTime`, used by the event log).
+- Routes: `APP_PATHS.tenant.integrations` (list) and `APP_PATHS.tenant.integrationDetail` (`'integrations/:slug'`, detail) — both guarded by `integrations.view` via `PAGE_PERMISSIONS`.
+- Permissions: `integrations.view` (list, detail, events) and `integrations.manage` (connect, update, disconnect) — Owner/Admin/Manager manage, Viewer read-only, Agent denied.

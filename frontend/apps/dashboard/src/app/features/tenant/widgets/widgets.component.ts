@@ -9,6 +9,7 @@ import { LoadingStateComponent } from '../../../shared/components/loading-state/
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
+import { copyToClipboard } from '../../../shared/utils/clipboard';
 import { WidgetPreviewComponent } from './widget-preview.component';
 import { WidgetEditorComponent } from './widget-editor.component';
 import { WidgetsStore } from './widgets.store';
@@ -440,7 +441,7 @@ export class WidgetsComponent {
   }
 
   protected copySnippet(snippet: string): void {
-    navigator.clipboard.writeText(snippet).then(() => {
+    copyToClipboard(snippet).then(() => {
       this.copied.set(true);
       setTimeout(() => this.copied.set(false), 2000);
     });

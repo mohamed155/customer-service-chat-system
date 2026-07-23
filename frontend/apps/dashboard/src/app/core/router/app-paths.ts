@@ -29,6 +29,7 @@ export const APP_PATHS = {
     knowledgeBaseDetail: (id: string) => `knowledge-base/${id}`,
     knowledgeBaseEdit: (id: string) => `knowledge-base/${id}/edit`,
     integrations: 'integrations',
+    integrationDetail: 'integrations/:slug',
     analytics: 'analytics',
     auditLogs: 'audit-logs',
     settings: 'settings',

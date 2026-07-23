@@ -7,6 +7,7 @@ import {
 import { SatisfactionBadgeComponent } from '../../../shared/components/satisfaction-badge/satisfaction-badge.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { Conversation, ConversationListQuery } from '../../../core/api/tenant-api.models';
+import { relativeTime } from '../../../shared/utils/relative-time';
 
 @Component({
   selector: 'app-inbox-list',
@@ -233,8 +234,5 @@ export class InboxListComponent {
     return 'neutral';
   }
 
-  protected relativeTime(iso: string): string {
-    const hours = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000));
-    return hours < 24 ? `${hours}h` : `${Math.round(hours / 24)}d`;
-  }
+  protected relativeTime = relativeTime;
 }

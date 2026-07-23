@@ -2,7 +2,6 @@ export type Channel = 'web' | 'whatsapp' | 'telegram' | 'mobile-sdk' | 'email' |
 export type ConversationStatus = 'open' | 'escalated' | 'closed';
 export type Sentiment = 'positive' | 'neutral' | 'angry';
 export type MessageAuthor = 'customer' | 'ai' | 'human' | 'system';
-export type IntegrationStatus = 'connected' | 'not-connected' | 'coming-soon';
 export type DeltaDirection = 'up' | 'down';
 
 export interface ConversationFixture {
@@ -73,15 +72,6 @@ export interface TopArticleFixture {
   category: string;
   uses: number;
   resolutionRate: number;
-}
-
-export interface IntegrationFixture {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  status: IntegrationStatus;
-  actionLabel: 'Connect' | 'Manage' | 'Notify me';
 }
 
 export interface WorkspaceProfileFixture {

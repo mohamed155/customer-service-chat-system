@@ -33,6 +33,24 @@ This variable is **required** in non-test environments (`production`, `staging`,
 `development`). In the `test` environment it may be omitted (encryption is
 effectively disabled for test helpers).
 
+The integrations module also encrypts per-connection secrets (webhook signing
+secrets and per-field user secrets) at rest using AES-256-GCM, via:
+
+```
+APP_INTEGRATION_SECRETS_KEY=<base64-of-32-bytes>
+```
+
+Generate a suitable key with:
+
+```bash
+head -c 32 /dev/urandom | base64
+```
+
+This variable is **required** in non-test environments (`production`, `staging`,
+`development`) — the integrations crate's `crypto::seal`/`open` path refuses
+to run without it. In the `test` environment it may be omitted (encryption is
+effectively disabled for test helpers).
+
 Optional per-provider base URL overrides allow routing traffic to proxies or
 test servers:
 

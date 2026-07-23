@@ -63,6 +63,7 @@ pub const CATEGORY_PREFIXES: &[(&str, &[&str])] = &[
     ("escalations", &["escalation."]),
     ("knowledge", &["knowledge_category.", "knowledge_document.", "knowledge_item."]),
     ("widgets", &["widget_instance."]),
+    ("integrations", &["integration."]),
 ];
 
 pub fn category_for_action(action: &str) -> &'static str {

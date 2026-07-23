@@ -12,6 +12,7 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
 import { ConversationFixture } from '../../../shared/fixtures/fixture.models';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
+import { relativeTime } from '../../../shared/utils/relative-time';
 import { OverviewChannelBreakdownComponent } from './overview-channel-breakdown.component';
 import { OverviewTrendChartComponent } from './overview-trend-chart.component';
 
@@ -225,10 +226,7 @@ export class OverviewComponent {
     return status === 'closed' ? 'green' : status === 'escalated' ? 'red' : 'amber';
   }
 
-  protected relativeTime(iso: string): string {
-    const hours = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 3_600_000));
-    return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
-  }
+  protected relativeTime = relativeTime;
 
   protected retry(): void {
     this.page.retry();

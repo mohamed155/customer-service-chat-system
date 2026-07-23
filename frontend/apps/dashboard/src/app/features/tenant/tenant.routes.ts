@@ -152,6 +152,19 @@ export const TENANT_ROUTES: Routes = [
     title: PAGE_TITLES.integrations.title,
   },
   {
+    path: APP_PATHS.tenant.integrationDetail,
+    canMatch: [permissionGuard],
+    loadComponent: () =>
+      import('./integrations/integration-detail.component').then(
+        (m) => m.IntegrationDetailComponent,
+      ),
+    data: {
+      pageTitle: 'integration-detail',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.integrationDetail],
+    },
+    title: PAGE_TITLES.integrations.title,
+  },
+  {
     path: APP_PATHS.tenant.analytics,
     canMatch: [permissionGuard],
     loadComponent: () =>
