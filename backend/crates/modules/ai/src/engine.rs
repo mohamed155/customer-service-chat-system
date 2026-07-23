@@ -876,6 +876,12 @@ pub async fn run_generation(
             )
             .await?;
 
+            if channel == "whatsapp" {
+                conversations::outbox::emit_whatsapp_outbound_in_tx(
+                    &mut tx, tenant_id, conversation_id, mid,
+                ).await?;
+            }
+
             let rec = GenerationRecord {
                 id: generation_id,
                 tenant_id,
@@ -1019,6 +1025,12 @@ pub async fn run_generation(
                     Some(confidence_score),
                 )
                 .await?;
+
+                if channel == "whatsapp" {
+                    conversations::outbox::emit_whatsapp_outbound_in_tx(
+                        &mut tx, tenant_id, conversation_id, mid,
+                    ).await?;
+                }
 
                 if !assembled.retrieved_chunks.is_empty() {
                     let citations: Vec<conversations::model::CitationToInsert> = assembled
@@ -1177,13 +1189,18 @@ pub async fn run_generation(
                         .await?;
                 if !has_ack {
                     let mut tx = pool.begin().await?;
-                    conversations::queries::insert_auto_ack_in_tx(
+                    let ack_mid = conversations::queries::insert_auto_ack_in_tx(
                         &mut tx,
                         tenant_id,
                         conversation_id,
                         "Thank you for your message. A team member will be with you shortly.",
                     )
                     .await?;
+                    if channel == "whatsapp" {
+                        conversations::outbox::emit_whatsapp_outbound_in_tx(
+                            &mut tx, tenant_id, conversation_id, ack_mid,
+                        ).await?;
+                    }
                     tx.commit().await?;
                 }
             }
@@ -1198,13 +1215,18 @@ pub async fn run_generation(
 
             let fallback_ok = match async {
                 let mut tx = pool.begin().await?;
-                conversations::queries::insert_fallback_in_tx(
+                let fallback_mid = conversations::queries::insert_fallback_in_tx(
                     &mut tx,
                     tenant_id,
                     conversation_id,
                     fallback_body,
                 )
                 .await?;
+                if channel == "whatsapp" {
+                    conversations::outbox::emit_whatsapp_outbound_in_tx(
+                        &mut tx, tenant_id, conversation_id, fallback_mid,
+                    ).await?;
+                }
                 let present_ids = presence.present_membership_ids_async(tenant_id).await;
                 let _ = escalations::routing::route_new_escalation_in_tx(
                     &mut tx,
@@ -1594,19 +1616,29 @@ pub async fn run_followup_generation(
     };
 
     // Store the reply and write generation record
-    let mid = {
-        let mut tx = pool.begin().await?;
-        let mid = conversations::queries::insert_ai_reply_in_tx(
-            &mut tx,
-            tenant_id,
-            conversation_id,
-            &output.content,
-            None,
-        )
-        .await?;
-        tx.commit().await?;
-        mid
-    };
+        let mid = {
+            let mut tx = pool.begin().await?;
+            let mid = conversations::queries::insert_ai_reply_in_tx(
+                &mut tx,
+                tenant_id,
+                conversation_id,
+                &output.content,
+                None,
+            )
+            .await?;
+            let channel = conversations::queries::conversation_row_in_tx(
+                &mut tx, tenant_id, conversation_id,
+            ).await?
+            .map(|r| r.channel)
+            .unwrap_or_default();
+            if channel == "whatsapp" {
+                conversations::outbox::emit_whatsapp_outbound_in_tx(
+                    &mut tx, tenant_id, conversation_id, mid,
+                ).await?;
+            }
+            tx.commit().await?;
+            mid
+        };
 
     let rec = GenerationRecord {
         id: generation_id,

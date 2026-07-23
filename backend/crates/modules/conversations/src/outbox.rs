@@ -108,3 +108,25 @@ pub async fn emit_tool_decision_in_tx(
     .await?;
     Ok(())
 }
+
+pub async fn emit_whatsapp_outbound_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    message_id: Uuid,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'whatsapp.outbound_message', $4, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(conversation_id)
+    .bind(tenant_id)
+    .bind(json!({
+        "conversation_id": conversation_id,
+        "message_id": message_id,
+    }))
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}

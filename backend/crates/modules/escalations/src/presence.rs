@@ -33,6 +33,7 @@ pub enum Event {
     ConversationTool(ConversationToolEvent),
     NotificationCreated(NotificationBadgeEvent),
     NotificationCleared(NotificationBadgeEvent),
+    ConversationMessageStatus(serde_json::Value),
 }
 
 struct TenantPresence {

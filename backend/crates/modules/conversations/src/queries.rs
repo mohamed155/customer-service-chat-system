@@ -493,6 +493,8 @@ fn timeline_row_to_message(row: TimelineRow) -> Message {
         created_at: row.created_at,
         citations: Vec::new(),
         confidence,
+        attachments: None,
+        delivery: None,
     }
 }
 
@@ -690,15 +692,33 @@ pub async fn timeline_query_in_tx(
     } else {
         load_citations_for_messages(pool, tenant_id, &message_ids).await?
     };
-    let mut data_with_citations: Vec<Message> = Vec::with_capacity(data.len());
+    let attachment_map = if message_ids.is_empty() {
+        HashMap::new()
+    } else {
+        load_attachments_for_messages(pool, tenant_id, &message_ids).await?
+    };
+    let mut delivery_map = if message_ids.is_empty() {
+        HashMap::new()
+    } else {
+        load_whatsapp_meta_for_messages(pool, tenant_id, &message_ids).await?
+    };
+    let mut data_with_enrichments: Vec<Message> = Vec::with_capacity(data.len());
     for mut message in data {
         if let Some(citations) = citation_map.remove(&message.id) {
             message.citations = citations;
         }
-        data_with_citations.push(message);
+        if let Some(attachments) = attachment_map.get(&message.id) {
+            if !attachments.is_empty() {
+                message.attachments = Some(attachments.clone());
+            }
+        }
+        if let Some(delivery) = delivery_map.remove(&message.id) {
+            message.delivery = Some(delivery);
+        }
+        data_with_enrichments.push(message);
     }
 
-    Ok((data_with_citations, has_more, next_cursor))
+    Ok((data_with_enrichments, has_more, next_cursor))
 }
 
 // ---------------------------------------------------------------------------
@@ -898,6 +918,8 @@ pub async fn add_message_in_tx(
             created_at: inserted.3,
             citations: Vec::new(),
             confidence: None,
+            attachments: None,
+            delivery: None,
         },
         ConversationStatusRef {
             status: status_enum,
@@ -1313,15 +1335,15 @@ pub async fn insert_auto_ack_in_tx(
     tenant_id: Uuid,
     conversation_id: Uuid,
     body: &str,
-) -> sqlx::Result<()> {
-    sqlx::query(
+) -> sqlx::Result<Uuid> {
+    let id: Uuid = sqlx::query_scalar(
         "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
-         VALUES ($1, $2, 'system', $3)",
+         VALUES ($1, $2, 'system', $3) RETURNING id",
     )
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(body)
-    .execute(&mut **tx)
+    .fetch_one(&mut **tx)
     .await?;
 
     sqlx::query(
@@ -1333,7 +1355,7 @@ pub async fn insert_auto_ack_in_tx(
     .execute(&mut **tx)
     .await?;
 
-    Ok(())
+    Ok(id)
 }
 
 pub async fn insert_ai_reply_in_tx(
@@ -1594,6 +1616,101 @@ pub async fn customer_id_for_conversation(
     .fetch_optional(pool)
     .await?
     .ok_or_else(|| sqlx::Error::Protocol("Conversation not found or soft-deleted".into()))
+}
+
+pub async fn find_open_conversation_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    customer_id: Uuid,
+    channel: &str,
+) -> sqlx::Result<Option<Uuid>> {
+    sqlx::query_scalar(
+        "SELECT id FROM conversations \
+         WHERE tenant_id = $1 AND customer_id = $2 AND channel = $3 \
+           AND status IN ('open', 'escalated') \
+           AND deleted_at IS NULL \
+         ORDER BY last_activity_at DESC \
+         LIMIT 1",
+    )
+    .bind(tenant_id)
+    .bind(customer_id)
+    .bind(channel)
+    .fetch_optional(&mut **tx)
+    .await
+}
+
+pub async fn last_customer_message_at(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+) -> sqlx::Result<Option<chrono::DateTime<chrono::Utc>>> {
+    sqlx::query_scalar(
+        "SELECT MAX(created_at) FROM messages \
+         WHERE tenant_id = $1 AND conversation_id = $2 AND kind = 'customer'",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn load_attachments_for_messages(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    message_ids: &[Uuid],
+) -> sqlx::Result<std::collections::HashMap<Uuid, Vec<crate::model::AttachmentInfo>>> {
+    let rows: Vec<(Uuid, Uuid, String, String, Option<String>, Option<i64>, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT id, message_id, kind, status, mime_type, size_bytes, file_name, storage_key \
+         FROM message_attachments WHERE tenant_id = $1 AND message_id = ANY($2)",
+    )
+    .bind(tenant_id)
+    .bind(message_ids)
+    .fetch_all(pool)
+    .await?;
+
+    let mut map: std::collections::HashMap<Uuid, Vec<crate::model::AttachmentInfo>> =
+        std::collections::HashMap::new();
+    for (id, message_id, kind, status, mime_type, size_bytes, file_name, storage_key) in rows {
+        let has_storage = storage_key.is_some();
+        map.entry(message_id).or_default().push(crate::model::AttachmentInfo {
+            id,
+            kind,
+            status,
+            mime_type,
+            size_bytes,
+            file_name,
+            url: if has_storage { Some(String::new()) } else { None },
+        });
+    }
+    Ok(map)
+}
+
+pub async fn load_whatsapp_meta_for_messages(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    message_ids: &[Uuid],
+) -> sqlx::Result<std::collections::HashMap<Uuid, crate::model::DeliveryInfo>> {
+    let rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
+        "SELECT message_id, COALESCE(delivery_status, 'pending'), failure_reason \
+         FROM whatsapp_message_meta \
+         WHERE tenant_id = $1 AND message_id = ANY($2) AND direction = 'outbound'",
+    )
+    .bind(tenant_id)
+    .bind(message_ids)
+    .fetch_all(pool)
+    .await?;
+
+    let mut map = std::collections::HashMap::new();
+    for (message_id, status, failure_reason) in rows {
+        map.insert(
+            message_id,
+            crate::model::DeliveryInfo {
+                status,
+                failure_reason,
+            },
+        );
+    }
+    Ok(map)
 }
 
 pub async fn has_customer_message_after(

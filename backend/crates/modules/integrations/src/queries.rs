@@ -428,3 +428,86 @@ pub async fn find_secret_ciphertext(
     .await?;
     Ok(row)
 }
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct ConnectionByTokenRow {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub catalog_id: Uuid,
+    pub is_active: bool,
+    pub config: serde_json::Value,
+}
+
+pub async fn connection_by_token_and_slug(
+    pool: &sqlx::PgPool,
+    token_hash: &[u8],
+    slug: &str,
+) -> Result<Option<ConnectionByTokenRow>, sqlx::Error> {
+    sqlx::query_as::<_, ConnectionByTokenRow>(
+        "SELECT c.id, c.tenant_id, c.catalog_id, c.is_active, c.config \
+         FROM integration_connections c \
+         JOIN integration_catalog cat ON cat.id = c.catalog_id \
+         WHERE c.webhook_token_hash = $1 AND cat.slug = $2",
+    )
+    .bind(token_hash)
+    .bind(slug)
+    .fetch_optional(pool)
+    .await
+}
+
+pub async fn decrypted_secret(
+    pool: &sqlx::PgPool,
+    master_key: &crate::crypto::MasterKey,
+    connection_id: Uuid,
+    field_key: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    let conn_info = sqlx::query_as::<_, (Uuid, String)>(
+        "SELECT c.tenant_id, cat.slug \
+         FROM integration_connections c \
+         JOIN integration_catalog cat ON cat.id = c.catalog_id \
+         WHERE c.id = $1",
+    )
+    .bind(connection_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let (tenant_id, slug) = match conn_info {
+        Some(row) => row,
+        None => return Ok(None),
+    };
+
+    let row = sqlx::query_as::<_, (Vec<u8>, Vec<u8>)>(
+        "SELECT ciphertext, nonce FROM integration_secrets \
+         WHERE connection_id = $1 AND field_key = $2",
+    )
+    .bind(connection_id)
+    .bind(field_key)
+    .fetch_optional(pool)
+    .await?;
+
+    match row {
+        Some((ciphertext, nonce)) => {
+            let scope = crate::crypto::aad(tenant_id, &slug, field_key);
+            let plaintext = crate::crypto::open(master_key, &scope, &ciphertext, &nonce)
+                .map_err(|e| sqlx::Error::Protocol(format!("decryption failed: {e}")))?;
+            Ok(Some(plaintext))
+        }
+        None => Ok(None),
+    }
+}
+
+pub async fn active_connection_for_slug(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    slug: &str,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar::<_, Uuid>(
+        "SELECT c.id FROM integration_connections c \
+         JOIN integration_catalog cat ON cat.id = c.catalog_id \
+         WHERE c.tenant_id = $1 AND cat.slug = $2 AND c.is_active = true AND c.disconnected_at IS NULL",
+    )
+    .bind(tenant_id)
+    .bind(slug)
+    .fetch_optional(pool)
+    .await
+}

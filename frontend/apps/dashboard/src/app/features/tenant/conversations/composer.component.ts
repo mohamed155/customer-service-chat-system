@@ -53,7 +53,12 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
           rows="3"
         ></textarea>
         @if (form.controls.body.touched && form.controls.body.invalid) {
-          <span class="field-error">Message is required.</span>
+          @if (form.controls.body.errors?.['required']) {
+            <span class="field-error">Message is required.</span>
+          }
+          @if (form.controls.body.errors?.['maxlength']) {
+            <span class="field-error">Message is too long for WhatsApp (4096 character max).</span>
+          }
         }
         <div class="composer-actions">
           <app-button
@@ -142,7 +147,7 @@ export class ComposerComponent {
   protected readonly mode = signal<'reply' | 'note' | 'customer'>('reply');
 
   protected readonly form = this.fb.nonNullable.group({
-    body: ['', [Validators.required, Validators.minLength(1)]],
+    body: ['', [Validators.required, Validators.minLength(1), Validators.maxLength(4096)]],
   });
 
   protected submit(): void {

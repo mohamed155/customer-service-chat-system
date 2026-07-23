@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{model, queries};
-use crate::outbox::emit_customer_message_in_tx;
+use crate::outbox::{emit_customer_message_in_tx, emit_whatsapp_outbound_in_tx};
 use crate::AiAgentStatus;
 
 use axum::{
@@ -10,6 +10,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
     Extension,
 };
+use chrono::Utc;
 use identity::Principal;
 use kernel::{ApiError, ApiJson, ErrorEnvelope};
 use serde::{Deserialize, Serialize};
@@ -717,6 +718,48 @@ pub async fn add_message(
             }
         };
 
+    if payload.kind == model::MessageKind::Reply && conv_channel == "whatsapp" {
+        if integrations::queries::active_connection_for_slug(&pool, ctx.tenant_id, "whatsapp")
+            .await
+            .unwrap_or(None)
+            .is_none()
+        {
+            return ApiError::new_with_code(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "whatsapp_channel_disconnected",
+                "The WhatsApp channel is disconnected \u{2014} reconnect it to reply.",
+            )
+            .with_request_id(&ctx.request_id)
+            .into_response();
+        }
+
+        let last_ts = queries::last_customer_message_at(&pool, ctx.tenant_id, conversation_id)
+            .await
+            .unwrap_or(None);
+        match last_ts {
+            Some(ts) if Utc::now().signed_duration_since(ts) < chrono::Duration::hours(24) => {}
+            _ => {
+                return ApiError::new_with_code(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "whatsapp_window_expired",
+                    "The WhatsApp messaging window has expired for this conversation.",
+                )
+                .with_request_id(&ctx.request_id)
+                .into_response();
+            }
+        }
+
+        if body.chars().count() > 4096 {
+            return ApiError::new_with_code(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "whatsapp_body_too_long",
+                "Message is too long for WhatsApp (4096 character max).",
+            )
+            .with_request_id(&ctx.request_id)
+            .into_response();
+        }
+    }
+
     let (message, status_ref) = match queries::add_message_in_tx(
         &mut tx,
         ctx.tenant_id,
@@ -752,6 +795,22 @@ pub async fn add_message(
         .await
         {
             tracing::error!(%error, conversation_id = %conversation_id, "emit_customer_message failed");
+            return ApiError::internal_error("Failed to add message")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    }
+
+    if payload.kind == model::MessageKind::Reply && conv_channel == "whatsapp" {
+        if let Err(error) = emit_whatsapp_outbound_in_tx(
+            &mut tx,
+            ctx.tenant_id,
+            conversation_id,
+            message.id,
+        )
+        .await
+        {
+            tracing::error!(%error, conversation_id = %conversation_id, "emit_whatsapp_outbound failed");
             return ApiError::internal_error("Failed to add message")
                 .with_request_id(&ctx.request_id)
                 .into_response();
