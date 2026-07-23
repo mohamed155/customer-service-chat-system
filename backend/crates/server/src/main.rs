@@ -26,6 +26,8 @@ use std::time::Duration;
 use storage::{InMemoryStorage, ObjectStorage, S3Storage};
 use tokio::net::TcpListener;
 
+use whatsapp;
+
 #[tokio::main]
 async fn main() {
     let config = match AppConfig::from_env() {
@@ -196,6 +198,30 @@ async fn main() {
             state.escalations.clone(),
         ),
     );
+
+    // WhatsApp channel workers (spec 029)
+    let whatsapp_api: Arc<dyn whatsapp::api::WhatsAppApi> = Arc::new(whatsapp::api::GraphWhatsAppApi::new());
+    let whatsapp_master_key = state
+        .config
+        .integration_secrets_key
+        .as_ref()
+        .and_then(|key| integrations::crypto::MasterKey::from_base64(key).ok());
+    if let Some(mk) = whatsapp_master_key {
+        let mk = Arc::new(mk);
+        let _media_worker = tokio::spawn(whatsapp::media::run_media_fetch_worker(
+            state.db.clone(),
+            whatsapp_api.clone(),
+            storage.clone(),
+            mk.clone(),
+        ));
+        let _sender_worker = tokio::spawn(whatsapp::sender::run_whatsapp_sender_worker(
+            state.db.clone(),
+            whatsapp_api.clone(),
+            mk,
+        ));
+    } else {
+        tracing::warn!("integration_secrets_key not configured — whatsapp workers disabled");
+    }
 
     let address = format!("{}:{}", state.config.bind_address, state.config.port);
     let listener = TcpListener::bind(&address)

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { MessageAttachmentComponent } from './message-attachment.component';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { CitationListComponent } from '../../../shared/components/citation-list/citation-list.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
@@ -14,6 +15,7 @@ type TimelineItem = { kind: 'message'; message: Message } | { kind: 'tool'; tool
 @Component({
   selector: 'app-conversation-thread',
   imports: [
+    MessageAttachmentComponent,
     AvatarComponent,
     CitationListComponent,
     LoadingStateComponent,
@@ -55,11 +57,28 @@ type TimelineItem = { kind: 'message'; message: Message } | { kind: 'tool'; tool
                 }
               </div>
               <p>{{ item.message.body }}</p>
+              @if (item.message.attachments?.length) {
+                @for (att of item.message.attachments; track att.id) {
+                  <app-message-attachment [attachment]="att" />
+                }
+              }
               @if (item.message.citations?.length) {
                 <app-citation-list [citations]="item.message.citations" />
               }
               @if (item.message.kind === 'ai' && item.message.confidence; as conf) {
                 <app-ai-confidence-badge [band]="conf.band" />
+              }
+              @if (item.message.delivery; as delivery) {
+                <span class="delivery-status" [class]="'status-' + delivery.status"
+                      [title]="delivery.failureReason ?? ''">
+                  @switch (delivery.status) {
+                    @case ('pending') { 🕐 }
+                    @case ('sent') { ✓ }
+                    @case ('delivered') { ✓✓ }
+                    @case ('read') { <span class="read-tick">✓✓</span> }
+                    @case ('failed') { <span class="failed-icon">⚠</span> }
+                  }
+                </span>
               }
             </div>
           </article>
@@ -193,6 +212,20 @@ type TimelineItem = { kind: 'message'; message: Message } | { kind: 'tool'; tool
         line-height: 1.55;
         white-space: pre-wrap;
         word-break: break-word;
+      }
+      .delivery-status {
+        display: inline-flex;
+        align-items: center;
+        margin-left: var(--app-space-2);
+        font-size: var(--app-font-xs);
+        color: var(--app-text-3);
+      }
+      .status-read {
+        color: var(--app-accent);
+      }
+      .failed-icon {
+        color: var(--app-red);
+        cursor: help;
       }
       .empty-timeline {
         display: grid;

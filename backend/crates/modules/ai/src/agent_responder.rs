@@ -137,13 +137,18 @@ pub async fn process_agent_responder_once(
                     .await?
                 {
                     let mut tx = pool.begin().await?;
-                    conversations::queries::insert_auto_ack_in_tx(
+                    let ack_mid = conversations::queries::insert_auto_ack_in_tx(
                         &mut tx,
                         tenant_id,
                         conversation_id,
                         "Thank you for your message. A team member will be with you shortly.",
                     )
                     .await?;
+                    if channel == "whatsapp" {
+                        conversations::outbox::emit_whatsapp_outbound_in_tx(
+                            &mut tx, tenant_id, conversation_id, ack_mid,
+                        ).await?;
+                    }
                     tx.commit().await?;
                 }
                 sqlx::query("DELETE FROM outbox_events WHERE id = $1")

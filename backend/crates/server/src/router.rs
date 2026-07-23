@@ -121,6 +121,8 @@ fn hooks_routes() -> OpenApiRouter<sqlx::PgPool> {
         .layer(DefaultBodyLimit::max(256 * 1024))
 }
 
+
+
 fn cors_layer(config: &AppConfig) -> CorsLayer {
     let origins: Vec<_> = config
         .cors_allowed_origins
@@ -812,7 +814,9 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(widgets::admin_routes::get_snippet)
                 .layer(require_permission(Permission::WidgetsView)),
-        );
+        )
+        // WhatsApp attachment download (spec 029)
+        .merge(whatsapp::routes::tenant_router().into());
     if include_test_routes {
         // Test routes are closures, not function paths, so they cannot use the
         // `routes!()` co-registration macro. They stay on the plain `.route()`
@@ -1091,6 +1095,23 @@ fn build_app(
         // entire documentation surface (both UI and JSON) is gated off
         // when this branch runs, so nothing must be served.
         drop(openapi_doc);
+    }
+
+    // WhatsApp webhook (spec 029) — mounted outside tenant auth, token-based
+    let master_key = state
+        .config
+        .integration_secrets_key
+        .as_ref()
+        .and_then(|key| integrations::crypto::MasterKey::from_base64(key).ok())
+        .map(Arc::new);
+    if let Some(ref mk) = master_key {
+        let whatsapp_webhook = whatsapp::routes::public_router()
+            .layer(Extension(mk.clone()))
+            .layer(DefaultBodyLimit::max(256 * 1024))
+            .with_state(state.db.clone());
+        router = router.merge(whatsapp_webhook);
+    } else {
+        tracing::warn!("integration_secrets_key not configured — whatsapp webhook disabled");
     }
 
     router

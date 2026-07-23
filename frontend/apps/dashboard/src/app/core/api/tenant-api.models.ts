@@ -435,6 +435,21 @@ export interface Citation {
   readonly itemAvailable: boolean;
 }
 
+export interface MessageAttachment {
+  readonly id: string;
+  readonly kind: 'image' | 'audio' | 'video' | 'document';
+  readonly status: 'pending' | 'stored' | 'failed';
+  readonly mimeType: string | null;
+  readonly sizeBytes: number | null;
+  readonly fileName: string | null;
+  readonly url: string | null;
+}
+
+export interface MessageDelivery {
+  readonly status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+  readonly failureReason: string | null;
+}
+
 export interface Message {
   readonly id: string;
   readonly kind: MessageKind;
@@ -448,6 +463,8 @@ export interface Message {
   readonly createdAt: string;
   readonly citations?: readonly Citation[];
   readonly confidence?: { readonly score: number; readonly band: 'high' | 'medium' | 'low' };
+  readonly attachments?: readonly MessageAttachment[];
+  readonly delivery?: MessageDelivery;
 }
 
 export interface AddMessageResponse {
@@ -521,6 +538,21 @@ export interface CitationWire {
   readonly item_available: boolean;
 }
 
+export interface MessageAttachmentWire {
+  readonly id: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly mime_type: string | null;
+  readonly size_bytes: number | null;
+  readonly file_name: string | null;
+  readonly url: string | null;
+}
+
+export interface MessageDeliveryWire {
+  readonly status: string;
+  readonly failure_reason: string | null;
+}
+
 export interface MessageWire {
   readonly id: string;
   readonly kind: string;
@@ -534,6 +566,8 @@ export interface MessageWire {
   readonly created_at: string;
   readonly citations?: readonly CitationWire[];
   readonly confidence?: { readonly score: number; readonly band: string };
+  readonly attachments?: readonly MessageAttachmentWire[];
+  readonly delivery?: MessageDeliveryWire;
 }
 
 export interface AddMessageResponseWire {
@@ -730,6 +764,27 @@ export function messageFromWire(wire: MessageWire): Message {
           confidence: {
             score: wire.confidence.score,
             band: wire.confidence.band as 'high' | 'medium' | 'low',
+          },
+        }
+      : {}),
+    ...(wire.attachments
+      ? {
+          attachments: wire.attachments.map(a => ({
+            id: a.id,
+            kind: a.kind as MessageAttachment['kind'],
+            status: a.status as MessageAttachment['status'],
+            mimeType: a.mime_type,
+            sizeBytes: a.size_bytes,
+            fileName: a.file_name,
+            url: a.url,
+          })),
+        }
+      : {}),
+    ...(wire.delivery
+      ? {
+          delivery: {
+            status: wire.delivery.status as MessageDelivery['status'],
+            failureReason: wire.delivery.failure_reason,
           },
         }
       : {}),

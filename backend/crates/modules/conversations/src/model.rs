@@ -141,6 +141,28 @@ pub struct ConversationDetail {
     pub feedback: Option<TenantFeedbackDto>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AttachmentInfo {
+    pub id: Uuid,
+    pub kind: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size_bytes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DeliveryInfo {
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failure_reason: Option<String>,
+}
+
 /// One message in a conversation, returned by the timeline endpoint and
 /// embedded in `AddMessageResponse`.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -155,6 +177,10 @@ pub struct Message {
     pub citations: Vec<CitationView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confidence: Option<ConfidenceView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<AttachmentInfo>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<DeliveryInfo>,
 }
 
 /// Deterministic confidence metadata attached to AI messages.

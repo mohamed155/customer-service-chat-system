@@ -18,6 +18,7 @@ import {
   ConversationDetailEscalation,
   ConversationStatus,
   Message,
+  MessageDelivery,
   ToolRequest,
   ToolRequestUpdatedEvent,
 } from '../../../core/api/tenant-api.models';
@@ -220,9 +221,21 @@ export const ConversationDetailStore = signalStore(
             }
           },
           error: (err: unknown) => {
+            const apiError = err as { code?: string; message?: string };
+            const code = apiError?.code;
+            let message = apiError?.message ?? 'Failed to send message';
+
+            if (code === 'whatsapp_window_expired') {
+              message = 'The WhatsApp messaging window has expired for this conversation.';
+            } else if (code === 'whatsapp_channel_disconnected') {
+              message = 'The WhatsApp channel is disconnected — reconnect it to reply.';
+            } else if (code === 'whatsapp_body_too_long') {
+              message = 'Message is too long for WhatsApp (4096 character max).';
+            }
+
             patchState(store, {
               submitting: false,
-              error: (err as Error)?.message ?? 'Failed to send message',
+              error: message,
             });
           },
         });
@@ -363,6 +376,35 @@ export const ConversationDetailStore = signalStore(
         }
       },
 
+      handleMessageStatusEvent(event: SseEvent): void {
+        const convId = store.openConversationId();
+        if (!convId) return;
+
+        const parsed = tryParseJson(event.data);
+        if (!parsed) return;
+
+        const data = parsed as { conversationId?: string; messageId?: string; status?: string; failureReason?: string | null };
+        if (!data.conversationId || data.conversationId !== convId || !data.messageId) return;
+
+        const pages = store.timelinePages();
+        const updated = pages.map((page) => ({
+          ...page,
+          items: page.items.map((msg) => {
+            if (msg.id === data.messageId) {
+              return {
+                ...msg,
+                delivery: {
+                  status: (data.status as MessageDelivery['status']) ?? 'failed',
+                  failureReason: data.failureReason ?? null,
+                } as MessageDelivery,
+              };
+            }
+            return msg;
+          }),
+        }));
+        patchState(store, { timelinePages: updated });
+      },
+
       setAiHandling(conversationId: string, mode: 'platform_ai' | 'human'): void {
         api.setConversationAiHandling(conversationId, mode).subscribe({
           next: (response) => {
@@ -416,18 +458,34 @@ export const ConversationDetailStore = signalStore(
         )
         .subscribe((e) => store.handleToolEvent(e));
 
+      const msgStatusSub = _realtime
+        .events()
+        .pipe(
+          filter((e) => e.event === 'conversation.message_status' && store.openConversationId() != null),
+        )
+        .subscribe((e) => store.handleMessageStatusEvent(e));
+
       (
         store as unknown as {
           realtimeSub: { unsubscribe: () => void };
           toolRealtimeSub: { unsubscribe: () => void };
+          msgStatusSub: { unsubscribe: () => void };
         }
       ).realtimeSub = sub;
       (
         store as unknown as {
           realtimeSub: { unsubscribe: () => void };
           toolRealtimeSub: { unsubscribe: () => void };
+          msgStatusSub: { unsubscribe: () => void };
         }
       ).toolRealtimeSub = toolSub;
+      (
+        store as unknown as {
+          realtimeSub: { unsubscribe: () => void };
+          toolRealtimeSub: { unsubscribe: () => void };
+          msgStatusSub: { unsubscribe: () => void };
+        }
+      ).msgStatusSub = msgStatusSub;
     },
     onDestroy(store) {
       (
@@ -436,6 +494,9 @@ export const ConversationDetailStore = signalStore(
       (
         store as unknown as { toolRealtimeSub?: { unsubscribe: () => void } }
       ).toolRealtimeSub?.unsubscribe();
+      (
+        store as unknown as { msgStatusSub?: { unsubscribe: () => void } }
+      ).msgStatusSub?.unsubscribe();
     },
   }),
 );

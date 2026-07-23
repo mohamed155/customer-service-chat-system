@@ -142,6 +142,14 @@ impl Stream for GuardedStream {
                 cx.waker().wake_by_ref();
                 Poll::Pending
             }
+            Poll::Ready(Some(Ok(presence::Event::ConversationMessageStatus(payload)))) => {
+                self.seq += 1;
+                let data = serde_json::to_string(&payload).unwrap_or_default();
+                Poll::Ready(Some(Ok(Event::default()
+                    .event("conversation.message_status")
+                    .data(data)
+                    .id(self.seq.to_string()))))
+            }
             Poll::Ready(Some(Err(BroadcastStreamRecvError::Lagged(n)))) => {
                 info!(%n, "SSE stream lagged, skipping");
                 cx.waker().wake_by_ref();
@@ -276,7 +284,7 @@ pub async fn process_escalation_outbox_once(
          SET claimed_at = now(), claim_token = $1 \
          WHERE id = ( \
              SELECT id FROM outbox_events \
-             WHERE event_type IN ('conversation.status_changed', 'conversation.assignment_changed') \
+             WHERE event_type IN ('conversation.status_changed', 'conversation.assignment_changed', 'conversation.message_status') \
              AND claimed_at IS NULL \
              ORDER BY created_at ASC \
              LIMIT 1 \
@@ -362,6 +370,9 @@ pub async fn process_escalation_outbox_once(
                     let present_ids = runtime.present_membership_ids_async(tenant_id).await;
                     routing::drain_any_in_tx(&mut tx, tenant_id, &present_ids, Uuid::nil()).await?;
                 }
+            }
+            "conversation.message_status" => {
+                runtime.broadcast(tenant_id, presence::Event::ConversationMessageStatus(payload.clone()));
             }
             _ => {}
         }
