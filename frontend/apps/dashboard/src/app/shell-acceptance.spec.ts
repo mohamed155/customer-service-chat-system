@@ -235,7 +235,7 @@ describe('Dashboard shell acceptance', () => {
       fixture.detectChanges();
       const sidebar = fixture.nativeElement.querySelector('app-sidebar') as HTMLElement;
       expect(sidebar).toBeTruthy();
-      expect(sidebar.querySelectorAll('app-sidebar-nav-group').length).toBe(4);
+      expect(sidebar.querySelectorAll('app-sidebar-nav-group').length).toBe(5);
     });
 
     it('shows limited navigation for Support Agent (view-only subset)', async () => {

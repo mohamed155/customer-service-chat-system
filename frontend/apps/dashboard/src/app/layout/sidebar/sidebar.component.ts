@@ -139,6 +139,17 @@ import { SidebarNavItemComponent } from './sidebar-nav-item.component';
           </app-sidebar-nav-group>
         }
 
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.billing])) {
+          <app-sidebar-nav-group label="Billing" [collapsed]="collapsed()">
+            <app-sidebar-nav-item
+              icon="@tui.receipt"
+              label="Billing"
+              [link]="links.billing"
+              [collapsed]="collapsed()"
+            />
+          </app-sidebar-nav-group>
+        }
+
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.settings])) {
           <app-sidebar-nav-group label="Settings" [collapsed]="collapsed()">
             <app-sidebar-nav-item
@@ -240,6 +251,7 @@ export class SidebarComponent {
     integrations: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.integrations}`,
     analytics: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.analytics}`,
     auditLogs: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.auditLogs}`,
+    billing: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.billing}`,
     settings: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.settings}`,
     team: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.team}`,
     widgets: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.widgets}`,

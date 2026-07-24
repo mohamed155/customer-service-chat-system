@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';

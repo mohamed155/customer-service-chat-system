@@ -315,15 +315,15 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
   3. `frontend/apps/dashboard/src/app/core/router/page-title.ts` — add `'billing'` to the page-key union and `billing: { title: 'Billing', subtitle: 'Your plan and usage this month' },` to `PAGE_TITLES`.
   4. `frontend/apps/dashboard/src/app/features/tenant/tenant.routes.ts` — add a lazy route for `APP_PATHS.tenant.billing` with `canMatch: [permissionGuard]`, `data.pageTitle: 'billing'`, `data.requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.billing]`, copying the `analytics` route entry exactly.
 
-- [ ] T029 [US1] In `frontend/apps/dashboard/src/app/layout/sidebar/sidebar.component.ts`, add a **Billing** nav entry and add `billing: \`/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.billing}\`,` to the `links` object. Give it its own single-item `<app-sidebar-nav-group label="Billing">` guarded by `@if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.billing]))`, placed between the existing **Security** and **Settings** groups — this copies the Insights/Security one-item-group pattern exactly and keeps visibility tied to `billing.view` alone (nesting it inside the Settings group would hide it behind `settings.view`).
+- [X] T029 [US1] In `frontend/apps/dashboard/src/app/layout/sidebar/sidebar.component.ts`, add a **Billing** nav entry and add `billing: \`/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.billing}\`,` to the `links` object. Give it its own single-item `<app-sidebar-nav-group label="Billing">` guarded by `@if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.billing]))`, placed between the existing **Security** and **Settings** groups — this copies the Insights/Security one-item-group pattern exactly and keeps visibility tied to `billing.view` alone (nesting it inside the Settings group would hide it behind `settings.view`).
 
-- [ ] T030 [US1] **Required — T029 breaks existing count assertions.** Update them in the same commit:
+- [X] T030 [US1] **Required — T029 breaks existing count assertions.** Update them in the same commit:
   1. `frontend/apps/dashboard/src/app/layout/sidebar/sidebar.component.spec.ts` — the two cases whose permission fixture includes `billing.view` (`renders full navigation with all permissions` and `shows all navigation items for Owner`) go from `nav-group` **5 → 6** and `nav-item` **10 → 11**. The Support Agent (2/5), Viewer (3/8), and Support Engineer staff (2/5) cases have no `billing.view` and must stay unchanged — if any of them moves, the guard is wrong.
   2. `frontend/apps/dashboard/src/app/shell-acceptance.spec.ts` — the `ALL_PERMISSIONS` case asserting `nav-group … toBe(4)` becomes `toBe(5)` (`ALL_PERMISSIONS` already contains `billing.view`). The Viewer (3) and limited (2) cases stay unchanged.
 
   Re-derive these numbers rather than trusting them blindly if you placed the entry differently than T029 specifies. No change is needed in `permissions.service.spec.ts`: that spec feeds permissions in as `MeResponse` fixtures and asserts on `has()` — it derives nothing from tenant roles, so the `TENANT_ADMIN` matrix change has no frontend counterpart.
 
-- [ ] T031 [US1] Run `pnpm ng test dashboard` and `pnpm lint` from `frontend/`. Both must pass.
+- [X] T031 [US1] Run `pnpm ng test dashboard` and `pnpm lint` from `frontend/`. Both must pass.
 
 **Checkpoint**: User Story 1 is complete and independently demoable.
 
