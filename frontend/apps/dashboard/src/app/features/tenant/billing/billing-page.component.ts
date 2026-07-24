@@ -18,6 +18,23 @@ function metricLabel(allowance: number | null): string {
   return allowance === null ? 'Unlimited' : allowance.toLocaleString();
 }
 
+function metricStateClass(allowance: number | null, state: string): string {
+  return allowance === null ? 'normal' : state;
+}
+
+function aiPausedMessage(reason: string | null): string {
+  switch (reason) {
+    case 'token_limit':
+      return 'AI replies are paused — the monthly token allowance is used up.';
+    case 'conversation_limit':
+      return 'AI replies are paused — the monthly conversation allowance is used up.';
+    case 'subscription_status':
+      return 'AI replies are paused — the subscription is past due or canceled.';
+    default:
+      return '';
+  }
+}
+
 function subscriptionTone(status: string): BadgeTone {
   switch (status) {
     case 'active':
@@ -54,6 +71,9 @@ function subscriptionTone(status: string): BadgeTone {
       } @else if (store.error(); as error) {
         <app-inline-alert tone="error">{{ error }}</app-inline-alert>
       } @else if (store.overview(); as ov) {
+        @if (ov.aiPaused) {
+          <app-inline-alert tone="warning">{{ aiPausedMessage(ov.aiPausedReason) }}</app-inline-alert>
+        }
         <div class="grid">
           <app-dashboard-card>
             <div card-header>
@@ -72,7 +92,10 @@ function subscriptionTone(status: string): BadgeTone {
             </div>
           </app-dashboard-card>
 
-          <app-dashboard-card>
+          <app-dashboard-card
+            [class.warning]="ov.usage.tokens.allowance !== null && ov.usage.tokens.state === 'warning'"
+            [class.exceeded]="ov.usage.tokens.allowance !== null && ov.usage.tokens.state === 'exceeded'"
+          >
             <div card-header>
               <span class="metric-title">Tokens</span>
             </div>
@@ -87,7 +110,10 @@ function subscriptionTone(status: string): BadgeTone {
             <div class="metric-footnote">{{ (ov.usage.tokens.percent ?? 0).toFixed(1) }}% used</div>
           </app-dashboard-card>
 
-          <app-dashboard-card>
+          <app-dashboard-card
+            [class.warning]="ov.usage.conversations.allowance !== null && ov.usage.conversations.state === 'warning'"
+            [class.exceeded]="ov.usage.conversations.allowance !== null && ov.usage.conversations.state === 'exceeded'"
+          >
             <div card-header>
               <span class="metric-title">Conversations</span>
             </div>
@@ -186,6 +212,12 @@ function subscriptionTone(status: string): BadgeTone {
         font-size: var(--app-font-xs);
         color: var(--app-text-3);
       }
+      .warning .bar-fill {
+        background: var(--app-amber);
+      }
+      .exceeded .bar-fill {
+        background: var(--app-red);
+      }
     `,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -196,4 +228,6 @@ export class BillingPageComponent {
   protected readonly formatDate = formatDate;
   protected readonly metricLabel = metricLabel;
   protected readonly subscriptionTone = subscriptionTone;
+  protected readonly metricStateClass = metricStateClass;
+  protected readonly aiPausedMessage = aiPausedMessage;
 }

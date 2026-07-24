@@ -53,6 +53,52 @@ const UNLIMITED_OVERVIEW: BillingOverview = {
   aiPausedReason: null,
 };
 
+const WARNING_OVERVIEW: BillingOverview = {
+  plan: {
+    id: 'plan-pro-001',
+    name: 'Professional',
+    monthlyPriceCents: 29900,
+    tokenAllowance: 100_000,
+    conversationAllowance: 500,
+    isDefault: false,
+    status: 'active',
+  },
+  subscriptionStatus: 'active',
+  period: {
+    start: new Date('2026-07-01T00:00:00Z'),
+    end: new Date('2026-08-01T00:00:00Z'),
+  },
+  usage: {
+    tokens: { used: 85000, allowance: 100_000, percent: 85, state: 'warning' },
+    conversations: { used: 420, allowance: 500, percent: 84, state: 'warning' },
+  },
+  aiPaused: false,
+  aiPausedReason: null,
+};
+
+const EXCEEDED_OVERVIEW: BillingOverview = {
+  plan: {
+    id: 'plan-starter-002',
+    name: 'Starter',
+    monthlyPriceCents: 9900,
+    tokenAllowance: 50_000,
+    conversationAllowance: 200,
+    isDefault: false,
+    status: 'active',
+  },
+  subscriptionStatus: 'active',
+  period: {
+    start: new Date('2026-07-01T00:00:00Z'),
+    end: new Date('2026-08-01T00:00:00Z'),
+  },
+  usage: {
+    tokens: { used: 50000, allowance: 50000, percent: 100, state: 'exceeded' },
+    conversations: { used: 200, allowance: 200, percent: 100, state: 'exceeded' },
+  },
+  aiPaused: true,
+  aiPausedReason: 'token_limit',
+};
+
 const ZERO_USAGE_OVERVIEW: BillingOverview = {
   plan: {
     id: 'plan-pro-001',
@@ -162,5 +208,59 @@ describe('BillingPageComponent', () => {
       fixture.detectChanges();
       expect(fixture.nativeElement.querySelector('app-loading-state')).toBeFalsy();
     });
+  });
+
+  it('renders warning CSS class at 85% usage', async () => {
+    const element = await renderWithOverview(WARNING_OVERVIEW);
+    const warningCards = element.querySelectorAll('app-dashboard-card.warning');
+    expect(warningCards.length).toBe(2);
+  });
+
+  it('renders exceeded CSS class at 100% usage', async () => {
+    const element = await renderWithOverview(EXCEEDED_OVERVIEW);
+    const exceededCards = element.querySelectorAll('app-dashboard-card.exceeded');
+    expect(exceededCards.length).toBe(2);
+  });
+
+  it('shows AI-paused banner with token_limit copy', async () => {
+    const element = await renderWithOverview(EXCEEDED_OVERVIEW);
+    const banner = element.querySelector('app-inline-alert[tone="warning"]');
+    expect(banner).toBeTruthy();
+    expect(banner?.textContent).toContain('AI replies are paused — the monthly token allowance is used up.');
+  });
+
+  it('shows AI-paused banner with conversation_limit copy', async () => {
+    const paused: BillingOverview = {
+      ...MOCK_OVERVIEW,
+      aiPaused: true,
+      aiPausedReason: 'conversation_limit',
+    };
+    const element = await renderWithOverview(paused);
+    const banner = element.querySelector('app-inline-alert[tone="warning"]');
+    expect(banner).toBeTruthy();
+    expect(banner?.textContent).toContain('AI replies are paused — the monthly conversation allowance is used up.');
+  });
+
+  it('shows AI-paused banner with subscription_status copy', async () => {
+    const paused: BillingOverview = {
+      ...MOCK_OVERVIEW,
+      subscriptionStatus: 'past_due',
+      aiPaused: true,
+      aiPausedReason: 'subscription_status',
+    };
+    const element = await renderWithOverview(paused);
+    const banner = element.querySelector('app-inline-alert[tone="warning"]');
+    expect(banner).toBeTruthy();
+    expect(banner?.textContent).toContain('AI replies are paused — the subscription is past due or canceled.');
+  });
+
+  it('keeps unlimited metric normal with no banner', async () => {
+    const element = await renderWithOverview(UNLIMITED_OVERVIEW);
+    const warningCards = element.querySelectorAll('app-dashboard-card.warning');
+    const exceededCards = element.querySelectorAll('app-dashboard-card.exceeded');
+    expect(warningCards.length).toBe(0);
+    expect(exceededCards.length).toBe(0);
+    const banner = element.querySelector('app-inline-alert[tone="warning"]');
+    expect(banner).toBeFalsy();
   });
 });

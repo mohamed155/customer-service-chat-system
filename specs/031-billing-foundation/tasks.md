@@ -392,11 +392,11 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
 ### Frontend
 
-- [ ] T037 [US2] Extend `billing-page.component.ts` with the three usage states: apply a `normal` / `warning` / `exceeded` CSS class driven by `metric.state`, and render an AI-paused banner above the cards when `overview.aiPaused` is true, with copy chosen from `aiPausedReason` (`token_limit` → "AI replies are paused — the monthly token allowance is used up.", `conversation_limit` → "AI replies are paused — the monthly conversation allowance is used up.", `subscription_status` → "AI replies are paused — the subscription is past due or canceled."). Unlimited metrics must never receive the warning or exceeded class.
+- [X] T037 [US2] Extend `billing-page.component.ts` with the three usage states: apply a `normal` / `warning` / `exceeded` CSS class driven by `metric.state`, and render an AI-paused banner above the cards when `overview.aiPaused` is true, with copy chosen from `aiPausedReason` (`token_limit` → "AI replies are paused — the monthly token allowance is used up.", `conversation_limit` → "AI replies are paused — the monthly conversation allowance is used up.", `subscription_status` → "AI replies are paused — the subscription is past due or canceled."). Unlimited metrics must never receive the warning or exceeded class.
 
-- [ ] T038 [US2] Extend `billing-page.component.spec.ts` with cases from the T023 fixtures: 85% renders the warning class; 100% renders the exceeded class; the AI-paused banner appears with the correct copy for each of the three reasons; an unlimited metric stays `normal` and shows no banner.
+- [X] T038 [US2] Extend `billing-page.component.spec.ts` with cases from the T023 fixtures: 85% renders the warning class; 100% renders the exceeded class; the AI-paused banner appears with the correct copy for each of the three reasons; an unlimited metric stays `normal` and shows no banner.
 
-- [ ] T039 [US2] Run `pnpm ng test dashboard` and `pnpm lint`. Both must pass.
+- [X] T039 [US2] Run `pnpm ng test dashboard` and `pnpm lint`. Both must pass.
 
 **Checkpoint**: User Stories 1 and 2 both work independently.
 
