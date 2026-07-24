@@ -74,7 +74,7 @@ export const PLATFORM_ROUTES: Routes = [
     canMatch: [permissionGuard],
     data: {
       pageTitle: 'platformBilling',
-      requiredPermission: 'platform.billing.view',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.platform.billing],
     },
     loadComponent: () =>
       import('./billing/platform-billing.component').then((m) => m.PlatformBillingComponent),
