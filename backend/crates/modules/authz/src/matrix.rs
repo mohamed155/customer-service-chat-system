@@ -61,6 +61,7 @@ const PLATFORM_ALL: &[Permission] = &[
     Permission::PlatformTenantsManage,
     Permission::PlatformAdmin,
     Permission::PlatformBillingView,
+    Permission::PlatformBillingManage,
     Permission::PlatformDiagnosticsView,
     Permission::PlatformAuditView,
 ];

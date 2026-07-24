@@ -54,6 +54,8 @@ pub enum Permission {
     PlatformAdmin,
     #[serde(rename = "platform.billing.view")]
     PlatformBillingView,
+    #[serde(rename = "platform.billing.manage")]
+    PlatformBillingManage,
     #[serde(rename = "platform.diagnostics.view")]
     PlatformDiagnosticsView,
     #[serde(rename = "audit.view")]
@@ -93,7 +95,7 @@ impl Permission {
         Self::WidgetsManage,
     ];
 
-    pub const ALL: [Self; 30] = [
+    pub const ALL: [Self; 31] = [
         Self::OverviewView,
         Self::ConversationsView,
         Self::ConversationsManage,
@@ -119,6 +121,7 @@ impl Permission {
         Self::PlatformTenantsManage,
         Self::PlatformAdmin,
         Self::PlatformBillingView,
+        Self::PlatformBillingManage,
         Self::PlatformDiagnosticsView,
         Self::AuditView,
         Self::PlatformAuditView,
@@ -155,6 +158,7 @@ impl fmt::Display for Permission {
             Self::PlatformTenantsManage => "platform.tenants.manage",
             Self::PlatformAdmin => "platform.admin",
             Self::PlatformBillingView => "platform.billing.view",
+            Self::PlatformBillingManage => "platform.billing.manage",
             Self::PlatformDiagnosticsView => "platform.diagnostics.view",
             Self::AuditView => "audit.view",
             Self::PlatformAuditView => "platform.audit.view",
@@ -198,7 +202,7 @@ mod tests {
 
     #[test]
     fn catalog_parity_with_contract() {
-        let contract_codes: [&str; 30] = [
+        let contract_codes: [&str; 31] = [
             "overview.view",
             "conversations.view",
             "conversations.manage",
@@ -224,6 +228,7 @@ mod tests {
             "platform.tenants.manage",
             "platform.admin",
             "platform.billing.view",
+            "platform.billing.manage",
             "platform.diagnostics.view",
             "audit.view",
             "platform.audit.view",
