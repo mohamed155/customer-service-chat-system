@@ -794,10 +794,12 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "chrono",
+ "db",
  "identity",
  "kernel",
  "serde",
  "serde_json",
+ "serial_test",
  "sqlx",
  "tenancy",
  "tokio",

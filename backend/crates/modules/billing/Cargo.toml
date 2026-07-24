@@ -17,5 +17,7 @@ utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+db = { path = "../../shared/db" }
+serial_test = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
