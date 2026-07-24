@@ -421,7 +421,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
 ### Backend
 
-- [ ] T040 [US3] Add the write queries to `backend/crates/modules/billing/src/queries.rs`:
+- [X] T040 [US3] Add the write queries to `backend/crates/modules/billing/src/queries.rs`:
   - `list_plans(pool)` — all plans ordered by `created_at ASC`.
   - `create_plan(tx, req)` — INSERT returning the row; map a unique-violation on `name` to a distinct error the handler turns into 409.
   - `plan_by_id(pool, plan_id)` — `Option<PlanDto>`.
@@ -448,12 +448,12 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
   (`tenants.deleted_at` exists — the `WHERE t.deleted_at IS NULL` clause is correct as written.)
 
-- [ ] T041 [US3] Implement the audit writers in `backend/crates/modules/billing/src/audit.rs`, each taking `&mut Transaction<'_, Postgres>` and calling `tenancy::audit::record_in_tx`:
+- [X] T041 [US3] Implement the audit writers in `backend/crates/modules/billing/src/audit.rs`, each taking `&mut Transaction<'_, Postgres>` and calling `tenancy::audit::record_in_tx`:
   - `plan_created(tx, actor_user_id, plan)` — action `billing_plan.created`, resource_type `billing_plan`, resource_id = plan id, tenant_id `None`, details = the full created attributes.
   - `plan_status_changed(tx, actor_user_id, plan_id, from, to)` — action `billing_plan.status_changed`, details `{"from": from, "to": to}`.
   - `subscription_changed(tx, actor_user_id, tenant_id, subscription_id, before, after)` — action `billing_subscription.changed`, resource_type `billing_subscription`, tenant_id `Some(tenant_id)`, details `{"plan_id": {"from": ..., "to": ...}, "status": {"from": ..., "to": ...}}` with `null` on the `from` side for a first assignment.
 
-- [ ] T042 [US3] Implement the five platform handlers in `backend/crates/modules/billing/src/routes.rs`, each with a full `#[utoipa::path(...)]` annotation (`tag = "billing"`):
+- [X] T042 [US3] Implement the five platform handlers in `backend/crates/modules/billing/src/routes.rs`, each with a full `#[utoipa::path(...)]` annotation (`tag = "billing"`):
   - `list_plans` — `get "/platform/billing/plans"` → 200 `PlanListResponse`.
   - `create_plan` — `post "/platform/billing/plans"`, body `ApiJson<CreatePlanRequest>` → 201 `PlanDto`. Validate: non-empty trimmed name, `monthly_price_cents >= 0`, allowances `>= 0` when present — otherwise 422. `0` is valid and intentionally means "AI disabled for this metric" (see T011's `metric_usage`); only negatives are rejected. Duplicate name ⇒ 409. Opens a transaction, inserts, writes `plan_created`, commits.
   - `update_plan` — `patch "/platform/billing/plans/{plan_id}"`, body `ApiJson<UpdatePlanRequest>` → 200 `PlanDto`. Unknown plan ⇒ 404; status not in `active|retired` ⇒ 422; retiring the plan whose `is_default` is true ⇒ 409. Transaction, update, `plan_status_changed`, commit.
@@ -462,11 +462,11 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
   All five take `Extension(principal): Extension<identity::Principal>` and pass `principal.user_id` as the audit actor.
 
-- [ ] T043 [US3] Register the five platform routes in `fn platform_routes(...)` of `backend/crates/server/src/router.rs`, next to the platform audit-logs registration. Permissions: `PlatformBillingView` for the two GETs; `PlatformBillingManage` for POST, PATCH, and PUT. Follow the existing `.routes(routes!(...).layer(require_permission(...)))` shape; use the `merge_with_permissions` helper only if two methods share one path (the plan collection path has both GET and POST — mirror the `ai::routes::get_platform_config` / `put_platform_config` example in the same file).
+- [X] T043 [US3] Register the five platform routes in `fn platform_routes(...)` of `backend/crates/server/src/router.rs`, next to the platform audit-logs registration. Permissions: `PlatformBillingView` for the two GETs; `PlatformBillingManage` for POST, PATCH, and PUT. Follow the existing `.routes(routes!(...).layer(require_permission(...)))` shape; use the `merge_with_permissions` helper only if two methods share one path (the plan collection path has both GET and POST — mirror the `ai::routes::get_platform_config` / `put_platform_config` example in the same file).
 
-- [ ] T044 [US3] In `backend/crates/server/src/openapi.rs`, add `billing::model::PlanListResponse`, `billing::model::CreatePlanRequest`, `billing::model::UpdatePlanRequest`, `billing::model::SubscriptionRowDto`, `billing::model::SubscriptionListResponse`, `billing::model::PutSubscriptionRequest`, and `billing::model::SubscriptionDto` to `components(schemas(...))`.
+- [X] T044 [US3] In `backend/crates/server/src/openapi.rs`, add `billing::model::PlanListResponse`, `billing::model::CreatePlanRequest`, `billing::model::UpdatePlanRequest`, `billing::model::SubscriptionRowDto`, `billing::model::SubscriptionListResponse`, `billing::model::PutSubscriptionRequest`, and `billing::model::SubscriptionDto` to `components(schemas(...))`.
 
-- [ ] T044a [US3] Same requirement as T018a for the five platform routes — without this, `openapi_coverage` fails with five "extra documented" entries. Add to `EXPECTED` in `backend/crates/server/tests/openapi_coverage.rs` **and** to `specs/016-backend-swagger-docs/contracts/openapi-coverage.md`:
+- [X] T044a [US3] Same requirement as T018a for the five platform routes — without this, `openapi_coverage` fails with five "extra documented" entries. Add to `EXPECTED` in `backend/crates/server/tests/openapi_coverage.rs` **and** to `specs/016-backend-swagger-docs/contracts/openapi-coverage.md`:
 
   ```text
   ("GET",   "/platform/billing/plans")
@@ -478,11 +478,11 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
   Path strings must match the `#[utoipa::path]` templates character-for-character, including the `{plan_id}` / `{tenant_id}` parameter names — the comparison is on literal path strings, not route patterns.
 
-- [ ] T045 [US3] Write `backend/crates/server/tests/billing_platform.rs`. Cover: Super Admin and Finance get 200 on all five endpoints; Developer, Sales, and Support get 403 on all five; duplicate plan name ⇒ 409; empty name ⇒ 422; negative price ⇒ 422; retiring the default plan ⇒ 409; assigning an unknown plan ⇒ 404; assigning a retired plan to a new tenant ⇒ 409; changing only the status while already on a retired plan ⇒ 200; the same PUT body sent twice ⇒ 200 both times with one subscription row; `list_subscriptions` returns a row for a tenant with no subscription showing the default plan and `explicit: false`; each mutation writes exactly one `audit_logs` row with the right action, actor, and before/after details.
+- [X] T045 [US3] Write `backend/crates/server/tests/billing_platform.rs`. Cover: Super Admin and Finance get 200 on all five endpoints; Developer, Sales, and Support get 403 on all five; duplicate plan name ⇒ 409; empty name ⇒ 422; negative price ⇒ 422; retiring the default plan ⇒ 409; assigning an unknown plan ⇒ 404; assigning a retired plan to a new tenant ⇒ 409; changing only the status while already on a retired plan ⇒ 200; the same PUT body sent twice ⇒ 200 both times with one subscription row; `list_subscriptions` returns a row for a tenant with no subscription showing the default plan and `explicit: false`; each mutation writes exactly one `audit_logs` row with the right action, actor, and before/after details.
 
   **Added for FR-011 / SC-007**: also assert that `list_subscriptions` returns **exactly one row per non-deleted tenant** — seed at least two tenants, one with an explicit subscription and one without, and check the response length equals the tenant count and that `tenant_name` is populated on every row (a soft-deleted tenant must be absent). This is the assertion that SC-007 rests on: a finance user can answer "what plan is tenant X on?" for *every* tenant, not just the assigned ones. The 403 sweep already covers the GETs as well as the mutations, which is US3 scenario 4's viewing case — do not narrow it to writes only.
 
-- [ ] T046 [US3] Run `cargo test -p billing`, `cargo test -p server --test billing_platform`, `cargo test -p server --test rbac`, `cargo test -p server --test openapi_contract`, and `cargo test -p server --test openapi_coverage`. All must pass.
+- [X] T046 [US3] Run `cargo test -p billing`, `cargo test -p server --test billing_platform`, `cargo test -p server --test rbac`, `cargo test -p server --test openapi_contract`, and `cargo test -p server --test openapi_coverage`. All must pass.
 
 ### Frontend
 
