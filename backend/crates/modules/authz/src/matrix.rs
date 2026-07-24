@@ -15,6 +15,7 @@ const TENANT_ADMIN: &[Permission] = &[
     Permission::IntegrationsManage,
     Permission::AnalyticsView,
     Permission::AuditView,
+    Permission::BillingView,
     Permission::MembersView,
     Permission::MembersManage,
     Permission::SettingsView,
@@ -86,6 +87,7 @@ const PLATFORM_FINANCE: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
     Permission::PlatformBillingView,
+    Permission::PlatformBillingManage,
     Permission::PlatformAuditView,
 ];
 
@@ -179,7 +181,6 @@ mod tests {
         assert_eq!(
             owner.difference(&admin).copied().collect::<HashSet<_>>(),
             HashSet::from([
-                Permission::BillingView,
                 Permission::BillingManage,
                 Permission::TenantDelete,
                 Permission::OwnerAssign,

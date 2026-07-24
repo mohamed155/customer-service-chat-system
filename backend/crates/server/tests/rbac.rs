@@ -95,6 +95,7 @@ const PLATFORM_OPERATIONS: &[&str] = &[
     "/api/v1/platform/tenants",
     "/api/v1/test/platform/admin",
     "/api/v1/test/platform/billing/view",
+    "/api/v1/test/platform/billing/manage",
     "/api/v1/test/platform/diagnostics/view",
     "/api/v1/platform/ai/config",
     "/api/v1/platform/audit-logs",
@@ -112,6 +113,7 @@ const PLATFORM_OPERATIONS_DENY_BY_DEFAULT: &[(&str, Method)] = &[
     ("__TENANT_DETAIL__", Method::PATCH),
     ("/api/v1/test/platform/admin", Method::GET),
     ("/api/v1/test/platform/billing/view", Method::GET),
+    ("/api/v1/test/platform/billing/manage", Method::GET),
     ("/api/v1/test/platform/diagnostics/view", Method::GET),
 ];
 

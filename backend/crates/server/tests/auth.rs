@@ -241,6 +241,7 @@ mod tests {
                     "platform.tenants.manage",
                     "platform.admin",
                     "platform.billing.view",
+                    "platform.billing.manage",
                     "platform.diagnostics.view"
                 ],
                 "staffTenantPermissions": [

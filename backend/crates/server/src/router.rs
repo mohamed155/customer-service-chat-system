@@ -346,6 +346,11 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
                     .route_layer(require_permission(Permission::PlatformBillingView)),
             )
             .route(
+                "/test/platform/billing/manage",
+                routing::get(|| async { StatusCode::OK })
+                    .route_layer(require_permission(Permission::PlatformBillingManage)),
+            )
+            .route(
                 "/test/platform/diagnostics/view",
                 routing::get(|| async { StatusCode::OK })
                     .route_layer(require_permission(Permission::PlatformDiagnosticsView)),
