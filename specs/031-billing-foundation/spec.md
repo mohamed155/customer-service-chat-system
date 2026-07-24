@@ -4,9 +4,11 @@
 
 **Created**: 2026-07-24
 
-**Status**: Draft
+**Status**: Approved — in implementation
 
-**Input**: User description: "Billing Foundation — Prepare subscription and billing management. Scope: Plans, Subscription status, Usage limits, Token usage, Conversation usage, Billing page. Backend: store plan and subscription data, track usage, enforce basic limits. Frontend: billing overview page, usage cards, plan display, limit warnings."
+**Updated**: 2026-07-24
+
+**Input**: User description: "Billing Foundation — Prepare subscription and billing management. Scope: Plans, Subscription status, Usage limits, Token usage, Conversation usage, Billing page. Backend: store plan and subscription data, track usage, enforce basic limits. Frontend: billing overview page, usage cards, plan display, limit warnings. Acceptance: tenant owners can view billing status; usage is tracked; limits can be enforced; platform finance users can view billing data."
 
 ## Clarifications
 
@@ -54,20 +56,22 @@ As a tenant approaches or exceeds its plan allowances, the system warns and then
 
 ---
 
-### User Story 3 - Platform operator manages plans and subscriptions (Priority: P3)
+### User Story 3 - Platform operator views and manages plans and subscriptions (Priority: P3)
 
-A platform user with billing authority (Super Admin or Finance) uses dedicated platform dashboard pages to maintain the catalog of plans (name, allowances, active/retired) and to assign or change a tenant's subscription — for example, moving a tenant from the default free plan to a paid plan, or marking a subscription past due or canceled. Every such change is audited.
+A platform user with billing authority (Super Admin or Finance) uses dedicated platform dashboard pages to review billing data across all tenants — the catalog of plans and which plan and status each tenant is on — and to maintain that data: creating or retiring plans (name, price, allowances, active/retired) and assigning or changing a tenant's subscription, for example moving a tenant from the default free plan to a paid plan, or marking a subscription past due or canceled. Reading billing data and changing it are separately authorized, so a finance reviewer can be granted visibility without the ability to mutate. Every change is audited.
 
-**Why this priority**: Someone must be able to set what Stories 1 and 2 display and enforce. Manual platform-side management is sufficient for a foundation; self-serve purchasing comes later.
+**Why this priority**: Someone must be able to see and set what Stories 1 and 2 display and enforce. Manual platform-side management is sufficient for a foundation; self-serve purchasing comes later.
 
-**Independent Test**: Can be tested by signing in as a platform user, changing a tenant's plan or subscription status, and verifying the tenant's Billing page reflects the change and an audit record exists.
+**Independent Test**: Can be tested by signing in as a platform user, reviewing the cross-tenant plan and subscription lists, changing a tenant's plan or subscription status, and verifying the tenant's Billing page reflects the change and an audit record exists.
 
 **Acceptance Scenarios**:
 
 1. **Given** a platform user with billing authority, **When** they assign a different plan to a tenant, **Then** the tenant's subscription reflects the new plan immediately and the new plan's allowances apply to the current period's already-recorded usage.
 2. **Given** a platform user changes a tenant's subscription status to past due or canceled, **When** the tenant's Owner views the Billing page, **Then** the new status is displayed.
 3. **Given** any plan assignment or subscription status change, **When** the change is saved, **Then** an audit record captures who made the change, what changed, and when.
-4. **Given** a platform user without billing authority (e.g., Developer, Sales, Support), **When** they attempt to modify plans or subscriptions, **Then** the change is rejected.
+4. **Given** a platform user without billing authority (e.g., Developer, Sales, Support), **When** they attempt to view or modify plans or subscriptions, **Then** the request is rejected and no billing navigation entry is shown to them.
+5. **Given** a platform finance user, **When** they open the platform billing pages, **Then** they see the full plan catalog and, for every tenant, the tenant's plan, subscription status, and whether that subscription is explicit or the default fallback.
+6. **Given** a platform user granted billing visibility but not billing management, **When** they open the platform billing pages, **Then** the plan and subscription data is fully readable and every create, retire, and assign control is unavailable.
 
 ---
 
@@ -85,7 +89,7 @@ A platform user with billing authority (Super Admin or Finance) uses dedicated p
 
 ### Functional Requirements
 
-- **FR-001**: System MUST maintain a catalog of subscription plans, each with a name, a monthly display price, a monthly AI token allowance, a monthly conversation allowance (either allowance may be unlimited), and an active/retired flag.
+- **FR-001**: System MUST maintain a catalog of subscription plans, each with a name, a monthly display price, a monthly AI token allowance, a monthly conversation allowance, and an active/retired flag. Either allowance may be **unlimited** (no ceiling — never warns, never enforces) or **zero**, which is a deliberate "AI disabled for this metric" plan: it counts as exhausted from the first moment of the period, so AI replies are paused for that metric immediately. Negative allowances MUST be rejected.
 - **FR-002**: System MUST associate every tenant with exactly one subscription referencing a plan and carrying a status of active, past due, or canceled; tenants without an explicit subscription are treated as subscribed to the default free plan.
 - **FR-003**: System MUST track, per tenant and per monthly billing period, cumulative AI token consumption (input plus output tokens across all AI provider calls) and the count of conversations started, reusing usage that is already recorded rather than double-counting.
 - **FR-004**: System MUST expose to tenant Owners and Admins the current plan, subscription status, current-period date range, and per-metric usage (consumed, allowance, percent used) — and MUST deny this view to lower tenant roles.
@@ -95,6 +99,7 @@ A platform user with billing authority (Super Admin or Finance) uses dedicated p
 - **FR-008**: Platform users with billing authority MUST be able to create and retire plans and to assign a plan or set the subscription status for any tenant, through dedicated platform dashboard pages backed by authorized endpoints; platform users without billing authority MUST be denied these operations.
 - **FR-009**: Every plan or subscription change MUST produce an audit record identifying the actor, the affected tenant or plan, the before/after values, and the time of change.
 - **FR-010**: All billing data MUST be tenant-isolated: a tenant user can never view or infer another tenant's plan, status, or usage.
+- **FR-011**: Platform users with billing visibility (Super Admin, Finance) MUST be able to read, across all tenants, the plan catalog and each tenant's plan, subscription status, and whether the subscription is explicit or the default fallback — through a dedicated platform billing page. Billing visibility MUST be authorized separately from billing management, so a user may be granted read access without write access; platform users with neither MUST be denied both the page and its data.
 
 ### Key Entities
 
@@ -113,6 +118,7 @@ A platform user with billing authority (Super Admin or Finance) uses dedicated p
 - **SC-004**: 100% of plan and subscription changes appear in the audit trail with actor, change, and timestamp.
 - **SC-005**: Tenants at or above 80% of any allowance see a warning on the Billing page before enforcement occurs, giving them the full remaining allowance window to act.
 - **SC-006**: Enforcement never blocks a customer from reaching the business: inbound messages and human-agent replies succeed at the same rate for over-limit tenants as for in-limit tenants.
+- **SC-007**: A platform finance user can determine which plan and subscription status any tenant is on, for every tenant, from a single page without asking engineering or querying data directly.
 
 ## Assumptions
 
@@ -121,8 +127,10 @@ A platform user with billing authority (Super Admin or Finance) uses dedicated p
 - **Token usage source already exists**: AI provider calls are already recorded per tenant with input/output token counts; this feature aggregates them per period rather than introducing a second tracking mechanism. Conversation usage is counted from conversations created in the period.
 - **Enforcement scope is AI replies only**: exhausted allowances pause AI-generated replies; they never block inbound customer messages, human agent replies, or dashboard access. This keeps enforcement safe for the business's end customers.
 - **Warning threshold is fixed at 80%** of an allowance; it is not tenant-configurable in this foundation.
+- **Three allowance shapes exist**, and they are distinct on purpose: *unlimited* (no ceiling, never warns or enforces), a *positive number* (warns at 80%, enforces at 100%), and *zero* (enforces immediately — a plan sold with that metric's AI turned off). Zero is a valid, orderable configuration rather than a degenerate case, which is why it is stated in FR-001 rather than left to implementation judgement.
+- **The default plan is fixed at seed time**: exactly one plan is the default, it cannot be retired, and no operation in this foundation moves the default designation to a different plan. Changing which plan is the fallback is future work.
 - **Default free plan**: a seeded plan with allowances of 100,000 AI tokens and 100 conversations per month acts as the fallback for tenants without an explicit subscription. Existing tenants land on this plan when the feature ships; platform users can immediately assign larger plans to tenants whose current usage exceeds it.
 - **Brief overshoot is acceptable**: enforcement is checked before starting an AI reply; work already in flight when the limit is crossed may complete, so consumption can slightly exceed the allowance.
-- **Platform billing authority** maps to the existing platform role set (Super Admin and Finance); tenant-side visibility maps to Owner and Admin, consistent with how other sensitive pages are gated.
+- **Platform billing authority** maps to the existing platform role set: both billing visibility and billing management are held by Super Admin and Finance, and by no other platform role. They remain two distinct authorizations so a future read-only reviewer role can be granted visibility alone without a spec change. Tenant-side visibility maps to Owner and Admin, consistent with how other sensitive pages are gated.
 - **Trial status is out of scope**: subscription status is limited to active, past due, and canceled; trials, grace periods, and dunning flows are future work.
 - **Existing notification and escalation behavior is unchanged**: this feature adds no new notification triggers; surfacing limit warnings beyond the Billing page (bell notifications, emails) is future work.

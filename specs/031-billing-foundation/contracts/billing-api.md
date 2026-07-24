@@ -41,6 +41,8 @@ Semantics:
 
 ## Platform
 
+Reads and writes are separately authorized (FR-011): the two GETs below require only `platform.billing.view`, the three mutations require `platform.billing.manage`. A caller holding view alone receives full read access and 403 on every mutation — the UI's hiding of write controls is a convenience, never the enforcement boundary.
+
 ### GET /platform/billing/plans — `platform.billing.view`
 
 200: `{ "plans": [PlanDto, …] }` (all plans, active and retired, ordered by created_at).

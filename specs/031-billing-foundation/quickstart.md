@@ -82,8 +82,10 @@ pnpm ng build dashboard && pnpm ng test dashboard && pnpm lint && pnpm format:ch
 UI checks:
 - Owner/Admin: sidebar shows **Billing**; page shows plan card (name, price, status), period line, two usage cards with normal/warning/exceeded styling, AI-paused banner when applicable. (SC-001, FR-007)
 - Manager/Agent/Viewer: no Billing nav entry; direct route navigation is blocked by the permission guard.
-- Platform Super Admin/Finance: platform Billing page lists plans (create/retire) and tenant subscriptions (assign plan/status); Developer/Sales/Support platform roles see neither.
+- Platform Super Admin/Finance: platform Billing page lists plans (create/retire) and tenant subscriptions (assign plan/status); Developer/Sales/Support platform roles see neither the nav entry nor the data. (FR-011)
+- Finance reviewer view (SC-007): the tenant subscriptions table shows one row per tenant — tenant name, plan, status, and whether the subscription is explicit or the default fallback — including tenants that have never been assigned a plan.
+- View-without-manage (US3 scenario 6): covered by `platform-billing.component.spec.ts`, which drives a permission set holding `platform.billing.view` but not `platform.billing.manage` and asserts the tables render while the create form and retire/assign controls are absent. No live platform role reproduces this today (see plan.md → Spec Update Alignment).
 
 ## 7. RBAC probes (test builds)
 
-`/test/tenant/billing/view` → 200 for Owner/Admin, 403 for Manager/Agent/Viewer. `/test/platform/billing/manage` → 200 for Super Admin/Finance, 403 for Developer/Sales/Support.
+`/test/tenant/billing/view` → 200 for Owner/Admin, 403 for Manager/Agent/Viewer. `/test/platform/billing/manage` → 200 for Super Admin/Finance, 403 for Developer/Sales/Support. `/test/platform/billing/view` (pre-existing) → same 200/403 split; the two probes are independent, which is what keeps FR-011's read/write separation enforceable server-side.

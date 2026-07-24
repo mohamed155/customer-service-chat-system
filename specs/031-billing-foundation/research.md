@@ -33,7 +33,8 @@ All decisions below were made against the actual codebase at branch `031-billing
 
 - **Decision**: Add a new `platform.billing.manage` permission (enum variant + serde name + `as_str` + catalog + frontend union), granted to `PLATFORM_ALL` (Super Admin) and `PLATFORM_FINANCE`. Reads use the existing `platform.billing.view`. Add a `/test/platform/billing/manage` RBAC probe route mirroring the existing probe pattern.
 - **Rationale**: FR-008 requires write authority for plan catalog + subscription assignment; only `platform.billing.view` exists today (verified). Following the established view/manage pair convention (`integrations.view`/`integrations.manage`, etc.) keeps the matrix legible; Developer/Sales/Support platform roles get neither view nor manage, satisfying FR-008's denial case.
-- **Alternatives considered**: Reusing `platform.billing.view` for writes — rejected: collapses the read/write distinction every other module maintains. Reusing `PlatformAdmin` — rejected: locks Finance out, contradicting spec role mapping.
+- **Reinforced by the 2026-07-24 spec update**: FR-011 makes the read/write split a *requirement* rather than a house convention — platform billing visibility must be grantable without management. The decision above already delivers it: the two GETs stay on `platform.billing.view`, the three mutations on `platform.billing.manage`. Caveat recorded in plan.md: no current platform role holds view without manage, so the view-only case (US3 scenario 6) is asserted at the frontend layer with a synthetic permission set rather than by a backend role sweep.
+- **Alternatives considered**: Reusing `platform.billing.view` for writes — rejected: collapses the read/write distinction every other module maintains, and would now also violate FR-011. Reusing `PlatformAdmin` — rejected: locks Finance out, contradicting spec role mapping.
 
 ## R6. API surface & audit actions
 
