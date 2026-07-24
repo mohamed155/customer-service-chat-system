@@ -8,6 +8,7 @@ ai-providers = { path = "../../ai-providers" }
 aes-gcm.workspace = true
 async-trait.workspace = true
 authz = { path = "../authz" }
+billing = { path = "../billing" }
 axum.workspace = true
 base64.workspace = true
 chrono = { workspace = true, features = ["serde"] }

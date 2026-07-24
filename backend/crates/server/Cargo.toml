@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 analytics = { path = "../modules/analytics" }
 audit = { path = "../modules/audit" }
+billing = { path = "../modules/billing" }
 authz = { path = "../modules/authz" }
 axum.workspace = true
 cache = { path = "../shared/cache" }
