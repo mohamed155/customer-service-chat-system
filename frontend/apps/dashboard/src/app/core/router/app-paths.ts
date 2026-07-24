@@ -13,6 +13,7 @@ export const APP_PATHS = {
     tenants: 'tenants',
     newTenant: 'new',
     auditLogs: 'audit',
+    billing: 'billing',
   },
   tenant: {
     base: 'tenant',

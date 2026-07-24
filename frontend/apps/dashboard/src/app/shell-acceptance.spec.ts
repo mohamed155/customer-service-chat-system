@@ -51,6 +51,7 @@ const ALL_PERMISSIONS: Permission[] = [
   'platform.tenants.switch',
   'platform.admin',
   'platform.billing.view',
+  'platform.billing.manage',
   'platform.diagnostics.view',
 ];
 

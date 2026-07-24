@@ -769,7 +769,7 @@ export function messageFromWire(wire: MessageWire): Message {
       : {}),
     ...(wire.attachments
       ? {
-          attachments: wire.attachments.map(a => ({
+          attachments: wire.attachments.map((a) => ({
             id: a.id,
             kind: a.kind as MessageAttachment['kind'],
             status: a.status as MessageAttachment['status'],
@@ -1465,6 +1465,74 @@ export interface BillingOverview {
   readonly usage: BillingUsage;
   readonly aiPaused: boolean;
   readonly aiPausedReason: string | null;
+}
+
+// ── Platform billing types (T047) ─────────────────────────────────────────────
+
+export interface PlatformPlanWire {
+  readonly id: string;
+  readonly name: string;
+  readonly monthly_price_cents: number;
+  readonly token_allowance: number | null;
+  readonly conversation_allowance: number | null;
+  readonly is_default: boolean;
+  readonly status: string;
+}
+
+export interface PlatformPlan {
+  readonly id: string;
+  readonly name: string;
+  readonly monthlyPriceCents: number;
+  readonly tokenAllowance: number | null;
+  readonly conversationAllowance: number | null;
+  readonly isDefault: boolean;
+  readonly status: string;
+}
+
+export interface PlatformSubscriptionRowWire {
+  readonly tenant_id: string;
+  readonly tenant_name: string;
+  readonly plan_id: string;
+  readonly plan_name: string;
+  readonly plan_is_default: boolean;
+  readonly status: string;
+  readonly explicit: boolean;
+}
+
+export interface PlatformSubscriptionRow {
+  readonly tenantId: string;
+  readonly tenantName: string;
+  readonly planId: string;
+  readonly planName: string;
+  readonly planIsDefault: boolean;
+  readonly status: string;
+  readonly explicit: boolean;
+}
+
+export function platformPlansFromWire(wire: PlatformPlanWire[]): PlatformPlan[] {
+  return wire.map((p) => ({
+    id: p.id,
+    name: p.name,
+    monthlyPriceCents: p.monthly_price_cents,
+    tokenAllowance: p.token_allowance,
+    conversationAllowance: p.conversation_allowance,
+    isDefault: p.is_default,
+    status: p.status,
+  }));
+}
+
+export function platformSubscriptionsFromWire(
+  wire: PlatformSubscriptionRowWire[],
+): PlatformSubscriptionRow[] {
+  return wire.map((s) => ({
+    tenantId: s.tenant_id,
+    tenantName: s.tenant_name,
+    planId: s.plan_id,
+    planName: s.plan_name,
+    planIsDefault: s.plan_is_default,
+    status: s.status,
+    explicit: s.explicit,
+  }));
 }
 
 export function billingOverviewFromWire(wire: BillingOverviewWire): BillingOverview {

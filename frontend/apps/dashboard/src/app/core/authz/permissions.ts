@@ -27,6 +27,7 @@ export type Permission =
   | 'platform.tenants.manage'
   | 'platform.admin'
   | 'platform.billing.view'
+  | 'platform.billing.manage'
   | 'platform.diagnostics.view'
   | 'platform.audit.view'
   | 'widgets.view'

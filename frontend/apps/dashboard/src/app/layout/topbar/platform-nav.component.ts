@@ -32,6 +32,11 @@ const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
     permission: 'platform.audit.view',
   },
   {
+    label: 'Billing',
+    path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.billing}`,
+    permission: 'platform.billing.view',
+  },
+  {
     label: 'Platform overview',
     path: `/${APP_PATHS.platform.base}`,
     permission: 'platform.admin',

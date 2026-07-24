@@ -69,4 +69,14 @@ export const PLATFORM_ROUTES: Routes = [
         (m) => m.PlatformAuditLogsComponent,
       ),
   },
+  {
+    path: APP_PATHS.platform.billing,
+    canMatch: [permissionGuard],
+    data: {
+      pageTitle: 'platformBilling',
+      requiredPermission: 'platform.billing.view',
+    },
+    loadComponent: () =>
+      import('./billing/platform-billing.component').then((m) => m.PlatformBillingComponent),
+  },
 ];

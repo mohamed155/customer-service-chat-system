@@ -32,6 +32,7 @@ export type PageTitleKey =
   | 'widgets'
   | 'auditLogs'
   | 'platformAuditLogs'
+  | 'platformBilling'
   | 'billing'
   | 'notifications';
 
@@ -116,6 +117,10 @@ export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
   platformAuditLogs: {
     title: 'Audit Logs',
     subtitle: 'Platform-wide activity across all tenants',
+  },
+  platformBilling: {
+    title: 'Platform Billing',
+    subtitle: 'Manage plans and subscriptions',
   },
   notifications: {
     title: 'Notifications',
