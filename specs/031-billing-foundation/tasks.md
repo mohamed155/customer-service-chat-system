@@ -18,7 +18,7 @@ description: "Task list for 031-billing-foundation"
 - **Two ticks rest on commit evidence, not a run I performed**: T013/T014/T020 name test files, which exist with real content (122, 271, and 439 lines). The suites were last reported green in commit `acd2c58`; this environment has no PostgreSQL (no docker daemon, no `DATABASE_URL`), so they were not re-run during reconciliation.
 - **T009 and T021 are deliberately left open** — they are "run the suite green" gates, and an unrunnable gate is not a passed gate. Tick them when `cargo test -p authz`, `--test rbac`, `--test auth`, `--test billing_overview`, and `--test openapi_coverage` actually pass with a database up.
 
-> **Resume at T029** (sidebar nav entry — `sidebar.component.ts` currently contains no `billing` reference), then T030's count updates, then the T031 gate. `enforcement.rs` and `audit.rs` are still 0-byte placeholders from T010, and `features/platform/billing/` does not exist — US2 and US3 are untouched.
+> **Resume at T037** (frontend warning/exceeded styling + AI-paused banner). `enforcement.rs` is implemented, the billing gate is active in `agent_responder.rs`, and US2 backend enforcement (T032-T036) is complete. `audit.rs` is still a 0-byte placeholder from T010, and `features/platform/billing/` does not exist — US3 is untouched.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -337,7 +337,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
 ### Backend
 
-- [ ] T032 [US2] Implement the enforcement gate in `backend/crates/modules/billing/src/enforcement.rs`:
+- [X] T032 [US2] Implement the enforcement gate in `backend/crates/modules/billing/src/enforcement.rs`:
 
   ```rust
   #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -352,7 +352,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
   `check` reuses `queries::current_period`, `queries::effective_plan`, `queries::token_usage`, and `queries::conversation_usage`. It returns `allowed: false` when the status is `past_due` or `canceled` (reason `SubscriptionStatus`), else when `token_allowance` is `Some(limit)` and `tokens >= limit` (reason `TokenLimit`), else when `conversation_allowance` is `Some(limit)` and `conversations >= limit` (reason `ConversationLimit`); otherwise `allowed: true, reason: None`. A `None` (unlimited) allowance never pauses. Check the reasons in exactly that order.
 
-- [ ] T033 [US2] Add the gate to `backend/crates/modules/ai/src/agent_responder.rs`, as the **last statement inside the `if !is_platform_persona {` block** — that is, immediately after the closing `}` of the `match rule_match { … }` statement and immediately before the `}` that closes the `if`, so the next thing to execute is `// Phase B + C — Delegate to the engine`:
+- [X] T033 [US2] Add the gate to `backend/crates/modules/ai/src/agent_responder.rs`, as the **last statement inside the `if !is_platform_persona {` block** — that is, immediately after the closing `}` of the `match rule_match { … }` statement and immediately before the `}` that closes the `if`, so the next thing to execute is `// Phase B + C — Delegate to the engine`:
 
   ```rust
       // Gate on billing allowance / subscription status (spec 031)
@@ -375,9 +375,9 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
   Do not change anything else in this file.
 
-- [ ] T034 [US2] Write `backend/crates/modules/billing/tests/enforcement_tests.rs` (DB-backed). Cover every row of the decision matrix: unlimited plan with heavy usage ⇒ allowed; usage just under the token limit ⇒ allowed; usage exactly at the token limit ⇒ paused with `TokenLimit`; usage over the limit ⇒ paused; conversations at limit ⇒ paused with `ConversationLimit`; status `past_due` ⇒ paused with `SubscriptionStatus` even when usage is zero; status `canceled` ⇒ same; tenant with no subscription row ⇒ uses the `Free` plan allowances; usage from the previous calendar month does not count toward this month; raising the plan allowance above current usage flips the decision back to allowed with no restart.
+- [X] T034 [US2] Write `backend/crates/modules/billing/tests/enforcement_tests.rs` (DB-backed). Cover every row of the decision matrix: unlimited plan with heavy usage ⇒ allowed; usage just under the token limit ⇒ allowed; usage exactly at the token limit ⇒ paused with `TokenLimit`; usage over the limit ⇒ paused; conversations at limit ⇒ paused with `ConversationLimit`; status `past_due` ⇒ paused with `SubscriptionStatus` even when usage is zero; status `canceled` ⇒ same; tenant with no subscription row ⇒ uses the `Free` plan allowances; usage from the previous calendar month does not count toward this month; raising the plan allowance above current usage flips the decision back to allowed with no restart.
 
-- [ ] T035 [US2] Write the responder-gate test as `backend/crates/server/tests/billing_responder_gate.rs`, copying the harness from `backend/crates/server/tests/engine_respond.rs`.
+- [X] T035 [US2] Write the responder-gate test as `backend/crates/server/tests/billing_responder_gate.rs`, copying the harness from `backend/crates/server/tests/engine_respond.rs`.
 
   **Not in the `ai` crate** — `crates/modules/ai/tests/` holds exactly one file (`sc005_fourth_provider.rs`, a provider test), the `ai` crate's `[dev-dependencies]` carry no DB/migration harness, and every existing test that drives `process_agent_responder_once` lives in `crates/server/tests/engine_*.rs`, which already have pool setup, `db::run_migrations`, tenant/conversation seeding, and the stub provider wiring this test needs.
 
@@ -388,7 +388,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
   - a human agent reply still succeeds while `ai_paused` is true: `POST /api/v1/tenant/conversations/{id}/messages` returns 2xx and the message row lands (SC-006's "human-agent replies succeed at the same rate");
   - allowance available ⇒ the responder proceeds and generates as before (no regression).
 
-- [ ] T036 [US2] Run `cargo test -p billing` and `cargo test -p server --test billing_responder_gate`. Both must pass.
+- [X] T036 [US2] Run `cargo test -p billing` and `cargo test -p server --test billing_responder_gate`. Both must pass.
 
 ### Frontend
 

@@ -329,6 +329,17 @@ pub async fn process_agent_responder_once(
             }
             RuleMatch::None => {}
         }
+
+        // Gate on billing allowance / subscription status (spec 031)
+        let decision = billing::enforcement::check(pool, tenant_id).await?;
+        if !decision.allowed {
+            tracing::info!(?tenant_id, reason = ?decision.reason, "agent responder: billing gate paused AI reply");
+            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                .bind(event_id)
+                .execute(pool)
+                .await?;
+            return Ok(true);
+        }
     }
 
     // Phase B + C — Delegate to the engine
