@@ -158,6 +158,12 @@ use utoipa::{openapi, Modify, OpenApi};
         audit::model::AuditEntryDto,
         audit::model::AuditPagination,
         audit::model::AuditListResponse,
+        // Billing (US1)
+        billing::model::PlanDto,
+        billing::model::PeriodDto,
+        billing::model::MetricUsageDto,
+        billing::model::UsageDto,
+        billing::model::BillingOverviewDto,
         // Notifications (spec 027)
         notifications::model::NotificationDto,
         notifications::model::NotificationActorDto,

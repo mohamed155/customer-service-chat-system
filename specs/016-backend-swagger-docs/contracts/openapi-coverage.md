@@ -116,6 +116,12 @@ This is the authoritative inventory of every endpoint the OpenAPI document MUST 
 | GET | `/tenant/ai/usage/summary` | — | 200 `UsageSummary` | 403 | cookie | `ai.agent.view` |
 | GET | `/tenant/ai/usage/{id}` | path `id: uuid` | 200 `UsageDetailRow` | 403, 404 | cookie | `ai.agent.manage` |
 
+## Tenant — billing (tag: billing)
+
+| Method | Path | Request | Success | Errors | Security | Permission |
+|--------|------|---------|---------|--------|----------|------------|
+| GET | `/tenant/billing/overview` | — | 200 (billing overview) | 401, 403 | cookie | `billing.view` |
+
 ## Operational (tag: ops) — outside `/api/v1`
 
 | Method | Path | Request | Success | Errors | Security | Permission |

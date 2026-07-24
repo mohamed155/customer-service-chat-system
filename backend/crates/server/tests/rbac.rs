@@ -89,6 +89,7 @@ const TENANT_OPERATIONS: &[(&str, &str)] = &[
     ("/api/v1/tenant/analytics/summary", "analytics.view"),
     ("/api/v1/tenant/analytics/timeseries", "analytics.view"),
     ("/api/v1/tenant/audit-logs", "audit.view"),
+    ("/api/v1/tenant/billing/overview", "billing.view"),
 ];
 
 const PLATFORM_OPERATIONS: &[&str] = &[

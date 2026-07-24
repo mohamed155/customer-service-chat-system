@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use storage::{InMemoryStorage, ObjectStorage, S3Storage};
 use tower_http::catch_panic::CatchPanicLayer;
+use billing;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_axum::router::{OpenApiRouter, UtoipaMethodRouterExt};
@@ -752,6 +753,11 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(audit::routes::list_tenant_audit_logs)
                 .layer(require_permission(Permission::AuditView)),
+        )
+        // Billing overview (spec 031)
+        .routes(
+            routes!(billing::routes::get_billing_overview)
+                .layer(require_permission(Permission::BillingView)),
         )
         // Integrations (spec 028)
         .routes(
