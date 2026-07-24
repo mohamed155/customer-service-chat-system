@@ -32,6 +32,7 @@ export type PageTitleKey =
   | 'widgets'
   | 'auditLogs'
   | 'platformAuditLogs'
+  | 'billing'
   | 'notifications';
 
 /** A page's resolved topbar title/subtitle. */
@@ -110,6 +111,7 @@ export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
     title: 'Chat Widget',
     subtitle: 'Embed the chat widget on your website',
   },
+  billing: { title: 'Billing', subtitle: 'Your plan and usage this month' },
   auditLogs: { title: 'Audit Logs', subtitle: 'Track sensitive actions in your workspace' },
   platformAuditLogs: {
     title: 'Audit Logs',

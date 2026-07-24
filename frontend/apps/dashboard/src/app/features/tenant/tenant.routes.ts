@@ -176,6 +176,17 @@ export const TENANT_ROUTES: Routes = [
     title: PAGE_TITLES.analytics.title,
   },
   {
+    path: APP_PATHS.tenant.billing,
+    canMatch: [permissionGuard],
+    loadComponent: () =>
+      import('./billing/billing-page.component').then((m) => m.BillingPageComponent),
+    data: {
+      pageTitle: 'billing',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.billing],
+    },
+    title: PAGE_TITLES.billing.title,
+  },
+  {
     path: APP_PATHS.tenant.auditLogs,
     canMatch: [permissionGuard],
     loadComponent: () =>

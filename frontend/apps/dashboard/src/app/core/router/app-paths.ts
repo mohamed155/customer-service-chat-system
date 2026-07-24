@@ -32,6 +32,7 @@ export const APP_PATHS = {
     integrationDetail: 'integrations/:slug',
     analytics: 'analytics',
     auditLogs: 'audit-logs',
+    billing: 'billing',
     settings: 'settings',
     settingsTools: 'settings/tools',
     team: 'team',

@@ -10,6 +10,16 @@ description: "Task list for 031-billing-foundation"
 
 **Tests**: Included — Constitution Principle VII (Test-First) and quickstart.md require DB-backed suites.
 
+**Last reviewed**: 2026-07-24 against the updated spec (FR-011, SC-007, US3 scenarios 5–6) and plan. No tasks were added, removed, or renumbered — the platform read surface was already in Phase 5. Amendments landed in the Phase 5 header (traceability table), T045, and T054.
+
+**Checkbox status (reconciled 2026-07-24 against the working tree, not against commit messages)**
+
+- **T001–T008a and T010–T028 are ticked.** Each was verified by inspecting the artifact it names: migration `0059` with both tables and the Free seed; the three `Cargo.toml` wirings; `PlatformBillingManage` in `permission.rs` plus all four `matrix.rs` edits including the corrected owner-exclusives set; the `/test/platform/billing/manage` probe and its `rbac.rs` entries; `auth.rs`'s `platformPermissions`; `metric_usage` and all four query functions; the handler, its utoipa annotation, the router registration, the openapi schemas, and **both** `openapi_coverage` inventories (test + the 016 contract md); and the seven frontend files plus all four route-wiring edits.
+- **Two ticks rest on commit evidence, not a run I performed**: T013/T014/T020 name test files, which exist with real content (122, 271, and 439 lines). The suites were last reported green in commit `acd2c58`; this environment has no PostgreSQL (no docker daemon, no `DATABASE_URL`), so they were not re-run during reconciliation.
+- **T009 and T021 are deliberately left open** — they are "run the suite green" gates, and an unrunnable gate is not a passed gate. Tick them when `cargo test -p authz`, `--test rbac`, `--test auth`, `--test billing_overview`, and `--test openapi_coverage` actually pass with a database up.
+
+> **Resume at T029** (sidebar nav entry — `sidebar.component.ts` currently contains no `billing` reference), then T030's count updates, then the T031 gate. `enforcement.rs` and `audit.rs` are still 0-byte placeholders from T010, and `features/platform/billing/` does not exist — US2 and US3 are untouched.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: can run in parallel (touches a different file than other [P] tasks in the same group)
@@ -41,7 +51,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
 **Purpose**: database schema and crate wiring. Nothing else can compile without these.
 
-- [ ] T001 Create the migration `backend/migrations/0059_billing_foundation.sql` with exactly this content:
+- [X] T001 Create the migration `backend/migrations/0059_billing_foundation.sql` with exactly this content:
 
   ```sql
   CREATE TABLE billing_plans (
@@ -87,7 +97,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
   VALUES ('Free', 0, 100000, 100, true, 'active');
   ```
 
-- [ ] T002 [P] Replace `backend/crates/modules/billing/Cargo.toml` dependencies with (keep the existing `[package]` block unchanged, add a `[dependencies]` section):
+- [X] T002 [P] Replace `backend/crates/modules/billing/Cargo.toml` dependencies with (keep the existing `[package]` block unchanged, add a `[dependencies]` section):
 
   ```toml
   [dependencies]
@@ -107,9 +117,9 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
   tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
   ```
 
-- [ ] T003 [P] In `backend/crates/server/Cargo.toml`, add `billing = { path = "../modules/billing" }` to `[dependencies]` (alphabetically, right after the `audit = ...` line).
+- [X] T003 [P] In `backend/crates/server/Cargo.toml`, add `billing = { path = "../modules/billing" }` to `[dependencies]` (alphabetically, right after the `audit = ...` line).
 
-- [ ] T004 [P] In `backend/crates/modules/ai/Cargo.toml`, add `billing = { path = "../billing" }` to `[dependencies]` (right after the `authz = ...` line).
+- [X] T004 [P] In `backend/crates/modules/ai/Cargo.toml`, add `billing = { path = "../billing" }` to `[dependencies]` (right after the `authz = ...` line).
 
 **Checkpoint**: run `cargo check -p billing -p ai -p server` from `backend/` — it must compile.
 
@@ -123,7 +133,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
 ### RBAC
 
-- [ ] T005 In `backend/crates/modules/authz/src/permission.rs`, add the new permission `PlatformBillingManage`. Four edits in this one file:
+- [X] T005 In `backend/crates/modules/authz/src/permission.rs`, add the new permission `PlatformBillingManage`. Four edits in this one file:
   1. In the `enum Permission`, immediately after the `PlatformBillingView` variant, add:
      `#[serde(rename = "platform.billing.manage")]` then `PlatformBillingManage,`
   2. In `pub const ALL: [Self; 30]`, change the length to `[Self; 31]` and add `Self::PlatformBillingManage,` right after `Self::PlatformBillingView,`.
@@ -132,7 +142,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
   Do NOT change `pub const TENANT: [Self; 23]` — this is a platform permission.
 
-- [ ] T006 In `backend/crates/modules/authz/src/matrix.rs`, make three array edits **and one test edit**:
+- [X] T006 In `backend/crates/modules/authz/src/matrix.rs`, make three array edits **and one test edit**:
   1. Add `Permission::BillingView,` to `TENANT_ADMIN` (put it right after `Permission::AuditView,`).
   2. Add `Permission::PlatformBillingManage,` to `PLATFORM_ALL` (right after `Permission::PlatformBillingView,`).
   3. Add `Permission::PlatformBillingManage,` to `PLATFORM_FINANCE` (right after `Permission::PlatformBillingView,`).
@@ -140,7 +150,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
   Do NOT add billing permissions to `TENANT_MANAGER`, `TENANT_AGENT`, or `TENANT_VIEWER` — the existing `manager_has_no_settings_or_billing_permissions` test depends on that.
 
-- [ ] T007 In `backend/crates/server/src/router.rs`, inside the `if include_test_routes {` block of the **platform** router (next to the existing `/test/platform/billing/view` route), add:
+- [X] T007 In `backend/crates/server/src/router.rs`, inside the `if include_test_routes {` block of the **platform** router (next to the existing `/test/platform/billing/view` route), add:
 
   ```rust
   .route(
@@ -150,19 +160,19 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
   )
   ```
 
-- [ ] T008 In `backend/crates/server/tests/rbac.rs`, update the expectation arrays so the existing sweeps cover the new permission:
+- [X] T008 In `backend/crates/server/tests/rbac.rs`, update the expectation arrays so the existing sweeps cover the new permission:
   1. Add `"/api/v1/test/platform/billing/manage",` to `PLATFORM_OPERATIONS`.
   2. Add `("/api/v1/test/platform/billing/manage", Method::GET),` to `PLATFORM_OPERATIONS_DENY_BY_DEFAULT`.
 
   No other list in this file needs the `billing.view` change: `TENANT_PERMISSIONS` is the Owner list (it already contains `billing.view`), and `me_staff_tenant_permissions_follow_environment_for_every_platform_role` asserts only `staffTenantPermissions`, which the `TENANT_ADMIN` edit does not affect. Verified by reading the file — do not go hunting for an "Admin list"; there isn't one.
 
-- [ ] T008a **Required — `backend/crates/server/tests/auth.rs` asserts the `/auth/login` and `/me` bodies with exact JSON equality**, including the super-admin `platformPermissions` array. The T006 `PLATFORM_ALL` edit changes that array, so this test fails until it is updated. In the `json!({...})` expectation (the `"platformPermissions"` array, ~line 238), add `"platform.billing.manage"` immediately after `"platform.billing.view"`. Order matters — it must match the order of `PLATFORM_ALL` in `matrix.rs`. `staffTenantPermissions` in the same assertion needs **no** change (it is the Owner set, which already has `billing.view`).
+- [X] T008a **Required — `backend/crates/server/tests/auth.rs` asserts the `/auth/login` and `/me` bodies with exact JSON equality**, including the super-admin `platformPermissions` array. The T006 `PLATFORM_ALL` edit changes that array, so this test fails until it is updated. In the `json!({...})` expectation (the `"platformPermissions"` array, ~line 238), add `"platform.billing.manage"` immediately after `"platform.billing.view"`. Order matters — it must match the order of `PLATFORM_ALL` in `matrix.rs`. `staffTenantPermissions` in the same assertion needs **no** change (it is the Owner set, which already has `billing.view`).
 
 - [ ] T009 Run `cargo test -p authz`, `cargo test -p server --test rbac`, and `cargo test -p server --test auth` from `backend/`. All three must pass before continuing — T006.4 and T008a exist precisely because the first two are red without them.
 
 ### Billing crate skeleton + shared reads
 
-- [ ] T010 Replace `backend/crates/modules/billing/src/lib.rs` with module docs following the exact section headings used in `backend/crates/modules/analytics/src/lib.rs` (`## Purpose`, `## Responsibilities`, `## Public Interfaces`, `## Dependencies`, `## Data Model`, `## Extension Points`), then these declarations:
+- [X] T010 Replace `backend/crates/modules/billing/src/lib.rs` with module docs following the exact section headings used in `backend/crates/modules/analytics/src/lib.rs` (`## Purpose`, `## Responsibilities`, `## Public Interfaces`, `## Dependencies`, `## Data Model`, `## Extension Points`), then these declarations:
 
   ```rust
   pub mod audit;
@@ -174,7 +184,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
   Create empty placeholder files `audit.rs`, `enforcement.rs`, `model.rs`, `queries.rs`, `routes.rs` in `backend/crates/modules/billing/src/` so the crate compiles.
 
-- [ ] T011 Create the DTOs in `backend/crates/modules/billing/src/model.rs`. Every struct derives `#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]` and uses snake_case field names (serde default). Define:
+- [X] T011 Create the DTOs in `backend/crates/modules/billing/src/model.rs`. Every struct derives `#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]` and uses snake_case field names (serde default). Define:
   - `PlanDto { id: Uuid, name: String, monthly_price_cents: i32, token_allowance: Option<i64>, conversation_allowance: Option<i32>, is_default: bool, status: String }`
   - `PeriodDto { start: DateTime<Utc>, end: DateTime<Utc> }`
   - `MetricUsageDto { used: i64, allowance: Option<i64>, percent: Option<i32>, state: String }`
@@ -212,7 +222,7 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
   }
   ```
 
-- [ ] T012 Create the shared read queries in `backend/crates/modules/billing/src/queries.rs`. All functions take `pool: &PgPool` and return `Result<_, sqlx::Error>`.
+- [X] T012 Create the shared read queries in `backend/crates/modules/billing/src/queries.rs`. All functions take `pool: &PgPool` and return `Result<_, sqlx::Error>`.
   1. `pub fn current_period(now: DateTime<Utc>) -> (DateTime<Utc>, DateTime<Utc>)` — pure Rust helper returning the UTC calendar-month `[start, end)` containing `now` (end = first instant of the next month).
   2. `pub async fn effective_plan(pool, tenant_id: Uuid) -> Result<(model::PlanDto, String), sqlx::Error>` — returns the plan and the subscription status. One query:
 
@@ -243,9 +253,9 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
      WHERE tenant_id = $1 AND created_at >= $2 AND created_at < $3 AND deleted_at IS NULL
      ```
 
-- [ ] T013 [P] Write unit tests for the pure helpers in `backend/crates/modules/billing/tests/usage_math_tests.rs` (no database needed). Cover: 0% is `normal`; 79% is `normal`; exactly 80% is `warning`; 99% is `warning`; exactly 100% is `exceeded`; over 100% is `exceeded`; `allowance = None` is always `normal` with `percent: None`; `allowance = Some(0)` with zero usage is `exceeded` (the "AI disabled" plan) and does not panic; `current_period` returns month start/end correctly including a December→January rollover.
+- [X] T013 [P] Write unit tests for the pure helpers in `backend/crates/modules/billing/tests/usage_math_tests.rs` (no database needed). Cover: 0% is `normal`; 79% is `normal`; exactly 80% is `warning`; 99% is `warning`; exactly 100% is `exceeded`; over 100% is `exceeded`; `allowance = None` is always `normal` with `percent: None`; `allowance = Some(0)` with zero usage is `exceeded` (the "AI disabled" plan) and does not panic; `current_period` returns month start/end correctly including a December→January rollover.
 
-- [ ] T014 [P] Write DB-backed tests for the queries in `backend/crates/modules/billing/tests/queries_tests.rs`. Cover: a tenant with no `tenant_subscriptions` row resolves to the seeded `Free` plan with status `"active"`; a tenant with an explicit row resolves to its own plan and status; `token_usage` sums `input_tokens + output_tokens` including rows where one column is NULL; usage recorded before the period start and on/after the period end is excluded; soft-deleted conversations are not counted.
+- [X] T014 [P] Write DB-backed tests for the queries in `backend/crates/modules/billing/tests/queries_tests.rs`. Cover: a tenant with no `tenant_subscriptions` row resolves to the seeded `Free` plan with status `"active"`; a tenant with an explicit row resolves to its own plan and status; `token_usage` sums `input_tokens + output_tokens` including rows where one column is NULL; usage recorded before the period start and on/after the period end is excluded; soft-deleted conversations are not counted.
 
 **Checkpoint**: `cargo test -p billing` passes. Foundation is ready.
 
@@ -259,11 +269,11 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
 ### Backend
 
-- [ ] T015 [US1] In `backend/crates/modules/billing/src/routes.rs`, implement `pub async fn get_billing_overview(State(pool): State<PgPool>, ctx: tenancy::TenantContext) -> Response`. Steps: compute the period with `queries::current_period(Utc::now())`; call `queries::effective_plan`, `queries::token_usage`, `queries::conversation_usage`; build both `MetricUsageDto`s with `model::metric_usage`; set `ai_paused` / `ai_paused_reason` using this precedence — status `past_due` or `canceled` ⇒ `("subscription_status")`, else tokens `exceeded` ⇒ `("token_limit")`, else conversations `exceeded` ⇒ `("conversation_limit")`, else `false` / `None`; return `(StatusCode::OK, Json(BillingOverviewDto)).into_response()`. On any `sqlx::Error`, log with `tracing::error!` and return `kernel::ApiError` 500, exactly like `analytics::routes`.
+- [X] T015 [US1] In `backend/crates/modules/billing/src/routes.rs`, implement `pub async fn get_billing_overview(State(pool): State<PgPool>, ctx: tenancy::TenantContext) -> Response`. Steps: compute the period with `queries::current_period(Utc::now())`; call `queries::effective_plan`, `queries::token_usage`, `queries::conversation_usage`; build both `MetricUsageDto`s with `model::metric_usage`; set `ai_paused` / `ai_paused_reason` using this precedence — status `past_due` or `canceled` ⇒ `("subscription_status")`, else tokens `exceeded` ⇒ `("token_limit")`, else conversations `exceeded` ⇒ `("conversation_limit")`, else `false` / `None`; return `(StatusCode::OK, Json(BillingOverviewDto)).into_response()`. On any `sqlx::Error`, log with `tracing::error!` and return `kernel::ApiError` 500, exactly like `analytics::routes`.
 
-- [ ] T016 [US1] Add the `#[utoipa::path(...)]` attribute above `get_billing_overview` with `get`, `path = "/tenant/billing/overview"`, `tag = "billing"`, `operation_id = "get_billing_overview"`, and responses `200` (body `model::BillingOverviewDto`), `403`, `500`. Copy the annotation shape from `audit::routes::list_tenant_audit_logs`.
+- [X] T016 [US1] Add the `#[utoipa::path(...)]` attribute above `get_billing_overview` with `get`, `path = "/tenant/billing/overview"`, `tag = "billing"`, `operation_id = "get_billing_overview"`, and responses `200` (body `model::BillingOverviewDto`), `403`, `500`. Copy the annotation shape from `audit::routes::list_tenant_audit_logs`.
 
-- [ ] T017 [US1] In `backend/crates/server/src/router.rs`, inside `fn tenant_routes(...)`, register the endpoint next to the audit-logs registration:
+- [X] T017 [US1] In `backend/crates/server/src/router.rs`, inside `fn tenant_routes(...)`, register the endpoint next to the audit-logs registration:
 
   ```rust
   // Billing overview (spec 031)
@@ -273,33 +283,33 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
   )
   ```
 
-- [ ] T018 [US1] In `backend/crates/server/src/openapi.rs`, add to the `components(schemas(...))` list (right after the `audit::model::*` entries): `billing::model::PlanDto`, `billing::model::PeriodDto`, `billing::model::MetricUsageDto`, `billing::model::UsageDto`, `billing::model::BillingOverviewDto`.
+- [X] T018 [US1] In `backend/crates/server/src/openapi.rs`, add to the `components(schemas(...))` list (right after the `audit::model::*` entries): `billing::model::PlanDto`, `billing::model::PeriodDto`, `billing::model::MetricUsageDto`, `billing::model::UsageDto`, `billing::model::BillingOverviewDto`.
 
-- [ ] T018a [US1] **Required — `backend/crates/server/tests/openapi_coverage.rs` fails on undocumented *and* extra-documented routes.** Its `EXPECTED` const is a hard-coded inventory compared for exact set equality against the router-derived doc, so registering T017's route makes the test fail with "extra" until the inventory grows. Two edits:
+- [X] T018a [US1] **Required — `backend/crates/server/tests/openapi_coverage.rs` fails on undocumented *and* extra-documented routes.** Its `EXPECTED` const is a hard-coded inventory compared for exact set equality against the router-derived doc, so registering T017's route makes the test fail with "extra" until the inventory grows. Two edits:
   1. Add `("GET", "/tenant/billing/overview"),` to `EXPECTED` in `backend/crates/server/tests/openapi_coverage.rs`, in a `// Billing (spec 031)` group placed next to the audit-logs entries.
   2. Mirror the same line into `specs/016-backend-swagger-docs/contracts/openapi-coverage.md` — the const's doc comment names that file as the authoritative inventory it mirrors, and letting them drift breaks the next feature that trusts it.
 
-- [ ] T019 [US1] **Append** `("/api/v1/tenant/billing/overview", "billing.view"),` to the **end** of `TENANT_OPERATIONS` in `backend/crates/server/tests/rbac.rs`. Position matters: `staff_tenant_access_is_environment_aware` zips this slice against fixed-length `expected` arrays (18 booleans, with a comment enumerating the positions) — appending past that length leaves the existing positional expectations intact, whereas inserting in the middle silently shifts every role's expectations. Do not extend those arrays. The same test's Development-environment loop sweeps *all* entries and asserts 200 for all five platform staff roles; the new route satisfies this because the migration seeds the default Free plan, so the handler returns 200 for any tenant.
+- [X] T019 [US1] **Append** `("/api/v1/tenant/billing/overview", "billing.view"),` to the **end** of `TENANT_OPERATIONS` in `backend/crates/server/tests/rbac.rs`. Position matters: `staff_tenant_access_is_environment_aware` zips this slice against fixed-length `expected` arrays (18 booleans, with a comment enumerating the positions) — appending past that length leaves the existing positional expectations intact, whereas inserting in the middle silently shifts every role's expectations. Do not extend those arrays. The same test's Development-environment loop sweeps *all* entries and asserts 200 for all five platform staff roles; the new route satisfies this because the migration seeds the default Free plan, so the handler returns 200 for any tenant.
 
-- [ ] T020 [US1] Write `backend/crates/server/tests/billing_overview.rs` (copy the harness setup from `backend/crates/server/tests/analytics_api.rs`). Cover: 200 for Owner and for Admin; 403 for Manager, Agent, and Viewer; a tenant with no subscription row returns the `Free` plan and `subscription_status: "active"`; a tenant with zero usage returns `used: 0` on both metrics (not an error); a plan with `token_allowance: null` returns `allowance: null`, `percent: null`, `state: "normal"`; tenant A's response never contains tenant B's usage numbers.
+- [X] T020 [US1] Write `backend/crates/server/tests/billing_overview.rs` (copy the harness setup from `backend/crates/server/tests/analytics_api.rs`). Cover: 200 for Owner and for Admin; 403 for Manager, Agent, and Viewer; a tenant with no subscription row returns the `Free` plan and `subscription_status: "active"`; a tenant with zero usage returns `used: 0` on both metrics (not an error); a plan with `token_allowance: null` returns `allowance: null`, `percent: null`, `state: "normal"`; tenant A's response never contains tenant B's usage numbers.
 
 - [ ] T021 [US1] Run `cargo test -p billing`, `cargo test -p server --test billing_overview`, `cargo test -p server --test rbac`, and `cargo test -p server --test openapi_coverage`. All must pass.
 
 ### Frontend
 
-- [ ] T022 [P] [US1] In `frontend/apps/dashboard/src/app/core/api/tenant-api.models.ts`, append the billing wire types and mappers (put them at the end of the file, following the `Analytics*` pattern): `BillingPlanWire`, `BillingPeriodWire`, `BillingMetricWire`, `BillingUsageWire`, `BillingOverviewWire` (snake_case fields matching the API) plus the camelCase app types `BillingPlan`, `BillingPeriod`, `BillingMetric`, `BillingUsage`, `BillingOverview`, and `export function billingOverviewFromWire(wire: BillingOverviewWire): BillingOverview`. Convert `period.start` / `period.end` to `Date`.
+- [X] T022 [P] [US1] In `frontend/apps/dashboard/src/app/core/api/tenant-api.models.ts`, append the billing wire types and mappers (put them at the end of the file, following the `Analytics*` pattern): `BillingPlanWire`, `BillingPeriodWire`, `BillingMetricWire`, `BillingUsageWire`, `BillingOverviewWire` (snake_case fields matching the API) plus the camelCase app types `BillingPlan`, `BillingPeriod`, `BillingMetric`, `BillingUsage`, `BillingOverview`, and `export function billingOverviewFromWire(wire: BillingOverviewWire): BillingOverview`. Convert `period.start` / `period.end` to `Date`.
 
-- [ ] T023 [P] [US1] Create `frontend/apps/dashboard/src/app/shared/fixtures/billing.fixtures.ts` exporting typed sample data for specs: a normal overview, an 85%-usage overview, a 100%-usage overview, an unlimited-allowance overview, and a `past_due` overview. Follow the shape of `analytics.fixtures.ts`.
+- [X] T023 [P] [US1] Create `frontend/apps/dashboard/src/app/shared/fixtures/billing.fixtures.ts` exporting typed sample data for specs: a normal overview, an 85%-usage overview, a 100%-usage overview, an unlimited-allowance overview, and a `past_due` overview. Follow the shape of `analytics.fixtures.ts`.
 
-- [ ] T024 [US1] Create `frontend/apps/dashboard/src/app/features/tenant/billing/billing-api.service.ts` — `@Injectable({ providedIn: 'root' })`, injects `ApiService`, one method `getOverview(): Observable<ApiResponse<BillingOverview>>` calling `this.api.get<{ data: BillingOverviewWire }>('/tenant/billing/overview')` and mapping through `billingOverviewFromWire`. Copy the structure of `analytics-api.service.ts`.
+- [X] T024 [US1] Create `frontend/apps/dashboard/src/app/features/tenant/billing/billing-api.service.ts` — `@Injectable({ providedIn: 'root' })`, injects `ApiService`, one method `getOverview(): Observable<ApiResponse<BillingOverview>>` calling `this.api.get<{ data: BillingOverviewWire }>('/tenant/billing/overview')` and mapping through `billingOverviewFromWire`. Copy the structure of `analytics-api.service.ts`.
 
-- [ ] T025 [US1] Create `frontend/apps/dashboard/src/app/features/tenant/billing/billing.store.ts` — an NgRx `signalStore` with state `{ overview: BillingOverview | null; loading: boolean; error: string | null }`, an `rxMethod` `load()` that sets `loading` then calls the API, and a `withHooks` `onInit` that reloads whenever the active tenant changes (copy the `selectActiveTenant` effect from `analytics.store.ts`).
+- [X] T025 [US1] Create `frontend/apps/dashboard/src/app/features/tenant/billing/billing.store.ts` — an NgRx `signalStore` with state `{ overview: BillingOverview | null; loading: boolean; error: string | null }`, an `rxMethod` `load()` that sets `loading` then calls the API, and a `withHooks` `onInit` that reloads whenever the active tenant changes (copy the `selectActiveTenant` effect from `analytics.store.ts`).
 
-- [ ] T026 [US1] Create `frontend/apps/dashboard/src/app/features/tenant/billing/billing-page.component.ts` — a standalone, `OnPush`, signal-based component providing `BillingStore`. Render: a plan card (plan name, monthly price formatted from cents as e.g. `$49.00`, subscription status badge), a period line (`period.start` – `period.end`), and two usage cards (Tokens, Conversations) each showing `used`, `allowance` (`Unlimited` when null), `percent`, and a progress bar. Show a loading state and an error state. Use only `--app-*` design tokens and wrapped Taiga components — no new UI primitives. Warning/exceeded styling and the AI-paused banner come later, in T037.
+- [X] T026 [US1] Create `frontend/apps/dashboard/src/app/features/tenant/billing/billing-page.component.ts` — a standalone, `OnPush`, signal-based component providing `BillingStore`. Render: a plan card (plan name, monthly price formatted from cents as e.g. `$49.00`, subscription status badge), a period line (`period.start` – `period.end`), and two usage cards (Tokens, Conversations) each showing `used`, `allowance` (`Unlimited` when null), `percent`, and a progress bar. Show a loading state and an error state. Use only `--app-*` design tokens and wrapped Taiga components — no new UI primitives. Warning/exceeded styling and the AI-paused banner come later, in T037.
 
-- [ ] T027 [P] [US1] Create `frontend/apps/dashboard/src/app/features/tenant/billing/billing.store.spec.ts` and `billing-page.component.spec.ts` using the T023 fixtures. Cover: the store exposes loaded data; the page renders plan name, price, and both usage cards; an unlimited metric shows `Unlimited` and no progress bar; zero usage renders `0` rather than an empty state.
+- [X] T027 [P] [US1] Create `frontend/apps/dashboard/src/app/features/tenant/billing/billing.store.spec.ts` and `billing-page.component.spec.ts` using the T023 fixtures. Cover: the store exposes loaded data; the page renders plan name, price, and both usage cards; an unlimited metric shows `Unlimited` and no progress bar; zero usage renders `0` rather than an empty state.
 
-- [ ] T028 [US1] Wire the tenant route. Four small edits:
+- [X] T028 [US1] Wire the tenant route. Four small edits:
   1. `frontend/apps/dashboard/src/app/core/router/app-paths.ts` — add `billing: 'billing',` to the `tenant` block (after `auditLogs`).
   2. `frontend/apps/dashboard/src/app/core/authz/permissions.ts` — add `[APP_PATHS.tenant.billing]: 'billing.view',` to `PAGE_PERMISSIONS`.
   3. `frontend/apps/dashboard/src/app/core/router/page-title.ts` — add `'billing'` to the page-key union and `billing: { title: 'Billing', subtitle: 'Your plan and usage this month' },` to `PAGE_TITLES`.
@@ -392,11 +402,22 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
 ---
 
-## Phase 5: User Story 3 — Platform operator manages plans and subscriptions (Priority: P3)
+## Phase 5: User Story 3 — Platform operator views and manages plans and subscriptions (Priority: P3)
 
-**Goal**: Super Admin / Finance maintain the plan catalog and assign tenant subscriptions; every change is audited.
+**Goal**: Super Admin / Finance review billing data across all tenants and maintain it — plan catalog plus tenant subscription assignment; reads and writes are separately authorized; every change is audited.
 
-**Independent Test**: sign in as platform Super Admin, create a plan, assign it to a tenant, and confirm the tenant's Billing page shows the new plan and `/platform/audit-logs` contains the change. Sign in as platform Developer — the writes are rejected with 403.
+**Independent Test**: sign in as platform Super Admin, review the plan catalog and the per-tenant subscription list, create a plan, assign it to a tenant, and confirm the tenant's Billing page shows the new plan and `/platform/audit-logs` contains the change. Sign in as platform Developer — both the reads and the writes are rejected with 403.
+
+**Spec-update coverage (2026-07-24 — FR-011 / SC-007, US3 scenarios 5–6)**: no new tasks were required; the read surface was already in this phase. Traceability:
+
+| Spec item | Covered by |
+|---|---|
+| FR-011 read surface (cross-tenant plan + subscription read) | T040 `list_subscriptions` query, T042 `list_plans` / `list_subscriptions` handlers, T051 platform page |
+| FR-011 read/write separation | T043 (`PlatformBillingView` on the two GETs, `PlatformBillingManage` on POST/PATCH/PUT), T007 probe route |
+| SC-007 (finance answers "what plan is tenant X on?" from one page) | T045 (every tenant appears exactly once), T051 subscriptions table |
+| US3 scenario 5 (finance reads catalog + all tenants) | T045, T051 |
+| US3 scenario 6 (view without manage) | T054 — frontend only; **no platform role holds view without manage today**, so this is asserted with a synthetic permission set, not a backend role sweep (see plan.md → Spec Update Alignment) |
+| US3 scenario 4 extended to viewing | T045 (Developer/Sales/Support 403 on all five, GETs included), T052/T053 (nav + route guarded by `platform.billing.view`) |
 
 ### Backend
 
@@ -459,6 +480,8 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
 - [ ] T045 [US3] Write `backend/crates/server/tests/billing_platform.rs`. Cover: Super Admin and Finance get 200 on all five endpoints; Developer, Sales, and Support get 403 on all five; duplicate plan name ⇒ 409; empty name ⇒ 422; negative price ⇒ 422; retiring the default plan ⇒ 409; assigning an unknown plan ⇒ 404; assigning a retired plan to a new tenant ⇒ 409; changing only the status while already on a retired plan ⇒ 200; the same PUT body sent twice ⇒ 200 both times with one subscription row; `list_subscriptions` returns a row for a tenant with no subscription showing the default plan and `explicit: false`; each mutation writes exactly one `audit_logs` row with the right action, actor, and before/after details.
 
+  **Added for FR-011 / SC-007**: also assert that `list_subscriptions` returns **exactly one row per non-deleted tenant** — seed at least two tenants, one with an explicit subscription and one without, and check the response length equals the tenant count and that `tenant_name` is populated on every row (a soft-deleted tenant must be absent). This is the assertion that SC-007 rests on: a finance user can answer "what plan is tenant X on?" for *every* tenant, not just the assigned ones. The 403 sweep already covers the GETs as well as the mutations, which is US3 scenario 4's viewing case — do not narrow it to writes only.
+
 - [ ] T046 [US3] Run `cargo test -p billing`, `cargo test -p server --test billing_platform`, `cargo test -p server --test rbac`, `cargo test -p server --test openapi_contract`, and `cargo test -p server --test openapi_coverage`. All must pass.
 
 ### Frontend
@@ -477,7 +500,9 @@ These are facts verified in this repo. Follow them exactly; do not invent altern
 
 - [ ] T053 [US3] In `frontend/apps/dashboard/src/app/layout/topbar/platform-nav.component.ts`, **append** a **Billing** entry pointing at `/${APP_PATHS.platform.base}/${APP_PATHS.platform.billing}`, guarded by `platform.billing.view` the same way the existing entries are guarded. Append it **after** the existing Audit Logs entry: `platform-nav.component.spec.ts` asserts `options[1].textContent` contains `'Audit Logs'`, so inserting ahead of it breaks that test. If you do place it earlier, update that index in the spec in the same commit.
 
-- [ ] T054 [P] [US3] Create `platform-billing.store.spec.ts` and `platform-billing.component.spec.ts` in the same folder. Cover: plans and subscriptions render; a Finance/Super Admin sees the create form and retire buttons; a user without `platform.billing.manage` sees neither; creating a plan calls the API and reloads the list.
+- [ ] T054 [P] [US3] Create `platform-billing.store.spec.ts` and `platform-billing.component.spec.ts` in the same folder. Cover: plans and subscriptions render; a Finance/Super Admin sees the create form and retire buttons; creating a plan calls the API and reloads the list.
+
+  **This spec is the only coverage of US3 scenario 6 (FR-011's view-without-manage case)** — write it deliberately, not as an afterthought: drive the component with a permission set containing `platform.billing.view` **but not** `platform.billing.manage`, then assert that both tables still render their rows *and* that the create form, the retire/activate buttons, and the plan/status assignment controls are all absent from the DOM. No real platform role produces this combination today (Super Admin and Finance hold both permissions; Developer/Sales/Support hold neither), so if this assertion is dropped, the requirement has zero test coverage anywhere in the stack.
 
 - [ ] T055 [US3] Run `pnpm ng test dashboard`, `pnpm lint`, and `pnpm format:check`. All must pass.
 

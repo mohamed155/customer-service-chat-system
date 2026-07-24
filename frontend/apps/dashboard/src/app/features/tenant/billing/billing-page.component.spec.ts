@@ -1,0 +1,166 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { provideTaiga } from '@taiga-ui/core';
+import { of, Subject } from 'rxjs';
+import { BillingOverview } from '../../../core/api/tenant-api.models';
+import { BillingApiService } from './billing-api.service';
+import { BillingStore } from './billing.store';
+import { BillingPageComponent } from './billing-page.component';
+
+const MOCK_OVERVIEW: BillingOverview = {
+  plan: {
+    id: 'plan-pro-001',
+    name: 'Professional',
+    monthlyPriceCents: 29900,
+    tokenAllowance: 100_000,
+    conversationAllowance: 500,
+    isDefault: false,
+    status: 'active',
+  },
+  subscriptionStatus: 'active',
+  period: {
+    start: new Date('2026-07-01T00:00:00Z'),
+    end: new Date('2026-08-01T00:00:00Z'),
+  },
+  usage: {
+    tokens: { used: 40000, allowance: 100_000, percent: 40, state: 'normal' },
+    conversations: { used: 100, allowance: 500, percent: 20, state: 'normal' },
+  },
+  aiPaused: false,
+  aiPausedReason: null,
+};
+
+const UNLIMITED_OVERVIEW: BillingOverview = {
+  plan: {
+    id: 'plan-enterprise-003',
+    name: 'Enterprise',
+    monthlyPriceCents: 99900,
+    tokenAllowance: null,
+    conversationAllowance: null,
+    isDefault: false,
+    status: 'active',
+  },
+  subscriptionStatus: 'active',
+  period: {
+    start: new Date('2026-07-01T00:00:00Z'),
+    end: new Date('2026-08-01T00:00:00Z'),
+  },
+  usage: {
+    tokens: { used: 250000, allowance: null, percent: null, state: 'normal' },
+    conversations: { used: 1200, allowance: null, percent: null, state: 'normal' },
+  },
+  aiPaused: false,
+  aiPausedReason: null,
+};
+
+const ZERO_USAGE_OVERVIEW: BillingOverview = {
+  plan: {
+    id: 'plan-pro-001',
+    name: 'Professional',
+    monthlyPriceCents: 29900,
+    tokenAllowance: 100_000,
+    conversationAllowance: 500,
+    isDefault: false,
+    status: 'active',
+  },
+  subscriptionStatus: 'active',
+  period: {
+    start: new Date('2026-07-01T00:00:00Z'),
+    end: new Date('2026-08-01T00:00:00Z'),
+  },
+  usage: {
+    tokens: { used: 0, allowance: 100_000, percent: 0, state: 'normal' },
+    conversations: { used: 0, allowance: 500, percent: 0, state: 'normal' },
+  },
+  aiPaused: false,
+  aiPausedReason: null,
+};
+
+function createComponent(): {
+  fixture: ReturnType<typeof TestBed.createComponent<BillingPageComponent>>;
+  store: ReturnType<typeof fixture.componentRef.injector.get<typeof BillingStore>>;
+} {
+  const fixture = TestBed.createComponent(BillingPageComponent);
+  const store = fixture.componentRef.injector.get(BillingStore);
+  return { fixture, store };
+}
+
+async function renderWithOverview(overview: BillingOverview): Promise<HTMLElement> {
+  const getOverview = TestBed.inject(BillingApiService).getOverview as ReturnType<typeof vi.fn>;
+  getOverview.mockReturnValue(of({ data: overview }));
+  await TestBed.compileComponents();
+  const { fixture, store } = createComponent();
+  store.load();
+  fixture.detectChanges();
+  await vi.waitFor(() => {
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-loading-state')).toBeFalsy();
+  });
+  return fixture.nativeElement as HTMLElement;
+}
+
+describe('BillingPageComponent', () => {
+  const getOverview = vi.fn();
+
+  beforeEach(() => {
+    getOverview.mockReset();
+    getOverview.mockReturnValue(of({ data: MOCK_OVERVIEW }));
+    TestBed.configureTestingModule({
+      imports: [BillingPageComponent],
+      providers: [
+        provideTaiga(),
+        provideZonelessChangeDetection(),
+        { provide: BillingApiService, useValue: { getOverview } },
+      ],
+    });
+  });
+
+  it('renders plan name and price', async () => {
+    const element = await renderWithOverview(MOCK_OVERVIEW);
+    expect(element.textContent).toContain('Professional');
+    expect(element.textContent).toContain('$299.00/mo');
+  });
+
+  it('renders token and conversation usage cards', async () => {
+    const element = await renderWithOverview(MOCK_OVERVIEW);
+    expect(element.textContent).toContain('Tokens');
+    expect(element.textContent).toContain('Conversations');
+    expect(element.textContent).toContain('40,000');
+    expect(element.textContent).toContain('100');
+    expect(element.textContent).toContain('100,000');
+    expect(element.textContent).toContain('500');
+  });
+
+  it('shows Unlimited and bar-fill at 0% for unlimited allowance', async () => {
+    const element = await renderWithOverview(UNLIMITED_OVERVIEW);
+    expect(element.textContent).toContain('Enterprise');
+    expect(element.textContent).toContain('$999.00/mo');
+    expect(element.textContent).toContain('Unlimited');
+    const barFills = element.querySelectorAll('.bar-fill');
+    for (const bar of barFills) {
+      expect((bar as HTMLElement).style.width).toBe('0%');
+    }
+  });
+
+  it('renders 0 not empty for zero usage', async () => {
+    const element = await renderWithOverview(ZERO_USAGE_OVERVIEW);
+    expect(element.textContent).toContain('0');
+    expect(element.textContent).toContain('0.0%');
+  });
+
+  it('shows loading state while API in flight then overview', async () => {
+    const subject = new Subject<{ data: BillingOverview }>();
+    getOverview.mockReturnValue(subject);
+    await TestBed.compileComponents();
+    const { fixture, store } = createComponent();
+    store.load();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-loading-state')).toBeTruthy();
+    subject.next({ data: MOCK_OVERVIEW });
+    subject.complete();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-loading-state')).toBeFalsy();
+    });
+  });
+});
