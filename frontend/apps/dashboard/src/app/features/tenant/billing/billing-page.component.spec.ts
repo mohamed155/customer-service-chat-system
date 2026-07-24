@@ -226,7 +226,9 @@ describe('BillingPageComponent', () => {
     const element = await renderWithOverview(EXCEEDED_OVERVIEW);
     const banner = element.querySelector('app-inline-alert[tone="warning"]');
     expect(banner).toBeTruthy();
-    expect(banner?.textContent).toContain('AI replies are paused — the monthly token allowance is used up.');
+    expect(banner?.textContent).toContain(
+      'AI replies are paused — the monthly token allowance is used up.',
+    );
   });
 
   it('shows AI-paused banner with conversation_limit copy', async () => {
@@ -238,7 +240,9 @@ describe('BillingPageComponent', () => {
     const element = await renderWithOverview(paused);
     const banner = element.querySelector('app-inline-alert[tone="warning"]');
     expect(banner).toBeTruthy();
-    expect(banner?.textContent).toContain('AI replies are paused — the monthly conversation allowance is used up.');
+    expect(banner?.textContent).toContain(
+      'AI replies are paused — the monthly conversation allowance is used up.',
+    );
   });
 
   it('shows AI-paused banner with subscription_status copy', async () => {
@@ -251,7 +255,9 @@ describe('BillingPageComponent', () => {
     const element = await renderWithOverview(paused);
     const banner = element.querySelector('app-inline-alert[tone="warning"]');
     expect(banner).toBeTruthy();
-    expect(banner?.textContent).toContain('AI replies are paused — the subscription is past due or canceled.');
+    expect(banner?.textContent).toContain(
+      'AI replies are paused — the subscription is past due or canceled.',
+    );
   });
 
   it('keeps unlimited metric normal with no banner', async () => {

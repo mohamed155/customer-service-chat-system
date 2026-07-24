@@ -72,7 +72,9 @@ function subscriptionTone(status: string): BadgeTone {
         <app-inline-alert tone="error">{{ error }}</app-inline-alert>
       } @else if (store.overview(); as ov) {
         @if (ov.aiPaused) {
-          <app-inline-alert tone="warning">{{ aiPausedMessage(ov.aiPausedReason) }}</app-inline-alert>
+          <app-inline-alert tone="warning">{{
+            aiPausedMessage(ov.aiPausedReason)
+          }}</app-inline-alert>
         }
         <div class="grid">
           <app-dashboard-card>
@@ -88,13 +90,19 @@ function subscriptionTone(status: string): BadgeTone {
               />
             </div>
             <div card-footer>
-              <span class="period">{{ formatDate(ov.period.start) }} – {{ formatDate(ov.period.end) }}</span>
+              <span class="period"
+                >{{ formatDate(ov.period.start) }} – {{ formatDate(ov.period.end) }}</span
+              >
             </div>
           </app-dashboard-card>
 
           <app-dashboard-card
-            [class.warning]="ov.usage.tokens.allowance !== null && ov.usage.tokens.state === 'warning'"
-            [class.exceeded]="ov.usage.tokens.allowance !== null && ov.usage.tokens.state === 'exceeded'"
+            [class.warning]="
+              ov.usage.tokens.allowance !== null && ov.usage.tokens.state === 'warning'
+            "
+            [class.exceeded]="
+              ov.usage.tokens.allowance !== null && ov.usage.tokens.state === 'exceeded'
+            "
           >
             <div card-header>
               <span class="metric-title">Tokens</span>
@@ -111,8 +119,14 @@ function subscriptionTone(status: string): BadgeTone {
           </app-dashboard-card>
 
           <app-dashboard-card
-            [class.warning]="ov.usage.conversations.allowance !== null && ov.usage.conversations.state === 'warning'"
-            [class.exceeded]="ov.usage.conversations.allowance !== null && ov.usage.conversations.state === 'exceeded'"
+            [class.warning]="
+              ov.usage.conversations.allowance !== null &&
+              ov.usage.conversations.state === 'warning'
+            "
+            [class.exceeded]="
+              ov.usage.conversations.allowance !== null &&
+              ov.usage.conversations.state === 'exceeded'
+            "
           >
             <div card-header>
               <span class="metric-title">Conversations</span>
@@ -120,12 +134,16 @@ function subscriptionTone(status: string): BadgeTone {
             <div class="metric-row">
               <span class="metric-value">{{ ov.usage.conversations.used.toLocaleString() }}</span>
               <span class="metric-divider">/</span>
-              <span class="metric-allowance">{{ metricLabel(ov.usage.conversations.allowance) }}</span>
+              <span class="metric-allowance">{{
+                metricLabel(ov.usage.conversations.allowance)
+              }}</span>
             </div>
             <div class="bar-track">
               <div class="bar-fill" [style.width.%]="ov.usage.conversations.percent ?? 0"></div>
             </div>
-            <div class="metric-footnote">{{ (ov.usage.conversations.percent ?? 0).toFixed(1) }}% used</div>
+            <div class="metric-footnote">
+              {{ (ov.usage.conversations.percent ?? 0).toFixed(1) }}% used
+            </div>
           </app-dashboard-card>
         </div>
       }
