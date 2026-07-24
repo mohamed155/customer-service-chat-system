@@ -116,6 +116,16 @@ This is the authoritative inventory of every endpoint the OpenAPI document MUST 
 | GET | `/tenant/ai/usage/summary` | — | 200 `UsageSummary` | 403 | cookie | `ai.agent.view` |
 | GET | `/tenant/ai/usage/{id}` | path `id: uuid` | 200 `UsageDetailRow` | 403, 404 | cookie | `ai.agent.manage` |
 
+## Platform — billing plans & subscriptions (tag: billing)
+
+| Method | Path | Request | Success | Errors | Security | Permission |
+|--------|------|---------|---------|--------|----------|------------|
+| GET | `/platform/billing/plans` | — | 200 `PlanListResponse` | 401, 403 | cookie | `platform.billing.view` |
+| POST | `/platform/billing/plans` | `CreatePlanRequest` | 201 `PlanDto` | 400, 401, 403, 409, 422 | cookie | `platform.billing.manage` |
+| PATCH | `/platform/billing/plans/{plan_id}` | `UpdatePlanRequest` | 200 `PlanDto` | 401, 403, 404, 409, 422 | cookie | `platform.billing.manage` |
+| GET | `/platform/billing/subscriptions` | — | 200 `SubscriptionListResponse` | 401, 403 | cookie | `platform.billing.view` |
+| PUT | `/platform/billing/tenants/{tenant_id}/subscription` | `PutSubscriptionRequest` | 200 `SubscriptionDto` | 401, 403, 404, 409, 422 | cookie | `platform.billing.manage` |
+
 ## Tenant — billing (tag: billing)
 
 | Method | Path | Request | Success | Errors | Security | Permission |

@@ -36,6 +36,9 @@ const TENANT_PERMISSIONS: &[&str] = &[
     "billing.manage",
     "tenant.delete",
     "owner.assign",
+    "audit.view",
+    "widgets.view",
+    "widgets.manage",
 ];
 
 const VIEWER_PERMISSIONS: &[&str] = &[
@@ -44,6 +47,7 @@ const VIEWER_PERMISSIONS: &[&str] = &[
     "customers.view",
     "knowledge_base.view",
     "integrations.view",
+    "widgets.view",
 ];
 
 const TENANT_OPERATIONS: &[(&str, &str)] = &[
@@ -1239,7 +1243,8 @@ async fn me_returns_exact_platform_support_payload_in_production() {
             "platformPermissions": [
                 "platform.tenants.list",
                 "platform.tenants.switch",
-                "platform.tenants.manage"
+                "platform.tenants.manage",
+                "platform.audit.view"
             ],
             "staffTenantPermissions": [
                 "overview.view",
@@ -1247,7 +1252,8 @@ async fn me_returns_exact_platform_support_payload_in_production() {
                 "conversations.manage",
                 "customers.view",
                 "customers.manage",
-                "knowledge_base.view"
+                "knowledge_base.view",
+                "widgets.view"
             ],
             "memberships": []
         })
@@ -1544,6 +1550,7 @@ async fn me_staff_tenant_permissions_follow_environment_for_every_platform_role(
                 "analytics.view",
                 "members.view",
                 "settings.view",
+                "widgets.view",
             ][..],
         ),
         (
@@ -1555,6 +1562,7 @@ async fn me_staff_tenant_permissions_follow_environment_for_every_platform_role(
                 "customers.view",
                 "customers.manage",
                 "knowledge_base.view",
+                "widgets.view",
             ][..],
         ),
         (

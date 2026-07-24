@@ -329,6 +329,36 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(audit::routes::list_platform_audit_logs)
                 .layer(require_permission(Permission::PlatformAuditView)),
+        )
+        // Platform billing plan catalog — GET+POST share the same path (T043)
+        .routes(
+            routes!(
+                billing::routes::list_plans,
+                billing::routes::create_plan
+            )
+            .map(|_| {
+                merge_with_permissions(
+                    routing::get(billing::routes::list_plans),
+                    Permission::PlatformBillingView,
+                    routing::post(billing::routes::create_plan),
+                    Permission::PlatformBillingManage,
+                )
+            }),
+        )
+        // Platform billing plan update (T043)
+        .routes(
+            routes!(billing::routes::update_plan)
+                .layer(require_permission(Permission::PlatformBillingManage)),
+        )
+        // Platform billing subscriptions (T043)
+        .routes(
+            routes!(billing::routes::list_subscriptions)
+                .layer(require_permission(Permission::PlatformBillingView)),
+        )
+        // Platform billing tenant subscription set (T043)
+        .routes(
+            routes!(billing::routes::put_subscription)
+                .layer(require_permission(Permission::PlatformBillingManage)),
         );
     if include_test_routes {
         // Test routes are closures, not function paths, so they cannot use the
