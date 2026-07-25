@@ -495,7 +495,7 @@ pub async fn run_generation(
     tenant_id: Uuid,
     conversation_id: Uuid,
     trigger_message_id: Uuid,
-    event_id: i64,
+    event_id: Uuid,
     row: &AgentConfigurationRow,
     is_platform_persona: bool,
     channel: &str,

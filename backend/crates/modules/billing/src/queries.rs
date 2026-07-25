@@ -28,7 +28,16 @@ pub async fn effective_plan(
 ) -> sqlx::Result<(model::PlanDto, String)> {
     let row = sqlx::query_as::<
         _,
-        (Uuid, String, i32, Option<i64>, Option<i32>, bool, String, String),
+        (
+            Uuid,
+            String,
+            i32,
+            Option<i64>,
+            Option<i32>,
+            bool,
+            String,
+            String,
+        ),
     >(
         r#"
         SELECT p.id, p.name, p.monthly_price_cents, p.token_allowance,
@@ -67,17 +76,18 @@ pub async fn effective_plan(
             subscription_status,
         ))
     } else {
-        let default = sqlx::query_as::<_, (Uuid, String, i32, Option<i64>, Option<i32>, bool, String)>(
-            r#"
+        let default =
+            sqlx::query_as::<_, (Uuid, String, i32, Option<i64>, Option<i32>, bool, String)>(
+                r#"
             SELECT id, name, monthly_price_cents, token_allowance,
                    conversation_allowance, is_default, status
             FROM billing_plans
             WHERE is_default = true
             LIMIT 1
             "#,
-        )
-        .fetch_one(pool)
-        .await?;
+            )
+            .fetch_one(pool)
+            .await?;
 
         Ok((
             model::PlanDto {
@@ -145,8 +155,15 @@ pub async fn list_plans(pool: &PgPool) -> sqlx::Result<Vec<model::PlanDto>> {
     Ok(rows
         .into_iter()
         .map(
-            |(id, name, monthly_price_cents, token_allowance, conversation_allowance,
-              is_default, status)| model::PlanDto {
+            |(
+                id,
+                name,
+                monthly_price_cents,
+                token_allowance,
+                conversation_allowance,
+                is_default,
+                status,
+            )| model::PlanDto {
                 id,
                 name,
                 monthly_price_cents,
@@ -196,8 +213,15 @@ pub async fn plan_by_id(pool: &PgPool, plan_id: Uuid) -> sqlx::Result<Option<mod
     .fetch_optional(pool)
     .await?;
     Ok(row.map(
-        |(id, name, monthly_price_cents, token_allowance, conversation_allowance,
-          is_default, status)| model::PlanDto {
+        |(
+            id,
+            name,
+            monthly_price_cents,
+            token_allowance,
+            conversation_allowance,
+            is_default,
+            status,
+        )| model::PlanDto {
             id,
             name,
             monthly_price_cents,

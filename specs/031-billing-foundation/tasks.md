@@ -585,3 +585,317 @@ These are not optional polish — each one is red the moment its paired change l
 - `[P]` means a different file with no unfinished dependency — never two tasks editing the same file.
 - Commit after each task or each small group; keep the tasks.md checkboxes honest — tick a box only after the named command passed or the named file exists with real content.
 - Never mark a test task complete because the test file was created; it counts only when the suite runs green.
+
+---
+
+## Phase 7: Convergence
+
+**Added 2026-07-25 by `/speckit-converge`.** The feature was assessed against spec.md, plan.md, and the constitution. **All 11 functional requirements, all 15 acceptance scenarios, and all 10 constitution principles are satisfied by the code** — `cargo check -p billing -p ai -p server --tests` compiles clean, the enforcement gate is correctly placed, and every exact-inventory test file was updated. Only the two low-severity cleanups below remain.
+
+**Do NOT re-do any earlier task.** T009, T021, T058, and T060 are still unchecked on purpose — they are "run the DB-backed suite green" gates that need a PostgreSQL the current environment cannot provide. Leave them alone; they are not part of this phase.
+
+- [X] T061 [P] Format the billing crate's own source files per plan: quality gate (`partial`)
+
+  **Problem**: six files this feature created are not rustfmt-clean, which violates Convention 9 above ("only keep your own new files formatted").
+
+  **Do exactly this** — from `backend/`, run:
+
+  ```bash
+  cargo fmt -p billing
+  ```
+
+  That reformats all six affected files:
+  `crates/modules/billing/src/model.rs`, `src/queries.rs`, `src/routes.rs`,
+  `crates/modules/billing/tests/usage_math_tests.rs`, `tests/queries_tests.rs`, `tests/enforcement_tests.rs`.
+
+  **Verify** with `cargo fmt -p billing -- --check` — it must print nothing and exit 0.
+
+  **Scope guardrails — read before running anything:**
+  - Run it with the `-p billing` flag **only**. Do **not** run a bare `cargo fmt` or `cargo fmt --all`.
+  - `cargo fmt --check` is already failing repo-wide at HEAD for unrelated reasons (Convention 9). That is **not** this feature's problem and must not be "fixed" here.
+  - In particular, `crates/modules/ai/src/agent_responder.rs` and `crates/modules/ai/src/engine.rs` are also unformatted, but their diffs are in **pre-existing WhatsApp code around line 146** — not in the billing gate at lines 333–342. **Do not reformat the `ai` crate.** Touching it would put unrelated churn in this feature's diff.
+  - This task changes whitespace/line-wrapping only. Do not alter any logic, rename anything, or edit any other file.
+
+  **Afterwards**, confirm nothing broke: `cargo check -p billing` must still succeed.
+
+- [X] T062 [P] Delete the unused `metricStateClass` helper from the tenant Billing page (`unrequested`)
+
+  **File**: `frontend/apps/dashboard/src/app/features/tenant/billing/billing-page.component.ts`
+
+  **Problem**: T037 ended up implementing the warning/exceeded styling with inline `[class.warning]` / `[class.exceeded]` bindings in the template. The `metricStateClass` helper it was originally going to use was left behind and is now dead code — it is defined, exposed to the template, and never referenced by it.
+
+  **Make exactly these two deletions:**
+
+  1. Delete the whole function near line 21 (and the blank line that follows it):
+
+     ```ts
+     function metricStateClass(allowance: number | null, state: string): string {
+       return allowance === null ? 'normal' : state;
+     }
+     ```
+
+  2. Delete this single line from the class body near line 249:
+
+     ```ts
+     protected readonly metricStateClass = metricStateClass;
+     ```
+
+  **Do NOT touch** the neighbouring helpers `formatDate`, `metricLabel`, `subscriptionTone`, or `aiPausedMessage` — those four **are** used by the template and must stay, along with their `protected readonly` lines.
+
+  **Do NOT change the template.** The existing `[class.warning]` / `[class.exceeded]` bindings already implement FR-007 correctly, including the rule that an unlimited allowance (`allowance === null`) never gets a warning or exceeded class. Behaviour must be identical after this change.
+
+  **Verify** from `frontend/`: `pnpm ng test dashboard` and `pnpm lint` both pass. The existing `billing-page.component.spec.ts` cases (warning at 85%, exceeded at 100%, unlimited stays normal) must still be green — if any of them fails, you deleted something that was in use; revert and re-check.
+
+---
+
+## Phase 8: Convergence (DB-verified)
+
+**Added 2026-07-25 by `/speckit-converge`.** Unlike Phase 7, this pass **had a working PostgreSQL** and actually ran the DB-backed suites that every earlier gate task had to assume. That changed the picture: the static code is still correct (all 11 FRs implemented, all routes/permissions/schemas wired, `cargo check -p billing -p ai -p server --tests` clean, `cargo fmt -p billing -- --check` clean), but **three suites are red**, and one of them means the billing enforcement gate never executes at all.
+
+**Evidence from this pass** (`DATABASE_URL` pointed at a throwaway DB, `REQUIRE_DB_TESTS=1`):
+
+| Suite | Result |
+|---|---|
+| `cargo test -p billing --test usage_math_tests` | ✅ 15/15 |
+| `cargo test -p billing --test queries_tests` | ✅ 6/6 |
+| `cargo test -p billing --test enforcement_tests` | ❌ **7 passed / 3 failed** → T064 |
+| `cargo test -p server --test billing_overview` | ✅ 9/9 |
+| `cargo test -p server --test billing_platform` | ✅ 38/38 |
+| `cargo test -p server --test billing_responder_gate` | ❌ **0 passed / 5 failed** → T063, T066 |
+| `pnpm ng test dashboard` | 138/139 files; the one failure is `conversations/composer.component.spec.ts`, **not billing** — out of scope, do not touch |
+
+**Do NOT re-do any earlier task.** T009, T021, T058, and T060 stay unchecked and are **not** part of this phase — do not "complete" them, do not tick them, do not restate them. Phase 7's T061/T062 are done; leave them alone.
+
+**How to run anything in this phase.** All four tasks need a database. From `backend/`:
+
+```bash
+createdb billing_converge_check                                          # once
+export DATABASE_URL="postgres://$(whoami)@localhost/billing_converge_check"
+export REQUIRE_DB_TESTS=1     # REQUIRED — without it the suites SKIP silently and print a false green
+```
+
+`REQUIRE_DB_TESTS=1` is not optional. Every one of these harnesses returns early with "skipping … DATABASE_URL not set" when it is missing, so a run without it proves nothing. Drop the DB when you are finished: `dropdb billing_converge_check`.
+
+**Do them in this order: T063 → T066 → T064 → T065.** T063 and T066 are the same test file and T066's assertion is unreachable until T063 lands. T064 (`billing` crate) and T065 (`audit` crate) are independent of both and can be done any time.
+
+---
+
+- [X] T063 **CRITICAL** — Fix the outbox claim type mismatch that stops the AI responder (and therefore the billing gate) from ever running, per FR-005 / SC-002 / SC-006 (`contradicts`)
+
+  **Problem.** `process_agent_responder_once` claims an outbox row into a Rust tuple whose first two column types are wrong:
+
+  - `outbox_events.id` is **UUID** (since migration `0002_outbox.sql`) but is decoded as `i64`.
+  - `outbox_events.tenant_id` is **TEXT** but is decoded as `Uuid`.
+
+  Every call therefore fails immediately with:
+
+  ```text
+  error occurred while decoding column 0: mismatched types;
+  Rust type `i64` (as SQL type `INT8`) is not compatible with SQL type `UUID`
+  ```
+
+  The function returns `Err` before reaching **any** gate, so the billing gate added by T033 never executes. This is why all five `billing_responder_gate` tests fail. FR-005 ("MUST pause AI-generated replies…") is currently unverifiable and, in a real deployment, unreachable.
+
+  **This bug pre-dates spec 031** — it is present at commit `b8df8f4`, before this feature branch's first commit. It is included here because it is the *only* thing preventing 031's own US2 acceptance test from passing, and because `agent_responder.rs` is a plan.md touch-point for this feature. Do not treat it as a billing-crate bug: **the `billing` crate itself is correct and needs no change for this task.**
+
+  **Make exactly these three edits — no others.**
+
+  1. `backend/crates/modules/ai/src/agent_responder.rs`, **line 19** — change the first tuple element from `i64` to `Uuid`:
+
+     ```rust
+     // BEFORE
+     let maybe_row: Option<(i64, Uuid, String, String, serde_json::Value)> = sqlx::query_as(
+     // AFTER
+     let maybe_row: Option<(Uuid, Uuid, String, String, serde_json::Value)> = sqlx::query_as(
+     ```
+
+  2. `backend/crates/modules/ai/src/agent_responder.rs`, **line 30** — cast the TEXT column so it decodes into `Uuid`. This is inside the SQL string literal of that same `query_as`:
+
+     ```rust
+     // BEFORE
+              RETURNING id, tenant_id, aggregate_id, event_type, payload",
+     // AFTER
+              RETURNING id, tenant_id::uuid, aggregate_id, event_type, payload",
+     ```
+
+  3. `backend/crates/modules/ai/src/engine.rs`, **line 498** — the `event_id` parameter of `pub async fn run_generation`:
+
+     ```rust
+     // BEFORE
+         event_id: i64,
+     // AFTER
+         event_id: Uuid,
+     ```
+
+  That is the whole change. The six `.bind(event_id)` call sites inside `engine.rs` (lines ~937, ~1092, ~1181, ~1208, ~1367, ~1374) and the ten inside `agent_responder.rs` need **no edit** — they bind whatever type `event_id` now is, and `Uuid` is what the `uuid` column wants.
+
+  **These three edits were applied and measured during convergence, then reverted.** Confirmed at that time:
+  - `run_generation` has exactly one caller — `agent_responder.rs:346`. (`grep -rn "run_generation" backend/crates --include='*.rs'` returns only the definition and that one call.) No test constructs an `event_id` literal.
+  - With the edits applied, `cargo check -p ai -p server --tests` **compiles clean** — every `server` test binary included, warnings only. So you should hit no compile errors in files this task tells you not to touch. If you do, stop and re-read the three edits rather than widening the change.
+
+  **Verify**, from `backend/` with the env vars above:
+
+  ```bash
+  cargo check -p ai -p server --tests
+  cargo test -p server --test billing_responder_gate
+  ```
+
+  **Expected result after this task alone: 3 passed / 2 failed.** That is the correct, verified outcome — it was measured. The three that must turn green are the ones carrying the FR-005 / SC-006 guarantees:
+  - `exhausted_allowance_gate_deletes_outbox_and_blocks_ai`
+  - `conversation_and_customer_message_survive_gate`
+  - `escalation_rule_still_matches_while_over_limit` (this one proves the T033 gate placement is right)
+
+  The two still-red ones are **not** yours to fix here:
+  - `human_agent_reply_succeeds_while_ai_paused` → fixed separately by **T066**.
+  - `allowance_available_responder_proceeds_normally` → **leave it red.** It seeds a fake OpenAI key (`sk-t035-allowed`) and asserts a real AI reply row appears, so it can only pass against a live provider. There is no mock provider in this repo. The pre-existing `engine_respond` suite is built the same way and is red for the same class of reason. Do not add a mock, do not weaken the assertion, do not delete the test.
+
+    **A 4-of-5 result here is not a regression you introduced.** This test was already unsatisfiable offline before spec 031 existed — it is a property of how the `engine_*` test family seeds providers, not of the billing gate. Record it as such if anyone asks why the suite is not fully green.
+
+  **Scope guardrails:**
+  - Touch **only** the two files named above, and only at those three points.
+  - Do **not** reformat either file. Both have pre-existing rustfmt drift in unrelated WhatsApp code (Convention 9) — leave it.
+  - Do **not** try to fix the other red `engine_*` suites. `engine_respond`, `engine_isolation`, and `engine_fallback` fail for unrelated pre-existing reasons (e.g. `engine_isolation` violates the `tenants_slug_format` check constraint by seeding an uppercase slug). Out of scope for 031.
+  - Do **not** change `outbox_events` in any migration. The schema is right; the Rust types were wrong.
+
+- [X] T064 Make plan names unique in `enforcement_tests.rs` so the suite can pass, per FR-005 (`partial`)
+
+  **File**: `backend/crates/modules/billing/tests/enforcement_tests.rs`
+
+  **Problem.** `billing_plans.name` has a `UNIQUE` constraint (migration `0059`), and the `setup()` helper truncates `ai_usage_records, tenant_subscriptions, conversations, customers, tenants` but deliberately **not** `billing_plans` (truncating it would delete the seeded default `Free` plan that other tests depend on). Meanwhile the `create_plan` helper inserts whatever fixed name the caller passes, and three names are reused across tests:
+
+  - `"Token Limit 1000"` — used by three tests (lines 166, 183, 203)
+  - `"Any Plan"` — used by two tests (lines 246, 263)
+
+  So the second and later test using each name dies with:
+
+  ```text
+  duplicate key value violates unique constraint "billing_plans_name_key"
+  Key (name)=(Token Limit 1000) already exists.
+  ```
+
+  Result: **7 passed / 3 failed**. The three failures are `usage_just_under_token_limit_allows`, `usage_exactly_at_token_limit_pauses_token_limit`, and `canceled_subscription_pauses_regardless_of_usage` — core FR-005 boundary cases that have therefore never actually run.
+
+  **Make exactly this one edit.** In the `create_plan` helper (around line 66), suffix the bound name with a fresh UUID so every insert is unique:
+
+  ```rust
+  // BEFORE
+      .bind(name)
+  // AFTER
+      .bind(format!("{name} {}", Uuid::new_v4().simple()))
+  ```
+
+  `Uuid` is already imported at the top of the file. Change nothing else — not the helper's `name: &str` signature, not any call site, not the `setup()` TRUNCATE list.
+
+  **Why this and not truncating `billing_plans`:** the `no_subscription_falls_back_to_free_plan` test depends on the seeded default `Free` row surviving. Truncating that table would break it.
+
+  **Safe because** no test in this file asserts on a plan *name* — they assert on `decision.allowed` and `decision.reason`. Verified.
+
+  **Verify**, from `backend/` with the env vars above:
+
+  ```bash
+  cargo test -p billing --test enforcement_tests
+  ```
+
+  **Expected: 10 passed / 0 failed.** This exact edit was applied and measured during convergence; it produced 10/10. If you see fewer than 10 passing, you changed something else too.
+
+- [X] T065 [P] Map the billing audit actions onto the existing `billing` audit category, per FR-009 / US3 (`partial`)
+
+  **File**: `backend/crates/modules/audit/src/model.rs` (one line)
+
+  **Problem.** The audit category catalogue matches actions by **string prefix**:
+
+  ```rust
+  ("billing", &["billing."]),      // line 60
+  ```
+
+  But this feature writes actions named `billing_plan.created`, `billing_plan.status_changed`, and `billing_subscription.changed` (see `backend/crates/modules/billing/src/audit.rs`). `"billing_plan.created".starts_with("billing.")` is **false** — the 8th character is `_`, not `.`. Consequences today:
+
+  - `category_for_action` returns `"other"` for every billing change, so the audit table shows them mis-labelled.
+  - Both audit pages already ship a **Billing** filter option (`features/tenant/audit-logs/audit-logs.component.ts:100` and `features/platform/audit-logs/platform-audit-logs.component.ts:106`). Selecting it builds the SQL filter `action LIKE ANY('{billing.%}')`, which matches none of these rows — so the filter returns an empty list.
+
+  The audit records themselves *are* written correctly (verified: `billing_platform.rs` audit assertions pass, 38/38), so FR-009's "an audit record captures who/what/when" holds. What fails is US3's independent test — "confirm `/platform/audit-logs` contains the change" — when the operator filters by Billing.
+
+  **Make exactly this one edit.** Replace line 60 of `CATEGORY_PREFIXES`:
+
+  ```rust
+  // BEFORE
+      ("billing", &["billing."]),
+  // AFTER
+      ("billing", &["billing.", "billing_plan.", "billing_subscription."]),
+  ```
+
+  Keep `"billing."` in the list — dropping it would orphan any other action that uses it.
+
+  **This follows the existing house pattern**, not a new one: the `knowledge` entry on line 64 already lists several underscore-style prefixes (`"knowledge_category."`, `"knowledge_document."`, `"knowledge_item."`) for exactly this reason. `category_for_action` picks the longest matching prefix, so adding these is safe.
+
+  **Do not "improve" the underscore escaping.** `prefixes_for_category` builds SQL `LIKE` patterns with `format!("{}%", p)`, and in `LIKE` an `_` is a single-character wildcard — so `billing_plan.%` would also match a hypothetical `billingXplan.created`. That looseness is harmless (no such actions exist) and the `knowledge_*` entries already have exactly the same property, so leaving it is the house-consistent choice. Escaping it here would make this one entry inconsistent with the rest of the table for no behavioural gain.
+
+  **Do NOT** rename the actions in `backend/crates/modules/billing/src/audit.rs`. `billing_platform.rs` asserts those exact action strings (lines 668, 694, 721) and they are already green — renaming would redden a passing suite for no gain.
+
+  **Verify**, from `backend/`:
+
+  ```bash
+  cargo test -p audit
+  cargo test -p server --test billing_platform      # must stay 38/38
+  ```
+
+- [X] T066 Correct the human-reply status assertion in the responder-gate test, per SC-006 (`partial`)
+
+  **File**: `backend/crates/server/tests/billing_responder_gate.rs`, in `human_agent_reply_succeeds_while_ai_paused` (assertion at ~line 657)
+
+  **Problem.** The test asserts the human reply returns `201 CREATED`:
+
+  ```text
+  assertion `left == right` failed: human reply should succeed while billing is paused
+    left: 200
+   right: 201
+  ```
+
+  The endpoint actually returns **200**. `conversations::routes::add_message` ends with a bare `Json(...)` response and never sets `StatusCode::CREATED` — its utoipa annotation documents 201, but the handler returns 200. That doc/handler mismatch lives in the `conversations` module and is **out of scope for spec 031**.
+
+  What SC-006 requires is that a human agent's reply *succeeds* while AI is paused. It does — 200 is a success. Only the assertion is wrong.
+
+  **Make exactly this edit** — assert success rather than a specific 2xx code:
+
+  ```rust
+  // BEFORE
+      assert_eq!(
+          resp.status(),
+          StatusCode::CREATED,
+          "human reply should succeed while billing is paused"
+      );
+  // AFTER
+      assert!(
+          resp.status().is_success(),
+          "human reply should succeed while billing is paused, got {}",
+          resp.status()
+      );
+  ```
+
+  Leave the rest of the test untouched — the assertions that follow (the reply row actually landing in `messages`) are the substance of SC-006 and are correct.
+
+  **Do NOT** "fix" `add_message` to return 201. That changes another feature's HTTP contract, and other suites assert the current behaviour.
+
+  **Verify** (do T063 first — this test cannot reach its assertion until the responder claim works), from `backend/` with the env vars above:
+
+  ```bash
+  cargo test -p server --test billing_responder_gate
+  ```
+
+  **Expected after T063 + T066: 4 passed / 1 failed**, the single remaining failure being `allowance_available_responder_proceeds_normally`, which needs a live AI provider — see the guardrail in T063.
+
+---
+
+### Phase 8 completion check
+
+With T063–T066 done, from `backend/` and with `DATABASE_URL` + `REQUIRE_DB_TESTS=1` set:
+
+```bash
+cargo test -p billing                              # expect 31/31 (15 + 6 + 10)
+cargo test -p server --test billing_overview       # expect 9/9
+cargo test -p server --test billing_platform       # expect 38/38
+cargo test -p server --test billing_responder_gate # expect 4/5 — see T063 guardrail
+cargo test -p audit                                # expect green
+```
+
+Do not run bare `cargo test --workspace` and read its result as this feature's gate — it skips DB tests and aborts early (Convention 8).

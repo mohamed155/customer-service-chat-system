@@ -4,9 +4,7 @@ import { MessageAttachmentComponent } from './message-attachment.component';
 import { MessageAttachment } from '../../../core/api/tenant-api.models';
 
 describe('MessageAttachmentComponent', () => {
-  function createAttachment(
-    overrides: Partial<MessageAttachment> = {},
-  ): MessageAttachment {
+  function createAttachment(overrides: Partial<MessageAttachment> = {}): MessageAttachment {
     return {
       id: 'att-1',
       kind: 'image',
@@ -33,9 +31,7 @@ describe('MessageAttachmentComponent', () => {
   }
 
   it('renders image with img element and links to url', async () => {
-    const { fixture } = await createComponent(
-      createAttachment({ kind: 'image' }),
-    );
+    const { fixture } = await createComponent(createAttachment({ kind: 'image' }));
     const img = fixture.nativeElement.querySelector('img');
     const link = fixture.nativeElement.querySelector('a');
     expect(img).toBeTruthy();
@@ -44,18 +40,14 @@ describe('MessageAttachmentComponent', () => {
   });
 
   it('renders audio with controls', async () => {
-    const { fixture } = await createComponent(
-      createAttachment({ kind: 'audio' }),
-    );
+    const { fixture } = await createComponent(createAttachment({ kind: 'audio' }));
     const audio = fixture.nativeElement.querySelector('audio');
     expect(audio).toBeTruthy();
     expect(audio.controls).toBe(true);
   });
 
   it('renders video with controls', async () => {
-    const { fixture } = await createComponent(
-      createAttachment({ kind: 'video' }),
-    );
+    const { fixture } = await createComponent(createAttachment({ kind: 'video' }));
     const video = fixture.nativeElement.querySelector('video');
     expect(video).toBeTruthy();
     expect(video.controls).toBe(true);
@@ -82,32 +74,24 @@ describe('MessageAttachmentComponent', () => {
   });
 
   it('shows pending placeholder for pending status', async () => {
-    const { fixture } = await createComponent(
-      createAttachment({ status: 'pending', url: null }),
-    );
+    const { fixture } = await createComponent(createAttachment({ status: 'pending', url: null }));
     expect(fixture.nativeElement.textContent).toContain('Receiving');
   });
 
   it('shows failed note for failed status', async () => {
-    const { fixture } = await createComponent(
-      createAttachment({ status: 'failed', url: null }),
-    );
+    const { fixture } = await createComponent(createAttachment({ status: 'failed', url: null }));
     expect(fixture.nativeElement.textContent).toContain('Failed to load');
   });
 
   it('renders document link that opens in new tab', async () => {
-    const { fixture } = await createComponent(
-      createAttachment({ kind: 'document' }),
-    );
+    const { fixture } = await createComponent(createAttachment({ kind: 'document' }));
     const link = fixture.nativeElement.querySelector('a');
     expect(link.target).toBe('_blank');
     expect(link.rel).toContain('noopener');
   });
 
   it('renders image link that opens in new tab', async () => {
-    const { fixture } = await createComponent(
-      createAttachment({ kind: 'image' }),
-    );
+    const { fixture } = await createComponent(createAttachment({ kind: 'image' }));
     const link = fixture.nativeElement.querySelector('a');
     expect(link.target).toBe('_blank');
     expect(link.rel).toContain('noopener');

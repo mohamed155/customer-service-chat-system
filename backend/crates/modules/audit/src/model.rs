@@ -57,7 +57,7 @@ pub const CATEGORY_PREFIXES: &[(&str, &[&str])] = &[
     ("prompts", &["agent_prompt."]),
     ("ai", &["ai_config.", "ai_credential.", "agent_config."]),
     ("tools", &["tool."]),
-    ("billing", &["billing."]),
+    ("billing", &["billing.", "billing_plan.", "billing_subscription."]),
     ("conversations", &["conversation."]),
     ("customers", &["customer."]),
     ("escalations", &["escalation."]),

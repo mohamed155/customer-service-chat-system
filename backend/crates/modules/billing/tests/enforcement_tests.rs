@@ -63,7 +63,7 @@ async fn create_plan(
          (name, monthly_price_cents, token_allowance, conversation_allowance, is_default, status) \
          VALUES ($1, 0, $2, $3, false, 'active') RETURNING id",
     )
-    .bind(name)
+    .bind(format!("{name} {}", Uuid::new_v4().simple()))
     .bind(token_allowance)
     .bind(conversation_allowance)
     .fetch_one(pool)
@@ -83,7 +83,13 @@ async fn subscribe(pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid, status: 
     .unwrap();
 }
 
-async fn insert_tokens(pool: &sqlx::PgPool, tenant_id: Uuid, input: i32, output: i32, at: chrono::DateTime<Utc>) {
+async fn insert_tokens(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    input: i32,
+    output: i32,
+    at: chrono::DateTime<Utc>,
+) {
     sqlx::query(
         "INSERT INTO ai_usage_records \
          (tenant_id, provider, model, input_tokens, output_tokens, status, streamed, latency_ms, created_at) \
@@ -146,9 +152,7 @@ async fn unlimited_plan_with_heavy_usage_allows() {
         insert_conversation(&pool, tenant_id, customer_id, now).await;
     }
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(decision.allowed);
     assert_eq!(decision.reason, None);
 }
@@ -165,9 +169,7 @@ async fn usage_just_under_token_limit_allows() {
     let now = Utc::now();
     insert_tokens(&pool, tenant_id, 500, 499, now).await;
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(decision.allowed);
     assert_eq!(decision.reason, None);
 }
@@ -184,9 +186,7 @@ async fn usage_exactly_at_token_limit_pauses_token_limit() {
     let now = Utc::now();
     insert_tokens(&pool, tenant_id, 1000, 0, now).await;
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(!decision.allowed);
     assert_eq!(
         decision.reason,
@@ -206,9 +206,7 @@ async fn usage_over_limit_pauses() {
     let now = Utc::now();
     insert_tokens(&pool, tenant_id, 800, 700, now).await;
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(!decision.allowed);
     assert_eq!(
         decision.reason,
@@ -231,9 +229,7 @@ async fn conversations_at_limit_pauses() {
         insert_conversation(&pool, tenant_id, customer_id, now).await;
     }
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(!decision.allowed);
     assert_eq!(
         decision.reason,
@@ -250,9 +246,7 @@ async fn past_due_subscription_pauses_regardless_of_usage() {
     let plan_id = create_plan(&pool, "Any Plan", Some(1_000_000), Some(10_000)).await;
     subscribe(&pool, tenant_id, plan_id, "past_due").await;
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(!decision.allowed);
     assert_eq!(
         decision.reason,
@@ -269,9 +263,7 @@ async fn canceled_subscription_pauses_regardless_of_usage() {
     let plan_id = create_plan(&pool, "Any Plan", Some(1_000_000), Some(10_000)).await;
     subscribe(&pool, tenant_id, plan_id, "canceled").await;
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(!decision.allowed);
     assert_eq!(
         decision.reason,
@@ -294,9 +286,7 @@ async fn no_subscription_falls_back_to_free_plan() {
         insert_conversation(&pool, tenant_id, customer_id, now).await;
     }
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(decision.allowed);
     assert_eq!(decision.reason, None);
 }
@@ -312,16 +302,16 @@ async fn previous_month_usage_does_not_count() {
 
     let now = Utc::now();
     let prev_month = if now.month() == 1 {
-        Utc.with_ymd_and_hms(now.year() - 1, 12, 15, 0, 0, 0).unwrap()
+        Utc.with_ymd_and_hms(now.year() - 1, 12, 15, 0, 0, 0)
+            .unwrap()
     } else {
-        Utc.with_ymd_and_hms(now.year(), now.month() - 1, 15, 0, 0, 0).unwrap()
+        Utc.with_ymd_and_hms(now.year(), now.month() - 1, 15, 0, 0, 0)
+            .unwrap()
     };
     // Insert heavy usage in previous month — should not count
     insert_tokens(&pool, tenant_id, 500, 0, prev_month).await;
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(decision.allowed);
     assert_eq!(decision.reason, None);
 }
@@ -339,9 +329,7 @@ async fn raising_plan_allowance_above_usage_flips_decision() {
     let now = Utc::now();
     insert_tokens(&pool, tenant_id, 150, 0, now).await;
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(!decision.allowed);
     assert_eq!(
         decision.reason,
@@ -356,9 +344,7 @@ async fn raising_plan_allowance_above_usage_flips_decision() {
         .await
         .unwrap();
 
-    let decision = billing::enforcement::check(&pool, tenant_id)
-        .await
-        .unwrap();
+    let decision = billing::enforcement::check(&pool, tenant_id).await.unwrap();
     assert!(decision.allowed);
     assert_eq!(decision.reason, None);
 }

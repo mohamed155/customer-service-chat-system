@@ -125,15 +125,22 @@ async fn token_usage_sums_input_and_output_with_null_handling() {
     let tenant_id = seed_tenant(&pool).await;
 
     let now = Utc::now();
-    let start = Utc.with_ymd_and_hms(now.year(), now.month(), 1, 0, 0, 0).unwrap();
+    let start = Utc
+        .with_ymd_and_hms(now.year(), now.month(), 1, 0, 0, 0)
+        .unwrap();
     let end = if now.month() == 12 {
         Utc.with_ymd_and_hms(now.year() + 1, 1, 1, 0, 0, 0).unwrap()
     } else {
-        Utc.with_ymd_and_hms(now.year(), now.month() + 1, 1, 0, 0, 0).unwrap()
+        Utc.with_ymd_and_hms(now.year(), now.month() + 1, 1, 0, 0, 0)
+            .unwrap()
     };
 
-    for (input, output) in &[(Some(10), Some(20)), (None, Some(15)), (Some(25), None), (None, None)]
-    {
+    for (input, output) in &[
+        (Some(10), Some(20)),
+        (None, Some(15)),
+        (Some(25), None),
+        (None, None),
+    ] {
         sqlx::query(
             "INSERT INTO ai_usage_records \
              (tenant_id, provider, model, input_tokens, output_tokens, status, streamed, latency_ms, created_at) \
@@ -165,11 +172,36 @@ async fn token_usage_excludes_records_outside_period() {
     let end = Utc.with_ymd_and_hms(2026, 8, 1, 0, 0, 0).unwrap();
 
     let cases: Vec<(DateTime<Utc>, i32, i32, i64)> = vec![
-        (Utc.with_ymd_and_hms(2026, 6, 30, 23, 59, 59).unwrap(), 10, 0, 0),  // before
-        (Utc.with_ymd_and_hms(2026, 7, 1, 0, 0, 0).unwrap(),    10, 20, 30), // at start — included
-        (Utc.with_ymd_and_hms(2026, 7, 15, 12, 0, 0).unwrap(),   10, 10, 20), // mid — included
-        (Utc.with_ymd_and_hms(2026, 8, 1, 0, 0, 0).unwrap(),     10, 10, 0),  // at end — excluded
-        (Utc.with_ymd_and_hms(2026, 8, 2, 0, 0, 0).unwrap(),     10, 10, 0),  // after — excluded
+        (
+            Utc.with_ymd_and_hms(2026, 6, 30, 23, 59, 59).unwrap(),
+            10,
+            0,
+            0,
+        ), // before
+        (
+            Utc.with_ymd_and_hms(2026, 7, 1, 0, 0, 0).unwrap(),
+            10,
+            20,
+            30,
+        ), // at start — included
+        (
+            Utc.with_ymd_and_hms(2026, 7, 15, 12, 0, 0).unwrap(),
+            10,
+            10,
+            20,
+        ), // mid — included
+        (
+            Utc.with_ymd_and_hms(2026, 8, 1, 0, 0, 0).unwrap(),
+            10,
+            10,
+            0,
+        ), // at end — excluded
+        (
+            Utc.with_ymd_and_hms(2026, 8, 2, 0, 0, 0).unwrap(),
+            10,
+            10,
+            0,
+        ), // after — excluded
     ];
 
     for (ts, input, output, _expected_contribution) in &cases {

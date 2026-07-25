@@ -97,16 +97,33 @@ pub struct SubscriptionDto {
 /// "AI disabled for this metric" plan, not a division-by-zero guard.
 pub fn metric_usage(used: i64, allowance: Option<i64>) -> MetricUsageDto {
     match allowance {
-        None => MetricUsageDto { used, allowance: None, percent: None, state: "normal".into() },
+        None => MetricUsageDto {
+            used,
+            allowance: None,
+            percent: None,
+            state: "normal".into(),
+        },
         Some(limit) if limit <= 0 => MetricUsageDto {
-            used, allowance: Some(limit), percent: Some(100), state: "exceeded".into(),
+            used,
+            allowance: Some(limit),
+            percent: Some(100),
+            state: "exceeded".into(),
         },
         Some(limit) => {
             let percent = ((used as f64 / limit as f64) * 100.0).floor() as i32;
-            let state = if used >= limit { "exceeded" }
-                else if percent >= 80 { "warning" }
-                else { "normal" };
-            MetricUsageDto { used, allowance: Some(limit), percent: Some(percent), state: state.into() }
+            let state = if used >= limit {
+                "exceeded"
+            } else if percent >= 80 {
+                "warning"
+            } else {
+                "normal"
+            };
+            MetricUsageDto {
+                used,
+                allowance: Some(limit),
+                percent: Some(percent),
+                state: state.into(),
+            }
         }
     }
 }

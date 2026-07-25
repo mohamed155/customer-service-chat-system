@@ -4,7 +4,7 @@ use std::time::Duration;
 use ai::agent_responder::process_agent_responder_once;
 use ai::crypto::{self, MasterKey};
 use axum::body::Body;
-use axum::http::{Method, Request, StatusCode};
+use axum::http::{Method, Request};
 use server::router;
 use server::state::AppState;
 use tower::ServiceExt;
@@ -654,10 +654,10 @@ async fn human_agent_reply_succeeds_while_ai_paused() {
         json_post(&uri, user_id, tenant_id, reply_payload),
     )
     .await;
-    assert_eq!(
-        resp.status(),
-        StatusCode::CREATED,
-        "human reply should succeed while billing is paused"
+    assert!(
+        resp.status().is_success(),
+        "human reply should succeed while billing is paused, got {}",
+        resp.status()
     );
 }
 

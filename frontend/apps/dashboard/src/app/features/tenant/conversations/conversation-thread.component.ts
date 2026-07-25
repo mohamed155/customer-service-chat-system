@@ -69,14 +69,27 @@ type TimelineItem = { kind: 'message'; message: Message } | { kind: 'tool'; tool
                 <app-ai-confidence-badge [band]="conf.band" />
               }
               @if (item.message.delivery; as delivery) {
-                <span class="delivery-status" [class]="'status-' + delivery.status"
-                      [title]="delivery.failureReason ?? ''">
+                <span
+                  class="delivery-status"
+                  [class]="'status-' + delivery.status"
+                  [title]="delivery.failureReason ?? ''"
+                >
                   @switch (delivery.status) {
-                    @case ('pending') { 🕐 }
-                    @case ('sent') { ✓ }
-                    @case ('delivered') { ✓✓ }
-                    @case ('read') { <span class="read-tick">✓✓</span> }
-                    @case ('failed') { <span class="failed-icon">⚠</span> }
+                    @case ('pending') {
+                      🕐
+                    }
+                    @case ('sent') {
+                      ✓
+                    }
+                    @case ('delivered') {
+                      ✓✓
+                    }
+                    @case ('read') {
+                      <span class="read-tick">✓✓</span>
+                    }
+                    @case ('failed') {
+                      <span class="failed-icon">⚠</span>
+                    }
                   }
                 </span>
               }

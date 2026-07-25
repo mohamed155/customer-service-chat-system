@@ -49,7 +49,10 @@ describe('application routes', () => {
         { provide: PermissionsService, useValue: permissions },
         provideZonelessChangeDetection(),
         provideHttpClientTesting(),
-        { provide: NotificationsApiService, useValue: { unreadCount: () => of({ data: { count: 0 } }) } },
+        {
+          provide: NotificationsApiService,
+          useValue: { unreadCount: () => of({ data: { count: 0 } }) },
+        },
         { provide: APP_CONFIG, useValue: environment },
       ],
     });

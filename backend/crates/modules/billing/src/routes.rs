@@ -1,4 +1,9 @@
-use axum::{extract::State, http::StatusCode, response::{IntoResponse, Response}, Extension, Json};
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Extension, Json,
+};
 use chrono::Utc;
 use kernel::ApiError;
 use sqlx::PgPool;
@@ -28,12 +33,16 @@ pub async fn get_billing_overview(
     match async {
         let (plan, subscription_status) = queries::effective_plan(&pool, ctx.tenant_id).await?;
         let token_used = queries::token_usage(&pool, ctx.tenant_id, period.0, period.1).await?;
-        let conv_used = queries::conversation_usage(&pool, ctx.tenant_id, period.0, period.1).await?;
+        let conv_used =
+            queries::conversation_usage(&pool, ctx.tenant_id, period.0, period.1).await?;
         Ok::<_, sqlx::Error>((plan, subscription_status, token_used, conv_used))
-    }.await {
+    }
+    .await
+    {
         Ok((plan, subscription_status, token_used, conv_used)) => {
             let tokens = model::metric_usage(token_used, plan.token_allowance);
-            let conversations = model::metric_usage(conv_used, plan.conversation_allowance.map(|v| v as i64));
+            let conversations =
+                model::metric_usage(conv_used, plan.conversation_allowance.map(|v| v as i64));
             let (ai_paused, ai_paused_reason) = match subscription_status.as_str() {
                 "past_due" | "canceled" => (true, Some("subscription_status".into())),
                 _ => {
@@ -46,14 +55,24 @@ pub async fn get_billing_overview(
                     }
                 }
             };
-            (StatusCode::OK, Json(model::BillingOverviewDto {
-                plan,
-                subscription_status,
-                period: model::PeriodDto { start: period.0, end: period.1 },
-                usage: model::UsageDto { tokens, conversations },
-                ai_paused,
-                ai_paused_reason,
-            })).into_response()
+            (
+                StatusCode::OK,
+                Json(model::BillingOverviewDto {
+                    plan,
+                    subscription_status,
+                    period: model::PeriodDto {
+                        start: period.0,
+                        end: period.1,
+                    },
+                    usage: model::UsageDto {
+                        tokens,
+                        conversations,
+                    },
+                    ai_paused,
+                    ai_paused_reason,
+                }),
+            )
+                .into_response()
         }
         Err(e) => {
             tracing::error!(?e, "get_billing_overview");
@@ -81,9 +100,7 @@ pub async fn list_plans(
     Extension(_principal): Extension<identity::Principal>,
 ) -> Response {
     match queries::list_plans(&pool).await {
-        Ok(plans) => {
-            (StatusCode::OK, Json(model::PlanListResponse { plans })).into_response()
-        }
+        Ok(plans) => (StatusCode::OK, Json(model::PlanListResponse { plans })).into_response(),
         Err(e) => {
             tracing::error!(?e, "list_plans");
             ApiError::internal_error("internal error").into_response()
@@ -136,10 +153,7 @@ pub async fn create_plan(
             message: "Token allowance must be non-negative".into(),
         });
     }
-    if payload
-        .conversation_allowance
-        .is_some_and(|v| v < 0)
-    {
+    if payload.conversation_allowance.is_some_and(|v| v < 0) {
         details.push(ErrorDetail {
             field: "conversationAllowance".into(),
             code: "invalid_value".into(),
@@ -176,8 +190,7 @@ pub async fn create_plan(
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}"))
-            .into_response();
+        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
     }
 
     (StatusCode::CREATED, Json(plan)).into_response()
@@ -258,8 +271,7 @@ pub async fn update_plan(
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}"))
-            .into_response();
+        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
     }
 
     (StatusCode::OK, Json(after)).into_response()
@@ -282,9 +294,11 @@ pub async fn list_subscriptions(
     Extension(_principal): Extension<identity::Principal>,
 ) -> Response {
     match queries::list_subscriptions(&pool).await {
-        Ok(subscriptions) => {
-            (StatusCode::OK, Json(model::SubscriptionListResponse { subscriptions })).into_response()
-        }
+        Ok(subscriptions) => (
+            StatusCode::OK,
+            Json(model::SubscriptionListResponse { subscriptions }),
+        )
+            .into_response(),
         Err(e) => {
             tracing::error!(?e, "list_subscriptions");
             ApiError::internal_error("internal error").into_response()
@@ -417,8 +431,7 @@ pub async fn put_subscription(
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}"))
-            .into_response();
+        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
     }
 
     (StatusCode::OK, Json(after)).into_response()

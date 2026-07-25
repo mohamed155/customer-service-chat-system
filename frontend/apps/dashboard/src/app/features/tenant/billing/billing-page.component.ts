@@ -18,10 +18,6 @@ function metricLabel(allowance: number | null): string {
   return allowance === null ? 'Unlimited' : allowance.toLocaleString();
 }
 
-function metricStateClass(allowance: number | null, state: string): string {
-  return allowance === null ? 'normal' : state;
-}
-
 function aiPausedMessage(reason: string | null): string {
   switch (reason) {
     case 'token_limit':
@@ -246,6 +242,5 @@ export class BillingPageComponent {
   protected readonly formatDate = formatDate;
   protected readonly metricLabel = metricLabel;
   protected readonly subscriptionTone = subscriptionTone;
-  protected readonly metricStateClass = metricStateClass;
   protected readonly aiPausedMessage = aiPausedMessage;
 }
