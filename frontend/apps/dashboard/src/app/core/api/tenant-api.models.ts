@@ -1469,24 +1469,19 @@ export interface BillingOverview {
 
 // ── Platform billing types (T047) ─────────────────────────────────────────────
 
-export interface PlatformPlanWire {
-  readonly id: string;
-  readonly name: string;
-  readonly monthly_price_cents: number;
-  readonly token_allowance: number | null;
-  readonly conversation_allowance: number | null;
-  readonly is_default: boolean;
-  readonly status: string;
-}
+export type PlatformPlanWire = BillingPlanWire;
+export type PlatformPlan = BillingPlan;
 
-export interface PlatformPlan {
-  readonly id: string;
-  readonly name: string;
-  readonly monthlyPriceCents: number;
-  readonly tokenAllowance: number | null;
-  readonly conversationAllowance: number | null;
-  readonly isDefault: boolean;
-  readonly status: string;
+function planFromWire(wire: BillingPlanWire): BillingPlan {
+  return {
+    id: wire.id,
+    name: wire.name,
+    monthlyPriceCents: wire.monthly_price_cents,
+    tokenAllowance: wire.token_allowance,
+    conversationAllowance: wire.conversation_allowance,
+    isDefault: wire.is_default,
+    status: wire.status,
+  };
 }
 
 export interface PlatformSubscriptionRowWire {
@@ -1509,16 +1504,8 @@ export interface PlatformSubscriptionRow {
   readonly explicit: boolean;
 }
 
-export function platformPlansFromWire(wire: PlatformPlanWire[]): PlatformPlan[] {
-  return wire.map((p) => ({
-    id: p.id,
-    name: p.name,
-    monthlyPriceCents: p.monthly_price_cents,
-    tokenAllowance: p.token_allowance,
-    conversationAllowance: p.conversation_allowance,
-    isDefault: p.is_default,
-    status: p.status,
-  }));
+export function platformPlansFromWire(wire: BillingPlanWire[]): BillingPlan[] {
+  return wire.map(planFromWire);
 }
 
 export function platformSubscriptionsFromWire(
@@ -1537,15 +1524,7 @@ export function platformSubscriptionsFromWire(
 
 export function billingOverviewFromWire(wire: BillingOverviewWire): BillingOverview {
   return {
-    plan: {
-      id: wire.plan.id,
-      name: wire.plan.name,
-      monthlyPriceCents: wire.plan.monthly_price_cents,
-      tokenAllowance: wire.plan.token_allowance,
-      conversationAllowance: wire.plan.conversation_allowance,
-      isDefault: wire.plan.is_default,
-      status: wire.plan.status,
-    },
+    plan: planFromWire(wire.plan),
     subscriptionStatus: wire.subscription_status,
     period: {
       start: new Date(wire.period.start),
