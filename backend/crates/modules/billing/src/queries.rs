@@ -76,31 +76,19 @@ pub async fn effective_plan(
             subscription_status,
         ))
     } else {
-        let default =
-            sqlx::query_as::<_, (Uuid, String, i32, Option<i64>, Option<i32>, bool, String)>(
-                r#"
+        let default = sqlx::query_as::<_, model::PlanDto>(
+            r#"
             SELECT id, name, monthly_price_cents, token_allowance,
                    conversation_allowance, is_default, status
             FROM billing_plans
             WHERE is_default = true
             LIMIT 1
             "#,
-            )
-            .fetch_one(pool)
-            .await?;
+        )
+        .fetch_one(pool)
+        .await?;
 
-        Ok((
-            model::PlanDto {
-                id: default.0,
-                name: default.1,
-                monthly_price_cents: default.2,
-                token_allowance: default.3,
-                conversation_allowance: default.4,
-                is_default: default.5,
-                status: default.6,
-            },
-            "active".into(),
-        ))
+        Ok((default, "active".into()))
     }
 }
 
@@ -146,41 +134,19 @@ pub async fn conversation_usage(
 // ── T040: Platform plan catalog / subscription queries ─────────────────────
 
 pub async fn list_plans(pool: &PgPool) -> sqlx::Result<Vec<model::PlanDto>> {
-    let rows = sqlx::query_as::<_, (Uuid, String, i32, Option<i64>, Option<i32>, bool, String)>(
+    sqlx::query_as::<_, model::PlanDto>(
         "SELECT id, name, monthly_price_cents, token_allowance, conversation_allowance, \
          is_default, status FROM billing_plans ORDER BY created_at ASC",
     )
     .fetch_all(pool)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(
-            |(
-                id,
-                name,
-                monthly_price_cents,
-                token_allowance,
-                conversation_allowance,
-                is_default,
-                status,
-            )| model::PlanDto {
-                id,
-                name,
-                monthly_price_cents,
-                token_allowance,
-                conversation_allowance,
-                is_default,
-                status,
-            },
-        )
-        .collect())
+    .await
 }
 
 pub async fn create_plan(
     tx: &mut Transaction<'_, Postgres>,
     req: &model::CreatePlanRequest,
 ) -> sqlx::Result<model::PlanDto> {
-    let row = sqlx::query_as::<_, (Uuid, String, i32, Option<i64>, Option<i32>, bool, String)>(
+    sqlx::query_as::<_, model::PlanDto>(
         "INSERT INTO billing_plans (name, monthly_price_cents, token_allowance, \
          conversation_allowance, is_default, status) \
          VALUES ($1, $2, $3, $4, false, 'active') \
@@ -192,45 +158,30 @@ pub async fn create_plan(
     .bind(req.token_allowance)
     .bind(req.conversation_allowance)
     .fetch_one(&mut **tx)
-    .await?;
-    Ok(model::PlanDto {
-        id: row.0,
-        name: row.1,
-        monthly_price_cents: row.2,
-        token_allowance: row.3,
-        conversation_allowance: row.4,
-        is_default: row.5,
-        status: row.6,
-    })
+    .await
 }
 
 pub async fn plan_by_id(pool: &PgPool, plan_id: Uuid) -> sqlx::Result<Option<model::PlanDto>> {
-    let row = sqlx::query_as::<_, (Uuid, String, i32, Option<i64>, Option<i32>, bool, String)>(
+    sqlx::query_as::<_, model::PlanDto>(
         "SELECT id, name, monthly_price_cents, token_allowance, conversation_allowance, \
          is_default, status FROM billing_plans WHERE id = $1",
     )
     .bind(plan_id)
     .fetch_optional(pool)
-    .await?;
-    Ok(row.map(
-        |(
-            id,
-            name,
-            monthly_price_cents,
-            token_allowance,
-            conversation_allowance,
-            is_default,
-            status,
-        )| model::PlanDto {
-            id,
-            name,
-            monthly_price_cents,
-            token_allowance,
-            conversation_allowance,
-            is_default,
-            status,
-        },
-    ))
+    .await
+}
+
+pub async fn plan_by_id_for_update(
+    tx: &mut Transaction<'_, Postgres>,
+    plan_id: Uuid,
+) -> sqlx::Result<Option<model::PlanDto>> {
+    sqlx::query_as::<_, model::PlanDto>(
+        "SELECT id, name, monthly_price_cents, token_allowance, conversation_allowance, \
+         is_default, status FROM billing_plans WHERE id = $1 FOR UPDATE",
+    )
+    .bind(plan_id)
+    .fetch_optional(&mut **tx)
+    .await
 }
 
 pub async fn set_plan_status(
@@ -238,7 +189,7 @@ pub async fn set_plan_status(
     plan_id: Uuid,
     status: &str,
 ) -> sqlx::Result<model::PlanDto> {
-    let row = sqlx::query_as::<_, (Uuid, String, i32, Option<i64>, Option<i32>, bool, String)>(
+    sqlx::query_as::<_, model::PlanDto>(
         "UPDATE billing_plans SET status = $1 WHERE id = $2 \
          RETURNING id, name, monthly_price_cents, token_allowance, \
          conversation_allowance, is_default, status",
@@ -246,16 +197,7 @@ pub async fn set_plan_status(
     .bind(status)
     .bind(plan_id)
     .fetch_one(&mut **tx)
-    .await?;
-    Ok(model::PlanDto {
-        id: row.0,
-        name: row.1,
-        monthly_price_cents: row.2,
-        token_allowance: row.3,
-        conversation_allowance: row.4,
-        is_default: row.5,
-        status: row.6,
-    })
+    .await
 }
 
 pub async fn list_subscriptions(pool: &PgPool) -> sqlx::Result<Vec<model::SubscriptionRowDto>> {
@@ -269,7 +211,7 @@ pub async fn list_subscriptions(pool: &PgPool) -> sqlx::Result<Vec<model::Subscr
          FROM tenants t \
          LEFT JOIN tenant_subscriptions s ON s.tenant_id = t.id \
          LEFT JOIN billing_plans p ON p.id = s.plan_id \
-         CROSS JOIN (SELECT id, name, is_default FROM billing_plans WHERE is_default) d \
+         LEFT JOIN LATERAL (SELECT id, name, is_default FROM billing_plans WHERE is_default LIMIT 1) d ON true \
          WHERE t.deleted_at IS NULL \
          ORDER BY t.name",
     )
@@ -303,6 +245,18 @@ pub async fn subscription_for_tenant(
     )
     .bind(tenant_id)
     .fetch_optional(pool)
+    .await
+}
+
+pub async fn subscription_for_tenant_for_update(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+) -> sqlx::Result<Option<(Uuid, Uuid, String)>> {
+    sqlx::query_as::<_, (Uuid, Uuid, String)>(
+        "SELECT id, plan_id, status FROM tenant_subscriptions WHERE tenant_id = $1 FOR UPDATE",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut **tx)
     .await
 }
 

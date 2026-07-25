@@ -140,7 +140,7 @@ const EXPECTED: &[(&str, &str)] = &[
     ("DELETE", "/tenant/knowledge/categories/{category_id}"),
     // Tool routes
     ("GET", "/api/v1/tenant/conversations/{id}/tool-activity"),
-    ("POST", "/tenant/tools/requests/{id}/decide"),
+    ("POST", "/api/v1/tenant/tools/requests/{id}/decide"),
     ("GET", "/api/v1/tenant/tool-requests"),
     ("GET", "/api/v1/tenant/tools"),
     ("PUT", "/api/v1/tenant/tools/builtin/{name}/policy"),

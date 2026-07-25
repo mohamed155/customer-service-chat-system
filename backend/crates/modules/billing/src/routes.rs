@@ -21,7 +21,7 @@ use crate::queries;
     summary = "Tenant billing overview",
     responses(
         (status = 200, description = "Billing overview for the current period.", body = model::BillingOverviewDto),
-        (status = 403, description = "Forbidden — missing billing.admin permission."),
+        (status = 403, description = "Forbidden — missing billing.view permission."),
         (status = 500, description = "Internal server error."),
     ),
 )]
@@ -141,21 +141,21 @@ pub async fn create_plan(
     }
     if payload.monthly_price_cents < 0 {
         details.push(ErrorDetail {
-            field: "monthlyPriceCents".into(),
+            field: "monthly_price_cents".into(),
             code: "invalid_value".into(),
             message: "Monthly price must be non-negative".into(),
         });
     }
     if payload.token_allowance.is_some_and(|v| v < 0) {
         details.push(ErrorDetail {
-            field: "tokenAllowance".into(),
+            field: "token_allowance".into(),
             code: "invalid_value".into(),
             message: "Token allowance must be non-negative".into(),
         });
     }
     if payload.conversation_allowance.is_some_and(|v| v < 0) {
         details.push(ErrorDetail {
-            field: "conversationAllowance".into(),
+            field: "conversation_allowance".into(),
             code: "invalid_value".into(),
             message: "Conversation allowance must be non-negative".into(),
         });
@@ -166,6 +166,14 @@ pub async fn create_plan(
             .into_response();
     }
 
+    let trimmed_name = payload.name.trim().to_string();
+    let create_req = model::CreatePlanRequest {
+        name: trimmed_name,
+        monthly_price_cents: payload.monthly_price_cents,
+        token_allowance: payload.token_allowance,
+        conversation_allowance: payload.conversation_allowance,
+    };
+
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => {
@@ -174,7 +182,7 @@ pub async fn create_plan(
         }
     };
 
-    let plan = match queries::create_plan(&mut tx, &payload).await {
+    let plan = match queries::create_plan(&mut tx, &create_req).await {
         Ok(plan) => plan,
         Err(sqlx::Error::Database(dbe)) if dbe.code().as_deref() == Some("23505") => {
             return ApiError::conflict("A plan with this name already exists").into_response();
@@ -230,18 +238,6 @@ pub async fn update_plan(
         .into_response();
     }
 
-    let before = match queries::plan_by_id(&pool, plan_id).await {
-        Ok(Some(p)) => p,
-        Ok(None) => return ApiError::not_found("Plan not found").into_response(),
-        Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
-        }
-    };
-
-    if before.is_default && payload.status == "retired" {
-        return ApiError::conflict("Cannot retire the default plan").into_response();
-    }
-
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => {
@@ -249,6 +245,22 @@ pub async fn update_plan(
                 .into_response();
         }
     };
+
+    let before = match queries::plan_by_id_for_update(&mut tx, plan_id).await {
+        Ok(Some(p)) => p,
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            return ApiError::not_found("Plan not found").into_response();
+        }
+        Err(e) => {
+            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
+        }
+    };
+
+    if before.is_default && payload.status == "retired" {
+        let _ = tx.rollback().await;
+        return ApiError::conflict("Cannot retire the default plan").into_response();
+    }
 
     let after = match queries::set_plan_status(&mut tx, plan_id, &payload.status).await {
         Ok(p) => p,
@@ -356,16 +368,27 @@ pub async fn put_subscription(
         return ApiError::not_found("Tenant not found").into_response();
     }
 
-    let target_plan = match queries::plan_by_id(&pool, payload.plan_id).await {
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => {
+            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
+                .into_response();
+        }
+    };
+
+    let target_plan = match queries::plan_by_id_for_update(&mut tx, payload.plan_id).await {
         Ok(Some(p)) => p,
-        Ok(None) => return ApiError::not_found("Plan not found").into_response(),
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            return ApiError::not_found("Plan not found").into_response();
+        }
         Err(e) => {
             return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
         }
     };
 
-    // Read before-state for audit
-    let before = match queries::subscription_for_tenant(&pool, tenant_id).await {
+    // Read before-state for audit (locked)
+    let before = match queries::subscription_for_tenant_for_update(&mut tx, tenant_id).await {
         Ok(sub) => sub,
         Err(e) => {
             return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
@@ -376,21 +399,15 @@ pub async fn put_subscription(
     if target_plan.status == "retired" {
         if let Some((_, current_plan_id, _)) = before {
             if current_plan_id != payload.plan_id {
+                let _ = tx.rollback().await;
                 return ApiError::conflict("Cannot assign a retired plan to a tenant")
                     .into_response();
             }
         } else {
+            let _ = tx.rollback().await;
             return ApiError::conflict("Cannot assign a retired plan to a tenant").into_response();
         }
     }
-
-    let mut tx = match pool.begin().await {
-        Ok(tx) => tx,
-        Err(e) => {
-            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
-                .into_response();
-        }
-    };
 
     let (subscription_id, after) = match queries::upsert_subscription(
         &mut tx,

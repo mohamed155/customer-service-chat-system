@@ -53,7 +53,7 @@ curl -s -b "$PCOOKIES" -X PUT \
   -H 'content-type: application/json' -d "{\"plan_id\":\"$PLAN\",\"status\":\"active\"}"
 ```
 
-Expected: overview now shows the Tiny plan; with any recorded usage both metrics read `exceeded`, `ai_paused: true`.
+Expected: overview now shows the Tiny plan; token and conversation usage are evaluated independently — each metric becomes `exceeded` only when its own allowance is reached, and `ai_paused` is true when either metric is exceeded.
 
 ## 4. Enforcement end-to-end
 
@@ -76,7 +76,7 @@ Expected: `billing_plan.created` and `billing_subscription.changed` entries with
 
 ```bash
 cd frontend
-pnpm ng build dashboard && pnpm ng test dashboard && pnpm lint && pnpm format:check
+pnpm ng build dashboard && pnpm ng test dashboard && pnpm test:e2e && pnpm lint && pnpm format:check
 ```
 
 UI checks:

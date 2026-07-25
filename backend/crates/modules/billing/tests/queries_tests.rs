@@ -1,56 +1,9 @@
-use std::time::Duration;
-
 use chrono::{DateTime, Datelike, TimeZone, Utc};
 use serial_test::serial;
 use uuid::Uuid;
 
-fn require_db_tests() -> bool {
-    std::env::var("REQUIRE_DB_TESTS").as_deref() == Ok("1")
-}
-
-async fn get_pool() -> Option<sqlx::PgPool> {
-    let url = match std::env::var("DATABASE_URL") {
-        Ok(v) => v,
-        Err(_) => {
-            eprintln!("skipping billing queries tests: DATABASE_URL not set");
-            return None;
-        }
-    };
-    let pool = db::lazy_pool(&url, 2, Duration::from_secs(5));
-    if sqlx::query("SELECT 1").execute(&pool).await.is_err() {
-        if require_db_tests() {
-            panic!("REQUIRE_DB_TESTS=1 but DATABASE_URL is unreachable");
-        }
-        eprintln!("skipping billing queries tests: DATABASE_URL is unreachable");
-        return None;
-    }
-    Some(pool)
-}
-
-async fn setup(pool: &sqlx::PgPool) {
-    db::run_migrations(pool)
-        .await
-        .expect("run_migrations should succeed");
-    sqlx::query(
-        "TRUNCATE TABLE \
-         ai_usage_records, tenant_subscriptions, conversations, \
-         customers, tenants \
-         RESTART IDENTITY CASCADE",
-    )
-    .execute(pool)
-    .await
-    .expect("truncate test tables");
-}
-
-async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
-    let slug = format!("billing-qt-{}", Uuid::new_v4().simple());
-    sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
-        .bind("Billing Queries Test Tenant")
-        .bind(&slug)
-        .fetch_one(pool)
-        .await
-        .unwrap()
-}
+mod common;
+use common::*;
 
 // ── effective_plan tests ─────────────────────────────────────────
 

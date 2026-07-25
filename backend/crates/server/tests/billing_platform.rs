@@ -150,8 +150,9 @@ async fn free_plan_id(pool: &sqlx::PgPool) -> Uuid {
 }
 
 async fn create_plan_via_api(pool: &sqlx::PgPool, user_id: Uuid, name: &str) -> Uuid {
+    let unique_name = format!("{} {}", name, Uuid::new_v4().simple());
     let body = json!({
-        "name": name,
+        "name": unique_name,
         "monthly_price_cents": 0,
         "token_allowance": null,
         "conversation_allowance": null,
@@ -502,7 +503,8 @@ async fn duplicate_plan_name_returns_409() {
     let Some(pool) = get_pool().await else { return };
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("super_admin")).await;
-    let body = json!({"name": "Unique409", "monthly_price_cents": 0});
+    let unique_name = format!("UniqueConflict {}", Uuid::new_v4().simple());
+    let body = json!({"name": unique_name, "monthly_price_cents": 0});
     let r1 = send(pool.clone(), platform_request(CREATE_PLAN, Method::POST, user, Some(body.clone()))).await;
     assert_eq!(r1.status(), StatusCode::CREATED);
     let r2 = send(pool.clone(), platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
@@ -658,12 +660,12 @@ async fn create_plan_writes_audit_log() {
     let Some(pool) = get_pool().await else { return };
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("super_admin")).await;
-    let body = json!({"name": "AuditPlan", "monthly_price_cents": 2000});
+    let unique_name = format!("AuditPlan {}", Uuid::new_v4().simple());
+    let body = json!({"name": unique_name, "monthly_price_cents": 2000});
     let response = send(pool.clone(), platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let plan: Value = body_json(response).await;
     let plan_id = plan["id"].as_str().unwrap();
-    // Verify the audit row
     let row: Value = sqlx::query_scalar(
         "SELECT row_to_json(a.*) FROM audit_logs a WHERE a.action = 'billing_plan.created' AND a.resource_id = $1 ORDER BY a.created_at DESC LIMIT 1",
     )
@@ -673,7 +675,7 @@ async fn create_plan_writes_audit_log() {
     .unwrap();
     assert_eq!(row["actor_user_id"], json!(user.to_string()));
     assert_eq!(row["resource_type"], "billing_plan");
-    assert_eq!(row["details"]["name"], "AuditPlan");
+    assert_eq!(row["details"]["name"], unique_name);
 }
 
 #[tokio::test]
@@ -725,9 +727,9 @@ async fn put_subscription_writes_audit_log() {
     .await
     .unwrap();
     assert_eq!(row["actor_user_id"], json!(user.to_string()));
-    assert_eq!(row["resource_type"], "tenant_subscription");
-    assert!(row["details"]["before"]["plan_id"].is_null());
-    assert_eq!(row["details"]["after"]["plan_id"], json!(plan_id.to_string()));
+    assert_eq!(row["resource_type"], "billing_subscription");
+    assert!(row["details"]["previous_plan_id"].is_null());
+    assert_eq!(row["details"]["plan_id"], json!(plan_id.to_string()));
 }
 
 // ── FR-011 / SC-007: one row per non-deleted tenant ──────────────────

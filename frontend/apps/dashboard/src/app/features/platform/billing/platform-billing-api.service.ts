@@ -21,7 +21,7 @@ export interface CreatePlanRequest {
 
 export interface PutSubscriptionRequest {
   readonly planId: string;
-  readonly status?: string;
+  readonly status: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -69,7 +69,7 @@ export class PlatformBillingApiService {
   ): Observable<ApiResponse<{ tenantId: string; planId: string; status: string }>> {
     const body = {
       plan_id: req.planId,
-      ...(req.status ? { status: req.status } : {}),
+      status: req.status,
     };
     return this.api
       .put<{ data: { tenant_id: string; plan_id: string; status: string } }>(

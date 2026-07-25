@@ -57,9 +57,14 @@ pub async fn subscription_changed(
         "billing_subscription.changed",
         Some(actor_user_id),
         Some(tenant_id),
-        "tenant_subscription",
+        "billing_subscription",
         Some(&subscription_id.to_string()),
-        &json!({"before": before, "after": after}),
+        &json!({
+            "plan_id": after.get("plan_id"),
+            "status": after.get("status"),
+            "previous_plan_id": before.get("plan_id"),
+            "previous_status": before.get("status"),
+        }),
     )
     .await
 }

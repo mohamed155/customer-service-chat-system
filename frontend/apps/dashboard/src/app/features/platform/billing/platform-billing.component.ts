@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TuiTextfield } from '@taiga-ui/core';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
@@ -17,6 +18,7 @@ function formatCents(cents: number): string {
   standalone: true,
   imports: [
     FormsModule,
+    TuiTextfield,
     ButtonComponent,
     DataTableComponent,
     InlineAlertComponent,
@@ -38,25 +40,42 @@ function formatCents(cents: number): string {
             <h2>Plan Catalog</h2>
             @if (canManage()) {
               <div class="form-inline">
-                <input type="text" placeholder="Name" [(ngModel)]="newPlanName" class="input-sm" />
-                <input
-                  type="number"
-                  placeholder="Price (cents)"
-                  [(ngModel)]="newPlanPrice"
-                  class="input-sm"
-                />
-                <input
-                  type="number"
-                  placeholder="Token allowance"
-                  [(ngModel)]="newPlanTokens"
-                  class="input-sm"
-                />
-                <input
-                  type="number"
-                  placeholder="Conv. allowance"
-                  [(ngModel)]="newPlanConversations"
-                  class="input-sm"
-                />
+                <tui-textfield>
+                  <input
+                    tuiTextfield
+                    type="text"
+                    placeholder="Name"
+                    [(ngModel)]="newPlanName"
+                    aria-label="Plan name"
+                  />
+                </tui-textfield>
+                <tui-textfield>
+                  <input
+                    tuiTextfield
+                    type="number"
+                    placeholder="Price (cents)"
+                    [(ngModel)]="newPlanPrice"
+                    aria-label="Monthly price in cents"
+                  />
+                </tui-textfield>
+                <tui-textfield>
+                  <input
+                    tuiTextfield
+                    type="number"
+                    placeholder="Token allowance"
+                    [(ngModel)]="newPlanTokens"
+                    aria-label="Token allowance"
+                  />
+                </tui-textfield>
+                <tui-textfield>
+                  <input
+                    tuiTextfield
+                    type="number"
+                    placeholder="Conv. allowance"
+                    [(ngModel)]="newPlanConversations"
+                    aria-label="Conversation allowance"
+                  />
+                </tui-textfield>
                 <app-button
                   variant="primary"
                   size="sm"
@@ -272,6 +291,6 @@ export class PlatformBillingComponent {
 
   protected onAssignPlan(tenantId: string, event: Event): void {
     const planId = (event.target as HTMLSelectElement).value;
-    this.store.assignSubscription(tenantId, planId);
+    this.store.assignSubscription(tenantId, planId, 'active');
   }
 }

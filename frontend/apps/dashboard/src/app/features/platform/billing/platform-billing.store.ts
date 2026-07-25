@@ -135,7 +135,7 @@ export const PlatformBillingStore = signalStore(
       ),
     );
 
-    const assignSubscription = rxMethod<{ tenantId: string; planId: string; status?: string }>(
+    const assignSubscription = rxMethod<{ tenantId: string; planId: string; status: string }>(
       pipe(
         tap(() => patchState(store, { saving: true, error: null })),
         switchMap(({ tenantId, planId, status }) =>
@@ -183,7 +183,7 @@ export const PlatformBillingStore = signalStore(
       activatePlan(planId: string): void {
         activatePlan(planId);
       },
-      assignSubscription(tenantId: string, planId: string, status?: string): void {
+      assignSubscription(tenantId: string, planId: string, status: string): void {
         assignSubscription({ tenantId, planId, status });
       },
     };
