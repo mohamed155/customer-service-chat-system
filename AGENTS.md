@@ -17,6 +17,7 @@
 
 ## Recent Changes
 
+- 031-billing-foundation: platform-global plan catalog (`billing_plans`, `tenant_subscriptions` seeded with Free plan), tenant billing overview page (plan card, usage cards with normal/warning/exceeded states, AI-paused banner), real-time usage-limit enforcement gate in `ai::agent_responder` (checks subscription status → token allowance → conversation allowance; runs after escalation rules so paused tenants still auto-escalate), platform plan/subscription CRUD (audited, view/manage separated), RBAC deltas (`billing.view`→Admin, `platform.billing.manage`→Super Admin+Finance), 6 endpoints, 60+ DB-backed integration tests, and full frontend under `features/{tenant,platform}/billing/`. See `specs/031-billing-foundation/plan.md`.
 - 029-whatsapp-channel: WhatsApp Business Cloud API integration with Meta webhook (GET verification + POST signed deliveries), inbound message intake (dedupe, customer identity resolution, conversation create-or-append, media fetch into S3 storage), outbound sender worker with sent/delivered/read/failed lifecycle, 24h window enforcement, dashboard channel badge/filter, attachment rendering, and delivery status ticks.
 - 027-notifications: tenant-scoped notification inbox with bell/badge, notification list/panel, SSE live updates, escalation/assignment/AI-failure/tool-approval triggers, auto-resolve on claim/decide, deduplication, 90-day retention, crate rename (notifications→email). See specs/027-notifications/plan.md.
 - 025-analytics-foundation: tenant analytics (summary + daily timeseries endpoints over existing conversation/feedback/usage tables, no rollup tables; metric cards, inline-SVG trend charts, date-range and channel filters; analytics.view restricted to Owner/Admin/Manager). See specs/025-analytics-foundation/plan.md.
@@ -30,5 +31,5 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/027-notifications/plan.md
+at specs/031-billing-foundation/plan.md
 <!-- SPECKIT END -->

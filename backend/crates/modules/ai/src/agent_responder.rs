@@ -16,7 +16,7 @@ pub async fn process_agent_responder_once(
 
     // 1. Claim one unprocessed outbox_events row
     let claim_token = Uuid::new_v4();
-    let maybe_row: Option<(i64, Uuid, String, String, serde_json::Value)> = sqlx::query_as(
+    let maybe_row: Option<(Uuid, Uuid, String, String, serde_json::Value)> = sqlx::query_as(
         "UPDATE outbox_events \
          SET claimed_at = now(), claim_token = $1 \
          WHERE id = ( \
@@ -27,7 +27,7 @@ pub async fn process_agent_responder_once(
              LIMIT 1 \
              FOR UPDATE SKIP LOCKED \
          ) \
-         RETURNING id, tenant_id, aggregate_id, event_type, payload",
+         RETURNING id, tenant_id::uuid, aggregate_id, event_type, payload",
     )
     .bind(claim_token)
     .fetch_optional(pool)
@@ -328,6 +328,17 @@ pub async fn process_agent_responder_once(
                 return Ok(true);
             }
             RuleMatch::None => {}
+        }
+
+        // Gate on billing allowance / subscription status (spec 031)
+        let decision = billing::enforcement::check(pool, tenant_id).await?;
+        if !decision.allowed {
+            tracing::info!(?tenant_id, reason = ?decision.reason, "agent responder: billing gate paused AI reply");
+            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                .bind(event_id)
+                .execute(pool)
+                .await?;
+            return Ok(true);
         }
     }
 

@@ -27,6 +27,7 @@ export type Permission =
   | 'platform.tenants.manage'
   | 'platform.admin'
   | 'platform.billing.view'
+  | 'platform.billing.manage'
   | 'platform.diagnostics.view'
   | 'platform.audit.view'
   | 'widgets.view'
@@ -52,5 +53,7 @@ export const PAGE_PERMISSIONS = {
   [APP_PATHS.tenant.widgets]: 'widgets.view',
   [APP_PATHS.tenant.notifications]: 'overview.view',
   [APP_PATHS.tenant.auditLogs]: 'audit.view',
+  [APP_PATHS.tenant.billing]: 'billing.view',
+  [APP_PATHS.platform.billing]: 'platform.billing.view',
   [APP_PATHS.platform.auditLogs]: 'platform.audit.view',
 } as const satisfies Record<string, Permission>;

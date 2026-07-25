@@ -769,7 +769,7 @@ export function messageFromWire(wire: MessageWire): Message {
       : {}),
     ...(wire.attachments
       ? {
-          attachments: wire.attachments.map(a => ({
+          attachments: wire.attachments.map((a) => ({
             id: a.id,
             kind: a.kind as MessageAttachment['kind'],
             status: a.status as MessageAttachment['status'],
@@ -1390,5 +1390,161 @@ export function integrationEventListFromWire(wire: IntegrationEventListWire): In
       nextCursor: wire.pagination.next_cursor,
       hasMore: wire.pagination.has_more,
     },
+  };
+}
+
+// ── Billing (T022) ───────────────────────────────────────────────────────────
+
+export interface BillingPlanWire {
+  readonly id: string;
+  readonly name: string;
+  readonly monthly_price_cents: number;
+  readonly token_allowance: number | null;
+  readonly conversation_allowance: number | null;
+  readonly is_default: boolean;
+  readonly status: string;
+}
+
+export interface BillingPeriodWire {
+  readonly start: string;
+  readonly end: string;
+}
+
+export interface BillingMetricWire {
+  readonly used: number;
+  readonly allowance: number | null;
+  readonly percent: number | null;
+  readonly state: string;
+}
+
+export interface BillingUsageWire {
+  readonly tokens: BillingMetricWire;
+  readonly conversations: BillingMetricWire;
+}
+
+export interface BillingOverviewWire {
+  readonly plan: BillingPlanWire;
+  readonly subscription_status: string;
+  readonly period: BillingPeriodWire;
+  readonly usage: BillingUsageWire;
+  readonly ai_paused: boolean;
+  readonly ai_paused_reason: string | null;
+}
+
+export interface BillingPlan {
+  readonly id: string;
+  readonly name: string;
+  readonly monthlyPriceCents: number;
+  readonly tokenAllowance: number | null;
+  readonly conversationAllowance: number | null;
+  readonly isDefault: boolean;
+  readonly status: string;
+}
+
+export interface BillingPeriod {
+  readonly start: Date;
+  readonly end: Date;
+}
+
+export interface BillingMetric {
+  readonly used: number;
+  readonly allowance: number | null;
+  readonly percent: number | null;
+  readonly state: string;
+}
+
+export interface BillingUsage {
+  readonly tokens: BillingMetric;
+  readonly conversations: BillingMetric;
+}
+
+export interface BillingOverview {
+  readonly plan: BillingPlan;
+  readonly subscriptionStatus: string;
+  readonly period: BillingPeriod;
+  readonly usage: BillingUsage;
+  readonly aiPaused: boolean;
+  readonly aiPausedReason: string | null;
+}
+
+// ── Platform billing types (T047) ─────────────────────────────────────────────
+
+export type PlatformPlanWire = BillingPlanWire;
+export type PlatformPlan = BillingPlan;
+
+function planFromWire(wire: BillingPlanWire): BillingPlan {
+  return {
+    id: wire.id,
+    name: wire.name,
+    monthlyPriceCents: wire.monthly_price_cents,
+    tokenAllowance: wire.token_allowance,
+    conversationAllowance: wire.conversation_allowance,
+    isDefault: wire.is_default,
+    status: wire.status,
+  };
+}
+
+export interface PlatformSubscriptionRowWire {
+  readonly tenant_id: string;
+  readonly tenant_name: string;
+  readonly plan_id: string;
+  readonly plan_name: string;
+  readonly plan_is_default: boolean;
+  readonly status: string;
+  readonly explicit: boolean;
+}
+
+export interface PlatformSubscriptionRow {
+  readonly tenantId: string;
+  readonly tenantName: string;
+  readonly planId: string;
+  readonly planName: string;
+  readonly planIsDefault: boolean;
+  readonly status: string;
+  readonly explicit: boolean;
+}
+
+export function platformPlansFromWire(wire: BillingPlanWire[]): BillingPlan[] {
+  return wire.map(planFromWire);
+}
+
+export function platformSubscriptionsFromWire(
+  wire: PlatformSubscriptionRowWire[],
+): PlatformSubscriptionRow[] {
+  return wire.map((s) => ({
+    tenantId: s.tenant_id,
+    tenantName: s.tenant_name,
+    planId: s.plan_id,
+    planName: s.plan_name,
+    planIsDefault: s.plan_is_default,
+    status: s.status,
+    explicit: s.explicit,
+  }));
+}
+
+export function billingOverviewFromWire(wire: BillingOverviewWire): BillingOverview {
+  return {
+    plan: planFromWire(wire.plan),
+    subscriptionStatus: wire.subscription_status,
+    period: {
+      start: new Date(wire.period.start),
+      end: new Date(wire.period.end),
+    },
+    usage: {
+      tokens: {
+        used: wire.usage.tokens.used,
+        allowance: wire.usage.tokens.allowance,
+        percent: wire.usage.tokens.percent,
+        state: wire.usage.tokens.state,
+      },
+      conversations: {
+        used: wire.usage.conversations.used,
+        allowance: wire.usage.conversations.allowance,
+        percent: wire.usage.conversations.percent,
+        state: wire.usage.conversations.state,
+      },
+    },
+    aiPaused: wire.ai_paused,
+    aiPausedReason: wire.ai_paused_reason,
   };
 }

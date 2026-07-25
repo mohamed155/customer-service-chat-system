@@ -22,7 +22,10 @@ describe('AppShellComponent', () => {
         provideTaiga(),
         provideZonelessChangeDetection(),
         provideHttpClientTesting(),
-        { provide: NotificationsApiService, useValue: { unreadCount: () => of({ data: { count: 0 } }) } },
+        {
+          provide: NotificationsApiService,
+          useValue: { unreadCount: () => of({ data: { count: 0 } }) },
+        },
         provideMockStore({
           initialState: { appUi: { themeMode: 'system', sidebarCollapsed: true } },
         }),

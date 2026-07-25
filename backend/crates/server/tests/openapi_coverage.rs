@@ -140,7 +140,7 @@ const EXPECTED: &[(&str, &str)] = &[
     ("DELETE", "/tenant/knowledge/categories/{category_id}"),
     // Tool routes
     ("GET", "/api/v1/tenant/conversations/{id}/tool-activity"),
-    ("POST", "/api/v1/tenant/tool-requests/{id}/decide"),
+    ("POST", "/api/v1/tenant/tools/requests/{id}/decide"),
     ("GET", "/api/v1/tenant/tool-requests"),
     ("GET", "/api/v1/tenant/tools"),
     ("PUT", "/api/v1/tenant/tools/builtin/{name}/policy"),
@@ -171,6 +171,13 @@ const EXPECTED: &[(&str, &str)] = &[
     // Audit logs (026)
     ("GET", "/tenant/audit-logs"),
     ("GET", "/platform/audit-logs"),
+    // Billing (031)
+    ("GET", "/tenant/billing/overview"),
+    ("GET", "/platform/billing/plans"),
+    ("POST", "/platform/billing/plans"),
+    ("PATCH", "/platform/billing/plans/{plan_id}"),
+    ("GET", "/platform/billing/subscriptions"),
+    ("PUT", "/platform/billing/tenants/{tenant_id}/subscription"),
     // Notifications (027)
     ("GET", "/tenant/notifications"),
     ("GET", "/tenant/notifications/unread-count"),

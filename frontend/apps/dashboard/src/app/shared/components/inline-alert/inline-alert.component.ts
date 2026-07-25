@@ -22,10 +22,13 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       .info {
         color: var(--app-text-2);
       }
+      .warning {
+        color: var(--app-amber);
+      }
     `,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class InlineAlertComponent {
-  readonly tone = input<'error' | 'info'>('info');
+  readonly tone = input<'error' | 'info' | 'warning'>('info');
 }

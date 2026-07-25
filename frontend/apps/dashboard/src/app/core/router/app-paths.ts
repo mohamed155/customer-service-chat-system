@@ -13,6 +13,7 @@ export const APP_PATHS = {
     tenants: 'tenants',
     newTenant: 'new',
     auditLogs: 'audit',
+    billing: 'manage-billing',
   },
   tenant: {
     base: 'tenant',
@@ -32,6 +33,7 @@ export const APP_PATHS = {
     integrationDetail: 'integrations/:slug',
     analytics: 'analytics',
     auditLogs: 'audit-logs',
+    billing: 'billing',
     settings: 'settings',
     settingsTools: 'settings/tools',
     team: 'team',

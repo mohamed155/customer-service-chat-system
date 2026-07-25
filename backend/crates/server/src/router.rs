@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use storage::{InMemoryStorage, ObjectStorage, S3Storage};
 use tower_http::catch_panic::CatchPanicLayer;
+use billing;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_axum::router::{OpenApiRouter, UtoipaMethodRouterExt};
@@ -328,6 +329,36 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(audit::routes::list_platform_audit_logs)
                 .layer(require_permission(Permission::PlatformAuditView)),
+        )
+        // Platform billing plan catalog — GET+POST share the same path (T043)
+        .routes(
+            routes!(
+                billing::routes::list_plans,
+                billing::routes::create_plan
+            )
+            .map(|_| {
+                merge_with_permissions(
+                    routing::get(billing::routes::list_plans),
+                    Permission::PlatformBillingView,
+                    routing::post(billing::routes::create_plan),
+                    Permission::PlatformBillingManage,
+                )
+            }),
+        )
+        // Platform billing plan update (T043)
+        .routes(
+            routes!(billing::routes::update_plan)
+                .layer(require_permission(Permission::PlatformBillingManage)),
+        )
+        // Platform billing subscriptions (T043)
+        .routes(
+            routes!(billing::routes::list_subscriptions)
+                .layer(require_permission(Permission::PlatformBillingView)),
+        )
+        // Platform billing tenant subscription set (T043)
+        .routes(
+            routes!(billing::routes::put_subscription)
+                .layer(require_permission(Permission::PlatformBillingManage)),
         );
     if include_test_routes {
         // Test routes are closures, not function paths, so they cannot use the
@@ -344,6 +375,11 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
                 "/test/platform/billing/view",
                 routing::get(|| async { StatusCode::OK })
                     .route_layer(require_permission(Permission::PlatformBillingView)),
+            )
+            .route(
+                "/test/platform/billing/manage",
+                routing::get(|| async { StatusCode::OK })
+                    .route_layer(require_permission(Permission::PlatformBillingManage)),
             )
             .route(
                 "/test/platform/diagnostics/view",
@@ -747,6 +783,11 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(audit::routes::list_tenant_audit_logs)
                 .layer(require_permission(Permission::AuditView)),
+        )
+        // Billing overview (spec 031)
+        .routes(
+            routes!(billing::routes::get_billing_overview)
+                .layer(require_permission(Permission::BillingView)),
         )
         // Integrations (spec 028)
         .routes(

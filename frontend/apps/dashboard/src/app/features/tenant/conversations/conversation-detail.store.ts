@@ -383,7 +383,12 @@ export const ConversationDetailStore = signalStore(
         const parsed = tryParseJson(event.data);
         if (!parsed) return;
 
-        const data = parsed as { conversationId?: string; messageId?: string; status?: string; failureReason?: string | null };
+        const data = parsed as {
+          conversationId?: string;
+          messageId?: string;
+          status?: string;
+          failureReason?: string | null;
+        };
         if (!data.conversationId || data.conversationId !== convId || !data.messageId) return;
 
         const pages = store.timelinePages();
@@ -461,7 +466,9 @@ export const ConversationDetailStore = signalStore(
       const msgStatusSub = _realtime
         .events()
         .pipe(
-          filter((e) => e.event === 'conversation.message_status' && store.openConversationId() != null),
+          filter(
+            (e) => e.event === 'conversation.message_status' && store.openConversationId() != null,
+          ),
         )
         .subscribe((e) => store.handleMessageStatusEvent(e));
 

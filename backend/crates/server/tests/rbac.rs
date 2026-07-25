@@ -36,6 +36,9 @@ const TENANT_PERMISSIONS: &[&str] = &[
     "billing.manage",
     "tenant.delete",
     "owner.assign",
+    "audit.view",
+    "widgets.view",
+    "widgets.manage",
 ];
 
 const VIEWER_PERMISSIONS: &[&str] = &[
@@ -44,6 +47,7 @@ const VIEWER_PERMISSIONS: &[&str] = &[
     "customers.view",
     "knowledge_base.view",
     "integrations.view",
+    "widgets.view",
 ];
 
 const TENANT_OPERATIONS: &[(&str, &str)] = &[
@@ -89,12 +93,14 @@ const TENANT_OPERATIONS: &[(&str, &str)] = &[
     ("/api/v1/tenant/analytics/summary", "analytics.view"),
     ("/api/v1/tenant/analytics/timeseries", "analytics.view"),
     ("/api/v1/tenant/audit-logs", "audit.view"),
+    ("/api/v1/tenant/billing/overview", "billing.view"),
 ];
 
 const PLATFORM_OPERATIONS: &[&str] = &[
     "/api/v1/platform/tenants",
     "/api/v1/test/platform/admin",
     "/api/v1/test/platform/billing/view",
+    "/api/v1/test/platform/billing/manage",
     "/api/v1/test/platform/diagnostics/view",
     "/api/v1/platform/ai/config",
     "/api/v1/platform/audit-logs",
@@ -112,6 +118,7 @@ const PLATFORM_OPERATIONS_DENY_BY_DEFAULT: &[(&str, Method)] = &[
     ("__TENANT_DETAIL__", Method::PATCH),
     ("/api/v1/test/platform/admin", Method::GET),
     ("/api/v1/test/platform/billing/view", Method::GET),
+    ("/api/v1/test/platform/billing/manage", Method::GET),
     ("/api/v1/test/platform/diagnostics/view", Method::GET),
 ];
 
@@ -1236,7 +1243,8 @@ async fn me_returns_exact_platform_support_payload_in_production() {
             "platformPermissions": [
                 "platform.tenants.list",
                 "platform.tenants.switch",
-                "platform.tenants.manage"
+                "platform.tenants.manage",
+                "platform.audit.view"
             ],
             "staffTenantPermissions": [
                 "overview.view",
@@ -1244,7 +1252,8 @@ async fn me_returns_exact_platform_support_payload_in_production() {
                 "conversations.manage",
                 "customers.view",
                 "customers.manage",
-                "knowledge_base.view"
+                "knowledge_base.view",
+                "widgets.view"
             ],
             "memberships": []
         })
@@ -1541,6 +1550,7 @@ async fn me_staff_tenant_permissions_follow_environment_for_every_platform_role(
                 "analytics.view",
                 "members.view",
                 "settings.view",
+                "widgets.view",
             ][..],
         ),
         (
@@ -1552,6 +1562,7 @@ async fn me_staff_tenant_permissions_follow_environment_for_every_platform_role(
                 "customers.view",
                 "customers.manage",
                 "knowledge_base.view",
+                "widgets.view",
             ][..],
         ),
         (
