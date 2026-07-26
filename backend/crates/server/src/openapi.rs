@@ -15,7 +15,7 @@
 //! different state type) so they are still listed here.
 
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
-use utoipa::{Modify, OpenApi, openapi};
+use utoipa::{openapi, Modify, OpenApi};
 
 /// Tag vocabulary used to group operations in the interactive UI.
 ///

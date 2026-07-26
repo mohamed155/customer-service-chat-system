@@ -99,29 +99,34 @@ pub async fn get_analytics_summary(
         }
     };
 
-    let channels =
-        match queries::channel_breakdown(&pool, ctx.tenant_id, resolved.from_ts, resolved.to_ts)
-            .await
-        {
-            Ok(rows) => {
-                let total: f64 = rows.iter().map(|(_, count)| *count as f64).sum();
-                rows.into_iter()
-                    .map(|(channel, count)| model::ChannelBreakdownItem {
-                        share: if total == 0.0 {
-                            0.0
-                        } else {
-                            count as f64 / total
-                        },
-                        conversation_count: count,
-                        channel,
-                    })
-                    .collect()
-            }
-            Err(e) => {
-                tracing::error!(%e, "get_analytics_summary: channel_breakdown failed");
-                return ApiError::internal_error("Failed to load summary").into_response();
-            }
-        };
+    let channels = match queries::channel_breakdown(
+        &pool,
+        ctx.tenant_id,
+        resolved.from_ts,
+        resolved.to_ts,
+        resolved.channel.as_deref(),
+    )
+    .await
+    {
+        Ok(rows) => {
+            let total: f64 = rows.iter().map(|(_, count)| *count as f64).sum();
+            rows.into_iter()
+                .map(|(channel, count)| model::ChannelBreakdownItem {
+                    share: if total == 0.0 {
+                        0.0
+                    } else {
+                        count as f64 / total
+                    },
+                    conversation_count: count,
+                    channel,
+                })
+                .collect()
+        }
+        Err(e) => {
+            tracing::error!(%e, "get_analytics_summary: channel_breakdown failed");
+            return ApiError::internal_error("Failed to load summary").into_response();
+        }
+    };
 
     let (total_tokens, unattributed_tokens) = match &resolved.channel {
         Some(channel) => {

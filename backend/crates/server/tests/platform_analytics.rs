@@ -6,9 +6,9 @@ use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
 use config::Environment;
 use http_body_util::BodyExt;
+use serial_test::serial;
 use server::router;
 use server::state::AppState;
-use serial_test::serial;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -186,12 +186,15 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
 }
 
 async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
-    sqlx::query_scalar("INSERT INTO customers (tenant_id, display_name) VALUES ($1, $2) RETURNING id")
-        .bind(tenant_id)
-        .bind("Platform Analytics Customer")
-        .fetch_one(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar(
+        "INSERT INTO customers (tenant_id, display_name) \
+         VALUES ($1, $2) RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind("Platform Analytics Customer")
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 async fn seed_conversation(pool: &sqlx::PgPool, tenant_id: Uuid, customer_id: Uuid, status: &str) {

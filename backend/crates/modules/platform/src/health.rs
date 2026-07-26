@@ -107,6 +107,36 @@ mod tests {
     }
 
     #[test]
+    fn storage_healthy_when_probe_ok() {
+        let backend = StorageBackend {
+            kind: StorageKind::S3,
+            s3_configured: true,
+        };
+        assert_eq!(storage_verdict(backend, Ok(())).0, HealthVerdict::Healthy);
+    }
+
+    #[test]
+    fn storage_unhealthy_when_s3_configured_but_running_in_memory() {
+        let backend = StorageBackend {
+            kind: StorageKind::InMemory,
+            s3_configured: true,
+        };
+        assert_eq!(storage_verdict(backend, Ok(())).0, HealthVerdict::Unhealthy);
+    }
+
+    #[test]
+    fn storage_unhealthy_on_probe_error() {
+        let backend = StorageBackend {
+            kind: StorageKind::S3,
+            s3_configured: true,
+        };
+        assert_eq!(
+            storage_verdict(backend, Err("boom".into())).0,
+            HealthVerdict::Unhealthy
+        );
+    }
+
+    #[test]
     fn provider_no_activity() {
         assert_eq!(provider_verdict(0, 0), ProviderVerdict::NoActivity);
     }

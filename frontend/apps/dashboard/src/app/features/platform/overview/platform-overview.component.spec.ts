@@ -57,7 +57,12 @@ describe('PlatformOverviewComponent', () => {
       setRange: vi.fn(),
     };
 
-    permissions.has.mockReturnValue(overrides?.hasDiagnostics ?? false);
+    permissions.has.mockImplementation((perm: string) => {
+      if (perm === 'platform.diagnostics.view') {
+        return overrides?.hasDiagnostics ?? false;
+      }
+      return false;
+    });
 
     TestBed.configureTestingModule({
       imports: [PlatformOverviewComponent],
@@ -96,7 +101,7 @@ describe('PlatformOverviewComponent', () => {
 
   it('hides System Health link when permission is denied', async () => {
     await setup({ hasDiagnostics: false });
-    expect(fixture.nativeElement.textContent).not.toContain('System health');
+    expect(fixture.nativeElement.textContent).not.toContain('System Health');
   });
 
   it('shows System Health link when permission is granted', async () => {

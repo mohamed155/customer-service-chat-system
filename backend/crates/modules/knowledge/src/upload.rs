@@ -1,4 +1,4 @@
-use crate::validate::{ItemStatus, MAX_DOCUMENT_BYTES, ValidationIssue, sanitize_filename};
+use crate::validate::{sanitize_filename, ItemStatus, ValidationIssue, MAX_DOCUMENT_BYTES};
 use axum::extract::Multipart;
 use std::future::Future;
 use std::path::Path;
@@ -284,8 +284,8 @@ mod tests {
     use axum::body::Body;
     use axum::extract::FromRequest;
     use axum::http::Request;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
     use storage::InMemoryStorage;
 
     #[allow(clippy::type_complexity)]

@@ -177,22 +177,27 @@ pub async fn channel_breakdown(
     tenant_id: Uuid,
     from_ts: DateTime<Utc>,
     to_ts: DateTime<Utc>,
+    channel: Option<&str>,
 ) -> sqlx::Result<Vec<(String, i64)>> {
-    sqlx::query_as::<_, (String, i64)>(
-        r#"
-        SELECT c.channel, COUNT(*)::bigint
-        FROM conversations c
-        WHERE c.tenant_id = $1 AND c.deleted_at IS NULL
-          AND c.created_at >= $2 AND c.created_at < $3
-        GROUP BY c.channel
-        ORDER BY COUNT(*) DESC, c.channel ASC
-        "#,
-    )
-    .bind(tenant_id)
-    .bind(from_ts)
-    .bind(to_ts)
-    .fetch_all(pool)
-    .await
+    let mut sql = String::from(
+        "SELECT c.channel, COUNT(*)::bigint \
+         FROM conversations c \
+         WHERE c.tenant_id = $1 AND c.deleted_at IS NULL \
+           AND c.created_at >= $2 AND c.created_at < $3",
+    );
+    if channel.is_some() {
+        sql.push_str(" AND c.channel = $4");
+    }
+    sql.push_str(" GROUP BY c.channel ORDER BY COUNT(*) DESC, c.channel ASC");
+
+    let mut q = sqlx::query_as::<_, (String, i64)>(&sql)
+        .bind(tenant_id)
+        .bind(from_ts)
+        .bind(to_ts);
+    if let Some(ch) = channel {
+        q = q.bind(ch);
+    }
+    q.fetch_all(pool).await
 }
 
 pub async fn token_totals_for_channel(

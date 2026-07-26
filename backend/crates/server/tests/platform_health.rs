@@ -6,6 +6,7 @@ use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
 use config::Environment;
 use http_body_util::BodyExt;
+use serial_test::serial;
 use server::router;
 use server::state::AppState;
 use tower::ServiceExt;
@@ -153,6 +154,10 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
     .unwrap();
 }
 
+async fn setup(pool: &sqlx::PgPool) {
+    db::run_migrations(pool).await.unwrap();
+}
+
 async fn seed_outbox_event(pool: &sqlx::PgPool, created_at_minutes_ago: i64, attempts: i32) {
     let created = chrono::Utc::now() - chrono::Duration::minutes(created_at_minutes_ago);
     sqlx::query("INSERT INTO outbox_events (id, event_type, aggregate_type, aggregate_id, payload, created_at, attempts) VALUES ($1, 'test.event', 'test', '00000000-0000-0000-0000-000000000000', '{}', $2, $3)")
@@ -165,9 +170,10 @@ async fn seed_outbox_event(pool: &sqlx::PgPool, created_at_minutes_ago: i64, att
 }
 
 #[tokio::test]
+#[serial(platform_health)]
 async fn platform_health_empty_queue_reachable_deps() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    setup(&pool).await;
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
@@ -183,9 +189,10 @@ async fn platform_health_empty_queue_reachable_deps() {
 }
 
 #[tokio::test]
+#[serial(platform_health)]
 async fn platform_health_queue_degraded_at_150_pending_12m_old() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    setup(&pool).await;
 
     for _ in 0..150 {
         seed_outbox_event(&pool, 12, 0).await;
@@ -207,9 +214,10 @@ async fn platform_health_queue_degraded_at_150_pending_12m_old() {
 }
 
 #[tokio::test]
+#[serial(platform_health)]
 async fn platform_health_queue_unhealthy_at_1000_pending() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    setup(&pool).await;
 
     for _ in 0..1000 {
         seed_outbox_event(&pool, 5, 0).await;
@@ -230,9 +238,10 @@ async fn platform_health_queue_unhealthy_at_1000_pending() {
 }
 
 #[tokio::test]
+#[serial(platform_health)]
 async fn platform_health_queue_degraded_with_stuck_retries() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    setup(&pool).await;
 
     seed_outbox_event(&pool, 1, 6).await;
 
@@ -251,9 +260,10 @@ async fn platform_health_queue_degraded_with_stuck_retries() {
 }
 
 #[tokio::test]
+#[serial(platform_health)]
 async fn platform_health_analytics_view_user_gets_403() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    setup(&pool).await;
     let user_id = seed_user(&pool, Some("sales")).await;
     let response = send(
         pool,
@@ -264,9 +274,10 @@ async fn platform_health_analytics_view_user_gets_403() {
 }
 
 #[tokio::test]
+#[serial(platform_health)]
 async fn platform_health_tenant_user_gets_403() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    setup(&pool).await;
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
     seed_membership(&pool, tenant_id, user_id).await;
@@ -279,9 +290,10 @@ async fn platform_health_tenant_user_gets_403() {
 }
 
 #[tokio::test]
+#[serial(platform_health)]
 async fn platform_health_response_has_no_sensitive_content() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    setup(&pool).await;
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(

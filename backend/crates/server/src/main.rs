@@ -23,7 +23,6 @@ use server::router;
 use server::state::AppState;
 use std::sync::Arc;
 use std::time::Duration;
-use storage::ObjectStorage;
 use tokio::net::TcpListener;
 
 use whatsapp;
@@ -79,10 +78,10 @@ async fn main() {
         ai: ai_service,
     };
 
-    let email_sender = router::configured_email_sender(&state.config);
-    let app = router::app_with_email_sender(state.clone(), email_sender.clone());
-
     let (storage, _storage_backend) = storage::select_storage(state.config.s3.as_ref()).await;
+    let email_sender = router::configured_email_sender(&state.config);
+    let app =
+        router::app_with_email_sender(state.clone(), email_sender.clone(), Some(storage.clone()));
 
     let delivery_worker = tokio::spawn(tenancy::invitations::run_invitation_delivery_worker(
         state.db.clone(),

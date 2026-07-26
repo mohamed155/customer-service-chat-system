@@ -6,11 +6,11 @@ use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
 use config::Environment;
 use http_body_util::BodyExt;
+use serial_test::serial;
 use server::router;
 use server::state::AppState;
 use tower::ServiceExt;
 use uuid::Uuid;
-use serial_test::serial;
 
 const TEST_ENV: config::Environment = config::Environment::Test;
 
@@ -113,12 +113,14 @@ fn authenticated_request(uri: &str, method: Method, user_id: Uuid) -> Request<Bo
 }
 
 async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
-    sqlx::query_scalar("INSERT INTO tenants (name, slug, status) VALUES ($1, $2, 'active') RETURNING id")
-        .bind("AI Providers Tenant")
-        .bind(format!("aip-{}", Uuid::new_v4().simple()))
-        .fetch_one(pool)
-        .await
-        .unwrap()
+    sqlx::query_scalar(
+        "INSERT INTO tenants (name, slug, status) VALUES ($1, $2, 'active') RETURNING id",
+    )
+    .bind("AI Providers Tenant")
+    .bind(format!("aip-{}", Uuid::new_v4().simple()))
+    .fetch_one(pool)
+    .await
+    .unwrap()
 }
 
 async fn seed_user(pool: &sqlx::PgPool, platform_role: Option<&str>) -> Uuid {
@@ -135,7 +137,10 @@ async fn seed_user(pool: &sqlx::PgPool, platform_role: Option<&str>) -> Uuid {
 
 async fn setup(pool: &sqlx::PgPool) {
     db::run_migrations(pool).await.unwrap();
-    sqlx::query("DELETE FROM escalations").execute(pool).await.unwrap();
+    sqlx::query("DELETE FROM escalations")
+        .execute(pool)
+        .await
+        .unwrap();
     sqlx::query(
         "TRUNCATE TABLE conversation_feedback, ai_generations, \
          ai_usage_records, agent_configurations, messages, \
@@ -180,16 +185,7 @@ async fn platform_ai_providers_failure_rate_and_verdict() {
     let tenant_id = seed_tenant(&pool).await;
 
     for _ in 0..75 {
-        seed_ai_call(
-            &pool,
-            tenant_id,
-            "openai",
-            "success",
-            None,
-            100,
-            120,
-        )
-        .await;
+        seed_ai_call(&pool, tenant_id, "openai", "success", None, 100, 120).await;
     }
     for _ in 0..25 {
         seed_ai_call(
@@ -236,16 +232,7 @@ async fn platform_ai_providers_degraded_verdict() {
     let tenant_id = seed_tenant(&pool).await;
 
     for _ in 0..96 {
-        seed_ai_call(
-            &pool,
-            tenant_id,
-            "openai",
-            "success",
-            None,
-            100,
-            120,
-        )
-        .await;
+        seed_ai_call(&pool, tenant_id, "openai", "success", None, 100, 120).await;
     }
     for _ in 0..4 {
         seed_ai_call(
@@ -297,29 +284,11 @@ async fn platform_ai_providers_categories_sum_to_failures() {
         ("invalid_request", 0),
     ];
     for _ in 0..90 {
-        seed_ai_call(
-            &pool,
-            tenant_id,
-            "openai",
-            "success",
-            None,
-            100,
-            120,
-        )
-        .await;
+        seed_ai_call(&pool, tenant_id, "openai", "success", None, 100, 120).await;
     }
     for (cat, n) in &categories {
         for _ in 0..*n {
-            seed_ai_call(
-                &pool,
-                tenant_id,
-                "openai",
-                "failure",
-                Some(cat),
-                200,
-                60,
-            )
-            .await;
+            seed_ai_call(&pool, tenant_id, "openai", "failure", Some(cat), 200, 60).await;
         }
     }
 
@@ -359,16 +328,7 @@ async fn platform_ai_providers_insufficient_data_and_no_activity() {
 
     // 3 calls for anthropic -> insufficient_data
     for _ in 0..3 {
-        seed_ai_call(
-            &pool,
-            tenant_id,
-            "anthropic",
-            "success",
-            None,
-            100,
-            120,
-        )
-        .await;
+        seed_ai_call(&pool, tenant_id, "anthropic", "success", None, 100, 120).await;
     }
     // 0 calls for gemini -> no_activity
 
@@ -411,7 +371,16 @@ async fn platform_ai_providers_recent_failures_capped_at_50() {
     let tenant_id = seed_tenant(&pool).await;
 
     for i in 0..60 {
-        seed_ai_call(&pool, tenant_id, "openai", "failure", Some("rate_limited"), 100, i + 1).await;
+        seed_ai_call(
+            &pool,
+            tenant_id,
+            "openai",
+            "failure",
+            Some("rate_limited"),
+            100,
+            i + 1,
+        )
+        .await;
     }
 
     let user_id = seed_user(&pool, Some("super_admin")).await;

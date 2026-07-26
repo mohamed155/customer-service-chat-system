@@ -920,7 +920,8 @@ async fn summary_respects_channel_filter() {
     assert_eq!(body["total_tokens"], 150);
     assert_eq!(body["unattributed_tokens"], 0);
     let channels = body["channels"].as_array().unwrap();
-    assert_eq!(channels.len(), 2);
+    assert_eq!(channels.len(), 1);
+    assert_eq!(channels[0]["channel"], "widget");
 
     let response = send(
         pool.clone(),
@@ -935,7 +936,8 @@ async fn summary_respects_channel_filter() {
     assert_eq!(body["conversation_volume"], 1);
     assert_eq!(body["total_tokens"], 200);
     let channels = body["channels"].as_array().unwrap();
-    assert_eq!(channels.len(), 2);
+    assert_eq!(channels.len(), 1);
+    assert_eq!(channels[0]["channel"], "email");
 }
 
 #[tokio::test]

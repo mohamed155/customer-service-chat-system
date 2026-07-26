@@ -4,11 +4,11 @@ use std::time::Duration;
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
-use axum::{Extension, Router, routing::get};
+use axum::{routing::get, Extension, Router};
 use config::Environment;
 use http_body_util::BodyExt;
 use rand::RngCore;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use server::router;
 use server::state::AppState;
 use sha2::Digest;
@@ -1147,12 +1147,10 @@ async fn permission_denial_writes_audit_reason_without_exposing_permission() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert!(
-        !body_json(response)
-            .await
-            .to_string()
-            .contains("settings.manage")
-    );
+    assert!(!body_json(response)
+        .await
+        .to_string()
+        .contains("settings.manage"));
 
     // Give the async audit write a moment to flush.
     tokio::time::sleep(Duration::from_millis(200)).await;

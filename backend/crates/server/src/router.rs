@@ -1,18 +1,18 @@
-use authz::{Permission, platform_permission_middleware, require_permission};
-use axum::Extension;
+use authz::{platform_permission_middleware, require_permission, Permission};
 use axum::extract::{DefaultBodyLimit, Request};
-use axum::http::{HeaderName, Method, StatusCode, header, header::SET_COOKIE};
+use axum::http::{header, header::SET_COOKIE, HeaderName, Method, StatusCode};
 use axum::middleware::from_fn_with_state;
 use axum::response::{IntoResponse, Response};
 use axum::routing::MethodRouter;
-use axum::{Router, middleware, routing};
+use axum::Extension;
+use axum::{middleware, routing, Router};
 use billing;
 use config::{AppConfig, Environment};
-use email::{EmailSender, noop::LogEmailSender, smtp::SmtpEmailSender};
-use identity::{IdentityConfig, Principal, principal_middleware};
+use email::{noop::LogEmailSender, smtp::SmtpEmailSender, EmailSender};
+use identity::{principal_middleware, IdentityConfig, Principal};
 use kernel::ApiError;
 use observability::health::HealthReport;
-use observability::request_id::{REQUEST_ID_HEADER, request_id_middleware};
+use observability::request_id::{request_id_middleware, REQUEST_ID_HEADER};
 use observability::trace::trace_middleware;
 use observability::{liveness, metrics};
 use std::sync::Arc;
@@ -1204,8 +1204,12 @@ pub fn app(state: AppState) -> Router {
     build_app(state, false, None, None)
 }
 
-pub fn app_with_email_sender(state: AppState, email_sender: Arc<dyn EmailSender>) -> Router {
-    build_app(state, false, Some(email_sender), None)
+pub fn app_with_email_sender(
+    state: AppState,
+    email_sender: Arc<dyn EmailSender>,
+    storage: Option<Arc<dyn ObjectStorage>>,
+) -> Router {
+    build_app(state, false, Some(email_sender), storage)
 }
 
 pub fn app_with_test_routes(state: AppState) -> Router {
@@ -1232,7 +1236,7 @@ pub fn app_with_test_routes_and_storage(
 
 #[cfg(test)]
 mod tests {
-    use super::{OpenApiRouter, docs_surface_enabled, platform_routes};
+    use super::{docs_surface_enabled, platform_routes, OpenApiRouter};
     use config::{AppConfig, Environment, LogFormat};
     use sqlx::PgPool;
 

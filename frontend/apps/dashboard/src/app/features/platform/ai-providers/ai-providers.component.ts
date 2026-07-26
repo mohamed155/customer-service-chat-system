@@ -1,5 +1,5 @@
 import { DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HealthIndicatorComponent } from '../../../shared/components/health-indicator/health-indicator.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
@@ -14,6 +14,7 @@ import {
 } from '../../../shared/components/select-filter/select-filter.component';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
+import { ProviderStatus } from '../../../core/api/platform-analytics.models';
 import { AiProvidersStore } from './ai-providers.store';
 
 @Component({
@@ -192,7 +193,7 @@ import { AiProvidersStore } from './ai-providers.store';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AiProvidersComponent {
+export class AiProvidersComponent implements OnInit {
   protected readonly store = inject(AiProvidersStore);
   protected readonly windowOptions: SelectFilterOption[] = [
     { value: '1h', label: 'Last hour' },
@@ -200,13 +201,17 @@ export class AiProvidersComponent {
     { value: '7d', label: 'Last 7 days' },
   ];
 
+  ngOnInit(): void {
+    this.store.load(this.store.window());
+  }
+
   protected onWindowChange(value: string): void {
     if (value === '1h' || value === '24h' || value === '7d') {
       this.store.setWindow(value);
     }
   }
 
-  protected healthVerdict(v: string): 'healthy' | 'degraded' | 'unhealthy' {
+  protected healthVerdict(v: ProviderStatus['providers'][number]['verdict']): 'healthy' | 'degraded' | 'unhealthy' {
     return v === 'degraded' || v === 'unhealthy' ? v : 'healthy';
   }
 }

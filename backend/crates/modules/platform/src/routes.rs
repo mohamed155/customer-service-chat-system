@@ -1,17 +1,18 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use axum::Extension;
-use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use axum::Extension;
+use axum::Json;
 use chrono::Utc;
+use futures::future::join_all;
 use kernel::ApiError;
 use observability::health::HealthCheck;
 use sqlx::PgPool;
 use storage::{ObjectStorage, StorageBackend};
-use tokio::time::{Duration, timeout};
+use tokio::time::{timeout, Duration};
 use tracing;
 
 use crate::health;
@@ -109,32 +110,52 @@ pub async fn get_platform_health(
     Extension(backend): Extension<StorageBackend>,
 ) -> Response {
     let read_at = Utc::now();
-    let mut deps = Vec::new();
 
-    for check in &checks {
+    // Run all checks concurrently
+    let check_futures: Vec<_> = checks
+        .iter()
+        .map(|check| {
+            let name = check.name().to_string();
+            async move {
+                let start = Instant::now();
+                let result = timeout(Duration::from_secs(5), check.check()).await;
+                let elapsed_ms = start.elapsed().as_millis() as u64;
+                let (verdict, reason) = match result {
+                    Ok(Ok(())) => (model::HealthVerdict::Healthy, None),
+                    Ok(Err(e)) => (model::HealthVerdict::Unhealthy, Some(e)),
+                    Err(_) => (model::HealthVerdict::Unhealthy, Some("timed out".into())),
+                };
+                model::DependencyHealthDto {
+                    name,
+                    verdict,
+                    reason,
+                    probe_ms: elapsed_ms,
+                    detail: None,
+                }
+            }
+        })
+        .collect();
+    let check_results = join_all(check_futures).await;
+
+    // Queue and storage probes run concurrently
+    let queue_fut = {
+        let pool = pool.clone();
+        async move {
+            let start = Instant::now();
+            let result = timeout(Duration::from_secs(5), queries::queue_health(&pool)).await;
+            let probe_ms = start.elapsed().as_millis() as u64;
+            (result, probe_ms)
+        }
+    };
+    let storage_fut = async {
         let start = Instant::now();
-        let result = timeout(Duration::from_secs(5), check.check()).await;
-        let elapsed_ms = start.elapsed().as_millis() as u64;
+        let result = timeout(Duration::from_secs(5), storage.probe()).await;
+        let probe_ms = start.elapsed().as_millis() as u64;
+        (result, probe_ms)
+    };
+    let ((queue_result, queue_ms), (probe_result, probe_ms)) = tokio::join!(queue_fut, storage_fut);
 
-        let (verdict, reason) = match result {
-            Ok(Ok(())) => (model::HealthVerdict::Healthy, None),
-            Ok(Err(e)) => (model::HealthVerdict::Unhealthy, Some(e)),
-            Err(_) => (model::HealthVerdict::Unhealthy, Some("timed out".into())),
-        };
-
-        deps.push(model::DependencyHealthDto {
-            name: check.name().to_string(),
-            verdict,
-            reason,
-            probe_ms: elapsed_ms,
-            detail: None,
-        });
-    }
-
-    // Queue health
-    let start = Instant::now();
-    let queue_result = timeout(Duration::from_secs(5), queries::queue_health(&pool)).await;
-    let probe_ms = start.elapsed().as_millis() as u64;
+    let mut deps: Vec<model::DependencyHealthDto> = check_results;
 
     match queue_result {
         Ok(Ok(row)) => {
@@ -145,7 +166,7 @@ pub async fn get_platform_health(
                 name: "queue".into(),
                 verdict: qv,
                 reason: qr,
-                probe_ms,
+                probe_ms: queue_ms,
                 detail: Some(model::DependencyDetail::Queue {
                     pending_count: queue_pending,
                     oldest_pending_age_seconds: oldest_age,
@@ -159,7 +180,7 @@ pub async fn get_platform_health(
                 name: "queue".into(),
                 verdict: model::HealthVerdict::Unhealthy,
                 reason: Some(e.to_string()),
-                probe_ms,
+                probe_ms: queue_ms,
                 detail: Some(model::DependencyDetail::Queue {
                     pending_count: 0,
                     oldest_pending_age_seconds: None,
@@ -172,7 +193,7 @@ pub async fn get_platform_health(
                 name: "queue".into(),
                 verdict: model::HealthVerdict::Unhealthy,
                 reason: Some("timed out".into()),
-                probe_ms,
+                probe_ms: queue_ms,
                 detail: Some(model::DependencyDetail::Queue {
                     pending_count: 0,
                     oldest_pending_age_seconds: None,
@@ -181,11 +202,6 @@ pub async fn get_platform_health(
             });
         }
     }
-
-    // Storage health
-    let start = Instant::now();
-    let probe_result = timeout(Duration::from_secs(5), storage.probe()).await;
-    let probe_ms = start.elapsed().as_millis() as u64;
 
     let probe_ok = match probe_result {
         Ok(Ok(())) => Ok(()),
@@ -252,44 +268,43 @@ pub async fn get_platform_ai_provider_status(
 
     let mut metrics_map: std::collections::HashMap<String, _> = std::collections::HashMap::new();
     for row in metrics_rows {
-        metrics_map.insert(row.0.clone(), row);
+        metrics_map.insert(row.provider.clone(), row);
     }
 
     let providers: Vec<model::ProviderMetricsDto> = model::PROVIDERS
         .iter()
         .map(|name| {
             if let Some(row) = metrics_map.get(*name) {
-                let total = row.1;
-                let successes = row.2;
-                let failures = row.3;
-                let input_tokens = row.4;
-                let output_tokens = row.5;
-                let p50 = row.6;
-                let p95 = row.7;
+                let total = row.total;
+                let failures = row.failures;
 
                 let (failure_rate, p50_latency_ms, p95_latency_ms) = if total == 0 {
                     (None, None, None)
                 } else {
-                    (Some(failures as f64 / total as f64), p50, p95)
+                    (
+                        Some(failures as f64 / total as f64),
+                        row.p50_latency_ms,
+                        row.p95_latency_ms,
+                    )
                 };
 
                 model::ProviderMetricsDto {
                     provider: name.to_string(),
                     verdict: health::provider_verdict(total, failures),
                     total_calls: total,
-                    successes,
+                    successes: row.successes,
                     failures,
                     failure_rate,
                     p50_latency_ms,
                     p95_latency_ms,
-                    input_tokens,
-                    output_tokens,
+                    input_tokens: row.input_tokens,
+                    output_tokens: row.output_tokens,
                     failures_by_category: model::FailuresByCategoryDto {
-                        authentication: row.8,
-                        rate_limited: row.9,
-                        unavailable: row.10,
-                        timeout: row.11,
-                        invalid_request: row.12,
+                        authentication: row.authentication,
+                        rate_limited: row.rate_limited,
+                        unavailable: row.unavailable,
+                        timeout: row.timeout,
+                        invalid_request: row.invalid_request,
                     },
                 }
             } else {

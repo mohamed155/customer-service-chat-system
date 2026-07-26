@@ -58,27 +58,28 @@ pub async fn queue_health(pool: &PgPool) -> sqlx::Result<(i64, Option<DateTime<U
     .await
 }
 
+#[derive(Debug, sqlx::FromRow)]
+pub struct ProviderMetricsRow {
+    pub provider: String,
+    pub total: i64,
+    pub successes: i64,
+    pub failures: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub p50_latency_ms: Option<i64>,
+    pub p95_latency_ms: Option<i64>,
+    pub authentication: i64,
+    pub rate_limited: i64,
+    pub unavailable: i64,
+    pub timeout: i64,
+    pub invalid_request: i64,
+}
+
 pub async fn provider_metrics(
     pool: &PgPool,
     from_ts: DateTime<Utc>,
     to_ts: DateTime<Utc>,
-) -> sqlx::Result<
-    Vec<(
-        String,
-        i64,
-        i64,
-        i64,
-        i64,
-        i64,
-        Option<i64>,
-        Option<i64>,
-        i64,
-        i64,
-        i64,
-        i64,
-        i64,
-    )>,
-> {
+) -> sqlx::Result<Vec<ProviderMetricsRow>> {
     sqlx::query_as(
         "SELECT provider,
                 COUNT(*)::bigint,

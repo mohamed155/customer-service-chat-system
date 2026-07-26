@@ -123,8 +123,8 @@ pub async fn emit_whatsapp_outbound_in_tx(
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(json!({
-        "conversation_id": conversation_id,
-        "message_id": message_id,
+        "conversationId": conversation_id,
+        "messageId": message_id,
     }))
     .execute(&mut **tx)
     .await?;

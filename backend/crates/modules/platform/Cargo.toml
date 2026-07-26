@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 axum.workspace = true
 chrono = { workspace = true, features = ["serde"] }
+futures.workspace = true
 kernel = { path = "../../shared/kernel" }
 observability = { path = "../../shared/observability" }
 serde.workspace = true

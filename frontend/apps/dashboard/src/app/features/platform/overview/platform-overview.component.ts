@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TuiTextfield } from '@taiga-ui/core';
@@ -168,6 +168,16 @@ export class PlatformOverviewComponent {
   protected readonly toValue = signal('');
 
   protected readonly canViewDiagnostics = () => this.permissions.has('platform.diagnostics.view');
+
+  constructor() {
+    effect(() => {
+      const summary = this.store.summary();
+      if (summary && !this.fromValue()) {
+        this.fromValue.set(summary.range.from);
+        this.toValue.set(summary.range.to);
+      }
+    });
+  }
 
   protected isZeroState(summary: NonNullable<ReturnType<typeof this.store.summary>>): boolean {
     return (
