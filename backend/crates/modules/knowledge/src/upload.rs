@@ -519,6 +519,10 @@ mod tests {
             async fn delete(&self, _key: &str) -> Result<(), StorageError> {
                 unreachable!()
             }
+
+            async fn probe(&self) -> Result<(), StorageError> {
+                Err(StorageError::Other("probe failed".into()))
+            }
         }
 
         let storage = FailingStorage;

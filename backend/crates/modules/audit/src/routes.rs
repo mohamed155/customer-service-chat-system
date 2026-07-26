@@ -17,22 +17,24 @@ pub(crate) struct ResolvedAuditQuery {
     pub limit: i64,
 }
 
-pub(crate) fn parse_audit_query(
-    query: &model::AuditQuery,
-) -> Result<ResolvedAuditQuery, Response> {
+pub(crate) fn parse_audit_query(query: &model::AuditQuery) -> Result<ResolvedAuditQuery, Response> {
     let limit = query.limit.unwrap_or(50).clamp(1, 100);
     let from_ts = match query.from.as_deref() {
         Some(s) => {
-            let d = NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                .map_err(|_| ApiError::unprocessable_entity("Invalid 'from' date, expected YYYY-MM-DD").into_response())?;
+            let d = NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| {
+                ApiError::unprocessable_entity("Invalid 'from' date, expected YYYY-MM-DD")
+                    .into_response()
+            })?;
             Some(d.and_hms_opt(0, 0, 0).unwrap().and_utc())
         }
         None => None,
     };
     let to_ts = match query.to.as_deref() {
         Some(s) => {
-            let d = NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                .map_err(|_| ApiError::unprocessable_entity("Invalid 'to' date, expected YYYY-MM-DD").into_response())?;
+            let d = NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| {
+                ApiError::unprocessable_entity("Invalid 'to' date, expected YYYY-MM-DD")
+                    .into_response()
+            })?;
             Some(d.and_hms_opt(23, 59, 59).unwrap().and_utc())
         }
         None => None,
@@ -101,7 +103,9 @@ fn build_response(rows: &[queries::AuditRow], limit: i64) -> model::AuditListRes
     };
     let entries: Vec<model::AuditEntryDto> = rows.iter().map(row_to_dto).collect();
     let next_cursor = has_more.then(|| {
-        let last = rows.last().expect("rows must be non-empty when has_more is true");
+        let last = rows
+            .last()
+            .expect("rows must be non-empty when has_more is true");
         queries::encode_cursor(last.created_at, last.id)
     });
     model::AuditListResponse {

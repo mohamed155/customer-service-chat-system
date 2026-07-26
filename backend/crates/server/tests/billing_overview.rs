@@ -36,9 +36,7 @@ fn test_config() -> config::AppConfig {
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
         docs_enabled: false,
-        ai_key_encryption_key: Some(
-            "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into(),
-        ),
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         integration_secrets_key: None,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
@@ -53,10 +51,7 @@ fn app_state(pool: sqlx::PgPool) -> AppState {
         db: pool.clone(),
         cache: Arc::new(cache::Cache::new("redis://127.0.0.1:6379").unwrap()),
         health_checks: vec![],
-        escalations: escalations::presence::Runtime::new(
-            pool.clone(),
-            Duration::from_secs(45),
-        ),
+        escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
         ai: ai::AiService::from_config(pool, &test_config()).unwrap(),
     }
 }
@@ -97,26 +92,19 @@ async fn send(pool: sqlx::PgPool, request: Request<Body>) -> Response {
 }
 
 async fn body_json(response: Response) -> serde_json::Value {
-    let bytes = response
-        .into_body()
-        .collect()
-        .await
-        .unwrap()
-        .to_bytes();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
     serde_json::from_slice(&bytes).unwrap()
 }
 
 // ── Seed helpers ────────────────────────────────────────────────────────────
 
 async fn seed_tenant(pool: &sqlx::PgPool, name: &str) -> Uuid {
-    sqlx::query_scalar(
-        "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
-    )
-    .bind(name)
-    .bind(format!("bill-{}", Uuid::new_v4().simple()))
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+        .bind(name)
+        .bind(format!("bill-{}", Uuid::new_v4().simple()))
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, display_name: &str) -> Uuid {
@@ -131,22 +119,15 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, display_name: &str)
 }
 
 async fn seed_user(pool: &sqlx::PgPool, email: &str) -> Uuid {
-    sqlx::query_scalar(
-        "INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id",
-    )
-    .bind(email)
-    .bind("Billing Test User")
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    sqlx::query_scalar("INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id")
+        .bind(email)
+        .bind("Billing Test User")
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
-async fn seed_member(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    email: &str,
-    role: &str,
-) -> Uuid {
+async fn seed_member(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str, role: &str) -> Uuid {
     let user_id = seed_user(pool, email).await;
     sqlx::query(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role, status) \
@@ -161,11 +142,7 @@ async fn seed_member(
     user_id
 }
 
-fn authenticated_request(
-    uri: &str,
-    user_id: Uuid,
-    tenant_id: Uuid,
-) -> Request<Body> {
+fn authenticated_request(uri: &str, user_id: Uuid, tenant_id: Uuid) -> Request<Body> {
     Request::builder()
         .uri(uri)
         .method(Method::GET)
@@ -176,14 +153,12 @@ fn authenticated_request(
 }
 
 async fn subscribe(pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid) {
-    sqlx::query(
-        "INSERT INTO tenant_subscriptions (tenant_id, plan_id) VALUES ($1, $2)",
-    )
-    .bind(tenant_id)
-    .bind(plan_id)
-    .execute(pool)
-    .await
-    .unwrap();
+    sqlx::query("INSERT INTO tenant_subscriptions (tenant_id, plan_id) VALUES ($1, $2)")
+        .bind(tenant_id)
+        .bind(plan_id)
+        .execute(pool)
+        .await
+        .unwrap();
 }
 
 async fn free_plan_id(pool: &sqlx::PgPool) -> Uuid {
@@ -333,7 +308,10 @@ async fn billing_overview_token_allowance_null() {
     let response = send(pool.clone(), authenticated_request(URI, user, tenant)).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
-    assert_eq!(body["usage"]["tokens"]["allowance"], serde_json::Value::Null);
+    assert_eq!(
+        body["usage"]["tokens"]["allowance"],
+        serde_json::Value::Null
+    );
     assert_eq!(body["usage"]["tokens"]["percent"], serde_json::Value::Null);
     assert_eq!(body["usage"]["tokens"]["state"], "normal");
 }
@@ -412,26 +390,16 @@ async fn billing_overview_tenant_isolation() {
     .await
     .unwrap();
 
-    let user_a =
-        seed_member(&pool, tenant_a, "admin@bill-t009-a.test", "admin").await;
-    let user_b =
-        seed_member(&pool, tenant_b, "admin@bill-t009-b.test", "admin").await;
+    let user_a = seed_member(&pool, tenant_a, "admin@bill-t009-a.test", "admin").await;
+    let user_b = seed_member(&pool, tenant_b, "admin@bill-t009-b.test", "admin").await;
 
-    let response_a = send(
-        pool.clone(),
-        authenticated_request(URI, user_a, tenant_a),
-    )
-    .await;
+    let response_a = send(pool.clone(), authenticated_request(URI, user_a, tenant_a)).await;
     assert_eq!(response_a.status(), StatusCode::OK);
     let body_a = body_json(response_a).await;
     assert_eq!(body_a["usage"]["conversations"]["used"], 5);
     assert_eq!(body_a["usage"]["tokens"]["used"], 150);
 
-    let response_b = send(
-        pool.clone(),
-        authenticated_request(URI, user_b, tenant_b),
-    )
-    .await;
+    let response_b = send(pool.clone(), authenticated_request(URI, user_b, tenant_b)).await;
     assert_eq!(response_b.status(), StatusCode::OK);
     let body_b = body_json(response_b).await;
     assert_eq!(body_b["usage"]["conversations"]["used"], 2);

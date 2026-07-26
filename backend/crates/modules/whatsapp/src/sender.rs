@@ -48,12 +48,14 @@ async fn claim_outbound_event(pool: &PgPool) -> sqlx::Result<Option<OutboundEven
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|(id, tenant_id, conversation_id, message_id)| OutboundEvent {
-        id,
-        tenant_id,
-        conversation_id,
-        message_id,
-    }))
+    Ok(row.map(
+        |(id, tenant_id, conversation_id, message_id)| OutboundEvent {
+            id,
+            tenant_id,
+            conversation_id,
+            message_id,
+        },
+    ))
 }
 
 pub async fn process_one(
@@ -103,21 +105,30 @@ pub async fn process_one(
     .await?;
 
     if !meta_exists {
-        queries::insert_outbound_meta_in_tx(&mut tx, event.tenant_id, event.message_id, event.conversation_id)
-            .await?;
+        queries::insert_outbound_meta_in_tx(
+            &mut tx,
+            event.tenant_id,
+            event.message_id,
+            event.conversation_id,
+        )
+        .await?;
     }
     tx.commit().await?;
 
     // 4. Re-check window
     let last_customer = conversations::queries::last_customer_message_at(
-        pool, event.tenant_id, event.conversation_id,
+        pool,
+        event.tenant_id,
+        event.conversation_id,
     )
     .await?;
 
     if !window::window_open(last_customer, chrono::Utc::now()) {
         let mut tx = pool.begin().await?;
         queries::set_outbound_failed_in_tx(
-            &mut tx, event.tenant_id, event.message_id,
+            &mut tx,
+            event.tenant_id,
+            event.message_id,
             "The WhatsApp messaging window has expired for this conversation.",
         )
         .await?;
@@ -126,23 +137,24 @@ pub async fn process_one(
     }
 
     // 5. Get connection config and access_token
-    let connection_id = match integrations::queries::active_connection_for_slug(
-        pool, event.tenant_id, "whatsapp",
-    )
-    .await?
-    {
-        Some(id) => id,
-        None => {
-            let mut tx = pool.begin().await?;
-            queries::set_outbound_failed_in_tx(
-                &mut tx, event.tenant_id, event.message_id,
-                "WhatsApp channel is disconnected.",
-            )
-            .await?;
-            tx.commit().await?;
-            return Ok(());
-        }
-    };
+    let connection_id =
+        match integrations::queries::active_connection_for_slug(pool, event.tenant_id, "whatsapp")
+            .await?
+        {
+            Some(id) => id,
+            None => {
+                let mut tx = pool.begin().await?;
+                queries::set_outbound_failed_in_tx(
+                    &mut tx,
+                    event.tenant_id,
+                    event.message_id,
+                    "WhatsApp channel is disconnected.",
+                )
+                .await?;
+                tx.commit().await?;
+                return Ok(());
+            }
+        };
 
     let config = sqlx::query_scalar::<_, serde_json::Value>(
         "SELECT config FROM integration_connections WHERE id = $1",
@@ -156,7 +168,9 @@ pub async fn process_one(
         None => {
             let mut tx = pool.begin().await?;
             queries::set_outbound_failed_in_tx(
-                &mut tx, event.tenant_id, event.message_id,
+                &mut tx,
+                event.tenant_id,
+                event.message_id,
                 "WhatsApp channel configuration not found.",
             )
             .await?;
@@ -170,7 +184,9 @@ pub async fn process_one(
         None => {
             let mut tx = pool.begin().await?;
             queries::set_outbound_failed_in_tx(
-                &mut tx, event.tenant_id, event.message_id,
+                &mut tx,
+                event.tenant_id,
+                event.message_id,
                 "WhatsApp phone number ID not configured.",
             )
             .await?;
@@ -180,7 +196,10 @@ pub async fn process_one(
     };
 
     let access_token = match integrations::queries::decrypted_secret(
-        pool, master_key, connection_id, "access_token",
+        pool,
+        master_key,
+        connection_id,
+        "access_token",
     )
     .await?
     {
@@ -188,7 +207,9 @@ pub async fn process_one(
         None => {
             let mut tx = pool.begin().await?;
             queries::set_outbound_failed_in_tx(
-                &mut tx, event.tenant_id, event.message_id,
+                &mut tx,
+                event.tenant_id,
+                event.message_id,
                 "WhatsApp access token not found.",
             )
             .await?;
@@ -198,7 +219,10 @@ pub async fn process_one(
     };
 
     // 6. Send via API
-    match api.send_text(&access_token, &phone_number_id, &wa_identifier, &body).await {
+    match api
+        .send_text(&access_token, &phone_number_id, &wa_identifier, &body)
+        .await
+    {
         Ok(wamid) => {
             let mut tx = pool.begin().await?;
             queries::set_outbound_sent_in_tx(&mut tx, event.tenant_id, event.message_id, &wamid)
@@ -208,7 +232,9 @@ pub async fn process_one(
         Err(SendError::WindowExpired) => {
             let mut tx = pool.begin().await?;
             queries::set_outbound_failed_in_tx(
-                &mut tx, event.tenant_id, event.message_id,
+                &mut tx,
+                event.tenant_id,
+                event.message_id,
                 "The WhatsApp messaging window has expired for this conversation.",
             )
             .await?;
@@ -217,7 +243,9 @@ pub async fn process_one(
         Err(SendError::Unauthorized) => {
             let mut tx = pool.begin().await?;
             queries::set_outbound_failed_in_tx(
-                &mut tx, event.tenant_id, event.message_id,
+                &mut tx,
+                event.tenant_id,
+                event.message_id,
                 "WhatsApp credentials rejected \u{2014} reconnect the integration.",
             )
             .await?;
@@ -227,7 +255,9 @@ pub async fn process_one(
             tracing::warn!(%msg, "sender worker: transient error, will retry on next poll");
             let mut tx = pool.begin().await?;
             queries::set_outbound_failed_in_tx(
-                &mut tx, event.tenant_id, event.message_id,
+                &mut tx,
+                event.tenant_id,
+                event.message_id,
                 &format!("Transient error: {msg}"),
             )
             .await?;
@@ -236,7 +266,9 @@ pub async fn process_one(
         Err(SendError::Other(msg)) => {
             let mut tx = pool.begin().await?;
             queries::set_outbound_failed_in_tx(
-                &mut tx, event.tenant_id, event.message_id,
+                &mut tx,
+                event.tenant_id,
+                event.message_id,
                 &format!("Send failed: {msg}"),
             )
             .await?;

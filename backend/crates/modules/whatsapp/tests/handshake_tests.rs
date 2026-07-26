@@ -72,14 +72,12 @@ async fn setup(pool: &sqlx::PgPool) {
 }
 
 async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
-    sqlx::query_scalar(
-        "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
-    )
-    .bind("WhatsApp Handshake Test Tenant")
-    .bind(format!("wht-{}", Uuid::new_v4().simple()))
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+        .bind("WhatsApp Handshake Test Tenant")
+        .bind(format!("wht-{}", Uuid::new_v4().simple()))
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn whatsapp_catalog_id(pool: &sqlx::PgPool) -> Uuid {
@@ -176,7 +174,12 @@ async fn handshake_request(
 }
 
 async fn response_bytes(resp: Response) -> Vec<u8> {
-    resp.into_body().collect().await.unwrap().to_bytes().to_vec()
+    resp.into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes()
+        .to_vec()
 }
 
 async fn response_text(resp: Response) -> String {

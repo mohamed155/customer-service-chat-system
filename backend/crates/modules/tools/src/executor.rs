@@ -109,7 +109,10 @@ pub async fn execute(
     let outcome = match resolved.source {
         ToolSource::Builtin => {
             let tools_list = catalog();
-            match tools_list.into_iter().find(|t| t.name() == resolved.spec.name) {
+            match tools_list
+                .into_iter()
+                .find(|t| t.name() == resolved.spec.name)
+            {
                 None => ExecutionOutcome::Failed(format!(
                     "builtin tool '{}' not found in catalog",
                     resolved.spec.name
@@ -128,23 +131,21 @@ pub async fn execute(
                 },
             }
         }
-        ToolSource::Tenant => {
-            match resolved.tenant_tool_id {
-                None => ExecutionOutcome::Failed("tenant tool has no id".into()),
-                Some(id) => match execute_tenant_endpoint(
-                    ctx,
-                    id,
-                    &resolved.spec.name,
-                    arguments,
-                    tool_request_id,
-                )
-                .await
-                {
-                    Ok(result) => ExecutionOutcome::Succeeded(result),
-                    Err(e) => ExecutionOutcome::Failed(ai_providers::sanitize_error_detail(&e)),
-                },
-            }
-        }
+        ToolSource::Tenant => match resolved.tenant_tool_id {
+            None => ExecutionOutcome::Failed("tenant tool has no id".into()),
+            Some(id) => match execute_tenant_endpoint(
+                ctx,
+                id,
+                &resolved.spec.name,
+                arguments,
+                tool_request_id,
+            )
+            .await
+            {
+                Ok(result) => ExecutionOutcome::Succeeded(result),
+                Err(e) => ExecutionOutcome::Failed(ai_providers::sanitize_error_detail(&e)),
+            },
+        },
     };
 
     crate::audit::record_execution(
@@ -153,7 +154,10 @@ pub async fn execute(
         ctx.conversation_id,
         &resolved.spec.name,
         tool_request_id,
-        &resolved.tenant_tool_id.map(|id| id.to_string()).unwrap_or_else(|| resolved.spec.name.to_string()),
+        &resolved
+            .tenant_tool_id
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| resolved.spec.name.to_string()),
         outcome.outcome_str(),
     )
     .await;

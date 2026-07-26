@@ -145,12 +145,11 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
 /// page over (the endpoint's behaviour is identical for active and inactive
 /// connections — it just filters by `connection_id`).
 async fn seed_connection(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
-    let catalog_id: Uuid =
-        sqlx::query_scalar("SELECT id FROM integration_catalog WHERE slug = $1")
-            .bind(TEST_SLUG)
-            .fetch_one(pool)
-            .await
-            .unwrap();
+    let catalog_id: Uuid = sqlx::query_scalar("SELECT id FROM integration_catalog WHERE slug = $1")
+        .bind(TEST_SLUG)
+        .fetch_one(pool)
+        .await
+        .unwrap();
 
     let mut token_hash = [0u8; 32];
     let mut token_ciphertext = vec![0u8; 48];
@@ -223,11 +222,7 @@ async fn events_are_returned_newest_first() {
     let base = chrono::Utc::now() - chrono::Duration::hours(1);
     let ids = seed_events(&pool, tenant, connection_id, 5, base).await;
     // Newest first → ids are reversed.
-    let expected_newest_first: Vec<String> = ids
-        .iter()
-        .rev()
-        .map(|id| id.to_string())
-        .collect();
+    let expected_newest_first: Vec<String> = ids.iter().rev().map(|id| id.to_string()).collect();
 
     let response = send(
         pool.clone(),
@@ -368,8 +363,7 @@ async fn cursor_pagination_walks_all_pages_without_overlap() {
 
     let base = chrono::Utc::now() - chrono::Duration::hours(1);
     let ids = seed_events(&pool, tenant, connection_id, 5, base).await;
-    let expected_newest_first: Vec<String> =
-        ids.iter().rev().map(|id| id.to_string()).collect();
+    let expected_newest_first: Vec<String> = ids.iter().rev().map(|id| id.to_string()).collect();
 
     let mut collected: Vec<String> = Vec::new();
     let mut cursor: Option<String> = None;
@@ -390,10 +384,7 @@ async fn cursor_pagination_walks_all_pages_without_overlap() {
         let entries = body["data"].as_array().unwrap();
         for entry in entries {
             let id = entry["id"].as_str().unwrap().to_string();
-            assert!(
-                !collected.contains(&id),
-                "duplicate id across pages: {id}"
-            );
+            assert!(!collected.contains(&id), "duplicate id across pages: {id}");
             collected.push(id);
         }
         last_has_more = body["pagination"]["has_more"].as_bool().unwrap();

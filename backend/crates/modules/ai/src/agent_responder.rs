@@ -146,8 +146,12 @@ pub async fn process_agent_responder_once(
                     .await?;
                     if channel == "whatsapp" {
                         conversations::outbox::emit_whatsapp_outbound_in_tx(
-                            &mut tx, tenant_id, conversation_id, ack_mid,
-                        ).await?;
+                            &mut tx,
+                            tenant_id,
+                            conversation_id,
+                            ack_mid,
+                        )
+                        .await?;
                     }
                     tx.commit().await?;
                 }

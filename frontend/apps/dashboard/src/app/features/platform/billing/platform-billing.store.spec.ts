@@ -154,7 +154,7 @@ describe('PlatformBillingStore', () => {
       const store = TestBed.inject(PlatformBillingStore);
       await vi.waitFor(() => expect(store.subscriptions().length).toBe(2));
 
-      store.assignSubscription('t-1', 'plan-2');
+      store.assignSubscription('t-1', 'plan-2', undefined as unknown as string);
       await vi.waitFor(() => {
         expect(store.saving()).toBe(false);
       });

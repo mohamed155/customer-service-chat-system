@@ -34,7 +34,9 @@ fn master_key() -> Arc<MasterKey> {
 fn test_app(pool: sqlx::PgPool, mk: Arc<MasterKey>) -> Router {
     whatsapp::routes::public_router()
         .layer(axum::extract::Extension(mk))
-        .layer(axum::extract::Extension(Arc::new(InMemoryRateLimitStore::new())))
+        .layer(axum::extract::Extension(Arc::new(
+            InMemoryRateLimitStore::new(),
+        )))
         .with_state(pool)
 }
 
@@ -113,7 +115,12 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 }
 
 async fn response_bytes(resp: Response) -> Vec<u8> {
-    resp.into_body().collect().await.unwrap().to_bytes().to_vec()
+    resp.into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes()
+        .to_vec()
 }
 
 // ---------------------------------------------------------------------------
@@ -140,14 +147,12 @@ async fn setup(pool: &sqlx::PgPool) {
 }
 
 async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
-    sqlx::query_scalar(
-        "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
-    )
-    .bind("WhatsApp Intake Test Tenant")
-    .bind(format!("wit-{}", Uuid::new_v4().simple()))
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+        .bind("WhatsApp Intake Test Tenant")
+        .bind(format!("wit-{}", Uuid::new_v4().simple()))
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn whatsapp_catalog_id(pool: &sqlx::PgPool) -> Uuid {
@@ -287,7 +292,10 @@ async fn signed_unknown_number_creates_customer_conversation_message_outbox() {
     .fetch_optional(&pool)
     .await
     .unwrap();
-    assert!(customer_id.is_some(), "customer should be created with whatsapp identifier");
+    assert!(
+        customer_id.is_some(),
+        "customer should be created with whatsapp identifier"
+    );
 
     // Open conversation
     let conv_count: i64 = sqlx::query_scalar(
@@ -323,7 +331,10 @@ async fn signed_unknown_number_creates_customer_conversation_message_outbox() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(outbox_count, 1, "one customer_message outbox event should exist");
+    assert_eq!(
+        outbox_count, 1,
+        "one customer_message outbox event should exist"
+    );
 
     // Verify outbox payload contains channel = "whatsapp"
     let channel: Option<String> = sqlx::query_scalar(
@@ -438,13 +449,12 @@ async fn identical_redelivery_creates_nothing_new() {
         assert_eq!(resp.status(), StatusCode::OK);
     }
 
-    let msg_count_before: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM messages WHERE tenant_id = $1",
-    )
-    .bind(conn.tenant_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let msg_count_before: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE tenant_id = $1")
+            .bind(conn.tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(msg_count_before, 1, "first delivery created one message");
 
     // Duplicate delivery (same wamid)
@@ -465,13 +475,12 @@ async fn identical_redelivery_creates_nothing_new() {
     }
 
     // Still only one message
-    let msg_count_after: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM messages WHERE tenant_id = $1",
-    )
-    .bind(conn.tenant_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let msg_count_after: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE tenant_id = $1")
+            .bind(conn.tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(msg_count_after, 1, "dedup should prevent a second message");
 }
 
@@ -505,13 +514,12 @@ async fn phone_identifier_attaches_without_new_customer_profile() {
     .await
     .unwrap();
 
-    let initial_customer_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM customers WHERE tenant_id = $1",
-    )
-    .bind(conn.tenant_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let initial_customer_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE tenant_id = $1")
+            .bind(conn.tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(initial_customer_count, 1, "one customer pre-exists");
 
     // Send whatsapp message from the same number
@@ -530,13 +538,12 @@ async fn phone_identifier_attaches_without_new_customer_profile() {
     assert_eq!(resp.status(), StatusCode::OK);
 
     // Still only one customer
-    let customer_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM customers WHERE tenant_id = $1",
-    )
-    .bind(conn.tenant_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let customer_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE tenant_id = $1")
+            .bind(conn.tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(customer_count, 1, "no new customer should be created");
 
     // Verify the original customer has a whatsapp identifier
@@ -553,17 +560,19 @@ async fn phone_identifier_attaches_without_new_customer_profile() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert!(has_whatsapp_id, "whatsapp identifier should be attached to existing customer");
+    assert!(
+        has_whatsapp_id,
+        "whatsapp identifier should be attached to existing customer"
+    );
 
     // Verify the existing customer's display_name is unchanged
-    let display_name: String = sqlx::query_scalar(
-        "SELECT display_name FROM customers WHERE tenant_id = $1 AND id = $2",
-    )
-    .bind(conn.tenant_id)
-    .bind(existing_customer_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let display_name: String =
+        sqlx::query_scalar("SELECT display_name FROM customers WHERE tenant_id = $1 AND id = $2")
+            .bind(conn.tenant_id)
+            .bind(existing_customer_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(
         display_name, "Phone Customer Pre-existing",
         "display name should not change"
@@ -646,9 +655,15 @@ async fn message_after_conversation_closed_opens_new_conversation() {
     .await
     .unwrap();
     assert_eq!(conv_rows.len(), 2, "two conversations should exist");
-    assert_eq!(conv_rows[0].1, "closed", "original conversation should be closed");
+    assert_eq!(
+        conv_rows[0].1, "closed",
+        "original conversation should be closed"
+    );
     assert_eq!(conv_rows[1].1, "open", "new conversation should be open");
-    assert_ne!(conv_rows[0].0, conv_rows[1].0, "conversation IDs should differ");
+    assert_ne!(
+        conv_rows[0].0, conv_rows[1].0,
+        "conversation IDs should differ"
+    );
 
     // New message is in the new conversation
     let msg_conv: Uuid = sqlx::query_scalar(
@@ -660,7 +675,10 @@ async fn message_after_conversation_closed_opens_new_conversation() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(msg_conv, conv_rows[1].0, "second message should be in new conversation");
+    assert_eq!(
+        msg_conv, conv_rows[1].0,
+        "second message should be in new conversation"
+    );
 }
 
 #[tokio::test]
@@ -674,8 +692,7 @@ async fn wrong_signature_returns_404_and_writes_nothing() {
     let from = "15557778888";
     let payload = text_message_payload(from, "wamid.intake.006", "Should not be processed");
     let raw_body = serde_json::to_vec(&payload).unwrap();
-    let bad_signature =
-        "sha256=0000000000000000000000000000000000000000000000000000000000000000";
+    let bad_signature = "sha256=0000000000000000000000000000000000000000000000000000000000000000";
 
     let req = Request::builder()
         .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
@@ -691,31 +708,27 @@ async fn wrong_signature_returns_404_and_writes_nothing() {
     assert_eq!(body, br#"{"error":"not found"}"#);
 
     // No rows written
-    let customer_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM customers WHERE tenant_id = $1",
-    )
-    .bind(conn.tenant_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let customer_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE tenant_id = $1")
+            .bind(conn.tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(customer_count, 0, "no customers should be created");
 
-    let conv_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM conversations WHERE tenant_id = $1",
-    )
-    .bind(conn.tenant_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let conv_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM conversations WHERE tenant_id = $1")
+            .bind(conn.tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(conv_count, 0, "no conversations should be created");
 
-    let msg_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM messages WHERE tenant_id = $1",
-    )
-    .bind(conn.tenant_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let msg_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE tenant_id = $1")
+        .bind(conn.tenant_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
     assert_eq!(msg_count, 0, "no messages should be created");
 }
 
@@ -764,5 +777,8 @@ async fn image_message_creates_pending_attachment() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(attachment_kind, "image", "attachment kind should be 'image'");
+    assert_eq!(
+        attachment_kind, "image",
+        "attachment kind should be 'image'"
+    );
 }

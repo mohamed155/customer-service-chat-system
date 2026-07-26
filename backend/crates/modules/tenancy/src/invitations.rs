@@ -624,11 +624,7 @@ pub async fn process_invitation_deliveries_once(
             let err_msg = delivery_status.error_message().map(|s| s.to_string());
             match delivery_status {
                 email::EmailDeliveryStatus::Sent => (
-                    Some((
-                        invitation_id,
-                        tenant_id,
-                        email::EmailDeliveryStatus::Sent,
-                    )),
+                    Some((invitation_id, tenant_id, email::EmailDeliveryStatus::Sent)),
                     None,
                 ),
                 email::EmailDeliveryStatus::Failed(_) => {
@@ -675,13 +671,7 @@ pub async fn process_invitation_deliveries_once(
                 payload.as_ref().err()
             );
             (
-                ids.map(|(i, t)| {
-                    (
-                        i,
-                        t,
-                        email::EmailDeliveryStatus::Failed(message.clone()),
-                    )
-                }),
+                ids.map(|(i, t)| (i, t, email::EmailDeliveryStatus::Failed(message.clone()))),
                 Some(message),
             )
         }
@@ -1529,10 +1519,7 @@ mod tests {
             self.configured
         }
 
-        async fn send(
-            &self,
-            _msg: email::EmailMessage,
-        ) -> email::EmailDeliveryStatus {
+        async fn send(&self, _msg: email::EmailMessage) -> email::EmailDeliveryStatus {
             if !self.configured {
                 email::EmailDeliveryStatus::Unconfigured
             } else if self.succeeds {
@@ -1592,10 +1579,7 @@ mod tests {
             "https://app.test/invite/abc".into(),
         )
         .await;
-        assert!(matches!(
-            status,
-            email::EmailDeliveryStatus::Failed(_)
-        ));
+        assert!(matches!(status, email::EmailDeliveryStatus::Failed(_)));
         assert_eq!(status.error_message(), Some("smtp failed"));
     }
 

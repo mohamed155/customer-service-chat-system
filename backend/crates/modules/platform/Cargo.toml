@@ -3,3 +3,17 @@ name = "platform"
 version.workspace = true
 edition.workspace = true
 
+[dependencies]
+axum.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+futures.workspace = true
+kernel = { path = "../../shared/kernel" }
+observability = { path = "../../shared/observability" }
+serde.workspace = true
+sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
+storage = { path = "../../shared/storage" }
+tokio.workspace = true
+tracing.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+

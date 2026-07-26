@@ -104,6 +104,9 @@ const PLATFORM_OPERATIONS: &[&str] = &[
     "/api/v1/test/platform/diagnostics/view",
     "/api/v1/platform/ai/config",
     "/api/v1/platform/audit-logs",
+    "/api/v1/platform/analytics/summary",
+    "/api/v1/platform/health",
+    "/api/v1/platform/ai-providers",
 ];
 
 /// T047: deny-by-default sweep covering the create (POST), detail (GET),
@@ -120,6 +123,9 @@ const PLATFORM_OPERATIONS_DENY_BY_DEFAULT: &[(&str, Method)] = &[
     ("/api/v1/test/platform/billing/view", Method::GET),
     ("/api/v1/test/platform/billing/manage", Method::GET),
     ("/api/v1/test/platform/diagnostics/view", Method::GET),
+    ("/api/v1/platform/analytics/summary", Method::GET),
+    ("/api/v1/platform/health", Method::GET),
+    ("/api/v1/platform/ai-providers", Method::GET),
 ];
 
 fn test_config(environment: Environment) -> config::AppConfig {
@@ -172,7 +178,9 @@ async fn get_pool() -> Option<sqlx::PgPool> {
         Err(_) => {
             eprintln!("skipping RBAC live tests: DATABASE_URL not set");
             if require_db_tests() {
-                panic!("REQUIRE_DB_TESTS=1 but DATABASE_URL is not set — refusing to silently skip RBAC tests");
+                panic!(
+                    "REQUIRE_DB_TESTS=1 but DATABASE_URL is not set — refusing to silently skip RBAC tests"
+                );
             }
             return None;
         }
@@ -181,7 +189,9 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     if sqlx::query("SELECT 1").execute(&pool).await.is_err() {
         eprintln!("skipping RBAC live tests: DATABASE_URL is unreachable");
         if require_db_tests() {
-            panic!("REQUIRE_DB_TESTS=1 but DATABASE_URL is unreachable — refusing to silently skip RBAC tests");
+            panic!(
+                "REQUIRE_DB_TESTS=1 but DATABASE_URL is unreachable — refusing to silently skip RBAC tests"
+            );
         }
         return None;
     }
@@ -1244,6 +1254,7 @@ async fn me_returns_exact_platform_support_payload_in_production() {
                 "platform.tenants.list",
                 "platform.tenants.switch",
                 "platform.tenants.manage",
+                "platform.analytics.view",
                 "platform.audit.view"
             ],
             "staffTenantPermissions": [

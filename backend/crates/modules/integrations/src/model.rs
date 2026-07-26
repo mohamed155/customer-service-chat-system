@@ -307,10 +307,7 @@ mod tests {
     #[test]
     fn rejects_secret_submitted_in_config() {
         let mut config = ok_config();
-        config.insert(
-            "signing_secret".to_string(),
-            json!("leakable_plaintext"),
-        );
+        config.insert("signing_secret".to_string(), json!("leakable_plaintext"));
         let errs =
             validate_against_schema(&schema(), &config, &BTreeMap::new(), false).unwrap_err();
         assert!(errs.iter().any(|e| e["field"] == "signing_secret"));
@@ -320,8 +317,7 @@ mod tests {
     fn rejects_text_submitted_in_secrets() {
         let mut secrets = ok_secrets();
         secrets.insert("source_label".to_string(), "wrong_bucket".to_string());
-        let errs =
-            validate_against_schema(&schema(), &Map::new(), &secrets, false).unwrap_err();
+        let errs = validate_against_schema(&schema(), &Map::new(), &secrets, false).unwrap_err();
         assert!(errs.iter().any(|e| e["field"] == "source_label"));
     }
 
@@ -329,8 +325,7 @@ mod tests {
     fn rejects_unknown_keys() {
         let mut config = ok_config();
         config.insert("nonsense".to_string(), json!("x"));
-        let errs =
-            validate_against_schema(&schema(), &config, &ok_secrets(), true).unwrap_err();
+        let errs = validate_against_schema(&schema(), &config, &ok_secrets(), true).unwrap_err();
         assert!(errs.iter().any(|e| e["field"] == "nonsense"));
     }
 
@@ -338,8 +333,7 @@ mod tests {
     fn rejects_empty_required_text_field() {
         let mut config = Map::new();
         config.insert("source_label".to_string(), json!(""));
-        let errs =
-            validate_against_schema(&schema(), &config, &ok_secrets(), true).unwrap_err();
+        let errs = validate_against_schema(&schema(), &config, &ok_secrets(), true).unwrap_err();
         assert!(errs.iter().any(|e| e["field"] == "source_label"));
     }
 

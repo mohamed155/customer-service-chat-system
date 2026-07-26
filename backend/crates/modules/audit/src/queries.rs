@@ -11,7 +11,9 @@ pub fn decode_cursor(cursor: &str) -> Option<(DateTime<Utc>, Uuid)> {
     let bytes = hex::decode(cursor).ok()?;
     let decoded = String::from_utf8(bytes).ok()?;
     let (ts_str, id_str) = decoded.split_once('|')?;
-    let ts = DateTime::parse_from_rfc3339(ts_str).ok()?.with_timezone(&Utc);
+    let ts = DateTime::parse_from_rfc3339(ts_str)
+        .ok()?
+        .with_timezone(&Utc);
     let id = Uuid::parse_str(id_str).ok()?;
     Some((ts, id))
 }

@@ -802,13 +802,8 @@ pub async fn add_message(
     }
 
     if payload.kind == model::MessageKind::Reply && conv_channel == "whatsapp" {
-        if let Err(error) = emit_whatsapp_outbound_in_tx(
-            &mut tx,
-            ctx.tenant_id,
-            conversation_id,
-            message.id,
-        )
-        .await
+        if let Err(error) =
+            emit_whatsapp_outbound_in_tx(&mut tx, ctx.tenant_id, conversation_id, message.id).await
         {
             tracing::error!(%error, conversation_id = %conversation_id, "emit_whatsapp_outbound failed");
             return ApiError::internal_error("Failed to add message")

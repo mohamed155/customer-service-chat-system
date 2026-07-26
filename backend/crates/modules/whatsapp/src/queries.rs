@@ -227,10 +227,7 @@ pub async fn mark_attachment_stored(
 }
 
 /// Increment fetch_attempts and auto-fail if threshold reached.
-pub async fn mark_attachment_failed_attempt(
-    pool: &sqlx::PgPool,
-    id: Uuid,
-) -> sqlx::Result<()> {
+pub async fn mark_attachment_failed_attempt(pool: &sqlx::PgPool, id: Uuid) -> sqlx::Result<()> {
     sqlx::query(
         "UPDATE message_attachments \
          SET fetch_attempts = fetch_attempts + 1, \

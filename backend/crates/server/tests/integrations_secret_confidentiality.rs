@@ -67,7 +67,9 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     let url = match std::env::var("DATABASE_URL") {
         Ok(value) => value,
         Err(_) => {
-            eprintln!("skipping integrations_secret_confidentiality live tests: DATABASE_URL not set");
+            eprintln!(
+                "skipping integrations_secret_confidentiality live tests: DATABASE_URL not set"
+            );
             if require_db_tests() {
                 panic!("REQUIRE_DB_TESTS=1 but DATABASE_URL is not set");
             }
@@ -76,7 +78,9 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     };
     let pool = db::lazy_pool(&url, 4, Duration::from_secs(5));
     if sqlx::query("SELECT 1").execute(&pool).await.is_err() {
-        eprintln!("skipping integrations_secret_confidentiality live tests: DATABASE_URL is unreachable");
+        eprintln!(
+            "skipping integrations_secret_confidentiality live tests: DATABASE_URL is unreachable"
+        );
         if require_db_tests() {
             panic!("REQUIRE_DB_TESTS=1 but DATABASE_URL is unreachable");
         }
@@ -281,12 +285,7 @@ async fn secret_never_appears_in_list_response() {
     // List must not include the secret either.
     let list = send(
         pool.clone(),
-        authenticated_request(
-            "/api/v1/tenant/integrations",
-            Method::GET,
-            admin,
-            tenant,
-        ),
+        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin, tenant),
     )
     .await;
     assert_eq!(list.status(), StatusCode::OK);
@@ -457,7 +456,9 @@ async fn secret_ciphertext_does_not_contain_plaintext_bytes() {
     .unwrap();
     let plaintext_bytes = SECRET_PLAINTEXT.as_bytes();
     assert!(
-        !ciphertext.windows(plaintext_bytes.len()).any(|w| w == plaintext_bytes),
+        !ciphertext
+            .windows(plaintext_bytes.len())
+            .any(|w| w == plaintext_bytes),
         "integration_secrets.ciphertext must not contain the plaintext bytes"
     );
     // Also confirm the hint stored alongside the ciphertext equals the

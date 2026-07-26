@@ -33,6 +33,8 @@ export type PageTitleKey =
   | 'auditLogs'
   | 'platformAuditLogs'
   | 'platformBilling'
+  | 'platformSystemHealth'
+  | 'platformAiProviders'
   | 'billing'
   | 'notifications';
 
@@ -121,6 +123,14 @@ export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
   platformBilling: {
     title: 'Platform Billing',
     subtitle: 'Manage plans and subscriptions',
+  },
+  platformSystemHealth: {
+    title: 'System health',
+    subtitle: 'Platform administration',
+  },
+  platformAiProviders: {
+    title: 'AI provider status',
+    subtitle: 'Platform administration',
   },
   notifications: {
     title: 'Notifications',

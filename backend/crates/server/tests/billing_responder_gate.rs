@@ -359,7 +359,9 @@ async fn exhausted_allowance_gate_deletes_outbox_and_blocks_ai() {
     let mut processed = false;
     for i in 0..20 {
         match process_agent_responder_once(&pool, &state.ai, &state.escalations).await {
-            Ok(true) => { processed = true; }
+            Ok(true) => {
+                processed = true;
+            }
             Ok(false) => break,
             Err(e) => panic!("responder error iteration {i}: {e}"),
         }
@@ -460,7 +462,9 @@ async fn conversation_and_customer_message_survive_gate() {
     let mut processed = false;
     for i in 0..20 {
         match process_agent_responder_once(&pool, &state.ai, &state.escalations).await {
-            Ok(true) => { processed = true; }
+            Ok(true) => {
+                processed = true;
+            }
             Ok(false) => break,
             Err(e) => panic!("responder error iteration {i}: {e}"),
         }
@@ -479,13 +483,12 @@ async fn conversation_and_customer_message_survive_gate() {
     assert!(conv_exists, "conversation should still exist");
 
     // Customer message still exists
-    let msg_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1)",
-    )
-    .bind(message_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let msg_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1)")
+            .bind(message_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert!(msg_exists, "customer message should still exist");
 }
 
@@ -572,7 +575,9 @@ async fn escalation_rule_still_matches_while_over_limit() {
     let mut processed = false;
     for i in 0..20 {
         match process_agent_responder_once(&pool, &state.ai, &state.escalations).await {
-            Ok(true) => { processed = true; }
+            Ok(true) => {
+                processed = true;
+            }
             Ok(false) => break,
             Err(e) => panic!("responder error iteration {i}: {e}"),
         }
@@ -649,11 +654,7 @@ async fn human_agent_reply_succeeds_while_ai_paused() {
         "body": "I'll help you with that right now"
     });
     let uri = format!("/api/v1/tenant/conversations/{conversation_id}/messages");
-    let resp = send(
-        &state,
-        json_post(&uri, user_id, tenant_id, reply_payload),
-    )
-    .await;
+    let resp = send(&state, json_post(&uri, user_id, tenant_id, reply_payload)).await;
     assert!(
         resp.status().is_success(),
         "human reply should succeed while billing is paused, got {}",
@@ -743,7 +744,9 @@ async fn allowance_available_responder_proceeds_normally() {
     let mut processed = false;
     for i in 0..20 {
         match process_agent_responder_once(&pool, &state.ai, &state.escalations).await {
-            Ok(true) => { processed = true; }
+            Ok(true) => {
+                processed = true;
+            }
             Ok(false) => break,
             Err(e) => panic!("responder error iteration {i}: {e}"),
         }

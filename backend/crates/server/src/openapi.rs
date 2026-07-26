@@ -291,6 +291,14 @@ impl Modify for TagDescriptionsAddon {
                 "notifications",
                 "Tenant-scoped notification inbox (list, unread count, mark read).",
             ),
+            (
+                "platform-analytics",
+                "Platform-internal cross-tenant business metrics.",
+            ),
+            (
+                "platform-health",
+                "Platform-internal system health and AI provider diagnostics.",
+            ),
         ];
         let mut out = Vec::with_capacity(tags.len());
         for (name, description) in tags {

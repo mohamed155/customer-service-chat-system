@@ -242,7 +242,8 @@ async fn connect_returns_201_and_status_connected() {
     assert_eq!(body["slug"], "generic-webhook");
     assert!(body["connection"].is_object());
     assert_eq!(
-        body["connection"]["config"]["source_label"], "Billing system"
+        body["connection"]["config"]["source_label"],
+        "Billing system"
     );
     let secrets = body["connection"]["secrets"].as_array().unwrap();
     assert_eq!(secrets.len(), 1);
@@ -418,7 +419,8 @@ async fn update_config_returns_200_and_changes_value() {
     assert_eq!(update.status(), StatusCode::OK);
     let update_body = body_json(update).await;
     assert_eq!(
-        update_body["connection"]["config"]["source_label"], "Billing 2"
+        update_body["connection"]["config"]["source_label"],
+        "Billing 2"
     );
     // Webhook URL is not rotated on a config-only update.
     let webhook_url_after = update_body["connection"]["webhook_url"]
@@ -549,12 +551,11 @@ async fn reconnect_keeps_exactly_one_connection_row() {
     // still be exactly 1 — reconnect reactivates the same row, never inserts
     // a duplicate (FR-004).
     let catalog_id = {
-        let row: (Uuid,) =
-            sqlx::query_as("SELECT id FROM integration_catalog WHERE slug = $1")
-                .bind("generic-webhook")
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+        let row: (Uuid,) = sqlx::query_as("SELECT id FROM integration_catalog WHERE slug = $1")
+            .bind("generic-webhook")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         row.0
     };
     let count = count_connection_rows(&pool, tenant, catalog_id).await;
@@ -576,9 +577,7 @@ async fn reconnect_keeps_exactly_one_connection_row() {
     .await;
     assert_eq!(detail.status(), StatusCode::OK);
     let detail_body = body_json(detail).await;
-    assert_eq!(
-        detail_body["connection"]["config"]["source_label"], "Two"
-    );
+    assert_eq!(detail_body["connection"]["config"]["source_label"], "Two");
     let _ = connection_id_str; // silence unused
 }
 
@@ -609,12 +608,11 @@ async fn sc_004_all_lifecycle_actions_land_in_both_logs() {
     assert_eq!(connect.status(), StatusCode::CREATED);
 
     let catalog_id = {
-        let row: (Uuid,) =
-            sqlx::query_as("SELECT id FROM integration_catalog WHERE slug = $1")
-                .bind("generic-webhook")
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+        let row: (Uuid,) = sqlx::query_as("SELECT id FROM integration_catalog WHERE slug = $1")
+            .bind("generic-webhook")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
         row.0
     };
     let connection_id = {
@@ -758,7 +756,12 @@ async fn sc_004_all_lifecycle_actions_land_in_both_logs() {
     // (5) FR-006: disconnect must NOT delete pre-existing event rows.
     // The connected + config_updated + secret_rotated + disconnected rows
     // must all still be present.
-    for event_type in ["connected", "config_updated", "secret_rotated", "disconnected"] {
+    for event_type in [
+        "connected",
+        "config_updated",
+        "secret_rotated",
+        "disconnected",
+    ] {
         let count = count_events_for_connection(&pool, connection_id, event_type).await;
         assert_eq!(
             count, 1,

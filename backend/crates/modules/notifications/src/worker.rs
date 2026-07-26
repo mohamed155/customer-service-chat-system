@@ -205,12 +205,7 @@ pub async fn process_notification_outbox_once(
 
                 for membership_id in affected {
                     let count = queries::unread_count(pool, ev.tenant_id, membership_id).await?;
-                    broadcast_notification_cleared(
-                        presence,
-                        ev.tenant_id,
-                        membership_id,
-                        count,
-                    );
+                    broadcast_notification_cleared(presence, ev.tenant_id, membership_id, count);
                 }
             }
             _ => {
@@ -247,10 +242,7 @@ pub async fn process_notification_outbox_once(
 
 // ── Worker loop ──────────────────────────────────────────────────────
 
-pub async fn run_notification_outbox_worker(
-    pool: PgPool,
-    presence: Arc<presence::Runtime>,
-) -> ! {
+pub async fn run_notification_outbox_worker(pool: PgPool, presence: Arc<presence::Runtime>) -> ! {
     tracing::info!("notifications outbox worker started");
     loop {
         match process_notification_outbox_once(&pool, &presence).await {

@@ -242,6 +242,7 @@ mod tests {
                     "platform.admin",
                     "platform.billing.view",
                     "platform.billing.manage",
+                    "platform.analytics.view",
                     "platform.diagnostics.view"
                 ],
                 "staffTenantPermissions": [

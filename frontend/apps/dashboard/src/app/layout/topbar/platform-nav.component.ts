@@ -37,9 +37,19 @@ const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
     permission: 'platform.billing.view',
   },
   {
+    label: 'System health',
+    path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.systemHealth}`,
+    permission: 'platform.diagnostics.view',
+  },
+  {
+    label: 'AI providers',
+    path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.aiProviders}`,
+    permission: 'platform.diagnostics.view',
+  },
+  {
     label: 'Platform overview',
-    path: `/${APP_PATHS.platform.base}`,
-    permission: 'platform.admin',
+    path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.overviewPlaceholder}`,
+    permission: 'platform.analytics.view',
   },
 ] as const;
 

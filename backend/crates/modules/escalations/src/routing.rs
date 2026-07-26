@@ -221,14 +221,7 @@ pub async fn route_new_escalation_in_tx(
         .await?;
 
         let actor_mid = resolve_actor_membership_id_in_tx(tx, tenant_id, actor_user_id).await;
-        notify_escalation_queued(
-            tx,
-            tenant_id,
-            escalation_id,
-            conversation_id,
-            actor_mid,
-        )
-        .await;
+        notify_escalation_queued(tx, tenant_id, escalation_id, conversation_id, actor_mid).await;
 
         Ok(RouteOutcome::Queued { escalation })
     }

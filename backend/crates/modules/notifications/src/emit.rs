@@ -167,7 +167,10 @@ mod tests {
             .unwrap()
             .with_timezone(&chrono::Utc);
 
-        assert_eq!(dedupe_key_ai_failed(conv_id, &t1), dedupe_key_ai_failed(conv_id, &t2));
+        assert_eq!(
+            dedupe_key_ai_failed(conv_id, &t1),
+            dedupe_key_ai_failed(conv_id, &t2)
+        );
     }
 
     #[test]
@@ -180,7 +183,10 @@ mod tests {
             .unwrap()
             .with_timezone(&chrono::Utc);
 
-        assert_ne!(dedupe_key_ai_failed(conv_id, &t1), dedupe_key_ai_failed(conv_id, &t2));
+        assert_ne!(
+            dedupe_key_ai_failed(conv_id, &t1),
+            dedupe_key_ai_failed(conv_id, &t2)
+        );
     }
 
     #[test]

@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 /// Channel values permitted by the conversations_channel_check constraint.
-pub const ALLOWED_CHANNELS: [&str; 6] =
-    ["email", "phone", "web_chat", "whatsapp", "telegram", "widget"];
+pub const ALLOWED_CHANNELS: [&str; 6] = [
+    "email", "phone", "web_chat", "whatsapp", "telegram", "widget",
+];
 
 pub const MAX_RANGE_DAYS: i64 = 366;
 pub const DEFAULT_RANGE_DAYS: i64 = 30;
@@ -130,11 +131,15 @@ mod tests {
     #[test]
     fn default_range_is_30_inclusive_days_ending_today() {
         let today = NaiveDate::from_ymd_opt(2026, 7, 19).unwrap();
-        let r = resolve_query(AnalyticsQuery {
-            from: None,
-            to: None,
-            channel: None,
-        }, today).unwrap();
+        let r = resolve_query(
+            AnalyticsQuery {
+                from: None,
+                to: None,
+                channel: None,
+            },
+            today,
+        )
+        .unwrap();
         assert_eq!(r.to_date, today);
         assert_eq!(r.from_date, NaiveDate::from_ymd_opt(2026, 6, 20).unwrap());
         assert_eq!((r.to_date - r.from_date).num_days() + 1, 30);
@@ -142,11 +147,15 @@ mod tests {
 
     #[test]
     fn explicit_valid_range_round_trips() {
-        let r = resolve_query(AnalyticsQuery {
-            from: Some("2026-03-10".into()),
-            to: Some("2026-03-12".into()),
-            channel: None,
-        }, NaiveDate::from_ymd_opt(2026, 7, 19).unwrap()).unwrap();
+        let r = resolve_query(
+            AnalyticsQuery {
+                from: Some("2026-03-10".into()),
+                to: Some("2026-03-12".into()),
+                channel: None,
+            },
+            NaiveDate::from_ymd_opt(2026, 7, 19).unwrap(),
+        )
+        .unwrap();
         assert_eq!(r.from_date, NaiveDate::from_ymd_opt(2026, 3, 10).unwrap());
         assert_eq!(r.to_date, NaiveDate::from_ymd_opt(2026, 3, 12).unwrap());
         assert_eq!(r.from_ts.to_rfc3339(), "2026-03-10T00:00:00+00:00");
@@ -155,41 +164,57 @@ mod tests {
 
     #[test]
     fn from_after_to_errors() {
-        let err = resolve_query(AnalyticsQuery {
-            from: Some("2026-03-12".into()),
-            to: Some("2026-03-10".into()),
-            channel: None,
-        }, NaiveDate::from_ymd_opt(2026, 7, 19).unwrap()).unwrap_err();
+        let err = resolve_query(
+            AnalyticsQuery {
+                from: Some("2026-03-12".into()),
+                to: Some("2026-03-10".into()),
+                channel: None,
+            },
+            NaiveDate::from_ymd_opt(2026, 7, 19).unwrap(),
+        )
+        .unwrap_err();
         assert_eq!(err, "from must be on or before to");
     }
 
     #[test]
     fn range_exceeds_366_days_errors() {
-        let err = resolve_query(AnalyticsQuery {
-            from: Some("2025-01-01".into()),
-            to: Some("2026-12-31".into()),
-            channel: None,
-        }, NaiveDate::from_ymd_opt(2026, 7, 19).unwrap()).unwrap_err();
+        let err = resolve_query(
+            AnalyticsQuery {
+                from: Some("2025-01-01".into()),
+                to: Some("2026-12-31".into()),
+                channel: None,
+            },
+            NaiveDate::from_ymd_opt(2026, 7, 19).unwrap(),
+        )
+        .unwrap_err();
         assert_eq!(err, "Date range must not exceed 366 days");
     }
 
     #[test]
     fn bad_channel_errors() {
-        let err = resolve_query(AnalyticsQuery {
-            from: None,
-            to: None,
-            channel: Some("carrier-pigeon".into()),
-        }, NaiveDate::from_ymd_opt(2026, 7, 19).unwrap()).unwrap_err();
+        let err = resolve_query(
+            AnalyticsQuery {
+                from: None,
+                to: None,
+                channel: Some("carrier-pigeon".into()),
+            },
+            NaiveDate::from_ymd_opt(2026, 7, 19).unwrap(),
+        )
+        .unwrap_err();
         assert_eq!(err, "Unknown channel");
     }
 
     #[test]
     fn bad_date_string_errors() {
-        let err = resolve_query(AnalyticsQuery {
-            from: Some("notadate".into()),
-            to: None,
-            channel: None,
-        }, NaiveDate::from_ymd_opt(2026, 7, 19).unwrap()).unwrap_err();
+        let err = resolve_query(
+            AnalyticsQuery {
+                from: Some("notadate".into()),
+                to: None,
+                channel: None,
+            },
+            NaiveDate::from_ymd_opt(2026, 7, 19).unwrap(),
+        )
+        .unwrap_err();
         assert_eq!(err, "Invalid date format, expected YYYY-MM-DD");
     }
 }

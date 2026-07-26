@@ -23,10 +23,7 @@ use crate::webhook;
 
 const FIELD_WEBHOOK_TOKEN: &str = "__webhook_token";
 
-fn build_event_response(
-    rows: &[queries::EventRow],
-    limit: i64,
-) -> IntegrationEventListResponse {
+fn build_event_response(rows: &[queries::EventRow], limit: i64) -> IntegrationEventListResponse {
     let has_more = rows.len() > limit as usize;
     let rows = if has_more {
         &rows[..limit as usize]
@@ -60,7 +57,9 @@ fn build_event_response(
         })
         .collect();
     let next_cursor = has_more.then(|| {
-        let last = rows.last().expect("rows must be non-empty when has_more is true");
+        let last = rows
+            .last()
+            .expect("rows must be non-empty when has_more is true");
         queries::encode_cursor(last.created_at, last.id)
     });
     IntegrationEventListResponse {
@@ -89,13 +88,9 @@ async fn active_membership_id(
 }
 
 fn load_master_key(config: &config::AppConfig) -> Result<MasterKey, Response> {
-    let raw = config
-        .integration_secrets_key
-        .as_deref()
-        .ok_or_else(|| {
-            ApiError::internal_error("Integration secrets key is not configured")
-                .into_response()
-        })?;
+    let raw = config.integration_secrets_key.as_deref().ok_or_else(|| {
+        ApiError::internal_error("Integration secrets key is not configured").into_response()
+    })?;
     MasterKey::from_base64(raw).map_err(|e| {
         tracing::error!(error = %e, "invalid integration_secrets_key");
         ApiError::internal_error("Integration secrets key is invalid").into_response()
@@ -118,10 +113,7 @@ fn build_webhook_url(config: &config::AppConfig, token: &str) -> String {
         (status = 403, description = "Forbidden — missing integrations.view permission."),
     ),
 )]
-pub async fn list_integrations(
-    State(pool): State<PgPool>,
-    ctx: TenantContext,
-) -> Response {
+pub async fn list_integrations(State(pool): State<PgPool>, ctx: TenantContext) -> Response {
     let rows = match queries::list_catalog_with_status(&pool, ctx.tenant_id).await {
         Ok(r) => r,
         Err(e) => {
@@ -149,7 +141,11 @@ pub async fn list_integrations(
         })
         .collect();
 
-    (StatusCode::OK, Json(IntegrationListResponse { data: items })).into_response()
+    (
+        StatusCode::OK,
+        Json(IntegrationListResponse { data: items }),
+    )
+        .into_response()
 }
 
 #[utoipa::path(
@@ -193,15 +189,23 @@ pub async fn get_integration(
         .ok()
         .flatten();
 
-    let schema: Vec<ConfigFieldDto> = serde_json::from_value(catalog.config_schema.clone())
-        .unwrap_or_default();
+    let schema: Vec<ConfigFieldDto> =
+        serde_json::from_value(catalog.config_schema.clone()).unwrap_or_default();
 
     let master = match load_master_key(&config) {
         Ok(m) => Some(m),
         Err(resp) => return resp,
     };
 
-    let detail = build_detail_dto(&pool, &catalog, connection, schema, master.as_ref(), &config).await;
+    let detail = build_detail_dto(
+        &pool,
+        &catalog,
+        connection,
+        schema,
+        master.as_ref(),
+        &config,
+    )
+    .await;
     (StatusCode::OK, Json(detail)).into_response()
 }
 
@@ -253,7 +257,9 @@ async fn build_detail_dto(
             let webhook_url = if c.is_active {
                 master.and_then(|m| {
                     let aad = crypto::aad(c.tenant_id, &catalog.slug, FIELD_WEBHOOK_TOKEN);
-                    let token = crypto::open(m, &aad, &c.webhook_token_ciphertext, &c.webhook_token_nonce).ok()?;
+                    let token =
+                        crypto::open(m, &aad, &c.webhook_token_ciphertext, &c.webhook_token_nonce)
+                            .ok()?;
                     Some(build_webhook_url(config, &token))
                 })
             } else {
@@ -309,8 +315,8 @@ async fn build_detail_dto_for_connection(
         }
     };
 
-    let schema: Vec<ConfigFieldDto> = serde_json::from_value(catalog.config_schema.clone())
-        .unwrap_or_default();
+    let schema: Vec<ConfigFieldDto> =
+        serde_json::from_value(catalog.config_schema.clone()).unwrap_or_default();
 
     let outcomes = queries::recent_event_outcomes(pool, connection.id)
         .await
@@ -428,14 +434,11 @@ pub async fn connect_integration(
             .into_response();
     }
 
-    let schema: Vec<ConfigFieldDto> = serde_json::from_value(catalog.config_schema.clone())
-        .unwrap_or_default();
-    if let Err(errors) = model::validate_against_schema(
-        &schema,
-        &payload.config,
-        &payload.secrets,
-        true,
-    ) {
+    let schema: Vec<ConfigFieldDto> =
+        serde_json::from_value(catalog.config_schema.clone()).unwrap_or_default();
+    if let Err(errors) =
+        model::validate_against_schema(&schema, &payload.config, &payload.secrets, true)
+    {
         return ApiError::unprocessable_entity("Validation failed")
             .with_details(errors)
             .with_request_id(&ctx.request_id)
@@ -449,12 +452,12 @@ pub async fn connect_integration(
     if let Some(c) = &existing {
         if c.is_active {
             return ApiError::new_with_code(
-                    StatusCode::CONFLICT,
-                    "integration_already_connected",
-                    "Integration is already actively connected",
-                )
-                .with_request_id(&ctx.request_id)
-                .into_response();
+                StatusCode::CONFLICT,
+                "integration_already_connected",
+                "Integration is already actively connected",
+            )
+            .with_request_id(&ctx.request_id)
+            .into_response();
         }
     }
 
@@ -514,9 +517,7 @@ pub async fn connect_integration(
         }
     };
 
-    if let Err(e) =
-        queries::delete_secrets_for_connection(&mut tx, connection_id).await
-    {
+    if let Err(e) = queries::delete_secrets_for_connection(&mut tx, connection_id).await {
         tracing::error!(%e, "connect_integration: delete_secrets_for_connection failed");
         let _ = tx.rollback().await;
         return ApiError::internal_error("Failed to connect integration")
@@ -557,9 +558,7 @@ pub async fn connect_integration(
     }
 
     let config_value = serde_json::Value::Object(payload.config.clone());
-    if let Err(e) =
-        queries::update_connection_config(&mut tx, connection_id, &config_value).await
-    {
+    if let Err(e) = queries::update_connection_config(&mut tx, connection_id, &config_value).await {
         tracing::error!(%e, "connect_integration: update_connection_config failed");
         let _ = tx.rollback().await;
         return ApiError::internal_error("Failed to connect integration")
@@ -790,15 +789,12 @@ pub async fn update_integration_config(
         .into_response();
     }
 
-    let schema: Vec<ConfigFieldDto> = serde_json::from_value(catalog.config_schema.clone())
-        .unwrap_or_default();
+    let schema: Vec<ConfigFieldDto> =
+        serde_json::from_value(catalog.config_schema.clone()).unwrap_or_default();
     let secrets_ref = payload.secrets.clone().unwrap_or_default();
-    if let Err(errors) = model::validate_against_schema(
-        &schema,
-        &payload.config,
-        &secrets_ref,
-        false,
-    ) {
+    if let Err(errors) =
+        model::validate_against_schema(&schema, &payload.config, &secrets_ref, false)
+    {
         return ApiError::unprocessable_entity("Validation failed")
             .with_details(errors)
             .with_request_id(&ctx.request_id)
@@ -1068,9 +1064,7 @@ pub async fn disconnect_integration(
             .into_response();
     }
 
-    if let Err(e) =
-        queries::deactivate_connection(&mut tx, connection.id, membership_id).await
-    {
+    if let Err(e) = queries::deactivate_connection(&mut tx, connection.id, membership_id).await {
         tracing::error!(%e, "disconnect_integration: deactivate_connection failed");
         let _ = tx.rollback().await;
         return ApiError::internal_error("Failed to disconnect integration")

@@ -35,22 +35,21 @@ pub async fn get_analytics_summary(
         Err(msg) => return ApiError::unprocessable_entity(msg).into_response(),
     };
 
-    let (volume, concluded, ai_resolved, handed_off) =
-        match queries::conversation_counts(
-            &pool,
-            ctx.tenant_id,
-            resolved.from_ts,
-            resolved.to_ts,
-            resolved.channel.as_deref(),
-        )
-        .await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                tracing::error!(%e, "get_analytics_summary: conversation_counts failed");
-                return ApiError::internal_error("Failed to load summary").into_response();
-            }
-        };
+    let (volume, concluded, ai_resolved, handed_off) = match queries::conversation_counts(
+        &pool,
+        ctx.tenant_id,
+        resolved.from_ts,
+        resolved.to_ts,
+        resolved.channel.as_deref(),
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(%e, "get_analytics_summary: conversation_counts failed");
+            return ApiError::internal_error("Failed to load summary").into_response();
+        }
+    };
 
     let avg_first = match queries::avg_first_response_seconds(
         &pool,
@@ -84,28 +83,28 @@ pub async fn get_analytics_summary(
         }
     };
 
-    let (satisfaction_avg, satisfaction_count) =
-        match queries::satisfaction(
-            &pool,
-            ctx.tenant_id,
-            resolved.from_ts,
-            resolved.to_ts,
-            resolved.channel.as_deref(),
-        )
-        .await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                tracing::error!(%e, "get_analytics_summary: satisfaction failed");
-                return ApiError::internal_error("Failed to load summary").into_response();
-            }
-        };
+    let (satisfaction_avg, satisfaction_count) = match queries::satisfaction(
+        &pool,
+        ctx.tenant_id,
+        resolved.from_ts,
+        resolved.to_ts,
+        resolved.channel.as_deref(),
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(%e, "get_analytics_summary: satisfaction failed");
+            return ApiError::internal_error("Failed to load summary").into_response();
+        }
+    };
 
     let channels = match queries::channel_breakdown(
         &pool,
         ctx.tenant_id,
         resolved.from_ts,
         resolved.to_ts,
+        resolved.channel.as_deref(),
     )
     .await
     {
@@ -113,7 +112,11 @@ pub async fn get_analytics_summary(
             let total: f64 = rows.iter().map(|(_, count)| *count as f64).sum();
             rows.into_iter()
                 .map(|(channel, count)| model::ChannelBreakdownItem {
-                    share: if total == 0.0 { 0.0 } else { count as f64 / total },
+                    share: if total == 0.0 {
+                        0.0
+                    } else {
+                        count as f64 / total
+                    },
                     conversation_count: count,
                     channel,
                 })
@@ -237,17 +240,27 @@ pub async fn get_analytics_timeseries(
 
     let days: Vec<model::TimeseriesDay> = rows
         .into_iter()
-        .map(|(date, volume, ai_resolved, handed_off, satisfaction_avg, satisfaction_count, total_tokens)| {
-            model::TimeseriesDay {
+        .map(
+            |(
                 date,
-                conversation_volume: volume,
+                volume,
                 ai_resolved,
                 handed_off,
-                satisfaction_avg: satisfaction_avg.map(|v| (v * 10.0).round() / 10.0),
+                satisfaction_avg,
                 satisfaction_count,
                 total_tokens,
-            }
-        })
+            )| {
+                model::TimeseriesDay {
+                    date,
+                    conversation_volume: volume,
+                    ai_resolved,
+                    handed_off,
+                    satisfaction_avg: satisfaction_avg.map(|v| (v * 10.0).round() / 10.0),
+                    satisfaction_count,
+                    total_tokens,
+                }
+            },
+        )
         .collect();
 
     let dto = model::AnalyticsTimeseriesDto {

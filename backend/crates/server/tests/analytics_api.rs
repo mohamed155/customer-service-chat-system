@@ -276,23 +276,21 @@ async fn seed_member(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str, role: &s
 #[allow(dead_code)]
 async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     // ── Tenants ──────────────────────────────────────────────────────────────
-    let tenant_a: Uuid = sqlx::query_scalar(
-        "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
-    )
-    .bind("Analytics Tenant A")
-    .bind(format!("an-a-{}", Uuid::new_v4().simple()))
-    .fetch_one(pool)
-    .await
-    .unwrap();
+    let tenant_a: Uuid =
+        sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+            .bind("Analytics Tenant A")
+            .bind(format!("an-a-{}", Uuid::new_v4().simple()))
+            .fetch_one(pool)
+            .await
+            .unwrap();
 
-    let tenant_b: Uuid = sqlx::query_scalar(
-        "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
-    )
-    .bind("Analytics Tenant B")
-    .bind(format!("an-b-{}", Uuid::new_v4().simple()))
-    .fetch_one(pool)
-    .await
-    .unwrap();
+    let tenant_b: Uuid =
+        sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+            .bind("Analytics Tenant B")
+            .bind(format!("an-b-{}", Uuid::new_v4().simple()))
+            .fetch_one(pool)
+            .await
+            .unwrap();
 
     // ── Customers ────────────────────────────────────────────────────────────
     let customer_a: Uuid = sqlx::query_scalar(
@@ -703,13 +701,14 @@ async fn summary_enforces_rbac() {
         StatusCode::FORBIDDEN,
     ];
     for (role, expected_status) in roles.iter().zip(expected.iter()) {
-        let user =
-            seed_member(&pool, tenant_a, &format!("{role}@analytics-t016.test"), role).await;
-        let response = send(
-            pool.clone(),
-            authenticated_request(uri, user, tenant_a),
+        let user = seed_member(
+            &pool,
+            tenant_a,
+            &format!("{role}@analytics-t016.test"),
+            role,
         )
         .await;
+        let response = send(pool.clone(), authenticated_request(uri, user, tenant_a)).await;
         assert_eq!(
             response.status(),
             *expected_status,
@@ -811,10 +810,26 @@ async fn summary_rejects_invalid_ranges() {
     let user = seed_member(&pool, tenant_a, "admin@t033.test", "admin").await;
 
     let cases: &[(&str, &str, &str)] = &[
-        ("from=2026-03-12&to=2026-03-10", "from must be on or before to", "/api/v1/tenant/analytics/summary?from=2026-03-12&to=2026-03-10"),
-        ("", "Date range must not exceed 366 days", "/api/v1/tenant/analytics/summary?from=2025-01-01&to=2026-12-31"),
-        ("", "Invalid date format, expected YYYY-MM-DD", "/api/v1/tenant/analytics/summary?from=notadate&to=2026-03-10"),
-        ("", "Unknown channel", "/api/v1/tenant/analytics/summary?channel=carrier-pigeon"),
+        (
+            "from=2026-03-12&to=2026-03-10",
+            "from must be on or before to",
+            "/api/v1/tenant/analytics/summary?from=2026-03-12&to=2026-03-10",
+        ),
+        (
+            "",
+            "Date range must not exceed 366 days",
+            "/api/v1/tenant/analytics/summary?from=2025-01-01&to=2026-12-31",
+        ),
+        (
+            "",
+            "Invalid date format, expected YYYY-MM-DD",
+            "/api/v1/tenant/analytics/summary?from=notadate&to=2026-03-10",
+        ),
+        (
+            "",
+            "Unknown channel",
+            "/api/v1/tenant/analytics/summary?channel=carrier-pigeon",
+        ),
     ];
 
     for (_label, expected_msg, uri) in cases {
@@ -826,8 +841,7 @@ async fn summary_rejects_invalid_ranges() {
         );
         let body = body_json(response).await;
         assert_eq!(
-            body["error"]["message"],
-            *expected_msg,
+            body["error"]["message"], *expected_msg,
             "unexpected error message for {uri}"
         );
     }
@@ -835,11 +849,7 @@ async fn summary_rejects_invalid_ranges() {
     // Omitting from and to should succeed (defaults to 30-day range).
     let response = send(
         pool.clone(),
-        authenticated_request(
-            "/api/v1/tenant/analytics/summary",
-            user,
-            tenant_a,
-        ),
+        authenticated_request("/api/v1/tenant/analytics/summary", user, tenant_a),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -910,7 +920,8 @@ async fn summary_respects_channel_filter() {
     assert_eq!(body["total_tokens"], 150);
     assert_eq!(body["unattributed_tokens"], 0);
     let channels = body["channels"].as_array().unwrap();
-    assert_eq!(channels.len(), 2);
+    assert_eq!(channels.len(), 1);
+    assert_eq!(channels[0]["channel"], "widget");
 
     let response = send(
         pool.clone(),
@@ -925,7 +936,8 @@ async fn summary_respects_channel_filter() {
     assert_eq!(body["conversation_volume"], 1);
     assert_eq!(body["total_tokens"], 200);
     let channels = body["channels"].as_array().unwrap();
-    assert_eq!(channels.len(), 2);
+    assert_eq!(channels.len(), 1);
+    assert_eq!(channels[0]["channel"], "email");
 }
 
 #[tokio::test]
@@ -1039,20 +1051,15 @@ async fn past_period_metrics_do_not_drift_when_new_activity_arrives() {
     let user = seed_member(&pool, tenant_a, "admin@t062.test", "admin").await;
 
     let url = "/api/v1/tenant/analytics/summary?from=2026-03-10&to=2026-03-12";
-    let first = send(
-        pool.clone(),
-        authenticated_request(url, user, tenant_a),
-    )
-    .await;
+    let first = send(pool.clone(), authenticated_request(url, user, tenant_a)).await;
     let body_first = body_json(first).await;
 
-    let customer_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM customers WHERE tenant_id = $1 LIMIT 1",
-    )
-    .bind(tenant_a)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let customer_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM customers WHERE tenant_id = $1 LIMIT 1")
+            .bind(tenant_a)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     sqlx::query(
         "INSERT INTO conversations (tenant_id, customer_id, channel, status, \
@@ -1078,11 +1085,7 @@ async fn past_period_metrics_do_not_drift_when_new_activity_arrives() {
     .await
     .unwrap();
 
-    let second = send(
-        pool.clone(),
-        authenticated_request(url, user, tenant_a),
-    )
-    .await;
+    let second = send(pool.clone(), authenticated_request(url, user, tenant_a)).await;
     let body_second = body_json(second).await;
 
     assert_eq!(body_first, body_second);
@@ -1096,14 +1099,13 @@ async fn summary_and_timeseries_are_fast_on_a_large_tenant() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;
 
-    let tenant_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
-    )
-    .bind("Performance Tenant")
-    .bind(format!("perf-{}", Uuid::new_v4().simple()))
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let tenant_id: Uuid =
+        sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+            .bind("Performance Tenant")
+            .bind(format!("perf-{}", Uuid::new_v4().simple()))
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     let customer_id: Uuid = sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name) VALUES ($1, $2) RETURNING id",
