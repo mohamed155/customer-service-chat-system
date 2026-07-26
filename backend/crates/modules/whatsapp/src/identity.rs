@@ -24,19 +24,15 @@ pub async fn resolve_customer_in_tx(
     let normalized = normalize_wa_id(wa_id);
 
     // Step 1: Try whatsapp identifier
-    if let Some(customer_id) = queries::find_customer_by_identifier_in_tx(
-        tx, tenant_id, "whatsapp", &normalized,
-    )
-    .await?
+    if let Some(customer_id) =
+        queries::find_customer_by_identifier_in_tx(tx, tenant_id, "whatsapp", &normalized).await?
     {
         return Ok(customer_id);
     }
 
     // Step 2: Try phone identifier, then attach whatsapp
-    if let Some(customer_id) = queries::find_customer_by_identifier_in_tx(
-        tx, tenant_id, "phone", &normalized,
-    )
-    .await?
+    if let Some(customer_id) =
+        queries::find_customer_by_identifier_in_tx(tx, tenant_id, "phone", &normalized).await?
     {
         queries::attach_identifier_in_tx(tx, tenant_id, customer_id, "whatsapp", &normalized)
             .await?;

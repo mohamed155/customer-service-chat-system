@@ -47,7 +47,10 @@ pub async fn fan_out(
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| (r.get("id"), r.get("recipient_membership_id"))).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| (r.get("id"), r.get("recipient_membership_id")))
+        .collect())
 }
 
 pub async fn resolve_subject(
@@ -71,7 +74,10 @@ pub async fn resolve_subject(
     .fetch_all(pool)
     .await?;
 
-    Ok(rows.into_iter().map(|r| r.get("recipient_membership_id")).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| r.get("recipient_membership_id"))
+        .collect())
 }
 
 // ── Read paths ──────────────────────────────────────────────────────
@@ -114,12 +120,17 @@ pub async fn list(
     builder.push(" ORDER BY created_at DESC, id DESC LIMIT ");
     builder.push_bind(limit + 1);
 
-    let rows = builder.build_query_as::<NotificationRow>().fetch_all(pool).await?;
+    let rows = builder
+        .build_query_as::<NotificationRow>()
+        .fetch_all(pool)
+        .await?;
 
     let has_more = rows.len() > limit as usize;
     let data: Vec<NotificationRow> = rows.into_iter().take(limit as usize).collect();
 
-    let next_cursor = data.last().map(|last| encode_cursor(last.created_at, last.id));
+    let next_cursor = data
+        .last()
+        .map(|last| encode_cursor(last.created_at, last.id));
 
     Ok((data, if has_more { next_cursor } else { None }))
 }

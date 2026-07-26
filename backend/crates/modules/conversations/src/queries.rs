@@ -1659,7 +1659,16 @@ pub async fn load_attachments_for_messages(
     tenant_id: Uuid,
     message_ids: &[Uuid],
 ) -> sqlx::Result<std::collections::HashMap<Uuid, Vec<crate::model::AttachmentInfo>>> {
-    let rows: Vec<(Uuid, Uuid, String, String, Option<String>, Option<i64>, Option<String>, Option<String>)> = sqlx::query_as(
+    let rows: Vec<(
+        Uuid,
+        Uuid,
+        String,
+        String,
+        Option<String>,
+        Option<i64>,
+        Option<String>,
+        Option<String>,
+    )> = sqlx::query_as(
         "SELECT id, message_id, kind, status, mime_type, size_bytes, file_name, storage_key \
          FROM message_attachments WHERE tenant_id = $1 AND message_id = ANY($2)",
     )
@@ -1672,15 +1681,21 @@ pub async fn load_attachments_for_messages(
         std::collections::HashMap::new();
     for (id, message_id, kind, status, mime_type, size_bytes, file_name, storage_key) in rows {
         let has_storage = storage_key.is_some();
-        map.entry(message_id).or_default().push(crate::model::AttachmentInfo {
-            id,
-            kind,
-            status,
-            mime_type,
-            size_bytes,
-            file_name,
-            url: if has_storage { Some(String::new()) } else { None },
-        });
+        map.entry(message_id)
+            .or_default()
+            .push(crate::model::AttachmentInfo {
+                id,
+                kind,
+                status,
+                mime_type,
+                size_bytes,
+                file_name,
+                url: if has_storage {
+                    Some(String::new())
+                } else {
+                    None
+                },
+            });
     }
     Ok(map)
 }

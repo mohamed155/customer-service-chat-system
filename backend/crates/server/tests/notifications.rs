@@ -10,12 +10,14 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use server::router;
-use server::state::AppState;
 use cache::Cache;
 use notifications::worker::process_notification_outbox_once;
+use server::router;
+use server::state::AppState;
 
-use notifications::emit::{self, NotificationRequest, dedupe_key_tool_approval, dedupe_key_ai_failed};
+use notifications::emit::{
+    self, dedupe_key_ai_failed, dedupe_key_tool_approval, NotificationRequest,
+};
 use notifications::model::{NotificationKind, SubjectType};
 
 fn test_config(environment: Environment) -> config::AppConfig {
@@ -145,12 +147,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    user_id: Uuid,
-    role: &str,
-) -> Uuid {
+async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -230,11 +227,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
     .unwrap()
 }
 
-async fn seed_conversation(
-    pool: &sqlx::PgPool,
-    tenant_id: Uuid,
-    customer_id: Uuid,
-) -> Uuid {
+async fn seed_conversation(pool: &sqlx::PgPool, tenant_id: Uuid, customer_id: Uuid) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO conversations (tenant_id, customer_id, channel, status, last_activity_at) \
          VALUES ($1, $2, 'web_chat', 'open', now()) RETURNING id",
@@ -246,18 +239,25 @@ async fn seed_conversation(
     .unwrap()
 }
 
-async fn seed_actor(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str, role: &str) -> SeededMembership {
+async fn seed_actor(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    email: &str,
+    role: &str,
+) -> SeededMembership {
     let unique_email = format!("{}-{}", email, Uuid::new_v4().simple());
-    let user_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id",
-    )
-    .bind(&unique_email)
-    .bind("Notifications Test User")
-    .fetch_one(pool)
-    .await
-    .unwrap();
+    let user_id: Uuid =
+        sqlx::query_scalar("INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id")
+            .bind(&unique_email)
+            .bind("Notifications Test User")
+            .fetch_one(pool)
+            .await
+            .unwrap();
     let membership_id = seed_membership(pool, tenant_id, user_id, role).await;
-    SeededMembership { user_id, membership_id }
+    SeededMembership {
+        user_id,
+        membership_id,
+    }
 }
 
 fn json_post(uri: &str, user_id: Uuid, tenant_id: Uuid, body: serde_json::Value) -> Request<Body> {
@@ -312,18 +312,42 @@ async fn list_returns_newest_first() {
 
     let subj_id = Uuid::new_v4();
     seed_notification(
-        &pool, tenant_id, mem_id, "escalation.new", "unread", "Oldest",
-        "escalation", subj_id, None, "2026-07-18T14:00:00Z",
+        &pool,
+        tenant_id,
+        mem_id,
+        "escalation.new",
+        "unread",
+        "Oldest",
+        "escalation",
+        subj_id,
+        None,
+        "2026-07-18T14:00:00Z",
     )
     .await;
     seed_notification(
-        &pool, tenant_id, mem_id, "escalation.new", "unread", "Middle",
-        "escalation", subj_id, None, "2026-07-18T15:00:00Z",
+        &pool,
+        tenant_id,
+        mem_id,
+        "escalation.new",
+        "unread",
+        "Middle",
+        "escalation",
+        subj_id,
+        None,
+        "2026-07-18T15:00:00Z",
     )
     .await;
     seed_notification(
-        &pool, tenant_id, mem_id, "escalation.new", "unread", "Newest",
-        "escalation", subj_id, None, "2026-07-18T16:00:00Z",
+        &pool,
+        tenant_id,
+        mem_id,
+        "escalation.new",
+        "unread",
+        "Newest",
+        "escalation",
+        subj_id,
+        None,
+        "2026-07-18T16:00:00Z",
     )
     .await;
 
@@ -362,8 +386,15 @@ async fn cursor_pagination_returns_all_pages() {
     let subj_id = Uuid::new_v4();
     for i in 0..5 {
         seed_notification(
-            &pool, tenant_id, mem_id, "escalation.new", "unread", &format!("Item {i}"),
-            "escalation", subj_id, None,
+            &pool,
+            tenant_id,
+            mem_id,
+            "escalation.new",
+            "unread",
+            &format!("Item {i}"),
+            "escalation",
+            subj_id,
+            None,
             &format!("2026-07-18T{:02}:00:00Z", 14 + i),
         )
         .await;
@@ -401,7 +432,13 @@ async fn cursor_pagination_returns_all_pages() {
         let response = send(
             pool.clone(),
             Environment::Test,
-            authenticated_request(&uri, Method::GET, user_id, Some(tenant_id), Environment::Test),
+            authenticated_request(
+                &uri,
+                Method::GET,
+                user_id,
+                Some(tenant_id),
+                Environment::Test,
+            ),
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
@@ -437,23 +474,55 @@ async fn unread_count_counts_only_unread() {
 
     let subj_id = Uuid::new_v4();
     seed_notification(
-        &pool, tenant_id, mem_id, "escalation.new", "unread",
-        "Unread 1", "escalation", subj_id, None, "2026-07-18T14:00:00Z",
+        &pool,
+        tenant_id,
+        mem_id,
+        "escalation.new",
+        "unread",
+        "Unread 1",
+        "escalation",
+        subj_id,
+        None,
+        "2026-07-18T14:00:00Z",
     )
     .await;
     seed_notification(
-        &pool, tenant_id, mem_id, "escalation.new", "unread",
-        "Unread 2", "escalation", subj_id, None, "2026-07-18T14:01:00Z",
+        &pool,
+        tenant_id,
+        mem_id,
+        "escalation.new",
+        "unread",
+        "Unread 2",
+        "escalation",
+        subj_id,
+        None,
+        "2026-07-18T14:01:00Z",
     )
     .await;
     seed_notification(
-        &pool, tenant_id, mem_id, "escalation.new", "read",
-        "Read 1", "escalation", subj_id, None, "2026-07-18T14:02:00Z",
+        &pool,
+        tenant_id,
+        mem_id,
+        "escalation.new",
+        "read",
+        "Read 1",
+        "escalation",
+        subj_id,
+        None,
+        "2026-07-18T14:02:00Z",
     )
     .await;
     seed_notification(
-        &pool, tenant_id, mem_id, "escalation.new", "resolved",
-        "Resolved 1", "escalation", subj_id, None, "2026-07-18T14:03:00Z",
+        &pool,
+        tenant_id,
+        mem_id,
+        "escalation.new",
+        "resolved",
+        "Resolved 1",
+        "escalation",
+        subj_id,
+        None,
+        "2026-07-18T14:03:00Z",
     )
     .await;
 
@@ -485,8 +554,16 @@ async fn mark_read_is_idempotent() {
 
     let subj_id = Uuid::new_v4();
     let nid = seed_notification(
-        &pool, tenant_id, mem_id, "escalation.new", "unread",
-        "Test", "escalation", subj_id, None, "2026-07-18T14:00:00Z",
+        &pool,
+        tenant_id,
+        mem_id,
+        "escalation.new",
+        "unread",
+        "Test",
+        "escalation",
+        subj_id,
+        None,
+        "2026-07-18T14:00:00Z",
     )
     .await;
 
@@ -537,8 +614,15 @@ async fn mark_all_read_returns_count_and_is_idempotent() {
     let subj_id = Uuid::new_v4();
     for i in 0..3 {
         seed_notification(
-            &pool, tenant_id, mem_id, "escalation.new", "unread",
-            &format!("Unread {i}"), "escalation", subj_id, None,
+            &pool,
+            tenant_id,
+            mem_id,
+            "escalation.new",
+            "unread",
+            &format!("Unread {i}"),
+            "escalation",
+            subj_id,
+            None,
             &format!("2026-07-18T{:02}:00:00Z", 14 + i),
         )
         .await;
@@ -592,8 +676,16 @@ async fn reading_another_members_notification_returns_404_not_403() {
 
     let subj_id = Uuid::new_v4();
     let nid = seed_notification(
-        &pool, tenant_id, mem_a, "escalation.new", "unread",
-        "Secret", "escalation", subj_id, None, "2026-07-18T14:00:00Z",
+        &pool,
+        tenant_id,
+        mem_a,
+        "escalation.new",
+        "unread",
+        "Secret",
+        "escalation",
+        subj_id,
+        None,
+        "2026-07-18T14:00:00Z",
     )
     .await;
 
@@ -626,8 +718,16 @@ async fn tenant_isolation() {
 
     let subj_id = Uuid::new_v4();
     seed_notification(
-        &pool, tenant_a, mem_a, "escalation.new", "unread",
-        "Only in A", "escalation", subj_id, None, "2026-07-18T14:00:00Z",
+        &pool,
+        tenant_a,
+        mem_a,
+        "escalation.new",
+        "unread",
+        "Only in A",
+        "escalation",
+        subj_id,
+        None,
+        "2026-07-18T14:00:00Z",
     )
     .await;
 
@@ -691,8 +791,15 @@ async fn all_five_tenant_roles_can_access_inbox() {
 
         // Seed one notification so the list is non-empty
         seed_notification(
-            &pool, tenant_id, mem_id, "escalation.new", "unread",
-            &format!("{role} notif"), "escalation", Uuid::new_v4(), None,
+            &pool,
+            tenant_id,
+            mem_id,
+            "escalation.new",
+            "unread",
+            &format!("{role} notif"),
+            "escalation",
+            Uuid::new_v4(),
+            None,
             "2026-07-18T14:00:00Z",
         )
         .await;
@@ -843,10 +950,9 @@ async fn tool_approval_notifies_conversations_manage_holders() {
         pool.clone(),
         Duration::from_secs(45),
     ));
-    let processed =
-        notifications::worker::process_notification_outbox_once(&pool, &presence)
-            .await
-            .unwrap();
+    let processed = notifications::worker::process_notification_outbox_once(&pool, &presence)
+        .await
+        .unwrap();
     assert!(processed, "expected outbox event to be processed");
 
     let rows: Vec<(Uuid, String)> = sqlx::query_as(
@@ -867,7 +973,11 @@ async fn tool_approval_notifies_conversations_manage_holders() {
     assert!(roles.contains(&"manager"));
     assert!(roles.contains(&"agent"));
     assert!(!roles.contains(&"viewer"));
-    assert_eq!(rows.len(), 4, "expected 4 notification rows for manage holders");
+    assert_eq!(
+        rows.len(),
+        4,
+        "expected 4 notification rows for manage holders"
+    );
 }
 
 #[tokio::test]
@@ -915,10 +1025,9 @@ async fn tool_decision_resolves_other_holders_notifications() {
         pool.clone(),
         Duration::from_secs(45),
     ));
-    let processed =
-        notifications::worker::process_notification_outbox_once(&pool, &presence)
-            .await
-            .unwrap();
+    let processed = notifications::worker::process_notification_outbox_once(&pool, &presence)
+        .await
+        .unwrap();
     assert!(processed, "expected resolve outbox event to be processed");
 
     let owner_state: String = sqlx::query_scalar(
@@ -931,7 +1040,10 @@ async fn tool_decision_resolves_other_holders_notifications() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(owner_state, "resolved", "owner's notification should be resolved");
+    assert_eq!(
+        owner_state, "resolved",
+        "owner's notification should be resolved"
+    );
 
     let admin_state: String = sqlx::query_scalar(
         "SELECT state FROM notifications \
@@ -943,7 +1055,10 @@ async fn tool_decision_resolves_other_holders_notifications() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(admin_state, "unread", "admin's (decider's) notification should remain unread");
+    assert_eq!(
+        admin_state, "unread",
+        "admin's (decider's) notification should remain unread"
+    );
 }
 
 #[tokio::test]
@@ -971,7 +1086,9 @@ async fn multiple_ai_failures_within_15_min_produce_one_notification() {
                 target_membership_id: None,
                 dedupe_key: dedupe.clone(),
                 title: "AI response failed".into(),
-                body: Some("The AI was unable to generate a response for this conversation.".into()),
+                body: Some(
+                    "The AI was unable to generate a response for this conversation.".into(),
+                ),
             },
         )
         .await;
@@ -982,10 +1099,9 @@ async fn multiple_ai_failures_within_15_min_produce_one_notification() {
         Duration::from_secs(45),
     ));
     for _ in 0..3 {
-        let processed =
-            notifications::worker::process_notification_outbox_once(&pool, &presence)
-                .await
-                .unwrap();
+        let processed = notifications::worker::process_notification_outbox_once(&pool, &presence)
+            .await
+            .unwrap();
         assert!(processed, "expected outbox event to be processed");
     }
 
@@ -1015,10 +1131,9 @@ async fn multiple_ai_failures_within_15_min_produce_one_notification() {
     )
     .await;
 
-    let processed =
-        notifications::worker::process_notification_outbox_once(&pool, &presence)
-            .await
-            .unwrap();
+    let processed = notifications::worker::process_notification_outbox_once(&pool, &presence)
+        .await
+        .unwrap();
     assert!(processed, "expected outbox event to be processed");
 
     let count_after: i64 = sqlx::query_scalar(
@@ -1029,7 +1144,10 @@ async fn multiple_ai_failures_within_15_min_produce_one_notification() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(count_after, 1, "still expected exactly 1 notification after 4th emit");
+    assert_eq!(
+        count_after, 1,
+        "still expected exactly 1 notification after 4th emit"
+    );
 }
 
 #[tokio::test]
@@ -1092,10 +1210,9 @@ async fn ai_failure_in_later_bucket_produces_second_notification() {
         Duration::from_secs(45),
     ));
     for _ in 0..2 {
-        let processed =
-            notifications::worker::process_notification_outbox_once(&pool, &presence)
-                .await
-                .unwrap();
+        let processed = notifications::worker::process_notification_outbox_once(&pool, &presence)
+            .await
+            .unwrap();
         assert!(processed, "expected outbox event to be processed");
     }
 
@@ -1151,8 +1268,15 @@ async fn assignment_notifies_only_new_assignee() {
     .await
     .unwrap();
 
-    assert_eq!(rows.len(), 1, "expected exactly 1 notification for assignee");
-    assert_eq!(rows[0].0, assignee.membership_id, "notification must go to the new assignee");
+    assert_eq!(
+        rows.len(),
+        1,
+        "expected exactly 1 notification for assignee"
+    );
+    assert_eq!(
+        rows[0].0, assignee.membership_id,
+        "notification must go to the new assignee"
+    );
 }
 
 #[tokio::test]
@@ -1189,7 +1313,10 @@ async fn self_assignment_notifies_nobody() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(req_count, 0, "self-assignment must not emit any notification.requested");
+    assert_eq!(
+        req_count, 0,
+        "self-assignment must not emit any notification.requested"
+    );
 }
 
 #[tokio::test]
@@ -1265,8 +1392,15 @@ async fn escalation_routing_produces_one_notification() {
     .await
     .unwrap();
 
-    assert_eq!(rows.len(), 1, "expected exactly 1 notification for routed escalation");
-    assert_eq!(rows[0].0, agent.membership_id, "notification must go to the routed agent");
+    assert_eq!(
+        rows.len(),
+        1,
+        "expected exactly 1 notification for routed escalation"
+    );
+    assert_eq!(
+        rows[0].0, agent.membership_id,
+        "notification must go to the routed agent"
+    );
 }
 
 #[tokio::test]
@@ -1315,9 +1449,19 @@ async fn queued_escalation_fans_out_to_manage_holders() {
     .await
     .unwrap();
 
-    assert_eq!(rows.len(), 2, "expected 2 notifications (one per manage holder)");
-    assert!(rows.contains(&agent_a.membership_id), "agent_a must be notified");
-    assert!(rows.contains(&agent_b.membership_id), "agent_b must be notified");
+    assert_eq!(
+        rows.len(),
+        2,
+        "expected 2 notifications (one per manage holder)"
+    );
+    assert!(
+        rows.contains(&agent_a.membership_id),
+        "agent_a must be notified"
+    );
+    assert!(
+        rows.contains(&agent_b.membership_id),
+        "agent_b must be notified"
+    );
 }
 
 #[tokio::test]
@@ -1389,7 +1533,11 @@ async fn claiming_resolves_others_rows() {
         ),
     )
     .await;
-    assert_eq!(claim_response.status(), StatusCode::OK, "claim should succeed");
+    assert_eq!(
+        claim_response.status(),
+        StatusCode::OK,
+        "claim should succeed"
+    );
 
     drain_pending_notifications(&state).await;
 
@@ -1404,7 +1552,10 @@ async fn claiming_resolves_others_rows() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(a_state, "resolved", "agent_a's notification should be resolved after claim");
+    assert_eq!(
+        a_state, "resolved",
+        "agent_a's notification should be resolved after claim"
+    );
 }
 
 #[tokio::test]
@@ -1471,7 +1622,10 @@ async fn auto_drain_resolves_others_rows() {
     )
     .await
     .unwrap();
-    assert!(drained.is_some(), "drain should pick up the queued escalation");
+    assert!(
+        drained.is_some(),
+        "drain should pick up the queued escalation"
+    );
     tx.commit().await.unwrap();
 
     let state = setup_state(pool.clone());
@@ -1489,7 +1643,10 @@ async fn auto_drain_resolves_others_rows() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(a_state, "resolved", "agent_a's unread notification should be resolved");
+    assert_eq!(
+        a_state, "resolved",
+        "agent_a's unread notification should be resolved"
+    );
 
     // Agent A's already-read notification should remain read (FR-011a)
     let a_read_state: String = sqlx::query_scalar(
@@ -1503,7 +1660,10 @@ async fn auto_drain_resolves_others_rows() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(a_read_state, "read", "already-read notification must remain read (FR-011a)");
+    assert_eq!(
+        a_read_state, "read",
+        "already-read notification must remain read (FR-011a)"
+    );
 }
 
 #[tokio::test]
@@ -1552,7 +1712,10 @@ async fn replay_dedup_produces_one_row_per_recipient() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(count, 1, "expected exactly 1 notification row despite 2 identical outbox events");
+    assert_eq!(
+        count, 1,
+        "expected exactly 1 notification row despite 2 identical outbox events"
+    );
 
     // Process again — should not create a duplicate
     drain_pending_notifications(&state).await;
@@ -1565,7 +1728,10 @@ async fn replay_dedup_produces_one_row_per_recipient() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(count_after, 1, "still expected exactly 1 notification row after replay");
+    assert_eq!(
+        count_after, 1,
+        "still expected exactly 1 notification row after replay"
+    );
 }
 
 // ── T046: Regression test for removed-then-re-added member ──────────────────
@@ -1581,8 +1747,15 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
 
     // Seed an unread notification for the active membership
     let nid = seed_notification(
-        &pool, tenant_id, old_mem_id, "escalation.new", "unread",
-        "Old notification", "escalation", Uuid::new_v4(), None,
+        &pool,
+        tenant_id,
+        old_mem_id,
+        "escalation.new",
+        "unread",
+        "Old notification",
+        "escalation",
+        Uuid::new_v4(),
+        None,
         "2026-07-18T14:00:00Z",
     )
     .await;
@@ -1611,27 +1784,30 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 
     // Old notification still exists and is tied to old membership
-    let old_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM notifications WHERE recipient_membership_id = $1",
-    )
-    .bind(old_mem_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(old_count, 1, "old notification must remain bound to old membership id");
+    let old_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM notifications WHERE recipient_membership_id = $1")
+            .bind(old_mem_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        old_count, 1,
+        "old notification must remain bound to old membership id"
+    );
 
     // Re-add the same user → new membership id
     // First soft-delete the old membership so the unique constraint allows
     // a new active row for the same (tenant_id, user_id).
-    sqlx::query(
-        "UPDATE tenant_memberships SET deleted_at = now() WHERE id = $1",
-    )
-    .bind(old_mem_id)
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query("UPDATE tenant_memberships SET deleted_at = now() WHERE id = $1")
+        .bind(old_mem_id)
+        .execute(&pool)
+        .await
+        .unwrap();
     let new_mem_id = seed_membership(&pool, tenant_id, user_id, "agent").await;
-    assert_ne!(old_mem_id, new_mem_id, "re-add must produce a new membership id");
+    assert_ne!(
+        old_mem_id, new_mem_id,
+        "re-add must produce a new membership id"
+    );
 
     // Unread count for new membership is 0 (old notifications don't carry over)
     let response = send(
@@ -1651,13 +1827,12 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     assert_eq!(json["count"].as_i64().unwrap(), 0);
 
     // Verify no notification rows point to the new membership
-    let new_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM notifications WHERE recipient_membership_id = $1",
-    )
-    .bind(new_mem_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let new_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM notifications WHERE recipient_membership_id = $1")
+            .bind(new_mem_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(new_count, 0, "new membership must have zero notifications");
 }
 
@@ -1704,9 +1879,19 @@ async fn assignment_by_actor_without_membership_notifies_assignee() {
     .await
     .unwrap();
 
-    assert_eq!(rows.len(), 1, "expected exactly 1 notification for assignee");
-    assert_eq!(rows[0].0, assignee_mid, "notification must go to the assignee");
-    assert!(rows[0].2.is_none(), "actor_membership_id must be NULL when actor has no membership");
+    assert_eq!(
+        rows.len(),
+        1,
+        "expected exactly 1 notification for assignee"
+    );
+    assert_eq!(
+        rows[0].0, assignee_mid,
+        "notification must go to the assignee"
+    );
+    assert!(
+        rows[0].2.is_none(),
+        "actor_membership_id must be NULL when actor has no membership"
+    );
 
     let req_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events \
@@ -1716,5 +1901,8 @@ async fn assignment_by_actor_without_membership_notifies_assignee() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(req_count, 0, "all notification.requested outbox events must be drained");
+    assert_eq!(
+        req_count, 0,
+        "all notification.requested outbox events must be drained"
+    );
 }

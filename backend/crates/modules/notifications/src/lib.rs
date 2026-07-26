@@ -39,9 +39,9 @@
 //! - Additional delivery channels (email, push) can be implemented as
 //!   observers within `emit` without changing the core model.
 
-pub mod model;
 pub mod emit;
-pub mod recipients;
+pub mod model;
 pub mod queries;
-pub mod worker;
+pub mod recipients;
 pub mod routes;
+pub mod worker;

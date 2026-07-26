@@ -71,26 +71,18 @@ pub fn verify_signature(secret: &str, raw_body: &[u8], header: &str) -> bool {
 /// FR-009 requires that these responses do not leak whether the address
 /// ever existed.
 fn not_found_response() -> Response {
-    (
-        StatusCode::NOT_FOUND,
-        Json(json!({ "error": "not found" })),
-    )
-        .into_response()
+    (StatusCode::NOT_FOUND, Json(json!({ "error": "not found" }))).into_response()
 }
 
 /// Resolve the integration master key from app config. Mirrors the helper
 /// in `routes::load_master_key`; duplicated here so the webhook crate does
 /// not need to call back into `routes`.
 fn load_master_key(config: &config::AppConfig) -> Result<MasterKey, Response> {
-    let raw = config
-        .integration_secrets_key
-        .as_deref()
-        .ok_or_else(|| {
-            ApiError::internal_error("Integration secrets key is not configured").into_response()
-        })?;
-    MasterKey::from_base64(raw).map_err(|_| {
-        ApiError::internal_error("Integration secrets key is invalid").into_response()
-    })
+    let raw = config.integration_secrets_key.as_deref().ok_or_else(|| {
+        ApiError::internal_error("Integration secrets key is not configured").into_response()
+    })?;
+    MasterKey::from_base64(raw)
+        .map_err(|_| ApiError::internal_error("Integration secrets key is invalid").into_response())
 }
 
 /// Persist a non-throttled rejection event (used for `invalid_signature` and
@@ -221,26 +213,29 @@ pub async fn receive_webhook(
         Err(resp) => return resp,
     };
 
-    let (ct, nonce) =
-        match queries::find_secret_ciphertext(&pool, conn.connection_id, SIGNING_SECRET_FIELD)
-            .await
-        {
-            Ok(Some(pair)) => pair,
-            Ok(None) => {
-                log_rejection_event(
-                    &pool,
-                    conn.tenant_id,
-                    conn.connection_id,
-                    model::RejectionReason::InvalidSignature.as_str(),
-                )
-                .await;
-                return not_found_response();
-            }
-            Err(e) => {
-                tracing::error!(%e, "receive_webhook: find_secret_ciphertext failed");
-                return ApiError::internal_error("Internal error").into_response();
-            }
-        };
+    let (ct, nonce) = match queries::find_secret_ciphertext(
+        &pool,
+        conn.connection_id,
+        SIGNING_SECRET_FIELD,
+    )
+    .await
+    {
+        Ok(Some(pair)) => pair,
+        Ok(None) => {
+            log_rejection_event(
+                &pool,
+                conn.tenant_id,
+                conn.connection_id,
+                model::RejectionReason::InvalidSignature.as_str(),
+            )
+            .await;
+            return not_found_response();
+        }
+        Err(e) => {
+            tracing::error!(%e, "receive_webhook: find_secret_ciphertext failed");
+            return ApiError::internal_error("Internal error").into_response();
+        }
+    };
 
     let aad = crypto::aad(conn.tenant_id, &conn.catalog_slug, SIGNING_SECRET_FIELD);
     let secret = match crypto::open(&master, &aad, &ct, &nonce) {
@@ -289,8 +284,8 @@ pub async fn receive_webhook(
             return ApiError::internal_error("Failed to record delivery").into_response();
         }
     };
-    if let Err(e) = queries::insert_delivery(&mut tx, conn.tenant_id, conn.connection_id, &payload)
-        .await
+    if let Err(e) =
+        queries::insert_delivery(&mut tx, conn.tenant_id, conn.connection_id, &payload).await
     {
         tracing::error!(%e, "receive_webhook: insert_delivery failed");
         let _ = tx.rollback().await;
@@ -316,11 +311,7 @@ pub async fn receive_webhook(
         return ApiError::internal_error("Failed to record delivery").into_response();
     }
 
-    (
-        StatusCode::ACCEPTED,
-        Json(json!({ "status": "accepted" })),
-    )
-        .into_response()
+    (StatusCode::ACCEPTED, Json(json!({ "status": "accepted" }))).into_response()
 }
 
 #[cfg(test)]
@@ -352,9 +343,9 @@ mod tests {
     #[test]
     fn generated_token_is_url_safe_base64_no_padding() {
         let token = generate_token();
-        assert!(token.chars().all(|c| {
-            c.is_ascii_alphanumeric() || c == '-' || c == '_'
-        }));
+        assert!(token
+            .chars()
+            .all(|c| { c.is_ascii_alphanumeric() || c == '-' || c == '_' }));
         assert!(!token.contains('='));
     }
 
@@ -397,6 +388,10 @@ mod tests {
         let original = br#"{"hello":"world"}"#;
         let sig = hmac_hex(secret, original);
         let tampered = br#"{"hello":"WORLD"}"#;
-        assert!(!verify_signature(secret, tampered, &format!("sha256={sig}")));
+        assert!(!verify_signature(
+            secret,
+            tampered,
+            &format!("sha256={sig}")
+        ));
     }
 }

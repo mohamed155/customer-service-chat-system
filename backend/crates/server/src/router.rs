@@ -1,24 +1,24 @@
-use authz::{platform_permission_middleware, require_permission, Permission};
+use authz::{Permission, platform_permission_middleware, require_permission};
+use axum::Extension;
 use axum::extract::{DefaultBodyLimit, Request};
-use axum::http::{header, header::SET_COOKIE, HeaderName, Method, StatusCode};
+use axum::http::{HeaderName, Method, StatusCode, header, header::SET_COOKIE};
 use axum::middleware::from_fn_with_state;
 use axum::response::{IntoResponse, Response};
 use axum::routing::MethodRouter;
-use axum::Extension;
-use axum::{middleware, routing, Router};
+use axum::{Router, middleware, routing};
+use billing;
 use config::{AppConfig, Environment};
-use identity::{principal_middleware, IdentityConfig, Principal};
+use email::{EmailSender, noop::LogEmailSender, smtp::SmtpEmailSender};
+use identity::{IdentityConfig, Principal, principal_middleware};
 use kernel::ApiError;
-use email::{noop::LogEmailSender, smtp::SmtpEmailSender, EmailSender};
 use observability::health::HealthReport;
-use observability::request_id::{request_id_middleware, REQUEST_ID_HEADER};
+use observability::request_id::{REQUEST_ID_HEADER, request_id_middleware};
 use observability::trace::trace_middleware;
 use observability::{liveness, metrics};
 use std::sync::Arc;
 use std::time::Duration;
-use storage::{InMemoryStorage, ObjectStorage, S3Storage};
+use storage::{ObjectStorage, StorageBackend, StorageKind};
 use tower_http::catch_panic::CatchPanicLayer;
-use billing;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_axum::router::{OpenApiRouter, UtoipaMethodRouterExt};
@@ -121,8 +121,6 @@ fn hooks_routes() -> OpenApiRouter<sqlx::PgPool> {
         .routes(routes!(integrations::webhook::receive_webhook))
         .layer(DefaultBodyLimit::max(256 * 1024))
 }
-
-
 
 fn cors_layer(config: &AppConfig) -> CorsLayer {
     let origins: Vec<_> = config
@@ -332,11 +330,7 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         )
         // Platform billing plan catalog — GET+POST share the same path (T043)
         .routes(
-            routes!(
-                billing::routes::list_plans,
-                billing::routes::create_plan
-            )
-            .map(|_| {
+            routes!(billing::routes::list_plans, billing::routes::create_plan).map(|_| {
                 merge_with_permissions(
                     routing::get(billing::routes::list_plans),
                     Permission::PlatformBillingView,
@@ -359,6 +353,21 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(billing::routes::put_subscription)
                 .layer(require_permission(Permission::PlatformBillingManage)),
+        )
+        // Platform analytics summary (032)
+        .routes(
+            routes!(platform::routes::get_platform_analytics_summary)
+                .layer(require_permission(Permission::PlatformAnalyticsView)),
+        )
+        // Platform system health (032)
+        .routes(
+            routes!(platform::routes::get_platform_health)
+                .layer(require_permission(Permission::PlatformDiagnosticsView)),
+        )
+        // Platform AI provider status (032)
+        .routes(
+            routes!(platform::routes::get_platform_ai_provider_status)
+                .layer(require_permission(Permission::PlatformDiagnosticsView)),
         );
     if include_test_routes {
         // Test routes are closures, not function paths, so they cannot use the
@@ -385,6 +394,11 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
                 "/test/platform/diagnostics/view",
                 routing::get(|| async { StatusCode::OK })
                     .route_layer(require_permission(Permission::PlatformDiagnosticsView)),
+            )
+            .route(
+                "/test/platform/analytics/view",
+                routing::get(|| async { StatusCode::OK })
+                    .route_layer(require_permission(Permission::PlatformAnalyticsView)),
             );
     }
     router
@@ -816,7 +830,9 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         )
         // Notifications (spec 027) — no permission gate (FR-012a)
         .routes(routes!(notifications::routes::list_notifications))
-        .routes(routes!(notifications::routes::get_unread_notification_count))
+        .routes(routes!(
+            notifications::routes::get_unread_notification_count
+        ))
         .routes(routes!(notifications::routes::mark_notification_read))
         .routes(routes!(notifications::routes::mark_all_notifications_read))
         // ── Widgets admin CRUD ─────────────────────────────────────────────
@@ -995,19 +1011,29 @@ fn api_routes(
         }
     });
 
-    let storage: Arc<dyn ObjectStorage> = storage.unwrap_or_else(|| {
-        if let Some(s3_config) = &state.config.s3 {
-            match tokio::runtime::Handle::current().block_on(S3Storage::new(s3_config)) {
-                Ok(s) => Arc::new(s),
-                Err(e) => {
-                    tracing::warn!(error = %e, "failed to create S3 storage, falling back to in-memory");
-                    Arc::new(InMemoryStorage::default())
-                }
-            }
-        } else {
-            Arc::new(InMemoryStorage::default())
-        }
-    });
+    let (fallback_storage, storage_backend) = if let Some(ref s) = storage {
+        (
+            s.clone(),
+            StorageBackend {
+                kind: StorageKind::InMemory,
+                s3_configured: false,
+            },
+        )
+    } else {
+        // `build_app` is sync but is called from inside `#[tokio::main]` (production) and
+        // from `#[tokio::test]` (the suites), so `Handle::current().block_on(...)` panics
+        // with "Cannot start a runtime from within a runtime". Run the async selection on
+        // a dedicated thread with its own runtime instead.
+        let s3 = state.config.s3.clone();
+        std::thread::spawn(move || {
+            tokio::runtime::Runtime::new()
+                .expect("failed to build storage-selection runtime")
+                .block_on(storage::select_storage(s3.as_ref()))
+        })
+        .join()
+        .expect("storage-selection thread panicked")
+    };
+    let storage: Arc<dyn ObjectStorage> = storage.unwrap_or(fallback_storage);
 
     let router: OpenApiRouter<sqlx::PgPool> =
         OpenApiRouter::with_openapi(ApiDoc::openapi()).merge(public_routes());
@@ -1048,6 +1074,8 @@ fn api_routes(
         .layer(Extension(state.config.clone()))
         .layer(Extension(state.escalations.clone()))
         .layer(Extension(state.ai.clone()))
+        .layer(Extension(state.health_checks.clone()))
+        .layer(Extension(storage_backend))
         .layer(Extension(Arc::new(ai::agent_config::AiAgentStatusAdapter {
             pool: state.db.clone(),
         })
@@ -1204,7 +1232,7 @@ pub fn app_with_test_routes_and_storage(
 
 #[cfg(test)]
 mod tests {
-    use super::{docs_surface_enabled, platform_routes, OpenApiRouter};
+    use super::{OpenApiRouter, docs_surface_enabled, platform_routes};
     use config::{AppConfig, Environment, LogFormat};
     use sqlx::PgPool;
 

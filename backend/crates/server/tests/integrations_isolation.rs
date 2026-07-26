@@ -145,12 +145,11 @@ async fn seed_connection_with_secrets(
     catalog_slug: &str,
     config: &str,
 ) -> Uuid {
-    let catalog_id: Uuid =
-        sqlx::query_scalar("SELECT id FROM integration_catalog WHERE slug = $1")
-            .bind(catalog_slug)
-            .fetch_one(pool)
-            .await
-            .unwrap();
+    let catalog_id: Uuid = sqlx::query_scalar("SELECT id FROM integration_catalog WHERE slug = $1")
+        .bind(catalog_slug)
+        .fetch_one(pool)
+        .await
+        .unwrap();
 
     let mut token_hash = [0u8; 32];
     let mut token_ciphertext = vec![0u8; 48];
@@ -221,7 +220,12 @@ async fn tenant_b_does_not_see_tenant_a_connection_in_list() {
     // Tenant A's list reflects its own connection.
     let response_a = send(
         pool.clone(),
-        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin_a, tenant_a),
+        authenticated_request(
+            "/api/v1/tenant/integrations",
+            Method::GET,
+            admin_a,
+            tenant_a,
+        ),
     )
     .await;
     assert_eq!(response_a.status(), StatusCode::OK);
@@ -237,7 +241,12 @@ async fn tenant_b_does_not_see_tenant_a_connection_in_list() {
     // Tenant B's list must not see tenant A's connection.
     let response_b = send(
         pool.clone(),
-        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin_b, tenant_b),
+        authenticated_request(
+            "/api/v1/tenant/integrations",
+            Method::GET,
+            admin_b,
+            tenant_b,
+        ),
     )
     .await;
     assert_eq!(response_b.status(), StatusCode::OK);
@@ -330,7 +339,8 @@ async fn tenant_b_detail_does_not_expose_tenant_a_secrets_or_config() {
     assert_eq!(a_json["status"], "connected");
     assert!(a_json["connection"].is_object());
     assert_eq!(
-        a_json["connection"]["config"]["source_label"], "A-secret-label"
+        a_json["connection"]["config"]["source_label"],
+        "A-secret-label"
     );
     assert_eq!(a_json["connection"]["secrets"].as_array().unwrap().len(), 1);
 

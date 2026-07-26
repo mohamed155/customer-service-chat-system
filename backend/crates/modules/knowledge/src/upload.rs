@@ -1,4 +1,4 @@
-use crate::validate::{sanitize_filename, ItemStatus, ValidationIssue, MAX_DOCUMENT_BYTES};
+use crate::validate::{ItemStatus, MAX_DOCUMENT_BYTES, ValidationIssue, sanitize_filename};
 use axum::extract::Multipart;
 use std::future::Future;
 use std::path::Path;
@@ -284,8 +284,8 @@ mod tests {
     use axum::body::Body;
     use axum::extract::FromRequest;
     use axum::http::Request;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use storage::InMemoryStorage;
 
     #[allow(clippy::type_complexity)]
@@ -518,6 +518,10 @@ mod tests {
 
             async fn delete(&self, _key: &str) -> Result<(), StorageError> {
                 unreachable!()
+            }
+
+            async fn probe(&self) -> Result<(), StorageError> {
+                Err(StorageError::Other("probe failed".into()))
             }
         }
 

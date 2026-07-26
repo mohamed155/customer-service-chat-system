@@ -14,6 +14,8 @@ export const APP_PATHS = {
     newTenant: 'new',
     auditLogs: 'audit',
     billing: 'manage-billing',
+    systemHealth: 'system-health',
+    aiProviders: 'ai-providers',
   },
   tenant: {
     base: 'tenant',

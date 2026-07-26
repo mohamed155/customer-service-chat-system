@@ -28,10 +28,7 @@ impl email::EmailSender for BlockingEmailSender {
         true
     }
 
-    async fn send(
-        &self,
-        _message: email::EmailMessage,
-    ) -> email::EmailDeliveryStatus {
+    async fn send(&self, _message: email::EmailMessage) -> email::EmailDeliveryStatus {
         self.started.notify_one();
         self.release.notified().await;
         email::EmailDeliveryStatus::Sent
@@ -44,10 +41,7 @@ impl email::EmailSender for DeterministicEmailSender {
         true
     }
 
-    async fn send(
-        &self,
-        _message: email::EmailMessage,
-    ) -> email::EmailDeliveryStatus {
+    async fn send(&self, _message: email::EmailMessage) -> email::EmailDeliveryStatus {
         if self.succeeds {
             email::EmailDeliveryStatus::Sent
         } else {
@@ -1004,8 +998,7 @@ async fn poison_delivery_is_terminal_and_does_not_starve_next_event() {
         ).bind(Uuid::new_v4()).bind(id.to_string()).bind(tenant_id.to_string()).bind(payload)
         .bind(created_offset).execute(&pool).await.unwrap();
     }
-    let sender: Arc<dyn email::EmailSender> =
-        Arc::new(DeterministicEmailSender { succeeds: true });
+    let sender: Arc<dyn email::EmailSender> = Arc::new(DeterministicEmailSender { succeeds: true });
 
     assert_eq!(
         tenancy::invitations::process_invitation_deliveries_once(&pool, sender.clone())

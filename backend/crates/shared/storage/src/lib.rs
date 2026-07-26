@@ -24,6 +24,19 @@ pub trait ObjectStorage: Send + Sync + 'static {
     async fn put(&self, key: &str, content_type: &str, bytes: Vec<u8>) -> Result<(), StorageError>;
     async fn get(&self, key: &str) -> Result<(Vec<u8>, String), StorageError>;
     async fn delete(&self, key: &str) -> Result<(), StorageError>;
+    async fn probe(&self) -> Result<(), StorageError>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StorageKind {
+    S3,
+    InMemory,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct StorageBackend {
+    pub kind: StorageKind,
+    pub s3_configured: bool,
 }
 
 pub struct S3Storage {
@@ -125,6 +138,16 @@ impl ObjectStorage for S3Storage {
 
         Ok(())
     }
+
+    async fn probe(&self) -> Result<(), StorageError> {
+        self.client
+            .head_bucket()
+            .bucket(&self.bucket)
+            .send()
+            .await
+            .map_err(|e| StorageError::Other(e.to_string()))?;
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -158,6 +181,44 @@ impl ObjectStorage for InMemoryStorage {
             .map_err(|e| StorageError::Other(format!("lock poisoned: {e}")))?;
         map.remove(key);
         Ok(())
+    }
+
+    async fn probe(&self) -> Result<(), StorageError> {
+        Ok(())
+    }
+}
+
+pub async fn select_storage(
+    s3: Option<&config::S3Config>,
+) -> (std::sync::Arc<dyn ObjectStorage>, StorageBackend) {
+    if let Some(s3_config) = s3 {
+        match S3Storage::new(s3_config).await {
+            Ok(s) => (
+                std::sync::Arc::new(s),
+                StorageBackend {
+                    kind: StorageKind::S3,
+                    s3_configured: true,
+                },
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to create S3 storage, falling back to in-memory");
+                (
+                    std::sync::Arc::new(InMemoryStorage::default()),
+                    StorageBackend {
+                        kind: StorageKind::InMemory,
+                        s3_configured: true,
+                    },
+                )
+            }
+        }
+    } else {
+        (
+            std::sync::Arc::new(InMemoryStorage::default()),
+            StorageBackend {
+                kind: StorageKind::InMemory,
+                s3_configured: false,
+            },
+        )
     }
 }
 
@@ -201,7 +262,19 @@ mod tests {
     #[tokio::test]
     async fn in_memory_delete_unknown_key_is_idempotent() {
         let storage = InMemoryStorage::default();
-        // Should not error
         storage.delete("does-not-exist").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn in_memory_probe_ok() {
+        let storage = InMemoryStorage::default();
+        assert!(storage.probe().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn select_storage_no_s3_returns_in_memory() {
+        let (_store, backend) = select_storage(None).await;
+        assert_eq!(backend.kind, StorageKind::InMemory);
+        assert!(!backend.s3_configured);
     }
 }

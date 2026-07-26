@@ -41,9 +41,7 @@ mod tests {
         let url = match std::env::var("DATABASE_URL") {
             Ok(value) => value,
             Err(_) => {
-                eprintln!(
-                    "skipping integrations retention live tests: DATABASE_URL not set"
-                );
+                eprintln!("skipping integrations retention live tests: DATABASE_URL not set");
                 if require_db_tests() {
                     panic!("REQUIRE_DB_TESTS=1 but DATABASE_URL is not set");
                 }
@@ -52,9 +50,7 @@ mod tests {
         };
         let pool = db::lazy_pool(&url, 4, Duration::from_secs(5));
         if sqlx::query("SELECT 1").execute(&pool).await.is_err() {
-            eprintln!(
-                "skipping integrations retention live tests: DATABASE_URL is unreachable"
-            );
+            eprintln!("skipping integrations retention live tests: DATABASE_URL is unreachable");
             if require_db_tests() {
                 panic!("REQUIRE_DB_TESTS=1 but DATABASE_URL is unreachable");
             }
@@ -147,13 +143,12 @@ mod tests {
         }
 
         // Sanity: 4 rows in each table before the sweep.
-        let events_before: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM integration_events WHERE connection_id = $1",
-        )
-        .bind(connection_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let events_before: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM integration_events WHERE connection_id = $1")
+                .bind(connection_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(events_before.0, 4, "expected 4 events before sweep");
         let deliveries_before: (i64,) = sqlx::query_as(
             "SELECT COUNT(*) FROM integration_webhook_deliveries WHERE connection_id = $1",
@@ -162,10 +157,7 @@ mod tests {
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(
-            deliveries_before.0, 4,
-            "expected 4 deliveries before sweep"
-        );
+        assert_eq!(deliveries_before.0, 4, "expected 4 deliveries before sweep");
 
         let deleted = sweep_expired(&pool)
             .await
@@ -175,13 +167,12 @@ mod tests {
             "sweep must return the total of rows deleted (2 events + 2 deliveries)"
         );
 
-        let events_after: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM integration_events WHERE connection_id = $1",
-        )
-        .bind(connection_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let events_after: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM integration_events WHERE connection_id = $1")
+                .bind(connection_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(
             events_after.0, 2,
             "the 2 old events must be deleted, the 2 new ones kept"

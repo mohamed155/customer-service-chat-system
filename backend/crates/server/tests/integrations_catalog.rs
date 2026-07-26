@@ -149,12 +149,11 @@ async fn seed_connection(
     catalog_slug: &str,
     is_active: bool,
 ) -> Uuid {
-    let catalog_id: Uuid =
-        sqlx::query_scalar("SELECT id FROM integration_catalog WHERE slug = $1")
-            .bind(catalog_slug)
-            .fetch_one(pool)
-            .await
-            .unwrap();
+    let catalog_id: Uuid = sqlx::query_scalar("SELECT id FROM integration_catalog WHERE slug = $1")
+        .bind(catalog_slug)
+        .fetch_one(pool)
+        .await
+        .unwrap();
 
     let mut token_hash = [0u8; 32];
     let mut token_ciphertext = vec![0u8; 48];
@@ -191,12 +190,7 @@ async fn list_returns_all_seeded_catalog_entries() {
 
     let response = send(
         pool.clone(),
-        authenticated_request(
-            "/api/v1/tenant/integrations",
-            Method::GET,
-            admin,
-            tenant,
-        ),
+        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin, tenant),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -224,12 +218,7 @@ async fn unavailable_entries_have_is_available_false() {
 
     let response = send(
         pool.clone(),
-        authenticated_request(
-            "/api/v1/tenant/integrations",
-            Method::GET,
-            admin,
-            tenant,
-        ),
+        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin, tenant),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -254,12 +243,7 @@ async fn tenant_with_no_connections_sees_not_connected_everywhere() {
 
     let response = send(
         pool.clone(),
-        authenticated_request(
-            "/api/v1/tenant/integrations",
-            Method::GET,
-            admin,
-            tenant,
-        ),
+        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin, tenant),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -287,12 +271,7 @@ async fn active_connection_yields_connected_status() {
 
     let response = send(
         pool.clone(),
-        authenticated_request(
-            "/api/v1/tenant/integrations",
-            Method::GET,
-            admin,
-            tenant,
-        ),
+        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin, tenant),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -317,12 +296,7 @@ async fn inactive_connection_yields_disconnected_status() {
 
     let response = send(
         pool.clone(),
-        authenticated_request(
-            "/api/v1/tenant/integrations",
-            Method::GET,
-            admin,
-            tenant,
-        ),
+        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin, tenant),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -439,10 +413,7 @@ fn authenticated_json_request_local(
         .unwrap()
 }
 
-async fn count_recent_invalid_signature_events(
-    pool: &sqlx::PgPool,
-    connection_id: Uuid,
-) -> i64 {
+async fn count_recent_invalid_signature_events(pool: &sqlx::PgPool, connection_id: Uuid) -> i64 {
     let row: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM integration_events \
          WHERE connection_id = $1 AND event_type = 'delivery_rejected' \
@@ -505,11 +476,7 @@ async fn three_rejected_deliveries_yield_error_status() {
         let body = format!(r#"{{"seq":{i}}}"#).into_bytes();
         // Sign with a key that does not match the stored secret.
         let signature = sign_body("whsec_definitely_wrong", &body);
-        let response = send(
-            pool.clone(),
-            webhook_request_for(&token, body, &signature),
-        )
-        .await;
+        let response = send(pool.clone(), webhook_request_for(&token, body, &signature)).await;
         assert_eq!(
             response.status(),
             StatusCode::NOT_FOUND,
@@ -526,12 +493,7 @@ async fn three_rejected_deliveries_yield_error_status() {
     // List endpoint must now report status = "error".
     let response = send(
         pool.clone(),
-        authenticated_request(
-            "/api/v1/tenant/integrations",
-            Method::GET,
-            admin,
-            tenant,
-        ),
+        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin, tenant),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -605,23 +567,14 @@ async fn accepted_delivery_after_failures_returns_connected_status() {
     for i in 0..3 {
         let body = format!(r#"{{"seq":{i}}}"#).into_bytes();
         let signature = sign_body("whsec_definitely_wrong", &body);
-        let response = send(
-            pool.clone(),
-            webhook_request_for(&token, body, &signature),
-        )
-        .await;
+        let response = send(pool.clone(), webhook_request_for(&token, body, &signature)).await;
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     // Sanity check: list now says "error".
     let response = send(
         pool.clone(),
-        authenticated_request(
-            "/api/v1/tenant/integrations",
-            Method::GET,
-            admin,
-            tenant,
-        ),
+        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin, tenant),
     )
     .await;
     let body = body_json(response).await;
@@ -636,21 +589,12 @@ async fn accepted_delivery_after_failures_returns_connected_status() {
     // One correctly signed delivery: list/detail flip back to "connected".
     let body = br#"{"event":"recovered"}"#.to_vec();
     let signature = sign_body(T056_SECRET, &body);
-    let response = send(
-        pool.clone(),
-        webhook_request_for(&token, body, &signature),
-    )
-    .await;
+    let response = send(pool.clone(), webhook_request_for(&token, body, &signature)).await;
     assert_eq!(response.status(), StatusCode::ACCEPTED);
 
     let response = send(
         pool.clone(),
-        authenticated_request(
-            "/api/v1/tenant/integrations",
-            Method::GET,
-            admin,
-            tenant,
-        ),
+        authenticated_request("/api/v1/tenant/integrations", Method::GET, admin, tenant),
     )
     .await;
     let body = body_json(response).await;

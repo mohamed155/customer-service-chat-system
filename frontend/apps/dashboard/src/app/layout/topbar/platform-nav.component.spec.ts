@@ -90,17 +90,17 @@ describe('PlatformNavComponent', () => {
     fixture.detectChanges();
 
     const options = (fixture.nativeElement as HTMLElement).querySelectorAll('.option');
-    // The first destination is "Tenants" (US2 added platform.tenants.list);
-    // the second is the original "Platform overview" (Super Admin only).
     expect(options[0].textContent).toContain('Tenants');
     expect(options[1].textContent).toContain('Audit Logs');
     expect(options[2].textContent).toContain('Billing');
-    expect(options[3].textContent).toContain('Platform overview');
+    expect(options[3].textContent).toContain('System health');
+    expect(options[4].textContent).toContain('AI providers');
+    expect(options[5].textContent).toContain('Platform overview');
 
-    (options[3] as HTMLElement).click();
+    (options[5] as HTMLElement).click();
     fixture.detectChanges();
 
-    expect(routerMock.navigate).toHaveBeenCalledWith(['/platform']);
+    expect(routerMock.navigate).toHaveBeenCalledWith(['/platform/overview-placeholder']);
     const dropdown = (fixture.nativeElement as HTMLElement).querySelector('.dropdown');
     expect(dropdown).toBeNull();
   });

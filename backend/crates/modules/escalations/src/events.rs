@@ -125,9 +125,9 @@ impl Stream for GuardedStream {
             Poll::Ready(Some(Ok(presence::Event::NotificationCreated(ev)))) => {
                 if ev.membership_id == self.membership_id {
                     let data = serde_json::to_string(&ev).unwrap_or_default();
-                    return Poll::Ready(Some(Ok::<_, Infallible>(Event::default()
-                        .event("notification.created")
-                        .data(data))));
+                    return Poll::Ready(Some(Ok::<_, Infallible>(
+                        Event::default().event("notification.created").data(data),
+                    )));
                 }
                 cx.waker().wake_by_ref();
                 Poll::Pending
@@ -135,9 +135,9 @@ impl Stream for GuardedStream {
             Poll::Ready(Some(Ok(presence::Event::NotificationCleared(ev)))) => {
                 if ev.membership_id == self.membership_id {
                     let data = serde_json::to_string(&ev).unwrap_or_default();
-                    return Poll::Ready(Some(Ok::<_, Infallible>(Event::default()
-                        .event("notification.cleared")
-                        .data(data))));
+                    return Poll::Ready(Some(Ok::<_, Infallible>(
+                        Event::default().event("notification.cleared").data(data),
+                    )));
                 }
                 cx.waker().wake_by_ref();
                 Poll::Pending
@@ -372,7 +372,10 @@ pub async fn process_escalation_outbox_once(
                 }
             }
             "conversation.message_status" => {
-                runtime.broadcast(tenant_id, presence::Event::ConversationMessageStatus(payload.clone()));
+                runtime.broadcast(
+                    tenant_id,
+                    presence::Event::ConversationMessageStatus(payload.clone()),
+                );
             }
             _ => {}
         }

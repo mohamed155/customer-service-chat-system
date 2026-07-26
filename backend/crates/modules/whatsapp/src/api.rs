@@ -40,17 +40,9 @@ pub trait WhatsAppApi: Send + Sync {
         body: &str,
     ) -> Result<String, SendError>;
 
-    async fn media_url(
-        &self,
-        access_token: &str,
-        media_id: &str,
-    ) -> Result<MediaInfo, SendError>;
+    async fn media_url(&self, access_token: &str, media_id: &str) -> Result<MediaInfo, SendError>;
 
-    async fn download(
-        &self,
-        access_token: &str,
-        url: &str,
-    ) -> Result<Bytes, SendError>;
+    async fn download(&self, access_token: &str, url: &str) -> Result<Bytes, SendError>;
 }
 
 pub struct GraphWhatsAppApi {
@@ -159,11 +151,7 @@ impl WhatsAppApi for GraphWhatsAppApi {
             .ok_or_else(|| SendError::Other("no message id in response".into()))
     }
 
-    async fn media_url(
-        &self,
-        access_token: &str,
-        media_id: &str,
-    ) -> Result<MediaInfo, SendError> {
+    async fn media_url(&self, access_token: &str, media_id: &str) -> Result<MediaInfo, SendError> {
         let url = format!("{}/{media_id}", self.base_url);
 
         let response = self
@@ -196,11 +184,7 @@ impl WhatsAppApi for GraphWhatsAppApi {
         })
     }
 
-    async fn download(
-        &self,
-        access_token: &str,
-        url: &str,
-    ) -> Result<Bytes, SendError> {
+    async fn download(&self, access_token: &str, url: &str) -> Result<Bytes, SendError> {
         let response = self
             .http
             .get(url)
@@ -290,11 +274,7 @@ impl WhatsAppApi for MockWhatsAppApi {
             })
     }
 
-    async fn download(
-        &self,
-        _access_token: &str,
-        _url: &str,
-    ) -> Result<Bytes, SendError> {
+    async fn download(&self, _access_token: &str, _url: &str) -> Result<Bytes, SendError> {
         self.download_responses
             .lock()
             .unwrap()

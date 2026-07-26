@@ -36,9 +36,7 @@ fn test_config() -> config::AppConfig {
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
         docs_enabled: false,
-        ai_key_encryption_key: Some(
-            "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into(),
-        ),
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         integration_secrets_key: None,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
@@ -53,10 +51,7 @@ fn app_state(pool: sqlx::PgPool) -> AppState {
         db: pool.clone(),
         cache: Arc::new(cache::Cache::new("redis://127.0.0.1:6379").unwrap()),
         health_checks: vec![],
-        escalations: escalations::presence::Runtime::new(
-            pool.clone(),
-            Duration::from_secs(45),
-        ),
+        escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
         ai: ai::AiService::from_config(pool, &test_config()).unwrap(),
     }
 }
@@ -95,16 +90,16 @@ async fn send(pool: sqlx::PgPool, request: Request<Body>) -> Response {
 }
 
 async fn body_json(response: Response) -> Value {
-    let bytes = response
-        .into_body()
-        .collect()
-        .await
-        .unwrap()
-        .to_bytes();
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
     serde_json::from_slice(&bytes).unwrap()
 }
 
-fn platform_request(uri: &str, method: Method, user_id: Uuid, body: Option<Value>) -> Request<Body> {
+fn platform_request(
+    uri: &str,
+    method: Method,
+    user_id: Uuid,
+    body: Option<Value>,
+) -> Request<Body> {
     let builder = Request::builder()
         .uri(uri)
         .method(method)
@@ -123,7 +118,10 @@ async fn seed_user(pool: &sqlx::PgPool, platform_role: Option<&str>) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO users (email, display_name, platform_role) VALUES ($1, $2, $3) RETURNING id",
     )
-    .bind(format!("billing_platform_{}@test.example", Uuid::new_v4().simple()))
+    .bind(format!(
+        "billing_platform_{}@test.example",
+        Uuid::new_v4().simple()
+    ))
     .bind("Billing Platform Test User")
     .bind(platform_role)
     .fetch_one(pool)
@@ -132,14 +130,12 @@ async fn seed_user(pool: &sqlx::PgPool, platform_role: Option<&str>) -> Uuid {
 }
 
 async fn seed_tenant(pool: &sqlx::PgPool, name: &str) -> Uuid {
-    sqlx::query_scalar(
-        "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
-    )
-    .bind(name)
-    .bind(format!("bp-{}", Uuid::new_v4().simple()))
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+        .bind(name)
+        .bind(format!("bp-{}", Uuid::new_v4().simple()))
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn free_plan_id(pool: &sqlx::PgPool) -> Uuid {
@@ -167,8 +163,16 @@ async fn create_plan_via_api(pool: &sqlx::PgPool, user_id: Uuid, name: &str) -> 
         ),
     )
     .await;
-    assert_eq!(response.status(), StatusCode::CREATED, "create_plan_via_api({name}) failed");
-    body_json(response).await["id"].as_str().unwrap().parse().unwrap()
+    assert_eq!(
+        response.status(),
+        StatusCode::CREATED,
+        "create_plan_via_api({name}) failed"
+    );
+    body_json(response).await["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap()
 }
 
 const LIST_PLANS: &str = "/api/v1/platform/billing/plans";
@@ -210,7 +214,11 @@ async fn super_admin_can_create_plan() {
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("super_admin")).await;
     let body = json!({"name": "SA Plan", "monthly_price_cents": 1000});
-    let response = send(pool, platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
+    let response = send(
+        pool,
+        platform_request(CREATE_PLAN, Method::POST, user, Some(body)),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::CREATED);
 }
 
@@ -221,7 +229,11 @@ async fn finance_can_create_plan() {
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("finance")).await;
     let body = json!({"name": "Finance Plan", "monthly_price_cents": 500});
-    let response = send(pool, platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
+    let response = send(
+        pool,
+        platform_request(CREATE_PLAN, Method::POST, user, Some(body)),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::CREATED);
 }
 
@@ -236,7 +248,8 @@ async fn super_admin_can_update_plan() {
     let response = send(
         pool,
         platform_request(&update_plan_uri(plan_id), Method::PATCH, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
@@ -251,7 +264,8 @@ async fn finance_can_update_plan() {
     let response = send(
         pool,
         platform_request(&update_plan_uri(plan_id), Method::PATCH, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
@@ -287,7 +301,8 @@ async fn super_admin_can_put_subscription() {
     let response = send(
         pool,
         platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
@@ -303,7 +318,8 @@ async fn finance_can_put_subscription() {
     let response = send(
         pool,
         platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
@@ -346,7 +362,11 @@ async fn developer_gets_403_on_create_plan() {
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("developer")).await;
     let body = json!({"name": "Dev Plan", "monthly_price_cents": 0});
-    let response = send(pool, platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
+    let response = send(
+        pool,
+        platform_request(CREATE_PLAN, Method::POST, user, Some(body)),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
@@ -357,7 +377,11 @@ async fn sales_gets_403_on_create_plan() {
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("sales")).await;
     let body = json!({"name": "Sales Plan", "monthly_price_cents": 0});
-    let response = send(pool, platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
+    let response = send(
+        pool,
+        platform_request(CREATE_PLAN, Method::POST, user, Some(body)),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
@@ -368,7 +392,11 @@ async fn support_gets_403_on_create_plan() {
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("support")).await;
     let body = json!({"name": "Support Plan", "monthly_price_cents": 0});
-    let response = send(pool, platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
+    let response = send(
+        pool,
+        platform_request(CREATE_PLAN, Method::POST, user, Some(body)),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
@@ -383,7 +411,8 @@ async fn developer_gets_403_on_update_plan() {
     let response = send(
         pool,
         platform_request(&update_plan_uri(free_id), Method::PATCH, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
@@ -398,7 +427,8 @@ async fn sales_gets_403_on_update_plan() {
     let response = send(
         pool,
         platform_request(&update_plan_uri(free_id), Method::PATCH, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
@@ -413,7 +443,8 @@ async fn support_gets_403_on_update_plan() {
     let response = send(
         pool,
         platform_request(&update_plan_uri(free_id), Method::PATCH, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
@@ -459,7 +490,8 @@ async fn developer_gets_403_on_put_subscription() {
     let response = send(
         pool,
         platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
@@ -475,7 +507,8 @@ async fn sales_gets_403_on_put_subscription() {
     let response = send(
         pool,
         platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
@@ -491,7 +524,8 @@ async fn support_gets_403_on_put_subscription() {
     let response = send(
         pool,
         platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
@@ -505,9 +539,17 @@ async fn duplicate_plan_name_returns_409() {
     let user = seed_user(&pool, Some("super_admin")).await;
     let unique_name = format!("UniqueConflict {}", Uuid::new_v4().simple());
     let body = json!({"name": unique_name, "monthly_price_cents": 0});
-    let r1 = send(pool.clone(), platform_request(CREATE_PLAN, Method::POST, user, Some(body.clone()))).await;
+    let r1 = send(
+        pool.clone(),
+        platform_request(CREATE_PLAN, Method::POST, user, Some(body.clone())),
+    )
+    .await;
     assert_eq!(r1.status(), StatusCode::CREATED);
-    let r2 = send(pool.clone(), platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
+    let r2 = send(
+        pool.clone(),
+        platform_request(CREATE_PLAN, Method::POST, user, Some(body)),
+    )
+    .await;
     assert_eq!(r2.status(), StatusCode::CONFLICT);
     let err = body_json(r2).await;
     assert_eq!(err["error"]["code"], "conflict");
@@ -520,7 +562,11 @@ async fn empty_name_returns_422() {
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("super_admin")).await;
     let body = json!({"name": "", "monthly_price_cents": 0});
-    let response = send(pool, platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
+    let response = send(
+        pool,
+        platform_request(CREATE_PLAN, Method::POST, user, Some(body)),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
@@ -531,7 +577,11 @@ async fn negative_price_returns_422() {
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("super_admin")).await;
     let body = json!({"name": "NegPrice", "monthly_price_cents": -1});
-    let response = send(pool, platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
+    let response = send(
+        pool,
+        platform_request(CREATE_PLAN, Method::POST, user, Some(body)),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
@@ -545,8 +595,14 @@ async fn retiring_default_plan_returns_409() {
     let body = json!({"status": "retired"});
     let response = send(
         pool,
-        platform_request(&update_plan_uri(default_id), Method::PATCH, user, Some(body)),
-    ).await;
+        platform_request(
+            &update_plan_uri(default_id),
+            Method::PATCH,
+            user,
+            Some(body),
+        ),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::CONFLICT);
     let err = body_json(response).await;
     assert_eq!(err["error"]["code"], "conflict");
@@ -564,7 +620,8 @@ async fn assigning_unknown_plan_returns_404() {
     let response = send(
         pool,
         platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
@@ -579,8 +636,14 @@ async fn assigning_retired_plan_to_new_tenant_returns_409() {
     let retire_body = json!({"status": "retired"});
     let resp = send(
         pool.clone(),
-        platform_request(&update_plan_uri(plan_id), Method::PATCH, user, Some(retire_body)),
-    ).await;
+        platform_request(
+            &update_plan_uri(plan_id),
+            Method::PATCH,
+            user,
+            Some(retire_body),
+        ),
+    )
+    .await;
     assert_eq!(resp.status(), StatusCode::OK);
     // Try assigning it to a new tenant
     let tenant = seed_tenant(&pool, "New Tenant Retired").await;
@@ -588,7 +651,8 @@ async fn assigning_retired_plan_to_new_tenant_returns_409() {
     let response = send(
         pool,
         platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
@@ -603,18 +667,32 @@ async fn changing_only_status_on_retired_plan_returns_200() {
     let tenant = seed_tenant(&pool, "Retired Status Change").await;
     // Assign the new plan first
     let body = json!({"plan_id": plan_id, "status": "active"});
-    let r = send(pool.clone(), platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body))).await;
+    let r = send(
+        pool.clone(),
+        platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
+    )
+    .await;
     assert_eq!(r.status(), StatusCode::OK);
     // Retire the plan
     let retire_body = json!({"status": "retired"});
-    let r = send(pool.clone(), platform_request(&update_plan_uri(plan_id), Method::PATCH, user, Some(retire_body))).await;
+    let r = send(
+        pool.clone(),
+        platform_request(
+            &update_plan_uri(plan_id),
+            Method::PATCH,
+            user,
+            Some(retire_body),
+        ),
+    )
+    .await;
     assert_eq!(r.status(), StatusCode::OK);
     // Change only status while on retired plan → should work
     let body = json!({"plan_id": plan_id, "status": "past_due"});
     let response = send(
         pool,
         platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
 }
 
@@ -627,9 +705,17 @@ async fn same_put_body_twice_is_idempotent() {
     let tenant = seed_tenant(&pool, "Idempotent Tenant").await;
     let plan_id = free_plan_id(&pool).await;
     let body = json!({"plan_id": plan_id, "status": "active"});
-    let r1 = send(pool.clone(), platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body.clone()))).await;
+    let r1 = send(
+        pool.clone(),
+        platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body.clone())),
+    )
+    .await;
     assert_eq!(r1.status(), StatusCode::OK);
-    let r2 = send(pool.clone(), platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body))).await;
+    let r2 = send(
+        pool.clone(),
+        platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
+    )
+    .await;
     assert_eq!(r2.status(), StatusCode::OK);
 }
 
@@ -646,7 +732,10 @@ async fn list_subscriptions_shows_default_plan_for_unassigned_tenant() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
     let subs = body["subscriptions"].as_array().unwrap();
-    let entry = subs.iter().find(|s| s["tenant_id"] == json!(tenant.to_string())).unwrap();
+    let entry = subs
+        .iter()
+        .find(|s| s["tenant_id"] == json!(tenant.to_string()))
+        .unwrap();
     assert_eq!(entry["explicit"], false);
     assert_eq!(entry["plan_name"], "Free");
     assert_eq!(entry["status"], "active");
@@ -662,7 +751,11 @@ async fn create_plan_writes_audit_log() {
     let user = seed_user(&pool, Some("super_admin")).await;
     let unique_name = format!("AuditPlan {}", Uuid::new_v4().simple());
     let body = json!({"name": unique_name, "monthly_price_cents": 2000});
-    let response = send(pool.clone(), platform_request(CREATE_PLAN, Method::POST, user, Some(body))).await;
+    let response = send(
+        pool.clone(),
+        platform_request(CREATE_PLAN, Method::POST, user, Some(body)),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let plan: Value = body_json(response).await;
     let plan_id = plan["id"].as_str().unwrap();
@@ -689,7 +782,8 @@ async fn update_plan_writes_audit_log() {
     let response = send(
         pool.clone(),
         platform_request(&update_plan_uri(plan_id), Method::PATCH, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     // Verify the audit row
     let row: Value = sqlx::query_scalar(
@@ -716,7 +810,8 @@ async fn put_subscription_writes_audit_log() {
     let response = send(
         pool.clone(),
         platform_request(&put_sub_uri(tenant), Method::PUT, user, Some(body)),
-    ).await;
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::OK);
     // Verify the audit row
     let row: Value = sqlx::query_scalar(
@@ -754,7 +849,11 @@ async fn list_subscriptions_returns_one_row_per_tenant() {
     // Assign explicit subscription to t2
     let plan_id = free_plan_id(&pool).await;
     let body = json!({"plan_id": plan_id, "status": "active"});
-    let r = send(pool.clone(), platform_request(&put_sub_uri(t2), Method::PUT, user, Some(body))).await;
+    let r = send(
+        pool.clone(),
+        platform_request(&put_sub_uri(t2), Method::PUT, user, Some(body)),
+    )
+    .await;
     assert_eq!(r.status(), StatusCode::OK);
 
     let response = send(pool, platform_request(LIST_SUBS, Method::GET, user, None)).await;

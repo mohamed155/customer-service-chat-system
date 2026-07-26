@@ -113,10 +113,7 @@ impl fmt::Debug for AppConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let smtp_url = self.smtp_url.as_ref().map(|_| "[REDACTED]");
         let ai_key = self.ai_key_encryption_key.as_ref().map(|_| "[REDACTED]");
-        let integration_secrets_key = self
-            .integration_secrets_key
-            .as_ref()
-            .map(|_| "[REDACTED]");
+        let integration_secrets_key = self.integration_secrets_key.as_ref().map(|_| "[REDACTED]");
         f.debug_struct("AppConfig")
             .field("database_url", &"[REDACTED]")
             .field("redis_url", &"[REDACTED]")

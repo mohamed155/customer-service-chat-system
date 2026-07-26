@@ -11,7 +11,9 @@ pub fn decode_cursor(cursor: &str) -> Option<(DateTime<Utc>, Uuid)> {
     let bytes = hex::decode(cursor).ok()?;
     let decoded = String::from_utf8(bytes).ok()?;
     let (ts_str, id_str) = decoded.split_once('|')?;
-    let ts = DateTime::parse_from_rfc3339(ts_str).ok()?.with_timezone(&Utc);
+    let ts = DateTime::parse_from_rfc3339(ts_str)
+        .ok()?
+        .with_timezone(&Utc);
     let id = Uuid::parse_str(id_str).ok()?;
     Some((ts, id))
 }
@@ -204,10 +206,7 @@ pub async fn list_events(
     builder.push(" ORDER BY created_at DESC, id DESC LIMIT ");
     builder.push_bind(limit + 1);
 
-    builder
-        .build_query_as::<EventRow>()
-        .fetch_all(pool)
-        .await
+    builder.build_query_as::<EventRow>().fetch_all(pool).await
 }
 
 pub async fn upsert_connection(
@@ -378,12 +377,14 @@ pub async fn find_connection_by_token_hash(
     .bind(hash)
     .fetch_optional(pool)
     .await?;
-    Ok(row.map(|(connection_id, tenant_id, catalog_slug, is_active)| ConnectionByToken {
-        connection_id,
-        tenant_id,
-        catalog_slug,
-        is_active,
-    }))
+    Ok(row.map(
+        |(connection_id, tenant_id, catalog_slug, is_active)| ConnectionByToken {
+            connection_id,
+            tenant_id,
+            catalog_slug,
+            is_active,
+        },
+    ))
 }
 
 /// Insert an accepted webhook delivery row. The body has already been parsed

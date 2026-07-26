@@ -10,12 +10,10 @@ export const PLATFORM_ROUTES: Routes = [
     canMatch: [permissionGuard],
     data: {
       pageTitle: 'platformOverview',
-      requiredPermission: 'platform.admin',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.platform.overviewPlaceholder],
     },
     loadComponent: () =>
-      import('./overview-placeholder/platform-overview-placeholder.component').then(
-        (module) => module.PlatformOverviewPlaceholderComponent,
-      ),
+      import('./overview/platform-overview.component').then((m) => m.PlatformOverviewComponent),
   },
   {
     path: APP_PATHS.platform.tenants,
@@ -78,5 +76,25 @@ export const PLATFORM_ROUTES: Routes = [
     },
     loadComponent: () =>
       import('./billing/platform-billing.component').then((m) => m.PlatformBillingComponent),
+  },
+  {
+    path: APP_PATHS.platform.systemHealth,
+    canMatch: [permissionGuard],
+    data: {
+      pageTitle: 'platformSystemHealth',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.platform.systemHealth],
+    },
+    loadComponent: () =>
+      import('./system-health/system-health.component').then((m) => m.SystemHealthComponent),
+  },
+  {
+    path: APP_PATHS.platform.aiProviders,
+    canMatch: [permissionGuard],
+    data: {
+      pageTitle: 'platformAiProviders',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.platform.aiProviders],
+    },
+    loadComponent: () =>
+      import('./ai-providers/ai-providers.component').then((m) => m.AiProvidersComponent),
   },
 ];

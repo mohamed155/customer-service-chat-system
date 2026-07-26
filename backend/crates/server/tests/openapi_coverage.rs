@@ -171,6 +171,10 @@ const EXPECTED: &[(&str, &str)] = &[
     // Audit logs (026)
     ("GET", "/tenant/audit-logs"),
     ("GET", "/platform/audit-logs"),
+    // Platform analytics & health (032)
+    ("GET", "/platform/analytics/summary"),
+    ("GET", "/platform/health"),
+    ("GET", "/platform/ai-providers"),
     // Billing (031)
     ("GET", "/tenant/billing/overview"),
     ("GET", "/platform/billing/plans"),

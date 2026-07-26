@@ -23,7 +23,7 @@ use server::router;
 use server::state::AppState;
 use std::sync::Arc;
 use std::time::Duration;
-use storage::{InMemoryStorage, ObjectStorage, S3Storage};
+use storage::ObjectStorage;
 use tokio::net::TcpListener;
 
 use whatsapp;
@@ -82,17 +82,7 @@ async fn main() {
     let email_sender = router::configured_email_sender(&state.config);
     let app = router::app_with_email_sender(state.clone(), email_sender.clone());
 
-    let storage: Arc<dyn ObjectStorage> = if let Some(s3_config) = &state.config.s3 {
-        match S3Storage::new(s3_config).await {
-            Ok(s) => Arc::new(s),
-            Err(e) => {
-                tracing::warn!(error = %e, "failed to create S3 storage, falling back to in-memory");
-                Arc::new(InMemoryStorage::default())
-            }
-        }
-    } else {
-        Arc::new(InMemoryStorage::default())
-    };
+    let (storage, _storage_backend) = storage::select_storage(state.config.s3.as_ref()).await;
 
     let delivery_worker = tokio::spawn(tenancy::invitations::run_invitation_delivery_worker(
         state.db.clone(),
@@ -151,14 +141,19 @@ async fn main() {
             let mut interval = tokio::time::interval(Duration::from_secs(6 * 3600));
             loop {
                 interval.tick().await;
-                match sqlx::query("DELETE FROM notifications WHERE created_at < now() - interval '90 days'")
-                    .execute(&pool)
-                    .await
+                match sqlx::query(
+                    "DELETE FROM notifications WHERE created_at < now() - interval '90 days'",
+                )
+                .execute(&pool)
+                .await
                 {
                     Ok(result) => {
                         let count = result.rows_affected();
                         if count > 0 {
-                            tracing::info!(count, "notification retention sweep: deleted expired notifications");
+                            tracing::info!(
+                                count,
+                                "notification retention sweep: deleted expired notifications"
+                            );
                         }
                     }
                     Err(e) => {
@@ -177,7 +172,10 @@ async fn main() {
                 match integrations::retention::sweep_expired(&pool).await {
                     Ok(count) => {
                         if count > 0 {
-                            tracing::info!(count, "integration retention sweep: deleted expired rows");
+                            tracing::info!(
+                                count,
+                                "integration retention sweep: deleted expired rows"
+                            );
                         }
                     }
                     Err(e) => {
@@ -192,15 +190,14 @@ async fn main() {
         Arc::new(state.ai.clone()) as Arc<dyn knowledge::indexer::Embedder>,
         storage.clone(),
     ));
-    let notifications_worker = tokio::spawn(
-        notifications::worker::run_notification_outbox_worker(
-            state.db.clone(),
-            state.escalations.clone(),
-        ),
-    );
+    let notifications_worker = tokio::spawn(notifications::worker::run_notification_outbox_worker(
+        state.db.clone(),
+        state.escalations.clone(),
+    ));
 
     // WhatsApp channel workers (spec 029)
-    let whatsapp_api: Arc<dyn whatsapp::api::WhatsAppApi> = Arc::new(whatsapp::api::GraphWhatsAppApi::new());
+    let whatsapp_api: Arc<dyn whatsapp::api::WhatsAppApi> =
+        Arc::new(whatsapp::api::GraphWhatsAppApi::new());
     let whatsapp_master_key = state
         .config
         .integration_secrets_key

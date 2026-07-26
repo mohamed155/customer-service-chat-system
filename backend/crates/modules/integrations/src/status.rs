@@ -37,10 +37,7 @@ mod tests {
 
     #[test]
     fn connected_when_active_no_outcomes() {
-        assert_eq!(
-            derive_status(Some(true), &[]),
-            ConnectionStatus::Connected
-        );
+        assert_eq!(derive_status(Some(true), &[]), ConnectionStatus::Connected);
     }
 
     #[test]

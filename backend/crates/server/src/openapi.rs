@@ -15,7 +15,7 @@
 //! different state type) so they are still listed here.
 
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
-use utoipa::{openapi, Modify, OpenApi};
+use utoipa::{Modify, OpenApi, openapi};
 
 /// Tag vocabulary used to group operations in the interactive UI.
 ///
@@ -290,6 +290,14 @@ impl Modify for TagDescriptionsAddon {
             (
                 "notifications",
                 "Tenant-scoped notification inbox (list, unread count, mark read).",
+            ),
+            (
+                "platform-analytics",
+                "Platform-internal cross-tenant business metrics.",
+            ),
+            (
+                "platform-health",
+                "Platform-internal system health and AI provider diagnostics.",
             ),
         ];
         let mut out = Vec::with_capacity(tags.len());

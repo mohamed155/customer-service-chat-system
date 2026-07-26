@@ -10,9 +10,9 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 use uuid::Uuid;
 
+use cache::Cache;
 use server::router;
 use server::state::AppState;
-use cache::Cache;
 
 fn test_config(environment: Environment) -> config::AppConfig {
     config::AppConfig {
@@ -140,15 +140,13 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
 }
 
 async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
-    sqlx::query(
-        "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)",
-    )
-    .bind(tenant_id)
-    .bind(user_id)
-    .bind(role)
-    .execute(pool)
-    .await
-    .unwrap();
+    sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
+        .bind(tenant_id)
+        .bind(user_id)
+        .bind(role)
+        .execute(pool)
+        .await
+        .unwrap();
 }
 
 async fn seed_audit_row(
@@ -186,8 +184,28 @@ async fn tenant_isolation_tenant_a_does_not_see_tenant_b_rows() {
     let admin = seed_user(&pool, None).await;
     seed_membership(&pool, tenant_a, admin, "admin").await;
 
-    seed_audit_row(&pool, Some(admin), "member.role_changed", "membership", "id-1", Some(tenant_a), r#"{"from":"agent","to":"manager"}"#, "2026-07-18T14:00:00Z").await;
-    seed_audit_row(&pool, Some(admin), "member.role_changed", "membership", "id-2", Some(tenant_b), r#"{"from":"agent","to":"admin"}"#, "2026-07-18T14:01:00Z").await;
+    seed_audit_row(
+        &pool,
+        Some(admin),
+        "member.role_changed",
+        "membership",
+        "id-1",
+        Some(tenant_a),
+        r#"{"from":"agent","to":"manager"}"#,
+        "2026-07-18T14:00:00Z",
+    )
+    .await;
+    seed_audit_row(
+        &pool,
+        Some(admin),
+        "member.role_changed",
+        "membership",
+        "id-2",
+        Some(tenant_b),
+        r#"{"from":"agent","to":"admin"}"#,
+        "2026-07-18T14:01:00Z",
+    )
+    .await;
 
     let response = send(
         pool.clone(),
@@ -220,8 +238,28 @@ async fn platform_level_rows_are_excluded_from_tenant_endpoint() {
     let admin = seed_user(&pool, None).await;
     seed_membership(&pool, tenant, admin, "admin").await;
 
-    seed_audit_row(&pool, None, "auth.login_failed", "auth", "test@example.com", None, r#"{}"#, "2026-07-18T14:00:00Z").await;
-    seed_audit_row(&pool, Some(admin), "member.role_changed", "membership", "id-1", Some(tenant), r#"{}"#, "2026-07-18T14:01:00Z").await;
+    seed_audit_row(
+        &pool,
+        None,
+        "auth.login_failed",
+        "auth",
+        "test@example.com",
+        None,
+        r#"{}"#,
+        "2026-07-18T14:00:00Z",
+    )
+    .await;
+    seed_audit_row(
+        &pool,
+        Some(admin),
+        "member.role_changed",
+        "membership",
+        "id-1",
+        Some(tenant),
+        r#"{}"#,
+        "2026-07-18T14:01:00Z",
+    )
+    .await;
 
     let response = send(
         pool.clone(),
@@ -251,8 +289,28 @@ async fn ordering_is_newest_first() {
     let admin = seed_user(&pool, None).await;
     seed_membership(&pool, tenant, admin, "admin").await;
 
-    seed_audit_row(&pool, Some(admin), "member.role_changed", "membership", "id-1", Some(tenant), r#"{}"#, "2026-07-18T14:00:00Z").await;
-    seed_audit_row(&pool, Some(admin), "member.role_changed", "membership", "id-2", Some(tenant), r#"{}"#, "2026-07-18T15:00:00Z").await;
+    seed_audit_row(
+        &pool,
+        Some(admin),
+        "member.role_changed",
+        "membership",
+        "id-1",
+        Some(tenant),
+        r#"{}"#,
+        "2026-07-18T14:00:00Z",
+    )
+    .await;
+    seed_audit_row(
+        &pool,
+        Some(admin),
+        "member.role_changed",
+        "membership",
+        "id-2",
+        Some(tenant),
+        r#"{}"#,
+        "2026-07-18T15:00:00Z",
+    )
+    .await;
 
     let response = send(
         pool.clone(),
@@ -294,7 +352,8 @@ async fn cursor_pagination_returns_all_pages() {
             Some(tenant),
             r#"{}"#,
             &format!("2026-07-18T{:02}:00:00Z", 14 + i),
-        ).await;
+        )
+        .await;
     }
 
     let all_ids = {
@@ -311,7 +370,12 @@ async fn cursor_pagination_returns_all_pages() {
         )
         .await;
         let json = body_json(response).await;
-        json["data"].as_array().unwrap().iter().map(|e| e["id"].as_str().unwrap().to_string()).collect::<Vec<_>>()
+        json["data"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["id"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
     };
 
     let mut collected = Vec::new();
@@ -336,7 +400,9 @@ async fn cursor_pagination_returns_all_pages() {
             collected.push(id.to_string());
         }
         let has_more = json["pagination"]["has_more"].as_bool().unwrap();
-        cursor = json["pagination"]["next_cursor"].as_str().map(|s| s.to_string());
+        cursor = json["pagination"]["next_cursor"]
+            .as_str()
+            .map(|s| s.to_string());
         if !has_more {
             break;
         }
@@ -356,8 +422,28 @@ async fn category_filter_returns_only_matching_rows() {
     let admin = seed_user(&pool, None).await;
     seed_membership(&pool, tenant, admin, "admin").await;
 
-    seed_audit_row(&pool, Some(admin), "member.role_changed", "membership", "id-1", Some(tenant), r#"{}"#, "2026-07-18T14:00:00Z").await;
-    seed_audit_row(&pool, Some(admin), "auth.login_succeeded", "auth", "id-2", Some(tenant), r#"{}"#, "2026-07-18T14:01:00Z").await;
+    seed_audit_row(
+        &pool,
+        Some(admin),
+        "member.role_changed",
+        "membership",
+        "id-1",
+        Some(tenant),
+        r#"{}"#,
+        "2026-07-18T14:00:00Z",
+    )
+    .await;
+    seed_audit_row(
+        &pool,
+        Some(admin),
+        "auth.login_succeeded",
+        "auth",
+        "id-2",
+        Some(tenant),
+        r#"{}"#,
+        "2026-07-18T14:01:00Z",
+    )
+    .await;
 
     let response = send(
         pool.clone(),
@@ -387,7 +473,17 @@ async fn system_actor_returns_kind_system() {
     let admin = seed_user(&pool, None).await;
     seed_membership(&pool, tenant, admin, "admin").await;
 
-    seed_audit_row(&pool, None, "auth.login_failed", "auth", "test@example.com", Some(tenant), r#"{}"#, "2026-07-18T14:00:00Z").await;
+    seed_audit_row(
+        &pool,
+        None,
+        "auth.login_failed",
+        "auth",
+        "test@example.com",
+        Some(tenant),
+        r#"{}"#,
+        "2026-07-18T14:00:00Z",
+    )
+    .await;
 
     let response = send(
         pool.clone(),
@@ -421,7 +517,17 @@ async fn deleted_actor_has_deleted_flag() {
         .await
         .unwrap();
 
-    seed_audit_row(&pool, Some(actor_user), "member.role_changed", "membership", "id-1", Some(tenant), r#"{}"#, "2026-07-18T14:00:00Z").await;
+    seed_audit_row(
+        &pool,
+        Some(actor_user),
+        "member.role_changed",
+        "membership",
+        "id-1",
+        Some(tenant),
+        r#"{}"#,
+        "2026-07-18T14:00:00Z",
+    )
+    .await;
 
     let admin = seed_user(&pool, None).await;
     seed_membership(&pool, tenant, admin, "admin").await;
@@ -453,7 +559,17 @@ async fn platform_staff_actor_has_is_platform_staff_flag() {
     let admin = seed_user(&pool, None).await;
     seed_membership(&pool, tenant, admin, "admin").await;
 
-    seed_audit_row(&pool, Some(staff_user), "member.role_changed", "membership", "id-1", Some(tenant), r#"{}"#, "2026-07-18T14:00:00Z").await;
+    seed_audit_row(
+        &pool,
+        Some(staff_user),
+        "member.role_changed",
+        "membership",
+        "id-1",
+        Some(tenant),
+        r#"{}"#,
+        "2026-07-18T14:00:00Z",
+    )
+    .await;
 
     let response = send(
         pool.clone(),
@@ -546,7 +662,17 @@ async fn immutability_update_and_delete_are_rejected_by_trigger() {
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool, None).await;
-    let id = seed_audit_row(&pool, Some(admin), "member.role_changed", "membership", "id-1", Some(tenant), r#"{}"#, "2026-07-18T14:00:00Z").await;
+    let id = seed_audit_row(
+        &pool,
+        Some(admin),
+        "member.role_changed",
+        "membership",
+        "id-1",
+        Some(tenant),
+        r#"{}"#,
+        "2026-07-18T14:00:00Z",
+    )
+    .await;
 
     let update_err = sqlx::query("UPDATE audit_logs SET action = 'tampered' WHERE id = $1")
         .bind(id)
@@ -555,7 +681,9 @@ async fn immutability_update_and_delete_are_rejected_by_trigger() {
         .unwrap_err();
     let msg = update_err.to_string().to_lowercase();
     assert!(
-        msg.contains("append-only") || msg.contains("audit_logs_append_only") || msg.contains("cannot update"),
+        msg.contains("append-only")
+            || msg.contains("audit_logs_append_only")
+            || msg.contains("cannot update"),
         "expected append-only error, got: {msg}"
     );
 
@@ -566,7 +694,9 @@ async fn immutability_update_and_delete_are_rejected_by_trigger() {
         .unwrap_err();
     let msg = delete_err.to_string().to_lowercase();
     assert!(
-        msg.contains("append-only") || msg.contains("audit_logs_append_only") || msg.contains("cannot delete"),
+        msg.contains("append-only")
+            || msg.contains("audit_logs_append_only")
+            || msg.contains("cannot delete"),
         "expected append-only error, got: {msg}"
     );
 }
@@ -584,9 +714,39 @@ async fn platform_user_sees_all_tenants_and_platform_rows() {
     let tenant_b = seed_tenant(&pool).await;
     let platform_user = seed_user(&pool, Some("super_admin")).await;
 
-    seed_audit_row(&pool, None, "auth.login_failed", "auth", "a@example.com", None, r#"{}"#, "2026-07-18T14:00:00Z").await;
-    seed_audit_row(&pool, None, "member.role_changed", "membership", "id-a", Some(tenant_a), r#"{}"#, "2026-07-18T14:01:00Z").await;
-    seed_audit_row(&pool, None, "member.role_changed", "membership", "id-b", Some(tenant_b), r#"{}"#, "2026-07-18T14:02:00Z").await;
+    seed_audit_row(
+        &pool,
+        None,
+        "auth.login_failed",
+        "auth",
+        "a@example.com",
+        None,
+        r#"{}"#,
+        "2026-07-18T14:00:00Z",
+    )
+    .await;
+    seed_audit_row(
+        &pool,
+        None,
+        "member.role_changed",
+        "membership",
+        "id-a",
+        Some(tenant_a),
+        r#"{}"#,
+        "2026-07-18T14:01:00Z",
+    )
+    .await;
+    seed_audit_row(
+        &pool,
+        None,
+        "member.role_changed",
+        "membership",
+        "id-b",
+        Some(tenant_b),
+        r#"{}"#,
+        "2026-07-18T14:02:00Z",
+    )
+    .await;
 
     let response = send(
         pool.clone(),
@@ -622,8 +782,28 @@ async fn platform_filter_by_tenant_narrows_results() {
     let tenant_b = seed_tenant(&pool).await;
     let platform_user = seed_user(&pool, Some("super_admin")).await;
 
-    seed_audit_row(&pool, None, "member.role_changed", "membership", "id-a", Some(tenant_a), r#"{}"#, "2026-07-18T14:01:00Z").await;
-    seed_audit_row(&pool, None, "member.role_changed", "membership", "id-b", Some(tenant_b), r#"{}"#, "2026-07-18T14:02:00Z").await;
+    seed_audit_row(
+        &pool,
+        None,
+        "member.role_changed",
+        "membership",
+        "id-a",
+        Some(tenant_a),
+        r#"{}"#,
+        "2026-07-18T14:01:00Z",
+    )
+    .await;
+    seed_audit_row(
+        &pool,
+        None,
+        "member.role_changed",
+        "membership",
+        "id-b",
+        Some(tenant_b),
+        r#"{}"#,
+        "2026-07-18T14:02:00Z",
+    )
+    .await;
 
     let response = send(
         pool.clone(),
@@ -903,16 +1083,20 @@ async fn performance_list_under_two_seconds() {
 
     let actor = seed_user(&pool, None).await;
     seed_membership(&pool, tenant_id, actor, "admin").await;
-    let base = |query: &str| {
-        format!("/api/v1/tenant/audit-logs{query}")
-    };
+    let base = |query: &str| format!("/api/v1/tenant/audit-logs{query}");
 
     // (a) Unfiltered first page
     let start = std::time::Instant::now();
     let response = send(
         pool.clone(),
         Environment::Test,
-        authenticated_request(&base(""), Method::GET, actor, Some(tenant_id), Environment::Test),
+        authenticated_request(
+            &base(""),
+            Method::GET,
+            actor,
+            Some(tenant_id),
+            Environment::Test,
+        ),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);

@@ -28,6 +28,7 @@ export type Permission =
   | 'platform.admin'
   | 'platform.billing.view'
   | 'platform.billing.manage'
+  | 'platform.analytics.view'
   | 'platform.diagnostics.view'
   | 'platform.audit.view'
   | 'widgets.view'
@@ -49,6 +50,9 @@ export const PAGE_PERMISSIONS = {
   [APP_PATHS.tenant.settingsTools]: 'settings.view',
   [APP_PATHS.tenant.team]: 'members.view',
   [APP_PATHS.platform.base]: 'platform.admin',
+  [APP_PATHS.platform.overviewPlaceholder]: 'platform.analytics.view',
+  [APP_PATHS.platform.systemHealth]: 'platform.diagnostics.view',
+  [APP_PATHS.platform.aiProviders]: 'platform.diagnostics.view',
   [APP_PATHS.tenant.escalations]: 'conversations.view',
   [APP_PATHS.tenant.widgets]: 'widgets.view',
   [APP_PATHS.tenant.notifications]: 'overview.view',

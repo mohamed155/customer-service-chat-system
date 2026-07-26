@@ -73,14 +73,12 @@ async fn setup(pool: &sqlx::PgPool) {
 }
 
 async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
-    sqlx::query_scalar(
-        "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
-    )
-    .bind("WhatsApp Sender Test Tenant")
-    .bind(format!("wst-{}", Uuid::new_v4().simple()))
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+        .bind("WhatsApp Sender Test Tenant")
+        .bind(format!("wst-{}", Uuid::new_v4().simple()))
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn whatsapp_catalog_id(pool: &sqlx::PgPool) -> Uuid {
@@ -206,7 +204,8 @@ async fn setup_sender_fixture(
 
     // Customer message (for window check)
     if with_customer_message {
-        let customer_msg_time = chrono::Utc::now() - chrono::Duration::seconds(customer_message_age_secs);
+        let customer_msg_time =
+            chrono::Utc::now() - chrono::Duration::seconds(customer_message_age_secs);
         sqlx::query(
             "INSERT INTO messages (tenant_id, conversation_id, kind, body, created_at) \
              VALUES ($1, $2, 'customer', 'I need help', $3)",
@@ -270,7 +269,12 @@ async fn setup_sender_fixture(
 }
 
 async fn response_bytes(resp: Response) -> Vec<u8> {
-    resp.into_body().collect().await.unwrap().to_bytes().to_vec()
+    resp.into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes()
+        .to_vec()
 }
 
 fn sign_body(secret: &str, body: &[u8]) -> String {
@@ -302,7 +306,9 @@ fn status_webhook_payload(wamid: &str, status: &str) -> serde_json::Value {
 fn test_app(pool: sqlx::PgPool, mk: Arc<MasterKey>) -> Router {
     whatsapp::routes::public_router()
         .layer(axum::extract::Extension(mk))
-        .layer(axum::extract::Extension(Arc::new(InMemoryRateLimitStore::new())))
+        .layer(axum::extract::Extension(Arc::new(
+            InMemoryRateLimitStore::new(),
+        )))
         .with_state(pool)
 }
 
@@ -346,7 +352,10 @@ async fn sender_success_path() {
     .await
     .expect("wamid should be set");
 
-    assert_eq!(wamid, "wamid.test.success", "wamid should match mock response");
+    assert_eq!(
+        wamid, "wamid.test.success",
+        "wamid should match mock response"
+    );
 }
 
 #[tokio::test]
@@ -463,7 +472,10 @@ async fn status_webhook_does_not_downgrade_read_to_delivered() {
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(status_after_read, "read", "status should be promoted to 'read'");
+    assert_eq!(
+        status_after_read, "read",
+        "status should be promoted to 'read'"
+    );
 
     // 2. POST a 'delivered' status (lower rank)
     let app2 = test_app(pool.clone(), mk);

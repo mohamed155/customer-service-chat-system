@@ -24,7 +24,11 @@ pub struct ListNotificationsQuery {
     state: Option<String>,
 }
 
-async fn active_membership_id(pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> Result<Uuid, Response> {
+async fn active_membership_id(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    user_id: Uuid,
+) -> Result<Uuid, Response> {
     match sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
@@ -35,7 +39,9 @@ async fn active_membership_id(pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> 
     .await
     {
         Ok(Some(mid)) => Ok(mid),
-        Ok(None) => Err(ApiError::validation_failed("No active membership in this tenant").into_response()),
+        Ok(None) => {
+            Err(ApiError::validation_failed("No active membership in this tenant").into_response())
+        }
         Err(e) => {
             tracing::error!(%e, "active_membership_id: query failed");
             Err(ApiError::internal_error("Database error").into_response())
@@ -60,7 +66,10 @@ async fn actor_display_names(pool: &PgPool, membership_ids: &[Uuid]) -> HashMap<
     rows.into_iter().collect()
 }
 
-fn row_to_dto(row: &crate::model::NotificationRow, names: &HashMap<Uuid, String>) -> NotificationDto {
+fn row_to_dto(
+    row: &crate::model::NotificationRow,
+    names: &HashMap<Uuid, String>,
+) -> NotificationDto {
     let actor = row.actor_membership_id.map(|mid| NotificationActorDto {
         membership_id: mid,
         display_name: names.get(&mid).cloned().unwrap_or_default(),

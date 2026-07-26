@@ -57,11 +57,21 @@ pub const CATEGORY_PREFIXES: &[(&str, &[&str])] = &[
     ("prompts", &["agent_prompt."]),
     ("ai", &["ai_config.", "ai_credential.", "agent_config."]),
     ("tools", &["tool."]),
-    ("billing", &["billing.", "billing_plan.", "billing_subscription."]),
+    (
+        "billing",
+        &["billing.", "billing_plan.", "billing_subscription."],
+    ),
     ("conversations", &["conversation."]),
     ("customers", &["customer."]),
     ("escalations", &["escalation."]),
-    ("knowledge", &["knowledge_category.", "knowledge_document.", "knowledge_item."]),
+    (
+        "knowledge",
+        &[
+            "knowledge_category.",
+            "knowledge_document.",
+            "knowledge_item.",
+        ],
+    ),
     ("widgets", &["widget_instance."]),
     ("integrations", &["integration."]),
 ];
@@ -98,7 +108,10 @@ mod tests {
 
     #[test]
     fn category_for_action_agent_prompt_version_created() {
-        assert_eq!(category_for_action("agent_prompt.version_created"), "prompts");
+        assert_eq!(
+            category_for_action("agent_prompt.version_created"),
+            "prompts"
+        );
     }
 
     #[test]

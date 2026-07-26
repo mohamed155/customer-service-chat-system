@@ -36,7 +36,8 @@ async fn process_one(
         None => return Ok(()),
     };
 
-    let access_token = match get_tenant_access_token(pool, master_key, attachment.tenant_id).await? {
+    let access_token = match get_tenant_access_token(pool, master_key, attachment.tenant_id).await?
+    {
         Some(token) => token,
         None => {
             crate::queries::mark_attachment_failed_attempt(pool, attachment.id).await?;
@@ -72,10 +73,20 @@ async fn process_one(
 
     let storage_key = format!("whatsapp-media/{}/{}", attachment.tenant_id, attachment.id);
 
-    match storage.put(&storage_key, &media_info.mime_type, bytes.to_vec()).await {
+    match storage
+        .put(&storage_key, &media_info.mime_type, bytes.to_vec())
+        .await
+    {
         Ok(()) => {
             let size = bytes.len() as i64;
-            crate::queries::mark_attachment_stored(pool, attachment.id, &storage_key, &media_info.mime_type, size).await?;
+            crate::queries::mark_attachment_stored(
+                pool,
+                attachment.id,
+                &storage_key,
+                &media_info.mime_type,
+                size,
+            )
+            .await?;
         }
         Err(e) => {
             tracing::warn!(%e, %storage_key, "media worker: storage put failed");
@@ -92,7 +103,8 @@ async fn get_tenant_access_token(
     tenant_id: Uuid,
 ) -> sqlx::Result<Option<String>> {
     let connection_id =
-        match integrations::queries::active_connection_for_slug(pool, tenant_id, "whatsapp").await? {
+        match integrations::queries::active_connection_for_slug(pool, tenant_id, "whatsapp").await?
+        {
             Some(id) => id,
             None => return Ok(None),
         };

@@ -66,14 +66,12 @@ async fn setup(pool: &PgPool) {
 }
 
 async fn seed_tenant(pool: &PgPool) -> Uuid {
-    sqlx::query_scalar(
-        "INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id",
-    )
-    .bind("WhatsApp AI Reply Test Tenant")
-    .bind(format!("wai-{}", Uuid::new_v4().simple()))
-    .fetch_one(pool)
-    .await
-    .unwrap()
+    sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+        .bind("WhatsApp AI Reply Test Tenant")
+        .bind(format!("wai-{}", Uuid::new_v4().simple()))
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 async fn whatsapp_catalog_id(pool: &PgPool) -> Uuid {
@@ -84,11 +82,7 @@ async fn whatsapp_catalog_id(pool: &PgPool) -> Uuid {
         .expect("whatsapp catalog entry must exist \u{2014} run migration 0057")
 }
 
-async fn setup_whatsapp_connection(
-    pool: &PgPool,
-    mk: &MasterKey,
-    tenant_id: Uuid,
-) -> Uuid {
+async fn setup_whatsapp_connection(pool: &PgPool, mk: &MasterKey, tenant_id: Uuid) -> Uuid {
     let catalog_id = whatsapp_catalog_id(pool).await;
 
     let access_token_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_ACCESS_TOKEN);
@@ -148,7 +142,12 @@ async fn setup_whatsapp_connection(
     connection_id
 }
 
-async fn seed_customer(pool: &PgPool, tenant_id: Uuid, display_name: &str, wa_identifier: &str) -> Uuid {
+async fn seed_customer(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    display_name: &str,
+    wa_identifier: &str,
+) -> Uuid {
     let customer_id: Uuid = sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name) \
          VALUES ($1, $2) RETURNING id",
@@ -386,13 +385,12 @@ async fn non_whatsapp_channel_does_not_emit_whatsapp_outbound() {
     );
 
     // Sanity check: the AI message was created
-    let msg_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM messages WHERE tenant_id = $1 AND id = $2",
-    )
-    .bind(tenant_id)
-    .bind(message_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let msg_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant_id)
+            .bind(message_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(msg_count, 1, "the AI message should exist");
 }

@@ -27,16 +27,12 @@ impl TelegramApi for RecordingApi {
         self.inner.get_me(token).await
     }
 
-    async fn set_webhook(
-        &self,
-        token: &str,
-        url: &str,
-        secret: &str,
-    ) -> Result<(), ApiError> {
-        self.set_webhook_calls
-            .lock()
-            .unwrap()
-            .push((token.to_string(), url.to_string(), secret.to_string()));
+    async fn set_webhook(&self, token: &str, url: &str, secret: &str) -> Result<(), ApiError> {
+        self.set_webhook_calls.lock().unwrap().push((
+            token.to_string(),
+            url.to_string(),
+            secret.to_string(),
+        ));
         self.inner.set_webhook(token, url, secret).await
     }
 
@@ -54,10 +50,11 @@ impl TelegramApi for RecordingApi {
         chat_id: i64,
         text: &str,
     ) -> Result<i64, telegram::api::SendError> {
-        self.send_message_calls
-            .lock()
-            .unwrap()
-            .push((token.to_string(), chat_id, text.to_string()));
+        self.send_message_calls.lock().unwrap().push((
+            token.to_string(),
+            chat_id,
+            text.to_string(),
+        ));
         self.inner.send_message(token, chat_id, text).await
     }
 
@@ -91,11 +88,7 @@ impl TelegramApi for RecordingApi {
         self.inner.get_file(token, file_id).await
     }
 
-    async fn download_file(
-        &self,
-        token: &str,
-        file_path: &str,
-    ) -> Result<Vec<u8>, ApiError> {
+    async fn download_file(&self, token: &str, file_path: &str) -> Result<Vec<u8>, ApiError> {
         self.inner.download_file(token, file_path).await
     }
 }

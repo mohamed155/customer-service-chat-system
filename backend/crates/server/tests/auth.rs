@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use argon2::password_hash::{rand_core::OsRng, SaltString};
+use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
 use axum::body::Body;
 use axum::http::{Method, Request};
@@ -242,6 +242,7 @@ mod tests {
                     "platform.admin",
                     "platform.billing.view",
                     "platform.billing.manage",
+                    "platform.analytics.view",
                     "platform.diagnostics.view"
                 ],
                 "staffTenantPermissions": [

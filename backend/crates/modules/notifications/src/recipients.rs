@@ -31,14 +31,18 @@ pub async fn resolve(
 
     match kind {
         NotificationKind::EscalationNew | NotificationKind::ToolApprovalRequired => {
-            resolve_role_based(pool, tenant_id, &roles_with_conversations_manage(), actor_membership_id).await
+            resolve_role_based(
+                pool,
+                tenant_id,
+                &roles_with_conversations_manage(),
+                actor_membership_id,
+            )
+            .await
         }
         NotificationKind::AiResponseFailed => {
             resolve_ai_failed(pool, tenant_id, subject_id, actor_membership_id).await
         }
-        NotificationKind::ConversationAssigned => {
-            Ok(Vec::new())
-        }
+        NotificationKind::ConversationAssigned => Ok(Vec::new()),
     }
 }
 

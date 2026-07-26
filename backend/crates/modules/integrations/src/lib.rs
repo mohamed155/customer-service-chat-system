@@ -51,11 +51,11 @@
 //!   `reason` `CHECK` constraints in the migration and the matching
 //!   Rust enums in `model`.
 
-pub mod model;
-pub mod crypto;
-pub mod queries;
-pub mod routes;
-pub mod webhook;
-pub mod status;
 pub mod audit;
+pub mod crypto;
+pub mod model;
+pub mod queries;
 pub mod retention;
+pub mod routes;
+pub mod status;
+pub mod webhook;

@@ -63,29 +63,34 @@ const PLATFORM_ALL: &[Permission] = &[
     Permission::PlatformAdmin,
     Permission::PlatformBillingView,
     Permission::PlatformBillingManage,
+    Permission::PlatformAnalyticsView,
     Permission::PlatformDiagnosticsView,
     Permission::PlatformAuditView,
 ];
 const PLATFORM_DEVELOPER: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
+    Permission::PlatformAnalyticsView,
     Permission::PlatformDiagnosticsView,
     Permission::PlatformAuditView,
 ];
 const PLATFORM_TENANT_ACCESS: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
+    Permission::PlatformAnalyticsView,
     Permission::PlatformAuditView,
 ];
 const PLATFORM_SUPPORT: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
     Permission::PlatformTenantsManage,
+    Permission::PlatformAnalyticsView,
     Permission::PlatformAuditView,
 ];
 const PLATFORM_FINANCE: &[Permission] = &[
     Permission::PlatformTenantsList,
     Permission::PlatformTenantsSwitch,
+    Permission::PlatformAnalyticsView,
     Permission::PlatformBillingView,
     Permission::PlatformBillingManage,
     Permission::PlatformAuditView,

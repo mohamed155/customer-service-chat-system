@@ -95,7 +95,13 @@ async fn send(pool: sqlx::PgPool, request: Request<Body>) -> Response {
 }
 
 async fn body_bytes(response: Response) -> Vec<u8> {
-    response.into_body().collect().await.unwrap().to_bytes().to_vec()
+    response
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes()
+        .to_vec()
 }
 
 async fn body_json(response: Response) -> Value {
@@ -227,13 +233,12 @@ async fn connect_through_api(
         .1
         .to_string();
 
-    let connection_id: Uuid = sqlx::query_scalar(
-        "SELECT id FROM integration_connections WHERE tenant_id = $1",
-    )
-    .bind(tenant_id)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let connection_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM integration_connections WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     ConnectionHandle {
         token,
@@ -241,11 +246,7 @@ async fn connect_through_api(
     }
 }
 
-async fn disconnect_through_api(
-    pool: sqlx::PgPool,
-    tenant_id: Uuid,
-    user_id: Uuid,
-) -> Response {
+async fn disconnect_through_api(pool: sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) -> Response {
     send(
         pool,
         authenticated_request(
@@ -265,29 +266,25 @@ async fn count_events(
     reason: Option<&str>,
 ) -> i64 {
     let row: (i64,) = match reason {
-        Some(r) => {
-            sqlx::query_as(
-                "SELECT COUNT(*) FROM integration_events \
+        Some(r) => sqlx::query_as(
+            "SELECT COUNT(*) FROM integration_events \
                  WHERE connection_id = $1 AND event_type = $2 AND reason = $3",
-            )
-            .bind(connection_id)
-            .bind(event_type)
-            .bind(r)
-            .fetch_one(pool)
-            .await
-            .unwrap()
-        }
-        None => {
-            sqlx::query_as(
-                "SELECT COUNT(*) FROM integration_events \
+        )
+        .bind(connection_id)
+        .bind(event_type)
+        .bind(r)
+        .fetch_one(pool)
+        .await
+        .unwrap(),
+        None => sqlx::query_as(
+            "SELECT COUNT(*) FROM integration_events \
                  WHERE connection_id = $1 AND event_type = $2 AND reason IS NULL",
-            )
-            .bind(connection_id)
-            .bind(event_type)
-            .fetch_one(pool)
-            .await
-            .unwrap()
-        }
+        )
+        .bind(connection_id)
+        .bind(event_type)
+        .fetch_one(pool)
+        .await
+        .unwrap(),
     };
     row.0
 }
@@ -328,11 +325,7 @@ async fn correctly_signed_delivery_returns_202_and_writes_event_and_delivery() {
     let body = br#"{"event":"order.created","id":42}"#.to_vec();
     let signature = sign(TEST_SECRET, &body);
 
-    let response = send(
-        pool.clone(),
-        webhook_request(&conn.token, body, &signature),
-    )
-    .await;
+    let response = send(pool.clone(), webhook_request(&conn.token, body, &signature)).await;
     assert_eq!(response.status(), StatusCode::ACCEPTED);
     let payload = body_json(response).await;
     assert_eq!(payload["status"], "accepted");
@@ -363,11 +356,7 @@ async fn bad_signature_returns_404_and_writes_invalid_signature_event() {
     // Sign with the wrong secret on purpose.
     let signature = sign("whsec_wrong_secret_value", &body);
 
-    let response = send(
-        pool.clone(),
-        webhook_request(&conn.token, body, &signature),
-    )
-    .await;
+    let response = send(pool.clone(), webhook_request(&conn.token, body, &signature)).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     assert_eq!(
@@ -410,7 +399,11 @@ async fn unknown_token_returns_404_with_no_new_events() {
     let body = br#"{"hello":"world"}"#.to_vec();
     let signature = sign(TEST_SECRET, &body);
 
-    let response = send(pool.clone(), webhook_request(&bogus_token, body, &signature)).await;
+    let response = send(
+        pool.clone(),
+        webhook_request(&bogus_token, body, &signature),
+    )
+    .await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     let after = count_all_events(&pool).await;
@@ -439,11 +432,7 @@ async fn disconnected_connection_returns_404_and_writes_inactive_event() {
     // hits the inactive-connection branch.
     let body = br#"{"event":"ping"}"#.to_vec();
     let signature = sign(TEST_SECRET, &body);
-    let response = send(
-        pool.clone(),
-        webhook_request(&conn.token, body, &signature),
-    )
-    .await;
+    let response = send(pool.clone(), webhook_request(&conn.token, body, &signature)).await;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     assert_eq!(
@@ -520,11 +509,7 @@ async fn body_larger_than_256kb_returns_413() {
     let body = vec![b'.'; 256 * 1024 + 1];
     let signature = sign(TEST_SECRET, &body);
 
-    let response = send(
-        pool.clone(),
-        webhook_request(&conn.token, body, &signature),
-    )
-    .await;
+    let response = send(pool.clone(), webhook_request(&conn.token, body, &signature)).await;
     assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
 }
 
@@ -543,11 +528,7 @@ async fn sixty_one_deliveries_produce_at_most_one_rate_limited_event() {
         let payload = format!(r#"{{"seq":{i}}}"#);
         let body = payload.as_bytes().to_vec();
         let signature = sign(TEST_SECRET, &body);
-        let response = send(
-            pool.clone(),
-            webhook_request(&conn.token, body, &signature),
-        )
-        .await;
+        let response = send(pool.clone(), webhook_request(&conn.token, body, &signature)).await;
         assert_eq!(
             response.status(),
             StatusCode::ACCEPTED,
@@ -558,11 +539,7 @@ async fn sixty_one_deliveries_produce_at_most_one_rate_limited_event() {
     // The 61st should be rate limited.
     let body = br#"{"seq":60}"#.to_vec();
     let signature = sign(TEST_SECRET, &body);
-    let response = send(
-        pool.clone(),
-        webhook_request(&conn.token, body, &signature),
-    )
-    .await;
+    let response = send(pool.clone(), webhook_request(&conn.token, body, &signature)).await;
     assert_eq!(
         response.status(),
         StatusCode::TOO_MANY_REQUESTS,
@@ -573,11 +550,7 @@ async fn sixty_one_deliveries_produce_at_most_one_rate_limited_event() {
     for i in 61..66 {
         let body = format!(r#"{{"seq":{i}}}"#).into_bytes();
         let signature = sign(TEST_SECRET, &body);
-        let response = send(
-            pool.clone(),
-            webhook_request(&conn.token, body, &signature),
-        )
-        .await;
+        let response = send(pool.clone(), webhook_request(&conn.token, body, &signature)).await;
         assert_eq!(
             response.status(),
             StatusCode::TOO_MANY_REQUESTS,
@@ -599,8 +572,13 @@ async fn sixty_one_deliveries_produce_at_most_one_rate_limited_event() {
 
     // Throttling assertion: at most one rate_limited event for the burst
     // (the 1-per-connection-per-minute budget from T047).
-    let rate_limited_count =
-        count_events(&pool, conn.connection_id, "delivery_rejected", Some("rate_limited")).await;
+    let rate_limited_count = count_events(
+        &pool,
+        conn.connection_id,
+        "delivery_rejected",
+        Some("rate_limited"),
+    )
+    .await;
     assert!(
         (1..=2).contains(&rate_limited_count),
         "rate_limited events must be throttled to at most one per burst, got {rate_limited_count}"

@@ -341,7 +341,8 @@ async fn reply_whatsapp_window_expired_422() {
 
     // Customer message > 24h ago
     let old_time = Utc::now() - chrono::Duration::hours(25);
-    let conv_id = seed_conversation(&pool, tenant_id, customer_id, "whatsapp", "open", old_time).await;
+    let conv_id =
+        seed_conversation(&pool, tenant_id, customer_id, "whatsapp", "open", old_time).await;
     seed_customer_message(&pool, tenant_id, conv_id, "Old customer message", old_time).await;
 
     let payload = json!({"kind": "reply", "body": "This should be blocked"});
@@ -492,5 +493,9 @@ async fn reply_whatsapp_success_emits_outbound() {
     .fetch_optional(&pool)
     .await
     .unwrap();
-    assert_eq!(payload_conv_id, Some(conv_id), "outbox payload should reference the conversation");
+    assert_eq!(
+        payload_conv_id,
+        Some(conv_id),
+        "outbox payload should reference the conversation"
+    );
 }

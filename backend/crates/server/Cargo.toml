@@ -23,6 +23,7 @@ kernel = { path = "../shared/kernel" }
 email = { path = "../modules/email" }
 notifications = { path = "../modules/notifications" }
 observability = { path = "../shared/observability" }
+platform = { path = "../modules/platform" }
 serde = { workspace = true }
 sqlx = { workspace = true, features = ["postgres"] }
 tenancy = { path = "../modules/tenancy" }

@@ -6,7 +6,11 @@ use crate::model::{Contact, IncomingMessage, MediaContent};
 
 fn extract_body(msg: &IncomingMessage) -> String {
     match msg.message_type.as_str() {
-        "text" => msg.text.as_ref().map(|t| t.body.clone()).unwrap_or_default(),
+        "text" => msg
+            .text
+            .as_ref()
+            .map(|t| t.body.clone())
+            .unwrap_or_default(),
         "image" => msg
             .image
             .as_ref()
@@ -75,7 +79,8 @@ pub async fn process_message(
     let profile_name = contact
         .and_then(|c| c.profile.as_ref())
         .and_then(|p| p.name.as_deref());
-    let customer_id = identity::resolve_customer_in_tx(&mut tx, tenant_id, &msg.from, profile_name).await?;
+    let customer_id =
+        identity::resolve_customer_in_tx(&mut tx, tenant_id, &msg.from, profile_name).await?;
 
     let conversation_id: Uuid =
         match conversations::queries::find_open_conversation_in_tx(&mut tx, tenant_id, customer_id, "whatsapp")
@@ -133,8 +138,14 @@ pub async fn process_message(
         .execute(&mut *tx)
         .await?;
 
-    conversations::outbox::emit_customer_message_in_tx(&mut tx, tenant_id, conversation_id, message_id, "whatsapp")
-        .await?;
+    conversations::outbox::emit_customer_message_in_tx(
+        &mut tx,
+        tenant_id,
+        conversation_id,
+        message_id,
+        "whatsapp",
+    )
+    .await?;
 
     tx.commit().await?;
     Ok(())
