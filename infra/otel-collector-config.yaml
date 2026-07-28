@@ -1,0 +1,40 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 5000
+    expected_new_traces_per_sec: 200
+    policies:
+      # FR-020: an errored request's trace is ALWAYS retained
+      - name: error-status-policy
+        type: status_code
+        config:
+          status_code_source: status
+          status_codes:
+            - ERROR
+      # FR-020: non-errored traces retained at configurable percentage
+      - name: probabilistic-policy
+        type: probabilistic
+        config:
+          sampling_percentage: ${env:OTEL_TAIL_SAMPLE_PERCENTAGE}
+
+exporters:
+  otlp:
+    endpoint: "tempo:4317"
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [tail_sampling, batch]
+      exporters: [otlp]

@@ -39,3 +39,122 @@ services:
     image: mailhog/mailhog
     ports: ["1025:1025", "8025:8025"]
 
+  otel-collector:
+    profiles:
+      - observability
+    image: otel/opentelemetry-collector-contrib:0.118.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    environment:
+      OTEL_TAIL_SAMPLE_PERCENTAGE: "${OTEL_TAIL_SAMPLE_PERCENTAGE:-100}"
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      - postgres
+      - redis
+
+  prometheus:
+    profiles:
+      - observability
+    image: prom/prometheus:v3.2.1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9090:9090"
+
+  node-exporter:
+    profiles:
+      - observability
+    image: prom/node-exporter:v1.9.0
+    command:
+      - "--collector.textfile.directory=/textfile"
+    volumes:
+      - /var/lib/node_exporter/textfile_collector:/textfile:ro
+    ports:
+      - "9100:9100"
+
+  grafana:
+    profiles:
+      - observability
+    image: grafana/grafana:11.6.0
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+  loki:
+    profiles:
+      - observability
+    image: grafana/loki:3.4.2
+    command:
+      - "-config.file=/etc/loki/loki-config.yaml"
+      - "-target=all"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+
+  promtail:
+    profiles:
+      - observability
+    image: grafana/promtail:3.4.2
+    command:
+      - "-config.file=/etc/promtail/promtail-config.yaml"
+    volumes:
+      - ./promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+
+  alertmanager:
+    profiles:
+      - observability
+    image: prom/alertmanager:v0.28.0
+    entrypoint:
+      - /etc/alertmanager/entrypoint.sh
+    command:
+      - "--config.file=/tmp/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    environment:
+      - APP_ALERT_WEBHOOK_URL=${APP_ALERT_WEBHOOK_URL:-}
+    volumes:
+      - ./alertmanager.yml.tmpl:/etc/alertmanager/alertmanager.yml.tmpl:ro
+      - ./alertmanager-entrypoint.sh:/etc/alertmanager/entrypoint.sh:ro
+
+  tempo:
+    profiles:
+      - observability
+    image: grafana/tempo:2.7.1
+    command: ["-config.file=/etc/tempo/tempo-config.yaml"]
+    volumes:
+      - ./tempo-config.yaml:/etc/tempo/tempo-config.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  tempo-data:
+

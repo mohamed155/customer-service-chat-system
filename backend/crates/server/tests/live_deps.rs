@@ -61,6 +61,21 @@ async fn live_readiness_with_real_deps() {
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
         s3: None,
+        trusted_proxy: false,
+        rate_limit_enabled: true,
+        rate_limit_login_max: 10,
+        rate_limit_login_window_secs: 60,
+        rate_limit_max_override: 10000,
+        rate_limit_fail_mode: "auth_closed".into(),
+        security_headers_enabled: true,
+        csp_policy:
+            "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'".into(),
+        csp_report_only: true,
+        hsts_max_age: 31536000,
+        otlp_endpoint: None,
+        trace_sample_ratio: 1.0,
+        sentry_dsn: None,
+        release_sha: None,
     };
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     let state = AppState {
@@ -70,6 +85,7 @@ async fn live_readiness_with_real_deps() {
         health_checks,
         escalations: escalations::presence::Runtime::new(pool, Duration::from_secs(45)),
         ai,
+        budget_resolver: Arc::new(cache::limiter::BudgetResolver::new(10_000)),
     };
 
     let app = router::app(state);

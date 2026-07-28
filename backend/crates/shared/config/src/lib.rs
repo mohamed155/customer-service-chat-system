@@ -3,16 +3,20 @@
 //! # Purpose
 //! Parse, validate, and expose all runtime configuration from environment
 //! variables. Secret-bearing fields are redacted in `Debug` output.
+//! Includes rate-limit thresholds, security header directives, OTLP/Sentry
+//! endpoints, and proxy trust settings.
 //!
 //! # Public Interfaces
 //! - `AppConfig::from_env()` — parse and validate
 //! - `Environment`, `LogFormat` enums
+//! - `S3Config` — optional S3-compatible object storage settings
 //!
 //! # Dependencies
-//! None beyond `std`.
+//! None beyond `std` and `url`.
 //!
 //! # Extension Points
-//! - Add new fields by extending the struct, the parser, and the test matrix.
+//! - Add new fields by extending the struct, the parser, the Debug impl,
+//!   the test cleanup list, and the test matrix.
 
 use std::{env, error::Error, fmt, str::FromStr};
 use url::Url;
@@ -77,7 +81,7 @@ fn validate_origin(s: &str) -> Result<(), ConfigError> {
     Ok(())
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq)]
 pub struct AppConfig {
     pub database_url: String,
     pub redis_url: String,
@@ -107,6 +111,20 @@ pub struct AppConfig {
     /// of this flag; in production the flag must be explicitly set to
     /// `true` to expose them (default `false` per FR-014).
     pub docs_enabled: bool,
+    pub rate_limit_enabled: bool,
+    pub rate_limit_login_max: u32,
+    pub rate_limit_login_window_secs: u64,
+    pub rate_limit_max_override: u32,
+    pub rate_limit_fail_mode: String,
+    pub security_headers_enabled: bool,
+    pub csp_policy: String,
+    pub csp_report_only: bool,
+    pub hsts_max_age: u64,
+    pub otlp_endpoint: Option<String>,
+    pub trace_sample_ratio: f64,
+    pub sentry_dsn: Option<String>,
+    pub release_sha: Option<String>,
+    pub trusted_proxy: bool,
 }
 
 impl fmt::Debug for AppConfig {
@@ -138,6 +156,23 @@ impl fmt::Debug for AppConfig {
             .field("ai_anthropic_base_url", &self.ai_anthropic_base_url)
             .field("ai_gemini_base_url", &self.ai_gemini_base_url)
             .field("s3", &self.s3)
+            .field("rate_limit_enabled", &self.rate_limit_enabled)
+            .field("rate_limit_login_max", &self.rate_limit_login_max)
+            .field(
+                "rate_limit_login_window_secs",
+                &self.rate_limit_login_window_secs,
+            )
+            .field("rate_limit_max_override", &self.rate_limit_max_override)
+            .field("rate_limit_fail_mode", &self.rate_limit_fail_mode)
+            .field("security_headers_enabled", &self.security_headers_enabled)
+            .field("csp_policy", &self.csp_policy)
+            .field("csp_report_only", &self.csp_report_only)
+            .field("hsts_max_age", &self.hsts_max_age)
+            .field("otlp_endpoint", &self.otlp_endpoint)
+            .field("trace_sample_ratio", &self.trace_sample_ratio)
+            .field("sentry_dsn", &self.sentry_dsn)
+            .field("release_sha", &self.release_sha)
+            .field("trusted_proxy", &self.trusted_proxy)
             .finish()
     }
 }
@@ -335,6 +370,40 @@ impl AppConfig {
             .transpose()?
             .unwrap_or(false);
 
+        let rate_limit_enabled = parse_bool_env("APP_RATE_LIMIT_ENABLED", true)?;
+        let rate_limit_login_max = env::var("APP_RATE_LIMIT_LOGIN_MAX")
+            .unwrap_or_else(|_| "10".into())
+            .parse()
+            .map_err(|_| ConfigError("APP_RATE_LIMIT_LOGIN_MAX must be a valid u32".into()))?;
+        let rate_limit_login_window_secs = env::var("APP_RATE_LIMIT_LOGIN_WINDOW_SECS")
+            .unwrap_or_else(|_| "60".into())
+            .parse()
+            .map_err(|_| {
+                ConfigError("APP_RATE_LIMIT_LOGIN_WINDOW_SECS must be a valid u64".into())
+            })?;
+        let rate_limit_max_override = env::var("APP_RATE_LIMIT_MAX_OVERRIDE")
+            .unwrap_or_else(|_| "10000".into())
+            .parse()
+            .map_err(|_| ConfigError("APP_RATE_LIMIT_MAX_OVERRIDE must be a valid u32".into()))?;
+        let rate_limit_fail_mode =
+            env::var("APP_RATE_LIMIT_FAIL_MODE").unwrap_or_else(|_| "auth_closed".into());
+        let security_headers_enabled = parse_bool_env("APP_SECURITY_HEADERS_ENABLED", true)?;
+        let csp_policy = env::var("APP_CSP_POLICY")
+            .unwrap_or_else(|_| "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'".into());
+        let csp_report_only = parse_bool_env("APP_CSP_REPORT_ONLY", true)?;
+        let hsts_max_age = env::var("APP_HSTS_MAX_AGE")
+            .unwrap_or_else(|_| "31536000".into())
+            .parse()
+            .map_err(|_| ConfigError("APP_HSTS_MAX_AGE must be a valid u64".into()))?;
+        let otlp_endpoint = env::var("APP_OTLP_ENDPOINT").ok();
+        let trace_sample_ratio = env::var("APP_TRACE_SAMPLE_RATIO")
+            .unwrap_or_else(|_| "1.0".into())
+            .parse()
+            .map_err(|_| ConfigError("APP_TRACE_SAMPLE_RATIO must be a valid f64".into()))?;
+        let sentry_dsn = env::var("APP_SENTRY_DSN").ok();
+        let release_sha = env::var("APP_RELEASE_SHA").ok();
+        let trusted_proxy = parse_bool_env("APP_TRUSTED_PROXY", false)?;
+
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             redis_url: required("REDIS_URL")?,
@@ -359,8 +428,36 @@ impl AppConfig {
             ready_probe_timeout_ms,
             shutdown_grace_seconds,
             docs_enabled,
+            rate_limit_enabled,
+            rate_limit_login_max,
+            rate_limit_login_window_secs,
+            rate_limit_max_override,
+            rate_limit_fail_mode,
+            security_headers_enabled,
+            csp_policy,
+            csp_report_only,
+            hsts_max_age,
+            otlp_endpoint,
+            trace_sample_ratio,
+            sentry_dsn,
+            release_sha,
+            trusted_proxy,
         })
     }
+}
+
+fn parse_bool_env(key: &str, default: bool) -> Result<bool, ConfigError> {
+    Ok(env::var(key)
+        .ok()
+        .map(|v| match v.to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Ok(true),
+            "0" | "false" | "no" | "off" => Ok(false),
+            other => Err(ConfigError(format!(
+                "{key} must be a boolean, got '{other}'"
+            ))),
+        })
+        .transpose()?
+        .unwrap_or(default))
 }
 
 fn validate_public_dashboard_url(url: &str) -> Result<(), ConfigError> {
@@ -419,6 +516,20 @@ mod tests {
                 "APP_S3_ACCESS_KEY_ID",
                 "APP_S3_SECRET_ACCESS_KEY",
                 "APP_S3_FORCE_PATH_STYLE",
+                "APP_RATE_LIMIT_ENABLED",
+                "APP_RATE_LIMIT_LOGIN_MAX",
+                "APP_RATE_LIMIT_LOGIN_WINDOW_SECS",
+                "APP_RATE_LIMIT_MAX_OVERRIDE",
+                "APP_RATE_LIMIT_FAIL_MODE",
+                "APP_SECURITY_HEADERS_ENABLED",
+                "APP_CSP_POLICY",
+                "APP_CSP_REPORT_ONLY",
+                "APP_HSTS_MAX_AGE",
+                "APP_OTLP_ENDPOINT",
+                "APP_TRACE_SAMPLE_RATIO",
+                "APP_SENTRY_DSN",
+                "APP_RELEASE_SHA",
+                "APP_TRUSTED_PROXY",
             ] {
                 env::remove_var(key);
             }
@@ -509,6 +620,23 @@ mod tests {
         assert_eq!(config.ai_openai_base_url, None);
         assert_eq!(config.ai_anthropic_base_url, None);
         assert_eq!(config.ai_gemini_base_url, None);
+        assert!(config.rate_limit_enabled);
+        assert_eq!(config.rate_limit_login_max, 10);
+        assert_eq!(config.rate_limit_login_window_secs, 60);
+        assert_eq!(config.rate_limit_max_override, 10000);
+        assert_eq!(config.rate_limit_fail_mode, "auth_closed");
+        assert!(config.security_headers_enabled);
+        assert_eq!(
+            config.csp_policy,
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        );
+        assert!(config.csp_report_only);
+        assert_eq!(config.hsts_max_age, 31536000);
+        assert_eq!(config.otlp_endpoint, None);
+        assert!((config.trace_sample_ratio - 1.0).abs() < f64::EPSILON);
+        assert_eq!(config.sentry_dsn, None);
+        assert_eq!(config.release_sha, None);
+        assert!(!config.trusted_proxy);
     }
 
     #[test]

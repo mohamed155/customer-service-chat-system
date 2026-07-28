@@ -22,6 +22,7 @@ pub async fn find_conversation_for_session(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert_feedback(
     pool: &PgPool,
     tenant_id: Uuid,

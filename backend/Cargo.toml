@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "crates/server", "crates/shared/*", "crates/modules/*", "crates/ai-providers"
 ]
+exclude = ["crates/modules/telegram"]
 
 [workspace.package]
 edition = "2021"
@@ -26,7 +27,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 url = "2"
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 redis = { version = "0.28", features = ["tokio-comp", "connection-manager"] }
-tower-http = { version = "0.6", features = ["cors", "catch-panic"] }
+tower-http = { version = "0.6", features = ["cors", "catch-panic", "set-header"] }
 async-trait = "0.1"
 argon2 = "0.5"
 axum-extra = { version = "0.10", features = ["cookie"] }
@@ -50,3 +51,13 @@ ammonia = "4"
 pdf-extract = "0.7"
 aws-config = { version = "1", default-features = false, features = ["behavior-version-latest", "rustls"] }
 aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls"] }
+strum = { version = "0.26", default-features = false, features = ["derive"] }
+regex = "1"
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
+opentelemetry = { version = "0.28", features = ["metrics", "trace"] }
+opentelemetry_sdk = { version = "0.28", features = ["trace", "metrics"] }
+opentelemetry-otlp = { version = "0.28", features = ["trace", "metrics", "grpc-tonic"] }
+tracing-opentelemetry = "0.29"
+sentry = "0.34"
+sentry-tracing = "0.34"

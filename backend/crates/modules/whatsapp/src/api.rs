@@ -216,6 +216,12 @@ pub struct MockWhatsAppApi {
     download_responses: std::sync::Mutex<Vec<Result<Bytes, SendError>>>,
 }
 
+impl Default for MockWhatsAppApi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockWhatsAppApi {
     pub fn new() -> Self {
         Self {

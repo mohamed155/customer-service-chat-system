@@ -49,12 +49,27 @@ pub fn test_config() -> config::AppConfig {
         ready_probe_timeout_ms: 5000,
         shutdown_grace_seconds: 1,
         docs_enabled: false,
+        rate_limit_enabled: true,
+        rate_limit_login_max: 10,
+        rate_limit_login_window_secs: 60,
+        rate_limit_max_override: 10000,
+        rate_limit_fail_mode: "auth_closed".into(),
+        security_headers_enabled: true,
+        csp_policy:
+            "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'".into(),
+        csp_report_only: true,
+        hsts_max_age: 31536000,
+        otlp_endpoint: None,
+        trace_sample_ratio: 1.0,
+        sentry_dsn: None,
+        release_sha: None,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         integration_secrets_key: None,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
         s3: None,
+        trusted_proxy: false,
     }
 }
 
@@ -67,6 +82,7 @@ pub fn test_app_state(pool: sqlx::PgPool) -> AppState {
         health_checks: vec![],
         escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
         ai: ai::AiService::from_config(pool, &test_config()).unwrap(),
+        budget_resolver: Arc::new(cache::limiter::BudgetResolver::new(10_000)),
     }
 }
 
@@ -85,6 +101,7 @@ pub fn test_app_state_with_config(pool: sqlx::PgPool, config: config::AppConfig)
         health_checks: vec![],
         escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
         ai: ai::AiService::from_config(pool, &config).unwrap(),
+        budget_resolver: Arc::new(cache::limiter::BudgetResolver::new(10_000)),
     }
 }
 

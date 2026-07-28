@@ -1,4 +1,5 @@
 use axum::extract::FromRef;
+use cache::limiter::BudgetResolver;
 use config::AppConfig;
 use observability::health::HealthCheck;
 use sqlx::PgPool;
@@ -12,6 +13,7 @@ pub struct AppState {
     pub health_checks: Vec<Arc<dyn HealthCheck>>,
     pub escalations: Arc<escalations::presence::Runtime>,
     pub ai: ai::AiService,
+    pub budget_resolver: Arc<BudgetResolver>,
 }
 
 impl FromRef<AppState> for PgPool {

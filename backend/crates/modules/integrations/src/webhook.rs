@@ -7,7 +7,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use base64::Engine;
 use hmac::{Hmac, Mac};
-use kernel::{ApiError, InMemoryRateLimitStore};
+use kernel::{ApiError, Budget, Decision, RateLimiter, Scope};
 use rand::Rng;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -77,6 +77,7 @@ fn not_found_response() -> Response {
 /// Resolve the integration master key from app config. Mirrors the helper
 /// in `routes::load_master_key`; duplicated here so the webhook crate does
 /// not need to call back into `routes`.
+#[allow(clippy::result_large_err)]
 fn load_master_key(config: &config::AppConfig) -> Result<MasterKey, Response> {
     let raw = config.integration_secrets_key.as_deref().ok_or_else(|| {
         ApiError::internal_error("Integration secrets key is not configured").into_response()
@@ -154,7 +155,7 @@ async fn log_rejection_event(
 pub async fn receive_webhook(
     Path(token): Path<String>,
     State(pool): State<PgPool>,
-    Extension(store): Extension<Arc<InMemoryRateLimitStore>>,
+    Extension(store): Extension<Arc<dyn RateLimiter>>,
     Extension(config): Extension<Arc<config::AppConfig>>,
     headers: HeaderMap,
     body: Bytes,
@@ -181,31 +182,55 @@ pub async fn receive_webhook(
     if !conn.is_active {
         // Inactive connection — 404 + throttled rejection event.
         let reason = model::RejectionReason::InactiveConnection.as_str();
-        if store.check(
-            &format!("integration_evt:{}:{}", conn.connection_id, reason),
-            REJECTION_EVENT_BUDGET,
-            std::time::Duration::from_secs(REJECTION_EVENT_WINDOW_SECS),
+        if matches!(
+            store
+                .check(
+                    Scope::Webhook,
+                    &format!("integration_evt:{}:{}", conn.connection_id, reason),
+                    Budget {
+                        max_requests: REJECTION_EVENT_BUDGET,
+                        window: std::time::Duration::from_secs(REJECTION_EVENT_WINDOW_SECS),
+                    },
+                )
+                .await,
+            Decision::Allowed { .. }
         ) {
             log_rejection_event(&pool, conn.tenant_id, conn.connection_id, reason).await;
         }
         return not_found_response();
     }
 
-    if !store.check(
-        &format!("integration_conn:{}", conn.connection_id),
-        RATE_LIMIT_REQUESTS,
-        std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS),
-    ) {
-        // Rate limited — 429 + throttled rejection event.
-        let reason = model::RejectionReason::RateLimited.as_str();
-        if store.check(
-            &format!("integration_evt:{}:{}", conn.connection_id, reason),
-            REJECTION_EVENT_BUDGET,
-            std::time::Duration::from_secs(REJECTION_EVENT_WINDOW_SECS),
-        ) {
-            log_rejection_event(&pool, conn.tenant_id, conn.connection_id, reason).await;
+    if config.rate_limit_enabled {
+        if let Decision::Refused { retry_after } = store
+            .check(
+                Scope::Webhook,
+                &format!("integration_conn:{}", conn.connection_id),
+                Budget {
+                    max_requests: RATE_LIMIT_REQUESTS,
+                    window: std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS),
+                },
+            )
+            .await
+        {
+            // Rate limited — 429 + throttled rejection event.
+            let reason = model::RejectionReason::RateLimited.as_str();
+            if matches!(
+                store
+                    .check(
+                        Scope::Webhook,
+                        &format!("integration_evt:{}:{}", conn.connection_id, reason),
+                        Budget {
+                            max_requests: REJECTION_EVENT_BUDGET,
+                            window: std::time::Duration::from_secs(REJECTION_EVENT_WINDOW_SECS),
+                        },
+                    )
+                    .await,
+                Decision::Allowed { .. }
+            ) {
+                log_rejection_event(&pool, conn.tenant_id, conn.connection_id, reason).await;
+            }
+            return ApiError::rate_limited("Too many requests", retry_after).into_response();
         }
-        return ApiError::rate_limited("Too many requests").into_response();
     }
 
     let master = match load_master_key(&config) {

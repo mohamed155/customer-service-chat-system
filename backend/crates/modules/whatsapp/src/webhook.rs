@@ -6,7 +6,7 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use hmac::{Hmac, Mac};
-use kernel::{ApiError, InMemoryRateLimitStore};
+use kernel::{ApiError, Budget, Decision, RateLimiter, Scope};
 use serde::Deserialize;
 use serde_json::json;
 use sha2::Sha256;
@@ -116,7 +116,8 @@ pub async fn receive_message(
     Path(token): Path<String>,
     State(pool): State<PgPool>,
     Extension(master_key): Extension<Arc<MasterKey>>,
-    Extension(store): Extension<Arc<InMemoryRateLimitStore>>,
+    Extension(store): Extension<Arc<dyn RateLimiter>>,
+    Extension(config): Extension<Arc<config::AppConfig>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
@@ -134,16 +135,20 @@ pub async fn receive_message(
         return not_found_response();
     }
 
-    if !store.check(
-        &format!("whatsapp_conn:{}", conn.id),
-        RATE_LIMIT_REQUESTS,
-        std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS),
-    ) {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(json!({"error":"rate_limited"})),
-        )
-            .into_response();
+    if config.rate_limit_enabled {
+        if let Decision::Refused { retry_after } = store
+            .check(
+                Scope::Webhook,
+                &format!("whatsapp_conn:{}", conn.id),
+                Budget {
+                    max_requests: RATE_LIMIT_REQUESTS,
+                    window: std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS),
+                },
+            )
+            .await
+        {
+            return ApiError::rate_limited("Too many requests", retry_after).into_response();
+        }
     }
 
     let sig_header = headers
@@ -165,10 +170,18 @@ pub async fn receive_message(
         };
 
     if !verify_meta_signature(&app_secret, &body, sig_header) {
-        if store.check(
-            &format!("whatsapp_evt:{}:invalid_signature", conn.id),
-            REJECTION_EVENT_BUDGET,
-            std::time::Duration::from_secs(REJECTION_EVENT_WINDOW_SECS),
+        if matches!(
+            store
+                .check(
+                    Scope::Webhook,
+                    &format!("whatsapp_evt:{}:invalid_signature", conn.id),
+                    Budget {
+                        max_requests: REJECTION_EVENT_BUDGET,
+                        window: std::time::Duration::from_secs(REJECTION_EVENT_WINDOW_SECS),
+                    },
+                )
+                .await,
+            Decision::Allowed { .. }
         ) {
             tracing::warn!(
                 "whatsapp webhook invalid signature for connection {}",

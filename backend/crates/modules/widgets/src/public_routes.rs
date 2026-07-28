@@ -3,7 +3,9 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
 use axum::Json;
-use kernel::{ApiError, ApiJson, ErrorEnvelope, InMemoryRateLimitStore};
+use kernel::{
+    ApiError, ApiJson, Budget, Decision, ErrorEnvelope, RateLimiter, Scope, TenantRateLimit,
+};
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -477,7 +479,9 @@ pub async fn create_conversation(
 )]
 pub async fn send_message(
     State(pool): State<PgPool>,
-    Extension(store): Extension<Arc<InMemoryRateLimitStore>>,
+    Extension(store): Extension<Arc<dyn RateLimiter>>,
+    Extension(tenant_limit): Extension<Arc<dyn TenantRateLimit>>,
+    Extension(config): Extension<Arc<config::AppConfig>>,
     axum::Extension(headers): axum::Extension<axum::http::HeaderMap>,
     Path(conversation_id): Path<Uuid>,
     ApiJson(payload): ApiJson<SendMessagePayload>,
@@ -492,20 +496,30 @@ pub async fn send_message(
     };
 
     // Per-session message rate limit (10/min, matches MESSAGES_PER_SESSION_LIMIT)
-    if !store.check(
-        &format!("session:{}", session.id),
-        10,
-        std::time::Duration::from_secs(60),
-    ) {
-        return ApiError::rate_limited("Too many messages").into_response();
+    if config.rate_limit_enabled {
+        if let Decision::Refused { retry_after } = store
+            .check(
+                Scope::WidgetMessage,
+                &session.id.to_string(),
+                Budget {
+                    max_requests: 10,
+                    window: std::time::Duration::from_secs(60),
+                },
+            )
+            .await
+        {
+            return ApiError::rate_limited("Too many messages", retry_after).into_response();
+        }
     }
     // Global per-tenant rate limit (600/min, matches GLOBAL_TENANT_LIMIT)
-    if !store.check(
-        &format!("tenant:{}", session.tenant_id),
-        600,
-        std::time::Duration::from_secs(60),
-    ) {
-        return ApiError::rate_limited("Too many requests").into_response();
+    let tid = session.tenant_id.to_string();
+    if let Some(budget) = tenant_limit.budget(&tid, Scope::TenantGlobal).await {
+        if let Decision::Refused { retry_after } =
+            store.check(Scope::TenantGlobal, &tid, budget).await
+        {
+            tenant_limit.record_refusal(&tid).await;
+            return ApiError::rate_limited("Too many requests", retry_after).into_response();
+        }
     }
 
     let body = payload.body.trim().to_string();

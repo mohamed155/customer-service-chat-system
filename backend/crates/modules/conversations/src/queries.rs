@@ -1659,6 +1659,7 @@ pub async fn load_attachments_for_messages(
     tenant_id: Uuid,
     message_ids: &[Uuid],
 ) -> sqlx::Result<std::collections::HashMap<Uuid, Vec<crate::model::AttachmentInfo>>> {
+    #[allow(clippy::type_complexity)]
     let rows: Vec<(
         Uuid,
         Uuid,

@@ -17,6 +17,7 @@ pub(crate) struct ResolvedAuditQuery {
     pub limit: i64,
 }
 
+#[allow(clippy::result_large_err)]
 pub(crate) fn parse_audit_query(query: &model::AuditQuery) -> Result<ResolvedAuditQuery, Response> {
     let limit = query.limit.unwrap_or(50).clamp(1, 100);
     let from_ts = match query.from.as_deref() {

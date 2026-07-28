@@ -1,3 +1,4 @@
+use axum::extract::MatchedPath;
 use axum::{extract::Request, middleware::Next, response::Response};
 use std::time::Instant;
 use tracing::{Instrument, Span};
@@ -5,6 +6,11 @@ use tracing::{Instrument, Span};
 pub async fn trace_middleware(request: Request, next: Next) -> Response {
     let method = request.method().to_string();
     let path = request.uri().path().to_owned();
+    let route = request
+        .extensions()
+        .get::<MatchedPath>()
+        .map(|m| m.as_str().to_owned())
+        .unwrap_or_else(|| "<unmatched>".to_owned());
     let request_id = request
         .headers()
         .get(&super::request_id::REQUEST_ID_HEADER)
@@ -12,8 +18,11 @@ pub async fn trace_middleware(request: Request, next: Next) -> Response {
         .unwrap_or("unknown")
         .to_owned();
 
+    sentry::configure_scope(|scope| scope.set_tag("request_id", &request_id));
+
     let start = Instant::now();
     let span = request_span(&request_id, &method, &path);
+    span.record("route", &route);
 
     let response = next.run(request).instrument(span).await;
 
@@ -38,6 +47,7 @@ fn request_span(request_id: &str, method: &str, path: &str) -> Span {
         request_id = %request_id,
         method = %method,
         path = %path,
+        route = tracing::field::Empty,
         principal.id = tracing::field::Empty,
         principal.kind = tracing::field::Empty,
         tenant.id = tracing::field::Empty,

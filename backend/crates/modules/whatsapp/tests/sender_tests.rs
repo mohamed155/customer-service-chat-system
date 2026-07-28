@@ -9,7 +9,7 @@ use hmac::{Hmac, Mac};
 use http_body_util::BodyExt;
 use integrations::crypto::{aad, hint, seal, MasterKey};
 use integrations::webhook::hash_token;
-use kernel::InMemoryRateLimitStore;
+use kernel::{InMemoryRateLimitStore, RateLimiter};
 use serde_json::json;
 use sha2::Sha256;
 use tower::ServiceExt;
@@ -303,12 +303,55 @@ fn status_webhook_payload(wamid: &str, status: &str) -> serde_json::Value {
     })
 }
 
+fn test_config() -> config::AppConfig {
+    config::AppConfig {
+        database_url: "postgres://localhost:5432/test".into(),
+        redis_url: "redis://localhost:6379".into(),
+        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
+        auth_session_ttl_seconds: 28_800,
+        port: 0,
+        bind_address: "0.0.0.0".into(),
+        environment: config::Environment::Test,
+        cors_allowed_origins: vec![],
+        log_format: config::LogFormat::Pretty,
+        smtp_url: None,
+        smtp_from: None,
+        public_dashboard_url: "http://localhost:4200".into(),
+        db_max_connections: 1,
+        db_acquire_timeout_ms: 1000,
+        ready_probe_timeout_ms: 500,
+        shutdown_grace_seconds: 1,
+        docs_enabled: false,
+        rate_limit_enabled: true,
+        rate_limit_login_max: 10,
+        rate_limit_login_window_secs: 60,
+        rate_limit_max_override: 10000,
+        rate_limit_fail_mode: "auth_closed".into(),
+        security_headers_enabled: true,
+        csp_policy:
+            "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'".into(),
+        csp_report_only: true,
+        hsts_max_age: 31536000,
+        otlp_endpoint: None,
+        trace_sample_ratio: 1.0,
+        sentry_dsn: None,
+        release_sha: None,
+        ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
+        integration_secrets_key: None,
+        ai_openai_base_url: None,
+        ai_anthropic_base_url: None,
+        ai_gemini_base_url: None,
+        s3: None,
+        trusted_proxy: false,
+    }
+}
+
 fn test_app(pool: sqlx::PgPool, mk: Arc<MasterKey>) -> Router {
+    let store: Arc<dyn RateLimiter> = Arc::new(InMemoryRateLimitStore::new());
     whatsapp::routes::public_router()
         .layer(axum::extract::Extension(mk))
-        .layer(axum::extract::Extension(Arc::new(
-            InMemoryRateLimitStore::new(),
-        )))
+        .layer(axum::extract::Extension(store))
+        .layer(axum::extract::Extension(Arc::new(test_config())))
         .with_state(pool)
 }
 
