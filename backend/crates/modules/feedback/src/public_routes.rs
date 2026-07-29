@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
 use axum::Json;
-use kernel::{ApiError, ApiJson, Budget, Decision, RateLimiter, Scope, TenantRateLimit};
+use kernel::{ApiError, ApiJson, Decision, RateLimiter, Scope, TenantRateLimit};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tracing::info_span;
@@ -71,21 +71,17 @@ pub async fn submit_feedback(
         Err(e) => return e.into_response(),
     };
 
-    // Rate limit: per-session 10/60s
+    // Rate limit: per-session via resolved budget
     if config.rate_limit_enabled {
-        if let Decision::Refused { retry_after } = store
-            .check(
-                Scope::WidgetMessage,
-                &session.id.to_string(),
-                Budget {
-                    max_requests: 10,
-                    window: std::time::Duration::from_secs(60),
-                },
-            )
-            .await
-        {
-            return ApiError::rate_limited("Too many submissions, try again later", retry_after)
-                .into_response();
+        let tid = session.tenant_id.to_string();
+        if let Some(budget) = tenant_limit.budget(&tid, Scope::WidgetMessage).await {
+            if let Decision::Refused { retry_after } = store
+                .check(Scope::WidgetMessage, &session.id.to_string(), budget)
+                .await
+            {
+                return ApiError::rate_limited("Too many submissions, try again later", retry_after)
+                    .into_response();
+            }
         }
     }
 

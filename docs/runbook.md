@@ -33,10 +33,10 @@ Five common operational tasks for the AI Customer Service Platform.
    ```
 7. Poll the readiness endpoint:
    ```bash
-   for i in $(seq 1 30); do
-     curl -sf http://localhost:8080/ready && break
+   ok=0; for i in $(seq 1 30); do
+     if curl -sf http://localhost:8080/ready; then ok=1; break; fi
      sleep 2
-   done
+   done; [ "$ok" = 1 ] || { echo "readiness probe timed out"; exit 1; }
    ```
 
 ### Expected outcome
@@ -51,7 +51,7 @@ Five common operational tasks for the AI Customer Service Platform.
   migration error (schema conflict, timeout, data issue), fix it, commit a new
   SHA, and retry.
 - **Readiness probe times out**: Roll back immediately (see §2). Check logs
-  with `docker compose logs app --tail 100`.
+  with `docker compose -f infra/docker-compose.yml logs app --tail 100`.
 - **Image pull fails**: Verify registry credentials and network access. Check
   that the SHA tag exists in the registry.
 
@@ -68,7 +68,7 @@ Five common operational tasks for the AI Customer Service Platform.
    ```
 3. **If no migrations ran between the two SHAs**, proceed:
    ```bash
-   docker compose -f infra/docker-compose.yml up -d --no-deps app:<target-sha>
+    ops/rollback.sh <target-sha>
    ```
 4. **If migrations did run**, the rollback is more involved:
    - The deployment script (`ops/rollback.sh`) **refuses by default** when
@@ -127,7 +127,7 @@ Five common operational tasks for the AI Customer Service Platform.
 5. Run the migration checker to confirm the schema version matches the current
    code:
    ```bash
-   # (pseudocode — use ops/verify-backup.sh)
+    ops/verify-backup.sh
    ```
 6. To restore the live database:
    ```bash
@@ -184,10 +184,10 @@ credentials.
    docker compose up -d --no-deps app
    ```
 4. **For `APP_AI_KEY_ENCRYPTION_KEY` and `APP_INTEGRATION_SECRETS_KEY`**:
-   Existing encrypted values are still decryptable only if the old key is
-   retained during transition. Re-encrypt stored secrets under the new key by
-   running the re-encryption job (if available) or accept that old data will
-   be re-encrypted on next write.
+   Existing encrypted values become **unreadable** after rotation. The system
+   uses a single active key with no previous-key fallback or transparent
+   re-encryption. Plan rotation during a maintenance window and accept that
+   existing ciphertext will be re-encrypted on next write.
 5. **For `AUTH_JWT_SECRET`**: All existing sessions signed with the old secret
    become invalid on restart. Coordinate rotation with a maintenance window.
    Users will need to re-authenticate.
@@ -196,8 +196,8 @@ credentials.
 
 - The application starts successfully with the new credential.
 - For JWT: existing sessions are invalidated; users sign in again.
-- For encryption keys: existing encrypted data remains accessible (old key
-  cached until re-encrypted) or is re-encrypted transparently.
+- For encryption keys: existing encrypted data becomes unreadable after
+  rotation. Re-encrypt secrets under the new key on next write.
 
 ### When it fails
 

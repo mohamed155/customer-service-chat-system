@@ -29,13 +29,17 @@ This starts PostgreSQL (port 5432), Redis (6379), Mailhog (1025 SMTP,
 cp .env.example .env
 ```
 
-Edit `.env` and fill in the `APP_AI_KEY_ENCRYPTION_KEY`:
+Edit `.env` and fill in both encryption keys:
 
 ```bash
-# Generate a suitable value:
+# Generate suitable values:
 openssl rand -base64 32
 # Paste the output into .env as:
 # APP_AI_KEY_ENCRYPTION_KEY=<paste here>
+# Also generate the integration secrets key:
+head -c 32 /dev/urandom | base64
+# Paste as:
+# APP_INTEGRATION_SECRETS_KEY=<paste here>
 ```
 
 Then export the variables:

@@ -326,6 +326,7 @@ async fn shutdown_signal(grace_seconds: u64) {
     }
 
     tracing::info!("shutdown signal received, starting graceful shutdown");
+    observability::errors::flush(Duration::from_secs(2));
     tokio::time::timeout(
         Duration::from_secs(grace_seconds),
         std::future::pending::<()>(),

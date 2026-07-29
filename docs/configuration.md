@@ -1,7 +1,10 @@
 # Configuration Reference
 
-Every environment variable the platform reads, sourced from
-`backend/crates/shared/config/src/lib.rs` (`AppConfig::from_env()`).
+Every environment variable the platform reads. Variables in the Required and
+Optional sections are sourced from `backend/crates/shared/config/src/lib.rs`
+(`AppConfig::from_env()`). Infrastructure and test-harness variables in later
+sections are consumed by Docker Compose, deploy scripts, and test code
+respectively — not by the Rust backend at runtime.
 
 ---
 
@@ -74,6 +77,7 @@ openssl rand -base64 32
 | `APP_CSP_REPORT_ONLY` | Emit CSP via `Content-Security-Policy-Report-Only` instead of `Content-Security-Policy`. Set to `false` after soak. | `true` | no |
 | `APP_HSTS_MAX_AGE` | `max-age` value for `Strict-Transport-Security`. Set to `0` for local development (prevents browser pinning localhost to HTTPS). Default seconds equals 1 year. | `31536000` | no |
 | `APP_TRACE_SAMPLE_RATIO` | Read by the backend but **no longer applied at the SDK** — every span is now exported so that FR-020's "an errored request's trace is always retained" can hold. The retention rate for non-errored traces is set by `OTEL_TAIL_SAMPLE_PERCENTAGE` on the collector. | `1.0` | no |
+| `APP_TRUSTED_PROXY` | Must be `true` in staging/production (traffic arrives through Caddy which overwrites `X-Forwarded-For`). Must stay `false` in local development (nothing sanitises the header). Defaults to `false`. | `false` | no |
 
 ---
 
@@ -123,7 +127,6 @@ Caddy, deploy scripts, Alertmanager) — not by the Rust backend.
 
 | Variable | Purpose | Default | Where used |
 |----------|---------|---------|------------|
-| `APP_TRUSTED_PROXY` | Must be `true` in staging/production (traffic arrives through Caddy which overwrites `X-Forwarded-For`). Must stay `false` in local development (nothing sanitises the header). | `false` | Backend (`shared::config` reads it, but it defaults to `false` and is only meaningful when Caddy is in front) |
 | `APP_ALERT_WEBHOOK_URL` | Webhook URL Alertmanager sends alert notifications to. Substituted into `infra/alertmanager.yml.tmpl` by `sed` in `infra/alertmanager-entrypoint.sh` at container start (busybox is minimal and has no template-string substitution tool). **The container refuses to start if this is unset**, so a missing destination fails loudly rather than silently dropping every alert. | — | Alertmanager (`infra/alertmanager.yml.tmpl`) |
 | `APP_DOMAIN` | Domain name used by Caddy for TLS and routing. Required in `infra/docker-compose.staging.yml`. | — | Caddy (`infra/Caddyfile`, `infra/docker-compose.staging.yml`) |
 | `IMAGE_BASE` | Container image repository prefix. Read by deploy and rollback scripts. | `ghcr.io/mohamed155/customer-service-chat-system` | `ops/deploy.sh`, `ops/rollback.sh`, `infra/docker-compose.staging.yml` |

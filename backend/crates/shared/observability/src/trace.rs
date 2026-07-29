@@ -18,6 +18,7 @@ pub async fn trace_middleware(request: Request, next: Next) -> Response {
         .unwrap_or("unknown")
         .to_owned();
 
+    let _sentry_scope = sentry::Hub::current().push_scope();
     sentry::configure_scope(|scope| scope.set_tag("request_id", &request_id));
 
     let start = Instant::now();

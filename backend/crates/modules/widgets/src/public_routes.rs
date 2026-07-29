@@ -511,14 +511,15 @@ pub async fn send_message(
             return ApiError::rate_limited("Too many messages", retry_after).into_response();
         }
     }
-    // Global per-tenant rate limit (600/min, matches GLOBAL_TENANT_LIMIT)
-    let tid = session.tenant_id.to_string();
-    if let Some(budget) = tenant_limit.budget(&tid, Scope::TenantGlobal).await {
-        if let Decision::Refused { retry_after } =
-            store.check(Scope::TenantGlobal, &tid, budget).await
-        {
-            tenant_limit.record_refusal(&tid).await;
-            return ApiError::rate_limited("Too many requests", retry_after).into_response();
+    if config.rate_limit_enabled {
+        let tid = session.tenant_id.to_string();
+        if let Some(budget) = tenant_limit.budget(&tid, Scope::TenantGlobal).await {
+            if let Decision::Refused { retry_after } =
+                store.check(Scope::TenantGlobal, &tid, budget).await
+            {
+                tenant_limit.record_refusal(&tid).await;
+                return ApiError::rate_limited("Too many requests", retry_after).into_response();
+            }
         }
     }
 

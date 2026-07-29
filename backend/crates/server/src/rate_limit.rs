@@ -56,13 +56,14 @@ pub async fn login_rate_limit(
     };
 
     let client_ip = if config.trusted_proxy {
-        parts
-            .headers
-            .get("x-forwarded-for")
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s.split(',').next().unwrap_or(s).trim())
-            .unwrap_or("127.0.0.1")
-            .to_string()
+        match parts.headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+            Some(header_val) => header_val
+                .split(',')
+                .next()
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|| "unknown".to_string()),
+            None => return next.run(Request::from_parts(parts, axum::body::Body::from(body_bytes))).await,
+        }
     } else {
         parts
             .extensions
@@ -75,8 +76,9 @@ pub async fn login_rate_limit(
         .ok()
         .and_then(|v| {
             v.get("email")
-                .and_then(|e| e.as_str().map(|s| s.to_owned()))
+                .and_then(|e| e.as_str().map(|s| s.trim().to_ascii_lowercase()))
         })
+        .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "unknown".to_string());
 
     let identifier = format!("{}:{}", email, client_ip);
@@ -151,17 +153,25 @@ async fn fetch_override(
     let id = uuid::Uuid::parse_str(&tenant_id).ok()?;
     let row: Option<(i32, i32)> = sqlx::query_as(
         "SELECT max_requests, window_seconds FROM tenant_rate_limit_overrides \
-         WHERE tenant_id = $1 AND scope = $2 AND deleted_at IS NULL",
+         WHERE tenant_id = $1 AND scope = $2 AND deleted_at IS NULL \
+         LIMIT 1",
     )
     .bind(id)
     .bind(scope.as_str())
     .fetch_optional(pool)
     .await
+    .inspect_err(|e| tracing::warn!(error = %e, "fetch_override: query failed, using defaults"))
     .ok()
     .flatten();
-    row.map(|(m, w)| Budget {
-        max_requests: m as u32,
-        window: std::time::Duration::from_secs(w as u64),
+    row.and_then(|(m, w)| {
+        if m <= 0 || w <= 0 {
+            tracing::warn!(max_requests = m, window_seconds = w, "fetch_override: invalid override row ignored");
+            return None;
+        }
+        Some(Budget {
+            max_requests: m as u32,
+            window: std::time::Duration::from_secs(w as u64),
+        })
     })
 }
 

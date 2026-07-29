@@ -95,6 +95,7 @@ pub fn set_outbox_backlog(count: i64) {
 pub fn spawn_dependency_updater(checks: Vec<Arc<dyn HealthCheck>>) {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             interval.tick().await;
             let report = readiness(checks.clone(), std::time::Duration::from_secs(5)).await;

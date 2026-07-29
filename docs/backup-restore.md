@@ -17,9 +17,11 @@ The backup captures:
 
 ## Ordering
 
-Objects are mirrored **first**, then the database is dumped. This guarantees that a
-restored row always finds its referenced object. The reverse order can produce a row
-pointing at an object that was never captured (FR-029).
+Objects are mirrored **first**, then the database is dumped. This ordering preserves
+referential ordering between rows and objects, but with live writes a row may still
+reference an object captured after the mirror. For strict consistency, quiesce writes
+or take a consistent snapshot before running the backup. The reverse order can produce
+a row pointing at an object that was never captured (FR-029).
 
 ## Documented RPO and RTO
 
@@ -73,8 +75,8 @@ If the automated script is unavailable, follow these steps:
 
 3. Restore the database:
    ```bash
-   pg_restore --clean --if-exists --no-owner --no-privileges \
-     --dbname postgresql://user:pass@host:5432/dbname backup.dump
+    pg_restore --clean --if-exists --no-owner --no-privileges \
+      --dbname postgresql://<user>:<password>@<host>:5432/<dbname> backup.dump
    ```
 
 4. Apply any pending migrations if the backup was older:
@@ -148,7 +150,7 @@ If a destructive migration must be rolled back:
 
 Backup success is exported as a Prometheus gauge metric:
 
-```
+```prometheus
 # HELP backup_last_success_timestamp_seconds Unix timestamp of last successful backup
 # TYPE backup_last_success_timestamp_seconds gauge
 backup_last_success_timestamp_seconds 1721980800

@@ -1060,9 +1060,11 @@ fn api_routes(
         });
     let widget_router = widget_routes()
         .layer(Extension(rate_store.clone()))
-        .layer(Extension(tenant_limit))
+        .layer(Extension(tenant_limit.clone()))
         .layer(widget_cors_layer());
-    let hooks_router = hooks_routes().layer(Extension(rate_store));
+    let hooks_router = hooks_routes()
+        .layer(Extension(rate_store))
+        .layer(Extension(tenant_limit));
 
     // Protected routes (everything except widget and hooks) get Scope B headers.
     let mut protected: OpenApiRouter<sqlx::PgPool> = OpenApiRouter::with_openapi(ApiDoc::openapi())

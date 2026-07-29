@@ -80,7 +80,7 @@ export default function () {
   const signature = signPayload(payload, WEBHOOK_SECRET);
 
   const res = http.post(
-    `${BASE_URL}/hooks/${CHANNEL}`,
+    `${BASE_URL}/hooks/v1/${CHANNEL}`,
     payload,
     {
       headers: {

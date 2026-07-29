@@ -7,7 +7,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use base64::Engine;
 use hmac::{Hmac, Mac};
-use kernel::{ApiError, Budget, Decision, RateLimiter, Scope};
+use kernel::{ApiError, Budget, Decision, RateLimiter, Scope, TenantRateLimit};
 use rand::Rng;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -157,6 +157,7 @@ pub async fn receive_webhook(
     State(pool): State<PgPool>,
     Extension(store): Extension<Arc<dyn RateLimiter>>,
     Extension(config): Extension<Arc<config::AppConfig>>,
+    Extension(tenant_limit): Extension<Arc<dyn TenantRateLimit>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
@@ -201,14 +202,18 @@ pub async fn receive_webhook(
     }
 
     if config.rate_limit_enabled {
+        let budget = tenant_limit
+            .budget(&conn.tenant_id.to_string(), Scope::Webhook)
+            .await
+            .unwrap_or(Budget {
+                max_requests: RATE_LIMIT_REQUESTS,
+                window: std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS),
+            });
         if let Decision::Refused { retry_after } = store
             .check(
                 Scope::Webhook,
                 &format!("integration_conn:{}", conn.connection_id),
-                Budget {
-                    max_requests: RATE_LIMIT_REQUESTS,
-                    window: std::time::Duration::from_secs(RATE_LIMIT_WINDOW_SECS),
-                },
+                budget,
             )
             .await
         {

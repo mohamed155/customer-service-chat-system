@@ -35,15 +35,18 @@ pub fn scope_b_layers(config: &AppConfig) -> Vec<SetResponseHeaderLayer<HeaderVa
         HeaderValue::from_static("DENY"),
     ));
 
-    let header_name = if config.csp_report_only {
-        HeaderName::from_static("content-security-policy-report-only")
-    } else {
-        header::CONTENT_SECURITY_POLICY
-    };
-    layers.push(SetResponseHeaderLayer::overriding(
-        header_name,
-        config.csp_policy.parse().expect("invalid CSP header value"),
-    ));
+    let policy = config.csp_policy.trim();
+    if !policy.is_empty() {
+        let header_name = if config.csp_report_only {
+            HeaderName::from_static("content-security-policy-report-only")
+        } else {
+            header::CONTENT_SECURITY_POLICY
+        };
+        layers.push(SetResponseHeaderLayer::overriding(
+            header_name,
+            policy.parse().expect("invalid CSP header value"),
+        ));
+    }
 
     layers
 }

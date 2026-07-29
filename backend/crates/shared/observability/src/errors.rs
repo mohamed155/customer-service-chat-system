@@ -1,4 +1,7 @@
 use sentry::protocol::{Event, Map};
+use std::sync::OnceLock;
+
+static SENTRY_GUARD: OnceLock<sentry::ClientInitGuard> = OnceLock::new();
 
 /// Initialise Sentry error capture.
 ///
@@ -11,7 +14,7 @@ pub fn init(dsn: Option<&str>, release: Option<&str>) {
         None => return,
     };
 
-    let _guard = sentry::init((
+    let guard = sentry::init((
         dsn,
         sentry::ClientOptions {
             release: release.map(|r| std::borrow::Cow::Owned(r.to_owned())),
@@ -19,12 +22,21 @@ pub fn init(dsn: Option<&str>, release: Option<&str>) {
             ..Default::default()
         },
     ));
-    std::mem::forget(_guard);
+    let _ = SENTRY_GUARD.set(guard);
+}
+
+/// Flush pending Sentry events; call during graceful shutdown.
+pub fn flush(timeout: std::time::Duration) {
+    if let Some(client) = sentry::Hub::current().client() {
+        client.close(Some(timeout));
+    }
 }
 
 fn scrub_event(mut event: Event<'static>) -> Event<'static> {
     if let Some(ref mut request) = event.request {
         request.data = None;
+        request.query_string = None;
+        request.cookies = None;
 
         let mut scrubbed_headers = Map::new();
         for (key, value) in request.headers.iter() {
@@ -60,6 +72,10 @@ fn scrub_event(mut event: Event<'static>) -> Event<'static> {
     event
         .extra
         .retain(|k, _| RETAINED_EXTRA.contains(&k.as_str()));
+
+    event.tags.retain(|k, _| RETAINED_EXTRA.contains(&k.as_str()));
+    event.contexts.clear();
+    event.server_name = None;
 
     event
 }
