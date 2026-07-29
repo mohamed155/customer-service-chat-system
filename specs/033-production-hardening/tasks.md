@@ -475,7 +475,7 @@ defects, and they are not repeated here.
 
 - [ ] T114 Replace the implausible CI test-count floor in `specs/033-production-hardening/baseline-test-count.txt` per **FR-035, SC-009**. The file currently reads **100**, but the backend contains roughly **1577** test functions across 77 integration test files. A floor of 100 means ~90% of the suite could stop running and the gate would still report green — which is precisely the regression FR-035 exists to detect, so the requirement is unmet despite T003 being checked off. **Do T113 first** — until the redirection bug is fixed the count cannot be read at all. Then, with `docker compose -f infra/docker-compose.yml up -d` running and `cd backend && sqlx migrate run` applied, run:
   ```bash
-  cd backend && REQUIRE_DB_TESTS=1 cargo nextest run --workspace > /tmp/baseline.txt 2>&1; echo "exit=$?"
+  cd backend && REQUIRE_DB_TESTS=1 cargo nextest run --workspace > /tmp/baseline.txt 2>&1; E=$?; echo "exit=$E"; exit "$E"
   ```
   The exit code **must** be 0 — a floor taken from a failing run is worthless. Read the integer from the `Summary [ ... ] N tests run` line in `/tmp/baseline.txt` and write **only that integer** into `specs/033-production-hardening/baseline-test-count.txt`. If the number is still anywhere near 100, stop and report it rather than writing it — that would mean the suite is not actually running. T093 (below, unchecked) will refresh this file at the end of the feature; that is expected and does not substitute for completing this task first. **Verify**: the file holds a single integer in the four-figure range, and `cat` shows no trailing text.
 

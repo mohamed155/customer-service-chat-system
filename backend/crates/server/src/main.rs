@@ -267,9 +267,8 @@ async fn main() {
         .expect("failed to bind HTTP listener");
     tracing::info!(%address, "server listening");
 
-    let grace = state.config.shutdown_grace_seconds;
     tokio::select! {
-        result = axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(shutdown_signal(grace)) => {
+        result = axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(shutdown_signal()) => {
             result.expect("server failed");
         }
         result = delivery_worker => {
@@ -300,9 +299,13 @@ async fn main() {
             panic!("integration retention sweeper stopped unexpectedly: {result:?}");
         }
     }
+
+    tracing::info!("observability: flushing remaining events");
+    observability::errors::flush(Duration::from_secs(2));
+    tracing::info!("graceful shutdown complete");
 }
 
-async fn shutdown_signal(grace_seconds: u64) {
+async fn shutdown_signal() {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
             .await
@@ -326,12 +329,4 @@ async fn shutdown_signal(grace_seconds: u64) {
     }
 
     tracing::info!("shutdown signal received, starting graceful shutdown");
-    observability::errors::flush(Duration::from_secs(2));
-    tokio::time::timeout(
-        Duration::from_secs(grace_seconds),
-        std::future::pending::<()>(),
-    )
-    .await
-    .ok();
-    tracing::info!("graceful shutdown complete");
 }
