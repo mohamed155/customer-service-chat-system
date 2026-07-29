@@ -1,17 +1,24 @@
-//! Cache — Redis client wrapper
+//! Cache — Redis client wrapper and Redis-backed rate limiter
 //!
 //! # Purpose
 //! Isolates the `redis` crate behind a minimal public API so module crates
-//! never import `redis` types directly. Provides lazy connection management
-//! and a readiness probe (`ping`).
+//! never import `redis` types directly. Provides lazy connection management,
+//! a readiness probe (`ping`), and the `RedisRateLimiter` that implements
+//! the kernel `RateLimiter` trait with sliding-window boundary correction,
+//! budget resolution (override → env → compiled default), degraded-mode
+//! fallback, and Prometheus counter emission for refusals and degradations.
 //!
 //! # Public Interfaces
 //! - `Cache::new(&str)` — construct without I/O
 //! - `Cache::ping()` — async health probe
 //! - `RedisHealthCheck` — implements `HealthCheck` for `/ready`
+//! - `RedisRateLimiter` — sliding-window counter (FR-003)
+//! - `BudgetResolver` — 3-tier budget resolution with 60 s in-process cache
+//! - `select_identifier` — identifier selection per FR-004
 //!
 //! # Dependencies
 //! - `redis` (tokio-comp + connection-manager)
+//! - `kernel`, `observability`, `metrics`, `sha2`
 //!
 //! # Extension Points
 //! - Future modules can add methods (e.g. `get`/`set`) without changing
@@ -55,6 +62,8 @@ impl Cache {
             .map_err(|e| format!("cache error: {e}"))
     }
 }
+
+pub mod limiter;
 
 pub struct RedisHealthCheck {
     cache: Cache,

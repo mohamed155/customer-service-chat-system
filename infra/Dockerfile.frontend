@@ -1,11 +1,13 @@
 FROM node:20-slim AS builder
+ARG APP=dashboard
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@10.12.4 --activate
+RUN corepack enable && corepack prepare pnpm@10.34.4 --activate
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY frontend ./
-RUN pnpm exec ng build dashboard
+RUN pnpm exec ng build ${APP}
 
 FROM nginx:alpine
-COPY --from=builder /app/dist/dashboard/browser /usr/share/nginx/html
+ARG APP=dashboard
+COPY --from=builder /app/dist/${APP}/browser /usr/share/nginx/html
 EXPOSE 80

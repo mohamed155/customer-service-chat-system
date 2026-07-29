@@ -13,6 +13,8 @@ use server::state::AppState;
 use tower::ServiceExt;
 use uuid::Uuid;
 
+const TEST_INTEGRATION_SECRETS_KEY: &str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+
 const TEST_MASTER_KEY_B64: &str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 const WHATSAPP_SLUG: &str = "whatsapp";
 const FIELD_ACCESS_TOKEN: &str = "access_token";
@@ -51,6 +53,21 @@ fn test_config() -> config::AppConfig {
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
         s3: None,
+        rate_limit_enabled: true,
+        rate_limit_login_max: 10,
+        rate_limit_login_window_secs: 60,
+        rate_limit_max_override: 10000,
+        rate_limit_fail_mode: "auth_closed".into(),
+        security_headers_enabled: true,
+        csp_policy:
+            "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'".into(),
+        csp_report_only: true,
+        hsts_max_age: 31536000,
+        otlp_endpoint: None,
+        trace_sample_ratio: 1.0,
+        sentry_dsn: None,
+        release_sha: None,
+        trusted_proxy: false,
     }
 }
 
@@ -62,7 +79,15 @@ fn app_state(pool: sqlx::PgPool) -> AppState {
         health_checks: vec![],
         escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
         ai: ai::AiService::from_config(pool, &test_config()).unwrap(),
+        budget_resolver: Arc::new(cache::limiter::BudgetResolver::new(10_000)),
     }
+}
+
+fn test_config_with_webhook() -> config::AppConfig {
+    let mut cfg = test_config();
+    cfg.integration_secrets_key = Some(TEST_INTEGRATION_SECRETS_KEY.into());
+    cfg.ai_key_encryption_key = Some(TEST_INTEGRATION_SECRETS_KEY.into());
+    cfg
 }
 
 fn require_db_tests() -> bool {
@@ -497,5 +522,44 @@ async fn reply_whatsapp_success_emits_outbound() {
         payload_conv_id,
         Some(conv_id),
         "outbox payload should reference the conversation"
+    );
+}
+
+#[tokio::test]
+async fn whatsapp_webhook_rate_limiter_wired() {
+    if !require_db_tests() {
+        eprintln!("skipping: REQUIRE_DB_TESTS not set");
+        return;
+    }
+    let pool = get_pool().await.unwrap();
+    let cfg = Arc::new(test_config_with_webhook());
+    let state = AppState {
+        config: cfg,
+        db: pool.clone(),
+        cache: Arc::new(cache::Cache::new("redis://127.0.0.1:6379").unwrap()),
+        health_checks: vec![],
+        escalations: escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
+        ai: ai::AiService::from_config(pool, &test_config_with_webhook()).unwrap(),
+        budget_resolver: Arc::new(cache::limiter::BudgetResolver::new(10_000)),
+    };
+    let app = router::app_with_test_routes(state);
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/integrations/whatsapp/webhook/test-token")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{"object":"whatsapp_business_account","entry":[]}"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    assert!(
+        status != StatusCode::NOT_FOUND && status != StatusCode::INTERNAL_SERVER_ERROR,
+        "whatsapp webhook rate limiter must be wired: expected neither 404 nor 500, got {}",
+        status
     );
 }

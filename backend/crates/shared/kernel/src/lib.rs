@@ -1,24 +1,30 @@
 //! Kernel — shared domain primitives
 //!
 //! # Purpose
-//! Types that cross every module boundary: error envelope, pagination, JSON
-//! extraction, idempotency. No business logic.
+//! Types that cross every module boundary: error envelope with Retry-After
+//! support, pagination, JSON extraction, idempotency, and the async
+//! `RateLimiter` trait with its `InMemoryRateLimitStore` implementation.
+//! No business logic.
 //!
 //! # Public Interfaces
-//! - `ApiError` constructors + `IntoResponse`
+//! - `ApiError` constructors (rate_limited accepts a Duration for Retry-After)
 //! - `ApiJson<T>` extractor
 //! - `PageParams`, `Page<T>`
 //! - Idempotency middleware
+//! - `RateLimiter` trait, `Scope`, `Budget`, `Decision`, `InMemoryRateLimitStore`
 //!
 //! # Dependencies
-//! - `axum`, `serde`, `uuid`
+//! - `axum`, `serde`, `uuid`, `strum`, `async-trait`
 //!
 //! # Extension Points
 //! - Add new `ApiError` constructors as the status map grows.
+//! - Add new `Scope` variants for new rate-limit domains.
 
 mod idempotency;
 pub mod rate_limit;
-pub use rate_limit::InMemoryRateLimitStore;
+pub use rate_limit::{
+    Budget, Decision, InMemoryRateLimitStore, RateLimiter, Scope, TenantRateLimit,
+};
 
 use axum::{
     extract::{FromRequest, Request},
@@ -28,6 +34,7 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use utoipa::{IntoParams, ToSchema};
 
 pub use idempotency::{
@@ -65,6 +72,7 @@ pub struct ErrorEnvelope {
 pub struct ApiError {
     status: StatusCode,
     envelope: ErrorEnvelope,
+    retry_after: Option<Duration>,
 }
 
 impl ApiError {
@@ -83,6 +91,7 @@ impl ApiError {
                     request_id: String::new(),
                 },
             },
+            retry_after: None,
         }
     }
 
@@ -135,8 +144,19 @@ impl ApiError {
         )
     }
 
-    pub fn rate_limited(message: impl Into<String>) -> Self {
-        Self::new_with_code(StatusCode::TOO_MANY_REQUESTS, "rate_limited", message)
+    pub fn rate_limited(message: impl Into<String>, retry_after: Duration) -> Self {
+        Self {
+            status: StatusCode::TOO_MANY_REQUESTS,
+            envelope: ErrorEnvelope {
+                error: ErrorBody {
+                    code: "rate_limited".to_owned(),
+                    message: message.into(),
+                    details: Vec::new(),
+                    request_id: String::new(),
+                },
+            },
+            retry_after: Some(retry_after),
+        }
     }
 
     pub fn internal_error(message: impl Into<String>) -> Self {
@@ -167,7 +187,14 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status, Json(self.envelope)).into_response()
+        let mut res = (self.status, Json(self.envelope)).into_response();
+        if let Some(retry_after) = self.retry_after {
+            res.headers_mut().insert(
+                axum::http::header::RETRY_AFTER,
+                retry_after.as_secs().to_string().parse().unwrap(),
+            );
+        }
+        res
     }
 }
 
@@ -453,9 +480,10 @@ mod tests {
 
     #[test]
     fn rate_limited_has_429_and_correct_code() {
-        let err = ApiError::rate_limited("too fast");
+        let err = ApiError::rate_limited("too fast", Duration::from_secs(30));
         assert_eq!(err.status, StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(err.envelope.error.code, "rate_limited");
+        assert_eq!(err.retry_after, Some(Duration::from_secs(30)));
     }
 
     #[test]

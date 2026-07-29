@@ -1,0 +1,72 @@
+# Widget static file server (local dev)
+# T017: widget index.html must not set X-Frame-Options and must allow framing
+http://localhost:8080 {
+    root * /app/widget
+    file_server
+
+    @widget_index {
+        path /index.html
+    }
+    header @widget_index {
+        -X-Frame-Options
+        Content-Security-Policy "frame-ancestors *"
+    }
+}
+
+# Staging/production
+# T062: TLS, reverse proxy, metrics restriction, X-Forwarded-For
+https://{$APP_DOMAIN} {
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    tls {
+        issuer acme
+    }
+
+    @widget {
+        path /widget /widget/*
+    }
+    handle @widget {
+        uri strip_prefix /widget
+        reverse_proxy widget:80
+        header {
+            -X-Frame-Options
+            Content-Security-Policy "frame-ancestors *"
+        }
+    }
+
+    @api {
+        path /api/*
+    }
+    reverse_proxy @api backend:8080 {
+        header_up X-Forwarded-For {remote_host}
+    }
+
+    @ws {
+        path /ws/*
+    }
+    reverse_proxy @ws backend:8080 {
+        header_up X-Forwarded-For {remote_host}
+        header_up Upgrade {http.request.header.Upgrade}
+        header_up Connection {http.request.header.Connection}
+    }
+
+    @metrics {
+        path /metrics
+    }
+    handle @metrics {
+        @denied not remote_ip 127.0.0.1 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+        respond @denied "Forbidden" 403
+        reverse_proxy backend:8080
+    }
+
+    handle {
+        header {
+            X-Frame-Options "DENY"
+            Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        }
+        reverse_proxy dashboard:80
+    }
+}

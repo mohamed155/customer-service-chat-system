@@ -1,7 +1,12 @@
 name: Backend
 on: [push, pull_request]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   verify:
+    outputs:
+      test_count: ${{ steps.tests.outputs.count }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -11,25 +16,99 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U customer_service" --health-interval 5s
           --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 10
     defaults: { run: { working-directory: backend } }
     env:
       DATABASE_URL: postgres://customer_service:customer_service@localhost:5432/customer_service
       AUTH_JWT_SECRET: 0123456789abcdef0123456789abcdef
       REQUIRE_DB_TESTS: "1"
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { components: rustfmt, clippy }
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
+      - run: rustc --version
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: backend }
       - run: cargo fmt --check
       - run: cargo clippy --workspace -- -D warnings
       - run: cargo install sqlx-cli --no-default-features --features rustls,postgres
       - run: sqlx migrate run
-      - run: cargo test --workspace
+      - uses: taiki-e/install-action@v2
+        with: { tool: cargo-nextest }
+      - id: tests
+        name: Run tests and verify count floor
+        run: |
+          EXIT=0
+          cargo nextest run --workspace > /tmp/nextest.out 2>&1 || EXIT=$?
+          cat /tmp/nextest.out
+          test $EXIT -eq 0 || exit $EXIT
+          COUNT=$(grep -oP '\d+(?= tests run)' /tmp/nextest.out || echo 0)
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          FLOOR=$(cat ../specs/033-production-hardening/baseline-test-count.txt)
+          if [ "$COUNT" -lt "$FLOOR" ]; then
+            echo "FAIL: $COUNT tests run < floor $FLOOR"
+            exit 1
+          fi
+          echo "OK: $COUNT tests run >= floor $FLOOR"
       - run: cargo install cargo-audit
       - run: cargo audit
-      - name: Build backend image
-        working-directory: .
-        run: docker build -f infra/Dockerfile.backend .
+  secret-scan:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Install gitleaks
+        run: |
+          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.2_linux_x64.tar.gz -C /usr/local/bin gitleaks
+      - name: Run gitleaks
+        run: gitleaks detect --source . --redact --exit-code 1
+  release:
+    needs: [verify, secret-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push backend image
+        run: docker buildx build --push -f infra/Dockerfile.backend -t ghcr.io/${{ github.repository }}-backend:${{ github.sha }} .
+      - name: Build and push dashboard image
+        run: docker buildx build --push -f infra/Dockerfile.frontend --build-arg APP=dashboard -t ghcr.io/${{ github.repository }}-dashboard:${{ github.sha }} .
+      - name: Build and push widget image
+        run: docker buildx build --push -f infra/Dockerfile.frontend --build-arg APP=widget -t ghcr.io/${{ github.repository }}-widget:${{ github.sha }} .
+      - name: Create release manifest
+        run: |
+          cat > release-manifest.json <<EOF
+          {
+            "commit_sha": "${{ github.sha }}",
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "workflow_run_id": "${{ github.run_id }}",
+            "tests_executed": ${{ needs.verify.outputs.test_count }},
+            "images": {
+              "backend": "ghcr.io/${{ github.repository }}-backend:${{ github.sha }}",
+              "dashboard": "ghcr.io/${{ github.repository }}-dashboard:${{ github.sha }}",
+              "widget": "ghcr.io/${{ github.repository }}-widget:${{ github.sha }}"
+            }
+          }
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest
+          path: release-manifest.json
 

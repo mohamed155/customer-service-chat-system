@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+
+rule_files:
+  - "prometheus-alerts.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+scrape_configs:
+  # Staging: the backend runs as a compose service (docker-compose.staging.yml).
+  - job_name: 'backend'
+    static_configs:
+      - targets: ['backend:8080']
+    metrics_path: /metrics
+
+  # Local development: the backend runs on the host via `cargo run -p server`.
+  - job_name: 'backend-local'
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+    metrics_path: /metrics
+
+  # Backup staleness metric (textfile collector, written by ops/backup.sh).
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']

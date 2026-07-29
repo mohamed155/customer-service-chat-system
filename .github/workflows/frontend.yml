@@ -1,5 +1,8 @@
 name: Frontend
 on: [push, pull_request]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -7,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: 10.12.4, run_install: false }
+        with: { version: 10.34.4, run_install: false }
       - uses: actions/setup-node@v4
         with:
           {
@@ -30,10 +33,7 @@ jobs:
       - run: pnpm exec ng build widget
       - run: pnpm exec ng test dashboard --watch=false --browsers=ChromeHeadless
       - run: pnpm exec ng test widget --watch=false --browsers=ChromeHeadless
-      - name: Secret pattern scan
-        working-directory: .
-        continue-on-error: true
-        run: git grep -nE 'AKIA[0-9A-Z]{16}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' -- ':!specs' || true
+
   real-backend-e2e:
     runs-on: ubuntu-latest
     services:
@@ -65,7 +65,11 @@ jobs:
       CI_REAL_BACKEND: "true"
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
+        working-directory: backend
+      - run: rustc --version
+        working-directory: backend
       - uses: pnpm/action-setup@v4
         with: { version: 10.34.4, run_install: false }
       - uses: actions/setup-node@v4

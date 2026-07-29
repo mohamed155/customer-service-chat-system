@@ -24,6 +24,7 @@ pub async fn run_whatsapp_sender_worker(
 }
 
 struct OutboundEvent {
+    #[allow(dead_code)]
     id: Uuid,
     tenant_id: Uuid,
     conversation_id: Uuid,

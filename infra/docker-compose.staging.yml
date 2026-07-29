@@ -1,0 +1,47 @@
+services:
+  backend:
+    image: ${IMAGE_BASE:-ghcr.io/mohamed155/customer-service-chat-system}-backend:${APP_RELEASE_SHA:?APP_RELEASE_SHA must be set}
+    environment:
+      APP_RELEASE_SHA: ${APP_RELEASE_SHA}
+      APP_ENVIRONMENT: staging
+    env_file:
+      - ../.env.staging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  dashboard:
+    image: ${IMAGE_BASE:-ghcr.io/mohamed155/customer-service-chat-system}-dashboard:${APP_RELEASE_SHA:?APP_RELEASE_SHA must be set}
+    ports:
+      - "4200:80"
+
+  widget:
+    image: ${IMAGE_BASE:-ghcr.io/mohamed155/customer-service-chat-system}-widget:${APP_RELEASE_SHA:?APP_RELEASE_SHA must be set}
+    ports:
+      - "8082:80"
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN must be set}
+    depends_on:
+      - backend
+      - dashboard
+      - widget
+
+volumes:
+  caddy_data:

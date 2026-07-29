@@ -2,17 +2,120 @@
 
 ## Quickstart
 
-Prerequisites: Rust stable, sqlx-cli, Node/pnpm, and Docker Compose.
+This guide takes you from a clean machine to a running backend, dashboard, and
+widget with seed data.
+
+### Prerequisites
+
+- **Rust** — Install via <https://rustup.rs> (stable, minimum 1.84).
+- **sqlx-cli** — `cargo install sqlx-cli --locked`
+- **Node.js** — v22 or later (use <https://nodejs.org> or `nvm`).
+- **pnpm** — `corepack enable && corepack prepare pnpm@10.34.4 --activate`
+- **Docker Desktop** (or Docker Compose standalone) — for PostgreSQL, Redis,
+  Mailhog, and MinIO.
+
+### 1. Start infrastructure
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d
-cd backend && sqlx migrate run && cargo run -p server
+```
+
+This starts PostgreSQL (port 5432), Redis (6379), Mailhog (1025 SMTP,
+8025 web), and MinIO (9000 S3, 9001 console).
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and fill in both encryption keys:
+
+```bash
+# Generate suitable values:
+openssl rand -base64 32
+# Paste the output into .env as:
+# APP_AI_KEY_ENCRYPTION_KEY=<paste here>
+# Also generate the integration secrets key:
+head -c 32 /dev/urandom | base64
+# Paste as:
+# APP_INTEGRATION_SECRETS_KEY=<paste here>
+```
+
+Then export the variables:
+
+```bash
+set -a && source .env && set +a
+```
+
+### 3. Run database migrations
+
+```bash
+cd backend && sqlx migrate run
+```
+
+### 4. Seed the database
+
+```bash
+cargo run -p server --bin seed
+```
+
+If no seed binary exists, the server auto-seeds on first start with default
+data (admin user, sample tenant, Free plan).
+
+### 5. Start the backend
+
+```bash
+cargo run -p server
+```
+
+The API listens on `http://localhost:8080`. Verify:
+
+```bash
+curl http://localhost:8080/api/v1/health
+```
+
+### 6. Start the dashboard
+
+In a new terminal:
+
+```bash
 cd frontend && pnpm install --frozen-lockfile && pnpm exec ng serve dashboard
-# In another terminal, to serve the widget:
+```
+
+The dashboard is at `http://localhost:4200`.
+
+### 7. Start the widget
+
+In another terminal:
+
+```bash
 cd frontend && pnpm exec ng serve widget
 ```
 
-The API listens on http://localhost:8080 (`GET /api/v1/health`), the dashboard on port 4200, Mailhog on port 8025, and MinIO's console on port 9001. Copy `.env.example` to `.env` and export its values before starting the backend.
+The widget dev server is at `http://localhost:4201`.
+
+### Local development notes
+
+- **Testing**: Set `REQUIRE_DB_TESTS=1` for a trustworthy local test run — see
+  [docs/configuration.md](docs/configuration.md) (Test-Harness Variables).
+- **HSTS**: Set `APP_HSTS_MAX_AGE=0` in `.env` to prevent your browser from
+  pinning `localhost` to HTTPS. A non-zero value is painful to unpin.
+- **API docs**: Swagger UI is at `http://localhost:8080/swagger-ui/` in
+  non-production environments without needing `APP_DOCS_ENABLED=true`.
+- **Mailhog**: Outgoing emails appear at `http://localhost:8025`.
+- **MinIO console**: Object storage at `http://localhost:9001` (credentials
+  from `.env`).
+
+### What runs where
+
+| Component | URL |
+|-----------|-----|
+| Backend API | http://localhost:8080 |
+| Dashboard | http://localhost:4200 |
+| Widget | http://localhost:4201 |
+| Mailhog UI | http://localhost:8025 |
+| MinIO console | http://localhost:9001 |
 
 ## Environment — AI Provider Abstraction
 

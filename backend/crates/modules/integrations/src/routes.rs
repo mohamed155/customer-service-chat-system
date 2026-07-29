@@ -87,6 +87,7 @@ async fn active_membership_id(
     Ok(row.map(|(id,)| id))
 }
 
+#[allow(clippy::result_large_err)]
 fn load_master_key(config: &config::AppConfig) -> Result<MasterKey, Response> {
     let raw = config.integration_secrets_key.as_deref().ok_or_else(|| {
         ApiError::internal_error("Integration secrets key is not configured").into_response()

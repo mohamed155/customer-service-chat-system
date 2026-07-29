@@ -211,7 +211,9 @@ export class AiProvidersComponent implements OnInit {
     }
   }
 
-  protected healthVerdict(v: ProviderStatus['providers'][number]['verdict']): 'healthy' | 'degraded' | 'unhealthy' {
+  protected healthVerdict(
+    v: ProviderStatus['providers'][number]['verdict'],
+  ): 'healthy' | 'degraded' | 'unhealthy' {
     return v === 'degraded' || v === 'unhealthy' ? v : 'healthy';
   }
 }

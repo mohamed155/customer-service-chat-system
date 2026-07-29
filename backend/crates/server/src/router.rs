@@ -7,10 +7,11 @@ use axum::routing::MethodRouter;
 use axum::Extension;
 use axum::{middleware, routing, Router};
 use billing;
+use cache::{limiter::RedisRateLimiter, Cache};
 use config::{AppConfig, Environment};
 use email::{noop::LogEmailSender, smtp::SmtpEmailSender, EmailSender};
 use identity::{principal_middleware, IdentityConfig, Principal};
-use kernel::ApiError;
+use kernel::{ApiError, RateLimiter, TenantRateLimit};
 use observability::health::HealthReport;
 use observability::request_id::{request_id_middleware, REQUEST_ID_HEADER};
 use observability::trace::trace_middleware;
@@ -26,6 +27,7 @@ use utoipa_axum::routes;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::openapi::ApiDoc;
+use crate::security_headers;
 use crate::state::AppState;
 
 #[utoipa::path(
@@ -247,7 +249,7 @@ where
 
 fn public_routes() -> OpenApiRouter<sqlx::PgPool> {
     OpenApiRouter::new()
-        .routes(routes!(login))
+        .routes(routes!(login).layer(middleware::from_fn(crate::rate_limit::login_rate_limit)))
         .routes(routes!(identity::routes::logout))
         .routes(routes!(tenancy::invitations::preview_invitation))
         .routes(routes!(tenancy::invitations::accept_invitation))
@@ -985,7 +987,11 @@ fn api_routes(
     include_test_routes: bool,
     email_sender: Option<Arc<dyn EmailSender>>,
     storage: Option<Arc<dyn ObjectStorage>>,
-) -> (Router<sqlx::PgPool>, utoipa::openapi::OpenApi) {
+) -> (
+    Router<sqlx::PgPool>,
+    utoipa::openapi::OpenApi,
+    Arc<dyn RateLimiter>,
+) {
     let identity_config = IdentityConfig {
         pool: state.db.clone(),
         environment: state.config.environment.clone(),
@@ -1035,30 +1041,54 @@ fn api_routes(
     };
     let storage: Arc<dyn ObjectStorage> = storage.unwrap_or(fallback_storage);
 
-    let router: OpenApiRouter<sqlx::PgPool> =
-        OpenApiRouter::with_openapi(ApiDoc::openapi()).merge(public_routes());
-    let router = router.merge(authenticated_routes());
     // Widget public routes — no authentication, permissive CORS, rate-limited.
     // The same `rate_store` Arc is also injected onto the integration hooks
     // router (FR-014 per-connection rate limit), so the two share budget.
-    let rate_store = Arc::new(kernel::InMemoryRateLimitStore::default());
+    let cache = Cache::new(&state.config.redis_url)
+        .expect("Redis cache for rate limiter — configure APP_REDIS_URL");
+    let rate_store: Arc<dyn RateLimiter> = Arc::new(RedisRateLimiter::new(
+        cache,
+        state.config.rate_limit_fail_mode.clone(),
+    ));
+    let login_store = rate_store.clone();
+    let whatsapp_store = rate_store.clone();
+    let tenant_limit: Arc<dyn TenantRateLimit> =
+        Arc::new(crate::rate_limit::ServerTenantRateLimit {
+            pool: state.db.clone(),
+            resolver: state.budget_resolver.clone(),
+            enabled: state.config.rate_limit_enabled,
+        });
     let widget_router = widget_routes()
         .layer(Extension(rate_store.clone()))
+        .layer(Extension(tenant_limit.clone()))
         .layer(widget_cors_layer());
-    let router = router.merge(widget_router);
-    let hooks_router = hooks_routes().layer(Extension(rate_store));
-    let router = router.merge(hooks_router);
+    let hooks_router = hooks_routes()
+        .layer(Extension(rate_store))
+        .layer(Extension(tenant_limit));
+
+    // Protected routes (everything except widget and hooks) get Scope B headers.
+    let mut protected: OpenApiRouter<sqlx::PgPool> = OpenApiRouter::with_openapi(ApiDoc::openapi())
+        .merge(public_routes())
+        .merge(authenticated_routes());
     let platform = platform_routes(include_test_routes)
         .layer(middleware::from_fn(platform_permission_middleware))
         .layer(middleware::from_fn(authentication_middleware));
-    let router = router.merge(platform);
+    protected = protected.merge(platform);
     let tenant = tenant_routes(include_test_routes)
         .layer(from_fn_with_state(
             tenancy_config,
             tenancy::tenant_context_middleware,
         ))
         .layer(middleware::from_fn(authentication_middleware));
-    let router = router.merge(tenant);
+    protected = protected.merge(tenant);
+
+    if state.config.security_headers_enabled {
+        for layer in security_headers::scope_b_layers(&state.config) {
+            protected = protected.layer(layer);
+        }
+    }
+
+    let router = protected.merge(widget_router).merge(hooks_router);
 
     let router = router
         .fallback(|request: Request| async move {
@@ -1069,6 +1099,7 @@ fn api_routes(
                 .unwrap_or("unknown");
             ApiError::not_found("Route not found").with_request_id(request_id)
         })
+        .layer(Extension(login_store))
         .layer(Extension(email_sender))
         .layer(Extension(storage.clone()))
         .layer(Extension(state.config.clone()))
@@ -1086,7 +1117,8 @@ fn api_routes(
         ))
         .layer(from_fn_with_state(identity_config, principal_middleware));
 
-    router.split_for_parts()
+    let (router, doc) = router.split_for_parts();
+    (router, doc, whatsapp_store)
 }
 
 /// Build the OpenApiRouter that carries the documented paths (no state
@@ -1138,7 +1170,8 @@ fn build_app(
     storage: Option<Arc<dyn ObjectStorage>>,
 ) -> Router {
     let config = state.config.clone();
-    let (api_router, openapi_doc) = api_routes(&state, include_test_routes, email_sender, storage);
+    let (api_router, openapi_doc, whatsapp_store) =
+        api_routes(&state, include_test_routes, email_sender, storage);
     let expose_docs = docs_surface_enabled(&config);
 
     let mut router: Router<AppState> = Router::new()
@@ -1176,6 +1209,8 @@ fn build_app(
     if let Some(ref mk) = master_key {
         let whatsapp_webhook = whatsapp::routes::public_router()
             .layer(Extension(mk.clone()))
+            .layer(Extension(whatsapp_store))
+            .layer(Extension(state.config.clone()))
             .layer(DefaultBodyLimit::max(256 * 1024))
             .with_state(state.db.clone());
         router = router.merge(whatsapp_webhook);
@@ -1183,7 +1218,7 @@ fn build_app(
         tracing::warn!("integration_secrets_key not configured — whatsapp webhook disabled");
     }
 
-    router
+    let mut app_router = router
         .nest("/api/v1", api_router.with_state(state.db.clone()))
         .fallback(|request: Request| async move {
             let request_id = request
@@ -1197,7 +1232,17 @@ fn build_app(
         .layer(middleware::from_fn(trace_middleware))
         .layer(middleware::from_fn(request_id_middleware))
         .layer(cors_layer(&config))
-        .with_state(state)
+        .layer(middleware::from_fn(
+            observability::metrics::metrics_middleware,
+        ));
+
+    if config.security_headers_enabled {
+        for layer in security_headers::scope_a_layers(&config) {
+            app_router = app_router.layer(layer);
+        }
+    }
+
+    app_router.with_state(state)
 }
 
 pub fn app(state: AppState) -> Router {
@@ -1272,6 +1317,22 @@ mod tests {
             ready_probe_timeout_ms: 0,
             shutdown_grace_seconds: 0,
             docs_enabled: false,
+            rate_limit_enabled: true,
+            rate_limit_login_max: 10,
+            rate_limit_login_window_secs: 60,
+            rate_limit_max_override: 10000,
+            rate_limit_fail_mode: "auth_closed".into(),
+            security_headers_enabled: true,
+            csp_policy:
+                "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+                    .into(),
+            csp_report_only: true,
+            hsts_max_age: 31536000,
+            otlp_endpoint: None,
+            trace_sample_ratio: 1.0,
+            sentry_dsn: None,
+            release_sha: None,
+            trusted_proxy: false,
         };
         assert!(docs_surface_enabled(&config));
         config.environment = Environment::Test;

@@ -1,0 +1,65 @@
+groups:
+  # Error rate ≥ 1% for 5m (SC-014 threshold)
+  - name: error_rate
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m]))
+            >= 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Error rate above 1%"
+          description: >
+            The HTTP 5xx error rate is {{ $value | humanizePercentage }} over the
+            last 5 minutes, exceeding the 1% threshold. Check backend logs and
+            dependency health.
+
+  # p95 latency ≥ 500ms for 10m (SC-014 threshold)
+  - name: latency
+    rules:
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[10m])) by (le))
+            >= 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency above 500ms"
+          description: >
+            The p95 request latency is {{ $value | humanizeDuration }}, exceeding
+            the 500ms target for the last 10 minutes.
+
+  # Dependency health — dependency_up == 0 for 2m
+  - name: dependency_health
+    rules:
+      - alert: DependencyDown
+        expr: dependency_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dependency {{ $labels.dependency }} is down"
+          description: >
+            Dependency {{ $labels.dependency }} has been unreachable for over
+            2 minutes. This may cause cascading failures across the platform.
+
+  - name: backup
+    rules:
+      - alert: BackupStale
+        expr: |
+          time() - backup_last_success_timestamp_seconds > 93600
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup has not succeeded in over 26 hours"
+          description: >
+            The last successful backup was {{ $value | humanizeDuration }} ago.
+            The RPO objective is 24 hours. The backup job may have failed or
+            been stopped. Check the backup script logs and the off-host storage
+            destination.
+          runbook_url: "https://github.com/anomalyco/customer-service-chat-system/blob/main/docs/backup-restore.md"

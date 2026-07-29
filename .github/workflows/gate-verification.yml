@@ -1,0 +1,69 @@
+name: Gate Verification
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 0'
+
+jobs:
+  verify-gate-rejects-broken-code:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_DB: customer_service, POSTGRES_USER: customer_service, POSTGRES_PASSWORD: customer_service }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U customer_service" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    defaults: { run: { working-directory: backend } }
+    env:
+      DATABASE_URL: postgres://customer_service:customer_service@localhost:5432/customer_service
+      AUTH_JWT_SECRET: 0123456789abcdef0123456789abcdef
+      REQUIRE_DB_TESTS: "1"
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: backend }
+      - uses: taiki-e/install-action@v2
+        with: { tool: cargo-nextest }
+      - run: cargo install sqlx-cli --no-default-features --features rustls,postgres
+      - run: sqlx migrate run
+      - name: Apply deliberate break
+        run: |
+          perl -i -pe 's/StatusCode::OK/StatusCode::IM_A_TEAPOT/' crates/server/tests/health.rs
+          if git diff --quiet -- crates/server/tests/health.rs; then
+            echo "FAIL: deliberate break was a no-op - health.rs unchanged, this workflow would prove nothing"
+            exit 1
+          fi
+          git --no-pager diff -- crates/server/tests/health.rs
+      - name: Run gate (should fail)
+        id: gate
+        continue-on-error: true
+        run: |
+          EXIT=0
+          cargo nextest run --workspace > /tmp/gate-out.txt 2>&1 || EXIT=$?
+          cat /tmp/gate-out.txt
+          echo "exit_code=$EXIT" >> $GITHUB_OUTPUT
+      - name: Assert gate failed
+        run: |
+          CODE="${{ steps.gate.outputs.exit_code }}"
+          if [ -z "$CODE" ]; then
+            echo "FAIL: gate step produced no exit_code output - cannot verify anything"
+            exit 1
+          fi
+          if [ "$CODE" -eq 0 ]; then
+            echo "FAIL: gate passed despite deliberate break"
+            exit 1
+          fi
+          echo "OK: gate correctly rejected broken code (exit $CODE)"
+      - name: Revert break
+        run: git checkout -- crates/server/tests/health.rs

@@ -25,8 +25,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
 
-use whatsapp;
-
 #[tokio::main]
 async fn main() {
     let config = match AppConfig::from_env() {
@@ -37,7 +35,31 @@ async fn main() {
         }
     };
 
-    observability::init_observability(config.log_format.clone());
+    if std::env::args().nth(1).as_deref() == Some("migrate") {
+        let pool = db::lazy_pool(
+            &config.database_url,
+            config.db_max_connections,
+            Duration::from_millis(config.db_acquire_timeout_ms),
+        );
+        match db::run_migrations(&pool).await {
+            Ok(()) => {
+                println!("migrations applied");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("migration failed: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+
+    observability::init_observability(
+        config.log_format.clone(),
+        config.otlp_endpoint.clone(),
+        config.trace_sample_ratio,
+        config.sentry_dsn.clone(),
+        config.release_sha.clone(),
+    );
 
     let db = db::lazy_pool(
         &config.database_url,
@@ -61,6 +83,21 @@ async fn main() {
         Arc::new(RedisHealthCheck::new((*cache).clone())),
     ];
 
+    observability::metrics::spawn_dependency_updater(health_checks.clone());
+
+    {
+        let pool = db.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+            loop {
+                interval.tick().await;
+                if let Ok((pending, _, _)) = platform::queries::queue_health(&pool).await {
+                    observability::metrics::set_outbox_backlog(pending);
+                }
+            }
+        });
+    }
+
     let escalations_runtime =
         escalations::presence::Runtime::new(db.clone(), Duration::from_secs(45));
     if let Err(e) = escalations_runtime.startup_sweep().await {
@@ -69,6 +106,10 @@ async fn main() {
 
     let ai_service = ai::AiService::from_config(db.clone(), &config).expect("AI service init");
 
+    let budget_resolver = Arc::new(cache::limiter::BudgetResolver::new(
+        config.rate_limit_max_override,
+    ));
+
     let state = AppState {
         config: Arc::new(config),
         db,
@@ -76,6 +117,7 @@ async fn main() {
         health_checks,
         escalations: escalations_runtime,
         ai: ai_service,
+        budget_resolver,
     };
 
     let (storage, _storage_backend) = storage::select_storage(state.config.s3.as_ref()).await;
@@ -225,9 +267,8 @@ async fn main() {
         .expect("failed to bind HTTP listener");
     tracing::info!(%address, "server listening");
 
-    let grace = state.config.shutdown_grace_seconds;
     tokio::select! {
-        result = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal(grace)) => {
+        result = axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(shutdown_signal()) => {
             result.expect("server failed");
         }
         result = delivery_worker => {
@@ -258,9 +299,13 @@ async fn main() {
             panic!("integration retention sweeper stopped unexpectedly: {result:?}");
         }
     }
+
+    tracing::info!("observability: flushing remaining events");
+    observability::errors::flush(Duration::from_secs(2));
+    tracing::info!("graceful shutdown complete");
 }
 
-async fn shutdown_signal(grace_seconds: u64) {
+async fn shutdown_signal() {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
             .await
@@ -284,11 +329,4 @@ async fn shutdown_signal(grace_seconds: u64) {
     }
 
     tracing::info!("shutdown signal received, starting graceful shutdown");
-    tokio::time::timeout(
-        Duration::from_secs(grace_seconds),
-        std::future::pending::<()>(),
-    )
-    .await
-    .ok();
-    tracing::info!("graceful shutdown complete");
 }
