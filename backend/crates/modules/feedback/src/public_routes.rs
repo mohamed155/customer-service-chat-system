@@ -79,8 +79,11 @@ pub async fn submit_feedback(
                 .check(Scope::WidgetMessage, &session.id.to_string(), budget)
                 .await
             {
-                return ApiError::rate_limited("Too many submissions, try again later", retry_after)
-                    .into_response();
+                return ApiError::rate_limited(
+                    "Too many submissions, try again later",
+                    retry_after,
+                )
+                .into_response();
             }
         }
     }

@@ -73,7 +73,9 @@ fn scrub_event(mut event: Event<'static>) -> Event<'static> {
         .extra
         .retain(|k, _| RETAINED_EXTRA.contains(&k.as_str()));
 
-    event.tags.retain(|k, _| RETAINED_EXTRA.contains(&k.as_str()));
+    event
+        .tags
+        .retain(|k, _| RETAINED_EXTRA.contains(&k.as_str()));
     event.contexts.clear();
     event.server_name = None;
 

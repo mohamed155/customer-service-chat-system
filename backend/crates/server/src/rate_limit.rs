@@ -56,13 +56,24 @@ pub async fn login_rate_limit(
     };
 
     let client_ip = if config.trusted_proxy {
-        match parts.headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+        match parts
+            .headers
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+        {
             Some(header_val) => header_val
                 .split(',')
                 .next()
                 .map(|s| s.trim().to_string())
                 .unwrap_or_else(|| "unknown".to_string()),
-            None => return next.run(Request::from_parts(parts, axum::body::Body::from(body_bytes))).await,
+            None => {
+                return next
+                    .run(Request::from_parts(
+                        parts,
+                        axum::body::Body::from(body_bytes),
+                    ))
+                    .await
+            }
         }
     } else {
         parts
@@ -165,7 +176,11 @@ async fn fetch_override(
     .flatten();
     row.and_then(|(m, w)| {
         if m <= 0 || w <= 0 {
-            tracing::warn!(max_requests = m, window_seconds = w, "fetch_override: invalid override row ignored");
+            tracing::warn!(
+                max_requests = m,
+                window_seconds = w,
+                "fetch_override: invalid override row ignored"
+            );
             return None;
         }
         Some(Budget {

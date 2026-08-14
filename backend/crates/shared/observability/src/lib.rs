@@ -58,7 +58,8 @@ pub fn init_observability(
         use tracing_subscriber::util::SubscriberInitExt;
         use tracing_subscriber::Registry;
 
-        let otlp_layer = otlp::build_layer(&endpoint, trace_sample_ratio).with_filter(filter.clone());
+        let otlp_layer =
+            otlp::build_layer(&endpoint, trace_sample_ratio).with_filter(filter.clone());
         let sentry_layer = sentry_tracing::layer().event_filter(|md| match *md.level() {
             tracing::Level::ERROR => sentry_tracing::EventFilter::Event,
             tracing::Level::WARN => sentry_tracing::EventFilter::Breadcrumb,
