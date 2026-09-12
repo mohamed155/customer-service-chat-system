@@ -201,7 +201,7 @@ pub async fn list(
         " ORDER BY created_at DESC, id DESC LIMIT ${next_bind}"
     ));
 
-    let mut query = sqlx::query_as::<_, UsageListItem>(&sql).bind(tenant_id);
+    let mut query = sqlx::query_as::<_, UsageListItem>(sqlx::AssertSqlSafe(sql)).bind(tenant_id);
 
     if let Some(f) = from {
         query = query.bind(f);
@@ -272,7 +272,7 @@ pub async fn summary(
         next_bind += 1;
     }
 
-    let mut query = sqlx::query_as::<_, UsageSummaryRow>(&sql).bind(tenant_id);
+    let mut query = sqlx::query_as::<_, UsageSummaryRow>(sqlx::AssertSqlSafe(sql)).bind(tenant_id);
 
     if let Some(f) = from {
         query = query.bind(f);

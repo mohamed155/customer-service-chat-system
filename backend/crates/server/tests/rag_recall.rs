@@ -279,7 +279,7 @@ async fn recall_target_tenant_chunk_among_noise() {
 
     let q = fmt_vec(&query_vector());
 
-    let results: Vec<RetrievedChunk> = sqlx::query_as(&format!(
+    let results: Vec<RetrievedChunk> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT kc.id AS chunk_id, \
                     kc.item_id, \
                     kc.tenant_id, \
@@ -297,7 +297,7 @@ async fn recall_target_tenant_chunk_among_noise() {
              ORDER BY similarity DESC \
              LIMIT $3",
         q, q
-    ))
+    )))
     .bind(target_tenant)
     .bind(THRESHOLD)
     .bind(TOP_K)

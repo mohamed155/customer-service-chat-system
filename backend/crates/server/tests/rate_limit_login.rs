@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHasher};
 use axum::body::Body;
 use axum::http::Request;
@@ -128,9 +127,8 @@ fn login_request(email: &str, password: &str) -> Request<Body> {
 }
 
 fn hash_password(password: &str) -> String {
-    let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .expect("hash password")
         .to_string()
 }

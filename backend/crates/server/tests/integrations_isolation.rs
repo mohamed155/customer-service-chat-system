@@ -6,7 +6,7 @@ use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
 use config::Environment;
 use http_body_util::BodyExt;
-use rand::RngCore;
+use rand::Rng;
 use serde_json::Value;
 use server::router;
 use server::state::AppState;
@@ -170,9 +170,9 @@ async fn seed_connection_with_secrets(
     let mut token_hash = [0u8; 32];
     let mut token_ciphertext = vec![0u8; 48];
     let mut token_nonce = [0u8; 12];
-    rand::rngs::OsRng.fill_bytes(&mut token_hash);
-    rand::rngs::OsRng.fill_bytes(&mut token_ciphertext);
-    rand::rngs::OsRng.fill_bytes(&mut token_nonce);
+    rand::rng().fill_bytes(&mut token_hash);
+    rand::rng().fill_bytes(&mut token_ciphertext);
+    rand::rng().fill_bytes(&mut token_nonce);
 
     let connection_id: Uuid = sqlx::query_scalar(
         "INSERT INTO integration_connections \
@@ -194,8 +194,8 @@ async fn seed_connection_with_secrets(
     // the field if isolation were broken.
     let mut secret_ciphertext = vec![0u8; 48];
     let mut secret_nonce = [0u8; 12];
-    rand::rngs::OsRng.fill_bytes(&mut secret_ciphertext);
-    rand::rngs::OsRng.fill_bytes(&mut secret_nonce);
+    rand::rng().fill_bytes(&mut secret_ciphertext);
+    rand::rng().fill_bytes(&mut secret_nonce);
     sqlx::query(
         "INSERT INTO integration_secrets \
          (tenant_id, connection_id, field_key, ciphertext, nonce, hint) \

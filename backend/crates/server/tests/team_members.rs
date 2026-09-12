@@ -5,7 +5,7 @@ use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
 use http_body_util::BodyExt;
-use rand::RngCore;
+use rand::Rng;
 use server::router;
 use server::state::AppState;
 use sha2::Digest;
@@ -641,7 +641,7 @@ async fn seed_invitation_with_token(
 ) -> (Uuid, String) {
     use sha2::Sha256;
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let raw = hex::encode(bytes);
     let hash = hex::encode(Sha256::digest(bytes));
     let expires_at = chrono::Utc::now() + chrono::Duration::days(7);
@@ -2582,7 +2582,7 @@ async fn accept_invitation_anonymous() {
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
 
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let raw_token = hex::encode(bytes);
     let token_hash = hex::encode(sha2::Sha256::digest(bytes));
     let email = format!("anon-{}@example.com", Uuid::new_v4().simple());
@@ -2675,7 +2675,7 @@ async fn accept_invitation_anonymous_existing_account_returns_409_without_mutati
     let _existing_account = seed_user(&pool, "Existing Account", &email).await;
 
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let raw_token = hex::encode(bytes);
     let token_hash = hex::encode(sha2::Sha256::digest(bytes));
     let expires_at = chrono::Utc::now() + chrono::Duration::days(7);
@@ -2750,7 +2750,7 @@ async fn accept_invitation_signed_in() {
     let user = seed_user(&pool, "Invited User", "signedin@example.com").await;
 
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let raw_token = hex::encode(bytes);
     let token_hash = hex::encode(sha2::Sha256::digest(bytes));
     let expires_at = chrono::Utc::now() + chrono::Duration::days(7);
@@ -2808,7 +2808,7 @@ async fn accept_expired_token_410() {
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
 
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let raw_token = hex::encode(bytes);
     let token_hash = hex::encode(sha2::Sha256::digest(bytes));
     let expires_at = chrono::Utc::now() - chrono::Duration::hours(1);
@@ -2933,7 +2933,7 @@ async fn accept_email_mismatch_403() {
     let user = seed_user(&pool, "Wrong User", "wrong@example.com").await;
 
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let raw_token = hex::encode(bytes);
     let token_hash = hex::encode(sha2::Sha256::digest(bytes));
     let expires_at = chrono::Utc::now() + chrono::Duration::days(7);
@@ -2977,7 +2977,7 @@ async fn accept_consumed_token_410() {
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
 
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let raw_token = hex::encode(bytes);
     let token_hash = hex::encode(sha2::Sha256::digest(bytes));
     let email = format!("consumed-{}@example.com", Uuid::new_v4().simple());
@@ -3023,7 +3023,7 @@ async fn accept_disabled_member_409() {
     let tenant_id = seed_tenant(&pool).await;
 
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let raw_token = hex::encode(bytes);
     let token_hash = hex::encode(sha2::Sha256::digest(bytes));
     let email = "disabledmember@example.com";

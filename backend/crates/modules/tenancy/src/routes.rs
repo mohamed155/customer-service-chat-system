@@ -399,7 +399,7 @@ pub async fn list_tenants(
     let sql =
         format!("SELECT id, name, slug, status, plan FROM tenants WHERE {where_sql} {order_limit}");
 
-    let mut query = sqlx::query(&sql);
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql));
     if let Some(ref q) = params.q {
         query = query.bind(format!("%{q}%"));
     }
@@ -1409,7 +1409,7 @@ pub async fn update_tenant(
              RETURNING id, name, slug, status, plan, contact_name, contact_email, created_at, updated_at",
             set_clauses.join(", ")
         );
-        let mut query = sqlx::query_as::<_, TenantRow>(&sql);
+        let mut query = sqlx::query_as::<_, TenantRow>(sqlx::AssertSqlSafe(sql));
         if let Some(ref n) = new_name {
             query = query.bind(n);
         }

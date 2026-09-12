@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::RngExt;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -211,7 +211,7 @@ const RETRY_BASE_MS: &[u64] = &[200, 1000];
 
 fn retry_delay(retry: u32) -> Duration {
     let base_ms = RETRY_BASE_MS[retry as usize];
-    let jitter_factor: f64 = rand::thread_rng().gen_range(0.75..=1.25);
+    let jitter_factor: f64 = rand::rng().random_range(0.75..=1.25);
     Duration::from_millis((base_ms as f64 * jitter_factor) as u64)
 }
 

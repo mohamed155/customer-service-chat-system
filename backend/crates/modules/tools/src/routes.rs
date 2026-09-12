@@ -183,12 +183,12 @@ pub async fn tool_activity(
     let result = match params.cursor {
         Some(cursor) => {
             sqlx::query_as::<_, ToolActivityQueryRow>(
-                &format!(
+                sqlx::AssertSqlSafe(format!(
                     "{} WHERE tr.tenant_id = $1 AND tr.conversation_id = $2 \
                      AND tr.created_at < (SELECT created_at FROM tool_requests WHERE id = $3 AND tenant_id = $1) \
                      ORDER BY tr.created_at DESC LIMIT $4",
                     base_sql
-                ),
+                )),
             )
             .bind(ctx.tenant_id)
             .bind(conversation_id)
@@ -199,11 +199,11 @@ pub async fn tool_activity(
         }
         None => {
             sqlx::query_as::<_, ToolActivityQueryRow>(
-                &format!(
+                sqlx::AssertSqlSafe(format!(
                     "{} WHERE tr.tenant_id = $1 AND tr.conversation_id = $2 \
                      ORDER BY tr.created_at DESC LIMIT $3",
                     base_sql
-                ),
+                )),
             )
             .bind(ctx.tenant_id)
             .bind(conversation_id)

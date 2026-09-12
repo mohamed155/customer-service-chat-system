@@ -393,7 +393,7 @@ pub async fn inbox_query(
         " ORDER BY c.last_activity_at DESC, c.id DESC LIMIT ${next_bind}"
     ));
 
-    let mut query = sqlx::query_as::<_, InboxRow>(&sql).bind(tenant_id);
+    let mut query = sqlx::query_as::<_, InboxRow>(sqlx::AssertSqlSafe(sql)).bind(tenant_id);
 
     // Bind status
     match status_val {
@@ -663,7 +663,7 @@ pub async fn timeline_query_in_tx(
         " ORDER BY m.created_at DESC, m.seq DESC LIMIT ${next_bind}"
     ));
 
-    let mut query = sqlx::query_as::<_, TimelineRow>(&sql)
+    let mut query = sqlx::query_as::<_, TimelineRow>(sqlx::AssertSqlSafe(sql))
         .bind(tenant_id)
         .bind(conversation_id);
 

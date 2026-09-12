@@ -8,7 +8,7 @@ use chrono::{Duration, Utc};
 use config::AppConfig;
 use identity::{password, session, OptionalPrincipal, Principal};
 use kernel::{ApiError, ErrorDetail, ErrorEnvelope, Page};
-use rand::RngCore;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::Row;
@@ -25,7 +25,7 @@ pub const INVITATION_EXPIRY_DAYS: i64 = 7;
 /// Generate a 256-bit random token and return (raw_token, sha256_hex_hash).
 fn generate_token() -> (String, String) {
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let raw = hex::encode(bytes);
     let hash = hex::encode(Sha256::digest(bytes));
     (raw, hash)
@@ -862,7 +862,7 @@ pub async fn list_invitations(
         where_clauses.join(" AND "),
     );
 
-    let mut query = sqlx::query(&sql).bind(ctx.tenant_id);
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql)).bind(ctx.tenant_id);
     match status_filter {
         InvitationStatusFilter::Open => {}
         InvitationStatusFilter::ExpiredOnly => query = query.bind(now),

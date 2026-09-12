@@ -190,7 +190,7 @@ pub async fn channel_breakdown(
     }
     sql.push_str(" GROUP BY c.channel ORDER BY COUNT(*) DESC, c.channel ASC");
 
-    let mut q = sqlx::query_as::<_, (String, i64)>(&sql)
+    let mut q = sqlx::query_as::<_, (String, i64)>(sqlx::AssertSqlSafe(sql))
         .bind(tenant_id)
         .bind(from_ts)
         .bind(to_ts);

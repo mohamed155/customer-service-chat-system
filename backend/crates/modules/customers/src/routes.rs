@@ -303,7 +303,7 @@ pub async fn list_customers(
         next_bind
     );
 
-    let mut query = sqlx::query(&sql).bind(ctx.tenant_id);
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql)).bind(ctx.tenant_id);
     if let Some(pattern) = search_pattern {
         query = query.bind(pattern);
     }
@@ -930,7 +930,7 @@ pub async fn update_customer(
             where_offset + 1
         );
 
-        let mut query = sqlx::query(&sql);
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(sql));
         if let Some(name) = &new_name {
             if name != &existing_name {
                 query = query.bind(name);

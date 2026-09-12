@@ -1,8 +1,9 @@
 use crate::SecretKey;
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, Payload},
+    aead::{Aead, Generate, KeyInit, Payload},
     Aes256Gcm, Nonce,
 };
+use aes_gcm::aead::Nonce as AeadNonce;
 use base64::Engine;
 
 pub struct MasterKey([u8; 32]);
@@ -37,7 +38,7 @@ pub fn seal(
 ) -> Result<(Vec<u8>, Vec<u8>), String> {
     let cipher =
         Aes256Gcm::new_from_slice(&master.0).map_err(|e| format!("AES-256-GCM init: {e}"))?;
-    let nonce = Aes256Gcm::generate_nonce(&mut aes_gcm::aead::OsRng);
+    let nonce = AeadNonce::<Aes256Gcm>::generate();
     let payload = Payload {
         msg: plaintext.as_bytes(),
         aad: scope_aad.as_bytes(),

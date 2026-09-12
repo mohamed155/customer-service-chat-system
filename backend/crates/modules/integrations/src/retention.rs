@@ -84,9 +84,9 @@ mod tests {
         let mut token_hash = [0u8; 32];
         let mut token_ciphertext = vec![0u8; 48];
         let mut token_nonce = [0u8; 12];
-        rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut token_hash);
-        rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut token_ciphertext);
-        rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut token_nonce);
+        rand::Rng::fill_bytes(&mut rand::rng(), &mut token_hash);
+        rand::Rng::fill_bytes(&mut rand::rng(), &mut token_ciphertext);
+        rand::Rng::fill_bytes(&mut rand::rng(), &mut token_nonce);
         let connection_id: Uuid = sqlx::query_scalar(
             "INSERT INTO integration_connections \
              (tenant_id, catalog_id, is_active, config, \
@@ -110,11 +110,11 @@ mod tests {
             } else {
                 "now() - interval '1 day'::timestamptz"
             };
-            sqlx::query(&format!(
+            sqlx::query(sqlx::AssertSqlSafe(format!(
                 "INSERT INTO integration_events \
                  (tenant_id, connection_id, event_type, outcome, reason, created_at) \
                  VALUES ($1, $2, 'delivery_accepted', 'success', NULL, {ts})"
-            ))
+            )))
             .bind(tenant_id)
             .bind(connection_id)
             .execute(&pool)
@@ -130,11 +130,11 @@ mod tests {
             } else {
                 "now() - interval '1 day'::timestamptz"
             };
-            sqlx::query(&format!(
+            sqlx::query(sqlx::AssertSqlSafe(format!(
                 "INSERT INTO integration_webhook_deliveries \
                  (tenant_id, connection_id, payload, received_at) \
                  VALUES ($1, $2, '{{}}'::jsonb, {ts})"
-            ))
+            )))
             .bind(tenant_id)
             .bind(connection_id)
             .execute(&pool)

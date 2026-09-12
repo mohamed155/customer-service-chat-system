@@ -190,7 +190,7 @@ pub async fn list_members_rows_in_tx(
          WHERE {where_sql} {order_limit}"
     );
 
-    let mut query = sqlx::query_as::<_, MemberRow>(&sql);
+    let mut query = sqlx::query_as::<_, MemberRow>(sqlx::AssertSqlSafe(sql));
     query = query.bind(tenant_id);
 
     if let Some(q) = q {

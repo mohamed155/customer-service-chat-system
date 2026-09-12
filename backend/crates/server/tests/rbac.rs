@@ -7,7 +7,7 @@ use axum::response::Response;
 use axum::{routing::get, Extension, Router};
 use config::Environment;
 use http_body_util::BodyExt;
-use rand::RngCore;
+use rand::Rng;
 use serde_json::{json, Value};
 use server::router;
 use server::state::AppState;
@@ -319,7 +319,7 @@ async fn seed_invitation(
     invited_by: Uuid,
 ) -> Uuid {
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let token_hash = hex::encode(sha2::Sha256::digest(bytes));
     sqlx::query_scalar(
         "INSERT INTO tenant_invitations (tenant_id, email, role, token_hash, invited_by, expires_at) VALUES ($1, $2, 'agent', $3, $4, now() + interval '7 days') RETURNING id",

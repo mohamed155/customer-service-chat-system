@@ -14,14 +14,11 @@ pub fn init(dsn: Option<&str>, release: Option<&str>) {
         None => return,
     };
 
-    let guard = sentry::init((
-        dsn,
-        sentry::ClientOptions {
-            release: release.map(|r| std::borrow::Cow::Owned(r.to_owned())),
-            before_send: Some(std::sync::Arc::new(|event| Some(scrub_event(event))) as _),
-            ..Default::default()
-        },
-    ));
+    let mut options = sentry::ClientOptions::default();
+    options.release = release.map(|r| std::borrow::Cow::Owned(r.to_owned()));
+    options.before_send = Some(std::sync::Arc::new(|event| Some(scrub_event(event))) as _);
+
+    let guard = sentry::init((dsn, options));
     let _ = SENTRY_GUARD.set(guard);
 }
 

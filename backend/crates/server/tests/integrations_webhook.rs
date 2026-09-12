@@ -6,9 +6,9 @@ use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
 use base64::Engine;
 use config::Environment;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use http_body_util::BodyExt;
-use rand::RngCore;
+use rand::Rng;
 use serde_json::{json, Value};
 use server::router;
 use server::state::AppState;
@@ -409,7 +409,7 @@ async fn unknown_token_returns_404_with_no_new_events() {
 
     // 32 random bytes URL-safe-base64-encoded to look like a real token.
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let bogus_token = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
 
     let body = br#"{"hello":"world"}"#.to_vec();
@@ -494,7 +494,7 @@ async fn unknown_token_and_bad_signature_404_bodies_are_byte_identical() {
 
     // Build a bogus token and send the same shape to the unknown-token branch.
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let bogus_token = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
 
     let body2 = br#"{"event":"order.created"}"#.to_vec();

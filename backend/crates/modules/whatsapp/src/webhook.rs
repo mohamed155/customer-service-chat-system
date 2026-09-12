@@ -5,7 +5,7 @@ use axum::extract::{Extension, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use kernel::{ApiError, Budget, Decision, RateLimiter, Scope};
 use serde::Deserialize;
 use serde_json::json;

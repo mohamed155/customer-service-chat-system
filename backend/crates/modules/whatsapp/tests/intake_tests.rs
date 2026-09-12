@@ -5,7 +5,7 @@ use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
 use axum::Router;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use http_body_util::BodyExt;
 use integrations::crypto::{aad, hint, seal, MasterKey};
 use integrations::webhook::hash_token;

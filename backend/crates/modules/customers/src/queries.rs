@@ -91,7 +91,7 @@ pub async fn update_contact_field_in_tx(
          WHERE tenant_id = $2 AND id = $3 AND deleted_at IS NULL"
     );
 
-    let rows = sqlx::query(&sql)
+    let rows = sqlx::query(sqlx::AssertSqlSafe(sql))
         .bind(value)
         .bind(tenant_id)
         .bind(customer_id)

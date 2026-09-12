@@ -1,6 +1,6 @@
 use axum::http::StatusCode;
 use kernel::ApiError;
-use rand::Rng;
+use rand::RngExt;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 
@@ -8,7 +8,7 @@ pub const SESSION_TTL_HOURS: i64 = 24;
 
 pub fn generate_token() -> String {
     let mut bytes = [0u8; 32];
-    rand::thread_rng().fill(&mut bytes);
+    rand::rng().fill(&mut bytes);
     hex::encode(bytes)
 }
 

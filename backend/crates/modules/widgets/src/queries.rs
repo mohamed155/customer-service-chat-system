@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use rand::Rng;
+use rand::RngExt;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -8,10 +8,10 @@ pub use crate::model::WidgetSessionRow;
 
 pub fn generate_public_id() -> String {
     const BASE62: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let id: String = (0..22)
         .map(|_| {
-            let idx = rng.gen_range(0..62);
+            let idx = rng.random_range(0..62);
             BASE62[idx] as char
         })
         .collect();
