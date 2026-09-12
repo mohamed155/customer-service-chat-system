@@ -62,7 +62,7 @@ describe('ConversationsComponent', () => {
           useValue: {
             list: apiList,
             listAssignableMembers: apiMembers,
-            getFeedbackSummary: vi.fn(),
+            getFeedbackSummary: vi.fn(() => of({ data: { averageRating: null, feedbackCount: 0 } })),
           },
         },
         { provide: Store, useValue: { selectSignal: () => activeTenant } },
