@@ -18,6 +18,7 @@ customers = { path = "../modules/customers" }
 escalations = { path = "../modules/escalations" }
 feedback = { path = "../modules/feedback" }
 db = { path = "../shared/db" }
+dotenvy.workspace = true
 identity = { path = "../modules/identity" }
 integrations = { path = "../modules/integrations" }
 kernel = { path = "../shared/kernel" }

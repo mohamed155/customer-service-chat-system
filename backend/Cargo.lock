@@ -5067,6 +5067,7 @@ dependencies = [
  "conversations",
  "customers",
  "db",
+ "dotenvy",
  "email",
  "escalations",
  "feedback",

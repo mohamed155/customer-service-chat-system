@@ -27,6 +27,9 @@ use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() {
+    // No-op if `.env` is absent; never overrides vars already set in the environment.
+    dotenvy::dotenv().ok();
+
     let config = match AppConfig::from_env() {
         Ok(c) => c,
         Err(e) => {

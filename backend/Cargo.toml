@@ -61,3 +61,4 @@ opentelemetry-otlp = { version = "0.32", features = ["trace", "metrics", "grpc-t
 tracing-opentelemetry = "0.33"
 sentry = "0.49"
 sentry-tracing = "0.49"
+dotenvy = "0.15"
