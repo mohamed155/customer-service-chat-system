@@ -1,0 +1,177 @@
+<div class="page">
+  <h1 class="page-title">Platform Billing</h1>
+
+  @if (store.loading()) {
+    <app-loading-state label="Loading billing data…" />
+  } @else if (store.error(); as error) {
+    <app-inline-alert tone="error">{{ error }}</app-inline-alert>
+  } @else {
+    <section class="section">
+      <div class="section-header">
+        <h2>Plan Catalog</h2>
+        @if (canManage()) {
+          <div class="form-inline">
+            <tui-textfield>
+              <input
+                tuiTextfield
+                type="text"
+                placeholder="Name"
+                [(ngModel)]="newPlanName"
+                aria-label="Plan name"
+              />
+            </tui-textfield>
+            <tui-textfield>
+              <input
+                tuiTextfield
+                type="number"
+                placeholder="Price (cents)"
+                [(ngModel)]="newPlanPrice"
+                aria-label="Monthly price in cents"
+              />
+            </tui-textfield>
+            <tui-textfield>
+              <input
+                tuiTextfield
+                type="number"
+                placeholder="Token allowance"
+                [(ngModel)]="newPlanTokens"
+                aria-label="Token allowance"
+              />
+            </tui-textfield>
+            <tui-textfield>
+              <input
+                tuiTextfield
+                type="number"
+                placeholder="Conv. allowance"
+                [(ngModel)]="newPlanConversations"
+                aria-label="Conversation allowance"
+              />
+            </tui-textfield>
+            <app-button
+              variant="primary"
+              size="sm"
+              (pressed)="onCreatePlan()"
+              [disabled]="!newPlanName() || !newPlanPrice() || store.saving()"
+            >
+              {{ store.saving() ? 'Saving…' : 'Create' }}
+            </app-button>
+          </div>
+        }
+      </div>
+
+      @if (store.plans().length === 0) {
+        <p class="empty-muted">No plans defined yet.</p>
+      } @else {
+        <app-data-table>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Price</th>
+                <th>Tokens</th>
+                <th>Conversations</th>
+                <th>Default</th>
+                <th>Status</th>
+                @if (canManage()) {
+                  <th>Actions</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (plan of store.plans(); track plan.id) {
+                <tr>
+                  <td>{{ plan.name }}</td>
+                  <td>{{ formatCents(plan.monthlyPriceCents) }}/mo</td>
+                  <td>{{ plan.tokenAllowance ?? 'Unlimited' }}</td>
+                  <td>{{ plan.conversationAllowance ?? 'Unlimited' }}</td>
+                  <td>
+                    @if (plan.isDefault) {
+                      <app-status-badge status="Default" tone="accent" />
+                    }
+                  </td>
+                  <td>
+                    <app-status-badge [status]="plan.status" tone="neutral" />
+                  </td>
+                  @if (canManage()) {
+                    <td>
+                      @if (plan.status === 'active') {
+                        <app-button
+                          variant="danger"
+                          size="sm"
+                          (pressed)="store.retirePlan(plan.id)"
+                          [disabled]="store.saving()"
+                        >
+                          Retire
+                        </app-button>
+                      } @else if (plan.status === 'retired') {
+                        <app-button
+                          variant="primary"
+                          size="sm"
+                          (pressed)="store.activatePlan(plan.id)"
+                          [disabled]="store.saving()"
+                        >
+                          Activate
+                        </app-button>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </app-data-table>
+      }
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>Tenant Subscriptions</h2>
+      </div>
+
+      @if (store.subscriptions().length === 0) {
+        <p class="empty-muted">No subscriptions found.</p>
+      } @else {
+        <app-data-table>
+          <table>
+            <thead>
+              <tr>
+                <th>Tenant</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Explicit</th>
+                @if (canManage()) {
+                  <th>Assign</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (sub of store.subscriptions(); track sub.tenantId) {
+                <tr>
+                  <td>{{ sub.tenantName }}</td>
+                  <td>{{ sub.planName }}</td>
+                  <td>
+                    <app-status-badge [status]="sub.status" tone="neutral" />
+                  </td>
+                  <td>{{ sub.explicit ? 'Yes' : 'No' }}</td>
+                  @if (canManage()) {
+                    <td>
+                      <select
+                        class="input-sm"
+                        [value]="sub.planId"
+                        (change)="onAssignPlan(sub.tenantId, $event)"
+                      >
+                        @for (plan of store.plans(); track plan.id) {
+                          <option [value]="plan.id">{{ plan.name }}</option>
+                        }
+                      </select>
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </app-data-table>
+      }
+    </section>
+  }
+</div>

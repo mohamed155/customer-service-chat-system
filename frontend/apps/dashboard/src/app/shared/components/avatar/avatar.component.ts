@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 @Component({
   selector: 'app-avatar',
   host: { '[class]': 'size()' },
-  template: `{{ initials() }}`,
+  templateUrl: './avatar.component.html',
   styles: [
     `
       :host {

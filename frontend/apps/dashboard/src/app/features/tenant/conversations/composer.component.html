@@ -1,0 +1,60 @@
+<footer class="composer">
+  <div class="mode-tabs">
+    <button
+      type="button"
+      class="mode-tab"
+      [class.active]="mode() === 'reply'"
+      (click)="mode.set('reply')"
+    >
+      Reply
+    </button>
+    <button
+      type="button"
+      class="mode-tab"
+      [class.active]="mode() === 'note'"
+      (click)="mode.set('note')"
+    >
+      Internal note
+    </button>
+    <button
+      type="button"
+      class="mode-tab"
+      [class.active]="mode() === 'customer'"
+      (click)="mode.set('customer')"
+    >
+      Customer
+    </button>
+  </div>
+
+  <form [formGroup]="form" (ngSubmit)="submit()" class="composer-form">
+    <textarea
+      formControlName="body"
+      aria-label="Message body"
+      [placeholder]="
+        mode() === 'reply'
+          ? 'Type a reply…'
+          : mode() === 'note'
+            ? 'Add an internal note…'
+            : 'Log a customer message…'
+      "
+      rows="3"
+    ></textarea>
+    @if (form.controls.body.touched && form.controls.body.invalid) {
+      @if (form.controls.body.errors?.['required']) {
+        <span class="field-error">Message is required.</span>
+      }
+      @if (form.controls.body.errors?.['maxlength']) {
+        <span class="field-error">Message is too long for WhatsApp (4096 character max).</span>
+      }
+    }
+    <div class="composer-actions">
+      <app-button
+        variant="primary"
+        type="submit"
+        [disabled]="submitting() || !form.controls.body.value.trim()"
+      >
+        {{ submitting() ? 'Sending…' : 'Send' }}
+      </app-button>
+    </div>
+  </form>
+</footer>

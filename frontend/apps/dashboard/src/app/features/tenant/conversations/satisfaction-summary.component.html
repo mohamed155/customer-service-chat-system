@@ -1,0 +1,12 @@
+@if (feedbackCount() > 0) {
+  <div class="summary-card">
+    <span class="average">{{ averageDisplay() }}</span>
+    <span class="caption"
+      >from {{ feedbackCount() }} rating{{ feedbackCount() === 1 ? '' : 's' }}</span
+    >
+  </div>
+} @else {
+  <div class="summary-card empty">
+    <span class="caption">No ratings yet</span>
+  </div>
+}

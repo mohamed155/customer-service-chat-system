@@ -1,0 +1,8 @@
+<div class="icon"><tui-icon icon="@tui.triangle-alert" /></div>
+<div class="copy">
+  <strong>{{ title() }}</strong>
+  <p>{{ description() }}</p>
+</div>
+<button type="button" aria-label="Dismiss alert" (click)="dismissed.emit()">
+  <tui-icon icon="@tui.x" />
+</button>

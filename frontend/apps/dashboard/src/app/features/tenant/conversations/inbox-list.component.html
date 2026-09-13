@@ -1,0 +1,49 @@
+<div class="filters" aria-label="Conversation status filters">
+  @for (filter of filters; track filter) {
+    <button
+      type="button"
+      [class.active]="statusFilter() === filter"
+      (click)="filterChanged.emit(filter)"
+    >
+      {{ filterLabel(filter) }}
+    </button>
+  }
+</div>
+
+<div class="list">
+  @for (conversation of conversations(); track conversation.id) {
+    <button
+      type="button"
+      class="item"
+      [class.selected]="selectedId() === conversation.id"
+      (click)="selected.emit(conversation.id)"
+    >
+      <app-avatar [initials]="customerInitials(conversation)" size="md" />
+      <span class="copy">
+        <strong>{{ conversation.customer.displayName }}</strong>
+        <span class="preview">{{ conversation.lastMessage?.preview ?? 'No messages' }}</span>
+        <span class="badges">
+          <app-channel-badge [channel]="channelBadge(conversation.channel)" />
+          <app-status-badge
+            [status]="conversation.status"
+            [tone]="statusTone(conversation.status)"
+          />
+          @if (conversation.widgetInstance; as wgt) {
+            <span class="widget-badge" title="Chat Widget: {{ wgt.name }}">Widget</span>
+          }
+          @if (conversation.rating; as rating) {
+            <app-satisfaction-badge [rating]="rating" />
+          }
+        </span>
+      </span>
+      <span class="meta">
+        @if (conversation.assignee; as assignee) {
+          <span class="assignee" [class.inactive]="!assignee.active">
+            {{ assignee.displayName }}
+          </span>
+        }
+        <time>{{ relativeTime(conversation.lastActivityAt) }}</time>
+      </span>
+    </button>
+  }
+</div>

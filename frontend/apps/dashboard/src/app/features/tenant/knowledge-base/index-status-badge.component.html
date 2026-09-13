@@ -1,0 +1,7 @@
+@if (showSpinner()) {
+  <span class="spinner"></span>
+}
+<span>{{ label() }}</span>
+@if (chunkCount(); as cnt) {
+  <span class="chunks">({{ cnt }})</span>
+}

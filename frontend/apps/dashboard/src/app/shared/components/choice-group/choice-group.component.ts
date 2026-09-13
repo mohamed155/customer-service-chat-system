@@ -7,20 +7,7 @@ export interface ChoiceGroupOption {
 
 @Component({
   selector: 'app-choice-group',
-  template: `
-    <div role="group" [attr.aria-label]="ariaLabel()">
-      @for (option of options(); track option.value) {
-        <button
-          type="button"
-          [attr.aria-pressed]="value() === option.value"
-          [class.selected]="value() === option.value"
-          (click)="value.set(option.value)"
-        >
-          {{ option.label }}
-        </button>
-      }
-    </div>
-  `,
+  templateUrl: './choice-group.component.html',
   styles: [
     `
       div {

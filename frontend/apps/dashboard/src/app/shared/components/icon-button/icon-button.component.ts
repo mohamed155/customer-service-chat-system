@@ -5,11 +5,7 @@ import { TuiIcon } from '@taiga-ui/core';
   selector: 'app-icon-button',
   imports: [TuiIcon],
   host: { '[class.active]': 'active()' },
-  template: `
-    <button type="button" [attr.aria-label]="label()">
-      <tui-icon [icon]="icon()" />
-    </button>
-  `,
+  templateUrl: './icon-button.component.html',
   styles: [
     `
       :host {

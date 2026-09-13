@@ -1,0 +1,64 @@
+<app-dialog-shell variant="drawer-right" [open]="open()" (dismiss)="closed.emit()">
+  @if (entry(); as e) {
+    <div class="drawer-header">
+      <h2 class="drawer-title">Audit Entry</h2>
+      <button type="button" class="close-btn" (click)="closed.emit()" aria-label="Close">
+        &times;
+      </button>
+    </div>
+
+    <dl class="def-list">
+      <div class="def-row">
+        <dt>Time</dt>
+        <dd>{{ e.createdAt | date: 'medium' }}</dd>
+      </div>
+      <div class="def-row">
+        <dt>Actor</dt>
+        <dd>
+          @if (e.actor.kind === 'system') {
+            <span>System</span>
+          } @else {
+            <span>{{ e.actor.displayName }}</span>
+            @if (e.actor.isPlatformStaff) {
+              <span class="badge badge-staff">Platform staff</span>
+            }
+            @if (e.actor.deleted) {
+              <span class="badge badge-deleted">deleted</span>
+            }
+          }
+        </dd>
+      </div>
+      <div class="def-row">
+        <dt>Action</dt>
+        <dd>
+          <code>{{ e.action }}</code>
+        </dd>
+      </div>
+      <div class="def-row">
+        <dt>Category</dt>
+        <dd>{{ e.category }}</dd>
+      </div>
+      <div class="def-row">
+        <dt>Target type</dt>
+        <dd>{{ e.resourceType }}</dd>
+      </div>
+      <div class="def-row">
+        <dt>Target ID</dt>
+        <dd>
+          <code>{{ e.resourceId }}</code>
+        </dd>
+      </div>
+      @if (e.tenantId) {
+        <div class="def-row">
+          <dt>Tenant</dt>
+          <dd>
+            <code>{{ e.tenantId }}</code>
+          </dd>
+        </div>
+      }
+    </dl>
+
+    <h3 class="meta-heading">Metadata</h3>
+    <pre class="meta-json">{{ e.details | json }}</pre>
+  }
+</app-dialog-shell>

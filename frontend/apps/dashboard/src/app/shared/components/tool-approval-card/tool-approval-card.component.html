@@ -1,0 +1,60 @@
+<article class="approval-card" [class.resolved]="isResolved()">
+  <div class="card-header">
+    <span class="tool-name">{{ request().toolName }}</span>
+    <span class="status-badge" [class.active]="!isResolved()" [class.settled]="isResolved()">
+      {{ isResolved() ? request().status : 'pending approval' }}
+    </span>
+  </div>
+
+  <div class="card-body">
+    <div class="args-section">
+      <span class="label">Arguments:</span>
+      <pre class="args-json">{{ request().arguments | json }}</pre>
+    </div>
+
+    @if (request().expiresAt && !isResolved()) {
+      <div class="expiry-section">
+        <span class="label">Expires:</span>
+        <span class="countdown">{{ expiryText() }}</span>
+      </div>
+    }
+  </div>
+
+  @if (!isResolved()) {
+    <div class="card-actions">
+      <button
+        type="button"
+        class="btn btn-approve"
+        (click)="onApprove()"
+        [disabled]="actionInProgress()"
+      >
+        Approve
+      </button>
+      <button type="button" class="btn btn-deny" (click)="onDeny()" [disabled]="actionInProgress()">
+        Deny
+      </button>
+    </div>
+  } @else {
+    <div class="resolved-state">
+      @if (request().status === 'approved') {
+        <span class="resolved-text approved">Approved — tool will execute</span>
+      } @else if (request().status === 'denied') {
+        <span class="resolved-text denied">Denied</span>
+      } @else if (request().status === 'expired') {
+        <span class="resolved-text expired">Expired — no decision was made in time</span>
+      } @else if (request().status === 'cancelled') {
+        <span class="resolved-text cancelled">Cancelled</span>
+      } @else if (request().status === 'succeeded') {
+        <span class="resolved-text succeeded">Executed successfully</span>
+      } @else if (request().status === 'failed' || request().status === 'timed_out') {
+        <span class="resolved-text failed">Execution failed</span>
+      } @else {
+        <span class="resolved-text">{{ request().status }}</span>
+      }
+    </div>
+  }
+
+  @if (request().error; as err) {
+    <p class="error-detail">{{ err }}</p>
+  }
+</article>

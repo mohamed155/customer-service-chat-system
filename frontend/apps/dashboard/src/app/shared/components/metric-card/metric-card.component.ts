@@ -16,21 +16,7 @@ export interface MetricCardData {
 @Component({
   selector: 'app-metric-card',
   imports: [DashboardCardComponent, SparklineComponent, TuiIcon],
-  template: `
-    <app-dashboard-card>
-      <div class="metric-head">
-        <span class="icon"><tui-icon [icon]="metric().icon" /></span>
-        @if (metric().delta) {
-          <span [class]="deltaClass()">{{ metric().delta }}</span>
-        }
-      </div>
-      <p>{{ metric().label }}</p>
-      <strong>{{ metric().value }}</strong>
-      @if (metric().trend?.length) {
-        <app-sparkline [points]="metric().trend ?? []" [colorToken]="sparkColor()" />
-      }
-    </app-dashboard-card>
-  `,
+  templateUrl: './metric-card.component.html',
   styles: [
     `
       :host {

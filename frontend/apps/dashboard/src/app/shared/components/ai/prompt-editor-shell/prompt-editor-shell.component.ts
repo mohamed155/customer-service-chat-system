@@ -2,19 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, model } from '@ang
 
 @Component({
   selector: 'app-prompt-editor-shell',
-  template: `
-    <div class="gutter">
-      @for (line of lines(); track line) {
-        <span>{{ line }}</span>
-      }
-    </div>
-    <textarea
-      [attr.aria-label]="label()"
-      [value]="value()"
-      (input)="updateValue($event)"
-      spellcheck="false"
-    ></textarea>
-  `,
+  templateUrl: './prompt-editor-shell.component.html',
   styles: [
     `
       :host {

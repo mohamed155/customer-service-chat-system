@@ -5,12 +5,7 @@ import { TuiIcon } from '@taiga-ui/core';
   selector: 'app-health-indicator',
   standalone: true,
   imports: [TuiIcon],
-  template: `
-    <span class="indicator" [class]="colorClass()">
-      <tui-icon [icon]="iconName()" />
-      <span>{{ label() }}</span>
-    </span>
-  `,
+  templateUrl: './health-indicator.component.html',
   styles: [
     `
       .indicator {

@@ -19,54 +19,7 @@ import { TenantSummary } from '../../core/api/tenant-api.models';
 @Component({
   selector: 'app-tenant-switcher',
   imports: [FormsModule, TuiIcon],
-  template: `
-    <div class="switcher">
-      <button
-        type="button"
-        class="trigger"
-        (click)="toggle()"
-        [attr.aria-expanded]="open()"
-        aria-haspopup="listbox"
-        aria-label="Switch tenant"
-      >
-        <tui-icon icon="@tui.building" />
-        <span class="name">{{ activeTenant()?.name ?? 'Select tenant...' }}</span>
-        <tui-icon icon="@tui.chevron-down" [style.rotate]="open() ? '180deg' : '0deg'" />
-      </button>
-
-      @if (open()) {
-        <div class="dropdown" role="listbox">
-          <label class="search-label">
-            <tui-icon icon="@tui.search" class="search-icon" />
-            <input
-              class="search-input"
-              type="search"
-              #searchInput
-              placeholder="Search tenants..."
-              [(ngModel)]="query"
-            />
-          </label>
-          <div class="list">
-            @for (tenant of filteredTenants(); track tenant.id) {
-              <button
-                type="button"
-                class="option"
-                role="option"
-                [class.active]="tenant.id === activeTenant()?.id"
-                [attr.aria-selected]="tenant.id === activeTenant()?.id"
-                (click)="select(tenant)"
-              >
-                <span class="option-name">{{ tenant.name }}</span>
-                <span class="option-slug">{{ tenant.slug }}</span>
-              </button>
-            } @empty {
-              <div class="empty">No tenants found</div>
-            }
-          </div>
-        </div>
-      }
-    </div>
-  `,
+  templateUrl: './tenant-switcher.component.html',
   styles: [
     `
       .switcher {

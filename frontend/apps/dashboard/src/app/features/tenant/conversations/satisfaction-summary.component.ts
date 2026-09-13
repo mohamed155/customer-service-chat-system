@@ -3,20 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 @Component({
   selector: 'app-satisfaction-summary',
   standalone: true,
-  template: `
-    @if (feedbackCount() > 0) {
-      <div class="summary-card">
-        <span class="average">{{ averageDisplay() }}</span>
-        <span class="caption"
-          >from {{ feedbackCount() }} rating{{ feedbackCount() === 1 ? '' : 's' }}</span
-        >
-      </div>
-    } @else {
-      <div class="summary-card empty">
-        <span class="caption">No ratings yet</span>
-      </div>
-    }
-  `,
+  templateUrl: './satisfaction-summary.component.html',
   styles: [
     `
       .summary-card {

@@ -5,14 +5,7 @@ import { APP_PATHS } from '../../core/router/app-paths';
 @Component({
   selector: 'app-not-found',
   imports: [RouterLink],
-  template: `<main>
-    <section>
-      <span>404</span>
-      <h1>Page not found</h1>
-      <p>The route you opened does not map to a Helix workspace screen.</p>
-      <a [routerLink]="homeUrl">Return to overview</a>
-    </section>
-  </main>`,
+  templateUrl: './not-found.component.html',
   styles: [
     `
       main {

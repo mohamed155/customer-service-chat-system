@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 @Component({
   selector: 'app-ai-confidence-badge',
   host: { '[class.low]': 'confidence() < 0.75' },
-  template: `AI {{ percent() }}%`,
+  templateUrl: './ai-confidence-badge.component.html',
   styles: [
     `
       :host {

@@ -4,12 +4,7 @@ import { TuiIcon } from '@taiga-ui/core';
 @Component({
   selector: 'app-empty-state',
   imports: [TuiIcon],
-  template: `
-    <div class="icon"><tui-icon [icon]="icon()" /></div>
-    <h2>{{ title() }}</h2>
-    <p>{{ description() }}</p>
-    <div class="actions"><ng-content /></div>
-  `,
+  templateUrl: './empty-state.component.html',
   styles: [
     `
       :host {

@@ -4,22 +4,7 @@ import { TuiIcon } from '@taiga-ui/core';
 @Component({
   selector: 'app-search-input',
   imports: [TuiIcon],
-  template: `
-    <label>
-      <span class="sr-only">{{ placeholder() }}</span>
-      <tui-icon icon="@tui.search" />
-      <input
-        type="search"
-        [placeholder]="placeholder()"
-        [value]="value()"
-        (input)="updateValue($event)"
-        (keydown.enter)="searchSubmit.emit(value())"
-      />
-      @if (shortcutHint()) {
-        <kbd>{{ shortcutHint() }}</kbd>
-      }
-    </label>
-  `,
+  templateUrl: './search-input.component.html',
   styles: [
     `
       :host {

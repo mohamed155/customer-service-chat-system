@@ -1,0 +1,128 @@
+<app-page-container>
+  <app-page-header title="Tenants" description="Manage customer organizations">
+    <a
+      *appHasPermission="'platform.tenants.manage'"
+      class="new-link"
+      [routerLink]="[
+        '/',
+        APP_PATHS.platform.base,
+        APP_PATHS.platform.tenants,
+        APP_PATHS.platform.newTenant,
+      ]"
+    >
+      New tenant
+    </a>
+  </app-page-header>
+
+  <div class="toolbar">
+    <app-search-input
+      placeholder="Search by name or slug"
+      [value]="searchInput()"
+      (valueChange)="onSearchChange($event)"
+    />
+    <select
+      class="status-filter"
+      [value]="statusFilter() ?? ''"
+      (change)="onStatusFilterChange($event)"
+      aria-label="Status filter"
+    >
+      <option value="">All statuses</option>
+      <option value="active">Active</option>
+      <option value="suspended">Suspended</option>
+    </select>
+  </div>
+
+  @if (store.loading()) {
+    <app-loading-state />
+  } @else if (store.status() === 'error') {
+    <app-empty-state
+      icon="@tui.alert-circle"
+      title="Something went wrong"
+      description="We couldn't load the tenants. Please try again."
+    >
+      <button type="button" class="primary-button" (click)="retry()">Try again</button>
+    </app-empty-state>
+  } @else if (store.items().length === 0 && (searchInput() || statusFilter())) {
+    <app-empty-state
+      icon="@tui.search-x"
+      title="No tenants match"
+      description="Try adjusting your search or filters."
+    >
+      <button type="button" class="primary-button" (click)="clearFilters()">Clear filters</button>
+    </app-empty-state>
+  } @else if (store.items().length === 0) {
+    <app-empty-state
+      icon="@tui.users"
+      title="No tenants yet"
+      description="Customer organizations will appear here once they are created."
+    >
+      <a
+        *appHasPermission="'platform.tenants.manage'"
+        class="primary-button"
+        [routerLink]="[
+          '/',
+          APP_PATHS.platform.base,
+          APP_PATHS.platform.tenants,
+          APP_PATHS.platform.newTenant,
+        ]"
+      >
+        New tenant
+      </a>
+    </app-empty-state>
+  } @else {
+    <app-data-table>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Slug</th>
+            <th>Status</th>
+            <th>Plan</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (tenant of store.items(); track tenant.id) {
+            <tr>
+              <td>
+                <a
+                  class="name-link"
+                  [routerLink]="[
+                    '/',
+                    APP_PATHS.platform.base,
+                    APP_PATHS.platform.tenants,
+                    tenant.id,
+                  ]"
+                >
+                  {{ tenant.name }}
+                </a>
+              </td>
+              <td class="muted">{{ tenant.slug }}</td>
+              <td>
+                <app-status-badge
+                  [status]="tenant.status"
+                  [tone]="tenant.status === 'active' ? 'green' : 'neutral'"
+                />
+              </td>
+              <td class="muted">{{ tenant.plan }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </app-data-table>
+    @if (store.hasMore()) {
+      <div class="load-more">
+        @if (store.loadMoreError(); as err) {
+          <div class="load-more-error" role="alert">{{ err.message }}</div>
+        }
+        <button
+          type="button"
+          class="load-more-button"
+          (click)="store.loadMore()"
+          [disabled]="store.loadingMore()"
+        >
+          {{ store.loadingMore() ? 'Loading…' : 'Load more' }}
+        </button>
+      </div>
+    }
+  }
+</app-page-container>

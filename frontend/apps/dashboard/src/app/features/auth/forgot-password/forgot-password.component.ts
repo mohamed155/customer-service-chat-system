@@ -6,15 +6,7 @@ import { AuthCardComponent } from '../auth-card/auth-card.component';
 @Component({
   selector: 'app-forgot-password',
   imports: [AuthCardComponent, RouterLink],
-  template: `
-    <app-auth-card title="Reset password" subtitle="Send a reset link to your workspace email">
-      <form (submit)="$event.preventDefault()">
-        <label>Email<input type="email" autocomplete="email" /></label>
-        <button type="submit">Send reset link</button>
-      </form>
-      <span auth-footer><a [routerLink]="loginUrl">Back to sign in</a></span>
-    </app-auth-card>
-  `,
+  templateUrl: './forgot-password.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ForgotPasswordComponent {

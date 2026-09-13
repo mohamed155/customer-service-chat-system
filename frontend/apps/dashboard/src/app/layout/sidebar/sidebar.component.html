@@ -1,0 +1,151 @@
+<aside>
+  <div class="brand" aria-label="Helix Support AI">
+    <span class="logo"><tui-icon icon="@tui.sparkles" /></span>
+    @if (!collapsed()) {
+      <div>
+        <strong>Helix</strong>
+        <span>Support AI</span>
+      </div>
+    }
+  </div>
+
+  <nav aria-label="Primary navigation">
+    @if (
+      permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.overview]) ||
+      permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.conversations]) ||
+      permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.escalations]) ||
+      permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.customers]) ||
+      permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.team])
+    ) {
+      <app-sidebar-nav-group label="Workspace" [collapsed]="collapsed()">
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.overview])) {
+          <app-sidebar-nav-item
+            icon="@tui.layout-dashboard"
+            label="Overview"
+            [link]="links.overview"
+            [collapsed]="collapsed()"
+          />
+        }
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.conversations])) {
+          <app-sidebar-nav-item
+            icon="@tui.messages-square"
+            label="Conversations"
+            [link]="links.conversations"
+            [collapsed]="collapsed()"
+            [badgeCount]="6"
+          />
+        }
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.escalations])) {
+          <app-sidebar-nav-item
+            icon="@tui.arrow-up-from-line"
+            label="Escalations"
+            [link]="links.escalations"
+            [collapsed]="collapsed()"
+          />
+        }
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.customers])) {
+          <app-sidebar-nav-item
+            icon="@tui.users"
+            label="Customers"
+            [link]="links.customers"
+            [collapsed]="collapsed()"
+          />
+        }
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.team])) {
+          <app-sidebar-nav-item
+            icon="@tui.badge-check"
+            label="Team"
+            [link]="links.team"
+            [collapsed]="collapsed()"
+          />
+        }
+      </app-sidebar-nav-group>
+    }
+
+    @if (
+      permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.aiAgent]) ||
+      permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase]) ||
+      permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.integrations]) ||
+      permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.widgets])
+    ) {
+      <app-sidebar-nav-group label="AI" [collapsed]="collapsed()">
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.aiAgent])) {
+          <app-sidebar-nav-item
+            icon="@tui.bot"
+            label="AI Agent"
+            [link]="links.aiAgent"
+            [collapsed]="collapsed()"
+          />
+        }
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase])) {
+          <app-sidebar-nav-item
+            icon="@tui.book-open"
+            label="Knowledge Base"
+            [link]="links.knowledgeBase"
+            [collapsed]="collapsed()"
+          />
+        }
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.integrations])) {
+          <app-sidebar-nav-item
+            icon="@tui.plug"
+            label="Integrations"
+            [link]="links.integrations"
+            [collapsed]="collapsed()"
+          />
+        }
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.widgets])) {
+          <app-sidebar-nav-item
+            icon="@tui.message-square"
+            label="Chat Widget"
+            [link]="links.widgets"
+            [collapsed]="collapsed()"
+          />
+        }
+      </app-sidebar-nav-group>
+    }
+
+    @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.analytics])) {
+      <app-sidebar-nav-group label="Insights" [collapsed]="collapsed()">
+        <app-sidebar-nav-item
+          icon="@tui.chart-line"
+          label="Analytics"
+          [link]="links.analytics"
+          [collapsed]="collapsed()"
+        />
+      </app-sidebar-nav-group>
+    }
+
+    @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.auditLogs])) {
+      <app-sidebar-nav-group label="Security" [collapsed]="collapsed()">
+        <app-sidebar-nav-item
+          icon="@tui.scroll-text"
+          label="Audit Logs"
+          [link]="links.auditLogs"
+          [collapsed]="collapsed()"
+        />
+      </app-sidebar-nav-group>
+    }
+
+    @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.billing])) {
+      <app-sidebar-nav-group label="Billing" [collapsed]="collapsed()">
+        <app-sidebar-nav-item
+          icon="@tui.receipt"
+          label="Billing"
+          [link]="links.billing"
+          [collapsed]="collapsed()"
+        />
+      </app-sidebar-nav-group>
+    }
+
+    @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.settings])) {
+      <app-sidebar-nav-group label="Settings" [collapsed]="collapsed()">
+        <app-sidebar-nav-item
+          icon="@tui.settings"
+          label="Settings"
+          [link]="links.settings"
+          [collapsed]="collapsed()"
+        />
+      </app-sidebar-nav-group>
+    }
+  </nav>
+</aside>

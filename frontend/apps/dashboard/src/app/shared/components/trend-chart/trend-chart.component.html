@@ -1,0 +1,54 @@
+<svg
+  [attr.viewBox]="viewBox()"
+  preserveAspectRatio="none"
+  role="img"
+  [attr.aria-label]="ariaLabel()"
+>
+  @for (segment of segments(); track $index) {
+    <polyline
+      [attr.points]="segment.points"
+      [attr.stroke]="segment.stroke"
+      stroke-width="2"
+      fill="none"
+      vector-effect="non-scaling-stroke"
+    />
+  }
+  @for (rect of tooltipRects(); track $index) {
+    <rect [attr.x]="rect.x" [attr.width]="rect.width" y="0" height="40" fill="transparent">
+      <title>{{ rect.label }}</title>
+    </rect>
+  }
+</svg>
+@if (series().length > 1) {
+  <ul class="legend" role="list">
+    @for (s of series(); track s.id) {
+      <li>
+        <span class="swatch" [style.background]="'var(--app-' + s.color + ')'"></span>
+        <span class="label">{{ s.label }}</span>
+      </li>
+    }
+  </ul>
+}
+<table class="sr-only" role="table">
+  <caption>
+    Chart data
+  </caption>
+  <thead>
+    <tr>
+      <th scope="col">{{ valueLabel() }}</th>
+      @for (s of series(); track s.id) {
+        <th scope="col">{{ s.label }}</th>
+      }
+    </tr>
+  </thead>
+  <tbody>
+    @for (label of labels(); track $index; let i = $index) {
+      <tr>
+        <th scope="row">{{ label }}</th>
+        @for (s of series(); track s.id) {
+          <td>{{ formatPoint(s.points[i]) }}</td>
+        }
+      </tr>
+    }
+  </tbody>
+</table>

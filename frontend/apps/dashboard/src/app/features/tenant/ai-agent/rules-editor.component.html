@@ -1,0 +1,88 @@
+<section class="section">
+  <h3 class="heading">Business Rules</h3>
+  <p class="subtitle">Guidelines the AI follows when responding</p>
+
+  <div class="rule-list">
+    @for (rule of businessRules(); track $index; let i = $index) {
+      <div class="rule-row">
+        <input [ngModel]="rule" (ngModelChange)="updateBusinessRule(i, $event)" />
+        <app-button variant="danger" size="sm" (pressed)="removeBusinessRule(i)">
+          Remove
+        </app-button>
+      </div>
+    }
+  </div>
+
+  <app-button variant="ghost" size="sm" (pressed)="addBusinessRule()"> + Add rule </app-button>
+</section>
+
+<section class="section">
+  <h3 class="heading">Escalation Rules</h3>
+  <p class="subtitle">When and how to transfer to a human agent</p>
+
+  <div class="rule-list">
+    @for (rule of escalationRules(); track $index; let i = $index) {
+      <fieldset class="escalation-rule">
+        <legend>
+          Escalation {{ i + 1 }}
+          <app-button variant="danger" size="sm" (pressed)="removeEscalationRule(i)">
+            Remove
+          </app-button>
+        </legend>
+
+        @for (ref of rule.brokenSkillRefs ?? []; track ref) {
+          <app-inline-alert tone="error"> Unknown skill reference: {{ ref }} </app-inline-alert>
+        }
+
+        <label class="field">
+          Name
+          <input [ngModel]="rule.name" (ngModelChange)="updateEscalationName(i, $event)" />
+        </label>
+
+        <fieldset class="radio-group">
+          <legend>Trigger</legend>
+          <label class="radio">
+            <input
+              type="radio"
+              name="trigger-{{ i }}"
+              value="human_request"
+              [checked]="rule.trigger === 'human_request'"
+              (change)="updateEscalationTrigger(i, 'human_request')"
+            />
+            Human request
+          </label>
+          <label class="radio">
+            <input
+              type="radio"
+              name="trigger-{{ i }}"
+              value="topic_keywords"
+              [checked]="rule.trigger === 'topic_keywords'"
+              (change)="updateEscalationTrigger(i, 'topic_keywords')"
+            />
+            Topic keywords
+          </label>
+        </fieldset>
+
+        <label class="field">
+          Keywords (comma separated)
+          <input
+            [ngModel]="rule.keywords.join(', ')"
+            (ngModelChange)="updateEscalationKeywords(i, $event)"
+          />
+        </label>
+
+        <label class="field">
+          Required Skill IDs (comma separated)
+          <input
+            [ngModel]="rule.requiredSkillIds.join(', ')"
+            (ngModelChange)="updateEscalationSkills(i, $event)"
+          />
+        </label>
+      </fieldset>
+    }
+  </div>
+
+  <app-button variant="ghost" size="sm" (pressed)="addEscalationRule()">
+    + Add escalation rule
+  </app-button>
+</section>

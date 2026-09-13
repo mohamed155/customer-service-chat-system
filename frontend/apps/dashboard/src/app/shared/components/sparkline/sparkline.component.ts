@@ -2,11 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 
 @Component({
   selector: 'app-sparkline',
-  template: `
-    <svg aria-hidden="true" viewBox="0 0 100 32" preserveAspectRatio="none">
-      <polyline [attr.points]="polyline()" [attr.stroke]="stroke()" />
-    </svg>
-  `,
+  templateUrl: './sparkline.component.html',
   styles: [
     `
       :host {

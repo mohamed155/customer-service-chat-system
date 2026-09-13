@@ -2,18 +2,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 
 @Component({
   selector: 'app-button',
-  template: `
-    <button
-      [attr.type]="type()"
-      [class]="variant()"
-      [class.sm]="size() === 'sm'"
-      [disabled]="disabled()"
-      [attr.aria-label]="ariaLabel()"
-      (click)="pressed.emit($event)"
-    >
-      <ng-content />
-    </button>
-  `,
+  templateUrl: './button.component.html',
   styles: [
     `
       :host {

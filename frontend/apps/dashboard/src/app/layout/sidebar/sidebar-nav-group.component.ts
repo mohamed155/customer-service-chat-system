@@ -3,12 +3,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 @Component({
   selector: 'app-sidebar-nav-group',
   host: { '[class.collapsed]': 'collapsed()' },
-  template: `
-    @if (!collapsed()) {
-      <p>{{ label() }}</p>
-    }
-    <div><ng-content /></div>
-  `,
+  templateUrl: './sidebar-nav-group.component.html',
   styles: [
     `
       :host {

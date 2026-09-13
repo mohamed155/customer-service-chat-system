@@ -4,25 +4,7 @@ import { PromptVariable } from '../../../../core/api/ai-agent.models';
 @Component({
   selector: 'app-variables-panel',
   standalone: true,
-  template: `
-    <div class="variables-panel">
-      <h3 class="panel-title">Available Variables</h3>
-      <p class="panel-hint">Click a variable to insert it at the cursor position.</p>
-      <div class="variable-list">
-        @for (v of variables(); track v.name) {
-          <button
-            type="button"
-            class="variable-chip"
-            (click)="insertVariable.emit(v.name)"
-            [attr.title]="v.description"
-          >
-            <span class="var-name">{{ '{{' }}{{ v.name }}{{ '}}' }}</span>
-            <span class="var-sample">{{ v.sample }}</span>
-          </button>
-        }
-      </div>
-    </div>
-  `,
+  templateUrl: './variables-panel.component.html',
   styles: [
     `
       .variables-panel {

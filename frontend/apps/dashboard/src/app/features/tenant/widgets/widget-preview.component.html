@@ -1,0 +1,61 @@
+<div class="preview-container">
+  <div
+    class="preview-phone"
+    [style.--wgt-primary]="formState().primaryColor || '#0066FF'"
+    [attr.data-wgt-theme]="formState().theme || 'light'"
+  >
+    @if (formState().enabled !== false) {
+      <button
+        class="wgt-launcher"
+        [style.background]="formState().primaryColor || '#0066FF'"
+        [style.bottom-right]="formState().position === 'bottom-left' ? undefined : '20px'"
+        [style.bottom-left]="formState().position === 'bottom-left' ? '20px' : undefined"
+        aria-label="Open chat"
+      >
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="white"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      </button>
+    }
+    <div class="wgt-window">
+      <div class="wgt-header" [style.background]="formState().primaryColor || '#0066FF'">
+        <span class="wgt-header-name">{{
+          formState().displayName || formState().name || 'Chat'
+        }}</span>
+        <button class="wgt-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="wgt-messages">
+        <div class="wgt-bubble wgt-bubble-assistant">
+          {{ formState().welcomeMessage || 'Hello! How can we help you today?' }}
+        </div>
+      </div>
+      <div class="wgt-composer">
+        <input class="wgt-input" type="text" placeholder="Type a message..." disabled value="" />
+        <button class="wgt-send-btn" disabled>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

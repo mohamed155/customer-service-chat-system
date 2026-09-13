@@ -4,11 +4,7 @@ import { TuiIcon } from '@taiga-ui/core';
 @Component({
   selector: 'app-ai-suggestion-card',
   imports: [TuiIcon],
-  template: `
-    <div class="head"><tui-icon icon="@tui.sparkles" /><strong>Suggested reply</strong></div>
-    <p>{{ suggestion() }}</p>
-    <div class="actions"><ng-content /></div>
-  `,
+  templateUrl: './ai-suggestion-card.component.html',
   styles: [
     `
       :host {

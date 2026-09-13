@@ -1,0 +1,15 @@
+<a
+  [routerLink]="link()"
+  routerLinkActive="active"
+  [routerLinkActiveOptions]="{ exact: true }"
+  ariaCurrentWhenActive="page"
+  [attr.aria-label]="collapsed() ? label() : null"
+>
+  <tui-icon [icon]="icon()" />
+  @if (!collapsed()) {
+    <span class="label">{{ label() }}</span>
+    @if (badgeCount()) {
+      <span class="badge">{{ badgeCount() }}</span>
+    }
+  }
+</a>

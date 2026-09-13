@@ -14,54 +14,7 @@ function stateClass(state: string): string {
 @Component({
   selector: 'app-notification-list',
   imports: [TuiIcon, EmptyStateComponent, LoadingStateComponent],
-  template: `
-    @if (loading() && items().length === 0) {
-      <app-loading-state />
-    } @else if (items().length === 0) {
-      <app-empty-state
-        icon="@tui.bell-off"
-        title="No notifications"
-        description="You're all caught up."
-      />
-    } @else {
-      <div class="list" role="listbox">
-        @for (item of items(); track item.id) {
-          <div
-            class="item {{ stateClass(item.state) }}"
-            role="option"
-            [attr.aria-selected]="false"
-            tabindex="0"
-            (click)="handleItemClick(item)"
-            (keydown.enter)="handleItemClick(item)"
-          >
-            <div class="item-content">
-              <div class="item-header">
-                <span class="item-title">{{ item.title }}</span>
-                <span class="item-time">{{ relativeTime(item.createdAt) }}</span>
-              </div>
-              @if (item.body; as body) {
-                <p class="item-body">{{ body }}</p>
-              }
-              @if (item.state === 'unread') {
-                <button
-                  type="button"
-                  class="mark-read-btn"
-                  (click)="$event.stopPropagation(); markRead.emit(item.id)"
-                >
-                  <tui-icon icon="@tui.check" />
-                  Mark read
-                </button>
-              }
-            </div>
-            <tui-icon class="item-icon" [icon]="iconForKind(item.kind)" />
-          </div>
-        }
-      </div>
-      @if (hasMore()) {
-        <button type="button" class="load-more" (click)="loadMore.emit()">Load more</button>
-      }
-    }
-  `,
+  templateUrl: './notification-list.component.html',
   styles: [
     `
       .list {

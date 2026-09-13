@@ -2,13 +2,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 @Component({
   selector: 'app-inline-alert',
-  template: `<p
-    [class]="tone()"
-    [attr.role]="tone() === 'error' ? 'alert' : 'status'"
-    [attr.aria-live]="tone() === 'error' ? 'assertive' : 'polite'"
-  >
-    <ng-content />
-  </p>`,
+  templateUrl: './inline-alert.component.html',
   styles: [
     `
       p {

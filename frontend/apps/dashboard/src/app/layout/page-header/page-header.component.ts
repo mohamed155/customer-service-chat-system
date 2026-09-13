@@ -2,17 +2,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 @Component({
   selector: 'app-page-header',
-  template: `<div class="page-header">
-    <div>
-      <div class="header-text">
-        <h1>{{ title() }}</h1>
-        @if (description(); as desc) {
-          <p class="description">{{ desc }}</p>
-        }
-      </div>
-      <ng-content />
-    </div>
-  </div>`,
+  templateUrl: './page-header.component.html',
   styles: [
     `
       .page-header {

@@ -8,62 +8,7 @@ import { PermissionsService } from '../../../core/authz/permissions.service';
 @Component({
   selector: 'app-skills-manager',
   imports: [TuiIcon, FormsModule],
-  template: `
-    <div class="skills-manager">
-      <div class="header">
-        <h3>Skill Catalog</h3>
-        @if (canManage()) {
-          <div class="add-form">
-            <input
-              #newName
-              type="text"
-              placeholder="New skill name"
-              (keydown.enter)="addSkill(newName.value); newName.value = ''"
-            />
-            <button
-              type="button"
-              class="add-btn"
-              (click)="addSkill(newName.value); newName.value = ''"
-            >
-              <tui-icon icon="@tui.plus" />
-            </button>
-          </div>
-        }
-      </div>
-      <ul class="skill-list">
-        @for (skill of skills(); track skill.id) {
-          <li class="skill-item">
-            @if (editingId() === skill.id) {
-              <input
-                #editInput
-                [value]="skill.name"
-                (keydown.enter)="renameSkill(skill.id, editInput.value)"
-                (keydown.escape)="editingId.set(null)"
-                (blur)="renameSkill(skill.id, editInput.value)"
-              />
-            } @else {
-              <span class="skill-name" (dblclick)="startEdit(skill.id)">{{ skill.name }}</span>
-            }
-            <span class="skill-count"
-              >{{ skill.agentCount }} agent{{ skill.agentCount === 1 ? '' : 's' }}</span
-            >
-            @if (canManage()) {
-              <button
-                type="button"
-                class="delete-btn"
-                [attr.aria-label]="'Delete skill ' + skill.name"
-                (click)="deleteSkill(skill.id)"
-              >
-                <tui-icon icon="@tui.trash" />
-              </button>
-            }
-          </li>
-        } @empty {
-          <li class="empty">No skills defined yet.</li>
-        }
-      </ul>
-    </div>
-  `,
+  templateUrl: './skills-manager.component.html',
   styles: [
     `
       .skills-manager {

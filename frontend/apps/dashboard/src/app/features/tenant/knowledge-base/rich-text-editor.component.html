@@ -1,0 +1,6 @@
+<tui-editor
+  [ngModel]="value()"
+  (ngModelChange)="value.set($event)"
+  [tools]="tools"
+  [placeholder]="placeholder()"
+/>

@@ -2,15 +2,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 @Component({
   selector: 'app-section-header',
-  template: `
-    <div>
-      <h2>{{ title() }}</h2>
-      @if (subtitle()) {
-        <p>{{ subtitle() }}</p>
-      }
-    </div>
-    <div class="actions"><ng-content /></div>
-  `,
+  templateUrl: './section-header.component.html',
   styles: [
     `
       :host {

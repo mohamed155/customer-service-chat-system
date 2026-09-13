@@ -8,37 +8,7 @@ export type AvatarValue = { kind: 'preset'; preset: string } | { kind: 'upload' 
   selector: 'app-avatar-picker',
   standalone: true,
   imports: [ButtonComponent, InlineAlertComponent],
-  template: `
-    <div class="avatar-picker">
-      <span class="label">Avatar</span>
-
-      <div class="preset-grid">
-        @for (preset of presets(); track preset) {
-          <button
-            type="button"
-            class="preset-btn"
-            [class.selected]="isPresetSelected(preset)"
-            (click)="value.set({ kind: 'preset', preset })"
-          >
-            {{ preset }}
-          </button>
-        }
-      </div>
-
-      <app-button variant="secondary" (pressed)="fileInput.click()"> Upload Image </app-button>
-      <input
-        #fileInput
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        (change)="handleFile($event)"
-        hidden
-      />
-
-      @if (uploadError(); as err) {
-        <app-inline-alert tone="error">{{ err }}</app-inline-alert>
-      }
-    </div>
-  `,
+  templateUrl: './avatar-picker.component.html',
   styles: [
     `
       :host {

@@ -1,0 +1,69 @@
+<app-page-container>
+  <app-page-header title="Analytics" description="Trends across every channel" />
+  <app-toolbar>
+    <div toolbar-start>
+      <app-select-filter
+        label="Date range"
+        [value]="store.preset()"
+        [options]="datePresetOptions"
+        (valueChange)="onPresetChange($event)"
+      />
+      @if (store.preset() === 'custom') {
+        <input type="date" [value]="store.from()" (change)="onFromChange($event)" />
+        <span>to</span>
+        <input type="date" [value]="store.to()" (change)="onToChange($event)" />
+      }
+      <app-select-filter
+        label="Channel"
+        [value]="channelDisplayValue()"
+        [options]="channelOptions"
+        (valueChange)="store.setChannel($event)"
+      />
+    </div>
+  </app-toolbar>
+  @if (store.loading()) {
+    <app-loading-state />
+  } @else if (store.error(); as errMsg) {
+    <app-empty-state icon="@tui.alert-circle" title="Something went wrong" [description]="errMsg">
+      <button type="button" (click)="store.load()">Try again</button>
+    </app-empty-state>
+  } @else if (store.summary(); as summary) {
+    <section class="metrics">
+      @for (card of metricCards(); track card.id) {
+        <app-metric-card [metric]="card" />
+      }
+    </section>
+    @if (store.timeseries(); as timeseries) {
+      <section class="charts">
+        <app-dashboard-card>
+          <app-section-header card-header title="Conversation volume" />
+          <app-trend-chart [series]="[conversationVolumeSeries()]" [labels]="chartLabels()" />
+        </app-dashboard-card>
+        <app-dashboard-card>
+          <app-section-header card-header title="AI resolved vs human handoff" />
+          <app-trend-chart [series]="aiVsHandoffSeries()" [labels]="chartLabels()" />
+        </app-dashboard-card>
+        <app-dashboard-card>
+          <app-section-header card-header title="Satisfaction trend" />
+          <app-trend-chart [series]="[satisfactionSeries()]" [labels]="chartLabels()" />
+        </app-dashboard-card>
+        <app-dashboard-card>
+          <app-section-header card-header title="Token usage" />
+          <app-trend-chart [series]="[tokenSeries()]" [labels]="chartLabels()" />
+        </app-dashboard-card>
+      </section>
+      <section class="breakdown">
+        <app-dashboard-card>
+          <app-section-header card-header title="Channel breakdown" />
+          <app-breakdown-bars [items]="breakdownItems()" />
+        </app-dashboard-card>
+      </section>
+    }
+  } @else {
+    <app-empty-state
+      icon="@tui.chart-line"
+      title="No analytics data"
+      description="Reports and charts will populate as customer interactions are recorded."
+    />
+  }
+</app-page-container>

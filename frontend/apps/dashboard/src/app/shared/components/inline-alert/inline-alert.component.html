@@ -1,0 +1,7 @@
+<p
+  [class]="tone()"
+  [attr.role]="tone() === 'error' ? 'alert' : 'status'"
+  [attr.aria-live]="tone() === 'error' ? 'assertive' : 'polite'"
+>
+  <ng-content />
+</p>

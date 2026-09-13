@@ -2,12 +2,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 @Component({
   selector: 'app-form-field',
-  template: `
-    <div class="field">
-      <label [attr.for]="for()">{{ label() }}</label>
-      <ng-content />
-    </div>
-  `,
+  templateUrl: './form-field.component.html',
   styles: [
     `
       .field {

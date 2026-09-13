@@ -9,29 +9,7 @@ import { NotificationListComponent } from '../../../shared/components/notificati
 @Component({
   selector: 'app-notifications-page',
   imports: [TuiIcon, NotificationListComponent],
-  template: `
-    <div class="page">
-      <div class="page-header">
-        <h2>Notifications</h2>
-        @if (store.unreadCount() > 0) {
-          <button type="button" class="mark-all-btn" (click)="store.markAllRead()">
-            <tui-icon icon="@tui.check-check" />
-            Mark all as read
-          </button>
-        }
-      </div>
-      <div class="page-body">
-        <app-notification-list
-          [items]="store.items()"
-          [loading]="store.loading()"
-          [hasMore]="store.hasMore()"
-          (itemClick)="onItemClick($event)"
-          (markRead)="store.markRead($event)"
-          (loadMore)="store.loadMore()"
-        />
-      </div>
-    </div>
-  `,
+  templateUrl: './notifications-page.component.html',
   styles: [
     `
       .page {

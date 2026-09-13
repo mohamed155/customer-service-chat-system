@@ -1,0 +1,53 @@
+<section [attr.aria-labelledby]="headingId()">
+  <h3 [id]="headingId()">{{ title() }}</h3>
+  <ng-content />
+  <app-data-table>
+    <table>
+      <caption>
+        {{
+          title()
+        }}
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Email</th>
+          <th scope="col">Role</th>
+          <th scope="col">Status</th>
+          <th scope="col">Email delivery</th>
+          <th scope="col">Invited</th>
+          @if (showActions()) {
+            <th scope="col">Actions</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (invitation of invitations(); track invitation.id) {
+          <tr>
+            <td>
+              <strong>{{ invitation.email }}</strong>
+            </td>
+            <td class="role">{{ invitation.role }}</td>
+            <td>
+              <app-status-badge [status]="invitation.status" [tone]="invitationTone(invitation)" />
+            </td>
+            <td>{{ deliveryLabel(invitation) }}</td>
+            <td class="muted">{{ invitation.createdAt | date: 'mediumDate' }}</td>
+            @if (showActions()) {
+              <td>
+                @if (revocableIds().includes(invitation.id)) {
+                  <app-button
+                    variant="danger"
+                    [ariaLabel]="'Revoke invitation for ' + invitation.email"
+                    [disabled]="revokingId() === invitation.id"
+                    (pressed)="revoke.emit(invitation.id)"
+                    >{{ revokingId() === invitation.id ? 'Revoking…' : 'Revoke' }}</app-button
+                  >
+                }
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </app-data-table>
+</section>

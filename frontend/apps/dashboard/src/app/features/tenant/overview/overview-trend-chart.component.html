@@ -1,0 +1,15 @@
+<svg viewBox="0 0 640 260" role="img" aria-label="Conversation trend">
+  <g class="grid">
+    @for (line of gridLines; track line) {
+      <line x1="0" [attr.y1]="line" x2="640" [attr.y2]="line" />
+    }
+  </g>
+  @for (item of series(); track item.id) {
+    <path [attr.d]="path(item.points)" [attr.stroke]="'var(--app-' + item.colorToken + ')'" />
+  }
+</svg>
+<div class="legend">
+  @for (item of series(); track item.id) {
+    <span><i [style.background]="'var(--app-' + item.colorToken + ')'"></i>{{ item.label }}</span>
+  }
+</div>

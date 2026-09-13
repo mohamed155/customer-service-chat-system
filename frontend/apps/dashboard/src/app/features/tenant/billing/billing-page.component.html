@@ -1,0 +1,77 @@
+<div class="page">
+  <h1 class="page-title">Billing</h1>
+
+  @if (store.loading()) {
+    <app-loading-state label="Loading billing overview…" />
+  } @else if (store.error(); as error) {
+    <app-inline-alert tone="error">{{ error }}</app-inline-alert>
+  } @else if (store.overview(); as ov) {
+    @if (ov.aiPaused) {
+      <app-inline-alert tone="warning">{{ aiPausedMessage(ov.aiPausedReason) }}</app-inline-alert>
+    }
+    <div class="grid">
+      <app-dashboard-card>
+        <div card-header>
+          <span class="plan-label">Plan</span>
+        </div>
+        <div class="plan-info">
+          <span class="plan-name">{{ ov.plan.name }}</span>
+          <span class="plan-price">{{ formatCents(ov.plan.monthlyPriceCents) }}/mo</span>
+          <app-status-badge
+            [status]="ov.subscriptionStatus"
+            [tone]="subscriptionTone(ov.subscriptionStatus)"
+          />
+        </div>
+        <div card-footer>
+          <span class="period"
+            >{{ formatDate(ov.period.start) }} – {{ formatDate(ov.period.end) }}</span
+          >
+        </div>
+      </app-dashboard-card>
+
+      <app-dashboard-card
+        [class.warning]="ov.usage.tokens.allowance !== null && ov.usage.tokens.state === 'warning'"
+        [class.exceeded]="
+          ov.usage.tokens.allowance !== null && ov.usage.tokens.state === 'exceeded'
+        "
+      >
+        <div card-header>
+          <span class="metric-title">Tokens</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-value">{{ ov.usage.tokens.used.toLocaleString() }}</span>
+          <span class="metric-divider">/</span>
+          <span class="metric-allowance">{{ metricLabel(ov.usage.tokens.allowance) }}</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" [style.width.%]="ov.usage.tokens.percent ?? 0"></div>
+        </div>
+        <div class="metric-footnote">{{ (ov.usage.tokens.percent ?? 0).toFixed(1) }}% used</div>
+      </app-dashboard-card>
+
+      <app-dashboard-card
+        [class.warning]="
+          ov.usage.conversations.allowance !== null && ov.usage.conversations.state === 'warning'
+        "
+        [class.exceeded]="
+          ov.usage.conversations.allowance !== null && ov.usage.conversations.state === 'exceeded'
+        "
+      >
+        <div card-header>
+          <span class="metric-title">Conversations</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-value">{{ ov.usage.conversations.used.toLocaleString() }}</span>
+          <span class="metric-divider">/</span>
+          <span class="metric-allowance">{{ metricLabel(ov.usage.conversations.allowance) }}</span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" [style.width.%]="ov.usage.conversations.percent ?? 0"></div>
+        </div>
+        <div class="metric-footnote">
+          {{ (ov.usage.conversations.percent ?? 0).toFixed(1) }}% used
+        </div>
+      </app-dashboard-card>
+    </div>
+  }
+</div>

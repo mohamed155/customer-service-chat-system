@@ -7,13 +7,7 @@ export interface SelectFilterOption {
 
 @Component({
   selector: 'app-select-filter',
-  template: `
-    <select [attr.aria-label]="label()" [value]="value()" (change)="onChange($event)">
-      @for (option of options(); track option.value) {
-        <option [value]="option.value">{{ option.label }}</option>
-      }
-    </select>
-  `,
+  templateUrl: './select-filter.component.html',
   styles: [
     `
       :host {

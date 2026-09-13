@@ -4,11 +4,7 @@ import { TuiIcon } from '@taiga-ui/core';
 @Component({
   selector: 'app-knowledge-citation',
   imports: [TuiIcon],
-  template: `
-    @for (title of titles(); track title) {
-      <span><tui-icon icon="@tui.book-open" />{{ title }}</span>
-    }
-  `,
+  templateUrl: './knowledge-citation.component.html',
   styles: [
     `
       :host {

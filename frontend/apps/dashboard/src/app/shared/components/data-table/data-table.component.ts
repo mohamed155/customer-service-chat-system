@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 
 @Component({
   selector: 'app-data-table',
-  template: `<div class="table-wrap"><ng-content /></div>`,
+  templateUrl: './data-table.component.html',
   styles: [
     `
       :host {

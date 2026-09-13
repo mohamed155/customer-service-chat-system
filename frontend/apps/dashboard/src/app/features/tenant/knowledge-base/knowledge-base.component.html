@@ -1,0 +1,164 @@
+<app-page-container>
+  <app-page-header
+    title="Knowledge Base"
+    description="Train your AI with trusted company knowledge"
+  >
+    @if (canManage()) {
+      <a class="new-btn" [routerLink]="APP_PATHS.tenant.knowledgeBaseNew">
+        <tui-icon icon="@tui.plus" />
+        New article
+      </a>
+    }
+  </app-page-header>
+
+  @if (store.loading() && !store.items().length) {
+    <app-loading-state />
+  } @else if (store.error(); as err) {
+    <app-empty-state icon="@tui.alert-circle" title="Something went wrong" [description]="err">
+      <button type="button" (click)="store.loadList()">Try again</button>
+    </app-empty-state>
+  } @else {
+    <app-section-header title="Knowledge articles" subtitle="Trusted sources for AI answers" />
+    <div class="stack">
+      <app-toolbar>
+        <app-search-input toolbar-start placeholder="Search knowledge" [(value)]="query" />
+        @if (canManage()) {
+          <button toolbar-end type="button" class="upload-btn" (click)="uploadOpen.set(true)">
+            <tui-icon icon="@tui.upload" />
+            Upload
+          </button>
+        }
+        <select
+          toolbar-end
+          aria-label="Status filter"
+          [ngModel]="statusFilter()"
+          (ngModelChange)="statusFilter.set($event); onFilterChange()"
+        >
+          <option value="">All statuses</option>
+          <option value="draft">Draft</option>
+          <option value="published">Published</option>
+          <option value="archived">Archived</option>
+        </select>
+        <select
+          toolbar-end
+          aria-label="Category filter"
+          [ngModel]="categoryFilter()"
+          (ngModelChange)="categoryFilter.set($event); onFilterChange()"
+        >
+          <option value="">All categories</option>
+          @for (cat of store.categories(); track cat.id) {
+            <option [value]="cat.id">{{ cat.name }}</option>
+          }
+        </select>
+        <input
+          toolbar-end
+          type="text"
+          aria-label="Tag filter"
+          placeholder="Filter by tag"
+          [ngModel]="tagFilter()"
+          (ngModelChange)="tagFilter.set($event); onFilterChange()"
+        />
+        @if (canManage()) {
+          <button
+            toolbar-end
+            type="button"
+            class="manage-cats-btn"
+            (click)="showCategoryManager.set(true)"
+          >
+            <tui-icon icon="@tui.settings" />
+            Categories
+          </button>
+        }
+      </app-toolbar>
+
+      @if (items().length) {
+        <section class="cards">
+          @for (article of items(); track article.id) {
+            <app-dashboard-card>
+              <div class="article-head">
+                <div>
+                  <strong>{{ article.title }}</strong>
+                  <span>
+                    {{ article.categoryName ?? 'Uncategorized' }}
+                    · Updated {{ article.updatedAt | date: 'mediumDate' }}
+                  </span>
+                </div>
+                <a
+                  class="detail-link"
+                  [routerLink]="APP_PATHS.tenant.knowledgeBaseDetail(article.id)"
+                >
+                  <tui-icon icon="@tui.eye" />
+                </a>
+              </div>
+              <div class="badges">
+                <app-status-badge [status]="article.status" [tone]="statusTone(article.status)" />
+                <app-status-badge [status]="typeLabel(article.itemType)" tone="neutral" />
+                @if (article.indexStatus) {
+                  <app-index-status-badge
+                    [indexStatus]="article.indexStatus"
+                    [title]="indexTooltip(article.indexStatus)"
+                  />
+                }
+                @if (article.tags.length) {
+                  <span class="tag-count">{{ article.tags.length }} tag(s)</span>
+                }
+              </div>
+              @if (canManage()) {
+                <div class="card-actions" card-footer>
+                  <a
+                    class="action-link"
+                    [routerLink]="APP_PATHS.tenant.knowledgeBaseEdit(article.id)"
+                  >
+                    <tui-icon icon="@tui.edit" />
+                    Edit
+                  </a>
+                  <button
+                    type="button"
+                    class="action-link"
+                    [disabled]="
+                      article.status === 'draft' || article.status === 'archived' || store.saving()
+                    "
+                    (click)="store.reindex(article.id)"
+                  >
+                    <tui-icon icon="@tui.refresh-ccw" />
+                    Re-index
+                  </button>
+                </div>
+              }
+            </app-dashboard-card>
+          }
+        </section>
+
+        @if (store.hasMore()) {
+          <div class="load-more">
+            <button type="button" [disabled]="store.loading()" (click)="store.loadMore()">
+              @if (store.loading()) {
+                Loading…
+              } @else {
+                Load more
+              }
+            </button>
+          </div>
+        }
+      } @else if (hasData()) {
+        <app-empty-state
+          icon="@tui.search-x"
+          title="No articles match"
+          description="Adjust the search or category filter to show knowledge sources."
+        />
+      } @else {
+        <app-empty-state
+          icon="@tui.book-open"
+          title="No articles yet"
+          description="Create your first knowledge article to train the AI assistant."
+        />
+      }
+    </div>
+  }
+</app-page-container>
+
+<app-upload-document
+  [open]="uploadOpen()"
+  (completed)="onUploaded()"
+  (closed)="uploadOpen.set(false)"
+/>

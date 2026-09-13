@@ -56,45 +56,7 @@ const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
 @Component({
   selector: 'app-platform-nav',
   imports: [TuiIcon],
-  template: `
-    @if (destinations().length) {
-      <div class="nav">
-        <button
-          type="button"
-          class="trigger"
-          (click)="toggle()"
-          [attr.aria-expanded]="open()"
-          aria-haspopup="menu"
-          aria-label="Platform"
-        >
-          <tui-icon icon="@tui.layout-dashboard" />
-          <span>Platform</span>
-        </button>
-
-        @if (open()) {
-          <div
-            class="dropdown"
-            role="menu"
-            tabindex="-1"
-            (click)="close()"
-            (keydown)="onDropdownKeydown($event)"
-          >
-            @for (dest of destinations(); track dest.path) {
-              <button
-                type="button"
-                class="option"
-                role="menuitem"
-                (click)="navigate(dest)"
-                (keydown.enter)="navigate(dest)"
-              >
-                {{ dest.label }}
-              </button>
-            }
-          </div>
-        }
-      </div>
-    }
-  `,
+  templateUrl: './platform-nav.component.html',
   styles: [
     `
       .nav {

@@ -1,0 +1,185 @@
+<app-page-container>
+  <app-page-header title="Settings" [description]="'Workspace preferences and security'" />
+  @if (page.loading()) {
+    <app-loading-state />
+  } @else if (hasError()) {
+    <app-empty-state
+      icon="@tui.alert-circle"
+      title="Something went wrong"
+      description="We couldn't load this page. Please try again."
+    >
+      <button type="button" (click)="retry()">Try again</button>
+    </app-empty-state>
+  } @else if (hasData()) {
+    <div class="tabs" role="tablist" aria-label="Settings sections">
+      @for (tab of tabs; track tab.id) {
+        <button
+          type="button"
+          role="tab"
+          [class.active]="store.activeTab() === tab.id"
+          [attr.aria-selected]="store.activeTab() === tab.id"
+          (click)="store.setTab(tab.id)"
+        >
+          {{ tab.label }}
+        </button>
+      }
+    </div>
+
+    @switch (store.activeTab()) {
+      @case ('general') {
+        <section class="grid two">
+          <app-dashboard-card>
+            <app-section-header
+              card-header
+              title="Workspace profile"
+              subtitle="Static workspace preferences"
+            />
+            <label>Name<input [value]="pageData()!.profile.name" /></label>
+            <label>Domain<input [value]="pageData()!.profile.domain" /></label>
+            <label>Timezone<input [value]="pageData()!.profile.timezone" /></label>
+            <label>Default language<input [value]="pageData()!.profile.defaultLanguage" /></label>
+          </app-dashboard-card>
+          <app-dashboard-card>
+            <app-section-header
+              card-header
+              title="Theme preference"
+              subtitle="Uses the global app UI action"
+            />
+            <div class="segmented">
+              @for (mode of themeModes; track mode) {
+                <button type="button" (click)="setTheme(mode)">{{ mode }}</button>
+              }
+            </div>
+            <label class="check"><input type="checkbox" checked /> Email notifications</label>
+            <label class="check"><input type="checkbox" checked /> AI quality alerts</label>
+          </app-dashboard-card>
+        </section>
+      }
+      @case ('team') {
+        <app-data-table>
+          <table>
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Role</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (member of pageData()!.team; track member.id) {
+                <tr>
+                  <td>
+                    <div class="person">
+                      <app-avatar [initials]="member.avatarInitials" size="sm" /><span
+                        >{{ member.name }}<small>{{ member.email }}</small></span
+                      >
+                    </div>
+                  </td>
+                  <td><app-status-badge [status]="member.role" tone="accent" /></td>
+                  <td>
+                    <app-status-badge
+                      [status]="member.status"
+                      [tone]="member.status === 'active' ? 'green' : 'amber'"
+                    />
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </app-data-table>
+      }
+      @case ('billing') {
+        <section class="grid two">
+          <app-dashboard-card>
+            <app-section-header card-header title="Usage" subtitle="Current plan limits" />
+            @for (usage of pageData()!.usage; track usage.label) {
+              <div class="usage">
+                <span>{{ usage.label }}</span
+                ><strong>{{ usage.used }} / {{ usage.limit }} {{ usage.unit }}</strong>
+                <div><i [style.width.%]="(usage.used / usage.limit) * 100"></i></div>
+              </div>
+            }
+          </app-dashboard-card>
+          <app-data-table>
+            <table>
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (invoice of pageData()!.invoices; track invoice.id) {
+                  <tr>
+                    <td>{{ invoice.period }}</td>
+                    <td>{{ invoice.amount }}</td>
+                    <td>
+                      <app-status-badge
+                        [status]="invoice.status"
+                        [tone]="invoice.status === 'paid' ? 'green' : 'amber'"
+                      />
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </app-data-table>
+        </section>
+      }
+      @case ('api-keys') {
+        <app-dashboard-card>
+          <app-section-header card-header title="API keys" subtitle="Masked fixture value only" />
+          <label
+            >{{ pageData()!.apiKey.label
+            }}<input class="mono" [value]="pageData()!.apiKey.maskedValue" readonly
+          /></label>
+          <p>Created {{ pageData()!.apiKey.createdAt }}</p>
+        </app-dashboard-card>
+      }
+      @case ('security') {
+        <section class="grid two">
+          <app-dashboard-card>
+            <app-section-header
+              card-header
+              title="Two-factor authentication"
+              subtitle="Visual switch"
+            />
+            <label class="switch"><input type="checkbox" checked /><span></span>Enabled</label>
+          </app-dashboard-card>
+          <app-data-table>
+            <table>
+              <thead>
+                <tr>
+                  <th>Device</th>
+                  <th>Location</th>
+                  <th>Last active</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (session of pageData()!.sessions; track session.id) {
+                  <tr>
+                    <td>
+                      {{ session.device }}
+                      @if (session.current) {
+                        <span class="current">Current</span>
+                      }
+                    </td>
+                    <td>{{ session.location }}</td>
+                    <td class="muted">{{ session.lastActiveAt }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </app-data-table>
+        </section>
+      }
+    }
+  } @else {
+    <app-empty-state
+      icon="@tui.settings"
+      title="Default settings apply"
+      description="Customize your workspace preferences and configurations."
+    />
+  }
+</app-page-container>

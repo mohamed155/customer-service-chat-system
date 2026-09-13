@@ -24,14 +24,7 @@ const CHANNEL_ICONS: Partial<Record<ChannelBadgeChannel, string>> = {
 @Component({
   selector: 'app-channel-badge',
   imports: [TuiIcon],
-  template: `
-    @if (icon(); as icon) {
-      <tui-icon [icon]="icon" />
-    } @else {
-      <span class="dot"></span>
-    }
-    <span>{{ label() }}</span>
-  `,
+  templateUrl: './channel-badge.component.html',
   styles: [
     `
       :host {

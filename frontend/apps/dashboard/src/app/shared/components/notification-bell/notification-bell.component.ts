@@ -4,19 +4,7 @@ import { TuiIcon } from '@taiga-ui/core';
 @Component({
   selector: 'app-notification-bell',
   imports: [TuiIcon],
-  template: `
-    <button
-      type="button"
-      class="bell-button"
-      aria-label="Notifications"
-      (click)="togglePanel.emit()"
-    >
-      <tui-icon icon="@tui.bell" />
-      @if (count() > 0) {
-        <span class="badge">{{ count() > 99 ? '99+' : count() }}</span>
-      }
-    </button>
-  `,
+  templateUrl: './notification-bell.component.html',
   styles: [
     `
       .bell-button {

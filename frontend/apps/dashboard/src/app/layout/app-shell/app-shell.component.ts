@@ -13,38 +13,7 @@ import { LayoutStore } from './layout.store';
   selector: 'app-shell',
   imports: [BreadcrumbComponent, RouterOutlet, SidebarComponent, TopbarComponent, TuiIcon],
   providers: [LayoutStore],
-  template: `<div class="shell">
-    <div
-      class="sidebar-wrapper"
-      [class.drawer]="isMobile()"
-      [class.open]="isMobile() && drawerOpen()"
-    >
-      <app-sidebar [collapsed]="isMobile() ? false : collapsed()" />
-    </div>
-    @if (isMobile() && drawerOpen()) {
-      <div
-        class="scrim"
-        (click)="closeDrawer()"
-        (keydown.enter)="closeDrawer()"
-        role="button"
-        tabindex="0"
-        aria-label="Close navigation drawer"
-      ></div>
-    }
-    <div class="workspace">
-      <app-topbar />
-      @if (errorMessage(); as message) {
-        <section class="tenant-error-banner" role="alert" aria-live="polite">
-          <tui-icon icon="@tui.triangle-alert" />
-          <span>{{ message }}</span>
-          <button type="button" (click)="dismissError()" aria-label="Dismiss tenant access alert">
-            Dismiss
-          </button>
-        </section>
-      }
-      <main tabindex="-1"><app-breadcrumb /><router-outlet /></main>
-    </div>
-  </div>`,
+  templateUrl: './app-shell.component.html',
   styles: [
     `
       .shell {

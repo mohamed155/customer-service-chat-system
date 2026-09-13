@@ -2,9 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 
 @Component({
   selector: 'app-page-container',
-  template: `<div>
-    <ng-content />
-  </div>`,
+  templateUrl: './page-container.component.html',
   styles: [
     `
       div {

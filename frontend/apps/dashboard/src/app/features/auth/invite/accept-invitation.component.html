@@ -1,0 +1,132 @@
+<app-auth-card title="Accept invitation" [subtitle]="cardSubtitle()">
+  @switch (status()) {
+    @case ('loading') {
+      <app-loading-state label="Verifying invitation…" />
+    }
+    @case ('preview') {
+      <app-dashboard-card>
+        <div class="row">
+          <span>Email</span><strong>{{ preview()?.email }}</strong>
+        </div>
+        <div class="row">
+          <span>Role</span><strong>{{ preview()?.role }}</strong>
+        </div>
+        <div class="row">
+          <span>Expires</span><strong>{{ preview()?.expiresAt | date: 'mediumDate' }}</strong>
+        </div>
+      </app-dashboard-card>
+      @if (signedInEmailMismatch()) {
+        <app-inline-alert tone="error">
+          This invitation was issued to {{ preview()?.email }}. Sign out and use that email to
+          accept it.
+        </app-inline-alert>
+        <app-button variant="primary" (pressed)="signOut()">Sign out and switch account</app-button>
+      } @else if (isAuthenticated()) {
+        <p class="info">You’re already signed in. Accept this invitation to join the team.</p>
+        <app-button variant="primary" (pressed)="acceptSignedIn()">Accept invitation</app-button>
+      } @else {
+        <p class="info">You already have an account. Sign in to accept this invitation.</p>
+        <app-button variant="primary" (pressed)="goToLogin()">Sign in</app-button>
+      }
+    }
+    @case ('form') {
+      @if (signedInEmailMismatch()) {
+        <app-inline-alert tone="error">
+          This invitation was issued to {{ preview()?.email }}. Sign out and use that email to
+          accept it.
+        </app-inline-alert>
+        <app-button variant="primary" (pressed)="signOut()">Sign out</app-button>
+      } @else {
+        <app-dashboard-card>
+          <p>
+            <strong>{{ preview()?.email }}</strong> will be invited as
+            <strong>{{ preview()?.role }}</strong
+            >.
+          </p>
+        </app-dashboard-card>
+        <form class="form-fields" [formGroup]="form" (ngSubmit)="submit()">
+          <app-form-field label="Display name" for="invite-display-name">
+            <input
+              id="invite-display-name"
+              type="text"
+              placeholder="Your full name"
+              formControlName="displayName"
+              [attr.aria-invalid]="
+                form.controls.displayName.invalid && form.controls.displayName.touched
+              "
+              [attr.aria-describedby]="controlError('displayName') ? 'display-name-error' : null"
+            />
+          </app-form-field>
+          @if (controlError('displayName'); as err) {
+            <app-inline-alert id="display-name-error" tone="error">{{ err }}</app-inline-alert>
+          }
+          <app-form-field label="Password" for="invite-password">
+            <input
+              id="invite-password"
+              type="password"
+              placeholder="Create a password (min 8 characters)"
+              formControlName="password"
+              [attr.aria-invalid]="form.controls.password.invalid && form.controls.password.touched"
+              [attr.aria-describedby]="controlError('password') ? 'password-error' : null"
+            />
+          </app-form-field>
+          @if (controlError('password'); as err) {
+            <app-inline-alert id="password-error" tone="error">{{ err }}</app-inline-alert>
+          }
+          @if (errorMessage(); as err) {
+            <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+          }
+          @if (recoveryAction() === 'switchAccount') {
+            <app-button variant="primary" (pressed)="signOut()">Sign out</app-button>
+          } @else if (recoveryAction() === 'login') {
+            <app-button variant="primary" (pressed)="goToLogin()">Sign in</app-button>
+          } @else if (recoveryAction() === 'freshInvitation') {
+            <p class="info">Ask a workspace admin to issue a fresh invitation.</p>
+          } @else if (recoveryAction() === 'reenableMembership') {
+            <p class="info">
+              Ask a workspace Owner or Admin to re-enable your existing membership. A new invitation
+              cannot restore disabled access.
+            </p>
+          }
+          <app-button variant="primary" type="submit" [disabled]="status() === 'submitting'">
+            {{ status() === 'submitting' ? 'Accepting…' : 'Accept & join' }}
+          </app-button>
+        </form>
+      }
+    }
+    @case ('submitting') {
+      <app-loading-state label="Accepting invitation…" />
+    }
+    @case ('success') {
+      <app-empty-state
+        icon="@tui.check"
+        title="Welcome aboard!"
+        description="Your account has been created. You can now sign in and start collaborating."
+      >
+        <app-button variant="primary" (pressed)="goToLogin()">Sign in</app-button>
+      </app-empty-state>
+    }
+    @case ('error') {
+      <app-empty-state
+        icon="@tui.alert-circle"
+        title="Invitation issue"
+        [description]="errorMessage()"
+      >
+        @if (recoveryAction() === 'switchAccount') {
+          <app-button variant="primary" (pressed)="signOut()"
+            >Sign out and switch account</app-button
+          >
+        } @else if (recoveryAction() === 'login') {
+          <app-button variant="primary" (pressed)="goToLogin()">Sign in</app-button>
+        } @else if (recoveryAction() === 'freshInvitation') {
+          <p class="info">Ask a workspace admin to issue a fresh invitation.</p>
+        } @else if (recoveryAction() === 'reenableMembership') {
+          <p class="info">
+            Ask a workspace Owner or Admin to re-enable your existing membership. A new invitation
+            cannot restore disabled access.
+          </p>
+        }
+      </app-empty-state>
+    }
+  }
+</app-auth-card>

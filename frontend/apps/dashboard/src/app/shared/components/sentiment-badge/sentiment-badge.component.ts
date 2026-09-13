@@ -4,7 +4,7 @@ import { Sentiment } from '../../fixtures/fixture.models';
 @Component({
   selector: 'app-sentiment-badge',
   host: { '[class]': 'sentiment()' },
-  template: `<span>{{ label() }}</span>`,
+  templateUrl: './sentiment-badge.component.html',
   styles: [
     `
       :host {

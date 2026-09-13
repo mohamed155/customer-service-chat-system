@@ -5,7 +5,7 @@ export type BadgeTone = 'green' | 'amber' | 'red' | 'accent' | 'neutral';
 @Component({
   selector: 'app-status-badge',
   host: { '[class]': 'toneClass()' },
-  template: `<span>{{ label() }}</span>`,
+  templateUrl: './status-badge.component.html',
   styles: [
     `
       :host {

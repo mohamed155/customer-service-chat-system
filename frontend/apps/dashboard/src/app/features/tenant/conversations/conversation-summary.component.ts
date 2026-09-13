@@ -7,25 +7,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
   selector: 'app-conversation-summary',
   standalone: true,
   imports: [ButtonComponent],
-  template: `
-    <div class="summary-panel">
-      <div class="summary-header">
-        <span class="summary-label">Conversation Summary</span>
-        @if (!summary() && !loading()) {
-          <app-button variant="secondary" size="sm" (pressed)="generate()"> Summarize </app-button>
-        }
-        @if (loading()) {
-          <span class="generating">Generating…</span>
-        }
-      </div>
-      @if (summary(); as s) {
-        <p class="summary-text">{{ s }}</p>
-      }
-      @if (error(); as err) {
-        <p class="summary-error">{{ err }}</p>
-      }
-    </div>
-  `,
+  templateUrl: './conversation-summary.component.html',
   styles: [
     `
       .summary-panel {

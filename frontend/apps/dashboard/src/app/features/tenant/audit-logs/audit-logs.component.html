@@ -1,0 +1,48 @@
+<div class="page">
+  <h1>Audit Logs</h1>
+
+  <app-toolbar>
+    <app-select-filter
+      label="Category"
+      [options]="categoryOptions"
+      [value]="store.category() ?? 'all'"
+      (valueChange)="store.setCategory($event)"
+    />
+    <input type="date" [ngModel]="store.from()" (ngModelChange)="onFromChange($event)" />
+    <input type="date" [ngModel]="store.to()" (ngModelChange)="onToChange($event)" />
+    <app-search-input
+      placeholder="Actor ID…"
+      [value]="store.actorId() ?? ''"
+      (searchSubmit)="store.setActor($event || null)"
+    />
+  </app-toolbar>
+
+  @if (store.error(); as error) {
+    <app-inline-alert tone="error">{{ error }}</app-inline-alert>
+  }
+
+  <app-audit-log-table
+    [entries]="store.entries()"
+    [loading]="store.loading()"
+    (rowSelected)="store.openEntry($event)"
+  />
+
+  @if (store.hasMore()) {
+    <div class="load-more">
+      <app-button
+        variant="secondary"
+        size="sm"
+        (pressed)="store.loadMore()"
+        [disabled]="store.loadingMore()"
+      >
+        {{ store.loadingMore() ? 'Loading…' : 'Load more' }}
+      </app-button>
+    </div>
+  }
+
+  <app-audit-detail-drawer
+    [entry]="store.selectedEntry()"
+    [open]="store.drawerOpen()"
+    (closed)="store.closeDrawer()"
+  />
+</div>

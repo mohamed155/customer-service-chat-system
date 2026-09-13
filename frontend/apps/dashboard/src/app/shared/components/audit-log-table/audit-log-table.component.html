@@ -1,0 +1,65 @@
+@if (loading()) {
+  <app-loading-state />
+} @else if (entries().length === 0) {
+  <app-empty-state
+    icon="@tui.scroll-text"
+    title="No audit entries"
+    description="No activity has been recorded yet."
+  />
+} @else {
+  <app-data-table>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Actor</th>
+          <th>Action</th>
+          <th>Target</th>
+          @if (showTenantColumn()) {
+            <th>Tenant</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of entries(); track entry.id) {
+          <tr
+            class="clickable-row"
+            (click)="rowSelected.emit(entry)"
+            tabindex="0"
+            (keydown.enter)="rowSelected.emit(entry)"
+            role="button"
+          >
+            <td>{{ entry.createdAt | date: 'medium' }}</td>
+            <td>
+              @if (entry.actor.kind === 'system') {
+                <span>System</span>
+              } @else {
+                <span>{{ entry.actor.displayName }}</span>
+                @if (entry.actor.isPlatformStaff) {
+                  <span class="staff-badge">Platform staff</span>
+                }
+                @if (entry.actor.deleted) {
+                  <span class="deleted-badge">deleted</span>
+                }
+              }
+            </td>
+            <td>
+              <span>{{ entry.action }}</span>
+              <span class="category-label">{{ entry.category }}</span>
+            </td>
+            <td>
+              <span>{{ entry.resourceType }}</span>
+              <span class="resource-id"
+                >{{ entry.resourceId | slice: 0 : 20
+                }}{{ entry.resourceId.length > 20 ? '…' : '' }}</span
+              >
+            </td>
+            @if (showTenantColumn()) {
+              <td>{{ entry.tenantId }}</td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </app-data-table>
+}

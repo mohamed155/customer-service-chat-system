@@ -4,21 +4,7 @@ import { TuiIcon } from '@taiga-ui/core';
 @Component({
   selector: 'app-auth-card',
   imports: [TuiIcon],
-  template: `
-    <main>
-      <section>
-        <div class="brand">
-          <span><tui-icon icon="@tui.sparkles" /></span>
-          <strong>Helix</strong>
-          <small>Support AI</small>
-        </div>
-        <h1>{{ title() }}</h1>
-        <p>{{ subtitle() }}</p>
-        <ng-content />
-        <footer><ng-content select="[auth-footer]" /></footer>
-      </section>
-    </main>
-  `,
+  templateUrl: './auth-card.component.html',
   styles: [
     `
       main {

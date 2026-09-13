@@ -6,21 +6,7 @@ import { injectBreadcrumbs } from '../../core/router/breadcrumb';
 @Component({
   selector: 'app-breadcrumb',
   imports: [RouterLink],
-  template: `<nav aria-label="Breadcrumb">
-    <div class="breadcrumb-inner">
-      <ol>
-        @for (crumb of crumbs(); track $index) {
-          <li>
-            @if (crumb.link; as link) {
-              <a [routerLink]="[link]">{{ crumb.label }}</a>
-            } @else {
-              <span [attr.aria-current]="$last ? 'page' : undefined">{{ crumb.label }}</span>
-            }
-          </li>
-        }
-      </ol>
-    </div>
-  </nav>`,
+  templateUrl: './breadcrumb.component.html',
   styles: [
     `
       nav {

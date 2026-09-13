@@ -9,7 +9,7 @@ import { selectResolvedTheme } from './core/state/system-theme';
 @Component({
   selector: 'app-root',
   imports: [RouterOutlet, TuiRoot],
-  template: '<tui-root [attr.tuiTheme]="theme()"><router-outlet /></tui-root>',
+  templateUrl: './app.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AppComponent {

@@ -1,0 +1,21 @@
+<app-auth-card title="Verify email" subtitle="Enter the six-digit code sent to your inbox">
+  <form (submit)="$event.preventDefault()">
+    <div class="otp" aria-label="Verification code">
+      @for (box of boxes; track box) {
+        <input
+          inputmode="numeric"
+          maxlength="1"
+          [attr.aria-label]="'Digit ' + box"
+          [class.active]="focusedIndex() === box - 1"
+          (focus)="focusedIndex.set(box - 1)"
+        />
+      }
+    </div>
+    <button type="submit">Verify email</button>
+  </form>
+  <span auth-footer>
+    Did not receive it? <a href="" (click)="$event.preventDefault()">Resend code</a>
+    ·
+    <a [routerLink]="loginUrl">Back to sign in</a>
+  </span>
+</app-auth-card>

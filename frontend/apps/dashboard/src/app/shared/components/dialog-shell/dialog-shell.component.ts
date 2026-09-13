@@ -12,30 +12,7 @@ import {
 
 @Component({
   selector: 'app-dialog-shell',
-  template: `
-    @if (open()) {
-      <button
-        class="dialog-backdrop"
-        type="button"
-        aria-label="Close dialog"
-        [disabled]="dismissDisabled()"
-        (click)="requestDismiss()"
-      ></button>
-      <section
-        #panel
-        class="dialog"
-        [class.dialog--drawer]="variant() === 'drawer-right'"
-        [attr.role]="role()"
-        aria-modal="true"
-        [attr.aria-labelledby]="ariaLabelledby()"
-        [attr.aria-describedby]="ariaDescribedby()"
-        tabindex="-1"
-        (keydown)="onKeydown($event)"
-      >
-        <ng-content />
-      </section>
-    }
-  `,
+  templateUrl: './dialog-shell.component.html',
   styles: [
     `
       :host {

@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 @Component({
   selector: 'app-satisfaction-badge',
   host: { '[class]': 'toneClass()', '[attr.aria-label]': 'ariaLabel()' },
-  template: `★ {{ rating() }}`,
+  templateUrl: './satisfaction-badge.component.html',
   styles: [
     `
       :host {

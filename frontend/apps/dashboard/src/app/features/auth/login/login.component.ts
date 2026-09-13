@@ -8,31 +8,7 @@ import { AuthCardComponent } from '../auth-card/auth-card.component';
 @Component({
   selector: 'app-login',
   imports: [AuthCardComponent, ReactiveFormsModule, RouterLink],
-  template: `
-    <app-auth-card title="Welcome back" subtitle="Sign in to your Helix workspace">
-      <form [formGroup]="form" (ngSubmit)="submit()">
-        <label>
-          Email
-          <input type="email" autocomplete="email" formControlName="email" />
-        </label>
-        <label>
-          Password
-          <input type="password" autocomplete="current-password" formControlName="password" />
-        </label>
-        @if (errorMessage()) {
-          <p role="alert">{{ errorMessage() }}</p>
-        }
-        <button type="submit" [disabled]="pending() || form.invalid">
-          {{ pending() ? 'Signing in...' : 'Sign in' }}
-        </button>
-      </form>
-      <span auth-footer>
-        <a [routerLink]="forgotUrl">Forgot password?</a>
-        ·
-        <a [routerLink]="signupUrl">Create account</a>
-      </span>
-    </app-auth-card>
-  `,
+  templateUrl: './login.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LoginComponent {

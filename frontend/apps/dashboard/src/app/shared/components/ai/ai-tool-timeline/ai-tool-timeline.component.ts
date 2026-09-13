@@ -7,19 +7,7 @@ export interface AiToolTimelineStep {
 
 @Component({
   selector: 'app-ai-tool-timeline',
-  template: `
-    @for (step of steps(); track step.label) {
-      <div class="step">
-        <span></span>
-        <div>
-          <strong>{{ step.label }}</strong>
-          @if (step.detail) {
-            <p>{{ step.detail }}</p>
-          }
-        </div>
-      </div>
-    }
-  `,
+  templateUrl: './ai-tool-timeline.component.html',
   styles: [
     `
       :host {

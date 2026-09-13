@@ -4,15 +4,7 @@ import { IndexStatus } from '../../../core/api/knowledge.models';
 @Component({
   selector: 'app-index-status-badge',
   host: { '[class]': 'hostClass()' },
-  template: `
-    @if (showSpinner()) {
-      <span class="spinner"></span>
-    }
-    <span>{{ label() }}</span>
-    @if (chunkCount(); as cnt) {
-      <span class="chunks">({{ cnt }})</span>
-    }
-  `,
+  templateUrl: './index-status-badge.component.html',
   styles: [
     `
       :host {

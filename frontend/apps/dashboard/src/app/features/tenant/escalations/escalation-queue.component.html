@@ -1,0 +1,48 @@
+@if (store.error(); as err) {
+  <div class="error-banner">{{ err }}</div>
+}
+
+@if (store.items().length === 0 && !store.loading()) {
+  <div class="empty">
+    <tui-icon icon="@tui.inbox" />
+    <p>No escalations in queue</p>
+    <span>All clear — no conversations need attention right now.</span>
+  </div>
+} @else {
+  <app-data-table>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Reason</th>
+          <th scope="col">Required Skills</th>
+          <th scope="col">Customer</th>
+          <th scope="col">Channel</th>
+          <th scope="col">Waiting</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of store.items(); track item.escalation.id) {
+          <tr>
+            <td>{{ item.escalation.reason }}</td>
+            <td>
+              @for (skill of item.escalation.requiredSkills; track skill.name) {
+                <span class="skill-chip">{{ skill.name }}</span>
+              }
+            </td>
+            <td>{{ item.conversation.customer.name }}</td>
+            <td class="muted">{{ item.conversation.channel }}</td>
+            <td class="muted">{{ formatWaiting(item.waitingSeconds) }}</td>
+            <td>
+              @if (permissionsService.has('conversations.manage')) {
+                <button type="button" class="claim-btn" (click)="store.claim(item.escalation.id)">
+                  Claim
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </app-data-table>
+}

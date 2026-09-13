@@ -21,14 +21,7 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
 @Component({
   selector: 'app-role-select',
   imports: [ChoiceGroupComponent],
-  template: `
-    <app-choice-group
-      [ariaLabel]="ariaLabel()"
-      [options]="filteredRoles()"
-      [value]="value()"
-      (valueChange)="selectRole($event)"
-    />
-  `,
+  templateUrl: './role-select.component.html',
   styles: [
     `
       :host {

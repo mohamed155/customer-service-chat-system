@@ -6,23 +6,7 @@ import { TuiIcon } from '@taiga-ui/core';
   selector: 'app-sidebar-nav-item',
   imports: [RouterLink, RouterLinkActive, TuiIcon],
   host: { '[class.collapsed]': 'collapsed()' },
-  template: `
-    <a
-      [routerLink]="link()"
-      routerLinkActive="active"
-      [routerLinkActiveOptions]="{ exact: true }"
-      ariaCurrentWhenActive="page"
-      [attr.aria-label]="collapsed() ? label() : null"
-    >
-      <tui-icon [icon]="icon()" />
-      @if (!collapsed()) {
-        <span class="label">{{ label() }}</span>
-        @if (badgeCount()) {
-          <span class="badge">{{ badgeCount() }}</span>
-        }
-      }
-    </a>
-  `,
+  templateUrl: './sidebar-nav-item.component.html',
   styles: [
     `
       :host {

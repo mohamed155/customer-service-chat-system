@@ -5,31 +5,7 @@ import { ChannelBadgeComponent } from '../../../shared/components/channel-badge/
 @Component({
   selector: 'app-overview-channel-breakdown',
   imports: [ChannelBadgeComponent],
-  template: `
-    <div class="donut" aria-hidden="true">
-      <svg viewBox="0 0 120 120">
-        @for (item of breakdown(); track item.channel; let index = $index) {
-          <circle
-            cx="60"
-            cy="60"
-            r="42"
-            [attr.stroke]="colors[index]"
-            [attr.stroke-dasharray]="dash(item)"
-            [attr.stroke-dashoffset]="offset(index)"
-          />
-        }
-      </svg>
-      <strong>100%</strong>
-    </div>
-    <div class="list">
-      @for (item of breakdown(); track item.channel) {
-        <div>
-          <app-channel-badge [channel]="item.channel" />
-          <span>{{ item.percentage }}%</span>
-        </div>
-      }
-    </div>
-  `,
+  templateUrl: './overview-channel-breakdown.component.html',
   styles: [
     `
       :host {

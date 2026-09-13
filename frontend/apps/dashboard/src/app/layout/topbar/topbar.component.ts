@@ -38,68 +38,7 @@ import { UserMenuComponent } from './user-menu.component';
     NotificationListComponent,
     TuiIcon,
   ],
-  template: `
-    <header>
-      <app-icon-button
-        icon="@tui.menu"
-        label="Toggle sidebar"
-        [active]="collapsed()"
-        [attr.aria-expanded]="!collapsed()"
-        (click)="toggleSidebar()"
-      />
-
-      <div class="title">
-        <strong>{{ pageTitle()?.title ?? 'Helix' }}</strong>
-        <span>{{ pageTitle()?.subtitle ?? 'Support AI' }}</span>
-      </div>
-
-      <div class="tools" aria-label="Dashboard tools">
-        <app-search-input
-          class="search"
-          placeholder="Search conversations, customers..."
-          shortcutHint="⌘K"
-          [(value)]="search"
-        />
-        @if (isPlatformUser()) {
-          <app-platform-nav />
-          <app-tenant-switcher />
-        }
-        <button class="new-button" type="button">
-          <tui-icon icon="@tui.plus" /><span class="new-label">New</span>
-        </button>
-        @if (canManageConversations()) {
-          <app-availability-toggle />
-        }
-        <app-icon-button
-          class="theme-toggle"
-          [icon]="themeIcon()"
-          [label]="themeLabel()"
-          (click)="cycleTheme()"
-        />
-        <div class="notification-wrapper">
-          <app-notification-bell
-            [count]="notificationsStore.unreadCount()"
-            (togglePanel)="toggleNotificationPanel()"
-          />
-          @if (notificationPanelOpen()) {
-            <div class="notification-dropdown">
-              <app-notification-list
-                [items]="notificationsStore.items()"
-                [loading]="notificationsStore.loading()"
-                [hasMore]="notificationsStore.hasMore()"
-                (itemClick)="onNotificationClick($event)"
-                (markRead)="notificationsStore.markRead($event)"
-                (loadMore)="notificationsStore.loadMore()"
-              />
-            </div>
-          }
-        </div>
-        @if (isAuthenticated()) {
-          <app-user-menu />
-        }
-      </div>
-    </header>
-  `,
+  templateUrl: './topbar.component.html',
   styles: [
     `
       header {

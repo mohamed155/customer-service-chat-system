@@ -1,0 +1,111 @@
+@if (store.loading()) {
+  <app-loading-state />
+} @else if (store.error(); as err) {
+  <app-empty-state icon="@tui.alert-circle" title="Something went wrong" [description]="err">
+    <button type="button" (click)="goBack()">Go back</button>
+  </app-empty-state>
+} @else if (store.conversation(); as conv) {
+  <section class="detail-shell">
+    <header class="detail-header">
+      <div class="header-left">
+        <button type="button" class="back-btn" (click)="goBack()">&larr; Back</button>
+        <app-avatar [initials]="customerInitials(conv)" size="md" />
+        <div class="header-copy">
+          <strong>{{ conv.customer.displayName }}</strong>
+          <span class="header-channel">
+            <app-channel-badge [channel]="channelBadge(conv.channel)" />
+            <app-status-badge [status]="conv.status" [tone]="statusTone(conv.status)" />
+            @if (conv.widgetInstance; as wgt) {
+              <span class="widget-badge">{{ wgt.name }}</span>
+            }
+          </span>
+        </div>
+      </div>
+      @if (hasManagePerm()) {
+        <div class="header-right">
+          <div class="control-group">
+            <span class="control-label">Status</span>
+            <app-select-filter
+              label="Status"
+              [value]="conv.status"
+              [options]="statusOptions"
+              (valueChange)="onStatusChange(conv.id, $event)"
+            />
+          </div>
+          <div class="control-group">
+            <span class="control-label">Assignee</span>
+            <app-select-filter
+              label="Assignee"
+              [value]="assigneeValue(conv)"
+              [options]="assigneeOptions()"
+              (valueChange)="onAssigneeChange(conv.id, $event)"
+            />
+          </div>
+        </div>
+      }
+    </header>
+
+    @if (conv.awaitingAiDecision) {
+      <app-ai-handling-banner
+        [visible]="true"
+        (choosePlatformAi)="store.setAiHandling(conv.id, 'platform_ai')"
+        (chooseHuman)="store.setAiHandling(conv.id, 'human')"
+      />
+    }
+
+    @if (conv.escalation) {
+      <app-escalation-banner [escalation]="conv.escalation" />
+    }
+
+    <section class="feedback-section">
+      <header class="feedback-header">
+        <span class="feedback-label">Customer Feedback</span>
+        @if (conv.feedback; as fb) {
+          <app-satisfaction-badge [rating]="fb.rating" />
+        }
+      </header>
+      @if (conv.feedback; as fb) {
+        @if (fb.comment; as comment) {
+          <p class="feedback-comment">{{ comment }}</p>
+        }
+        <time class="feedback-time">{{ formatDate(fb.submittedAt) }}</time>
+      } @else {
+        <p class="no-rating">No rating</p>
+      }
+    </section>
+
+    @if (conv.participants.length) {
+      <div class="participants-bar">
+        <span class="participants-label">Participants</span>
+        @for (p of conv.participants; track p.type + (p.id ?? p.membershipId)) {
+          <span class="participant-chip" [class.inactive]="p.active === false">
+            {{ p.displayName }}
+            <span class="participant-type">({{ p.type }})</span>
+          </span>
+        }
+      </div>
+    }
+
+    @if (hasManagePerm()) {
+      <app-conversation-summary [conversationId]="conv.id" />
+    }
+
+    <app-conversation-thread
+      [messages]="store.timeline()"
+      [loading]="store.loadingTimeline()"
+      [hasMore]="store.hasMoreTimeline()"
+      [activeGeneration]="store.activeGeneration()"
+      [toolActivity]="store.toolActivity()"
+      (loadOlder)="store.loadOlder(conv.id)"
+    />
+
+    @if (hasManagePerm()) {
+      <app-composer
+        [conversationId]="conv.id"
+        [currentStatus]="conv.status"
+        [submitting]="store.submitting()"
+        (send)="store.addMessage(conv.id, $event)"
+      />
+    }
+  </section>
+}

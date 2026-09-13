@@ -1,0 +1,20 @@
+<div class="preview-panel">
+  <h3 class="panel-title">Preview</h3>
+  <div class="preview-content">
+    @if (preview().text.length === 0) {
+      <span class="placeholder-text">Preview will appear here as you type.</span>
+    } @else {
+      <span class="preview-text">{{ preview().text }}</span>
+    }
+  </div>
+  @if (preview().errorSpans.length > 0) {
+    <div class="error-spans">
+      @for (span of preview().errorSpans; track $index) {
+        <span class="error-chip">
+          {{ span.reason === 'malformed' ? 'Malformed' : 'Unknown' }} placeholder at position
+          {{ span.start }}
+        </span>
+      }
+    </div>
+  }
+</div>

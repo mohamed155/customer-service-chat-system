@@ -6,14 +6,7 @@ import { TuiEditorTool } from '@taiga-ui/editor/common';
 @Component({
   selector: 'app-rich-text-editor',
   imports: [FormsModule, TuiEditor],
-  template: `
-    <tui-editor
-      [ngModel]="value()"
-      (ngModelChange)="value.set($event)"
-      [tools]="tools"
-      [placeholder]="placeholder()"
-    />
-  `,
+  templateUrl: './rich-text-editor.component.html',
   styles: [
     `
       tui-editor {

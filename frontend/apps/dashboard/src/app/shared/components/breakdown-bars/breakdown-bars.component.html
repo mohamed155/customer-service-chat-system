@@ -1,0 +1,11 @@
+<ul [attr.aria-label]="ariaLabel()">
+  @for (item of items(); track item.label) {
+    <li>
+      <span class="label">{{ item.label }}</span>
+      <span class="value">{{ item.count }} ({{ formatPct(item.share) }})</span>
+      <div class="bar-track">
+        <div class="bar-fill" [style.width.%]="item.share * 100"></div>
+      </div>
+    </li>
+  }
+</ul>

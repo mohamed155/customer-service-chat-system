@@ -1,0 +1,29 @@
+<div class="selector">
+  <label class="label" for="ai-provider-select">AI Provider</label>
+  <select
+    id="ai-provider-select"
+    [ngModel]="value().providerId"
+    (ngModelChange)="setProvider($event)"
+  >
+    <option [ngValue]="null">Follow platform default</option>
+    @for (provider of availableProviders(); track provider.id) {
+      <option [ngValue]="provider.id">{{ provider.name }}</option>
+    }
+  </select>
+
+  @if (value().providerId) {
+    <label class="label" for="ai-model-select">Model</label>
+    <select id="ai-model-select" [ngModel]="value().model" (ngModelChange)="setModel($event)">
+      <option [ngValue]="null">Follow platform default</option>
+      @for (model of selectedModels(); track model) {
+        <option [ngValue]="model">{{ model }}</option>
+      }
+    </select>
+  }
+
+  @if (stale()) {
+    <app-inline-alert tone="info">
+      This provider selection may be stale — the credential status may have changed.
+    </app-inline-alert>
+  }
+</div>

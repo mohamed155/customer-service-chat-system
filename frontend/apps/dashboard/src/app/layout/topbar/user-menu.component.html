@@ -1,0 +1,31 @@
+<div class="menu">
+  <button
+    type="button"
+    class="trigger"
+    #trigger
+    (click)="toggle()"
+    [attr.aria-expanded]="open()"
+    aria-haspopup="menu"
+    aria-label="User menu"
+  >
+    <app-avatar [initials]="initials()" size="sm" />
+    <tui-icon icon="@tui.chevron-down" [style.rotate]="open() ? '180deg' : '0deg'" />
+  </button>
+
+  @if (open()) {
+    <div class="dropdown" role="menu">
+      <div class="user-info">
+        <span class="display-name">{{ currentUser()?.displayName }}</span>
+        <span class="email">{{ currentUser()?.email }}</span>
+        @if (roleLine(); as line) {
+          <span class="role-line">{{ line }}</span>
+        }
+      </div>
+      <div class="divider"></div>
+      <button type="button" class="sign-out" #menuItem role="menuitem" (click)="signOut()">
+        <tui-icon icon="@tui.log-out" />
+        Sign out
+      </button>
+    </div>
+  }
+</div>

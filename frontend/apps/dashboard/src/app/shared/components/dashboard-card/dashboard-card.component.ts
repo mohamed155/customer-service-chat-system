@@ -3,17 +3,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 @Component({
   selector: 'app-dashboard-card',
   host: { '[class.padding-none]': "padding() === 'none'" },
-  template: `
-    <div class="card-header">
-      <ng-content select="[card-header]" />
-    </div>
-    <div class="card-body">
-      <ng-content />
-    </div>
-    <div class="card-footer">
-      <ng-content select="[card-footer]" />
-    </div>
-  `,
+  templateUrl: './dashboard-card.component.html',
   styles: [
     `
       :host {

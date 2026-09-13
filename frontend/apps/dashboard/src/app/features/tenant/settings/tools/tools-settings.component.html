@@ -1,0 +1,228 @@
+<app-page-container>
+  <app-page-header title="AI Tool Settings" description="Manage built-in and custom AI tools" />
+
+  @if (loading()) {
+    <div class="skeleton">
+      <div class="shimmer"></div>
+      <div class="shimmer"></div>
+    </div>
+  } @else if (error()) {
+    <app-inline-alert tone="error">{{ error() }}</app-inline-alert>
+    <button type="button" class="btn" (click)="loadTools()">Retry</button>
+  } @else {
+    <app-section-header title="Built-in tools" subtitle="Platform-provided tools the AI may use" />
+    <section class="builtin-grid">
+      @for (tool of builtinTools(); track tool.name) {
+        <app-dashboard-card>
+          <div class="tool-head">
+            <strong>{{ tool.name }}</strong>
+            <app-status-badge
+              [status]="tool.classification"
+              [tone]="tool.classification === 'approval' ? 'amber' : 'green'"
+            />
+          </div>
+          <p class="tool-desc">{{ tool.description }}</p>
+          <div class="tool-controls">
+            <label class="toggle">
+              <input
+                type="checkbox"
+                [checked]="tool.enabled"
+                (change)="toggleBuiltinEnabled(tool.name, !tool.enabled)"
+              />
+              <span>Enabled</span>
+            </label>
+            <label class="toggle" [class.toggle--disabled]="tool.classification === 'approval'">
+              <input
+                type="checkbox"
+                [checked]="tool.requireApproval"
+                [disabled]="tool.classification === 'approval'"
+                (change)="toggleBuiltinApproval(tool.name, tool.enabled, !tool.requireApproval)"
+              />
+              <span>Require approval</span>
+            </label>
+          </div>
+          @if (tool.effectiveApproval) {
+            <p class="hint">Effective approval: required</p>
+          }
+        </app-dashboard-card>
+      }
+    </section>
+
+    <div class="tenant-header">
+      <app-section-header
+        title="Custom tools"
+        subtitle="Tools you define routed to an external HTTPS endpoint"
+      />
+      <button type="button" class="btn btn--primary" (click)="openCreateDialog()">Add tool</button>
+    </div>
+
+    @if (tenantDefinedTools().length === 0) {
+      <p class="empty">No custom tools yet.</p>
+    } @else {
+      <app-data-table>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+              <th>Classification</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (tool of tenantDefinedTools(); track tool.id) {
+              <tr>
+                <td class="mono">{{ tool.name }}</td>
+                <td class="muted">{{ tool.description }}</td>
+                <td>
+                  <app-status-badge
+                    [status]="tool.classification"
+                    [tone]="tool.classification === 'approval' ? 'amber' : 'green'"
+                  />
+                </td>
+                <td>
+                  <app-status-badge
+                    [status]="tool.enabled ? 'enabled' : 'disabled'"
+                    [tone]="tool.enabled ? 'green' : 'neutral'"
+                  />
+                </td>
+                <td class="actions">
+                  <button type="button" class="btn btn--sm" (click)="openEditDialog(tool)">
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--sm btn--danger"
+                    (click)="confirmDelete(tool)"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </app-data-table>
+    }
+  }
+</app-page-container>
+
+@if (dialogOpen()) {
+  <app-dialog-shell
+    [open]="dialogOpen()"
+    [dismissDisabled]="submitting()"
+    ariaLabelledby="tool-dialog-title"
+    (dismiss)="closeDialog()"
+  >
+    <h2 id="tool-dialog-title">
+      {{ editingTool() ? 'Edit tool' : 'Add custom tool' }}
+    </h2>
+
+    @if (dialogError()) {
+      <app-inline-alert tone="error">{{ dialogError() }}</app-inline-alert>
+    }
+
+    <app-form-field label="Name">
+      <input
+        id="tool-name"
+        [(ngModel)]="formName"
+        placeholder="my_custom_tool"
+        [disabled]="!!editingTool()"
+      />
+    </app-form-field>
+
+    <app-form-field label="Description">
+      <input
+        id="tool-desc"
+        [(ngModel)]="formDescription"
+        placeholder="Describe what this tool does"
+      />
+    </app-form-field>
+
+    <app-form-field label="Input schema (JSON)">
+      <textarea
+        id="tool-schema"
+        [(ngModel)]="formSchema"
+        rows="5"
+        placeholder='{"type":"object","properties":{...}}'
+      ></textarea>
+    </app-form-field>
+
+    <app-form-field label="Endpoint URL">
+      <input
+        id="tool-url"
+        [(ngModel)]="formEndpointUrl"
+        placeholder="https://api.example.com/tools/..."
+      />
+    </app-form-field>
+
+    <app-form-field label="Credential">
+      <input
+        id="tool-credential"
+        type="password"
+        [(ngModel)]="formCredential"
+        [placeholder]="editingTool() ? 'Leave empty to keep current' : 'Optional API key'"
+      />
+    </app-form-field>
+
+    <app-form-field label="Classification">
+      <select id="tool-classification" [(ngModel)]="formClassification">
+        <option value="approval">Approval (staff must approve)</option>
+        <option value="auto">Auto (AI decides)</option>
+      </select>
+    </app-form-field>
+
+    <label class="toggle">
+      <input type="checkbox" [(ngModel)]="formEnabled" />
+      <span>Enabled</span>
+    </label>
+
+    <div class="dialog-actions">
+      <button type="button" class="btn" (click)="closeDialog()" [disabled]="submitting()">
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn btn--primary"
+        (click)="submitTool()"
+        [disabled]="submitting()"
+      >
+        {{ submitting() ? 'Saving…' : editingTool() ? 'Save changes' : 'Create tool' }}
+      </button>
+    </div>
+  </app-dialog-shell>
+}
+
+@if (deleteConfirmTool()) {
+  <app-dialog-shell
+    [open]="!!deleteConfirmTool()"
+    [dismissDisabled]="submitting()"
+    ariaLabelledby="delete-dialog-title"
+    (dismiss)="deleteConfirmTool.set(null)"
+  >
+    <h2 id="delete-dialog-title">Delete tool</h2>
+    <p>
+      Are you sure you want to delete <strong>{{ deleteConfirmTool()?.name }}</strong
+      >? Existing tool requests referencing it will remain intact.
+    </p>
+    <div class="dialog-actions">
+      <button
+        type="button"
+        class="btn"
+        (click)="deleteConfirmTool.set(null)"
+        [disabled]="submitting()"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn btn--danger"
+        (click)="executeDelete()"
+        [disabled]="submitting()"
+      >
+        {{ submitting() ? 'Deleting…' : 'Delete' }}
+      </button>
+    </div>
+  </app-dialog-shell>
+}

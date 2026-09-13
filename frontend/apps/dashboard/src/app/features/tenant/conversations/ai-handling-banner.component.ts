@@ -5,24 +5,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
   selector: 'app-ai-handling-banner',
   standalone: true,
   imports: [ButtonComponent],
-  template: `
-    @if (visible()) {
-      <div class="ai-handling-banner">
-        <p>This conversation is awaiting an AI-handling decision.</p>
-        <div class="actions">
-          <app-button (pressed)="choosePlatformAi.emit()" [disabled]="platformAiUnavailable()">
-            Use Platform AI
-          </app-button>
-          <app-button variant="secondary" (pressed)="chooseHuman.emit()">
-            Assign to a Human
-          </app-button>
-        </div>
-        @if (platformAiUnavailableReason(); as reason) {
-          <p class="reason">{{ reason }}</p>
-        }
-      </div>
-    }
-  `,
+  templateUrl: './ai-handling-banner.component.html',
   styles: [
     `
       .ai-handling-banner {

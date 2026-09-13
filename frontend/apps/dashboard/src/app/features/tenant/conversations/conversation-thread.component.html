@@ -1,0 +1,98 @@
+<div class="messages" #scrollContainer>
+  @if (hasMore()) {
+    <div class="load-older-wrap">
+      <button type="button" class="load-older-btn" (click)="loadOlder.emit()">
+        Load older messages
+      </button>
+    </div>
+  }
+
+  @if (loading()) {
+    <app-loading-state label="Loading messages" />
+  }
+
+  @for (
+    item of timelineEntries();
+    track item.kind + '-' + (item.kind === 'message' ? item.message.id : item.tool.id)
+  ) {
+    @if (item.kind === 'message') {
+      <article
+        [class]="senderClass(item.message)"
+        [class.note-message]="item.message.kind === 'note'"
+      >
+        <app-avatar [initials]="avatarInitials(item.message)" size="sm" />
+        <div class="bubble">
+          <div class="bubble-header">
+            <span class="sender-name">{{ item.message.sender.displayName }}</span>
+            <span class="message-time">{{ formatTime(item.message.createdAt) }}</span>
+            @if (item.message.kind === 'note') {
+              <span class="note-badge">Note</span>
+            }
+          </div>
+          <p>{{ item.message.body }}</p>
+          @if (item.message.attachments?.length) {
+            @for (att of item.message.attachments; track att.id) {
+              <app-message-attachment [attachment]="att" />
+            }
+          }
+          @if (item.message.citations?.length) {
+            <app-citation-list [citations]="item.message.citations" />
+          }
+          @if (item.message.kind === 'ai' && item.message.confidence; as conf) {
+            <app-ai-confidence-badge [band]="conf.band" />
+          }
+          @if (item.message.delivery; as delivery) {
+            <span
+              class="delivery-status"
+              [class]="'status-' + delivery.status"
+              [title]="delivery.failureReason ?? ''"
+            >
+              @switch (delivery.status) {
+                @case ('pending') {
+                  🕐
+                }
+                @case ('sent') {
+                  ✓
+                }
+                @case ('delivered') {
+                  ✓✓
+                }
+                @case ('read') {
+                  <span class="read-tick">✓✓</span>
+                }
+                @case ('failed') {
+                  <span class="failed-icon">⚠</span>
+                }
+              }
+            </span>
+          }
+        </div>
+      </article>
+    } @else if (item.tool.status === 'awaiting_approval') {
+      <app-tool-approval-card [request]="item.tool" />
+    } @else {
+      <app-tool-timeline-entry [request]="item.tool" />
+    }
+  }
+
+  @if (activeGeneration(); as gen) {
+    @if (gen.phase === 'thinking') {
+      <app-ai-thinking-indicator />
+    } @else if (gen.phase === 'streaming') {
+      <article class="member ai-streaming">
+        <app-avatar initials="AI" size="sm" />
+        <div class="bubble">
+          <div class="bubble-header">
+            <span class="sender-name">AI Assistant</span>
+            <span class="message-time">streaming…</span>
+          </div>
+          <p>{{ gen.buffer }}</p>
+        </div>
+      </article>
+    }
+  }
+
+  @if (messages().length === 0 && !activeGeneration() && !loading()) {
+    <div class="empty-timeline">No messages yet</div>
+  }
+</div>

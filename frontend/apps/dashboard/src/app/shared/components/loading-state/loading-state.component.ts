@@ -2,8 +2,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 @Component({
   selector: 'app-loading-state',
-  template: `<span aria-hidden="true"></span>
-    <p>{{ label() }}</p>`,
+  templateUrl: './loading-state.component.html',
   styles: [
     `
       :host {

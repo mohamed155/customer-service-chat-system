@@ -1,0 +1,188 @@
+<app-page-container>
+  <a class="back" [routerLink]="backLink()">← Back to integrations</a>
+  <app-page-header [title]="title()" [description]="description()" />
+  @if (loading() && !detail()) {
+    <app-loading-state />
+  } @else if (error()) {
+    <app-empty-state
+      icon="@tui.alert-circle"
+      title="Something went wrong"
+      [description]="error() ?? ''"
+    >
+      <button type="button" (click)="retry()">Try again</button>
+    </app-empty-state>
+  } @else if (detail(); as d) {
+    <section class="summary">
+      <span class="category">{{ d.category }}</span>
+      <app-status-badge [status]="d.status" [tone]="tone(d.status)" />
+      @if (!d.isAvailable) {
+        <span class="badge-soon">Coming soon</span>
+      }
+    </section>
+
+    <app-section-header title="Configuration" />
+    <app-dashboard-card>
+      <form class="config-form" (ngSubmit)="onSubmit()">
+        @for (field of d.configSchema; track field.key) {
+          @if (field.kind === 'secret') {
+            <app-form-field [label]="field.label" [for]="field.key">
+              <input
+                [id]="field.key"
+                type="password"
+                autocomplete="off"
+                placeholder="Leave blank to keep current value"
+                [ngModel]="formValues().secrets[field.key]"
+                (ngModelChange)="onSecretChange(field.key, $event)"
+                [name]="field.key"
+              />
+              @if (secretHint(field.key); as hint) {
+                <span class="secret-hint">Stored: ••••{{ hint }}</span>
+              }
+            </app-form-field>
+          } @else {
+            <app-form-field [label]="field.label" [for]="field.key">
+              <input
+                [id]="field.key"
+                type="text"
+                [ngModel]="formValues().config[field.key]"
+                (ngModelChange)="onConfigChange(field.key, $event)"
+                [name]="field.key"
+              />
+            </app-form-field>
+          }
+        }
+
+        @if (canManage()) {
+          @if (storeError()) {
+            <p class="form-error">{{ storeError() }}</p>
+          }
+
+          <div class="actions">
+            @if (!d.connection || d.status === 'disconnected' || d.status === 'not_connected') {
+              <app-button
+                variant="primary"
+                type="submit"
+                [disabled]="saving()"
+                (pressed)="onSubmit()"
+              >
+                {{ saving() ? 'Connecting…' : 'Connect' }}
+              </app-button>
+            } @else {
+              <app-button
+                variant="primary"
+                type="submit"
+                [disabled]="saving()"
+                (pressed)="onSubmit()"
+              >
+                {{ saving() ? 'Saving…' : 'Save' }}
+              </app-button>
+              <app-button variant="danger" [disabled]="saving()" (pressed)="onDisconnect()">
+                {{ saving() ? 'Working…' : 'Disconnect' }}
+              </app-button>
+            }
+          </div>
+        }
+      </form>
+    </app-dashboard-card>
+
+    <app-section-header title="Connection" />
+    <app-dashboard-card>
+      @if (d.connection; as c) {
+        <dl class="connection">
+          <div class="row">
+            <dt>Connected at</dt>
+            <dd>{{ c.connectedAt | date: 'medium' }}</dd>
+          </div>
+          @if (c.disconnectedAt) {
+            <div class="row">
+              <dt>Disconnected at</dt>
+              <dd>{{ c.disconnectedAt | date: 'medium' }}</dd>
+            </div>
+          }
+          @if (c.webhookUrl) {
+            <div class="row">
+              <dt>Webhook URL</dt>
+              <dd class="webhook">
+                <code>{{ c.webhookUrl }}</code>
+                <app-button
+                  size="sm"
+                  variant="ghost"
+                  (pressed)="onCopyWebhook(c.webhookUrl)"
+                  [attr.aria-label]="copyStatus() === 'copied' ? 'Copied' : 'Copy webhook URL'"
+                >
+                  {{ copyStatus() === 'copied' ? 'Copied' : 'Copy' }}
+                </app-button>
+              </dd>
+            </div>
+          }
+          @if (c.secrets.length > 0) {
+            <div class="row">
+              <dt>Secrets</dt>
+              <dd>
+                <ul class="secrets">
+                  @for (s of c.secrets; track s.fieldKey) {
+                    <li>
+                      <code>{{ s.fieldKey }}</code> — <code>••••{{ s.hint }}</code>
+                    </li>
+                  }
+                </ul>
+              </dd>
+            </div>
+          }
+        </dl>
+      } @else {
+        <p class="muted">Not connected.</p>
+      }
+    </app-dashboard-card>
+
+    <app-section-header title="Recent events" />
+    <app-dashboard-card>
+      @if (eventsLoading() && events().length === 0) {
+        <app-loading-state />
+      } @else if (eventsError() && events().length === 0) {
+        <app-empty-state
+          icon="@tui.alert-circle"
+          title="Could not load events"
+          [description]="eventsError() ?? ''"
+        >
+          <button type="button" (click)="retryEvents()">Try again</button>
+        </app-empty-state>
+      } @else if (events().length === 0) {
+        <app-empty-state
+          icon="@tui.activity"
+          title="No events yet"
+          description="Delivery attempts and lifecycle changes will appear here."
+        />
+      } @else {
+        <ul class="events">
+          @for (event of events(); track event.id) {
+            <li class="event">
+              <div class="event-row">
+                <span class="event-type">{{ event.eventType }}</span>
+                @if (event.outcome; as outcome) {
+                  <app-status-badge [status]="outcome" [tone]="outcomeTone(outcome)" />
+                }
+                <time class="event-time">{{ formatEventTime(event.createdAt) }}</time>
+              </div>
+              @if (event.reason) {
+                <p class="event-reason">Reason: {{ event.reason }}</p>
+              }
+            </li>
+          }
+        </ul>
+        @if (eventsHasMore()) {
+          <div class="load-more">
+            <app-button
+              variant="secondary"
+              size="sm"
+              (pressed)="onLoadMoreEvents()"
+              [disabled]="eventsLoading()"
+            >
+              {{ eventsLoading() ? 'Loading…' : 'Load more' }}
+            </app-button>
+          </div>
+        }
+      }
+    </app-dashboard-card>
+  }
+</app-page-container>

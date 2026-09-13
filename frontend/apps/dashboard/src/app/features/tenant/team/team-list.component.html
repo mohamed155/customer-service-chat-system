@@ -1,0 +1,260 @@
+<app-page-container>
+  <app-page-header title="Team" description="Manage team members and invitations" />
+
+  @switch (store.status()) {
+    @case ('loading') {
+      @if (store.members().length === 0) {
+        <app-loading-state label="Loading team roster..." />
+      }
+    }
+    @case ('error') {
+      <app-empty-state
+        icon="@tui.alert-circle"
+        title="Something went wrong"
+        description="We couldn't load the team roster. Please try again."
+      >
+        <app-button (pressed)="store.retry()">Try again</app-button>
+      </app-empty-state>
+    }
+  }
+
+  @if (
+    store.status() !== 'error' && !(store.status() === 'loading' && store.members().length === 0)
+  ) {
+    <div class="stack">
+      <app-toolbar>
+        <app-search-input
+          toolbar-start
+          placeholder="Search members"
+          [value]="store.query().q ?? ''"
+          (valueChange)="store.search($event)"
+        />
+        <app-select-filter
+          toolbar-end
+          label="Status filter"
+          [value]="store.query().status ?? 'all'"
+          [options]="memberStatusOptions"
+          (valueChange)="onStatusChange($event)"
+        />
+        <app-select-filter
+          toolbar-end
+          label="Invitation status filter"
+          [value]="invitationFilter()"
+          [options]="invitationStatusOptions"
+          (valueChange)="onInvitationStatusChange($event)"
+        />
+        @if (canManage()) {
+          <app-button toolbar-end variant="ghost" (pressed)="showSkillsManager.set(true)">
+            Skills
+          </app-button>
+        }
+        @if (canManage()) {
+          <app-button toolbar-end variant="primary" (pressed)="openInviteDialog($event)">
+            Invite
+          </app-button>
+        }
+      </app-toolbar>
+
+      @if (store.invitationsStatus() === 'error') {
+        <app-empty-state
+          icon="@tui.alert-circle"
+          title="Unable to load invitations"
+          [description]="
+            store.invitationsError() ?? 'We could not load invitations. Please try again.'
+          "
+        >
+          <app-button (pressed)="store.loadInvitations({ query: store.invitationQuery() })">
+            Try again
+          </app-button>
+        </app-empty-state>
+      } @else {
+        @if (invitationFilter() === 'all') {
+          @if (pendingInvitations().length > 0) {
+            <app-invitation-table
+              title="Pending invitations"
+              headingId="pending-invitations-title"
+              [invitations]="pendingInvitations()"
+              [revocableIds]="revocableInvitationIds()"
+              [revokingId]="revokingInvitationId()"
+              [showActions]="true"
+              (revoke)="revoke($event)"
+            >
+              @if (store.revokeInvitationStatus() === 'error') {
+                <app-inline-alert tone="error">{{
+                  store.revokeInvitationError()
+                }}</app-inline-alert>
+              }
+            </app-invitation-table>
+          }
+
+          @if (expiredInvitations().length > 0) {
+            <app-invitation-table
+              title="Expired invitations"
+              headingId="expired-invitations-title"
+              [invitations]="expiredInvitations()"
+            />
+          }
+
+          @if (otherInvitations().length > 0) {
+            <app-invitation-table
+              title="Accepted and revoked invitations"
+              headingId="invitation-history-title"
+              [invitations]="otherInvitations()"
+            />
+          }
+        } @else {
+          @if (filteredInvitations().length > 0) {
+            <app-invitation-table
+              [title]="invitationSectionTitle(invitationFilter())"
+              headingId="filtered-invitations-title"
+              [invitations]="filteredInvitations()"
+              [revocableIds]="revocableInvitationIds()"
+              [revokingId]="revokingInvitationId()"
+              [showActions]="true"
+              (revoke)="revoke($event)"
+            />
+          } @else {
+            <app-empty-state
+              icon="@tui.users"
+              title="No invitations found"
+              description="Try a different invitation status filter."
+            />
+          }
+        }
+      }
+
+      @if (store.invitationHasMore()) {
+        <div class="load-more invitations-load-more">
+          <app-button (pressed)="store.loadMoreInvitations()">Load more invitations</app-button>
+        </div>
+      }
+
+      @if (store.status() === 'empty') {
+        <app-empty-state
+          icon="@tui.users"
+          title="No team members"
+          description="Invite team members to collaborate on support conversations."
+        />
+      } @else {
+        <app-data-table>
+          <table>
+            <caption>
+              Team members
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Role</th>
+                <th scope="col">Status</th>
+                <th scope="col">Joined</th>
+                @if (canManage()) {
+                  <th scope="col">Actions</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (member of store.members(); track member.id) {
+                <tr>
+                  <td class="cell-name">
+                    <app-avatar [initials]="memberInitials(member.displayName)" size="sm" />
+                    <div class="member-info">
+                      <strong>{{ member.displayName }}</strong>
+                      @if (member.availability) {
+                        <app-availability-dot [state]="member.availability" />
+                      }
+                    </div>
+                    @if (member.skills && member.skills.length > 0) {
+                      <div class="skill-chips">
+                        @for (skill of member.skills; track skill.id) {
+                          <span class="skill-chip">{{ skill.name }}</span>
+                        }
+                      </div>
+                    }
+                  </td>
+                  <td class="muted">{{ member.email }}</td>
+                  <td>
+                    <app-status-badge [status]="member.role" [tone]="roleTone(member.role)" />
+                  </td>
+                  <td>
+                    <app-status-badge [status]="member.status" [tone]="statusTone(member.status)" />
+                  </td>
+                  <td class="muted">{{ member.joinedAt | date: 'mediumDate' }}</td>
+                  @if (canManage()) {
+                    <td class="actions-cell">
+                      @if (!isSelf(member) && canManageMember(member)) {
+                        <app-role-select
+                          [value]="member.role"
+                          [currentRole]="currentRole()"
+                          [canAssignOwner]="canAssignOwner()"
+                          [ariaLabel]="memberRoleLabel(member)"
+                          (valueChange)="changeRole(member, $event)"
+                        />
+                        <app-button
+                          variant="ghost"
+                          [ariaLabel]="
+                            (member.status === 'active' ? 'Disable ' : 'Enable ') +
+                            member.displayName
+                          "
+                          [disabled]="isMemberUpdating(member.id)"
+                          (pressed)="toggleStatus(member)"
+                        >
+                          {{
+                            isMemberUpdating(member.id)
+                              ? 'Working…'
+                              : member.status === 'active'
+                                ? 'Disable'
+                                : 'Enable'
+                          }}
+                        </app-button>
+                        @if (
+                          store.memberUpdateStatus() === 'error' &&
+                          store.memberUpdateMemberId() === member.id
+                        ) {
+                          <app-inline-alert tone="error">{{
+                            store.memberUpdateError()
+                          }}</app-inline-alert>
+                        }
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </app-data-table>
+
+        @if (store.hasMore()) {
+          <div class="load-more">
+            <app-button (pressed)="store.loadNext()" [disabled]="store.status() === 'loading'">
+              @if (store.status() === 'loading') {
+                Loading...
+              } @else {
+                Load more
+              }
+            </app-button>
+          </div>
+        }
+      }
+    </div>
+  }
+</app-page-container>
+
+@if (showInviteDialog()) {
+  <app-invite-dialog
+    (invite)="onInvite($event)"
+    (closeDialog)="closeInviteDialog()"
+    [submitting]="invitationSubmitting()"
+    [error]="invitationError()"
+    [result]="invitationResult()"
+    [deliveryPollingError]="store.invitationDeliveryPollingError()"
+    [currentRole]="currentRole()"
+    [canAssignOwner]="canAssignOwner()"
+  />
+}
+
+@if (showSkillsManager()) {
+  <app-dialog-shell (close)="showSkillsManager.set(false)">
+    <app-skills-manager />
+  </app-dialog-shell>
+}

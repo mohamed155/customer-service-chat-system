@@ -5,21 +5,7 @@ import { AvailabilityState } from '../../../core/api/tenant-api.models';
 @Component({
   selector: 'app-availability-dot',
   imports: [TuiIcon],
-  template: `
-    <span
-      class="dot"
-      [class.available]="state() === 'available'"
-      [class.away]="state() === 'away'"
-      [attr.aria-label]="state() === 'available' ? 'Available' : 'Away'"
-    >
-      @if (state() === 'available') {
-        <tui-icon icon="@tui.circle-check" />
-      }
-      @if (state() === 'away') {
-        <tui-icon icon="@tui.circle-minus" />
-      }
-    </span>
-  `,
+  templateUrl: './availability-dot.component.html',
   styles: [
     `
       .dot {

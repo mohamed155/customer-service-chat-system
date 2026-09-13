@@ -1,0 +1,39 @@
+<app-page-container>
+  <app-page-header title="Integrations" [description]="'Connect channels and business systems'" />
+  @if (loading() && items().length === 0) {
+    <app-loading-state />
+  } @else if (error()) {
+    <app-empty-state
+      icon="@tui.alert-circle"
+      title="Something went wrong"
+      [description]="error() ?? ''"
+    >
+      <button type="button" (click)="retry()">Try again</button>
+    </app-empty-state>
+  } @else if (items().length === 0) {
+    <app-empty-state
+      icon="@tui.plug"
+      title="No integrations configured"
+      description="Connect your channels and tools to extend the platform's capabilities."
+    />
+  } @else {
+    <app-section-header title="Integrations" subtitle="Connect channels and systems" />
+    <section class="grid">
+      @for (integration of items(); track integration.slug) {
+        <app-dashboard-card>
+          <div class="head">
+            <app-status-badge [status]="integration.status" [tone]="tone(integration.status)" />
+            @if (!integration.isAvailable) {
+              <span class="badge-soon">Coming soon</span>
+            }
+          </div>
+          <h2>{{ integration.name }}</h2>
+          <p>{{ integration.description }}</p>
+          <a class="action" [routerLink]="detailLink(integration.slug)">{{
+            integration.status === 'connected' ? 'Configure' : 'View'
+          }}</a>
+        </app-dashboard-card>
+      }
+    </section>
+  }
+</app-page-container>

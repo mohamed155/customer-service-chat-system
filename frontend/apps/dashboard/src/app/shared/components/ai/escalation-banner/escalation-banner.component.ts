@@ -4,16 +4,7 @@ import { TuiIcon } from '@taiga-ui/core';
 @Component({
   selector: 'app-escalation-banner',
   imports: [TuiIcon],
-  template: `
-    <div class="icon"><tui-icon icon="@tui.triangle-alert" /></div>
-    <div class="copy">
-      <strong>{{ title() }}</strong>
-      <p>{{ description() }}</p>
-    </div>
-    <button type="button" aria-label="Dismiss alert" (click)="dismissed.emit()">
-      <tui-icon icon="@tui.x" />
-    </button>
-  `,
+  templateUrl: './escalation-banner.component.html',
   styles: [
     `
       :host {

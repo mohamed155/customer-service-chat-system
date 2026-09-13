@@ -9,18 +9,7 @@ import { RealtimeService } from '../../core/realtime/realtime.service';
 @Component({
   selector: 'app-availability-toggle',
   imports: [TuiIcon],
-  template: `
-    <button
-      type="button"
-      class="toggle"
-      (click)="toggle()"
-      [class.available]="state() === 'available'"
-      [class.away]="state() === 'away'"
-    >
-      <tui-icon [icon]="state() === 'available' ? '@tui.circle-check' : '@tui.circle-minus'" />
-      <span>{{ state() === 'available' ? 'Available' : 'Away' }}</span>
-    </button>
-  `,
+  templateUrl: './availability-toggle.component.html',
   styles: [
     `
       .toggle {

@@ -4,16 +4,7 @@ import { AvatarComponent } from '../../avatar/avatar.component';
 @Component({
   selector: 'app-agent-preview-card',
   imports: [AvatarComponent],
-  template: `
-    <div class="row customer">
-      <app-avatar initials="MC" size="sm" />
-      <p>Can I exchange an order without losing the promotion?</p>
-    </div>
-    <div class="row ai">
-      <app-avatar initials="AI" size="sm" />
-      <p>Yes. I can preserve eligible promotional credit while starting the exchange.</p>
-    </div>
-  `,
+  templateUrl: './agent-preview-card.component.html',
   styles: [
     `
       :host {

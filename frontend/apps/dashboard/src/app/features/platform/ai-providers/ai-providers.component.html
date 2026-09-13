@@ -1,0 +1,102 @@
+<app-page-container>
+  <app-page-header title="AI provider status" />
+
+  @if (store.loading() && !store.status()) {
+    <app-loading-state label="Loading provider status…" />
+  } @else if (store.error(); as error) {
+    <app-inline-alert tone="error">{{ error }}</app-inline-alert>
+  }
+
+  @if (store.status(); as status) {
+    <div class="toolbar">
+      <app-select-filter
+        label="Window"
+        [options]="windowOptions"
+        [value]="store.window()"
+        (valueChange)="onWindowChange($event)"
+      />
+      <span class="utc-note">Window: {{ status.window.from }} – {{ status.window.to }} UTC</span>
+    </div>
+
+    <div class="cards">
+      @for (prov of status.providers; track prov.provider) {
+        <app-dashboard-card [title]="prov.provider">
+          <div class="prov-row">
+            @if (prov.verdict === 'no_activity' || prov.verdict === 'insufficient_data') {
+              <app-status-badge [status]="prov.verdict" tone="neutral" />
+            } @else {
+              <app-health-indicator [verdict]="healthVerdict(prov.verdict)" />
+            }
+            <p class="meta">
+              Calls: {{ prov.totalCalls }} · Success: {{ prov.successes }} · Failures:
+              {{ prov.failures }}
+            </p>
+            <p class="meta">
+              Failure rate:
+              {{
+                prov.failureRate !== null ? (prov.failureRate * 100 | number: '1.0-1') + '%' : '—'
+              }}
+            </p>
+            <p class="meta">
+              p50: {{ prov.p50LatencyMs !== null ? prov.p50LatencyMs + 'ms' : '—' }} · p95:
+              {{ prov.p95LatencyMs !== null ? prov.p95LatencyMs + 'ms' : '—' }}
+            </p>
+            <p class="meta">Tokens in: {{ prov.inputTokens }} · out: {{ prov.outputTokens }}</p>
+            <details class="categories">
+              <summary>Failures by category</summary>
+              <ul>
+                <li>Authentication: {{ prov.failuresByCategory.authentication }}</li>
+                <li>Rate limited: {{ prov.failuresByCategory.rateLimited }}</li>
+                <li>Unavailable: {{ prov.failuresByCategory.unavailable }}</li>
+                <li>Timeout: {{ prov.failuresByCategory.timeout }}</li>
+                <li>Invalid request: {{ prov.failuresByCategory.invalidRequest }}</li>
+              </ul>
+            </details>
+          </div>
+        </app-dashboard-card>
+      }
+    </div>
+
+    <section class="failures">
+      <h3>Recent Failures</h3>
+      @if (status.recentFailures.length === 0) {
+        <app-empty-state
+          icon="@tui.circle-check"
+          title="No recent failures"
+          description="No failed AI calls were recorded in this window."
+        />
+      } @else {
+        <app-data-table>
+          <table>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Model</th>
+                <th>Category</th>
+                <th>Latency</th>
+                <th>Time (UTC)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of status.recentFailures; track $index) {
+                <tr>
+                  <td>{{ f.provider }}</td>
+                  <td>{{ f.model }}</td>
+                  <td>{{ f.errorCategory ?? '—' }}</td>
+                  <td>{{ f.latencyMs }}ms</td>
+                  <td>{{ f.occurredAt }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </app-data-table>
+      }
+    </section>
+  } @else {
+    <app-empty-state
+      icon="@tui.bot"
+      title="No provider data available"
+      description="Provider metrics will appear once AI calls are recorded."
+    />
+  }
+</app-page-container>

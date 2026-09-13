@@ -2,10 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 
 @Component({
   selector: 'app-toolbar',
-  template: `
-    <div class="start"><ng-content select="[toolbar-start]" /></div>
-    <div class="end"><ng-content select="[toolbar-end]" /></div>
-  `,
+  templateUrl: './toolbar.component.html',
   styles: [
     `
       :host {

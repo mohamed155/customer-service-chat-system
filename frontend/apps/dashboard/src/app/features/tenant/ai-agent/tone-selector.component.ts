@@ -6,12 +6,7 @@ import { ChoiceGroupOption } from '../../../shared/components/choice-group/choic
   selector: 'app-tone-selector',
   standalone: true,
   imports: [ChoiceGroupComponent],
-  template: `
-    <div class="tone-selector">
-      <span class="label">Response Tone</span>
-      <app-choice-group [options]="options()" [(value)]="value" ariaLabel="Response tone" />
-    </div>
-  `,
+  templateUrl: './tone-selector.component.html',
   styles: [
     `
       :host {
