@@ -3,6 +3,7 @@ pub mod authorize;
 pub mod invitations;
 pub mod members;
 pub mod routes;
+pub mod signup;
 
 use axum::{
     extract::{FromRequestParts, Request, State},

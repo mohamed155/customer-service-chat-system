@@ -189,6 +189,28 @@ fn login_request(email: &str, password: &str) -> Request<Body> {
         .unwrap()
 }
 
+fn signup_request(
+    workspace_name: &str,
+    display_name: &str,
+    email: &str,
+    password: &str,
+) -> Request<Body> {
+    Request::builder()
+        .uri("/api/v1/auth/signup")
+        .method("POST")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({
+                "workspaceName": workspace_name,
+                "displayName": display_name,
+                "email": email,
+                "password": password,
+            })
+            .to_string(),
+        ))
+        .unwrap()
+}
+
 fn strip_request_id(mut body: serde_json::Value) -> serde_json::Value {
     if let Some(error) = body
         .get_mut("error")
@@ -751,5 +773,166 @@ mod tests {
                 .unwrap();
 
         assert_eq!(revoked_count, 0);
+    }
+
+    #[tokio::test]
+    async fn signup_creates_tenant_owner_and_session() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let email = unique_test_email();
+        let mut res = send_request(
+            pool.clone(),
+            signup_request("Acme Corp", "Jane Doe", &email, "correct horse battery"),
+        )
+        .await;
+
+        assert_eq!(res.status(), 201);
+        let cookie = res
+            .headers()
+            .get("set-cookie")
+            .and_then(|value| value.to_str().ok())
+            .expect("signup should set session cookie")
+            .to_owned();
+        assert!(cookie.starts_with("app_session="));
+
+        let body = body_json(&mut res).await;
+        assert_eq!(body["email"], email);
+        assert_eq!(body["displayName"], "Jane Doe");
+        assert_eq!(body["memberships"][0]["tenantName"], "Acme Corp");
+        assert_eq!(body["memberships"][0]["role"], "owner");
+
+        let tenant_id: uuid::Uuid = sqlx::query_scalar("SELECT id FROM tenants WHERE name = $1")
+            .bind("Acme Corp")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let slug: String = sqlx::query_scalar("SELECT slug FROM tenants WHERE id = $1")
+            .bind(tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(slug, "acme-corp");
+
+        let audit_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM audit_logs WHERE action = 'tenant.signup_completed' AND tenant_id = $1",
+        )
+        .bind(tenant_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(audit_count, 1);
+
+        let mut me = send_request(pool, get_me_request(&cookie)).await;
+        assert_eq!(me.status(), 200);
+        let me_body = body_json(&mut me).await;
+        assert_eq!(me_body, body);
+    }
+
+    #[tokio::test]
+    async fn signup_disambiguates_colliding_slugs() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let first = send_request(
+            pool.clone(),
+            signup_request(
+                "Collide Inc",
+                "Alice",
+                &unique_test_email(),
+                "correct horse battery",
+            ),
+        )
+        .await;
+        assert_eq!(first.status(), 201);
+
+        let mut second = send_request(
+            pool.clone(),
+            signup_request(
+                "Collide Inc",
+                "Bob",
+                &unique_test_email(),
+                "correct horse battery",
+            ),
+        )
+        .await;
+        assert_eq!(second.status(), 201);
+        let second_body = body_json(&mut second).await;
+        let second_tenant_id: uuid::Uuid =
+            uuid::Uuid::parse_str(second_body["memberships"][0]["tenantId"].as_str().unwrap())
+                .unwrap();
+        let slug: String = sqlx::query_scalar("SELECT slug FROM tenants WHERE id = $1")
+            .bind(second_tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_ne!(slug, "collide-inc");
+        assert!(slug.starts_with("collide-inc-"));
+    }
+
+    #[tokio::test]
+    async fn signup_rejects_duplicate_email_with_409() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let email = unique_test_email();
+        seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
+
+        let mut res = send_request(
+            pool.clone(),
+            signup_request("Another Co", "Someone", &email, "correct horse battery"),
+        )
+        .await;
+
+        assert_eq!(res.status(), 409);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["error"]["code"], "conflict");
+    }
+
+    #[tokio::test]
+    async fn signup_validation_errors_return_422_with_field_details() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let mut res = send_request(
+            pool.clone(),
+            signup_request("", "", "not-an-email", "short"),
+        )
+        .await;
+
+        assert_eq!(res.status(), 422);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["error"]["code"], "validation_failed");
+        let fields: Vec<String> = body["error"]["details"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| d["field"].as_str().unwrap().to_string())
+            .collect();
+        assert!(fields.contains(&"workspaceName".to_string()));
+        assert!(fields.contains(&"displayName".to_string()));
+        assert!(fields.contains(&"email".to_string()));
+        assert!(fields.contains(&"password".to_string()));
+    }
+
+    #[tokio::test]
+    async fn signup_malformed_json_returns_400() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let mut res = send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/auth/signup")
+                .method("POST")
+                .header("content-type", "application/json")
+                .body(Body::from("not-json"))
+                .unwrap(),
+        )
+        .await;
+
+        assert_eq!(res.status(), 400);
+        let body = body_json(&mut res).await;
+        assert_eq!(body["error"]["code"], "validation_failed");
     }
 }

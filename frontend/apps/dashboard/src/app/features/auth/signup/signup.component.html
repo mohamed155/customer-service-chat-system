@@ -1,9 +1,72 @@
 <app-auth-card title="Create workspace" subtitle="Start a Helix Support AI workspace">
-  <form (submit)="$event.preventDefault()">
-    <label>Name<input autocomplete="name" /></label>
-    <label>Email<input type="email" autocomplete="email" /></label>
-    <label>Password<input type="password" autocomplete="new-password" /></label>
-    <button type="submit">Create account</button>
+  <form [formGroup]="form" (ngSubmit)="submit()">
+    <app-form-field label="Workspace name" for="signup-workspace-name">
+      <input
+        id="signup-workspace-name"
+        type="text"
+        autocomplete="organization"
+        placeholder="Acme Corp"
+        formControlName="workspaceName"
+        [attr.aria-invalid]="
+          form.controls.workspaceName.invalid && form.controls.workspaceName.touched
+        "
+        [attr.aria-describedby]="controlError('workspaceName') ? 'workspace-name-error' : null"
+      />
+    </app-form-field>
+    @if (controlError('workspaceName'); as err) {
+      <app-inline-alert id="workspace-name-error" tone="error">{{ err }}</app-inline-alert>
+    }
+
+    <app-form-field label="Your name" for="signup-display-name">
+      <input
+        id="signup-display-name"
+        type="text"
+        autocomplete="name"
+        formControlName="displayName"
+        [attr.aria-invalid]="form.controls.displayName.invalid && form.controls.displayName.touched"
+        [attr.aria-describedby]="controlError('displayName') ? 'display-name-error' : null"
+      />
+    </app-form-field>
+    @if (controlError('displayName'); as err) {
+      <app-inline-alert id="display-name-error" tone="error">{{ err }}</app-inline-alert>
+    }
+
+    <app-form-field label="Email" for="signup-email">
+      <input
+        id="signup-email"
+        type="email"
+        autocomplete="email"
+        formControlName="email"
+        [attr.aria-invalid]="form.controls.email.invalid && form.controls.email.touched"
+        [attr.aria-describedby]="controlError('email') ? 'signup-email-error' : null"
+      />
+    </app-form-field>
+    @if (controlError('email'); as err) {
+      <app-inline-alert id="signup-email-error" tone="error">{{ err }}</app-inline-alert>
+    }
+
+    <app-form-field label="Password" for="signup-password">
+      <input
+        id="signup-password"
+        type="password"
+        autocomplete="new-password"
+        placeholder="At least 8 characters"
+        formControlName="password"
+        [attr.aria-invalid]="form.controls.password.invalid && form.controls.password.touched"
+        [attr.aria-describedby]="controlError('password') ? 'signup-password-error' : null"
+      />
+    </app-form-field>
+    @if (controlError('password'); as err) {
+      <app-inline-alert id="signup-password-error" tone="error">{{ err }}</app-inline-alert>
+    }
+
+    @if (errorMessage()) {
+      <app-inline-alert tone="error">{{ errorMessage() }}</app-inline-alert>
+    }
+
+    <app-button variant="primary" type="submit" [disabled]="pending() || form.invalid">
+      {{ pending() ? 'Creating workspace...' : 'Create account' }}
+    </app-button>
   </form>
   <span auth-footer>
     By continuing you agree to the workspace terms. Already have an account?

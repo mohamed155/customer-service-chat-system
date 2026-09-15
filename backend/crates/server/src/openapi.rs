@@ -46,6 +46,7 @@ use utoipa::{openapi, Modify, OpenApi};
         // Identity
         identity::routes::LoginRequest,
         identity::Principal,
+        tenancy::signup::SignupRequest,
         // Tenancy — platform
         tenancy::routes::TenantSummary,
         tenancy::routes::PlatformTenantDetail,

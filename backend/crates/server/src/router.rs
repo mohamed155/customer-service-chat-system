@@ -250,6 +250,9 @@ where
 fn public_routes() -> OpenApiRouter<sqlx::PgPool> {
     OpenApiRouter::new()
         .routes(routes!(login).layer(middleware::from_fn(crate::rate_limit::login_rate_limit)))
+        .routes(routes!(tenancy::signup::signup).layer(middleware::from_fn(
+            crate::rate_limit::per_ip_creation_limit,
+        )))
         .routes(routes!(identity::routes::logout))
         .routes(routes!(tenancy::invitations::preview_invitation))
         .routes(routes!(tenancy::invitations::accept_invitation))

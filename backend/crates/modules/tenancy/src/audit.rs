@@ -183,6 +183,26 @@ pub async fn record_member_enabled(
     .await
 }
 
+pub async fn record_tenant_signup_completed(
+    tx: &mut Transaction<'_, Postgres>,
+    actor_user_id: uuid::Uuid,
+    tenant_id: uuid::Uuid,
+    tenant_name: &str,
+    slug: &str,
+    email: &str,
+) -> Result<(), sqlx::Error> {
+    record_in_tx(
+        tx,
+        "tenant.signup_completed",
+        Some(actor_user_id),
+        Some(tenant_id),
+        "tenant",
+        Some(&tenant_id.to_string()),
+        &json!({"name": tenant_name, "slug": slug, "email": email}),
+    )
+    .await
+}
+
 pub async fn access_denied(
     pool: &PgPool,
     actor_user_id: Option<uuid::Uuid>,

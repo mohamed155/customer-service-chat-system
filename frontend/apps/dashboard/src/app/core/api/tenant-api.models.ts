@@ -134,6 +134,13 @@ export interface AcceptInvitationRequest {
   readonly password?: string;
 }
 
+export interface SignupRequest {
+  readonly workspaceName: string;
+  readonly displayName: string;
+  readonly email: string;
+  readonly password: string;
+}
+
 export interface PatchMemberPayload {
   readonly role?: MembershipRole;
   readonly status?: MemberStatus;

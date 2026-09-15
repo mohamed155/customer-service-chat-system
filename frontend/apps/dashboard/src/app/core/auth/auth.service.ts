@@ -2,7 +2,7 @@ import { inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../api/api.models';
-import { MeResponse } from '../api/tenant-api.models';
+import { MeResponse, SignupRequest } from '../api/tenant-api.models';
 import { ApiService } from '../api/api.service';
 import { mapHttpError, userMessageFor } from '../errors/http-error.mapper';
 import { APP_PATHS } from '../router/app-paths';
@@ -13,6 +13,17 @@ export const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
 
 export class AuthLoginError extends Error {
   override readonly name = 'AuthLoginError';
+
+  constructor(
+    message: string,
+    readonly apiError: ApiError,
+  ) {
+    super(message);
+  }
+}
+
+export class AuthSignupError extends Error {
+  override readonly name = 'AuthSignupError';
 
   constructor(
     message: string,
@@ -45,6 +56,19 @@ export class AuthService {
     }
   }
 
+  async signup(payload: SignupRequest): Promise<void> {
+    this.pendingSignal.set(true);
+
+    try {
+      await firstValueFrom(this.api.post<MeResponse>('/auth/signup', payload));
+      await this.currentUser.load();
+    } catch (error) {
+      throw this.toSignupError(error);
+    } finally {
+      this.pendingSignal.set(false);
+    }
+  }
+
   async logout(options: { returnUrl?: string } = {}): Promise<void> {
     this.pendingSignal.set(true);
 
@@ -71,6 +95,15 @@ export class AuthService {
       apiError.status === 401 ? INVALID_CREDENTIALS_MESSAGE : userMessageFor(apiError),
       apiError,
     );
+  }
+
+  private toSignupError(error: unknown): AuthSignupError {
+    const apiError = isApiError(error) ? error : mapHttpError(error);
+    const message =
+      apiError.status === 409
+        ? 'An account with this email already exists. Please sign in instead.'
+        : userMessageFor(apiError);
+    return new AuthSignupError(message, apiError);
   }
 }
 
