@@ -16,14 +16,13 @@ processors:
       # FR-020: an errored request's trace is ALWAYS retained
       - name: error-status-policy
         type: status_code
-        config:
-          status_code_source: status
+        status_code:
           status_codes:
             - ERROR
       # FR-020: non-errored traces retained at configurable percentage
       - name: probabilistic-policy
         type: probabilistic
-        config:
+        probabilistic:
           sampling_percentage: ${env:OTEL_TAIL_SAMPLE_PERCENTAGE}
 
 exporters:
