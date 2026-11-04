@@ -1,0 +1,24 @@
+title = "customer-service-chat-system gitleaks config"
+
+# Keep all of gitleaks' default rules; only allowlist known, non-secret
+# dev/CI/test fixtures below. Anything else still fails the scan.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dev, CI and test fixture values that are intentionally public"
+regexes = [
+  # Dev / CI JWT signing secrets (.env.example, workflows, local run script)
+  '''0123456789abcdef0123456789abcdef''',
+  '''t150-ci-auth-jwt-secret-at-least-32-bytes''',
+  '''local-dev-jwt-secret-do-not-use-in-production-32bytes-min''',
+  # Test-only provider key and documented example webhook secret
+  '''sk-engine-isolation-key''',
+  '''whsec_abc123XYZ''',
+]
+paths = [
+  # Static design mockup with fake, masked Stripe-style keys
+  '''^Helix Admin\.html$''',
+  # Vendored spec-kit extension catalog cache (third-party metadata)
+  '''^\.specify/extensions/\.cache/''',
+]

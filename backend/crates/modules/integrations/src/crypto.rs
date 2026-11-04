@@ -1,8 +1,8 @@
+use aes_gcm::aead::Nonce as AeadNonce;
 use aes_gcm::{
     aead::{Aead, Generate, KeyInit, Payload},
     Aes256Gcm, Nonce,
 };
-use aes_gcm::aead::Nonce as AeadNonce;
 use base64::Engine;
 #[allow(unused_imports)]
 use uuid::Uuid;
