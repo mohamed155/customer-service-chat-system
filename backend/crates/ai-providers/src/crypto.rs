@@ -63,13 +63,13 @@ pub fn open(
             nonce.len()
         ));
     }
-    let nonce = Nonce::from_slice(nonce);
+    let nonce = Nonce::try_from(nonce).map_err(|_| "invalid nonce".to_string())?;
     let payload = Payload {
         msg: ciphertext,
         aad: scope_aad.as_bytes(),
     };
     let plaintext = cipher
-        .decrypt(nonce, payload)
+        .decrypt(&nonce, payload)
         .map_err(|_| "decryption failed (tampered ciphertext or wrong key)".to_string())?;
     let key_str = String::from_utf8(plaintext)
         .map_err(|_| "decrypted data is not valid UTF-8".to_string())?;

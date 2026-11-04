@@ -65,6 +65,11 @@ jobs:
       CI_REAL_BACKEND: "true"
     steps:
       - uses: actions/checkout@v4
+      - name: Generate ephemeral AI key encryption key
+        run: |
+          KEY=$(openssl rand -base64 32)
+          echo "::add-mask::$KEY"
+          echo "APP_AI_KEY_ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
       - name: Install toolchain from rust-toolchain.toml
         run: rustup show active-toolchain || rustup toolchain install
         working-directory: backend
