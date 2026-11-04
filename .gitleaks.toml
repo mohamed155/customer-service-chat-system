@@ -15,6 +15,8 @@ regexes = [
   # Test-only provider key and documented example webhook secret
   '''sk-engine-isolation-key''',
   '''whsec_abc123XYZ''',
+  # Test-only user password in server integration tests
+  '''securePassword123!''',
 ]
 paths = [
   # Static design mockup with fake, masked Stripe-style keys
