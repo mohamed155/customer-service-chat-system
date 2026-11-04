@@ -24,7 +24,7 @@ jobs:
     defaults: { run: { working-directory: backend } }
     env:
       DATABASE_URL: postgres://customer_service:customer_service@localhost:5432/customer_service
-      AUTH_JWT_SECRET: 0123456789abcdef0123456789abcdef
+      AUTH_JWT_SECRET: ${{ secrets.AUTH_JWT_SECRET || '0123456789abcdef0123456789abcdef' }}
       REQUIRE_DB_TESTS: "1"
       REDIS_URL: redis://localhost:6379
     steps:

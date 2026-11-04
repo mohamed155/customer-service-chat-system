@@ -1,0 +1,18 @@
+title = "customer-service-chat-system gitleaks config"
+
+[extend]
+useDefault = true
+
+# Only known non-secret fixtures are allowlisted: placeholder values in CI/env
+# examples, test passwords, a design mockup with fake keys, spec examples and a
+# vendored extension catalog. Real secrets elsewhere are still detected.
+[allowlist]
+description = "Known placeholders and test fixtures"
+paths = [
+  '''^\.env\.example$''',
+  '''^\.github/workflows/(backend|gate-verification)\.yml$''',
+  '''^backend/crates/server/tests/team_members\.rs$''',
+  '''^Helix Admin\.html$''',
+  '''^specs/.*\.md$''',
+  '''^\.specify/extensions/\.cache/.*\.json$''',
+]

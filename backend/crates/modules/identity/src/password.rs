@@ -8,7 +8,9 @@ const DUMMY_PASSWORD_HASH: &str =
 const DUMMY_PASSWORD_ATTEMPT: &str = "__unknown_user_dummy_password__";
 
 pub fn hash_password(password: &str) -> Result<String, Error> {
-    Ok(Argon2::default().hash_password(password.as_bytes())?.to_string())
+    Ok(Argon2::default()
+        .hash_password(password.as_bytes())?
+        .to_string())
 }
 
 pub fn verify_password(password: &str, password_hash: &str) -> Result<bool, Error> {

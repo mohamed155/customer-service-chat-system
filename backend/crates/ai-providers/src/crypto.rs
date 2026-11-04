@@ -1,9 +1,9 @@
 use crate::SecretKey;
+use aes_gcm::aead::Nonce as AeadNonce;
 use aes_gcm::{
     aead::{Aead, Generate, KeyInit, Payload},
     Aes256Gcm, Nonce,
 };
-use aes_gcm::aead::Nonce as AeadNonce;
 use base64::Engine;
 
 pub struct MasterKey([u8; 32]);
