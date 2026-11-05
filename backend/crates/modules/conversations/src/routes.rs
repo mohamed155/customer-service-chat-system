@@ -298,11 +298,9 @@ pub async fn list_conversations(
     .await
     {
         Ok(Some(mid)) => mid,
-        Ok(None) => {
-            return ApiError::not_found("User not found in tenant")
-                .with_request_id(&ctx.request_id)
-                .into_response();
-        }
+        // Platform staff browsing a tenant (no membership) may still list
+        // conversations; `assignee=me` then matches nothing.
+        Ok(None) => Uuid::nil(),
         Err(error) => {
             tracing::error!(%error, "failed to resolve membership_id");
             return ApiError::internal_error("Failed to look up membership")

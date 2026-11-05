@@ -106,9 +106,9 @@ mod tests {
         for label in ["old-1", "old-2", "new-1", "new-2"] {
             let is_old = label.starts_with("old-");
             let ts = if is_old {
-                "now() - interval '100 days'::timestamptz"
+                "(now() - interval '100 days')"
             } else {
-                "now() - interval '1 day'::timestamptz"
+                "(now() - interval '1 day')"
             };
             sqlx::query(sqlx::AssertSqlSafe(format!(
                 "INSERT INTO integration_events \
@@ -126,9 +126,9 @@ mod tests {
         for label in ["old-1", "old-2", "new-1", "new-2"] {
             let is_old = label.starts_with("old-");
             let ts = if is_old {
-                "now() - interval '100 days'::timestamptz"
+                "(now() - interval '100 days')"
             } else {
-                "now() - interval '1 day'::timestamptz"
+                "(now() - interval '1 day')"
             };
             sqlx::query(sqlx::AssertSqlSafe(format!(
                 "INSERT INTO integration_webhook_deliveries \

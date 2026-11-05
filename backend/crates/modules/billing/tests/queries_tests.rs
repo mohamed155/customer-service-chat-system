@@ -32,12 +32,14 @@ async fn tenant_with_explicit_subscription_resolves_correctly() {
     setup(&pool).await;
     let tenant_id = seed_tenant(&pool).await;
 
+    // Plan names are globally unique and rows persist across runs.
+    let plan_name = format!("Pro Plan {}", Uuid::new_v4());
     let plan_id: Uuid = sqlx::query_scalar(
         "INSERT INTO billing_plans \
          (name, monthly_price_cents, token_allowance, conversation_allowance, is_default, status) \
          VALUES ($1, $2, $3, $4, false, 'active') RETURNING id",
     )
-    .bind("Pro Plan")
+    .bind(&plan_name)
     .bind(2999)
     .bind(1_000_000i64)
     .bind(1000i32)
@@ -59,7 +61,7 @@ async fn tenant_with_explicit_subscription_resolves_correctly() {
         .await
         .unwrap();
 
-    assert_eq!(plan.name, "Pro Plan");
+    assert_eq!(plan.name, plan_name);
     assert_eq!(plan.monthly_price_cents, 2999);
     assert_eq!(plan.token_allowance, Some(1_000_000));
     assert_eq!(plan.conversation_allowance, Some(1000));

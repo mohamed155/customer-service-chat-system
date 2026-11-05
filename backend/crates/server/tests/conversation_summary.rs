@@ -322,8 +322,11 @@ async fn populated_conversation_returns_summary() {
     .enumerate()
     {
         sqlx::query(
-            "INSERT INTO messages (tenant_id, conversation_id, kind, body, created_at) \
-             VALUES ($1, $2, $3, $4, $5)",
+            // Staff replies need a sender (messages_kind_consistency).
+            "INSERT INTO messages (tenant_id, conversation_id, kind, body, created_at, sender_membership_id) \
+             VALUES ($1, $2, $3, $4, $5, \
+                     CASE WHEN $3 IN ('reply', 'note') \
+                          THEN (SELECT id FROM tenant_memberships WHERE tenant_id = $1 LIMIT 1) END)",
         )
         .bind(tenant_id)
         .bind(conversation_id)

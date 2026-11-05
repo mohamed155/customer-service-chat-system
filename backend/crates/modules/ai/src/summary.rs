@@ -39,8 +39,13 @@ pub async fn handle_summary(
     Extension(ai): Extension<AiService>,
     ctx: TenantContext,
     Path(conversation_id): Path<Uuid>,
-) -> impl IntoResponse {
+) -> axum::response::Response {
     let tenant_id = ctx.tenant_id;
+    let err = |status: axum::http::StatusCode, code: &'static str, msg: &str| {
+        kernel::ApiError::new_with_code(status, code, msg.to_string())
+            .with_request_id(&ctx.request_id)
+            .into_response()
+    };
 
     // Verify the conversation belongs to the tenant
     let conv_exists: bool = match sqlx::query_scalar(
@@ -52,16 +57,14 @@ pub async fn handle_summary(
     .await
     {
         Ok(e) => e,
-        Err(_) => return (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "internal", "message": "Database error"})),
-        ),
+        Err(_) => return err(axum::http::StatusCode::INTERNAL_SERVER_ERROR, "internal_error", "Database error"),
     };
 
     if !conv_exists {
-        return (
+        return err(
             axum::http::StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": "not_found", "message": "Conversation not found"})),
+            "not_found",
+            "Conversation not found",
         );
     }
 
@@ -76,20 +79,20 @@ pub async fn handle_summary(
     {
         Ok(h) => h,
         Err(e) => {
-            return (
+            tracing::error!(%e, "summary: history load failed");
+            return err(
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "internal", "message": e.to_string()})),
+                "internal_error",
+                "Database error",
             );
         }
     };
 
     if history.is_empty() {
-        return (
+        return err(
             axum::http::StatusCode::UNPROCESSABLE_ENTITY,
-            Json(serde_json::json!({
-                "error": "validation_failed",
-                "message": "Conversation has no messages to summarize"
-            })),
+            "validation_failed",
+            "Conversation has no messages to summarize",
         );
     }
 
@@ -129,26 +132,19 @@ pub async fn handle_summary(
                 generated_at: chrono::Utc::now(),
                 message_count: history.len(),
             };
-            (
-                axum::http::StatusCode::OK,
-                Json(serde_json::to_value(&response).unwrap_or_default()),
-            )
+            (axum::http::StatusCode::OK, Json(response)).into_response()
         }
-        Err(AiCallError::NotConfigured) => (
+        Err(AiCallError::NotConfigured) => err(
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            Json(serde_json::json!({
-                "error": "ai_not_configured",
-                "message": "AI is not configured for this tenant"
-            })),
+            "ai_not_configured",
+            "AI is not configured for this tenant",
         ),
         Err(e) => {
             tracing::warn!(?e, "summary generation failed");
-            (
+            err(
                 axum::http::StatusCode::BAD_GATEWAY,
-                Json(serde_json::json!({
-                    "error": "provider_error",
-                    "message": "AI provider failed to generate summary"
-                })),
+                "provider_error",
+                "AI provider failed to generate summary",
             )
         }
     }
