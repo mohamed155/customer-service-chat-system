@@ -212,7 +212,7 @@ async fn schedule_presence_revert(
                     audit::record_availability_changed(
                         &mut tx,
                         // No actor user id for automated reverts
-                        Uuid::nil(),
+                        None,
                         tenant_id,
                         membership_id,
                         Some("available"),

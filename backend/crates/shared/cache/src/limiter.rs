@@ -118,6 +118,10 @@ impl RateLimiter for RedisRateLimiter {
             }
         };
 
+        // A pipeline replies with an array even when only one command's result
+        // is kept, so decode a 1-tuple. Decoding straight into i64 fails on
+        // redis-rs 1.x, which sent every check down the degraded path — and in
+        // the default `auth_closed` mode that refused every sign-in with 429.
         let current_count: i64 = match redis::pipe()
             .atomic()
             .cmd("INCR")
@@ -126,10 +130,10 @@ impl RateLimiter for RedisRateLimiter {
             .arg(&current_key)
             .arg(ttl)
             .ignore()
-            .query_async(&mut conn)
+            .query_async::<(i64,)>(&mut conn)
             .await
         {
-            Ok(c) => c,
+            Ok((c,)) => c,
             Err(e) => {
                 warn!("RedisRateLimiter: INCR error: {e}");
                 return self.degrade(scope, identifier, budget).await;
@@ -375,7 +379,7 @@ mod tests {
             max_requests: 10,
             window: Duration::from_secs(60),
         };
-        let id = "allows_up_to_limit:key";
+        let id = &format!("allows_up_to_limit:{}", uuid::Uuid::new_v4());
         for i in 0..10 {
             match limiter.check(Scope::Login, id, budget).await {
                 Decision::Allowed { .. } => {}
@@ -393,7 +397,7 @@ mod tests {
             max_requests: 10,
             window: Duration::from_secs(60),
         };
-        let id = "refuses_past_limit:key";
+        let id = &format!("refuses_past_limit:{}", uuid::Uuid::new_v4());
         for i in 0..10 {
             match limiter.check(Scope::Login, id, budget).await {
                 Decision::Allowed { .. } => {}
@@ -416,7 +420,7 @@ mod tests {
             max_requests: 3,
             window: Duration::from_secs(1),
         };
-        let id = "resets_after_window:key";
+        let id = &format!("resets_after_window:{}", uuid::Uuid::new_v4());
         for i in 0..3 {
             match limiter.check(Scope::Login, id, budget).await {
                 Decision::Allowed { .. } => {}
@@ -444,8 +448,9 @@ mod tests {
             max_requests: 5,
             window: Duration::from_secs(60),
         };
-        let id_a = "different_keys:tenant-a";
-        let id_b = "different_keys:tenant-b";
+        let run = uuid::Uuid::new_v4();
+        let id_a = &format!("different_keys:{run}:tenant-a");
+        let id_b = &format!("different_keys:{run}:tenant-b");
         for _ in 0..5 {
             limiter.check(Scope::Login, id_a, budget).await;
         }

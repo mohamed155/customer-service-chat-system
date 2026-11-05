@@ -233,6 +233,24 @@ impl Drop for PresenceGuard {
     }
 }
 
+/// The reconnect drain in `/tenant/events` runs in a spawned task, so wait
+/// (briefly) for the queue to settle at the expected number of entries.
+async fn wait_for_queued_count(pool: &sqlx::PgPool, tenant_id: Uuid, expected: i64) {
+    for _ in 0..50 {
+        let queued: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM escalations WHERE tenant_id = $1 AND status = 'queued'",
+        )
+        .bind(tenant_id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        if queued == expected {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 async fn connect_presence(state: &AppState, user_id: Uuid, tenant_id: Uuid) -> PresenceGuard {
     let request = authenticated_request("/api/v1/tenant/events", user_id, tenant_id);
     let response = send(state, request).await;
@@ -405,7 +423,7 @@ async fn seed_inactive_member(
     let user_id = seed_user(pool, email).await;
     let membership_id: Uuid = sqlx::query_scalar(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role, status) \
-         VALUES ($1, $2, $3, 'deactivated') RETURNING id",
+         VALUES ($1, $2, $3, 'disabled') RETURNING id",
     )
     .bind(tenant_id)
     .bind(user_id)
@@ -507,7 +525,8 @@ async fn get_conversation(
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
-    body_json(resp).await
+    // The detail endpoint returns the `{ data: … }` envelope.
+    body_json(resp).await["data"].clone()
 }
 
 async fn process_outbox(state: &AppState) {
@@ -816,10 +835,14 @@ async fn cross_tenant_conversation_returns_404() {
     let customer_a = seed_customer(&pool, tenant_a, "Cust", None, None).await;
     let conv_a = seed_conversation(&pool, tenant_a, customer_a, "web_chat", "open", None).await;
 
-    // admin_a tries to escalate conversation from tenant_a using tenant_b's tenant_id
+    let _ = admin_a;
+    // A legitimate tenant_b admin reaching for tenant_a's conversation must get
+    // 404 (spec 014: cross-tenant never confirms existence). A non-member of
+    // tenant_b would be stopped earlier by the tenancy middleware with 403.
+    let admin_b = seed_admin(&pool, tenant_b, "admin@b.test").await;
     let resp = send_post(
         &state,
-        admin_a.user_id,
+        admin_b.user_id,
         tenant_b,
         &format!("/api/v1/tenant/conversations/{conv_a}/escalate"),
         &serde_json::json!({"reason": "help"}),
@@ -1161,7 +1184,8 @@ async fn claim_assigns_and_audits() {
     assert_eq!(body["status"], "assigned");
     assert_eq!(body["routing"]["reason"], "manual_claim");
 
-    let audit_count = fetch_audit_count(&pool, "escalation.assigned", esc_id).await;
+    // Spec 014 rest-api.md: a manual claim is audited as `escalation.claimed`.
+    let audit_count = fetch_audit_count(&pool, "escalation.claimed", esc_id).await;
     assert_eq!(audit_count, 1);
 }
 
@@ -1297,6 +1321,7 @@ async fn skill_aware_drain_picks_correct_entry() {
     // Agent becomes available+present → drain should pick the newer billing entry
     seed_availability(&pool, tenant, agent.membership_id, "available").await;
     let _guard = connect_presence(&state, agent.user_id, tenant).await;
+    wait_for_queued_count(&pool, tenant, 1).await;
     // Trigger drain by toggling availability
     let put_resp = send_put(
         &state,
@@ -1390,6 +1415,7 @@ async fn three_queued_one_agent_assigns_exactly_one() {
 
     seed_availability(&pool, tenant, agent.membership_id, "available").await;
     let _guard = connect_presence(&state, agent.user_id, tenant).await;
+    wait_for_queued_count(&pool, tenant, 2).await;
 
     let remaining = collect_queue_pages(&state, agent.user_id, tenant).await;
     assert_eq!(
@@ -1520,7 +1546,7 @@ async fn toggle_available_drains_queue() {
     let customer = seed_customer(&pool, tenant, "Cust", None, None).await;
     let conv = seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await;
 
-    send_post(
+    let esc_resp = send_post(
         &state,
         agent.user_id,
         tenant,
@@ -1528,6 +1554,12 @@ async fn toggle_available_drains_queue() {
         &serde_json::json!({"reason": "drain on"}),
     )
     .await;
+    assert_eq!(
+        esc_resp.status(),
+        StatusCode::CREATED,
+        "escalate failed: {:?}",
+        body_json(esc_resp).await
+    );
 
     seed_availability(&pool, tenant, agent.membership_id, "available").await;
     let _guard = connect_presence(&state, agent.user_id, tenant).await;
@@ -1722,7 +1754,7 @@ async fn create_rename_delete_skill() {
     setup(&pool).await;
     let state = app_state(pool.clone());
     let tenant = seed_tenant(&pool, "crud-skill").await;
-    let member = seed_member(&pool, tenant, "member@crud.test", "agent").await;
+    let member = seed_member(&pool, tenant, "member@crud.test", "admin").await;
 
     // Create
     let create_resp = send_post(
@@ -1733,7 +1765,7 @@ async fn create_rename_delete_skill() {
         &serde_json::json!({"name": "support"}),
     )
     .await;
-    assert_eq!(create_resp.status(), StatusCode::OK);
+    assert_eq!(create_resp.status(), StatusCode::CREATED);
     let skill_id: Uuid = body_json(create_resp).await["id"]
         .as_str()
         .unwrap()
@@ -1791,7 +1823,7 @@ async fn case_insensitive_duplicate_skill_409() {
     setup(&pool).await;
     let state = app_state(pool.clone());
     let tenant = seed_tenant(&pool, "dup-skill").await;
-    let member = seed_member(&pool, tenant, "member@dupskill.test", "agent").await;
+    let member = seed_member(&pool, tenant, "member@dupskill.test", "admin").await;
 
     let r1 = send_post(
         &state,
@@ -1801,7 +1833,7 @@ async fn case_insensitive_duplicate_skill_409() {
         &serde_json::json!({"name": "Billing"}),
     )
     .await;
-    assert_eq!(r1.status(), StatusCode::OK);
+    assert_eq!(r1.status(), StatusCode::CREATED);
 
     let r2 = send_post(
         &state,
@@ -1821,7 +1853,7 @@ async fn delete_skill_removes_agent_skills_and_queue_refs() {
     setup(&pool).await;
     let state = app_state(pool.clone());
     let tenant = seed_tenant(&pool, "del-skill-refs").await;
-    let agent = seed_member(&pool, tenant, "agent@delref.test", "agent").await;
+    let agent = seed_member(&pool, tenant, "agent@delref.test", "admin").await;
     let customer = seed_customer(&pool, tenant, "Cust", None, None).await;
     let conv = seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await;
     let skill = seed_skill(&pool, tenant, "obsolete").await;
@@ -1878,7 +1910,7 @@ async fn put_member_skills_idempotent() {
     setup(&pool).await;
     let state = app_state(pool.clone());
     let tenant = seed_tenant(&pool, "put-skills").await;
-    let agent = seed_member(&pool, tenant, "agent@putskills.test", "agent").await;
+    let agent = seed_member(&pool, tenant, "agent@putskills.test", "admin").await;
     let skill_a = seed_skill(&pool, tenant, "a").await;
     let skill_b = seed_skill(&pool, tenant, "b").await;
 
@@ -1921,7 +1953,7 @@ async fn unknown_skill_id_on_member_skills_returns_422() {
     setup(&pool).await;
     let state = app_state(pool.clone());
     let tenant = seed_tenant(&pool, "unknown-mem-skills").await;
-    let agent = seed_member(&pool, tenant, "agent@unknown.test", "agent").await;
+    let agent = seed_member(&pool, tenant, "agent@unknown.test", "admin").await;
     let fake_id = Uuid::new_v4();
 
     let resp = send_put(
@@ -1975,7 +2007,7 @@ async fn tenant_isolation_skills() {
     let state = app_state(pool.clone());
     let tenant_a = seed_tenant(&pool, "iso-skills-a").await;
     let tenant_b = seed_tenant(&pool, "iso-skills-b").await;
-    let member_a = seed_member(&pool, tenant_a, "member@iso-a.test", "agent").await;
+    let member_a = seed_member(&pool, tenant_a, "member@iso-a.test", "admin").await;
     let _member_b = seed_member(&pool, tenant_b, "member@iso-b.test", "agent").await;
     let _skill_a = seed_skill(&pool, tenant_a, "unique-a").await;
     let _skill_b = seed_skill(&pool, tenant_b, "unique-b").await;
@@ -2000,7 +2032,7 @@ async fn each_skill_mutation_writes_audit() {
     setup(&pool).await;
     let state = app_state(pool.clone());
     let tenant = seed_tenant(&pool, "audit-skills").await;
-    let member = seed_member(&pool, tenant, "member@audit-skill.test", "agent").await;
+    let member = seed_member(&pool, tenant, "member@audit-skill.test", "admin").await;
 
     let audit_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs")
         .fetch_one(&pool)
@@ -2015,7 +2047,7 @@ async fn each_skill_mutation_writes_audit() {
         &serde_json::json!({"name": "audited-skill"}),
     )
     .await;
-    assert_eq!(create_resp.status(), StatusCode::OK);
+    assert_eq!(create_resp.status(), StatusCode::CREATED);
     let skill_id: Uuid = body_json(create_resp).await["id"]
         .as_str()
         .unwrap()
@@ -2076,7 +2108,7 @@ async fn get_conversation_embeds_escalation() {
     );
 
     // Escalate
-    send_post(
+    let esc_resp = send_post(
         &state,
         agent.user_id,
         tenant,
@@ -2084,6 +2116,12 @@ async fn get_conversation_embeds_escalation() {
         &serde_json::json!({"reason": "embed test"}),
     )
     .await;
+    assert_eq!(
+        esc_resp.status(),
+        StatusCode::CREATED,
+        "escalate failed: {:?}",
+        body_json(esc_resp).await
+    );
 
     // Now has escalation
     let detail2 = get_conversation(&state, agent.user_id, tenant, conv).await;
@@ -2138,7 +2176,7 @@ async fn patch_assignee_escalated_conversation_relabels() {
             &format!("/api/v1/tenant/conversations/{conv}"),
             agent_a.user_id,
             tenant,
-            serde_json::json!({"assignedMembershipId": target}),
+            serde_json::json!({"assigned_membership_id": target}),
         ),
     )
     .await;
@@ -2212,10 +2250,12 @@ async fn cross_tenant_conversation_detail_404() {
     let customer_a = seed_customer(&pool, tenant_a, "Cust", None, None).await;
     let conv_a = seed_conversation(&pool, tenant_a, customer_a, "web_chat", "open", None).await;
 
-    // admin_a looks up conv_a but with tenant_b's tenant_id
+    let _ = admin_a;
+    // tenant_b's admin looks up tenant_a's conversation -> 404 (see above).
+    let admin_b = seed_admin(&pool, tenant_b, "admin@detail-b.test").await;
     let resp = send_get(
         &state,
-        admin_a.user_id,
+        admin_b.user_id,
         tenant_b,
         &format!("/api/v1/tenant/conversations/{conv_a}"),
     )

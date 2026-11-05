@@ -46,6 +46,10 @@ pub async fn record_in_tx(
     resource_id: Option<&str>,
     details: &serde_json::Value,
 ) -> Result<(), sqlx::Error> {
+    // Callers use the nil UUID to mean "the system" (routing engine, presence
+    // timeouts). actor_user_id references users(id), so store that as NULL
+    // instead of failing the whole transaction on the FK.
+    let actor_user_id = actor_user_id.filter(|id| !id.is_nil());
     sqlx::query(
         "INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, tenant_id, details) VALUES ($1, $2, $3, $4, $5, $6)",
     )

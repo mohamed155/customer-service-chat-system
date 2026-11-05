@@ -93,7 +93,8 @@ pub async fn record_escalation_claimed(
 
 pub async fn record_escalation_closed(
     tx: &mut Transaction<'_, Postgres>,
-    actor_user_id: Uuid,
+    // None when closed by the system (conversation resolved/closed event).
+    actor_user_id: Option<Uuid>,
     tenant_id: Uuid,
     escalation_id: Uuid,
     cause: &str,
@@ -101,7 +102,7 @@ pub async fn record_escalation_closed(
     tenancy::audit::record_in_tx(
         tx,
         "escalation.closed",
-        Some(actor_user_id),
+        actor_user_id,
         Some(tenant_id),
         RESOURCE_TYPE_ESCALATION,
         Some(&escalation_id.to_string()),
@@ -193,7 +194,9 @@ pub async fn record_member_skills_changed(
 
 pub async fn record_availability_changed(
     tx: &mut Transaction<'_, Postgres>,
-    actor_user_id: Uuid,
+    // None for system-initiated changes (presence timeout): audit_logs
+    // references users(id), so a placeholder id would violate the FK.
+    actor_user_id: Option<Uuid>,
     tenant_id: Uuid,
     membership_id: Uuid,
     previous_state: Option<&str>,
@@ -203,7 +206,7 @@ pub async fn record_availability_changed(
     tenancy::audit::record_in_tx(
         tx,
         "availability.changed",
-        Some(actor_user_id),
+        actor_user_id,
         Some(tenant_id),
         RESOURCE_TYPE_AVAILABILITY,
         Some(&membership_id.to_string()),
