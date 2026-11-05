@@ -216,11 +216,12 @@ async fn list_returns_all_seeded_catalog_entries() {
         .iter()
         .map(|e| e["slug"].as_str().unwrap())
         .collect();
-    assert_eq!(entries.len(), 4);
+    assert_eq!(entries.len(), 5); // 4 foundation entries + whatsapp (029)
     assert!(slugs.contains(&"generic-webhook"));
     assert!(slugs.contains(&"slack"));
     assert!(slugs.contains(&"microsoft-teams"));
     assert!(slugs.contains(&"crm"));
+    assert!(slugs.contains(&"whatsapp"));
 }
 
 #[tokio::test]
@@ -265,7 +266,7 @@ async fn tenant_with_no_connections_sees_not_connected_everywhere() {
     assert_eq!(response.status(), StatusCode::OK);
     let json = body_json(response).await;
     let entries = json["data"].as_array().unwrap();
-    assert_eq!(entries.len(), 4);
+    assert_eq!(entries.len(), 5); // 4 foundation entries + whatsapp (029)
     for entry in entries {
         assert_eq!(
             entry["status"], "not_connected",
@@ -376,6 +377,13 @@ async fn retired_entry_keeps_existing_connection_working() {
         ),
     )
     .await;
+    // Restore the shared catalog row before asserting so other tests (which
+    // share this database) still see a connectable entry.
+    sqlx::query("UPDATE integration_catalog SET is_available = true WHERE slug = $1")
+        .bind("generic-webhook")
+        .execute(&pool)
+        .await
+        .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let json = body_json(response).await;
     assert_eq!(json["slug"], "generic-webhook");

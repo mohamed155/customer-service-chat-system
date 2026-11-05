@@ -193,8 +193,11 @@ pub async fn get_integration(
     let schema: Vec<ConfigFieldDto> =
         serde_json::from_value(catalog.config_schema.clone()).unwrap_or_default();
 
+    // The key is only needed to reveal this tenant's own webhook URL; a tenant
+    // with no connection still gets the catalog detail without it.
     let master = match load_master_key(&config) {
         Ok(m) => Some(m),
+        Err(_) if connection.is_none() => None,
         Err(resp) => return resp,
     };
 
@@ -618,7 +621,7 @@ pub async fn connect_integration(
         None,
     )
     .await;
-    (StatusCode::OK, Json(detail)).into_response()
+    (StatusCode::CREATED, Json(detail)).into_response()
 }
 
 #[utoipa::path(
@@ -813,7 +816,10 @@ pub async fn update_integration_config(
         }
     };
 
-    let config_changed = !payload.config.is_empty();
+    // Only a real change to the stored config counts (resubmitting the same
+    // values alongside a secret rotation is not a config update).
+    let config_changed = !payload.config.is_empty()
+        && serde_json::Value::Object(payload.config.clone()) != connection.config;
     let secrets_changed = !secrets_ref.is_empty();
 
     let mut tx = match pool.begin().await {

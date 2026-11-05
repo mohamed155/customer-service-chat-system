@@ -94,3 +94,63 @@ pub fn streaming_template(body: &Value) -> ResponseTemplate {
         .insert_header("content-type", "text/event-stream")
         .set_body_string(completion_to_sse(body))
 }
+
+/// Anthropic Messages responder: answers streaming requests with the
+/// Anthropic SSE event sequence, others with the plain JSON body.
+/// `body` is a non-streaming Messages response (`content[0].text`, `usage`).
+pub struct AnthropicReply {
+    body: Value,
+}
+
+impl AnthropicReply {
+    pub fn new(body: Value) -> Self {
+        Self { body }
+    }
+}
+
+impl Respond for AnthropicReply {
+    fn respond(&self, request: &Request) -> ResponseTemplate {
+        let streaming = serde_json::from_slice::<Value>(&request.body)
+            .ok()
+            .and_then(|v| v.get("stream").and_then(Value::as_bool))
+            .unwrap_or(false);
+        if !streaming {
+            return ResponseTemplate::new(200).set_body_json(self.body.clone());
+        }
+        let model = self.body["model"].as_str().unwrap_or("claude");
+        let text = self.body["content"][0]["text"].as_str().unwrap_or("");
+        let input = self.body["usage"]["input_tokens"].as_u64().unwrap_or(0);
+        let output = self.body["usage"]["output_tokens"].as_u64().unwrap_or(0);
+        let stop = self.body["stop_reason"].as_str().unwrap_or("end_turn");
+        let events = [
+            (
+                "message_start",
+                json!({ "type": "message_start", "message": { "model": model, "usage": { "input_tokens": input } } }),
+            ),
+            (
+                "content_block_start",
+                json!({ "type": "content_block_start", "index": 0, "content_block": { "type": "text", "text": "" } }),
+            ),
+            (
+                "content_block_delta",
+                json!({ "type": "content_block_delta", "index": 0, "delta": { "type": "text_delta", "text": text } }),
+            ),
+            (
+                "content_block_stop",
+                json!({ "type": "content_block_stop", "index": 0 }),
+            ),
+            (
+                "message_delta",
+                json!({ "type": "message_delta", "delta": { "stop_reason": stop }, "usage": { "output_tokens": output } }),
+            ),
+            ("message_stop", json!({ "type": "message_stop" })),
+        ];
+        let mut out = String::new();
+        for (name, data) in events {
+            out.push_str(&format!("event: {name}\ndata: {data}\n\n"));
+        }
+        ResponseTemplate::new(200)
+            .insert_header("content-type", "text/event-stream")
+            .set_body_string(out)
+    }
+}

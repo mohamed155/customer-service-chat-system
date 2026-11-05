@@ -537,6 +537,16 @@ async fn sixty_one_deliveries_produce_at_most_one_rate_limited_event() {
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
     seed_membership(&pool, tenant, admin, "admin").await;
+    // The platform default webhook budget is 600/60s (spec 033); pin this
+    // tenant to 60/60s through an override so the burst stays small.
+    sqlx::query(
+        "INSERT INTO tenant_rate_limit_overrides (tenant_id, scope, max_requests, window_seconds) \
+         VALUES ($1, 'webhook', 60, 60)",
+    )
+    .bind(tenant)
+    .execute(&pool)
+    .await
+    .unwrap();
     let conn = connect_through_api(pool.clone(), tenant, admin).await;
 
     // Send 60 correctly signed deliveries — all should be accepted.

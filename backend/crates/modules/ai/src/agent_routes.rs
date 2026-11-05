@@ -420,6 +420,57 @@ pub async fn put_agent_config(
             .into_response();
     }
 
+    // Save-time reference checks (spec 017 rest-api: skills must be live in
+    // the tenant; an override's provider must have a resolvable credential).
+    for rule in &payload.escalation_rules {
+        if rule.required_skill_ids.is_empty() {
+            continue;
+        }
+        let live = match agent_config::live_skill_ids(
+            &pool,
+            ctx.tenant_id,
+            &rule.required_skill_ids,
+        )
+        .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!(%e, "put_agent_config: skill lookup failed");
+                return ApiError::internal_error("Failed to save agent configuration")
+                    .with_request_id(&ctx.request_id)
+                    .into_response();
+            }
+        };
+        if rule.required_skill_ids.iter().any(|id| !live.contains(id)) {
+            return ApiError::unprocessable_entity(format!(
+                "Escalation rule '{}' references non-existent skills",
+                rule.name
+            ))
+            .with_details(vec![serde_json::json!({
+                "field": "escalationRules.requiredSkillIds",
+                "code": "unknown_skill",
+                "message": format!("Rule '{}' references non-existent skills", rule.name),
+            })])
+            .with_request_id(&ctx.request_id)
+            .into_response();
+        }
+    }
+    if let Some(sel) = &payload.provider_selection {
+        if !agent_config::credential_resolves(&pool, ctx.tenant_id, &sel.provider).await {
+            return ApiError::unprocessable_entity(format!(
+                "Provider '{}' has no usable credential",
+                sel.provider
+            ))
+            .with_details(vec![serde_json::json!({
+                "field": "providerSelection.provider",
+                "code": "unresolvable_provider",
+                "message": format!("Provider '{}' has no usable credential", sel.provider),
+            })])
+            .with_request_id(&ctx.request_id)
+            .into_response();
+        }
+    }
+
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => {
@@ -540,45 +591,23 @@ pub async fn put_agent_config(
                 }
             }
 
-            // Validate skill IDs exist
-            if !payload.escalation_rules.is_empty() {
-                let all_skill_ids: Vec<Uuid> = payload
-                    .escalation_rules
-                    .iter()
-                    .flat_map(|r| r.required_skill_ids.iter())
-                    .copied()
-                    .collect();
-                let live_ids = agent_config::live_skill_ids(&pool, ctx.tenant_id, &all_skill_ids)
-                    .await
-                    .unwrap_or_default();
-                for rule in &payload.escalation_rules {
-                    let missing: Vec<&Uuid> = rule
-                        .required_skill_ids
-                        .iter()
-                        .filter(|id| !live_ids.contains(id))
-                        .collect();
-                    if !missing.is_empty() {
-                        let _ = tx.rollback().await;
-                        return ApiError::unprocessable_entity(format!(
-                            "Rule '{}' references non-existent skill IDs",
-                            rule.name
-                        ))
+            // Skill and provider references were validated before the tx.
+
+            // Switching to a preset retires any uploaded avatar.
+            if payload.avatar.kind == "preset" {
+                if let Err(e) = sqlx::query(
+                    "UPDATE agent_avatar_uploads SET deleted_at = now() \
+                     WHERE agent_id = $1 AND deleted_at IS NULL",
+                )
+                .bind(existing_row.id)
+                .execute(&mut *tx)
+                .await
+                {
+                    tracing::error!(%e, "put_agent_config: retire avatar upload failed");
+                    let _ = tx.rollback().await;
+                    return ApiError::internal_error("Failed to save agent configuration")
                         .with_request_id(&ctx.request_id)
                         .into_response();
-                    }
-                }
-            }
-
-            // Validate provider credential resolves
-            if let Some(ref sel) = payload.provider_selection {
-                if !agent_config::credential_resolves(&pool, ctx.tenant_id, &sel.provider).await {
-                    let _ = tx.rollback().await;
-                    return ApiError::unprocessable_entity(format!(
-                        "Provider '{}' has no resolvable credential",
-                        sel.provider
-                    ))
-                    .with_request_id(&ctx.request_id)
-                    .into_response();
                 }
             }
 
@@ -919,6 +948,24 @@ pub async fn set_conversation_ai_handling(
 
     match payload.mode.as_str() {
         "platform_ai" => {
+            // Once escalated, the queue/claim state owns the conversation:
+            // human -> platform_ai is a 409 before any AI-layer check.
+            match escalations::routing::has_open_escalation(&pool, ctx.tenant_id, conversation_id)
+                .await
+            {
+                Ok(false) => {}
+                Ok(true) => {
+                    return ApiError::conflict("Conversation is already handled by a human")
+                        .with_request_id(&ctx.request_id)
+                        .into_response();
+                }
+                Err(e) => {
+                    tracing::error!(%e, "set_ai_handling: escalation check failed");
+                    return ApiError::internal_error("Failed to check escalation state")
+                        .with_request_id(&ctx.request_id)
+                        .into_response();
+                }
+            }
             // 3a. Check config + credential both resolve
             let resolved = crate::resolution::resolve_config(
                 &pool,

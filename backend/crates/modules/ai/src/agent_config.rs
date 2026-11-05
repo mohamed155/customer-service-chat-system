@@ -284,7 +284,7 @@ pub async fn create_in_tx(
     .bind(&payload.avatar.preset)
     .bind(&payload.tone)
     .bind(serde_json::to_value(&payload.business_rules).unwrap_or_default())
-    .bind(serde_json::to_value(&payload.escalation_rules).unwrap_or_default())
+    .bind(rules_with_ids(&payload.escalation_rules))
     .bind(serde_json::to_value(&payload.enabled_channels).unwrap_or_default())
     .bind(payload.provider_selection.as_ref().map(|p| &p.provider))
     .bind(payload.provider_selection.as_ref().map(|p| &p.model))
@@ -312,7 +312,7 @@ pub async fn update_in_tx(
     .bind(&payload.avatar.preset)
     .bind(&payload.tone)
     .bind(serde_json::to_value(&payload.business_rules).unwrap_or_default())
-    .bind(serde_json::to_value(&payload.escalation_rules).unwrap_or_default())
+    .bind(rules_with_ids(&payload.escalation_rules))
     .bind(serde_json::to_value(&payload.enabled_channels).unwrap_or_default())
     .bind(payload.provider_selection.as_ref().map(|p| &p.provider))
     .bind(payload.provider_selection.as_ref().map(|p| &p.model))
@@ -449,4 +449,18 @@ mod tests {
         let result = validate_payload(&payload);
         assert!(result.is_ok());
     }
+}
+
+/// Stored rules always carry an id: new rules (no `id` in the payload) get one
+/// at save time so reads can parse them as [`EscalationRule`].
+fn rules_with_ids(rules: &[EscalationRulePayload]) -> serde_json::Value {
+    let with_ids: Vec<EscalationRulePayload> = rules
+        .iter()
+        .cloned()
+        .map(|mut r| {
+            r.id.get_or_insert_with(Uuid::new_v4);
+            r
+        })
+        .collect();
+    serde_json::to_value(with_ids).unwrap_or_default()
 }

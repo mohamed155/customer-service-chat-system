@@ -286,7 +286,7 @@ async fn mock_anthropic(mock: &MockServer, api_key: &str, body: serde_json::Valu
     Mock::given(wm_method("POST"))
         .and(wm_path("/v1/messages"))
         .and(wm_header("x-api-key", api_key))
-        .respond_with(openai_mock::OpenAiReply::new(body))
+        .respond_with(openai_mock::AnthropicReply::new(body))
         .mount(mock)
         .await;
 }
@@ -602,7 +602,7 @@ async fn save_round_trips_on_reload() {
     assert_eq!(json["agent"]["avatar"]["kind"], "preset");
     assert_eq!(json["agent"]["avatar"]["preset"], "nova");
     assert_eq!(json["agent"]["version"], 1);
-    assert!(!json["agent"]["updated_at"].is_null());
+    assert!(!json["agent"]["updatedAt"].is_null());
 
     let rules = &json["agent"]["escalationRules"];
     assert_eq!(rules.as_array().unwrap().len(), 1);
@@ -865,11 +865,8 @@ async fn configured_agent_drives_ai_reply() {
         "system message should contain 'friendly' tone directive 'warm', got: {}",
         system_msg
     );
-    assert!(
-        system_msg.contains("Custom prompt text"),
-        "system message should contain the custom prompt, got: {}",
-        system_msg
-    );
+    // The agent payload carries no free-text prompt (prompt templates moved
+    // to spec 018 prompt management), so there is no custom prompt to check.
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2181,13 +2178,9 @@ async fn broken_skill_ref_surfaced_on_read() {
     let user_id = seed_user(&pool, "t061@test.com", "admin").await;
     seed_membership(&pool, tenant_id, user_id, "admin").await;
 
-    // Seed a skill, then delete it (skills are hard-deleted; see 0035_agent_skills)
+    // Seed a live skill; it is deleted after the save (saving a reference to
+    // an already-deleted skill is rejected with 422 — spec 017 rest-api).
     let skill_id = seed_skill(&pool, tenant_id, "obsolete-skill").await;
-    sqlx::query("DELETE FROM skills WHERE id = $1")
-        .bind(skill_id)
-        .execute(&pool)
-        .await
-        .unwrap();
 
     let rule_id = Uuid::new_v4();
     let agent_payload = serde_json::json!({
@@ -2214,6 +2207,13 @@ async fn broken_skill_ref_surfaced_on_read() {
     )
     .await;
     assert_eq!(put_resp.status(), StatusCode::CREATED);
+
+    // Skills are hard-deleted (see 0035_agent_skills).
+    sqlx::query("DELETE FROM skills WHERE id = $1")
+        .bind(skill_id)
+        .execute(&pool)
+        .await
+        .unwrap();
 
     // GET should surface the broken skill ref
     let get_resp = send(

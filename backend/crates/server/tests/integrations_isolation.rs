@@ -35,7 +35,7 @@ fn test_config() -> config::AppConfig {
         shutdown_grace_seconds: 1,
         docs_enabled: false,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
-        integration_secrets_key: None,
+        integration_secrets_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
@@ -375,7 +375,11 @@ async fn tenant_b_detail_does_not_expose_tenant_a_secrets_or_config() {
     let b_json = body_json(b_detail).await;
     assert_eq!(b_json["status"], "not_connected");
     assert!(b_json["connection"].is_null());
-    let serialized = b_json.to_string();
+    // The public catalog schema legitimately names the field keys; check
+    // everything except it for tenant A's data.
+    let mut tenant_view = b_json.clone();
+    tenant_view.as_object_mut().unwrap().remove("config_schema");
+    let serialized = tenant_view.to_string();
     assert!(
         !serialized.contains("A-secret-label"),
         "tenant B's response must not contain tenant A's config values: {serialized}"
