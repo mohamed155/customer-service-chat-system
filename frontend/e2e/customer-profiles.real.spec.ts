@@ -77,8 +77,11 @@ if (REAL_BACKEND) {
       expect(response.status()).toBe(200);
       await expect(agentPage.getByRole('heading', { name: 'Customers' })).toBeVisible();
 
+      // Newest first, 25 per page: Customer 01–24 plus Sara Ali (seeded
+      // 10 days ago) fill page one, so Customer 25 is the first on page two.
       await expect(agentPage.getByText('Customer 01')).toBeVisible();
-      await expect(agentPage.getByText('Customer 25')).toBeVisible();
+      await expect(agentPage.getByText('Customer 24')).toBeVisible();
+      await expect(agentPage.getByText('Customer 25')).toHaveCount(0);
 
       const loadMore = agentPage.getByRole('button', { name: 'Load more' });
       await expect(loadMore).toBeVisible();
@@ -89,7 +92,8 @@ if (REAL_BACKEND) {
       await loadMore.click();
       await nextPageResponse;
 
-      await expect(agentPage.getByText('Customer 26')).toBeVisible();
+      await expect(agentPage.getByText('Customer 25')).toBeVisible();
+      await expect(agentPage.getByText('Customer 30')).toBeVisible();
     });
 
     test('conversation-history: Agent sees conversation history on a customer profile', async () => {
@@ -99,13 +103,14 @@ if (REAL_BACKEND) {
           res.url().includes(`/api/v1/tenant/customers/${SARA_CUSTOMER_ID}`) &&
           res.request().method() === 'GET',
       );
-      await agentPage.goto(`/tenant/customers/${SARA_CUSTOMER_ID}`);
-      await detailResponse;
-      await expect(agentPage.getByText('Sara Ali')).toBeVisible();
-
+      // Register both waits before navigating: the page loads the profile
+      // and its conversations together.
       const convResponse = agentPage.waitForResponse((res) =>
         res.url().includes(`/api/v1/tenant/customers/${SARA_CUSTOMER_ID}/conversations`),
       );
+      await agentPage.goto(`/tenant/customers/${SARA_CUSTOMER_ID}`);
+      await detailResponse;
+      await expect(agentPage.getByRole('heading', { name: 'Sara Ali' })).toBeVisible();
       await convResponse;
 
       await expect(agentPage.getByText('Open').first()).toBeVisible();
@@ -118,7 +123,7 @@ if (REAL_BACKEND) {
       const updatedName = 'Sara Updated';
 
       await agentPage.goto(`/tenant/customers/${SARA_CUSTOMER_ID}`);
-      await expect(agentPage.getByText(originalName)).toBeVisible();
+      await expect(agentPage.getByRole('heading', { name: originalName })).toBeVisible();
 
       const editButton = agentPage.getByRole('button', { name: 'Edit' });
       await expect(editButton).toBeVisible();
@@ -138,7 +143,7 @@ if (REAL_BACKEND) {
       const patch = await patchResponse;
       expect((await patch.json()).data.display_name).toBe(updatedName);
 
-      await expect(agentPage.getByText(updatedName)).toBeVisible();
+      await expect(agentPage.getByRole('heading', { name: updatedName })).toBeVisible();
     });
 
     test('duplicate-conflict: Creating a customer with existing identifier returns 409', async () => {
@@ -151,8 +156,8 @@ if (REAL_BACKEND) {
       await agentPage.getByLabel('Email').fill('conflict@test.com');
 
       await agentPage.getByRole('button', { name: 'Add identifier' }).click();
-      await agentPage.getByLabel('Channel').fill('whatsapp');
-      await agentPage.getByLabel('Identifier value').fill('+201001234567');
+      await agentPage.getByLabel('Channel').selectOption('whatsapp');
+      await agentPage.getByLabel('Identifier', { exact: true }).fill('+201001234567');
 
       const createResponse = agentPage.waitForResponse(
         (res) =>
@@ -219,7 +224,7 @@ if (REAL_BACKEND) {
       await agentPage.goto('/tenant/customers');
       await listResponse;
 
-      const searchInput = agentPage.getByPlaceholder(/search/i);
+      const searchInput = agentPage.getByRole('searchbox', { name: 'Search customers' });
       await expect(searchInput).toBeVisible();
 
       const searchResponse = agentPage.waitForResponse(
@@ -231,7 +236,9 @@ if (REAL_BACKEND) {
       await searchInput.fill('Sara');
       await searchResponse;
 
-      await expect(agentPage.getByText('Sara Ali')).toBeVisible();
+      // The update-customer test may already have renamed Sara Ali.
+      await expect(agentPage.getByRole('link', { name: /^Sara (Ali|Updated)$/ })).toBeVisible();
+      await expect(agentPage.getByText('Customer 01')).toHaveCount(0);
 
       const emptyResponse = agentPage.waitForResponse(
         (res) =>
@@ -242,7 +249,7 @@ if (REAL_BACKEND) {
       await searchInput.fill('zzz_nonexistent_zzz');
       await emptyResponse;
 
-      await expect(agentPage.getByText(/no.*result|empty/i)).toBeVisible();
+      await expect(agentPage.getByRole('heading', { name: 'No customers match' })).toBeVisible();
     });
 
     test('create-customer: Agent can create a new customer that appears in the list', async () => {
