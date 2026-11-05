@@ -216,11 +216,12 @@ pub async fn stream_events(
     let (guard, rx) = runtime.connect(ctx.tenant_id, membership_id);
 
     // Reconnect drain: if the agent is already available (reconnect within grace window),
-    // drain one queued escalation for them.
+    // drain one queued escalation for them. Awaited before the stream is returned so the
+    // assignment is settled once the connection is up (no race with the caller).
     let pool_for_drain = pool.clone();
     let tenant_id = ctx.tenant_id;
     let runtime_for_drain = runtime.clone();
-    tokio::spawn(async move {
+    async move {
         let avail_state: Option<String> = sqlx::query_scalar(
             "SELECT state FROM agent_availability \
              WHERE tenant_id = $1 AND membership_id = $2",
@@ -254,7 +255,8 @@ pub async fn stream_events(
             }
             tx.commit().await.ok();
         }
-    });
+    }
+    .await;
 
     let stream = GuardedStream {
         guard,
