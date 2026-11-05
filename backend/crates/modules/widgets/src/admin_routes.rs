@@ -502,15 +502,17 @@ pub async fn delete_instance(
         }
     };
 
-    match queries::soft_delete_instance(&pool, ctx.tenant_id, instance_id).await {
+    match queries::soft_delete_instance(&mut tx, ctx.tenant_id, instance_id).await {
         Ok(true) => {}
         Ok(false) => {
+            let _ = tx.rollback().await;
             return ApiError::not_found("Widget instance not found")
                 .with_request_id(&ctx.request_id)
                 .into_response();
         }
         Err(e) => {
             tracing::error!(%e, "delete_instance: soft delete failed");
+            let _ = tx.rollback().await;
             return ApiError::internal_error("Failed to delete widget instance")
                 .with_request_id(&ctx.request_id)
                 .into_response();

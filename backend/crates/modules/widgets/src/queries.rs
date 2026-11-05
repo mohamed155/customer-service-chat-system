@@ -225,8 +225,11 @@ pub async fn update_instance(
     .await
 }
 
+/// Runs in the caller's transaction: the delete handler holds the row with
+/// `SELECT … FOR UPDATE`, so updating through a separate pool connection
+/// blocked on that lock forever (DELETE never returned).
 pub async fn soft_delete_instance(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
     instance_id: Uuid,
 ) -> sqlx::Result<bool> {
@@ -236,7 +239,7 @@ pub async fn soft_delete_instance(
     )
     .bind(instance_id)
     .bind(tenant_id)
-    .execute(pool)
+    .execute(&mut **tx)
     .await?;
     Ok(result.rows_affected() > 0)
 }

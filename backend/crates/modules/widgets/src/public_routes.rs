@@ -529,13 +529,21 @@ pub async fn send_message(
         }
     };
 
+    // Scope to the session's own customer: a visitor may only post into their
+    // own conversation. Matching on tenant alone let any session in the
+    // tenant target another visitor's conversation (spec 023: 404 instead).
+    let Some(session_customer_id) = session.customer_id else {
+        let _ = tx.rollback().await;
+        return ApiError::not_found("Conversation not found").into_response();
+    };
     let conv_status: Option<String> = sqlx::query_scalar(
         "SELECT status FROM conversations \
-         WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL \
+         WHERE tenant_id = $1 AND id = $2 AND customer_id = $3 AND deleted_at IS NULL \
          FOR UPDATE",
     )
     .bind(session.tenant_id)
     .bind(conversation_id)
+    .bind(session_customer_id)
     .fetch_optional(&mut *tx)
     .await
     .map_err(|e| {

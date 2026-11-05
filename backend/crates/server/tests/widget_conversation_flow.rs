@@ -96,6 +96,15 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 
 async fn setup(pool: &sqlx::PgPool) {
     db::run_migrations(pool).await.unwrap();
+    // Widget rate-limit buckets are keyed by client IP, which is the same
+    // ("unknown") for every test request; reset them so tests don't share budget.
+    cache::Cache::new(
+        &std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into()),
+    )
+    .expect("redis url")
+    .delete_by_prefix("rl:widget_")
+    .await
+    .expect("reset widget rate-limit buckets");
     sqlx::query(
         "TRUNCATE TABLE widget_sessions, widget_instances, messages, \
          customer_channel_identifiers, customers, conversations, \
