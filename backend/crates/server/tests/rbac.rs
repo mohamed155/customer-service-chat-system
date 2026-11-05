@@ -39,6 +39,7 @@ const TENANT_PERMISSIONS: &[&str] = &[
     "audit.view",
     "widgets.view",
     "widgets.manage",
+    "tools.view",
 ];
 
 const VIEWER_PERMISSIONS: &[&str] = &[

@@ -645,7 +645,8 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         )
         // T057: Tool settings
         .routes(
-            routes!(tools::routes::list_tools).layer(require_permission(Permission::AiAgentView)),
+            // Read = Manager+ (spec 022); mutations below stay ai_agent.manage.
+            routes!(tools::routes::list_tools).layer(require_permission(Permission::ToolsView)),
         )
         .routes(
             routes!(tools::routes::update_builtin_policy)

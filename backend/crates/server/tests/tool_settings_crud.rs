@@ -335,4 +335,47 @@ mod tests {
         .await;
         assert_eq!(res.status(), 403, "manager should get 403 on create");
     }
+
+    async fn get_tools_as(pool: &sqlx::PgPool, role: &str) -> axum::response::Response {
+        let user_id = seed_user(pool, None).await;
+        let tenant_id = seed_tenant(pool, None).await;
+        seed_membership(pool, tenant_id, user_id, role).await;
+        send_request(
+            pool.clone(),
+            Request::builder()
+                .uri("/api/v1/tenant/tools")
+                .method("GET")
+                .header("X-Dev-User-Id", user_id.to_string())
+                .header("X-Tenant-ID", tenant_id.to_string())
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+    }
+
+    /// Spec 022 tool-settings-api: read = Manager+.
+    #[tokio::test]
+    async fn manager_can_read_tool_settings() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        let mut res = get_tools_as(&pool, "manager").await;
+        assert_eq!(res.status(), 200, "manager should read tool settings");
+        let json = body_json(&mut res).await;
+        assert!(
+            json["items"].is_array(),
+            "tool list should carry items: {json}"
+        );
+    }
+
+    #[tokio::test]
+    async fn agent_and_viewer_cannot_read_tool_settings() {
+        let Some(pool) = get_pool().await else { return };
+        db::run_migrations(&pool).await.unwrap();
+
+        for role in ["agent", "viewer"] {
+            let res = get_tools_as(&pool, role).await;
+            assert_eq!(res.status(), 403, "{role} must not read tool settings");
+        }
+    }
 }

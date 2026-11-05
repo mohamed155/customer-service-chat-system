@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
 import { of, throwError } from 'rxjs';
 import { BuiltinToolSetting, TenantDefinedTool } from '../../../../core/api/tenant-api.models';
+import { PermissionsService } from '../../../../core/authz/permissions.service';
 import { ToolsSettingsApiService } from './tools-settings-api.service';
 import { ToolsSettingsComponent } from './tools-settings.component';
 
@@ -54,9 +55,18 @@ const MOCK_NEW_TOOL: TenantDefinedTool = {
 };
 
 describe('ToolsSettingsComponent', () => {
+  /** Owners/Admins hold `ai_agent.manage`; Managers only `tools.view`. */
+  function permissionsWith(canManage: boolean) {
+    return {
+      has: (permission: string) =>
+        permission === 'tools.view' || (canManage && permission === 'ai_agent.manage'),
+    };
+  }
+
   async function setup(config?: {
     builtin?: BuiltinToolSetting[];
     tenantDefined?: TenantDefinedTool[];
+    canManage?: boolean;
   }) {
     const mockApi = {
       getTools: vi.fn().mockReturnValue(
@@ -77,6 +87,7 @@ describe('ToolsSettingsComponent', () => {
         provideTaiga(),
         provideZonelessChangeDetection(),
         { provide: ToolsSettingsApiService, useValue: mockApi },
+        { provide: PermissionsService, useValue: permissionsWith(config?.canManage ?? true) },
       ],
     });
     await TestBed.compileComponents();
@@ -117,6 +128,7 @@ describe('ToolsSettingsComponent', () => {
         provideTaiga(),
         provideZonelessChangeDetection(),
         { provide: ToolsSettingsApiService, useValue: mockApi },
+        { provide: PermissionsService, useValue: permissionsWith(true) },
       ],
     });
     await TestBed.compileComponents();
@@ -277,6 +289,42 @@ describe('ToolsSettingsComponent', () => {
       await vi.waitFor(() => {
         expect(mockApi.deleteTenantTool).toHaveBeenCalledWith('tool-1');
       });
+    });
+  });
+
+  describe('read-only access (Manager)', () => {
+    it('shows the tools but no way to change them', async () => {
+      const { fixture, mockApi } = await setup({ canManage: false });
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(fixture.nativeElement.textContent).toContain('check_order_status');
+      });
+      const el: HTMLElement = fixture.nativeElement;
+
+      expect(el.textContent).toContain('read-only access');
+      const buttonLabels = Array.from(el.querySelectorAll('button')).map((b) =>
+        b.textContent?.trim(),
+      );
+      expect(buttonLabels).not.toContain('Add tool');
+      expect(buttonLabels).not.toContain('Edit');
+      expect(buttonLabels).not.toContain('Delete');
+
+      const toggles = Array.from(
+        el.querySelectorAll<HTMLInputElement>('.builtin-grid input[type="checkbox"]'),
+      );
+      expect(toggles.length).toBeGreaterThan(0);
+      expect(toggles.every((t) => t.disabled)).toBe(true);
+      expect(mockApi.updateBuiltinPolicy).not.toHaveBeenCalled();
+    });
+
+    it('does not show the read-only note to Owners and Admins', async () => {
+      const { fixture } = await setup();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(fixture.nativeElement.textContent).toContain('check_order_status');
+      });
+      expect(fixture.nativeElement.textContent).not.toContain('read-only access');
+      expect(fixture.nativeElement.textContent).toContain('Add tool');
     });
   });
 });

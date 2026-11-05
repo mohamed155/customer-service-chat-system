@@ -1,6 +1,12 @@
 <app-page-container>
   <app-page-header title="AI Tool Settings" description="Manage built-in and custom AI tools" />
 
+  @if (!canManage()) {
+    <app-inline-alert>
+      You have read-only access. Only Owners and Admins can change tool settings.
+    </app-inline-alert>
+  }
+
   @if (loading()) {
     <div class="skeleton">
       <div class="shimmer"></div>
@@ -27,15 +33,19 @@
               <input
                 type="checkbox"
                 [checked]="tool.enabled"
+                [disabled]="!canManage()"
                 (change)="toggleBuiltinEnabled(tool.name, !tool.enabled)"
               />
               <span>Enabled</span>
             </label>
-            <label class="toggle" [class.toggle--disabled]="tool.classification === 'approval'">
+            <label
+              class="toggle"
+              [class.toggle--disabled]="tool.classification === 'approval' || !canManage()"
+            >
               <input
                 type="checkbox"
                 [checked]="tool.requireApproval"
-                [disabled]="tool.classification === 'approval'"
+                [disabled]="tool.classification === 'approval' || !canManage()"
                 (change)="toggleBuiltinApproval(tool.name, tool.enabled, !tool.requireApproval)"
               />
               <span>Require approval</span>
@@ -53,7 +63,11 @@
         title="Custom tools"
         subtitle="Tools you define routed to an external HTTPS endpoint"
       />
-      <button type="button" class="btn btn--primary" (click)="openCreateDialog()">Add tool</button>
+      @if (canManage()) {
+        <button type="button" class="btn btn--primary" (click)="openCreateDialog()">
+          Add tool
+        </button>
+      }
     </div>
 
     @if (tenantDefinedTools().length === 0) {
@@ -67,7 +81,9 @@
               <th>Description</th>
               <th>Classification</th>
               <th>Status</th>
-              <th></th>
+              @if (canManage()) {
+                <th></th>
+              }
             </tr>
           </thead>
           <tbody>
@@ -87,18 +103,20 @@
                     [tone]="tool.enabled ? 'green' : 'neutral'"
                   />
                 </td>
-                <td class="actions">
-                  <button type="button" class="btn btn--sm" (click)="openEditDialog(tool)">
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn--sm btn--danger"
-                    (click)="confirmDelete(tool)"
-                  >
-                    Delete
-                  </button>
-                </td>
+                @if (canManage()) {
+                  <td class="actions">
+                    <button type="button" class="btn btn--sm" (click)="openEditDialog(tool)">
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn--sm btn--danger"
+                      (click)="confirmDelete(tool)"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                }
               </tr>
             }
           </tbody>

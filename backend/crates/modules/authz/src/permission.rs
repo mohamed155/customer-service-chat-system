@@ -68,10 +68,14 @@ pub enum Permission {
     WidgetsView,
     #[serde(rename = "widgets.manage")]
     WidgetsManage,
+    /// Read the AI tool settings (spec 022: read = Manager+; changes need
+    /// `ai_agent.manage`).
+    #[serde(rename = "tools.view")]
+    ToolsView,
 }
 
 impl Permission {
-    pub const TENANT: [Self; 23] = [
+    pub const TENANT: [Self; 24] = [
         Self::OverviewView,
         Self::ConversationsView,
         Self::ConversationsManage,
@@ -95,9 +99,10 @@ impl Permission {
         Self::AuditView,
         Self::WidgetsView,
         Self::WidgetsManage,
+        Self::ToolsView,
     ];
 
-    pub const ALL: [Self; 32] = [
+    pub const ALL: [Self; 33] = [
         Self::OverviewView,
         Self::ConversationsView,
         Self::ConversationsManage,
@@ -130,6 +135,7 @@ impl Permission {
         Self::PlatformAuditView,
         Self::WidgetsView,
         Self::WidgetsManage,
+        Self::ToolsView,
     ];
 }
 
@@ -168,6 +174,7 @@ impl fmt::Display for Permission {
             Self::PlatformAuditView => "platform.audit.view",
             Self::WidgetsView => "widgets.view",
             Self::WidgetsManage => "widgets.manage",
+            Self::ToolsView => "tools.view",
         };
         f.write_str(code)
     }
@@ -206,7 +213,7 @@ mod tests {
 
     #[test]
     fn catalog_parity_with_contract() {
-        let contract_codes: [&str; 32] = [
+        let contract_codes: [&str; 33] = [
             "overview.view",
             "conversations.view",
             "conversations.manage",
@@ -239,6 +246,7 @@ mod tests {
             "platform.audit.view",
             "widgets.view",
             "widgets.manage",
+            "tools.view",
         ];
         let mut implemented: Vec<String> = Permission::ALL.iter().map(|p| p.to_string()).collect();
         implemented.sort();
