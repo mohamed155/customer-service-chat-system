@@ -66,6 +66,7 @@ import { EscalationQueueStore } from './escalation-queue.store';
       }
     `,
   ],
+  providers: [EscalationQueueStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class EscalationQueueComponent {

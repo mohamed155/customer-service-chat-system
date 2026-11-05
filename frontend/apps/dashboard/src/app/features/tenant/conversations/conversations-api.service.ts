@@ -61,10 +61,10 @@ export class ConversationsApiService {
   }
 
   listAssignableMembers(): Observable<ApiResponse<TeamMember[]>> {
-    // The endpoint returns a page envelope ({ data, pagination }), not a bare array.
+    // The endpoint returns a page ({ items, nextCursor, hasMore }), not a bare array.
     return this.api
-      .get<{ data: TeamMember[] }>('/tenant/members')
-      .pipe(map(({ data, ...response }) => ({ ...response, data: data?.data ?? [] })));
+      .get<PaginatedResponse<TeamMember>>('/tenant/members')
+      .pipe(map(({ data, ...response }) => ({ ...response, data: data?.items ?? [] })));
   }
 
   getFeedbackSummary(): Observable<ApiResponse<FeedbackSummary>> {

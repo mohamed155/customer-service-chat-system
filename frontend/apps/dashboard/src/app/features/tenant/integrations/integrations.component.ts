@@ -85,6 +85,7 @@ import { IntegrationsStore } from './integrations.store';
       }
     `,
   ],
+  providers: [IntegrationsStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IntegrationsComponent {

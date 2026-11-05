@@ -193,7 +193,7 @@ async function installApi(page: Page, identity: ReturnType<typeof agentIdentity>
 
     if (path === '/tenant/members' && method === 'GET') {
       return json(route, {
-        data: [
+        items: [
           {
             id: AGENT_MEMBERSHIP_ID,
             userId: 'user-agent-1',
@@ -213,6 +213,8 @@ async function installApi(page: Page, identity: ReturnType<typeof agentIdentity>
             joinedAt: '2026-07-01T09:00:00Z',
           },
         ],
+        nextCursor: null,
+        hasMore: false,
       });
     }
 

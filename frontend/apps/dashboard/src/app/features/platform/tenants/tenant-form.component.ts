@@ -163,7 +163,7 @@ export class TenantFormComponent {
       switchMap((id) =>
         this.service.get(id).pipe(
           tap((response) => {
-            if (this.initial() === null) {
+            if (this.initial() == null) {
               this.fetchedInitial.set(response.data);
               this.applyDetail(response.data);
             }
@@ -240,7 +240,8 @@ export class TenantFormComponent {
   protected readonly canManage = computed(() => this.permissions.has('platform.tenants.manage'));
   protected readonly editingId = computed<string | null>(() => {
     const initial = this.initial();
-    if (initial !== null) {
+    // Router input binding sets unmatched inputs to undefined, not null.
+    if (initial != null) {
       return initial.id;
     }
     return this.tenantId();
@@ -250,7 +251,7 @@ export class TenantFormComponent {
     () =>
       this.isEditMode() &&
       !this.loadingInitial() &&
-      this.initial() === null &&
+      this.initial() == null &&
       this.fetchedInitial() === null &&
       this.serverError() !== null,
   );

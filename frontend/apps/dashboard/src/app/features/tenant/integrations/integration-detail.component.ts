@@ -208,6 +208,7 @@ function secretHintFor(
       }
     `,
   ],
+  providers: [IntegrationDetailStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IntegrationDetailComponent {
