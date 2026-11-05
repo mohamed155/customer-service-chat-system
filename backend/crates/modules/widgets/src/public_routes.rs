@@ -44,7 +44,7 @@ pub struct ConfigQuery {
 pub async fn get_config(
     State(pool): State<PgPool>,
     Query(query): Query<ConfigQuery>,
-    axum::Extension(headers): axum::Extension<axum::http::HeaderMap>,
+    headers: axum::http::HeaderMap,
 ) -> Response {
     let span = info_span!("widget_config_lookup", widget_id = %query.widget_id);
     let _guard = span.enter();
@@ -98,7 +98,7 @@ pub async fn get_config(
 )]
 pub async fn create_session(
     State(pool): State<PgPool>,
-    axum::Extension(headers): axum::Extension<axum::http::HeaderMap>,
+    headers: axum::http::HeaderMap,
     ApiJson(payload): ApiJson<CreateSessionPayload>,
 ) -> Response {
     let span = info_span!("widget_session_mint", widget_id = %payload.widget_id);
@@ -238,7 +238,7 @@ fn build_conversation_view(
 pub async fn get_conversation(
     State(pool): State<PgPool>,
     Extension(runtime): Extension<Arc<escalations::presence::Runtime>>,
-    axum::Extension(headers): axum::Extension<axum::http::HeaderMap>,
+    headers: axum::http::HeaderMap,
 ) -> Response {
     let auth = headers.get("authorization").and_then(|v| v.to_str().ok());
     let session = match crate::session::authenticate_session(&pool, auth).await {
@@ -304,11 +304,7 @@ pub async fn get_conversation(
         .is_empty();
     let dto = build_conversation_view(conv.0, &conv.1, conv.2, conv.3, team_online, messages);
 
-    (
-        StatusCode::OK,
-        Json(WidgetConversationResponse { data: Some(dto) }),
-    )
-        .into_response()
+    (StatusCode::OK, Json(WidgetConversationResponse::some(dto))).into_response()
 }
 
 // ---------------------------------------------------------------------------
@@ -331,7 +327,7 @@ pub async fn get_conversation(
 pub async fn create_conversation(
     State(pool): State<PgPool>,
     Extension(runtime): Extension<Arc<escalations::presence::Runtime>>,
-    axum::Extension(headers): axum::Extension<axum::http::HeaderMap>,
+    headers: axum::http::HeaderMap,
 ) -> Response {
     let auth = headers.get("authorization").and_then(|v| v.to_str().ok());
     let session = match crate::session::authenticate_session(&pool, auth).await {
@@ -347,7 +343,7 @@ pub async fn create_conversation(
         }
     };
 
-    let customer_id = match queries::ensure_customer_for_session(&mut tx, &pool, &session).await {
+    let customer_id = match queries::ensure_customer_for_session(&mut tx, &session).await {
         Ok(id) => id,
         Err(e) => {
             tracing::error!(%e, "create_conversation: ensure customer failed");
@@ -400,11 +396,7 @@ pub async fn create_conversation(
         let team_online = !team_online.is_empty();
         let dto =
             build_conversation_view(conv_id, &status, escalated, assigned, team_online, messages);
-        return (
-            StatusCode::OK,
-            Json(WidgetConversationResponse { data: Some(dto) }),
-        )
-            .into_response();
+        return (StatusCode::OK, Json(WidgetConversationResponse::some(dto))).into_response();
     }
 
     let conv_detail = match conversations::queries::create_conversation_in_tx(
@@ -448,7 +440,7 @@ pub async fn create_conversation(
 
     (
         StatusCode::CREATED,
-        Json(WidgetConversationResponse { data: Some(dto) }),
+        Json(WidgetConversationResponse::some(dto)),
     )
         .into_response()
 }
@@ -482,7 +474,7 @@ pub async fn send_message(
     Extension(store): Extension<Arc<dyn RateLimiter>>,
     Extension(tenant_limit): Extension<Arc<dyn TenantRateLimit>>,
     Extension(config): Extension<Arc<config::AppConfig>>,
-    axum::Extension(headers): axum::Extension<axum::http::HeaderMap>,
+    headers: axum::http::HeaderMap,
     Path(conversation_id): Path<Uuid>,
     ApiJson(payload): ApiJson<SendMessagePayload>,
 ) -> Response {

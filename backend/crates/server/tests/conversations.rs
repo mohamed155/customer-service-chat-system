@@ -971,9 +971,10 @@ async fn per_tenant_isolation_list_and_pagination() {
         "tenant A must never see tenant B's conversations"
     );
 
-    // Tenant B sees only B's conversations.
+    // Tenant B sees only B's conversations. B's are `pending` and the inbox
+    // default view is open-only, so ask for every status.
     let b_observed: std::collections::HashSet<Uuid> =
-        collect_pages(&pool, admin_b.user_id, tenant_b, &[])
+        collect_pages(&pool, admin_b.user_id, tenant_b, &[("status", "all")])
             .await
             .into_iter()
             .collect();
@@ -3189,7 +3190,9 @@ async fn viewer_403_for_create() {
             .fetch_one(&pool)
             .await
             .unwrap();
-    let audit_count_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs")
+    let audit_count_before: i64 = // Denials are audited as tenant.access_denied by design; only conversation
+    // actions must be absent.
+    sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE action LIKE 'conversation.%'")
         .fetch_one(&pool)
         .await
         .unwrap();
@@ -3221,7 +3224,9 @@ async fn viewer_403_for_create() {
             .fetch_one(&pool)
             .await
             .unwrap();
-    let audit_count_after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs")
+    let audit_count_after: i64 = // Denials are audited as tenant.access_denied by design; only conversation
+    // actions must be absent.
+    sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE action LIKE 'conversation.%'")
         .fetch_one(&pool)
         .await
         .unwrap();

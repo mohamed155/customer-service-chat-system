@@ -107,6 +107,7 @@ async fn run_migrations_succeeds() {
         (62, "platform analytics indexes outbox created"),
         (63, "platform analytics indexes outbox attempts"),
         (64, "platform analytics indexes conversations status"),
+        (65, "customer identifier widget channel"),
     ];
     assert_eq!(
         rows.len(),

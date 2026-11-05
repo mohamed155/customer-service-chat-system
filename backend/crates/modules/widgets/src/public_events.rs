@@ -163,7 +163,7 @@ impl WidgetEventStream {
 pub async fn stream_events(
     State(pool): State<PgPool>,
     Extension(runtime): Extension<Arc<escalations::presence::Runtime>>,
-    axum::Extension(headers): axum::Extension<axum::http::HeaderMap>,
+    headers: axum::http::HeaderMap,
     Path(conversation_id): Path<Uuid>,
 ) -> Response {
     let span = info_span!("widget_sse_subscribe", conversation_id = %conversation_id);

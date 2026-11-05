@@ -1,5 +1,6 @@
 use axum::extract::MatchedPath;
 use axum::{extract::Request, middleware::Next, response::Response};
+use sentry::SentryFutureExt;
 use std::time::Instant;
 use tracing::{Instrument, Span};
 
@@ -18,14 +19,17 @@ pub async fn trace_middleware(request: Request, next: Next) -> Response {
         .unwrap_or("unknown")
         .to_owned();
 
-    let _sentry_scope = sentry::Hub::current().push_scope();
-    sentry::configure_scope(|scope| scope.set_tag("request_id", &request_id));
+    // Per-request Sentry hub bound to this future. Pushing a scope on the
+    // thread-local hub and holding the guard across `.await` lets concurrent
+    // requests on one thread pop scopes out of order, which panics.
+    let hub = std::sync::Arc::new(sentry::Hub::new_from_top(sentry::Hub::current()));
+    hub.configure_scope(|scope| scope.set_tag("request_id", &request_id));
 
     let start = Instant::now();
     let span = request_span(&request_id, &method, &path);
     span.record("route", &route);
 
-    let response = next.run(request).instrument(span).await;
+    let response = next.run(request).instrument(span).bind_hub(hub).await;
 
     let latency_ms = start.elapsed().as_millis() as u64;
     let status = response.status().as_u16();

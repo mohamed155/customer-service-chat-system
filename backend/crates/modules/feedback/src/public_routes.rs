@@ -40,7 +40,7 @@ pub async fn submit_feedback(
     Extension(store): Extension<Arc<dyn RateLimiter>>,
     Extension(tenant_limit): Extension<Arc<dyn TenantRateLimit>>,
     Extension(config): Extension<Arc<config::AppConfig>>,
-    axum::Extension(headers): axum::Extension<axum::http::HeaderMap>,
+    headers: axum::http::HeaderMap,
     Path(conversation_id): Path<Uuid>,
     ApiJson(payload): ApiJson<SubmitFeedbackPayload>,
 ) -> Response {
@@ -227,7 +227,7 @@ pub async fn submit_feedback(
 )]
 pub async fn get_pending_feedback(
     State(pool): State<PgPool>,
-    axum::Extension(headers): axum::Extension<axum::http::HeaderMap>,
+    headers: axum::http::HeaderMap,
 ) -> Response {
     let auth = headers.get("authorization").and_then(|v| v.to_str().ok());
     let session = match widgets::session::authenticate_session(&pool, auth).await {
