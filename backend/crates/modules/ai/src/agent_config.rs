@@ -332,7 +332,9 @@ pub async fn live_skill_ids(
         return Ok(Vec::new());
     }
     let rows: Vec<(Uuid,)> = sqlx::query_as(
-        "SELECT id FROM skills WHERE tenant_id = $1 AND id = ANY($2) AND deleted_at IS NULL",
+        // Skills are hard-deleted (0035_agent_skills has no deleted_at column);
+        // the old `deleted_at IS NULL` filter made this query always fail.
+        "SELECT id FROM skills WHERE tenant_id = $1 AND id = ANY($2)",
     )
     .bind(tenant_id)
     .bind(ids)

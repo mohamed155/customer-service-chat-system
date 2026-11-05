@@ -146,7 +146,7 @@ impl From<ToolActivityQueryRow> for ToolActivityItem {
 
 #[utoipa::path(
     get,
-    path = "/api/v1/tenant/conversations/{id}/tool-activity",
+    path = "/tenant/conversations/{id}/tool-activity",
     tag = "tools",
     operation_id = "tool_activity",
     summary = "Get tool activity for a conversation",
@@ -229,7 +229,7 @@ pub async fn tool_activity(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/tenant/tool-requests/{id}/decide",
+    path = "/tenant/tool-requests/{id}/decide",
     tag = "tools",
     operation_id = "decide_tool_request",
     summary = "Decide (approve/deny) a pending tool request",
@@ -305,7 +305,7 @@ pub async fn decide_tool_request(
 
 #[utoipa::path(
     get,
-    path = "/api/v1/tenant/tool-requests",
+    path = "/tenant/tool-requests",
     tag = "tools",
     operation_id = "list_pending_tool_requests",
     summary = "List pending tool requests",
@@ -423,7 +423,7 @@ struct ListToolsItem {
 
 #[utoipa::path(
     get,
-    path = "/api/v1/tenant/tools",
+    path = "/tenant/tools",
     tag = "tools",
     operation_id = "list_tools",
     summary = "List all available tools",
@@ -501,7 +501,7 @@ pub struct UpdateBuiltinPolicyBody {
 
 #[utoipa::path(
     put,
-    path = "/api/v1/tenant/tools/builtin/{name}/policy",
+    path = "/tenant/tools/builtin/{name}/policy",
     tag = "tools",
     operation_id = "update_builtin_policy",
     summary = "Update policy for a built-in tool",
@@ -626,7 +626,7 @@ async fn validate_tool_name_unique(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/tenant/tools",
+    path = "/tenant/tools",
     tag = "tools",
     operation_id = "create_tenant_tool",
     summary = "Create a tenant-defined tool",
@@ -739,7 +739,7 @@ pub struct UpdateTenantToolBody {
 
 #[utoipa::path(
     put,
-    path = "/api/v1/tenant/tools/{id}",
+    path = "/tenant/tools/{id}",
     tag = "tools",
     operation_id = "update_tenant_tool",
     summary = "Update a tenant-defined tool",
@@ -853,7 +853,7 @@ pub async fn update_tenant_tool_route(
 
 #[utoipa::path(
     delete,
-    path = "/api/v1/tenant/tools/{id}",
+    path = "/tenant/tools/{id}",
     tag = "tools",
     operation_id = "delete_tenant_tool",
     summary = "Soft-delete a tenant-defined tool",

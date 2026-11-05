@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -111,7 +113,7 @@ async fn setup(pool: &sqlx::PgPool) {
 }
 
 async fn seed_tenant(pool: &sqlx::PgPool, label: &str) -> Uuid {
-    let slug = format!("tool-iso-{}-{}", label, Uuid::new_v4().simple());
+    let slug = format!("tool-iso-{}-{}", label, Uuid::new_v4().simple()).to_lowercase();
     sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
         .bind(format!("Tool Isolation Tenant {}", label))
         .bind(&slug)
@@ -260,10 +262,10 @@ async fn engine_tool_isolation() {
         "name": "Tenant-A-Assistant",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let bytes_a = serde_json::to_vec(&agent_payload_a).unwrap();
     let put_a =
@@ -326,10 +328,10 @@ async fn engine_tool_isolation() {
         "name": "Tenant-B-Assistant",
         "avatar": { "kind": "preset", "preset": "nova" },
         "tone": "friendly",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let bytes_b = serde_json::to_vec(&agent_payload_b).unwrap();
     let put_b =
@@ -401,8 +403,8 @@ async fn engine_tool_isolation() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conv_b)
@@ -421,8 +423,8 @@ async fn engine_tool_isolation() {
     let text_resp = text_response("I found Bob TenantB, email bob@tenantb.com, phone +1-555-0202");
     let responder = ToolThenTextResponder {
         called: AtomicBool::new(false),
-        tool_call: ResponseTemplate::new(200).set_body_json(tool_resp),
-        text: ResponseTemplate::new(200).set_body_json(text_resp),
+        tool_call: openai_mock::streaming_template(&tool_resp),
+        text: openai_mock::streaming_template(&text_resp),
     };
     Mock::given(wiremock::matchers::method("POST"))
         .and(wiremock::matchers::path("/v1/chat/completions"))

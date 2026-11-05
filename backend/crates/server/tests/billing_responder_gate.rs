@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -202,7 +204,7 @@ async fn mock_openai(mock: &MockServer, api_key: &str, body: serde_json::Value) 
     Mock::given(wm_method("POST"))
         .and(wm_path("/v1/chat/completions"))
         .and(wm_header("Authorization", format!("Bearer {}", api_key)))
-        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .respond_with(openai_mock::OpenAiReply::new(body))
         .mount(mock)
         .await;
 }

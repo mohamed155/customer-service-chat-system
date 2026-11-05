@@ -236,7 +236,7 @@ mod tests {
         let generation_id = Uuid::new_v4();
         sqlx::query(
             "INSERT INTO conversations (id, tenant_id, customer_id, channel, status) \
-             VALUES ($1, $2, $3, 'chat', 'active')",
+             VALUES ($1, $2, $3, 'web_chat', 'open')",
         )
         .bind(conversation_id)
         .bind(tenant_id)
@@ -245,14 +245,24 @@ mod tests {
         .await
         .unwrap();
 
+        // trigger_message_id is FK-referenced, so seed a real trigger message.
+        let trigger_message_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
+             VALUES ($1, $2, 'customer', 'hi') RETURNING id",
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         sqlx::query(
-            "INSERT INTO ai_generations (id, tenant_id, conversation_id, trigger_message_id, outcome) \
-             VALUES ($1, $2, $3, $4, 'success')",
+            "INSERT INTO ai_generations (id, tenant_id, conversation_id, trigger_message_id, outcome, latency_ms) \
+             VALUES ($1, $2, $3, $4, 'success', 0)",
         )
         .bind(generation_id)
         .bind(tenant_id)
         .bind(conversation_id)
-        .bind(Uuid::new_v4())
+        .bind(trigger_message_id)
         .execute(&pool)
         .await
         .unwrap();

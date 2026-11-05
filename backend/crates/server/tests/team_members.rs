@@ -916,7 +916,7 @@ async fn queued_outbox_delivery_is_recovered() {
     let state: (String, bool) = sqlx::query_as(
         "SELECT ti.email_delivery_status, oe.processed_at IS NOT NULL \
          FROM tenant_invitations ti JOIN outbox_events oe ON oe.aggregate_id = ti.id::text \
-         WHERE ti.tenant_id = $1 AND ti.id = $2",
+         WHERE ti.tenant_id = $1::text AND ti.id = $2",
     )
     .bind(tenant_id)
     .bind(invitation_id)

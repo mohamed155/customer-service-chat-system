@@ -918,7 +918,7 @@ async fn tool_execution_emits_audit_row() {
     .unwrap();
 
     let conversation_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO conversations (tenant_id, customer_id, channel, status) VALUES ($1, $2, 'chat', 'active') RETURNING id",
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status) VALUES ($1, $2, 'web_chat', 'open') RETURNING id",
     )
     .bind(tenant_id)
     .bind(customer_id)
@@ -1000,7 +1000,7 @@ async fn failed_tool_execution_emits_audit_row() {
     .unwrap();
 
     let conversation_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO conversations (tenant_id, customer_id, channel, status) VALUES ($1, $2, 'chat', 'active') RETURNING id",
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status) VALUES ($1, $2, 'web_chat', 'open') RETURNING id",
     )
     .bind(tenant_id)
     .bind(customer_id)

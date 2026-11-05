@@ -1,3 +1,5 @@
+#[path = "support/tool_fixtures.rs"]
+mod tool_fixtures;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -168,7 +170,6 @@ async fn tool_activity_endpoint_returns_succeeded_tool() {
     .await
     .unwrap();
 
-    let gen_id = Uuid::new_v4();
     let conversation_id = sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO conversations (tenant_id, customer_id, channel, status) \
          VALUES ($1, $2, 'web_chat', 'open') RETURNING id",
@@ -178,6 +179,7 @@ async fn tool_activity_endpoint_returns_succeeded_tool() {
     .fetch_one(&pool)
     .await
     .unwrap();
+    let gen_id = tool_fixtures::seed_generation(&pool, tenant_a, conversation_id).await;
 
     // Insert a succeeded tool_requests row for tenant A
     let tool_request_id = sqlx::query_scalar::<_, Uuid>(

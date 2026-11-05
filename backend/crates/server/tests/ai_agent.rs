@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -230,7 +232,7 @@ async fn mock_openai(mock: &MockServer, api_key: &str, body: serde_json::Value) 
     Mock::given(wm_method("POST"))
         .and(wm_path("/v1/chat/completions"))
         .and(wm_header("Authorization", format!("Bearer {}", api_key)))
-        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .respond_with(openai_mock::OpenAiReply::new(body))
         .mount(mock)
         .await;
 }
@@ -284,7 +286,7 @@ async fn mock_anthropic(mock: &MockServer, api_key: &str, body: serde_json::Valu
     Mock::given(wm_method("POST"))
         .and(wm_path("/v1/messages"))
         .and(wm_header("x-api-key", api_key))
-        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .respond_with(openai_mock::OpenAiReply::new(body))
         .mount(mock)
         .await;
 }
@@ -372,15 +374,15 @@ async fn get_returns_editable_defaults_when_unconfigured() {
     let agent = &json["agent"];
     assert_eq!(agent["name"], "AI Assistant");
     assert_eq!(agent["tone"], "professional");
-    assert_eq!(agent["enabled_channels"], serde_json::json!(["web_chat"]));
-    assert_eq!(agent["is_default"], true);
+    assert_eq!(agent["enabledChannels"], serde_json::json!(["web_chat"]));
+    assert_eq!(agent["isDefault"], true);
     assert!(agent["version"].is_null());
     assert!(agent["updated_at"].is_null());
     assert_eq!(agent["avatar"]["kind"], "preset");
     assert_eq!(agent["avatar"]["preset"], "spark");
-    assert!(agent["upload_url"].is_null() || agent.get("upload_url").is_none());
+    assert!(agent["uploadUrl"].is_null() || agent.get("upload_url").is_none());
 
-    let provider = &agent["provider_selection"];
+    let provider = &agent["providerSelection"];
     assert!(provider["provider"].is_null());
     assert!(provider["model"].is_null());
     assert_eq!(provider["stale"], false);
@@ -409,10 +411,10 @@ async fn first_save_creates_and_activates_agent() {
         "name": "My Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let resp = send(
@@ -463,10 +465,10 @@ async fn stale_version_conflicts_without_overwriting() {
         "name": "Agent V1",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let resp1 = send(
@@ -483,10 +485,10 @@ async fn stale_version_conflicts_without_overwriting() {
         "name": "Agent V2",
         "avatar": { "kind": "preset", "preset": "nova" },
         "tone": "friendly",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
         "version": 1,
     });
 
@@ -505,10 +507,10 @@ async fn stale_version_conflicts_without_overwriting() {
         "name": "Agent Stale",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
         "version": 1,
     });
 
@@ -553,17 +555,17 @@ async fn save_round_trips_on_reload() {
         "name": "Roundtrip Agent",
         "avatar": { "kind": "preset", "preset": "nova" },
         "tone": "friendly",
-        "business_rules": ["Be concise", "Use emoji sparingly"],
-        "escalation_rules": [
+        "businessRules": ["Be concise", "Use emoji sparingly"],
+        "escalationRules": [
             {
                 "name": "Refund Request",
                 "trigger": "topic_keywords",
                 "keywords": ["refund", "money back"],
-                "required_skill_ids": []
+                "requiredSkillIds": []
             }
         ],
-        "enabled_channels": ["web_chat", "email"],
-        "provider_selection": null,
+        "enabledChannels": ["web_chat", "email"],
+        "providerSelection": null,
     });
 
     let put_resp = send(
@@ -590,11 +592,11 @@ async fn save_round_trips_on_reload() {
     assert_eq!(json["agent"]["name"], "Roundtrip Agent");
     assert_eq!(json["agent"]["tone"], "friendly");
     assert_eq!(
-        json["agent"]["business_rules"],
+        json["agent"]["businessRules"],
         serde_json::json!(["Be concise", "Use emoji sparingly"])
     );
     assert_eq!(
-        json["agent"]["enabled_channels"],
+        json["agent"]["enabledChannels"],
         serde_json::json!(["web_chat", "email"])
     );
     assert_eq!(json["agent"]["avatar"]["kind"], "preset");
@@ -602,7 +604,7 @@ async fn save_round_trips_on_reload() {
     assert_eq!(json["agent"]["version"], 1);
     assert!(!json["agent"]["updated_at"].is_null());
 
-    let rules = &json["agent"]["escalation_rules"];
+    let rules = &json["agent"]["escalationRules"];
     assert_eq!(rules.as_array().unwrap().len(), 1);
     assert_eq!(rules[0]["name"], "Refund Request");
     assert_eq!(rules[0]["trigger"], "topic_keywords");
@@ -635,10 +637,10 @@ async fn save_rejects_invalid_payload_atomically() {
         "name": "   ",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let put_resp = send(
@@ -695,10 +697,10 @@ async fn cross_tenant_isolation() {
         "name": "Tenant-A Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let put_a = send(
@@ -750,10 +752,10 @@ async fn configured_agent_drives_ai_reply() {
         "name": "AgentX",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "friendly",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
 
     let put_resp = send(
@@ -810,8 +812,8 @@ async fn configured_agent_drives_ai_reply() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -893,10 +895,10 @@ async fn avatar_preset_select_and_upload() {
         "name": "Avatar Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let resp1 = send(
@@ -963,10 +965,10 @@ async fn avatar_preset_select_and_upload() {
         "name": "Avatar Agent",
         "avatar": { "kind": "preset", "preset": "orbit" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
         "version": 2,
     });
 
@@ -1513,10 +1515,10 @@ async fn ai_handling_rejects_once_agent_configured() {
         "name": "T042 Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let put_resp = send(
@@ -1826,10 +1828,10 @@ async fn business_rule_appears_in_composed_prompt() {
         "name": "RuleAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": ["never promise refunds"],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": ["never promise refunds"],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
 
     let put_resp = send(
@@ -1876,8 +1878,8 @@ async fn business_rule_appears_in_composed_prompt() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -1943,18 +1945,18 @@ async fn keyword_rule_escalates_with_rule_name_reason() {
         "name": "EscalateAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [
+        "businessRules": [],
+        "escalationRules": [
             {
                 "id": rule_id,
                 "name": "Refund requests",
                 "trigger": "topic_keywords",
                 "keywords": ["refund"],
-                "required_skill_ids": [skill_id]
+                "requiredSkillIds": [skill_id]
             }
         ],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
 
     let put_resp = send(
@@ -2000,8 +2002,8 @@ async fn keyword_rule_escalates_with_rule_name_reason() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -2079,10 +2081,10 @@ async fn baseline_escalation_survives_zero_tenant_rules() {
         "name": "BaselineAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
 
     let put_resp = send(
@@ -2128,8 +2130,8 @@ async fn baseline_escalation_survives_zero_tenant_rules() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -2179,9 +2181,9 @@ async fn broken_skill_ref_surfaced_on_read() {
     let user_id = seed_user(&pool, "t061@test.com", "admin").await;
     seed_membership(&pool, tenant_id, user_id, "admin").await;
 
-    // Seed a skill, then soft-delete it
+    // Seed a skill, then delete it (skills are hard-deleted; see 0035_agent_skills)
     let skill_id = seed_skill(&pool, tenant_id, "obsolete-skill").await;
-    sqlx::query("UPDATE skills SET deleted_at = now() WHERE id = $1")
+    sqlx::query("DELETE FROM skills WHERE id = $1")
         .bind(skill_id)
         .execute(&pool)
         .await
@@ -2192,18 +2194,18 @@ async fn broken_skill_ref_surfaced_on_read() {
         "name": "BrokenRefAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [
+        "businessRules": [],
+        "escalationRules": [
             {
                 "id": rule_id,
                 "name": "DependsOnObsolete",
                 "trigger": "topic_keywords",
                 "keywords": ["obsolete"],
-                "required_skill_ids": [skill_id]
+                "requiredSkillIds": [skill_id]
             }
         ],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let put_resp = send(
@@ -2222,9 +2224,9 @@ async fn broken_skill_ref_surfaced_on_read() {
     assert_eq!(get_resp.status(), StatusCode::OK);
     let json = body_json(get_resp).await;
 
-    let rules = json["agent"]["escalation_rules"].as_array().unwrap();
+    let rules = json["agent"]["escalationRules"].as_array().unwrap();
     assert_eq!(rules.len(), 1);
-    let broken = rules[0]["broken_skill_refs"].as_array().unwrap();
+    let broken = rules[0]["brokenSkillRefs"].as_array().unwrap();
     assert_eq!(broken.len(), 1, "expected one broken skill ref");
     let broken_id = broken[0].as_str().unwrap();
     assert_eq!(
@@ -2257,18 +2259,18 @@ async fn save_rejects_unknown_skill_reference() {
         "name": "BadRefAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [
+        "businessRules": [],
+        "escalationRules": [
             {
                 "id": Uuid::new_v4(),
                 "name": "BadRule",
                 "trigger": "topic_keywords",
                 "keywords": ["test"],
-                "required_skill_ids": [fake_skill_id]
+                "requiredSkillIds": [fake_skill_id]
             }
         ],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let put_resp = send(
@@ -2315,18 +2317,18 @@ async fn save_rejects_malformed_rules() {
         "name": "EmptyKwAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [
+        "businessRules": [],
+        "escalationRules": [
             {
                 "id": Uuid::new_v4(),
                 "name": "EmptyKwRule",
                 "trigger": "topic_keywords",
                 "keywords": [],
-                "required_skill_ids": []
+                "requiredSkillIds": []
             }
         ],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let resp1 = send(
@@ -2348,18 +2350,18 @@ async fn save_rejects_malformed_rules() {
         "name": "NonemptyKwAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [
+        "businessRules": [],
+        "escalationRules": [
             {
                 "id": Uuid::new_v4(),
                 "name": "HumanWithKwRule",
                 "trigger": "human_request",
                 "keywords": ["should", "not", "be", "here"],
-                "required_skill_ids": []
+                "requiredSkillIds": []
             }
         ],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let resp2 = send(
@@ -2412,10 +2414,10 @@ async fn disabled_channel_blocks_ai_reply() {
         "name": "Disabled Channel Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": [],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": [],
+        "providerSelection": null,
     });
 
     let resp = send(
@@ -2461,8 +2463,8 @@ async fn disabled_channel_blocks_ai_reply() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -2510,7 +2512,7 @@ async fn disabled_channel_blocks_ai_reply() {
 
     // Assert outbox event was consumed
     let outbox_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM outbox_events WHERE tenant_id = $1 AND event_type = 'conversation.customer_message'",
+        "SELECT COUNT(*) FROM outbox_events WHERE tenant_id = $1::text AND event_type = 'conversation.customer_message'",
     )
     .bind(tenant_id)
     .fetch_one(&pool)
@@ -2548,10 +2550,10 @@ async fn re_enabled_channel_resumes_replies() {
         "name": "ReEnabled Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let resp = send(
@@ -2606,8 +2608,8 @@ async fn re_enabled_channel_resumes_replies() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -2659,10 +2661,10 @@ async fn all_channels_disabled_save_succeeds() {
         "name": "All Disabled Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": [],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": [],
+        "providerSelection": null,
     });
 
     let put_resp = send(
@@ -2681,7 +2683,7 @@ async fn all_channels_disabled_save_succeeds() {
     assert_eq!(get_resp.status(), StatusCode::OK);
     let json = body_json(get_resp).await;
     assert_eq!(json["configured"], true);
-    assert_eq!(json["agent"]["enabled_channels"], serde_json::json!([]));
+    assert_eq!(json["agent"]["enabledChannels"], serde_json::json!([]));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2766,10 +2768,10 @@ async fn every_write_is_audited() {
         "name": "Audited Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let create_resp = send(
@@ -2804,10 +2806,10 @@ async fn every_write_is_audited() {
         "name": "Audited Agent Updated",
         "avatar": { "kind": "preset", "preset": "nova" },
         "tone": "friendly",
-        "business_rules": ["Be nice"],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat", "email"],
-        "provider_selection": null,
+        "businessRules": ["Be nice"],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat", "email"],
+        "providerSelection": null,
         "version": 1,
     });
 
@@ -2912,10 +2914,10 @@ async fn unauthorized_roles_get_403() {
             "name": "Role Test",
             "avatar": { "kind": "preset", "preset": "spark" },
             "tone": "professional",
-            "business_rules": [],
-            "escalation_rules": [],
-            "enabled_channels": ["web_chat"],
-            "provider_selection": null,
+            "businessRules": [],
+            "escalationRules": [],
+            "enabledChannels": ["web_chat"],
+            "providerSelection": null,
         });
         let put_resp = send(
             &state,
@@ -2951,10 +2953,10 @@ async fn unauthorized_roles_get_403() {
                 "name": "Owner Agent",
                 "avatar": { "kind": "preset", "preset": "spark" },
                 "tone": "professional",
-                "business_rules": [],
-                "escalation_rules": [],
-                "enabled_channels": ["web_chat"],
-                "provider_selection": null,
+                "businessRules": [],
+                "escalationRules": [],
+                "enabledChannels": ["web_chat"],
+                "providerSelection": null,
             }),
         ),
     )
@@ -2983,10 +2985,10 @@ async fn unauthorized_roles_get_403() {
                 "name": "Admin Agent",
                 "avatar": { "kind": "preset", "preset": "spark" },
                 "tone": "professional",
-                "business_rules": [],
-                "escalation_rules": [],
-                "enabled_channels": ["web_chat"],
-                "provider_selection": null,
+                "businessRules": [],
+                "escalationRules": [],
+                "enabledChannels": ["web_chat"],
+                "providerSelection": null,
             }),
         ),
     )
@@ -3027,10 +3029,10 @@ async fn platform_actor_attribution_via_tenant_switch() {
         "name": "Platform-Modified Agent",
         "avatar": { "kind": "preset", "preset": "orbit" },
         "tone": "friendly",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": null,
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": null,
     });
 
     let put_resp = send(
@@ -3094,12 +3096,12 @@ async fn options_lists_only_credential_backed_providers() {
     assert!(json["tones"].is_array(), "tones must be present");
     assert!(json["channels"].is_array(), "channels must be present");
     assert!(
-        json["avatar_presets"].is_array(),
+        json["avatarPresets"].is_array(),
         "avatar_presets must be present"
     );
-    assert_eq!(json["prompt_max_length"], 8000);
-    assert_eq!(json["limits"]["business_rules_max"], 20);
-    assert_eq!(json["limits"]["escalation_rules_max"], 20);
+    assert_eq!(json["promptMaxLength"], 8000);
+    assert_eq!(json["limits"]["businessRulesMax"], 20);
+    assert_eq!(json["limits"]["escalationRulesMax"], 20);
 
     // Assert provider credential availability
     let providers = json["providers"].as_array().unwrap();
@@ -3107,17 +3109,17 @@ async fn options_lists_only_credential_backed_providers() {
         .iter()
         .find(|p| p["provider"] == "anthropic")
         .unwrap();
-    assert_eq!(anthropic["credential_available"], true);
+    assert_eq!(anthropic["credentialAvailable"], true);
     let openai = providers
         .iter()
         .find(|p| p["provider"] == "openai")
         .unwrap();
-    assert_eq!(openai["credential_available"], false);
+    assert_eq!(openai["credentialAvailable"], false);
     let gemini = providers
         .iter()
         .find(|p| p["provider"] == "gemini")
         .unwrap();
-    assert_eq!(gemini["credential_available"], false);
+    assert_eq!(gemini["credentialAvailable"], false);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3149,10 +3151,10 @@ async fn provider_override_serves_ai_reply() {
         "name": "OverrideAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "anthropic", "model": "claude-sonnet-5" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "anthropic", "model": "claude-sonnet-5" },
     });
 
     let put_resp = send(
@@ -3206,8 +3208,8 @@ async fn provider_override_serves_ai_reply() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -3275,10 +3277,10 @@ async fn stale_override_falls_back() {
         "name": "StaleAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "anthropic", "model": "claude-sonnet-5" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "anthropic", "model": "claude-sonnet-5" },
     });
 
     let put_resp = send(
@@ -3288,7 +3290,7 @@ async fn stale_override_falls_back() {
     .await;
     assert_eq!(put_resp.status(), StatusCode::CREATED);
     let put_json = body_json(put_resp).await;
-    assert_eq!(put_json["agent"]["provider_selection"]["stale"], false);
+    assert_eq!(put_json["agent"]["providerSelection"]["stale"], false);
     let _version = put_json["agent"]["version"].as_i64().unwrap();
 
     // Delete the anthropic credential
@@ -3308,7 +3310,7 @@ async fn stale_override_falls_back() {
     .await;
     assert_eq!(get_resp.status(), StatusCode::OK);
     let get_json = body_json(get_resp).await;
-    assert_eq!(get_json["agent"]["provider_selection"]["stale"], true);
+    assert_eq!(get_json["agent"]["providerSelection"]["stale"], true);
 
     // Mock OpenAI (default path)
     mock_openai(
@@ -3354,8 +3356,8 @@ async fn stale_override_falls_back() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -3414,10 +3416,10 @@ async fn save_rejects_unresolvable_provider() {
         "name": "NoCredAgent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "anthropic", "model": "claude-sonnet-5" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "anthropic", "model": "claude-sonnet-5" },
     });
 
     let put_resp = send(

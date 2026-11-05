@@ -232,7 +232,7 @@ async fn emit_whatsapp_outbound_for_ai_reply() {
     // Verify the outbox event exists
     let outbox_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+         WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
     .fetch_one(&pool)
@@ -246,7 +246,7 @@ async fn emit_whatsapp_outbound_for_ai_reply() {
     // Verify the outbox event references the AI message
     let event_message_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT (payload->>'message_id')::uuid FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+         WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
     .fetch_optional(&pool)
@@ -261,7 +261,7 @@ async fn emit_whatsapp_outbound_for_ai_reply() {
     // Verify the outbox event references the conversation
     let event_conversation_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT (payload->>'conversation_id')::uuid FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+         WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
     .fetch_optional(&pool)
@@ -313,7 +313,7 @@ async fn auto_ack_system_message_with_whatsapp_outbound() {
     // Verify the outbox event exists
     let outbox_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+         WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
     .fetch_one(&pool)
@@ -327,7 +327,7 @@ async fn auto_ack_system_message_with_whatsapp_outbound() {
     // Verify the outbox event references the system message
     let event_message_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT (payload->>'message_id')::uuid FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+         WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
     .fetch_optional(&pool)
@@ -373,7 +373,7 @@ async fn non_whatsapp_channel_does_not_emit_whatsapp_outbound() {
     // verify the outbox is empty. This tests the defensive coding path.
     let outbox_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+         WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
     .fetch_one(&pool)

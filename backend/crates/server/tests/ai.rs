@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -234,7 +236,7 @@ async fn mock_openai(mock: &MockServer, api_key: &str, body: serde_json::Value) 
     Mock::given(method("POST"))
         .and(path("/v1/chat/completions"))
         .and(header("Authorization", format!("Bearer {}", api_key)))
-        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .respond_with(openai_mock::OpenAiReply::new(body))
         .mount(mock)
         .await;
 }
@@ -243,7 +245,7 @@ async fn mock_anthropic(mock: &MockServer, api_key: &str, body: serde_json::Valu
     Mock::given(method("POST"))
         .and(path("/v1/messages"))
         .and(header("x-api-key", api_key))
-        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .respond_with(openai_mock::OpenAiReply::new(body))
         .mount(mock)
         .await;
 }
@@ -253,7 +255,7 @@ async fn mock_gemini(mock: &MockServer, api_key: &str, body: serde_json::Value) 
     Mock::given(method("POST"))
         .and(path("/v1beta/models/gemini-2.0-flash:generateContent"))
         .and(header("x-goog-api-key", api_key))
-        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .respond_with(openai_mock::OpenAiReply::new(body))
         .mount(mock)
         .await;
 }
@@ -932,7 +934,8 @@ async fn put_tenant_config_validation_rejects_bad_provider() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    // Platform contract (spec 001): validation failures are 400 `validation_failed`.
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -954,7 +957,8 @@ async fn put_tenant_config_validation_rejects_bad_temperature() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    // Platform contract (spec 001): validation failures are 400 `validation_failed`.
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -985,7 +989,8 @@ async fn put_tenant_config_validation_rejects_too_many_fallbacks() {
     )
     .await;
 
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    // Platform contract (spec 001): validation failures are 400 `validation_failed`.
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -2223,13 +2228,22 @@ async fn usage_detail_rbac() {
 
     let state = plain_state(pool.clone());
 
-    // viewer can list
+    // Viewer has no ai_agent.view (spec 015: usage reads need ai_agent.view,
+    // which only Owner/Admin hold), so the list is forbidden too.
     let list_resp = send(
         &state,
         auth_get("/api/v1/tenant/ai/usage", viewer_id, tenant_id),
     )
     .await;
-    assert_eq!(list_resp.status(), StatusCode::OK);
+    assert_eq!(list_resp.status(), StatusCode::FORBIDDEN);
+
+    // admin can list
+    let admin_list = send(
+        &state,
+        auth_get("/api/v1/tenant/ai/usage", admin_id, tenant_id),
+    )
+    .await;
+    assert_eq!(admin_list.status(), StatusCode::OK);
 
     // viewer cannot access detail
     let detail_url = format!("/api/v1/tenant/ai/usage/{}", id);

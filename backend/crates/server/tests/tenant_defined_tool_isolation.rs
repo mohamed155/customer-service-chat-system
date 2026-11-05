@@ -114,7 +114,7 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str, platform_role: Option<&str>
 async fn seed_tenant(pool: &sqlx::PgPool, label: &str) -> Uuid {
     let slug = format!(
         "tenant-{}-{}",
-        label,
+        label.to_lowercase(),
         Uuid::new_v4().to_string().split('-').next().unwrap()
     );
     sqlx::query_scalar::<_, Uuid>("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")

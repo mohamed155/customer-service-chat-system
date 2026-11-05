@@ -497,7 +497,7 @@ async fn reply_whatsapp_success_emits_outbound() {
     // Verify outbox event was emitted
     let outbox_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+         WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
     .fetch_one(&pool)
@@ -512,7 +512,7 @@ async fn reply_whatsapp_success_emits_outbound() {
     // Verify the payload contains the conversation_id
     let payload_conv_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT (payload->>'conversationId')::uuid FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+         WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
     .fetch_optional(&pool)

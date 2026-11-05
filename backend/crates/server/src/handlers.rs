@@ -317,7 +317,7 @@ pub struct DecideRequest {
 
 #[utoipa::path(
     post,
-    path = "/tenant/tools/requests/{id}/decide",
+    path = "/tenant/tool-requests/{id}/decide",
     tag = "tools",
     operation_id = "decide_tool_request",
     summary = "Decide (approve/deny) a pending tool request",

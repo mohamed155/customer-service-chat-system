@@ -1,4 +1,6 @@
 use std::time::Duration;
+#[path = "support/tool_fixtures.rs"]
+mod tool_fixtures;
 
 use uuid::Uuid;
 
@@ -157,7 +159,7 @@ async fn engine_tool_approval_race() {
     .await
     .unwrap();
 
-    let gen_id = Uuid::new_v4();
+    let gen_id = tool_fixtures::seed_generation(&pool, tenant_id, conversation_id).await;
 
     // Seed a tool_requests row in 'awaiting_approval' status
     let tool_request_id = sqlx::query_scalar::<_, Uuid>(
@@ -172,20 +174,6 @@ async fn engine_tool_approval_race() {
     .bind(conversation_id)
     .bind(gen_id)
     .fetch_one(&pool)
-    .await
-    .unwrap();
-
-    // Seed an ai_generation row referencing this
-    sqlx::query(
-        "INSERT INTO ai_generations (id, tenant_id, conversation_id, trigger_message_id, \
-         outcome, attempts, latency_ms) \
-         VALUES ($1, $2, $3, $4, 'awaiting_tool_approval', 1, 0)",
-    )
-    .bind(gen_id)
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .bind(Uuid::new_v4())
-    .execute(&pool)
     .await
     .unwrap();
 
@@ -252,7 +240,7 @@ async fn engine_tool_approval_race() {
 
     // Exactly one outbox event (ai.tool_decision) should exist
     let event_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'ai.tool_decision' AND tenant_id = $1",
+        "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'ai.tool_decision' AND tenant_id = $1::text",
     )
     .bind(tenant_id)
     .fetch_one(&pool)

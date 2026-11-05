@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -202,7 +204,7 @@ async fn mock_openai(mock: &MockServer, api_key: &str, body: serde_json::Value) 
     Mock::given(wm_method("POST"))
         .and(wm_path("/v1/chat/completions"))
         .and(wm_header("Authorization", format!("Bearer {}", api_key)))
-        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .respond_with(openai_mock::OpenAiReply::new(body))
         .mount(mock)
         .await;
 }
@@ -264,10 +266,10 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
         "name": "T006 Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
 
     let put_resp = send(
@@ -324,8 +326,8 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)

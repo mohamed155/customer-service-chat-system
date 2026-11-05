@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -129,14 +131,14 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
-    sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
+async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+    sqlx::query_scalar("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id")
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .fetch_one(pool)
         .await
-        .unwrap();
+        .unwrap()
 }
 
 async fn seed_ai_config(pool: &sqlx::PgPool, tenant_id: Option<Uuid>, provider: &str, model: &str) {
@@ -250,7 +252,7 @@ async fn engine_tool_chain_executes_lookup_customer() {
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, "t025@test.com").await;
-    seed_membership(&pool, tenant_id, user_id, "admin").await;
+    let membership_id = seed_membership(&pool, tenant_id, user_id, "admin").await;
     let master = master_key();
 
     seed_ai_config(&pool, None, "openai", "gpt-4").await;
@@ -262,7 +264,7 @@ async fn engine_tool_chain_executes_lookup_customer() {
          VALUES ($1, 'lookup_customer', true, false, $2)",
     )
     .bind(tenant_id)
-    .bind(user_id)
+    .bind(membership_id)
     .execute(&pool)
     .await
     .unwrap();
@@ -272,10 +274,10 @@ async fn engine_tool_chain_executes_lookup_customer() {
         "name": "T025 Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let app_state_for_put = wiremock_state(pool.clone(), &openai_mock.uri());
     let bytes = serde_json::to_vec(&agent_payload).unwrap();
@@ -336,8 +338,8 @@ async fn engine_tool_chain_executes_lookup_customer() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -353,8 +355,8 @@ async fn engine_tool_chain_executes_lookup_customer() {
 
     let responder = ToolThenTextResponder {
         called: AtomicBool::new(false),
-        tool_call: ResponseTemplate::new(200).set_body_json(tool_response),
-        text: ResponseTemplate::new(200).set_body_json(text_resp),
+        tool_call: openai_mock::streaming_template(&tool_response),
+        text: openai_mock::streaming_template(&text_resp),
     };
 
     Mock::given(wiremock::matchers::method("POST"))

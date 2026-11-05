@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -115,7 +117,7 @@ async fn setup(pool: &sqlx::PgPool) {
 }
 
 async fn seed_tenant(pool: &sqlx::PgPool, label: &str) -> Uuid {
-    let slug = format!("engine-iso-{}-{}", label, Uuid::new_v4().simple());
+    let slug = format!("engine-iso-{}-{}", label, Uuid::new_v4().simple()).to_lowercase();
     sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
         .bind(format!("Engine Isolation Tenant {}", label))
         .bind(&slug)
@@ -204,7 +206,7 @@ async fn seed_knowledge_article(
 async fn mock_openai_completion(mock: &MockServer, content: &str) {
     Mock::given(method("POST"))
         .and(path("/v1/chat/completions"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+        .respond_with(openai_mock::OpenAiReply::new(json!({
             "id": "chatcmpl-test",
             "object": "chat.completion",
             "model": "gpt-4",
@@ -270,10 +272,10 @@ async fn engine_cross_tenant_isolation() {
         "name": "Tenant-A-Assistant",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let put_a = send(
         &state,
@@ -327,8 +329,8 @@ async fn engine_cross_tenant_isolation() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conv_a)
@@ -348,10 +350,10 @@ async fn engine_cross_tenant_isolation() {
         "name": "Tenant-B-Assistant",
         "avatar": { "kind": "preset", "preset": "nova" },
         "tone": "friendly",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let put_b = send(
         &state,
@@ -405,8 +407,8 @@ async fn engine_cross_tenant_isolation() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conv_b)

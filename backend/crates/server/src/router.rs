@@ -501,9 +501,13 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             routes!(ai::agent_routes::set_conversation_ai_handling)
                 .layer(require_permission(Permission::ConversationsManage)),
         )
+        // Mounted under /api/v1 by the parent router (the path previously
+        // repeated the prefix, so the endpoint was unreachable). Authz is the
+        // ConversationsView layer the handler's docs rely on.
         .route(
-            "/api/v1/tenant/conversations/{id}/summary",
-            routing::post(ai::summary::handle_summary),
+            "/tenant/conversations/{id}/summary",
+            routing::post(ai::summary::handle_summary)
+                .layer(require_permission(Permission::ConversationsView)),
         )
         .routes(
             routes!(escalations::routes::list_queue)
