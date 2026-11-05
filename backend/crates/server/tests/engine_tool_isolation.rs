@@ -252,6 +252,11 @@ async fn engine_tool_isolation() {
 
     let master = master_key();
 
+    // Seed platform AI config + credential (shared) before the agent saves:
+    // a provider override must resolve at save time (spec 017).
+    seed_ai_config(&pool, "openai", "gpt-4").await;
+    seed_ai_credential(&pool, "openai", "sk-tool-iso-key", &master).await;
+
     // ── Tenant A ─────────────────────────────────────────────────────────────
     let tenant_a = seed_tenant(&pool, "A").await;
     let user_a = seed_user(&pool, "tool-iso-a@test.com").await;
@@ -413,10 +418,6 @@ async fn engine_tool_isolation() {
     .execute(&pool)
     .await
     .unwrap();
-
-    // Seed platform AI config + credential (shared)
-    seed_ai_config(&pool, "openai", "gpt-4").await;
-    seed_ai_credential(&pool, "openai", "sk-tool-iso-key", &master).await;
 
     // Mock OpenAI: first call tool_call for lookup_customer, second call text with B's data
     let tool_resp = tool_call_response("lookup_customer", "{}");

@@ -1410,6 +1410,15 @@ async fn staff_tenant_access_is_environment_aware() {
     .fetch_one(&pool)
     .await
     .unwrap();
+    // `/tenant/ai/config` answers 404 until the tenant has an AI config.
+    sqlx::query(
+        "INSERT INTO ai_configurations (tenant_id, provider, model, fallbacks) \
+         VALUES ($1, 'openai', 'gpt-4', '[]'::jsonb)",
+    )
+    .bind(tenant_id)
+    .execute(&pool)
+    .await
+    .unwrap();
     let resolve = |uri: &str| {
         if uri.starts_with("/api/v1/tenant/conversations/") {
             uri.replace("{id}", &conversation_id.to_string())
