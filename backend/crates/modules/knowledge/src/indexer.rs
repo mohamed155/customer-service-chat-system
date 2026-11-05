@@ -177,7 +177,7 @@ async fn process_one_event(
         }
     } else {
         let body = item.body.as_deref().unwrap_or("");
-        format!("{}\n\n{}", item.title, body)
+        chunking::authored_source_text(&item.title, body)
     };
 
     // 6. Chunk and check indexability

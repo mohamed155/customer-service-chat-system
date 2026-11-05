@@ -43,8 +43,8 @@ async fn claim_outbound_event(pool: &PgPool) -> sqlx::Result<Option<OutboundEven
             LIMIT 1 \
             FOR UPDATE SKIP LOCKED \
         ) \
-        DELETE FROM outbox_events WHERE id IN (SELECT id FROM claimed) \
-        RETURNING id, tenant_id, conversation_id, message_id",
+        DELETE FROM outbox_events oe USING claimed c WHERE oe.id = c.id \
+        RETURNING oe.id, oe.tenant_id::uuid, c.conversation_id, c.message_id",
     )
     .fetch_optional(pool)
     .await?;

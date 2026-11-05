@@ -1268,9 +1268,13 @@ pub async fn reindex_item(
 
     if item.status != "published" {
         let _ = tx.rollback().await;
-        return ApiError::conflict("Only published items can be reindexed")
-            .with_request_id(&ctx.request_id)
-            .into_response();
+        return ApiError::new_with_code(
+            StatusCode::CONFLICT,
+            "not_publishable",
+            "Only published items can be reindexed",
+        )
+        .with_request_id(&ctx.request_id)
+        .into_response();
     }
 
     // Idempotency check: if the item is already pending or indexing, return 202

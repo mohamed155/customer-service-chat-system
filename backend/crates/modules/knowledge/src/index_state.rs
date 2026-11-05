@@ -99,7 +99,11 @@ pub async fn upsert_status(
     sqlx::query(
         "INSERT INTO knowledge_index_state (item_id, tenant_id, status) \
          VALUES ($1, $2, $3) \
-         ON CONFLICT (item_id) DO UPDATE SET status = $3, updated_at = now()",
+         ON CONFLICT (item_id) DO UPDATE SET status = $3, updated_at = now(), \
+           chunk_count = CASE WHEN $3 = 'not_indexed' THEN 0 \
+                              ELSE knowledge_index_state.chunk_count END, \
+           indexed_content_hash = CASE WHEN $3 = 'not_indexed' THEN NULL \
+                              ELSE knowledge_index_state.indexed_content_hash END",
     )
     .bind(item_id)
     .bind(tenant_id)
@@ -158,8 +162,12 @@ pub async fn set_not_indexable(
     reason: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
-        "UPDATE knowledge_index_state SET status = 'not_indexable', failure_reason = $1, updated_at = now() \
-         WHERE item_id = $2",
+        // Upsert: an item can resolve to not_indexable before any state row
+        // was written for it.
+        "INSERT INTO knowledge_index_state (item_id, tenant_id, status, failure_reason, chunk_count) \
+         SELECT id, tenant_id, 'not_indexable', $1, 0 FROM knowledge_items WHERE id = $2 \
+         ON CONFLICT (item_id) DO UPDATE SET status = 'not_indexable', failure_reason = $1, \
+           chunk_count = 0, updated_at = now()",
     )
     .bind(reason)
     .bind(item_id)

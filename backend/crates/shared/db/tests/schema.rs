@@ -2554,7 +2554,7 @@ async fn migration_0025_0026_check_constraints_exist() {
         (
             "customer_channel_identifiers",
             "customer_channel_identifiers_channel_check",
-            "CHECK ((channel = ANY (ARRAY['email'::text, 'phone'::text, 'web_chat'::text, 'whatsapp'::text, 'telegram'::text])))",
+            "CHECK ((channel = ANY (ARRAY['email'::text, 'phone'::text, 'web_chat'::text, 'whatsapp'::text, 'telegram'::text, 'widget'::text])))",
         ),
         (
             "customer_channel_identifiers",
@@ -2564,12 +2564,12 @@ async fn migration_0025_0026_check_constraints_exist() {
         (
             "conversations",
             "conversations_channel_check",
-            "CHECK ((channel = ANY (ARRAY['email'::text, 'phone'::text, 'web_chat'::text, 'whatsapp'::text, 'telegram'::text])))",
+            "CHECK ((channel = ANY (ARRAY['email'::text, 'phone'::text, 'web_chat'::text, 'whatsapp'::text, 'telegram'::text, 'widget'::text])))",
         ),
         (
             "conversations",
             "conversations_status_check",
-            "CHECK ((status = ANY (ARRAY['open'::text, 'escalated'::text, 'closed'::text])))",
+            "CHECK ((status = ANY (ARRAY['open'::text, 'pending'::text, 'resolved'::text, 'closed'::text])))",
         ),
     ] {
         let definition: Option<String> = sqlx::query_scalar(
@@ -3592,7 +3592,8 @@ async fn migration_0034_messages_table() {
     .expect("query kind check");
     let def = def.expect("messages_kind_check should exist");
     let normalized = def.split_whitespace().collect::<String>();
-    let expected = "CHECK ((kind = ANY (ARRAY['customer'::text, 'reply'::text, 'note'::text])))"
+    // 0048 added 'ai' and 'system' kinds.
+    let expected = "CHECK ((kind = ANY (ARRAY['customer'::text, 'reply'::text, 'note'::text, 'ai'::text, 'system'::text])))"
         .split_whitespace()
         .collect::<String>();
     assert_eq!(normalized, expected, "messages_kind_check definition");
@@ -3712,7 +3713,9 @@ async fn migration_0035_agent_skills() {
     .expect("query skills name check");
     let def = def.expect("skills_name_check should exist");
     assert!(
-        def.contains("char_length(trim(name)) BETWEEN 1 AND 50"),
+        // pg normalizes `BETWEEN` / `trim()` in the stored definition.
+        def.contains("char_length(TRIM(BOTH FROM name)) >= 1")
+            && def.contains("char_length(TRIM(BOTH FROM name)) <= 50"),
         "skills name CHECK should enforce 1-50 chars after trim"
     );
 
@@ -3966,7 +3969,7 @@ async fn migration_0037_escalations() {
     .await
     .expect("escalations_one_active_uniq");
     assert!(
-        idx.contains("WHERE ((status = 'queued'::text) OR (status = 'assigned'::text))"),
+        idx.contains("WHERE (status = ANY (ARRAY['queued'::text, 'assigned'::text]))"),
         "escalations_one_active_uniq must be partial on queued/assigned"
     );
     assert!(
@@ -4065,7 +4068,7 @@ async fn migration_0038_ai_configurations() {
     .expect("query temperature check");
     let def = def.expect("ai_configurations_temperature_check should exist");
     assert!(
-        def.contains(">= 0") && def.contains("<= 2"),
+        def.contains(">= (0)") && def.contains("<= (2)"),
         "temperature CHECK should constrain 0..2"
     );
 
@@ -4078,7 +4081,7 @@ async fn migration_0038_ai_configurations() {
     .expect("ai_configurations_platform_live_uq");
     assert!(idx.contains("UNIQUE"), "platform_live_uq must be unique");
     assert!(
-        idx.contains("WHERE tenant_id IS NULL"),
+        idx.contains("WHERE ((tenant_id IS NULL)"),
         "platform_live_uq must be partial on tenant_id IS NULL"
     );
 
@@ -4092,17 +4095,24 @@ async fn migration_0038_ai_configurations() {
     assert!(idx.contains("UNIQUE"), "tenant_live_uq must be unique");
 
     // 5b. Insert a tenant row, second same tenant fails (unique), soft-delete then insert ok
+    // (ai_configurations.tenant_id references tenants, so use a real tenant).
+    let cfg_tenant: uuid::Uuid = sqlx::query_scalar(
+        "INSERT INTO tenants (name, slug) VALUES ('Cfg Tenant', 'cfg-' || substr(md5(random()::text), 1, 12)) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("insert tenant for ai_configurations");
     sqlx::query(
         "INSERT INTO ai_configurations (tenant_id, provider, model) VALUES ($1, 'openai', 'gpt-4')",
     )
-    .bind(uuid::Uuid::nil())
+    .bind(cfg_tenant)
     .execute(&pool)
     .await
     .expect("insert first tenant config");
     let err = sqlx::query(
         "INSERT INTO ai_configurations (tenant_id, provider, model) VALUES ($1, 'anthropic', 'claude-3')",
     )
-    .bind(uuid::Uuid::nil())
+    .bind(cfg_tenant)
     .execute(&pool)
     .await
     .expect_err("second tenant row should fail");
@@ -4111,21 +4121,21 @@ async fn migration_0038_ai_configurations() {
         "second tenant row should be rejected: {err}"
     );
     sqlx::query("UPDATE ai_configurations SET deleted_at = now() WHERE tenant_id = $1")
-        .bind(uuid::Uuid::nil())
+        .bind(cfg_tenant)
         .execute(&pool)
         .await
         .expect("soft-delete first row");
     sqlx::query(
         "INSERT INTO ai_configurations (tenant_id, provider, model) VALUES ($1, 'anthropic', 'claude-3')",
     )
-    .bind(uuid::Uuid::nil())
+    .bind(cfg_tenant)
     .execute(&pool)
     .await
     .expect("insert after soft-delete should succeed");
 
     // Cleanup
     sqlx::query("DELETE FROM ai_configurations WHERE tenant_id = $1")
-        .bind(uuid::Uuid::nil())
+        .bind(cfg_tenant)
         .execute(&pool)
         .await
         .expect("cleanup ai_configurations");
@@ -5500,14 +5510,14 @@ async fn migration_0045_agent_prompt_versions_user_delete_rejected() {
     db::run_migrations(&pool).await.unwrap();
 
     let tenant_id = sqlx::query_scalar::<_, uuid::Uuid>(
-        "INSERT INTO tenants (id, name, slug) VALUES (gen_random_uuid(), 'Test Tenant', 'test-tenant-0045-user-delete') RETURNING id"
+        "INSERT INTO tenants (id, name, slug) VALUES (gen_random_uuid(), 'Test Tenant', 'test-tenant-0045-' || substr(md5(random()::text), 1, 12)) RETURNING id"
     )
     .fetch_one(&pool)
     .await
     .expect("insert tenant should succeed");
 
     let user_id = sqlx::query_scalar::<_, uuid::Uuid>(
-        "INSERT INTO users (id, email, display_name) VALUES (gen_random_uuid(), 'test@userdelete-0045.com', 'Test User') RETURNING id"
+        "INSERT INTO users (id, email, display_name) VALUES (gen_random_uuid(), 'test-' || substr(md5(random()::text), 1, 12) || '@userdelete-0045.com', 'Test User') RETURNING id"
     )
     .fetch_one(&pool)
     .await
@@ -5862,6 +5872,8 @@ async fn migration_0046_knowledge_documents_storage_key_unique() {
         None => return,
     };
     db::run_migrations(&pool).await.unwrap();
+    // Unique per run: rows from earlier runs persist in the shared test DB.
+    let storage_key = format!("unique-key-{}", uuid::Uuid::new_v4());
     let tid = seed_tenant(&pool).await;
     let item1_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
@@ -5894,7 +5906,7 @@ async fn migration_0046_knowledge_documents_storage_key_unique() {
     )
     .bind(item1_id)
     .bind(tid)
-    .bind("unique-key")
+    .bind(&storage_key)
     .bind("doc1.pdf")
     .bind("application/pdf")
     .bind(100_i64)
@@ -5908,7 +5920,7 @@ async fn migration_0046_knowledge_documents_storage_key_unique() {
     )
     .bind(item2_id)
     .bind(tid)
-    .bind("unique-key")
+    .bind(&storage_key)
     .bind("doc2.pdf")
     .bind("application/pdf")
     .bind(200_i64)

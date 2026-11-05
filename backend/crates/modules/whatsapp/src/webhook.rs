@@ -233,8 +233,11 @@ async fn handle_status_update(
     status: &crate::model::StatusUpdate,
 ) -> sqlx::Result<()> {
     let failure_reason = status.errors.first().map(|e| e.title.as_str());
+    // Keep the transaction in a binding and commit it: a temporary
+    // `&mut pool.begin()` is dropped (rolled back) at the end of the call.
+    let mut tx = pool.begin().await?;
     match crate::queries::update_status_by_wamid_in_tx(
-        &mut pool.begin().await?,
+        &mut tx,
         tenant_id,
         &status.id,
         &status.status,
@@ -242,7 +245,9 @@ async fn handle_status_update(
     )
     .await
     {
-        Ok(Some((_conversation_id, _message_id))) => {}
+        Ok(Some((_conversation_id, _message_id))) => {
+            tx.commit().await?;
+        }
         Ok(None) => {
             tracing::debug!(wamid = %status.id, "status update: no change or unknown wamid");
         }

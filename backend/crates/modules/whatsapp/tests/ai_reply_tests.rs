@@ -245,7 +245,7 @@ async fn emit_whatsapp_outbound_for_ai_reply() {
 
     // Verify the outbox event references the AI message
     let event_message_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT (payload->>'message_id')::uuid FROM outbox_events \
+        "SELECT (payload->>'messageId')::uuid FROM outbox_events \
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
@@ -260,7 +260,7 @@ async fn emit_whatsapp_outbound_for_ai_reply() {
 
     // Verify the outbox event references the conversation
     let event_conversation_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT (payload->>'conversation_id')::uuid FROM outbox_events \
+        "SELECT (payload->>'conversationId')::uuid FROM outbox_events \
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
@@ -326,7 +326,7 @@ async fn auto_ack_system_message_with_whatsapp_outbound() {
 
     // Verify the outbox event references the system message
     let event_message_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT (payload->>'message_id')::uuid FROM outbox_events \
+        "SELECT (payload->>'messageId')::uuid FROM outbox_events \
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)

@@ -557,9 +557,22 @@ async fn whatsapp_webhook_rate_limiter_wired() {
         .await
         .unwrap();
     let status = response.status();
-    assert!(
-        status != StatusCode::NOT_FOUND && status != StatusCode::INTERNAL_SERVER_ERROR,
-        "whatsapp webhook rate limiter must be wired: expected neither 404 nor 500, got {}",
-        status
+    // A missing extension fails extraction with 500. An unknown token is the
+    // handler's own opaque 404 (`{"error":"not found"}`), which proves the
+    // route is mounted and every extractor (incl. the limiter) resolved —
+    // unlike the router fallback's `route not found` envelope.
+    assert_ne!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "whatsapp webhook rate limiter must be wired"
     );
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+    if status == StatusCode::NOT_FOUND {
+        assert_eq!(
+            body,
+            json!({ "error": "not found" }),
+            "404 must come from the whatsapp handler, not the router fallback"
+        );
+    }
 }

@@ -109,8 +109,12 @@ async fn seed_message(
     body: &str,
 ) -> Uuid {
     sqlx::query_scalar(
-        "INSERT INTO messages (tenant_id, conversation_id, kind, body, created_at) \
-         VALUES ($1, $2, $3, $4, now()) RETURNING id",
+        // Staff messages (reply/note) need a sender (messages_kind_consistency).
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body, created_at, sender_membership_id) \
+         VALUES ($1, $2, $3, $4, now(), \
+                 CASE WHEN $3 IN ('reply', 'note') \
+                      THEN (SELECT id FROM tenant_memberships WHERE tenant_id = $1 LIMIT 1) END) \
+         RETURNING id",
     )
     .bind(tenant_id)
     .bind(conversation_id)

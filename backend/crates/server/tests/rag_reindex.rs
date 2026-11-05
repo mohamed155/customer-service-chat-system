@@ -318,7 +318,7 @@ async fn reindex_published_item_returns_202() {
     );
     let json = body_json(reindex_resp).await;
     assert_eq!(
-        json["data"]["index_status"]["status"], "pending",
+        json["indexStatus"]["status"], "pending",
         "status should reset to pending"
     );
 }
@@ -741,7 +741,7 @@ async fn authored_article_empty_body_resolves_to_not_indexable() {
 
     // Simulate the indexer chunking step:
     // authored articles combine title + body
-    let source_text = format!("{}\n\n{}", "Empty body", "   ");
+    let source_text = knowledge::chunking::authored_source_text("Empty body", "   ");
     let chunk_result = knowledge::chunking::chunk_text(&source_text);
 
     assert!(
