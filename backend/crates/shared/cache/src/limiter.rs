@@ -149,8 +149,7 @@ impl RateLimiter for RedisRateLimiter {
             _ => 0,
         };
 
-        let correction = elapsed as f64 / window_secs as f64;
-        let weighted = current_count as f64 + prev_count as f64 * correction;
+        let weighted = sliding_window_count(current_count, prev_count, elapsed, window_secs);
         let current_u32 = current_count.max(0) as u32;
         let remaining_secs = window_secs.saturating_sub(elapsed);
 
@@ -327,8 +326,31 @@ impl BudgetResolver {
     }
 }
 
+/// Sliding-window estimate: the current window's count plus the share of the
+/// previous window that still overlaps the trailing `window_secs`. Right
+/// after a boundary the previous window counts in full, fading to nothing by
+/// the end of the current window — so a burst cannot reset at a boundary.
+fn sliding_window_count(current: i64, previous: u32, elapsed: u64, window_secs: u64) -> f64 {
+    let overlap = 1.0 - (elapsed as f64 / window_secs as f64);
+    current as f64 + previous as f64 * overlap
+}
+
 #[cfg(test)]
 mod tests {
+    use super::sliding_window_count;
+
+    #[test]
+    fn previous_window_counts_in_full_right_after_a_boundary() {
+        // 10 attempts just before the boundary, 1 just after: still 11.
+        assert_eq!(sliding_window_count(1, 10, 0, 60), 11.0);
+    }
+
+    #[test]
+    fn previous_window_fades_out_across_the_current_window() {
+        assert_eq!(sliding_window_count(1, 10, 30, 60), 6.0);
+        assert!((sliding_window_count(1, 10, 59, 60) - (1.0 + 10.0 / 60.0)).abs() < 1e-9);
+    }
+
     use super::*;
 
     #[test]
@@ -432,7 +454,9 @@ mod tests {
             matches!(decision, Decision::Refused { .. }),
             "4th request should be refused, got {decision:?}"
         );
-        tokio::time::sleep(Duration::from_millis(1200)).await;
+        // Sliding window: the previous window still weighs in until it has
+        // fully aged out, so wait two whole windows for a clean slate.
+        tokio::time::sleep(Duration::from_millis(2100)).await;
         match limiter.check(Scope::Login, id, budget).await {
             Decision::Allowed { .. } => {}
             other => panic!("request after window should be allowed, got {other:?}"),
