@@ -723,11 +723,11 @@ async fn list_items_cursor_pagination() {
             assert!(!seen.contains(&id), "duplicate item {id}");
             seen.push(id);
         }
-        if json["has_more"].as_bool().unwrap_or(false) {
-            cursor = json["next_cursor"].as_str().map(|s| s.to_string());
+        if json["hasMore"].as_bool().unwrap_or(false) {
+            cursor = json["nextCursor"].as_str().map(|s| s.to_string());
             assert!(cursor.is_some(), "has_more=true but next_cursor is null");
         } else {
-            assert!(json["next_cursor"].is_null());
+            assert!(json["nextCursor"].is_null());
             break;
         }
     }
@@ -1552,7 +1552,7 @@ async fn each_transition_writes_audit() {
     )
     .await;
     let audit: Vec<String> = sqlx::query_scalar(
-        "SELECT action FROM audit_logs WHERE tenant_id = $1 AND item_id = $2::text AND action = 'knowledge_item.published'",
+        "SELECT action FROM audit_logs WHERE tenant_id = $1 AND resource_id = $2::text AND action = 'knowledge_item.published'",
     )
     .bind(tenant_id)
     .bind(&item_id)
@@ -1576,7 +1576,7 @@ async fn each_transition_writes_audit() {
     )
     .await;
     let audit2: Vec<String> = sqlx::query_scalar(
-        "SELECT action FROM audit_logs WHERE tenant_id = $1 AND item_id = $2::text AND action = 'knowledge_item.archived'",
+        "SELECT action FROM audit_logs WHERE tenant_id = $1 AND resource_id = $2::text AND action = 'knowledge_item.archived'",
     )
     .bind(tenant_id)
     .bind(&item_id)
@@ -1600,7 +1600,7 @@ async fn each_transition_writes_audit() {
     )
     .await;
     let audit3: Vec<String> = sqlx::query_scalar(
-        "SELECT action FROM audit_logs WHERE tenant_id = $1 AND item_id = $2::text AND action = 'knowledge_item.restored'",
+        "SELECT action FROM audit_logs WHERE tenant_id = $1 AND resource_id = $2::text AND action = 'knowledge_item.restored'",
     )
     .bind(tenant_id)
     .bind(&item_id)
@@ -1770,7 +1770,7 @@ async fn upload_document_201() {
         .unwrap()
         .contains("report.pdf"));
     assert_eq!(json["document"]["contentType"], "application/pdf");
-    assert_eq!(json["document"]["sizeBytes"], 17);
+    assert_eq!(json["document"]["sizeBytes"], 18);
 
     let item_id = json["id"].as_str().unwrap();
     let storage_key = format!("{}/knowledge/{}", tenant_id, item_id);

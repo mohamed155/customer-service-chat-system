@@ -182,6 +182,7 @@ pub async fn list_members_with_skills(
 
     let next_cursor = items
         .last()
+        .filter(|_| has_more)
         .map(|last| format!("{}_{}", last.joined_at.format("%+"), last.id));
 
     Json(Page {

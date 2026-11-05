@@ -358,6 +358,7 @@ pub async fn delete_category_in_tx(
 #[allow(clippy::too_many_arguments)]
 pub async fn create_document_in_tx(
     tx: &mut Transaction<'_, Postgres>,
+    item_id: Uuid,
     tenant_id: Uuid,
     title: &str,
     status: &str,
@@ -370,8 +371,8 @@ pub async fn create_document_in_tx(
     size_bytes: i64,
 ) -> sqlx::Result<KnowledgeItemRow> {
     let item = sqlx::query_as::<_, KnowledgeItemRow>(
-        "INSERT INTO knowledge_items (tenant_id, item_type, title, body, status, source, category_id, created_by_user_id, created_by_display) \
-         VALUES ($1, 'document', $2, NULL, $3, 'uploaded', $4, $5, $6) RETURNING *",
+        "INSERT INTO knowledge_items (id, tenant_id, item_type, title, body, status, source, category_id, created_by_user_id, created_by_display) \
+         VALUES ($7, $1, 'document', $2, NULL, $3, 'uploaded', $4, $5, $6) RETURNING *",
     )
     .bind(tenant_id)
     .bind(title)
@@ -379,6 +380,7 @@ pub async fn create_document_in_tx(
     .bind(category_id)
     .bind(created_by_user_id)
     .bind(created_by_display)
+    .bind(item_id)
     .fetch_one(&mut **tx)
     .await?;
 

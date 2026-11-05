@@ -172,6 +172,7 @@ pub struct ItemListQuery {
     #[serde(rename = "type")]
     pub item_type: Option<String>,
     pub status: Option<String>,
+    #[serde(rename = "categoryId", alias = "category_id")]
     pub category_id: Option<Uuid>,
     pub tag: Option<String>,
     pub q: Option<String>,
@@ -1071,7 +1072,7 @@ pub async fn set_item_status(
 
     match validate::check_transition(current_status, new_status, item_type, item.body.as_deref()) {
         Err(validate::TransitionError::Illegal { from, to }) => {
-            return ApiError::validation_failed(format!(
+            return ApiError::unprocessable_entity(format!(
                 "Cannot transition from '{}' to '{}'; allowed transitions: \
                  draft\u{2192}published, published\u{2192}archived, archived\u{2192}draft",
                 from.as_str(),
@@ -1081,7 +1082,7 @@ pub async fn set_item_status(
             .into_response();
         }
         Err(validate::TransitionError::BodyRequired) => {
-            return ApiError::validation_failed("Publishing requires content")
+            return ApiError::unprocessable_entity("Publishing requires content")
                 .with_request_id(&ctx.request_id)
                 .into_response();
         }
@@ -1426,7 +1427,7 @@ pub async fn upload_document(
     let parsed = match upload::parse(multipart).await {
         Ok(p) => p,
         Err(issue) => {
-            return ApiError::validation_failed("Upload validation failed")
+            return ApiError::unprocessable_entity("Upload validation failed")
                 .with_details(vec![json!(issue)])
                 .with_request_id(&ctx.request_id)
                 .into_response();
@@ -1468,6 +1469,7 @@ pub async fn upload_document(
 
                 let item = store::create_document_in_tx(
                     &mut tx,
+                    item_id,
                     ctx.tenant_id,
                     persist_title.as_deref().unwrap_or("Untitled"),
                     status.as_str(),
@@ -1599,21 +1601,6 @@ pub async fn download_file(
     Extension(_principal): Extension<Principal>,
     Path(item_id): Path<Uuid>,
 ) -> Response {
-    let doc = match store::get_document(&pool, ctx.tenant_id, item_id).await {
-        Ok(Some(doc)) => doc,
-        Ok(None) => {
-            return ApiError::not_found("Document not found")
-                .with_request_id(&ctx.request_id)
-                .into_response();
-        }
-        Err(e) => {
-            tracing::error!(%e, "download_file: get_document failed");
-            return ApiError::internal_error("Failed to download file")
-                .with_request_id(&ctx.request_id)
-                .into_response();
-        }
-    };
-
     let item = match store::get_item(&pool, ctx.tenant_id, item_id).await {
         Ok(Some(item)) => item,
         Ok(None) => {
@@ -1630,10 +1617,25 @@ pub async fn download_file(
     };
 
     if item.item_type != "document" {
-        return ApiError::validation_failed("Item is not a document")
+        return ApiError::unprocessable_entity("Item is not a document")
             .with_request_id(&ctx.request_id)
             .into_response();
     }
+
+    let doc = match store::get_document(&pool, ctx.tenant_id, item_id).await {
+        Ok(Some(doc)) => doc,
+        Ok(None) => {
+            return ApiError::not_found("Document not found")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!(%e, "download_file: get_document failed");
+            return ApiError::internal_error("Failed to download file")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
 
     let (data, _) = match storage.get(&doc.storage_key).await {
         Ok(result) => result,
