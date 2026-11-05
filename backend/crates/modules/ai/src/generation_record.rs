@@ -47,6 +47,33 @@ pub struct GenerationRecord {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// Write a provisional generation row before tool requests reference it
+/// (`tool_requests.generation_id` is a foreign key). The final `insert` for
+/// the same id completes it. No-op if the row already exists.
+pub async fn ensure_provisional(
+    pool: &PgPool,
+    id: Uuid,
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    trigger_message_id: Uuid,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO ai_generations \
+         (id, tenant_id, conversation_id, trigger_message_id, outcome, attempts, latency_ms) \
+         VALUES ($1, $2, $3, $4, 'awaiting_tool_approval', 1, 0) \
+         ON CONFLICT (id) DO NOTHING",
+    )
+    .bind(id)
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .bind(trigger_message_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Insert the generation record, or complete the provisional row written by
+/// [`ensure_provisional`] for the same id.
 pub async fn insert(pool: &PgPool, rec: &GenerationRecord) -> sqlx::Result<Uuid> {
     let id = sqlx::query_scalar::<_, Uuid>(
         r#"INSERT INTO ai_generations
@@ -55,6 +82,21 @@ pub async fn insert(pool: &PgPool, rec: &GenerationRecord) -> sqlx::Result<Uuid>
             continuation_used, retrieval_chunk_count, retrieval_top_similarity,
             retrieval_degraded, confidence_score, latency_ms, request_id, created_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+           ON CONFLICT (id) DO UPDATE SET
+             response_message_id = EXCLUDED.response_message_id,
+             usage_record_id = EXCLUDED.usage_record_id,
+             provider = EXCLUDED.provider,
+             model = EXCLUDED.model,
+             outcome = EXCLUDED.outcome,
+             error_category = EXCLUDED.error_category,
+             attempts = EXCLUDED.attempts,
+             continuation_used = EXCLUDED.continuation_used,
+             retrieval_chunk_count = EXCLUDED.retrieval_chunk_count,
+             retrieval_top_similarity = EXCLUDED.retrieval_top_similarity,
+             retrieval_degraded = EXCLUDED.retrieval_degraded,
+             confidence_score = EXCLUDED.confidence_score,
+             latency_ms = EXCLUDED.latency_ms,
+             request_id = EXCLUDED.request_id
            RETURNING id"#,
     )
     .bind(rec.id)

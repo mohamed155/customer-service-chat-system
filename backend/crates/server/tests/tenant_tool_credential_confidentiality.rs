@@ -234,13 +234,21 @@ mod tests {
         // Create a conversation and tool request to test tool_activity endpoint
         let conversation_id = Uuid::new_v4();
         let generation_id = Uuid::new_v4();
+        // conversations (tenant_id, customer_id) references customers.
+        let customer_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO customers (tenant_id, display_name) VALUES ($1, 'Cred Customer') RETURNING id",
+        )
+        .bind(tenant_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         sqlx::query(
             "INSERT INTO conversations (id, tenant_id, customer_id, channel, status) \
              VALUES ($1, $2, $3, 'web_chat', 'open')",
         )
         .bind(conversation_id)
         .bind(tenant_id)
-        .bind(Uuid::new_v4())
+        .bind(customer_id)
         .execute(&pool)
         .await
         .unwrap();

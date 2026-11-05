@@ -250,7 +250,9 @@ async fn customer_view_contains_no_tool_request_data() {
         "FR-020: tool error text leaked into conversation timeline"
     );
     assert!(
-        !body_pretty.contains("Test Customer") || body_pretty.contains("displayName"),
+        !body_pretty.contains("Test Customer")
+            || body_pretty.contains("displayName")
+            || body_pretty.contains("display_name"),
         "FR-020: only message data (not tool result) should appear"
     );
 

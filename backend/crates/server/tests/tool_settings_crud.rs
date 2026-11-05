@@ -167,7 +167,9 @@ mod tests {
 
         let user_id = seed_user(&pool, None).await;
         let tenant_id = seed_tenant(&pool, None).await;
-        let _membership_id = seed_membership(&pool, tenant_id, user_id, "manager").await;
+        // Tool settings are Owner/Admin in the shipped RBAC (route needs
+        // ai_agent.view; dashboard needs settings.view).
+        let _membership_id = seed_membership(&pool, tenant_id, user_id, "admin").await;
 
         // Step 1: GET /tenant/tools returns built-in tools
         let mut res = send_request(
@@ -199,7 +201,7 @@ mod tests {
                         "name": "custom_order_lookup",
                         "description": "Look up order status",
                         "inputSchema": {"type": "object", "properties": {"orderId": {"type": "string"}}},
-                        "endpointUrl": "https://api.example.com/orders",
+                        "endpointUrl": "https://93.184.215.14/orders",
                         "credential": "sk-test-key-12345",
                         "classification": "auto",
                     }))
@@ -324,7 +326,7 @@ mod tests {
                         "name": "test_tool",
                         "description": "test",
                         "inputSchema": {"type": "object", "properties": {}},
-                        "endpointUrl": "https://api.example.com/test",
+                        "endpointUrl": "https://93.184.215.14/test",
                     }))
                     .unwrap(),
                 ))

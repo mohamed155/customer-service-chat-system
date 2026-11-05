@@ -93,7 +93,8 @@ pub async fn process_agent_responder_once(
          WHERE event_type = 'conversation.customer_message' \
          AND claimed_at IS NULL \
          AND payload->>'conversation_id' = $1::text \
-         AND id != $2",
+         AND id != $2 \
+         AND created_at < (SELECT created_at FROM outbox_events WHERE id = $2)",
     )
     .bind(conversation_id.to_string())
     .bind(event_id)
@@ -211,8 +212,33 @@ pub async fn process_agent_responder_once(
             }
         }
 
-        // Gate on open escalation
+        // Gate on open escalation: the reply is cancelled before generation
+        // starts; record that outcome (spec 021, scenario 3).
         if escalations::routing::has_open_escalation(pool, tenant_id, conversation_id).await? {
+            let rec = crate::generation_record::GenerationRecord {
+                id: Uuid::new_v4(),
+                tenant_id,
+                conversation_id,
+                trigger_message_id: message_id,
+                response_message_id: None,
+                usage_record_id: None,
+                provider: None,
+                model: None,
+                outcome: crate::generation_record::GenerationOutcome::CancelledEscalation,
+                error_category: None,
+                attempts: 0,
+                continuation_used: false,
+                retrieval_chunk_count: 0,
+                retrieval_top_similarity: None,
+                retrieval_degraded: false,
+                confidence_score: None,
+                latency_ms: 0,
+                request_id: None,
+                created_at: Some(chrono::Utc::now()),
+            };
+            if let Err(e) = crate::generation_record::insert(pool, &rec).await {
+                tracing::warn!(error = %e, "failed to record cancelled_escalation generation");
+            }
             sqlx::query("DELETE FROM outbox_events WHERE id = $1")
                 .bind(event_id)
                 .execute(pool)

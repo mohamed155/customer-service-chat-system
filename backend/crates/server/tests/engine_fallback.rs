@@ -361,7 +361,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
 
     // Also confirm via raw SQL
     let esc_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM escalations WHERE tenant_id = $1 AND conversation_id = $2 AND status = 'open'",
+        "SELECT COUNT(*) FROM escalations WHERE tenant_id = $1 AND conversation_id = $2 AND status IN ('queued', 'assigned')",
     )
     .bind(tenant_id)
     .bind(conversation_id)
@@ -372,7 +372,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
 
     // (c) Exactly one ai_generations row with outcome='fallback',
     //     non-null error_category, and attempts >= 1
-    let fallback_rows: Vec<(String, Option<String>, i32)> = sqlx::query_as(
+    let fallback_rows: Vec<(String, Option<String>, i16)> = sqlx::query_as(
         "SELECT outcome, error_category, attempts FROM ai_generations \
          WHERE tenant_id = $1 AND conversation_id = $2 AND outcome = 'fallback'",
     )

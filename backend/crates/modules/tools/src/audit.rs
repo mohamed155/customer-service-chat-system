@@ -58,6 +58,19 @@ pub async fn record_config_change(
     .await
     .unwrap_or(None);
 
+    // audit_logs requires a resource_id (0013_audit_resource_required); a NULL
+    // made every tool config audit fail. Tenant tools are identified by
+    // `toolId`, built-in tool policies by `toolName`.
+    let resource_id = details
+        .get("toolId")
+        .or_else(|| details.get("toolName"))
+        .map(|v| {
+            v.as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| v.to_string())
+        })
+        .unwrap_or_else(|| tenant_id.to_string());
+
     let result = sqlx::query(
         "INSERT INTO audit_logs \
          (actor_user_id, action, resource_type, resource_id, tenant_id, details) \
@@ -66,7 +79,7 @@ pub async fn record_config_change(
     .bind(user_id)
     .bind(action)
     .bind("tenant_tool")
-    .bind(Option::<String>::None)
+    .bind(resource_id)
     .bind(tenant_id)
     .bind(&details)
     .execute(pool)

@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 #[path = "support/tool_fixtures.rs"]
 mod tool_fixtures;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -142,6 +144,43 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
     .unwrap()
 }
 
+async fn seed_ai_config(pool: &sqlx::PgPool, tenant_id: Option<Uuid>, provider: &str, model: &str) {
+    sqlx::query(
+        "INSERT INTO ai_configurations (tenant_id, provider, model, fallbacks) \
+         VALUES ($1, $2, $3, '[]'::jsonb)",
+    )
+    .bind(tenant_id)
+    .bind(provider)
+    .bind(model)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn seed_ai_credential(
+    pool: &sqlx::PgPool,
+    tenant_id: Option<Uuid>,
+    provider: &str,
+    api_key: &str,
+    master: &MasterKey,
+) {
+    let aad = crypto::aad(tenant_id, provider);
+    let (ciphertext, nonce) = crypto::seal(master, &aad, api_key).unwrap();
+    let hint = crypto::hint(api_key);
+    sqlx::query(
+        "INSERT INTO ai_credentials (tenant_id, provider, ciphertext, nonce, key_hint) \
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(tenant_id)
+    .bind(provider)
+    .bind(ciphertext)
+    .bind(nonce)
+    .bind(hint)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 fn master_key() -> MasterKey {
     MasterKey::from_base64("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=").unwrap()
 }
@@ -161,11 +200,28 @@ async fn engine_tool_approval_expiry() {
 
     let openai_mock = MockServer::start().await;
     let state = wiremock_state(pool.clone(), &openai_mock.uri());
+    Mock::given(wiremock::matchers::method("POST"))
+        .and(wiremock::matchers::path("/v1/chat/completions"))
+        .respond_with(openai_mock::OpenAiReply::new(serde_json::json!({
+            "id": "chatcmpl-expiry",
+            "object": "chat.completion",
+            "model": "gpt-4",
+            "choices": [{
+                "index": 0,
+                "message": { "role": "assistant", "content": "Sorry, that request timed out. A team member can help." },
+                "finish_reason": "stop"
+            }],
+            "usage": { "prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30 }
+        })))
+        .mount(&openai_mock)
+        .await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, "t043@test.com").await;
     let _membership_id = seed_membership(&pool, tenant_id, user_id, "admin").await;
     let master = master_key();
+    seed_ai_config(&pool, None, "openai", "gpt-4").await;
+    seed_ai_credential(&pool, None, "openai", "sk-t043-test-key", &master).await;
 
     // Create a customer and conversation so we can seed a tool request
     let customer_id = sqlx::query_scalar::<_, Uuid>(

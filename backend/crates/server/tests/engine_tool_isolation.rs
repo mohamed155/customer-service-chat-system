@@ -131,14 +131,14 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
-    sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
+async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+    sqlx::query_scalar("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id")
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .fetch_one(pool)
         .await
-        .unwrap();
+        .unwrap()
 }
 
 async fn seed_ai_config(pool: &sqlx::PgPool, provider: &str, model: &str) {
@@ -255,7 +255,7 @@ async fn engine_tool_isolation() {
     // ── Tenant A ─────────────────────────────────────────────────────────────
     let tenant_a = seed_tenant(&pool, "A").await;
     let user_a = seed_user(&pool, "tool-iso-a@test.com").await;
-    seed_membership(&pool, tenant_a, user_a, "admin").await;
+    let membership_a = seed_membership(&pool, tenant_a, user_a, "admin").await;
 
     // Agent config for tenant A
     let agent_payload_a = serde_json::json!({
@@ -290,7 +290,7 @@ async fn engine_tool_isolation() {
          VALUES ($1, 'lookup_customer', true, false, $2)",
     )
     .bind(tenant_a)
-    .bind(user_a)
+    .bind(membership_a)
     .execute(&pool)
     .await
     .unwrap();
@@ -322,7 +322,7 @@ async fn engine_tool_isolation() {
     // ── Tenant B ─────────────────────────────────────────────────────────────
     let tenant_b = seed_tenant(&pool, "B").await;
     let user_b = seed_user(&pool, "tool-iso-b@test.com").await;
-    seed_membership(&pool, tenant_b, user_b, "admin").await;
+    let membership_b = seed_membership(&pool, tenant_b, user_b, "admin").await;
 
     let agent_payload_b = serde_json::json!({
         "name": "Tenant-B-Assistant",
@@ -356,7 +356,7 @@ async fn engine_tool_isolation() {
          VALUES ($1, 'lookup_customer', true, false, $2)",
     )
     .bind(tenant_b)
-    .bind(user_b)
+    .bind(membership_b)
     .execute(&pool)
     .await
     .unwrap();
