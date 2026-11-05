@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { openWidgetHost } from './support/widget-harness';
 
 test.describe('Widget Chat (US1)', () => {
   test('full US1 journey: open launcher → welcome message → send → bubble → reply', async ({
     page,
   }) => {
-    await page.goto('/fixtures/widget-host.html');
+    await openWidgetHost(page);
 
     const launcher = page.locator('button[aria-label="Open chat"]');
     await expect(launcher).toBeVisible({ timeout: 10000 });

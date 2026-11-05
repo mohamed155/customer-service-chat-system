@@ -19,20 +19,27 @@ jobs:
             cache-dependency-path: frontend/pnpm-lock.yaml,
           }
       - run: pnpm install --frozen-lockfile
-      - name: Install Playwright browsers
-        working-directory: frontend
-        run: npx playwright install chromium --with-deps
-      - name: Run E2E tests
-        working-directory: frontend
-        run: pnpm test:e2e
       - run: pnpm run lint
       - name: Check formatting
-        working-directory: frontend
         run: pnpm format:check
       - run: pnpm exec ng build dashboard
       - run: pnpm exec ng build widget
-      - run: pnpm exec ng test dashboard --watch=false --browsers=ChromeHeadless
-      - run: pnpm exec ng test widget --watch=false --browsers=ChromeHeadless
+      - name: Build widget loader
+        run: pnpm build:widget-loader
+      - run: pnpm exec ng test dashboard --watch=false
+      - run: pnpm exec ng test widget --watch=false
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install chromium --with-deps
+      # Runs after the widget build: the widget specs serve dist/widget.
+      - name: Run E2E tests
+        run: pnpm test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: frontend/test-results
+          retention-days: 7
 
   real-backend-e2e:
     runs-on: ubuntu-latest

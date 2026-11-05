@@ -7,6 +7,15 @@ import { AppComponent } from './app.component';
 import { selectThemeMode } from './core/state/app-ui.feature';
 
 describe('application theme', () => {
+  afterEach(() => {
+    // overrideSelector mutates the shared memoized selector; undo it so the
+    // override doesn't leak into other spec files in the same test run.
+    TestBed.inject(MockStore).resetSelectors();
+    selectThemeMode.release();
+    vi.unstubAllGlobals();
+    delete document.documentElement.dataset['theme'];
+  });
+
   it('applies explicit and live system theme changes', async () => {
     const target = new EventTarget();
     const media = Object.assign(target, {

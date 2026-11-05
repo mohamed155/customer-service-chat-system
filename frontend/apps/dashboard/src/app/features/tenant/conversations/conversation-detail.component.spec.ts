@@ -126,6 +126,10 @@ describe('ConversationDetailComponent', () => {
         },
       ],
     });
+    // The component provides its own ConversationDetailStore; swap in the mock there.
+    TestBed.overrideComponent(ConversationDetailComponent, {
+      set: { providers: [{ provide: ConversationDetailStore, useValue: storeMock }] },
+    });
   });
 
   it('renders loading state initially', async () => {

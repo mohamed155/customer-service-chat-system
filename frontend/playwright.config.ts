@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  // *.real.spec.ts need a live backend; they run via playwright.real.config.ts.
+  testIgnore: ['**/*.real.spec.ts'],
   outputDir: 'test-results',
   fullyParallel: true,
   forbidOnly: Boolean(process.env['CI']),

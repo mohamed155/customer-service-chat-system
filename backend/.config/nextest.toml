@@ -6,6 +6,9 @@
 [profile.default]
 # Report every failing test in one run instead of stopping at the first.
 fail-fast = false
+# Flag tests slower than 60s and kill any still running after 3 minutes,
+# so one hung test fails loudly instead of stalling CI for hours.
+slow-timeout = { period = "60s", terminate-after = 3 }
 
 [test-groups]
 serial-db = { max-threads = 1 }

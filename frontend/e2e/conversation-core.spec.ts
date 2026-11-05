@@ -47,7 +47,13 @@ function agentIdentity() {
         tenantName: 'Conv Co',
         tenantSlug: 'conv-co',
         role: 'agent' as MemberRole,
-        permissions: ['conversations.view', 'conversations.manage'],
+        permissions: [
+          'overview.view',
+          'conversations.view',
+          'conversations.manage',
+          'customers.view',
+          'customers.manage',
+        ],
       },
     ],
   };
@@ -95,10 +101,11 @@ function apiError(code: string, message: string) {
 let convCounter = 0;
 
 function makeConversation(overrides: Partial<ConversationWire> = {}): ConversationWire {
-  const id = `conv-e2e-${++convCounter}`;
+  const n = ++convCounter;
+  const id = overrides.id ?? `conv-e2e-${n}`;
   return {
     id,
-    customer: { id: `cust-${id}`, display_name: `Customer ${convCounter}` },
+    customer: { id: `cust-${id}`, display_name: `Customer ${n}` },
     channel: 'web_chat',
     status: 'open',
     assignee: null,
@@ -442,6 +449,10 @@ async function installApi(page: Page, identity: ReturnType<typeof agentIdentity>
       });
     }
 
+    if (/^\/tenant\/conversations\/[^/]+\/tool-activity$/.test(path) && method === 'GET') {
+      return json(route, { items: [] });
+    }
+
     const customerConvsMatch = path.match(/^\/tenant\/customers\/([a-zA-Z0-9_-]+)\/conversations$/);
     if (customerConvsMatch && method === 'GET') {
       const customerId = customerConvsMatch[1];
@@ -505,7 +516,7 @@ test.describe('Conversation Core', () => {
         res.request().method() === 'PATCH',
     );
 
-    await page.getByRole('button', { name: 'Resolve' }).click();
+    await page.getByRole('combobox', { name: 'Status' }).selectOption({ label: 'Resolved' });
     await patchResponse;
 
     await expect(page.getByText('resolved', { exact: false }).first()).toBeVisible();
@@ -525,7 +536,7 @@ test.describe('Conversation Core', () => {
         res.request().method() === 'POST',
     );
 
-    await page.getByPlaceholder('Type a message').fill('Thanks for your patience.');
+    await page.getByRole('textbox', { name: 'Message body' }).fill('Thanks for your patience.');
     await page.getByRole('button', { name: 'Send' }).click();
     await postResponse;
 
@@ -605,10 +616,8 @@ test.describe('Conversation Core', () => {
     await expect(page.getByText('Load test message 60 of 60')).toBeVisible();
     await expect(page.getByText('Load test message 41 of 60')).toBeVisible();
 
-    const timeline = page.locator('app-conversation-thread, [data-testid="timeline"], .timeline');
-    const initialCount = await timeline
-      .locator('app-message, [data-testid="message"], .message')
-      .count();
+    const timelineMessages = page.getByRole('article');
+    const initialCount = await timelineMessages.count();
 
     const loadOlderButton = page.getByRole('button', { name: /load older|show earlier/i });
     if (await loadOlderButton.isVisible().catch(() => false)) {
@@ -618,9 +627,7 @@ test.describe('Conversation Core', () => {
       await expect(page.getByText('Load test message 40 of 60')).toBeVisible();
       await expect(page.getByText('Load test message 21 of 60')).toBeVisible();
 
-      const secondCount = await timeline
-        .locator('app-message, [data-testid="message"], .message')
-        .count();
+      const secondCount = await timelineMessages.count();
       expect(secondCount).toBeGreaterThan(initialCount);
 
       if (await loadOlderButton.isVisible().catch(() => false)) {
@@ -634,9 +641,7 @@ test.describe('Conversation Core', () => {
       await page.waitForTimeout(500);
     }
 
-    const allMessages = await timeline
-      .locator('app-message, [data-testid="message"], .message')
-      .allTextContents();
+    const allMessages = await timelineMessages.allTextContents();
     const messageSet = new Set(allMessages);
     expect(messageSet.size).toBe(allMessages.length);
 
@@ -669,27 +674,24 @@ test.describe('Conversation Core', () => {
 
     await expect(page.getByRole('dialog')).toBeVisible();
 
-    const customerSearch = page.getByPlaceholder(/search|customer/i);
-    if (await customerSearch.isVisible().catch(() => false)) {
-      await customerSearch.fill('Customer');
-      await page.waitForTimeout(200);
-      const firstOption = page.locator('[role="option"], .option, tui-option').first();
-      if (await firstOption.isVisible().catch(() => false)) {
-        await firstOption.click();
-      }
-    }
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('textbox', { name: 'Search customers' }).fill('Customer');
+    // Search is debounced; wait for the result list instead of a fixed sleep.
+    const firstOption = dialog.getByRole('option').first();
+    await expect(firstOption).toBeVisible();
+    await firstOption.click();
 
     const channelSelect = page.getByRole('combobox', { name: /channel/i });
     if (await channelSelect.isVisible().catch(() => false)) {
       await channelSelect.selectOption('email');
     }
 
-    const messageField = page.getByPlaceholder(/message|type/i).first();
+    const messageField = dialog.getByRole('textbox', { name: 'First message' });
     if (await messageField.isVisible().catch(() => false)) {
       await messageField.fill('Welcome to our support!');
     }
 
-    const submitButton = page.getByRole('button', { name: /send|create|start/i });
+    const submitButton = page.getByRole('button', { name: 'Create conversation' });
     if (await submitButton.isVisible().catch(() => false)) {
       const postResponse = page.waitForResponse(
         (res) =>
@@ -710,15 +712,9 @@ test.describe('Conversation Core', () => {
 
     await page.goto('/tenant/conversations/conv-e2e-open');
 
-    const noteTab = page.getByRole('tab', { name: /note/i });
-    const noteRadio = page.getByRole('radio', { name: /note/i });
-    if (await noteTab.isVisible().catch(() => false)) {
-      await noteTab.click();
-    } else if (await noteRadio.isVisible().catch(() => false)) {
-      await noteRadio.click();
-    }
+    await page.getByRole('button', { name: 'Internal note' }).click();
 
-    await page.getByPlaceholder('Type a message').fill('Internal note for the team.');
+    await page.getByRole('textbox', { name: 'Message body' }).fill('Internal note for the team.');
     const sendButton = page.getByRole('button', { name: 'Send' });
 
     const firstPostResponse = page.waitForResponse(
@@ -738,15 +734,9 @@ test.describe('Conversation Core', () => {
       await expect(noteElements.last()).toBeVisible();
     }
 
-    const customerTab = page.getByRole('tab', { name: /log|customer/i });
-    const customerRadio = page.getByRole('radio', { name: /log|customer/i });
-    if (await customerTab.isVisible().catch(() => false)) {
-      await customerTab.click();
-    } else if (await customerRadio.isVisible().catch(() => false)) {
-      await customerRadio.click();
-    }
+    await page.getByRole('button', { name: 'Customer', exact: true }).click();
 
-    const composerField = page.getByPlaceholder('Type a message');
+    const composerField = page.getByRole('textbox', { name: 'Message body' });
     await composerField.fill('Customer said they are happy.');
 
     const secondPostResponse = page.waitForResponse(
@@ -776,7 +766,7 @@ test.describe('Conversation Core', () => {
         res.request().method() === 'POST',
     );
 
-    await page.getByPlaceholder('Type a message').fill('Reopening this conversation.');
+    await page.getByRole('textbox', { name: 'Message body' }).fill('Reopening this conversation.');
     await page.getByRole('button', { name: 'Send' }).click();
     await postResponse;
 
@@ -834,7 +824,7 @@ test.describe('Conversation Core', () => {
     const custId = 'cust-conv-e2e-open';
     await page.goto(`/tenant/customers/${custId}`);
 
-    await expect(page.getByText(/conversations|history/i)).toBeVisible();
+    await expect(page.getByText(/conversation history/i).first()).toBeVisible();
 
     const convText = page.getByText(/conv-e2e-open/i);
     if (await convText.isVisible().catch(() => false)) {
@@ -891,7 +881,7 @@ test.describe('Conversation Core', () => {
     await expect(page.getByRole('button', { name: 'Send' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Resolve' })).toHaveCount(0);
 
-    const composerField = page.getByPlaceholder('Type a message');
+    const composerField = page.getByRole('textbox', { name: 'Message body' });
     await expect(composerField).toHaveCount(0);
 
     const assignControls = page.getByRole('button', { name: /assign/i });

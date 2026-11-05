@@ -35,6 +35,9 @@ describe('AppShellComponent', () => {
   );
 
   it('renders semantic landmarks and collapsed navigation', async () => {
+    // Desktop width: on mobile widths the shell never shows the collapsed rail.
+    // Set explicitly because other spec files resize the shared window.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 });
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(AppShellComponent);
     fixture.detectChanges();

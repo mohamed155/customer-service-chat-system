@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { WidgetStore, REPLY_TIMEOUT_MS } from './widget.store';
 import { WIDGET_API_BASE, WidgetApiService } from './widget-api.service';
 import { SessionStore } from './session.store';
@@ -26,6 +27,8 @@ describe('WidgetStore', () => {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
+        // Keep any unstubbed request in memory instead of hitting the network.
+        provideHttpClientTesting(),
         WidgetStore,
         SessionStore,
         { provide: WIDGET_API_BASE, useValue: 'http://test' },
