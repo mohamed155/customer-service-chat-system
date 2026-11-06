@@ -209,7 +209,8 @@ enterprise, pool for everyone else).
 - Platform users act in a tenant via an **impersonation session**: explicit start with reason,
   time-boxed (e.g. 60 min), visible banner, every action audited with `actor = platform user,
   on_behalf_of_tenant`. Destructive actions in a tenant can require a second confirmation.
-- Platform permissions are separate (`platform:tenants:read`, `platform:billing:write`, …).
+- Platform permissions are separate (`platform.tenants.list`, `platform.billing.manage`, …).
+  Full impersonation-session rules: **ADR-006**.
 
 ### 5.4 Noisy-neighbor protection
 
@@ -231,7 +232,7 @@ enterprise, pool for everyone else).
 - Refresh token: opaque, random 256-bit, stored hashed, **rotated on every use with reuse
   detection** (reuse of an old token revokes the whole session family).
 - Browser storage: tokens in `HttpOnly; Secure; SameSite=Lax` cookies; CSRF protection via
-  double-submit token or `SameSite` + custom header check. Never `localStorage`. **ADR-005.**
+  strict `Origin` check + custom header (no double-submit token). Never `localStorage`. **ADR-005.**
 - MFA: TOTP first, WebAuthn/passkeys later; mandatory for platform users.
 - Enterprise SSO (OIDC/SAML) and SCIM provisioning later; the identity model supports external
   identities from day one.
@@ -239,8 +240,9 @@ enterprise, pool for everyone else).
 
 ### 6.2 Authorization
 
-- **RBAC with permissions**: roles are named bundles of permissions (`conversations:reply`,
-  `knowledge:publish`, `agent:configure`, `billing:manage`, …). Code checks permissions only.
+- **RBAC with permissions**: roles are named bundles of permissions (`conversations.manage`,
+  `knowledge_base.manage`, `ai_agent.manage`, `billing.manage`, …), named `resource.action`.
+  Code checks permissions only.
 - **Policy layer** for rules RBAC can't express (ABAC-style): "agents can only reply to
   conversations assigned to them unless Manager", "Viewer can't export PII". Implemented as a
   `Policy` trait per resource; Cedar-style engine considered later. **ADR-006.**
