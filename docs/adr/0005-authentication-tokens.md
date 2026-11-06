@@ -1,6 +1,6 @@
 # ADR-005: Authentication — password hashing, tokens, cookies, CSRF, MFA
 
-- **Status:** Accepted
+- **Status:** Proposed. Becomes Accepted when the MOH-16 PR merges.
 - **Date:** 2026-11-06
 - **Deciders:** Platform engineering
 - **Related:** [System architecture §6.1](../architecture/system-architecture.md#61-authentication),
@@ -101,8 +101,10 @@ was the right first step, but it doesn't meet the bar above. See
   `auth.refresh_reuse_detected` audit event, and returns `401`.
 - **Concurrency grace:** two browser tabs can refresh at the same moment. If the reused token was
   rotated **less than 10 seconds ago** and the request comes from the same session, the server
-  returns the successor pair that was already issued instead of revoking. Outside that window,
-  reuse is treated as theft.
+  doesn't revoke. It issues a fresh **access token only** and leaves the refresh cookie alone.
+  Both tabs share one cookie jar, so the winning response has already set the successor refresh
+  token, and the server never needs its plaintext. Outside that window, reuse is treated as
+  theft.
 - **Lifetimes:** 12-hour idle timeout (each rotation extends it) and a 7-day absolute cap for
   tenant users. Platform users get 1 hour idle and 12 hours absolute.
 - **Logout** revokes the session family. "Sign out everywhere" and admin-forced sign-out revoke
@@ -140,11 +142,15 @@ Two more layers sit on top of it, and both are required:
 2. **Custom-header requirement.** Unsafe cookie-authenticated requests must carry
    `X-Requested-With: helix`, or `X-Tenant-ID` on tenant routes. A plain HTML form can't set
    custom headers, and a cross-origin `fetch` that sets one triggers a CORS preflight, which our
-   allowlist rejects.
+   allowlist rejects. `x-requested-with` has to be added to the dashboard CORS layer's
+   allowed headers. Without that, the dashboard's own cross-origin calls fail preflight.
 
 The architecture doc mentions double-submit tokens. This design doesn't need them, because the
 two checks above cover the same attacks without server-side token state.
-`POST /auth/login` is covered by the same checks to block login CSRF.
+
+**Login CSRF.** `POST /auth/login` and `POST /auth/refresh` have no authenticated principal when
+they arrive, so they get the same Origin and custom-header checks applied **unconditionally**.
+The checks don't depend on a principal being present.
 
 Long-lived SSE streams (`GET /tenant/events`, ADR-009) are safe methods and need no CSRF check.
 However, they **outlive the access token**. When a stream is opened, the server records the
@@ -211,7 +217,7 @@ this ADR.
 | A1 | JWTs are signed **HS256** with the shared `AUTH_JWT_SECRET`, with no `kid`, `iss`, `aud`, `sid` or `typ` claims. | `backend/crates/modules/identity/src/session.rs` (`issue_token`, `validate_token`) | Add an EdDSA signer, JWKS and key config. Accept both algorithms for one access-TTL window during cutover, then drop HS256. |
 | A2 | There's a single **8-hour** access token (`AUTH_SESSION_TTL_SECONDS`, default 28800). There's no refresh token, session family or reuse detection. Revocation uses the per-`jti` table `revoked_sessions`. | `identity/src/routes.rs` (`authenticate_login`, `logout`), `identity/src/lib.rs` (`resolve_cookie_principal`) | Add the `auth_sessions` and `refresh_tokens` migrations, `POST /auth/refresh`, and a refresh queue in the frontend credentials interceptor. Retire `revoked_sessions` after cutover. |
 | A3 | **Argon2 parameter mismatch.** `hash_password` uses `Argon2::default()`, which in argon2 0.6 is `m=19456, t=2, p=1`. `DUMMY_PASSWORD_HASH` is `m=65536, t=2, p=1`. Unknown-email logins take about 3× longer than known-email logins, which creates a **timing oracle for account enumeration**. | `identity/src/password.rs` | **High priority.** Pin `Params` in one constant, build the dummy hash from it, add a test asserting the two match, and add rehash-on-login. |
-| A4 | The CSRF origin check **lets requests without `Origin` through**. There is no `Referer` fallback and no custom-header requirement outside tenant routes. | `backend/crates/server/src/router.rs` (`csrf_origin_middleware`) | Reject a missing `Origin`/`Referer` on unsafe cookie-authenticated requests, and require `X-Requested-With` (or `X-Tenant-ID`). |
+| A4 | The CSRF origin check **lets requests without `Origin` through**. There is no `Referer` fallback and no custom-header requirement outside tenant routes. It runs only when a `Principal` exists, so `POST /auth/login` isn't checked at all. `cors_layer` doesn't allow `x-requested-with`. | `backend/crates/server/src/router.rs` (`csrf_origin_middleware`, `cors_layer`) | Reject a missing `Origin`/`Referer` on unsafe cookie-authenticated requests, and require `X-Requested-With` (or `X-Tenant-ID`). Apply both checks unconditionally on `/auth/login` and `/auth/refresh`. Add the header to the CORS allowlist. |
 | A5 | The cookie is named `app_session` without the `__Host-` prefix. | `identity/src/session.rs` (`session_cookie_string`) | Rename to `__Host-app_session` at the same time as A2 (it forces one re-login). |
 | A6 | There's no MFA. | — | Phase M1 (TOTP + platform mandate + step-up), then M2 (WebAuthn). |
 | A7 | There's no per-account lockout. Only the `(email, ip)` window limit exists. | `backend/crates/server/src/rate_limit.rs` (`login_rate_limit`) | Add a per-account failure counter with exponential backoff. |
