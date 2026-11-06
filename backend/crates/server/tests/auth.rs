@@ -272,38 +272,9 @@ mod tests {
                 "email": email,
                 "displayName": "Seed User",
                 "platformRole": "super_admin",
-                "platformPermissions": [
-                    "platform.tenants.list",
-                    "platform.tenants.switch",
-                    "platform.tenants.manage",
-                    "platform.admin",
-                    "platform.billing.view",
-                    "platform.billing.manage",
-                    "platform.analytics.view",
-                    "platform.diagnostics.view"
-                ],
-                "staffTenantPermissions": [
-                    "overview.view",
-                    "conversations.view",
-                    "conversations.manage",
-                    "customers.view",
-                    "customers.manage",
-                    "ai_agent.view",
-                    "ai_agent.manage",
-                    "knowledge_base.view",
-                    "knowledge_base.manage",
-                    "integrations.view",
-                    "integrations.manage",
-                    "analytics.view",
-                    "members.view",
-                    "members.manage",
-                    "settings.view",
-                    "settings.manage",
-                    "billing.view",
-                    "billing.manage",
-                    "tenant.delete",
-                    "owner.assign"
-                ],
+                // Derived from the authz matrix so new permissions don't break this.
+                "platformPermissions": authz::platform_role_permissions(identity::PlatformRole::SuperAdmin),
+                "staffTenantPermissions": authz::staff_tenant_permissions(identity::PlatformRole::SuperAdmin, false),
                 "memberships": []
             })
         );
@@ -358,15 +329,7 @@ mod tests {
         assert_eq!(login_body["staffTenantPermissions"], json!(null));
         assert_eq!(
             login_body["memberships"][0]["permissions"],
-            json!([
-                "overview.view",
-                "conversations.view",
-                "customers.view",
-                "ai_agent.view",
-                "knowledge_base.view",
-                "integrations.view",
-                "analytics.view"
-            ])
+            json!(authz::tenant_role_permissions(authz::TenantRole::Viewer))
         );
     }
 

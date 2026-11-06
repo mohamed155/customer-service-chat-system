@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
+import { filter, take } from 'rxjs';
 import { WidgetApiService } from './core/widget-api.service';
 import { SessionStore } from './core/session.store';
 import { WidgetStore } from './core/widget.store';
@@ -30,6 +31,7 @@ export class AppComponent implements OnInit {
   private readonly session = inject(SessionStore);
   readonly store = inject(WidgetStore);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly sessionToken$ = toObservable(this.session.token$);
 
   ngOnInit(): void {
     const params = new URLSearchParams(window.location.search);
@@ -47,10 +49,16 @@ export class AppComponent implements OnInit {
 
           this.store.initSession(widgetId);
 
-          const token = this.session.getToken();
-          if (token) {
-            this.store.open();
-          }
+          // A first-time visitor's session token arrives asynchronously, so
+          // open the chat once a token exists rather than only if one is
+          // already stored.
+          this.sessionToken$
+            .pipe(
+              filter((token): token is string => !!token),
+              take(1),
+              takeUntilDestroyed(this.destroyRef),
+            )
+            .subscribe(() => this.store.open());
 
           this.emitResize();
         },

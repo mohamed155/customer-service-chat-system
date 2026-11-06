@@ -197,6 +197,7 @@ use utoipa::{openapi, Modify, OpenApi};
         widgets::model::SendMessagePayload,
         widgets::model::WidgetMessageDto,
         widgets::model::WidgetConversationDto,
+        widgets::model::WidgetConversationData,
         widgets::model::WidgetConversationResponse,
         widgets::model::WidgetMessageResponse,
         widgets::model::WidgetMessageResponseData,

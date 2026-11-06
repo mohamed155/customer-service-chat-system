@@ -68,10 +68,9 @@ async function inviteThroughUi(page: Page, email: string, role: string) {
   });
   expect(body.acceptUrl).toMatch(/^http:\/\/127\.0\.0\.1:4201\/invite\/[A-Za-z0-9_-]+$/);
   await expect(page.getByRole('heading', { name: 'Invitation sent' })).toBeVisible();
-  const acceptUrl = (await page
-    .getByLabel('Invitation link')
-    .locator('span')
-    .textContent())!.trim();
+  const acceptUrl = (
+    await page.getByLabel('Invitation link for manual copying').inputValue()
+  ).trim();
   expect(acceptUrl).toBe(body.acceptUrl);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   return { acceptUrl, invitationId: body.invitation.id as string };
@@ -141,11 +140,16 @@ test('T150 browser workflow enforces tenant team lifecycle end to end', async ({
   ).toEqual({ role: 'manager', tenant_id: BETA });
 
   const revoked = await inviteThroughUi(ownerAlpha.page, 'revoked@t150.test', 'viewer');
-  const revokedRow = ownerAlpha.page
-    .locator('.invitation-row')
-    .filter({ hasText: 'revoked@t150.test' });
+  const revokedRow = ownerAlpha.page.getByRole('row').filter({ hasText: 'revoked@t150.test' });
   await revokedRow.getByRole('button', { name: 'Revoke' }).click();
-  await expect(revokedRow).toContainText('revoked');
+  // The default view lists open invitations only (spec 011); a revoked one
+  // drops out of it and is listed under the Revoked filter.
+  await expect(revokedRow).toHaveCount(0);
+  await ownerAlpha.page.getByLabel('Invitation status filter').selectOption({ label: 'Revoked' });
+  await expect(revokedRow).toContainText(/revoked/i);
+  await ownerAlpha.page
+    .getByLabel('Invitation status filter')
+    .selectOption({ label: 'All invitations' });
   const revokedPage = await ownerAlpha.context.newPage();
   await revokedPage.goto(revoked.acceptUrl);
   await expect(revokedPage.getByRole('heading', { name: 'Invitation issue' })).toBeVisible();

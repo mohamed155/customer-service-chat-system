@@ -1,201 +1,293 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.1.0 → 1.2.0
-Modified principles: N/A
-Added sections: N/A
-Expanded sections:
-  - Technology Stack & Platform Requirements → Frontend now mandates
-    RxJS-first asynchronous logic: Angular code MUST prefer RxJS observables
-    and operator composition over Promise-based flows; Observable→Promise
-    conversion is confined to inherently Promise-based integration boundaries.
-Removed sections: N/A
-Templates requiring updates:
-  - .specify/templates/plan-template.md ✅ no change needed (Constitution Check
-    gate is populated dynamically from this file; already generic)
-  - .specify/templates/spec-template.md ✅ no constitution-specific references found
-  - .specify/templates/tasks-template.md ✅ no constitution-specific references found
-  - .specify/templates/checklist-template.md ✅ no constitution-specific references found
-Follow-up TODOs: none.
+Version change: 1.2.0 → 2.0.0 (MAJOR — full rewrite; principles redefined and renumbered)
+
+Principle mapping (old → new):
+  - I. Enterprise Modular Monolith           → IV. Modular Monolith With Enforced Boundaries
+  - II. Multi-Tenant Isolation, No Exceptions → I. Tenant Isolation Is Non-Negotiable
+                                               (now also requires PostgreSQL RLS + composite FKs)
+  - III. Zero-Trust Security & RBAC          → II. Secure by Default (permission-based, not role-name)
+  - IV. AI Provider Independence & Tool-Mediated Access → III. AI Is Constrained, Observable,
+                                               and Accountable
+  - V. API-First & Contract Consistency      → VIII. Explicit Contracts and Type Safety
+  - VI. Observability by Default             → VII. Observability Is a Feature
+  - VII. Test-First & Regression Discipline  → VI. Tests Are Part of the Change
+  - VIII. Database Integrity & Migration Discipline → X. Data Integrity and Safe Change
+  - IX. Design System Discipline             → XII. Consistent, Accessible User Experience
+  - X. Performance & Efficiency              → XI. Scalable and Resilient by Design
+
+Added sections:
+  - Principle V. Spec-Driven, Incremental Delivery
+  - Principle IX. Simplicity and Evolvability
+  - Technology Standards table (replaces "Technology Stack & Platform Requirements")
+  - Development Workflow and Quality Gates, Definition of Done
+
+Removed sections / rules (not carried forward from 1.2.0):
+  - Vision section
+  - Frontend RxJS-first rule (Observable composition over Promises)
+  - angular.json `standalone: true` schematics-enforcement rule
+  - Enumerated Platform User / Tenant User role sets
+  - "Deterministic prompt construction" and "inspectable AI execution timeline" wording
+  - Documentation & Future Readiness section (module doc fields, future channel list);
+    module READMEs are now covered by Principle IX
+
+Templates:
+  - .specify/templates/plan-template.md ✅ updated (Constitution Check lists I–XII; ADR column
+    in Complexity Tracking; performance budget field)
+  - .specify/templates/spec-template.md ✅ updated (Scope & Non-Goals, Users & Roles,
+    Security & Tenancy Impact, Data Changes, API Contracts, UX States, Test Strategy,
+    Acceptance Criteria)
+  - .specify/templates/tasks-template.md ✅ updated (tests mandatory; verification per story;
+    tenant-isolation/authorization and observability tasks)
+  - .specify/templates/checklist-template.md ✅ no change needed (generic)
+  - CLAUDE.md, frontend/CLAUDE.md, .claude/skills/speckit-*/SKILL.md ✅ no principle-number
+    references found
+
+Follow-up TODOs:
+  - TODO(ARCH_DOC): `docs/architecture/system-architecture.md` is referenced but does not exist.
+  - TODO(ADR_DIR): `docs/adr/` is referenced but does not exist.
+  - TODO(COMPLIANCE_GAP): existing code (specs 005–033) was built under 1.2.0. Known gaps vs 2.0.0:
+    no PostgreSQL RLS policies (I), no i18n externalization (XII), UUIDv7 not used for PKs
+    (Technology Standards), generated TypeScript client not confirmed (VIII). Needs a corrective spec.
 -->
 
 # AI Customer Service Platform Constitution
 
-## Vision
+This constitution defines the non-negotiable rules for designing, building, and operating the
+AI Customer Service Platform: a multi-tenant SaaS that lets businesses run AI support agents with
+knowledge retrieval, safe tool calling, omnichannel conversations, and human handoff.
 
-Build an Enterprise Operating System for AI Customer Service: not a chatbot, but a
-platform that lets businesses configure, monitor, analyze, debug, and continuously
-improve AI agents across multiple communication channels. Every architectural
-decision MUST optimize for maintainability and long-term SaaS scalability over
-premature feature development.
+Every spec, plan, task, and pull request MUST comply. Where a rule cannot be met, the deviation
+MUST be recorded in the plan's Complexity Tracking table with a justification and an ADR.
+
+Keywords MUST, MUST NOT, SHOULD, and MAY follow RFC 2119.
+
+Detailed architecture guidance lives in `docs/architecture/system-architecture.md`.
+This document states the rules; the architecture document explains how to satisfy them.
+
+---
 
 ## Core Principles
 
-### I. Enterprise Modular Monolith
-The initial implementation MUST be a Modular Monolith. Modules MUST be isolated
-behind clear interfaces and communicate only through application services and
-domain events — never through direct cross-module data access or tightly coupled
-calls. Every module boundary MUST be drawn so that the module could be extracted
-into an independent microservice later without a major rewrite.
-**Rationale**: A monolith is faster to build and operate at this stage, but the
-business requires a large multi-tenant SaaS platform long-term; strict internal
-modularity is what makes that future extraction possible instead of requiring a
-rewrite.
+### I. Tenant Isolation Is Non-Negotiable
 
-### II. Multi-Tenant Isolation, No Exceptions
-The system distinguishes Platform Users (Super Admin, Developer, Sales, Support,
-Finance — who may switch tenant context via a Tenant Switcher) from Tenant Users
-(Owner, Admin, Manager, Agent, Viewer — who never access data outside their own
-tenant). Every tenant-owned table MUST include a `tenant_id`, and every
-tenant-aware query MUST enforce tenant isolation at the data-access layer.
-Frontend-only authorization checks MUST NEVER be relied upon as the sole
-enforcement mechanism for tenant or role boundaries.
-**Rationale**: A single cross-tenant data leak is an existential trust failure
-for an enterprise SaaS platform; isolation must be enforced where it cannot be
-bypassed by a compromised or buggy client.
+Cross-tenant data exposure is the single worst failure this product can have.
 
-### III. Zero-Trust Security & RBAC
-All endpoints MUST require authorization; there are no implicitly trusted
-internal routes. Access control MUST use RBAC consistent with the Platform User
-and Tenant User role sets. Secrets MUST NEVER appear in source code or version
-control. Sensitive operations (role changes, tenant data export, billing,
-credential rotation, AI configuration changes) MUST be audited with who/what/when
-records.
-**Rationale**: Zero-trust and audit trails are baseline expectations for
-enterprise buyers and are far cheaper to build in from the start than to retrofit
-after a security incident.
+- Every tenant-owned table MUST carry a non-null `tenant_id`, and every tenant-owned query and
+  mutation MUST be scoped by it.
+- Tenant scope MUST be enforced in at least two independent layers:
+  1. Application layer: repositories accept a validated `TenantContext`; there is no API that
+     reads tenant data without one.
+  2. Database layer: PostgreSQL Row-Level Security policies keyed on a per-transaction
+     `app.tenant_id` setting.
+- Foreign keys between tenant-owned tables MUST be composite `(tenant_id, id)` so a row can never
+  reference another tenant's row.
+- Client-supplied tenant identifiers (e.g. `X-Tenant-ID`) MUST be validated server-side against
+  membership or platform privilege on every request. Frontend guards are UX, never security.
+- Caches, object-storage keys, vector indexes, queues, logs, and metrics MUST be tenant-namespaced.
+- Every module that owns tenant data MUST ship automated cross-tenant access tests
+  (tenant A cannot read, list, update, or delete tenant B's data, including via IDs guessed from
+  another tenant).
 
-### IV. AI Provider Independence & Tool-Mediated Access
-LLMs MUST NEVER access databases or internal services directly; they interact
-exclusively through approved, explicitly defined tools. Prompt construction MUST
-be deterministic (same inputs produce the same prompt structure). The AI
-subsystem MUST support tool calling, RAG, conversation memory, human escalation,
-and prompt versioning, and MUST remain provider-independent across OpenAI,
-Anthropic, and Gemini today, such that adding a future provider requires minimal
-implementation effort.
-**Rationale**: Direct LLM-to-database access is both a security hole and a
-correctness risk (non-deterministic queries); a tool-mediated, provider-abstracted
-design keeps the platform auditable and lets the business swap or add model
-vendors without rearchitecting.
+### II. Secure by Default
 
-### V. API-First & Contract Consistency
-All functionality MUST be exposed through a REST-first, versioned API with
-consistent naming, predictable pagination, and standardized error responses.
-Write operations MUST be idempotent where the operation's semantics allow it.
-Public interfaces are a first-class deliverable, not an afterthought to the UI.
-**Rationale**: API-first design keeps the platform extensible (integrations,
-marketplace, third-party channels) and prevents the frontend from becoming the
-only consumer of business logic.
+- Deny by default. Every endpoint MUST declare the permission it requires; an endpoint without a
+  declared permission MUST fail to compile or fail CI.
+- Authorization MUST check permissions, not role names. Roles map to permission sets.
+- The security baseline is OWASP ASVS Level 2 and the OWASP Top 10 for LLM Applications.
+- Secrets MUST live server-side only, encrypted at rest (envelope encryption), never in frontend
+  configuration, logs, prompts, error messages, or source control.
+- All external input (HTTP, webhooks, files, channel messages, LLM output, retrieved documents)
+  MUST be treated as untrusted and validated at the boundary.
+- Inbound webhooks MUST verify signatures with constant-time comparison and reject replays.
+- Outbound requests to tenant-configured URLs MUST pass SSRF protection.
+- Sensitive administrative and business actions MUST write an append-only audit record.
+- Platform users entering a tenant context MUST be audited with actor, tenant, reason, and time.
+- Dependencies MUST pass vulnerability and license scanning in CI.
 
-### VI. Observability by Default
-Every request MUST propagate a request ID and support structured logging,
-distributed tracing, and metrics. Critical AI operations (tool calls, RAG
-retrieval, escalation decisions) MUST expose an inspectable execution timeline.
-**Rationale**: AI-driven behavior is inherently harder to reason about than
-deterministic code paths; without built-in observability, debugging agent
-behavior in production becomes guesswork.
+### III. AI Is Constrained, Observable, and Accountable
 
-### VII. Test-First & Regression Discipline
-Unit, integration, API, and end-to-end tests are all required categories of
-coverage for shipped functionality. Every bug fix MUST introduce a regression
-test that fails before the fix and passes after.
-**Rationale**: Regression tests turn every past incident into a permanent
-guardrail, which compounds in value as the platform grows in scope and
-contributor count.
+- LLMs MUST NOT receive direct database, filesystem, network, or secret access. All actions go
+  through registered tools.
+- Every tool MUST declare: input JSON Schema, required permission, tenant scope, side-effect class
+  (read / write / irreversible), approval policy, timeout, and idempotency behavior.
+- Tool arguments produced by an LLM MUST be schema-validated and authorization-checked server-side
+  before execution. Irreversible tools MUST require explicit approval unless the tenant opts in.
+- Retrieved knowledge and customer messages MUST be treated as data, never as instructions, and
+  MUST be clearly delimited in prompts.
+- AI responses that cite knowledge MUST store citations to the source chunks.
+- Every AI turn MUST record provider, model, prompt version, token usage, latency, cost, tool calls,
+  and outcome.
+- Prompts MUST be versioned and immutable once published. Changes create a new version.
+- The system MUST degrade safely: on provider failure, budget exhaustion, low confidence, or a
+  guardrail violation, the conversation escalates to a human or returns a safe fallback. It MUST
+  NOT fabricate an answer.
+- AI provider access MUST go through the provider abstraction. Feature code MUST NOT call a vendor
+  SDK directly.
 
-### VIII. Database Integrity & Migration Discipline
-Schemas MUST be normalized by default; deviations require explicit justification.
-All schema changes MUST go through migrations — schema changes MUST NEVER be
-applied manually against an environment. Every tenant-owned table includes
-`tenant_id` (see Principle II). Indexes are mandatory for production query paths;
-N+1 query patterns MUST be avoided.
-**Rationale**: Migrations are the only reliable way to keep schema state
-reproducible and auditable across environments and tenants at SaaS scale.
+### IV. Modular Monolith With Enforced Boundaries
 
-### IX. Design System Discipline
-Reusable design tokens MUST exist before components; reusable components MUST
-exist before pages; reusable patterns MUST exist before features. UI logic MUST
-NEVER be duplicated across the codebase. The product's visual and interaction
-language MUST target the density, accessibility, performance, and consistency
-bar set by enterprise tools such as Intercom, Stripe, HubSpot, Notion, and Linear.
-**Rationale**: Building bottom-up (tokens → components → patterns → features)
-is what keeps a growing UI codebase consistent instead of accumulating
-one-off, divergent implementations.
+- The backend is a single deployable Rust codebase organized as bounded-context modules.
+- Each module owns its data. Modules MUST NOT read or write another module's tables.
+- Cross-module interaction happens only through the other module's public application interface
+  or through domain events. Circular dependencies are forbidden and MUST be enforced by the
+  crate graph.
+- Inside a module, dependencies point inward: `api → application → domain`, with
+  `infrastructure` implementing ports declared by `application`/`domain` (hexagonal architecture).
+- Domain code MUST NOT depend on Axum, SQLx, Redis, or any vendor SDK.
+- Extracting a module into a separate service requires a measured reason (load, isolation,
+  deployment cadence) documented in an ADR.
 
-### X. Performance & Efficiency
-Implementations MUST optimize for low latency, efficient queries, and minimal
-allocations, and MUST use streaming where the interaction pattern benefits from
-it (e.g., AI response generation). N+1 queries are treated as defects, not
-style issues.
-**Rationale**: Customer-service interactions are latency-sensitive by nature;
-performance is a correctness property of this product, not a later optimization
-pass.
+### V. Spec-Driven, Incremental Delivery
 
-## Technology Stack & Platform Requirements
+- Work proceeds spec → clarify → plan → tasks → implement, one bounded spec at a time.
+- Every spec MUST state scope, non-goals, security and tenancy impact, data changes, API contracts,
+  test strategy, and measurable acceptance criteria.
+- Every task MUST be independently verifiable and produce working code with tests.
+- Placeholder modules, stubbed business logic, or "TODO: implement" paths MUST NOT be merged as
+  complete work. Visual mock fixtures are allowed only when isolated from production services and
+  explicitly in scope.
+- A spec is complete only when its acceptance criteria are verified, not when files exist.
 
-**Frontend**: Angular, TypeScript, Signals, RxJS, Angular Material or the
-project's own component library. Components, directives, and pipes MUST be
-standalone by default — NgModules MUST NOT be introduced for new code. The
-Angular workspace configuration (`angular.json` `schematics` defaults) MUST
-keep `standalone: true` as the generated default so this is enforced by
-tooling, not convention alone.
+### VI. Tests Are Part of the Change
 
-Asynchronous and event-driven logic in Angular code MUST prefer RxJS
-observables and operator composition (`pipe`, `map`, `switchMap`,
-`catchError`, …) over Promise-based flows. Converting an Observable to a
-Promise (`firstValueFrom`/`lastValueFrom`, `async/await` wrappers, `.then()`
-chains) is permitted only at integration boundaries where the consumed or
-exposed API is inherently Promise-based (e.g., application initializers,
-imperative `Router.navigate` calls); such conversions MUST stay localized to
-that boundary and MUST NOT replace operator composition inside services,
-interceptors, guards, effects, or component streams.
+- Every behavior change MUST include tests at the lowest effective level:
+  - Unit tests for domain logic and algorithms.
+  - Integration tests against real PostgreSQL and Redis (containers), not mocks, for repositories,
+    migrations, RLS, and queues.
+  - Contract tests for HTTP APIs against the OpenAPI specification.
+  - Component tests for Angular UI; end-to-end tests for critical user journeys.
+- Security-relevant code MUST have negative tests (unauthorized, wrong tenant, malformed input).
+- Algorithms with invariants (routing, rate limiting, chunking, ranking) SHOULD have
+  property-based tests.
+- Every bug fix MUST add a regression test that fails before the fix.
+- AI behavior changes (prompts, retrieval, guardrails) MUST run the evaluation suite and MUST NOT
+  regress agreed metrics without explicit sign-off.
+- CI MUST be green (format, lint, type check, build, tests, security scans) before merge.
 
-**Backend**: Rust, Axum, Tokio, SQLx, PostgreSQL, Redis, pgvector, Serde, Tracing.
+### VII. Observability Is a Feature
 
-**Storage**: S3-compatible object storage.
+- All services MUST emit structured JSON logs, OpenTelemetry traces, and metrics.
+- Every request and job MUST carry a request/trace ID propagated across HTTP, queues, workers,
+  channel adapters, and AI provider calls.
+- Logs MUST include tenant ID and actor where applicable and MUST NOT include secrets, tokens,
+  passwords, or raw personal data beyond what is required.
+- Each module MUST expose RED metrics (rate, errors, duration); queues MUST expose depth and age.
+- Liveness and readiness endpoints are mandatory; readiness reflects real dependency health.
 
-**AI**: A provider abstraction layer supporting OpenAI, Anthropic, and Gemini
-today. Adding a future provider MUST require implementing only the abstraction's
-defined interface, not changes to calling code.
+### VIII. Explicit Contracts and Type Safety
 
-Deviating from this stack for a given module requires explicit justification
-recorded in that feature's plan (see Complexity Tracking in the plan template).
+- Rust: no `unwrap`/`expect`/`panic!` in request or job paths; errors use typed enums mapped to a
+  single public error model. Identifiers use newtypes (`TenantId`, `ConversationId`, …) so IDs
+  cannot be mixed up. SQL is compile-time checked with SQLx.
+- TypeScript: `strict` mode, no `any` without a justified, linted exception.
+- The HTTP API is versioned (`/api/v1`), documented in OpenAPI generated from code, and the
+  frontend client is generated from that contract.
+- Breaking API changes require a new version or a documented deprecation window.
+- Errors returned to clients follow RFC 9457 Problem Details and never leak internals.
 
-## Documentation & Future Readiness
+### IX. Simplicity and Evolvability
 
-Every module MUST document its Purpose, Responsibilities, Public Interfaces,
-Dependencies, Data Model, and Extension Points.
+- Prefer the simplest design that satisfies current requirements and keeps future options open.
+- New infrastructure (message broker, search engine, service split) requires an ADR with the
+  problem, alternatives, and the measurement that justifies it.
+- Significant architectural decisions MUST be recorded as ADRs in `docs/adr/`.
+- Code MUST be readable by a new engineer: clear naming, small functions, module READMEs stating
+  responsibilities, public interface, owned data, and emitted events.
 
-The architecture MUST be designed so the following are addable as extensions
-rather than rewrites: Voice AI, Email, Facebook Messenger, Instagram, Slack,
-Microsoft Teams, CRM integrations, ERP integrations, a partner/app Marketplace,
-workflow automation, and custom AI providers. New channels and integrations are
-expected to plug into the existing module and tool-abstraction boundaries defined
-by Principles I and IV.
+### X. Data Integrity and Safe Change
+
+- All schema changes go through versioned, reviewed migrations. Manual production DDL is forbidden.
+- Migrations MUST be backward compatible with the currently deployed code (expand → migrate →
+  contract) so deployments are zero-downtime.
+- Writes that can be retried (API commands, webhooks, jobs, tool executions) MUST be idempotent,
+  using idempotency keys or natural keys.
+- State changes that must publish events MUST use the transactional outbox; dual writes are
+  forbidden.
+- Concurrent updates to shared aggregates MUST use optimistic concurrency (version column) or
+  explicit row locks.
+- Personal data MUST support per-tenant export and deletion; retention periods are configurable.
+
+### XI. Scalable and Resilient by Design
+
+- API and worker processes MUST be stateless; state lives in PostgreSQL, Redis, or object storage.
+- Every outbound call (DB, Redis, AI provider, channel, integration) MUST have a timeout.
+  Retries MUST use exponential backoff with jitter and only for retryable, idempotent operations.
+- External dependencies MUST be isolated with circuit breakers and bulkheads so a failing provider
+  cannot exhaust shared resources.
+- Long or bursty work (ingestion, embeddings, outbound messages, webhooks) MUST run in background
+  workers, not in request handlers.
+- Per-tenant rate limits and quotas MUST protect the platform from noisy neighbors.
+- Lists MUST be paginated (keyset pagination for large or real-time collections).
+- Each spec touching hot paths MUST state its performance budget; defaults: API p95 < 300 ms
+  excluding AI generation; first AI token p95 < 2.5 s.
+
+### XII. Consistent, Accessible User Experience
+
+- UI MUST be built from the Design System (Taiga UI wrapped by product components and design
+  tokens); one-off styling of shared patterns is not allowed.
+- Interfaces MUST meet WCAG 2.2 AA, support keyboard navigation, light and dark themes, and
+  right-to-left layouts.
+- Every data view MUST handle loading, empty, error, and permission-denied states.
+- User-facing text MUST be externalized for internationalization.
+
+---
+
+## Technology Standards
+
+| Area | Standard |
+| -- | -- |
+| Frontend | Angular 22, standalone components, Signals, zoneless change detection, strict TypeScript |
+| Frontend state | NgRx Store/Effects for global state; NgRx SignalStore for feature state; signals for component state. One writable owner per piece of state |
+| UI | Taiga UI wrapped by product components; CSS design tokens; light/dark/RTL |
+| Backend | Rust (stable), Axum, Tokio, Tower middleware, SQLx, Serde, Tracing + OpenTelemetry |
+| Data | PostgreSQL (with pgvector, RLS), Redis, S3-compatible object storage (MinIO local; R2/S3 prod) |
+| AI | Provider-independent abstraction; OpenAI, Anthropic, Gemini adapters; local models later |
+| Contracts | OpenAPI 3.1 generated from code; generated TypeScript client; RFC 9457 errors |
+| IDs | UUIDv7 for all primary keys |
+| Delivery | Docker, GitHub Actions, Conventional Commits, trunk-based development with short-lived branches |
+
+Adding or replacing a technology in this table requires an ADR and a constitution amendment.
+
+---
+
+## Development Workflow and Quality Gates
+
+1. **Spec** (`/speckit.specify`): problem, scope, non-goals, users and roles, tenancy and security
+   impact, data, API, UX states, acceptance criteria.
+2. **Clarify** (`/speckit.clarify`): resolve ambiguities before planning.
+3. **Plan** (`/speckit.plan`): MUST include a Constitution Check against Principles I–XII and list
+   any deviation in Complexity Tracking.
+4. **Tasks** (`/speckit.tasks`): small, ordered, independently verifiable; each with tests.
+5. **Implement** (`/speckit.implement`): one task per cycle; run format, lint, build, and tests.
+6. **Review**: pull request linked to its Linear issue; at least one approval; checklist covers
+   tenancy, authorization, input validation, error handling, observability, tests, and docs.
+7. **QA**: verify acceptance criteria in the QA environment before Done.
+
+**Definition of Done**
+
+- Acceptance criteria verified.
+- Tests added and passing; coverage of new domain logic ≥ 80% lines.
+- Tenant-isolation and authorization tests present where tenant data or permissions are touched.
+- No new lint warnings; no unresolved review comments.
+- OpenAPI, ADRs, module READMEs, and user docs updated to match the code.
+- Observability (logs, traces, metrics) in place for new flows.
+- Migrations reversible or explicitly documented as forward-only.
+
+---
 
 ## Governance
 
-This constitution supersedes all other engineering practices, style guides, and
-prior conventions where they conflict. All specifications, implementation plans,
-and PRs/reviews MUST verify compliance with these principles before merge.
+- This constitution supersedes conflicting conventions, templates, and habits.
+- Amendments require a pull request that explains the change and its impact, updates dependent
+  templates, and adds a Sync Impact Report.
+- Versioning follows semantic versioning:
+  - MAJOR: removing or redefining a principle in a backward-incompatible way.
+  - MINOR: adding a principle or materially expanding guidance.
+  - PATCH: clarifications and wording fixes.
+- Every plan MUST pass the Constitution Check; every pull request review MUST confirm compliance.
+- Compliance is reviewed at the end of each phase; recurring violations trigger an amendment or a
+  corrective spec.
 
-**Amendment procedure**: Amendments are proposed by editing this file, must state
-the rationale for the change, and must update the Sync Impact Report at the top
-of this file along with the version and date fields below. Any dependent
-templates (plan, spec, tasks, checklist) or agent-facing guidance found to be
-inconsistent with the amendment MUST be updated in the same change.
-
-**Versioning policy** (semantic versioning applied to governance):
-- **MAJOR**: Backward-incompatible principle removals or redefinitions.
-- **MINOR**: New principle or section added, or existing guidance materially
-  expanded.
-- **PATCH**: Clarifications, wording, typo fixes, and non-semantic refinements.
-
-**Compliance review**: Any deviation from a Core Principle in a plan MUST be
-recorded and justified in that plan's Complexity Tracking section; unjustified
-deviations are grounds to block the plan at the Constitution Check gate.
-
-When making decisions not explicitly covered above, prioritize simplicity,
-maintainability, and long-term scalability over short-term convenience.
-
-**Version**: 1.2.0 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-07-11
+**Version**: 2.0.0 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-11-04

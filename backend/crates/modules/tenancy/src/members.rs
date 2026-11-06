@@ -344,6 +344,7 @@ pub async fn list_members(
 
     let next_cursor = items
         .last()
+        .filter(|_| has_more)
         .map(|last| format!("{}_{}", last.joined_at.format("%+"), last.id));
 
     Json(Page {
@@ -427,6 +428,19 @@ pub async fn update_member(
         }
     };
 
+    // Serialize roster mutations per tenant: concurrent changes otherwise lock
+    // the target row and then the owner set in different orders (deadlock).
+    if let Err(e) = sqlx::query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('tenant_members:' || $1::text, 0))",
+    )
+    .bind(ctx.tenant_id)
+    .execute(&mut *tx)
+    .await
+    {
+        tracing::error!(error = %e, "failed to take roster lock");
+        return ApiError::internal_error("Failed to update member").into_response();
+    }
+
     let target = sqlx::query_as::<_, (Uuid, String, String, Uuid)>(
         "SELECT tm.id, tm.role, tm.status, tm.user_id \
          FROM tenant_memberships tm \
@@ -468,7 +482,12 @@ pub async fn update_member(
         let new_role_parsed = match TenantRole::from_str(new_role) {
             Ok(r) => r,
             Err(_) => {
-                return ApiError::validation_failed(format!("Unknown role: {new_role}"))
+                return ApiError::unprocessable_entity(format!("Unknown role: {new_role}"))
+                    .with_details(vec![ErrorDetail {
+                        field: "role".into(),
+                        code: "invalid_value".into(),
+                        message: "Role must be a known tenant role".into(),
+                    }])
                     .into_response();
             }
         };
@@ -542,7 +561,12 @@ pub async fn update_member(
         }
     } else if let Some(new_status) = &payload.status {
         if new_status != "active" && new_status != "disabled" {
-            return ApiError::validation_failed(format!("Invalid status: {new_status}"))
+            return ApiError::unprocessable_entity(format!("Invalid status: {new_status}"))
+                .with_details(vec![ErrorDetail {
+                    field: "status".into(),
+                    code: "invalid_value".into(),
+                    message: "Status must be active or disabled".into(),
+                }])
                 .into_response();
         }
 

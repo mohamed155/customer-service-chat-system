@@ -90,9 +90,9 @@ describe('ConversationsApiService', () => {
   });
 
   describe('listAssignableMembers', () => {
-    it('calls GET /tenant/members', async () => {
+    it('calls GET /tenant/members and returns the page items', async () => {
       const members = [{ id: 'm1', displayName: 'Alice' }];
-      api.get.mockReturnValue(of({ data: members }));
+      api.get.mockReturnValue(of({ data: { items: members, nextCursor: null, hasMore: false } }));
 
       const result = await firstValueFrom(service.listAssignableMembers());
 

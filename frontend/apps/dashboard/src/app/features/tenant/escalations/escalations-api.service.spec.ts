@@ -1,3 +1,4 @@
+import { HttpParams } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, of, throwError } from 'rxjs';
 import { ApiService } from '../../../core/api/api.service';
@@ -6,12 +7,12 @@ import { EscalationsApiService } from './escalations-api.service';
 describe('EscalationsApiService', () => {
   let service: EscalationsApiService;
   let api: {
-    list: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
     post: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
-    api = { list: vi.fn(), post: vi.fn() };
+    api = { get: vi.fn(), post: vi.fn() };
     TestBed.configureTestingModule({
       providers: [EscalationsApiService, { provide: ApiService, useValue: api }],
     });
@@ -19,28 +20,34 @@ describe('EscalationsApiService', () => {
   });
 
   describe('listQueue', () => {
-    it('passes query params through with no mapper', async () => {
-      const response = {
-        data: { items: [], nextCursor: null, hasMore: false },
-      };
-      api.list.mockReturnValue(of(response));
+    it('maps the { data, pagination } wire envelope to a paginated response', async () => {
+      const entry = { escalation: { id: 'esc-1' } };
+      api.get.mockReturnValue(
+        of({
+          data: { data: [entry], pagination: { next_cursor: 'next-1', has_more: true } },
+          requestId: 'req-1',
+        }),
+      );
 
-      const result = await firstValueFrom(service.listQueue({ cursor: 'cursor-abc', limit: 20 }));
+      const result = await firstValueFrom(service.listQueue());
 
-      expect(api.list).toHaveBeenCalledWith('tenant/escalations/queue', {
-        cursor: 'cursor-abc',
-        limit: 20,
+      expect(result).toEqual({
+        data: { items: [entry], nextCursor: 'next-1', hasMore: true },
+        requestId: 'req-1',
       });
-      expect(result).toEqual(response);
     });
 
-    it('passes cursor through to the API', async () => {
-      api.list.mockReturnValue(of({ data: { items: [], nextCursor: null, hasMore: false } }));
+    it('passes cursor and limit as query params', async () => {
+      api.get.mockReturnValue(
+        of({ data: { data: [], pagination: { next_cursor: null, has_more: false } } }),
+      );
 
-      await firstValueFrom(service.listQueue({ cursor: 'prev-cursor' }));
+      await firstValueFrom(service.listQueue({ cursor: 'prev-cursor', limit: 20 }));
 
-      const [, query] = api.list.mock.calls[0];
-      expect(query.cursor).toBe('prev-cursor');
+      const [path, params] = api.get.mock.calls[0] as [string, HttpParams];
+      expect(path).toBe('tenant/escalations/queue');
+      expect(params.get('cursor')).toBe('prev-cursor');
+      expect(params.get('limit')).toBe('20');
     });
   });
 

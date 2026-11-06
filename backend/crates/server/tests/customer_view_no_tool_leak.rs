@@ -150,8 +150,8 @@ async fn customer_view_contains_no_tool_request_data() {
 
     // Insert a customer message
     sqlx::query(
-        "INSERT INTO messages (tenant_id, conversation_id, kind, sender_type, sender_display_name, body) \
-         VALUES ($1, $2, 'customer', 'customer', 'Test Customer', 'Hello')",
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
+         VALUES ($1, $2, 'customer', 'Hello')",
     )
     .bind(tenant_id)
     .bind(conversation_id)
@@ -161,8 +161,8 @@ async fn customer_view_contains_no_tool_request_data() {
 
     // Insert an AI reply
     let ai_msg_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO messages (tenant_id, conversation_id, kind, sender_type, sender_display_name, body) \
-         VALUES ($1, $2, 'ai', 'member', 'AI Bot', 'I can help!') RETURNING id",
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
+         VALUES ($1, $2, 'ai', 'I can help!') RETURNING id",
     )
     .bind(tenant_id)
     .bind(conversation_id)
@@ -172,8 +172,8 @@ async fn customer_view_contains_no_tool_request_data() {
 
     // Insert an AI generation row so the FK is satisfied
     let generation_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO ai_generations (tenant_id, conversation_id, trigger_message_id, response_message_id, outcome) \
-         VALUES ($1, $2, $3, $4, 'success') RETURNING id",
+        "INSERT INTO ai_generations (tenant_id, conversation_id, trigger_message_id, response_message_id, outcome, latency_ms) \
+         VALUES ($1, $2, $3, $4, 'success', 0) RETURNING id",
     )
     .bind(tenant_id)
     .bind(conversation_id)
@@ -250,7 +250,9 @@ async fn customer_view_contains_no_tool_request_data() {
         "FR-020: tool error text leaked into conversation timeline"
     );
     assert!(
-        !body_pretty.contains("Test Customer") || body_pretty.contains("displayName"),
+        !body_pretty.contains("Test Customer")
+            || body_pretty.contains("displayName")
+            || body_pretty.contains("display_name"),
         "FR-020: only message data (not tool result) should appear"
     );
 

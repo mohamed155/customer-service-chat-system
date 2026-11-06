@@ -60,11 +60,7 @@ pub fn init_observability(
 
         let otlp_layer =
             otlp::build_layer(&endpoint, trace_sample_ratio).with_filter(filter.clone());
-        let sentry_layer = sentry_tracing::layer().event_filter(|md| match *md.level() {
-            tracing::Level::ERROR => sentry_tracing::EventFilter::Event,
-            tracing::Level::WARN => sentry_tracing::EventFilter::Breadcrumb,
-            _ => sentry_tracing::EventFilter::Ignore,
-        });
+        let sentry_layer = sentry_layers();
         if matches!(log_format, LogFormat::Json) {
             let _ = Registry::default()
                 .with(otlp_layer)
@@ -91,13 +87,7 @@ pub fn init_observability(
             LogFormat::Json => {
                 let _ = Registry::default()
                     .with(tracing_subscriber::fmt::layer().json().with_filter(filter))
-                    .with(
-                        sentry_tracing::layer().event_filter(|md| match *md.level() {
-                            tracing::Level::ERROR => sentry_tracing::EventFilter::Event,
-                            tracing::Level::WARN => sentry_tracing::EventFilter::Breadcrumb,
-                            _ => sentry_tracing::EventFilter::Ignore,
-                        }),
-                    )
+                    .with(sentry_layers())
                     .try_init();
             }
             LogFormat::Pretty => {
@@ -107,13 +97,7 @@ pub fn init_observability(
                             .pretty()
                             .with_filter(filter),
                     )
-                    .with(
-                        sentry_tracing::layer().event_filter(|md| match *md.level() {
-                            tracing::Level::ERROR => sentry_tracing::EventFilter::Event,
-                            tracing::Level::WARN => sentry_tracing::EventFilter::Breadcrumb,
-                            _ => sentry_tracing::EventFilter::Ignore,
-                        }),
-                    )
+                    .with(sentry_layers())
                     .try_init();
             }
         }
@@ -166,4 +150,22 @@ mod tests {
     fn sensitive_values_are_redacted() {
         assert_eq!(super::redact("secret"), "[REDACTED]");
     }
+}
+
+/// Sentry tracing layers: `ERROR` events become Sentry error events, `WARN`
+/// events are kept as breadcrumbs, and `INFO`+ spans are recorded.
+fn sentry_layers<S>() -> impl tracing_subscriber::Layer<S>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    use tracing_subscriber::filter::{filter_fn, LevelFilter};
+    use tracing_subscriber::Layer;
+
+    sentry_tracing::ErrorLayer::new()
+        .with_filter(LevelFilter::ERROR)
+        .and_then(
+            sentry_tracing::BreadcrumbLayer::new()
+                .with_filter(filter_fn(|md| *md.level() == tracing::Level::WARN)),
+        )
+        .and_then(sentry_tracing::SpanLayer::new().with_filter(LevelFilter::INFO))
 }

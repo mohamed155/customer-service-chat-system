@@ -22,6 +22,7 @@ const TENANT_ADMIN: &[Permission] = &[
     Permission::SettingsManage,
     Permission::WidgetsView,
     Permission::WidgetsManage,
+    Permission::ToolsView,
 ];
 const TENANT_MANAGER: &[Permission] = &[
     Permission::OverviewView,
@@ -37,6 +38,7 @@ const TENANT_MANAGER: &[Permission] = &[
     Permission::MembersView,
     Permission::MembersManage,
     Permission::WidgetsView,
+    Permission::ToolsView,
 ];
 const TENANT_AGENT: &[Permission] = &[
     Permission::OverviewView,

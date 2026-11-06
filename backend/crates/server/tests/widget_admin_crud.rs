@@ -95,6 +95,15 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 
 async fn setup(pool: &sqlx::PgPool) {
     db::run_migrations(pool).await.unwrap();
+    // Widget rate-limit buckets are keyed by client IP, which is the same
+    // ("unknown") for every test request; reset them so tests don't share budget.
+    cache::Cache::new(
+        &std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".into()),
+    )
+    .expect("redis url")
+    .delete_by_prefix("rl:widget_")
+    .await
+    .expect("reset widget rate-limit buckets");
     sqlx::query(
         "TRUNCATE TABLE messages, customer_channel_identifiers, customers, conversations, \
          widget_sessions, widget_instances, outbox_events, audit_logs, \
@@ -605,8 +614,12 @@ async fn widget_conversation_has_channel_and_attribution() {
     assert!(conv.is_some(), "Widget conversation should be in the list");
     let conv = conv.unwrap();
     assert_eq!(conv["channel"], "widget");
-    assert_eq!(conv["widgetInstance"]["id"], widget_instance_id.to_string());
-    assert_eq!(conv["widgetInstance"]["name"], widget_name);
+    // The conversations wire format is snake_case (frontend: WidgetInstanceRefWire).
+    assert_eq!(
+        conv["widget_instance"]["id"],
+        widget_instance_id.to_string()
+    );
+    assert_eq!(conv["widget_instance"]["name"], widget_name);
 }
 
 #[tokio::test]

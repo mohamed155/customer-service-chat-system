@@ -144,7 +144,23 @@ pub struct WidgetConversationDto {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WidgetConversationResponse {
-    pub data: Option<WidgetConversationDto>,
+    pub data: Option<WidgetConversationData>,
+}
+
+/// `{ "conversation": … }` wrapper required by the public widget contract
+/// (specs/023-website-chat-widget/contracts/public-widget-api.md).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WidgetConversationData {
+    pub conversation: WidgetConversationDto,
+}
+
+impl WidgetConversationResponse {
+    pub fn some(conversation: WidgetConversationDto) -> Self {
+        Self {
+            data: Some(WidgetConversationData { conversation }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

@@ -8,6 +8,27 @@
 
 **Input**: User description: "$ARGUMENTS"
 
+## Scope & Non-Goals *(mandatory)*
+
+**In scope**:
+
+- [What this spec delivers]
+
+**Non-goals** (explicitly out of scope for this spec):
+
+- [What this spec will NOT deliver, and where it is deferred to if known]
+
+## Users & Roles *(mandatory)*
+
+<!--
+  List every actor (platform users, tenant users, anonymous customers, system workers) and the
+  permissions each needs. Authorization checks permissions, never role names (Constitution II).
+-->
+
+| Actor | Permission(s) required | What they can do |
+|-------|------------------------|------------------|
+| [e.g., Tenant Admin] | [e.g., `widgets.manage`] | [capability] |
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -103,11 +124,54 @@
 - **[Entity 1]**: [What it represents, key attributes without implementation]
 - **[Entity 2]**: [What it represents, relationships to other entities]
 
-## Success Criteria *(mandatory)*
+## Security & Tenancy Impact *(mandatory)*
 
 <!--
-  ACTION REQUIRED: Define measurable success criteria.
-  These must be technology-agnostic and measurable.
+  Constitution I and II. Write "None" only with a reason.
+-->
+
+- **Tenant-owned data touched**: [tables/objects; how tenant scope is enforced in app + RLS]
+- **Cross-tenant risks**: [ID guessing, shared caches/keys/queues, SSE streams, etc.]
+- **Untrusted input boundaries**: [HTTP bodies, webhooks, files, channel messages, LLM output]
+- **Secrets**: [any new credentials and where they are stored]
+- **Audit events**: [sensitive actions that must write audit records]
+- **AI/tool impact** (Constitution III): [new tools, prompts, guardrails, or N/A]
+
+## Data Changes *(mandatory)*
+
+- [New/changed tables, columns, indexes; migration strategy (expand → migrate → contract);
+  idempotency keys; retention; PII export/deletion impact — or "None"]
+
+## API Contracts *(mandatory if any API changes)*
+
+- [Endpoints under `/api/v1`, permission per endpoint, pagination style, RFC 9457 error cases]
+
+## UX States *(mandatory if UI changes)*
+
+- **Loading**: [behavior]
+- **Empty**: [behavior]
+- **Error**: [behavior]
+- **Permission denied**: [behavior]
+- **Accessibility / theming**: [WCAG 2.2 AA, keyboard, light/dark, RTL, i18n notes]
+
+## Test Strategy *(mandatory)*
+
+<!--
+  Constitution VI. Name the lowest effective level for each behavior.
+-->
+
+- **Unit**: [domain logic]
+- **Integration** (real PostgreSQL/Redis): [repositories, migrations, RLS, queues]
+- **Contract**: [OpenAPI endpoints]
+- **Component / E2E**: [UI and critical journeys]
+- **Negative / security**: [unauthorized, wrong tenant, malformed input]
+- **AI evaluation**: [eval suite impact, or N/A]
+
+## Success Criteria / Acceptance Criteria *(mandatory)*
+
+<!--
+  ACTION REQUIRED: Define measurable acceptance criteria.
+  These must be technology-agnostic, measurable, and verifiable in QA (Constitution V).
 -->
 
 ### Measurable Outcomes
@@ -116,6 +180,7 @@
 - **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
 - **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
 - **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+- **SC-005**: [Performance budget if hot paths are touched, e.g., "API p95 < 300 ms"]
 
 ## Assumptions
 

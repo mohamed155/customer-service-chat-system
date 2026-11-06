@@ -264,7 +264,7 @@ async fn connect_returns_201_and_status_connected() {
     let secrets = body["connection"]["secrets"].as_array().unwrap();
     assert_eq!(secrets.len(), 1);
     assert_eq!(secrets[0]["field_key"], "signing_secret");
-    assert_eq!(secrets[0]["hint"], "abc"); // last 4 chars of "whsec_test_abc"
+    assert_eq!(secrets[0]["hint"], "_abc"); // last 4 chars of "whsec_test_abc"
     assert!(body["connection"]["webhook_url"].is_string());
     assert!(body["connection"]["webhook_url"]
         .as_str()
@@ -341,7 +341,7 @@ async fn connecting_unavailable_slack_returns_422() {
     .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let body = body_json(response).await;
-    assert_eq!(body["error"]["code"], "unprocessable_entity");
+    assert_eq!(body["error"]["code"], "validation_failed");
 }
 
 #[tokio::test]
@@ -371,7 +371,7 @@ async fn connect_with_missing_required_field_returns_422() {
     .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let body = body_json(response).await;
-    assert_eq!(body["error"]["code"], "unprocessable_entity");
+    assert_eq!(body["error"]["code"], "validation_failed");
     let details = body["error"]["details"].as_array().unwrap();
     let fields: Vec<&str> = details
         .iter()

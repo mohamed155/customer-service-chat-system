@@ -8,6 +8,7 @@ jobs:
     outputs:
       test_count: ${{ steps.tests.outputs.count }}
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -44,9 +45,9 @@ jobs:
       - id: tests
         name: Run tests and verify count floor
         run: |
+          set -o pipefail
           EXIT=0
-          cargo nextest run --workspace > /tmp/nextest.out 2>&1 || EXIT=$?
-          cat /tmp/nextest.out
+          cargo nextest run --workspace 2>&1 | tee /tmp/nextest.out || EXIT=$?
           test $EXIT -eq 0 || exit $EXIT
           COUNT=$(grep -oP '\d+(?= tests run)' /tmp/nextest.out || echo 0)
           echo "count=$COUNT" >> $GITHUB_OUTPUT
@@ -70,7 +71,7 @@ jobs:
           wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_x64.tar.gz
           tar -xzf gitleaks_8.18.2_linux_x64.tar.gz -C /usr/local/bin gitleaks
       - name: Run gitleaks
-        run: gitleaks detect --source . --redact --exit-code 1
+        run: gitleaks detect --source . --redact --verbose --exit-code 1
   release:
     needs: [verify, secret-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'

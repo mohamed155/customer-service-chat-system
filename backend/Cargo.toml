@@ -12,9 +12,9 @@ license = "UNLICENSED"
 
 [workspace.dependencies]
 axum = { version = "0.8", features = ["multipart"] }
-utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid", "openapi_extensions"] }
-utoipa-axum = "0.2"
-utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
+utoipa = { version = "6", features = ["axum_extras", "chrono", "uuid", "openapi_extensions"] }
+utoipa-axum = "0.3"
+utoipa-swagger-ui = { version = "10", features = ["axum", "vendored"] }
 chrono = { version = "0.4", features = ["serde"] }
 http = "1"
 serde = { version = "1", features = ["derive"] }
@@ -33,7 +33,7 @@ argon2 = "0.6"
 axum-extra = { version = "0.12", features = ["cookie"] }
 futures = "0.3"
 http-body-util = "0.1"
-jsonwebtoken = { version = "11", features = ["rust_crypto"] }
+jsonwebtoken = { version = "11", features = ["aws_lc_rs"] }
 rand = "0.10"
 serial_test = "4"
 hex = "0.4"
@@ -49,8 +49,8 @@ zeroize = { version = "1", features = ["derive"] }
 wiremock = "0.6"
 ammonia = "4"
 pdf-extract = "0.12"
-aws-config = { version = "1", default-features = false, features = ["behavior-version-latest", "rustls"] }
-aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls"] }
+aws-config = { version = "1", default-features = false, features = ["behavior-version-latest", "default-https-client", "rt-tokio"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
 strum = { version = "0.28", default-features = false, features = ["derive"] }
 regex = "1"
 metrics = "0.24"

@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -111,7 +113,7 @@ async fn setup(pool: &sqlx::PgPool) {
 }
 
 async fn seed_tenant(pool: &sqlx::PgPool, label: &str) -> Uuid {
-    let slug = format!("tool-iso-{}-{}", label, Uuid::new_v4().simple());
+    let slug = format!("tool-iso-{}-{}", label, Uuid::new_v4().simple()).to_lowercase();
     sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
         .bind(format!("Tool Isolation Tenant {}", label))
         .bind(&slug)
@@ -129,14 +131,14 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
-    sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
+async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+    sqlx::query_scalar("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id")
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .fetch_one(pool)
         .await
-        .unwrap();
+        .unwrap()
 }
 
 async fn seed_ai_config(pool: &sqlx::PgPool, provider: &str, model: &str) {
@@ -250,20 +252,25 @@ async fn engine_tool_isolation() {
 
     let master = master_key();
 
+    // Seed platform AI config + credential (shared) before the agent saves:
+    // a provider override must resolve at save time (spec 017).
+    seed_ai_config(&pool, "openai", "gpt-4").await;
+    seed_ai_credential(&pool, "openai", "sk-tool-iso-key", &master).await;
+
     // ── Tenant A ─────────────────────────────────────────────────────────────
     let tenant_a = seed_tenant(&pool, "A").await;
     let user_a = seed_user(&pool, "tool-iso-a@test.com").await;
-    seed_membership(&pool, tenant_a, user_a, "admin").await;
+    let membership_a = seed_membership(&pool, tenant_a, user_a, "admin").await;
 
     // Agent config for tenant A
     let agent_payload_a = serde_json::json!({
         "name": "Tenant-A-Assistant",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let bytes_a = serde_json::to_vec(&agent_payload_a).unwrap();
     let put_a =
@@ -288,7 +295,7 @@ async fn engine_tool_isolation() {
          VALUES ($1, 'lookup_customer', true, false, $2)",
     )
     .bind(tenant_a)
-    .bind(user_a)
+    .bind(membership_a)
     .execute(&pool)
     .await
     .unwrap();
@@ -320,16 +327,16 @@ async fn engine_tool_isolation() {
     // ── Tenant B ─────────────────────────────────────────────────────────────
     let tenant_b = seed_tenant(&pool, "B").await;
     let user_b = seed_user(&pool, "tool-iso-b@test.com").await;
-    seed_membership(&pool, tenant_b, user_b, "admin").await;
+    let membership_b = seed_membership(&pool, tenant_b, user_b, "admin").await;
 
     let agent_payload_b = serde_json::json!({
         "name": "Tenant-B-Assistant",
         "avatar": { "kind": "preset", "preset": "nova" },
         "tone": "friendly",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let bytes_b = serde_json::to_vec(&agent_payload_b).unwrap();
     let put_b =
@@ -354,7 +361,7 @@ async fn engine_tool_isolation() {
          VALUES ($1, 'lookup_customer', true, false, $2)",
     )
     .bind(tenant_b)
-    .bind(user_b)
+    .bind(membership_b)
     .execute(&pool)
     .await
     .unwrap();
@@ -401,8 +408,8 @@ async fn engine_tool_isolation() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conv_b)
@@ -412,17 +419,13 @@ async fn engine_tool_isolation() {
     .await
     .unwrap();
 
-    // Seed platform AI config + credential (shared)
-    seed_ai_config(&pool, "openai", "gpt-4").await;
-    seed_ai_credential(&pool, "openai", "sk-tool-iso-key", &master).await;
-
     // Mock OpenAI: first call tool_call for lookup_customer, second call text with B's data
     let tool_resp = tool_call_response("lookup_customer", "{}");
     let text_resp = text_response("I found Bob TenantB, email bob@tenantb.com, phone +1-555-0202");
     let responder = ToolThenTextResponder {
         called: AtomicBool::new(false),
-        tool_call: ResponseTemplate::new(200).set_body_json(tool_resp),
-        text: ResponseTemplate::new(200).set_body_json(text_resp),
+        tool_call: openai_mock::streaming_template(&tool_resp),
+        text: openai_mock::streaming_template(&text_resp),
     };
     Mock::given(wiremock::matchers::method("POST"))
         .and(wiremock::matchers::path("/v1/chat/completions"))

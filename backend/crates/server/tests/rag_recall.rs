@@ -74,7 +74,8 @@ fn fmt_vec(v: &[f32; 1536]) -> String {
         }
         s.push_str(&x.to_string());
     }
-    s
+    // pgvector literal: `[x,y,...]`
+    format!("[{s}]")
 }
 
 /// Query vector — points along the first axis.
@@ -285,7 +286,7 @@ async fn recall_target_tenant_chunk_among_noise() {
                     kc.tenant_id, \
                     kc.content, \
                     kc.content_hash, \
-                    (1 - (kc.embedding <=> '[{}]'::vector)) AS similarity, \
+                    (1 - (kc.embedding <=> '{}'::vector)) AS similarity, \
                     ki.title AS item_title \
              FROM knowledge_chunks kc \
              JOIN knowledge_items ki \
@@ -293,7 +294,7 @@ async fn recall_target_tenant_chunk_among_noise() {
               AND ki.tenant_id = kc.tenant_id \
              WHERE kc.tenant_id = $1 \
                AND ki.status = 'published' \
-               AND (1 - (kc.embedding <=> '[{}]'::vector)) >= $2 \
+               AND (1 - (kc.embedding <=> '{}'::vector)) >= $2 \
              ORDER BY similarity DESC \
              LIMIT $3",
         q, q

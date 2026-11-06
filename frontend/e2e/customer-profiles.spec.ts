@@ -421,6 +421,13 @@ async function installCustomersApi(page: Page, state: CustomersState) {
 test.describe('Customer Profiles', () => {
   test('Customer list pagination and search', async ({ page }) => {
     const state = makeState(makeManagerIdentity());
+    // The list loads 25 per page; pad the fixtures so a second page exists.
+    const PAGE_SIZE = 25;
+    while (state.customers.length < PAGE_SIZE + 5) {
+      state.customers.push(
+        makeCustomer({ display_name: `Paged Customer ${state.customers.length}` }),
+      );
+    }
     await installCustomersApi(page, state);
     await page.addInitScript((tenant) => {
       localStorage.setItem('app.tenant', JSON.stringify(tenant));
@@ -430,8 +437,8 @@ test.describe('Customer Profiles', () => {
 
     await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
 
-    const firstPage = state.customers.slice(0, 10);
-    const secondPage = state.customers.slice(10, 15);
+    const firstPage = state.customers.slice(0, PAGE_SIZE);
+    const secondPage = state.customers.slice(PAGE_SIZE);
 
     for (const c of firstPage) {
       await expect(page.getByText(c.display_name)).toBeVisible();
@@ -453,7 +460,7 @@ test.describe('Customer Profiles', () => {
       await expect(page.getByText(c.display_name)).toBeVisible();
     }
 
-    const searchInput = page.getByPlaceholder('Search customers');
+    const searchInput = page.getByRole('searchbox', { name: 'Search customers' });
     if (await searchInput.isVisible()) {
       const searchResponse = page.waitForResponse(
         (res) => res.url().includes('/api/v1/tenant/customers') && res.request().method() === 'GET',
@@ -498,12 +505,12 @@ test.describe('Customer Profiles', () => {
 
     await page.goto(`/tenant/customers/${target.id}`);
 
-    await expect(page.getByText(target.display_name)).toBeVisible();
-    await expect(page.getByText(target.email!)).toBeVisible();
-    await expect(page.getByText(target.phone!)).toBeVisible();
-
-    await expect(page.getByText('sara@example.com')).toBeVisible();
-    await expect(page.getByText('+201001234567')).toBeVisible();
+    await expect(page.getByRole('heading', { name: target.display_name })).toBeVisible();
+    // Email and phone show both as contact details and as channel identifiers.
+    await expect(page.getByText(target.email!).first()).toBeVisible();
+    await expect(page.getByText(target.phone!).first()).toBeVisible();
+    await expect(page.getByText('sara@example.com')).toHaveCount(2);
+    await expect(page.getByText('+201001234567').first()).toBeVisible();
 
     await expect(page.getByText('enterprise')).toBeVisible();
     await expect(page.getByText('EMEA')).toBeVisible();
@@ -552,8 +559,8 @@ test.describe('Customer Profiles', () => {
     await page.getByLabel('Phone').fill('+15550000999');
 
     await page.getByRole('button', { name: 'Add identifier' }).click();
-    await page.getByLabel('Channel').fill('whatsapp');
-    await page.getByLabel('Identifier value').fill('+15550000999');
+    await page.getByLabel('Channel').selectOption('whatsapp');
+    await page.getByLabel('Identifier', { exact: true }).fill('+15550000999');
 
     await page.getByRole('button', { name: 'Add metadata' }).click();
     await page.getByLabel('Key').fill('source');
@@ -653,6 +660,8 @@ test.describe('Customer Profiles', () => {
               apiErrorBody('conflict', 'Channel identifier already held by another customer.', [
                 {
                   field: 'identifiers',
+                  code: 'identifier_conflict',
+                  message: 'Channel `whatsapp:+15550000999` is already held by `Existing Customer`',
                   channel: 'whatsapp',
                   identifier: '+15550000999',
                   existing_customer_id: 'existing-customer-id',
@@ -674,6 +683,7 @@ test.describe('Customer Profiles', () => {
     await page.getByLabel('Email').fill('conflict@test.com');
     await page.getByRole('button', { name: 'Create' }).click();
 
-    await expect(page.getByText('already held by another customer')).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'is already held by' })).toHaveCount(1);
+    await expect(page.getByText('already held by `Existing Customer`')).toBeVisible();
   });
 });

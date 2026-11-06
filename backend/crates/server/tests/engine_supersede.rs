@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -239,10 +241,10 @@ async fn engine_supersede_rapid_second_message() {
         "name": "T021 Scenario 2 Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let put_resp = send(
         &state,
@@ -266,9 +268,7 @@ async fn engine_supersede_rapid_second_message() {
     Mock::given(wm_method("POST"))
         .and(wm_path("/v1/chat/completions"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_delay(Duration::from_secs(2))
-                .set_body_json(mock_response),
+            openai_mock::streaming_template(&mock_response).set_delay(Duration::from_secs(2)),
         )
         .mount(&openai_mock)
         .await;
@@ -311,8 +311,8 @@ async fn engine_supersede_rapid_second_message() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -339,8 +339,8 @@ async fn engine_supersede_rapid_second_message() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -469,10 +469,10 @@ async fn engine_supersede_escalation_cancels_generation() {
         "name": "T021 Scenario 3 Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let put_resp = send(
         &state,
@@ -495,7 +495,7 @@ async fn engine_supersede_escalation_cancels_generation() {
     });
     Mock::given(wm_method("POST"))
         .and(wm_path("/v1/chat/completions"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(mock_response))
+        .respond_with(openai_mock::OpenAiReply::new(mock_response))
         .mount(&openai_mock)
         .await;
 
@@ -537,8 +537,8 @@ async fn engine_supersede_escalation_cancels_generation() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)

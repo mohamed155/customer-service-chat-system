@@ -29,6 +29,54 @@ pub fn resolve_builtin(
     Some(effective)
 }
 
+/// A built-in tool as shown in tenant tool settings, with this tenant's
+/// policy applied. Unlike [`resolve_available`] (what the engine may call),
+/// this includes tools the tenant has not enabled yet — otherwise the
+/// settings page could never offer them to be switched on.
+#[derive(Debug, Clone)]
+pub struct BuiltinSetting {
+    pub spec: ai_providers::ToolSpec,
+    pub classification: Classification,
+    pub enabled: bool,
+    pub require_approval: bool,
+    pub effective_approval: bool,
+}
+
+pub async fn builtin_settings(
+    pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+) -> sqlx::Result<Vec<BuiltinSetting>> {
+    let policies: Vec<(String, bool, bool)> = sqlx::query_as(
+        "SELECT tool_name, enabled, require_approval \
+         FROM tenant_tool_policies \
+         WHERE tenant_id = $1",
+    )
+    .bind(tenant_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(crate::registry::catalog()
+        .iter()
+        .map(|tool| {
+            let (enabled, require_approval) = policies
+                .iter()
+                .find(|(n, _, _)| n == tool.name())
+                .map(|(_, e, r)| (*e, *r))
+                .unwrap_or((false, false));
+            let classification = tool.classification();
+            let effective_approval =
+                matches!(classification, Classification::Approval) || require_approval;
+            BuiltinSetting {
+                spec: tool.spec(),
+                classification,
+                enabled,
+                require_approval,
+                effective_approval,
+            }
+        })
+        .collect())
+}
+
 pub async fn resolve_available(
     pool: &sqlx::PgPool,
     tenant_id: Uuid,

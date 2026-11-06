@@ -400,47 +400,19 @@ pub async fn create_invitation(
     // ---- Revoke any stale (expired) pending invitation for this (tenant,
     // email) pair before inserting. An active pending invite was already
     // rejected above (409) so only already-expired rows are touched. ----
-    let superseded: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT id, role FROM tenant_invitations \
-         WHERE tenant_id = $1 AND email = $2 AND status = 'pending' AND expires_at <= now() \
-         LIMIT 1",
+    // An automatic expiry is not an admin revocation: persist it as `expired`
+    // and write no revocation audit.
+    if let Err(e) = sqlx::query(
+        "UPDATE tenant_invitations SET status = 'expired' \
+         WHERE tenant_id = $1 AND email = $2 AND status = 'pending' AND expires_at <= now()",
     )
     .bind(ctx.tenant_id)
     .bind(&email)
-    .fetch_optional(&mut *tx)
+    .execute(&mut *tx)
     .await
-    .unwrap_or(None);
-
-    if let Some((old_id, old_role)) = &superseded {
-        if let Err(e) = sqlx::query(
-            "UPDATE tenant_invitations \
-             SET status = 'revoked', revoked_at = now(), revoked_by = $1 \
-             WHERE id = $2 AND tenant_id = $3",
-        )
-        .bind(principal.user_id)
-        .bind(old_id)
-        .bind(ctx.tenant_id)
-        .execute(&mut *tx)
-        .await
-        {
-            return ApiError::internal_error(format!(
-                "Failed to supersede expired invitation: {e}"
-            ))
+    {
+        return ApiError::internal_error(format!("Failed to expire stale invitation: {e}"))
             .into_response();
-        }
-
-        if let Err(e) = audit::record_member_invitation_revoked(
-            &mut tx,
-            principal.user_id,
-            ctx.tenant_id,
-            *old_id,
-            &email,
-            old_role,
-        )
-        .await
-        {
-            return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
-        }
     }
 
     let initial_delivery_status = if sender.is_configured() {
@@ -853,7 +825,7 @@ pub async fn list_invitations(
     }
 
     let sql = format!(
-        "SELECT ti.id, ti.email, ti.role, ti.status, ti.email_delivery_status, u.display_name AS invited_by_name, ti.expires_at, ti.created_at \
+        "SELECT ti.id, ti.email, ti.role, ti.status, ti.email_delivery_status, ti.email_delivery_error, u.display_name AS invited_by_name, ti.expires_at, ti.created_at \
          FROM tenant_invitations ti \
          JOIN users u ON u.id = ti.invited_by \
          WHERE {} \
@@ -1255,6 +1227,27 @@ pub async fn accept_invitation(
                 .into_response();
         }
     };
+
+    // Lock the invitation first so a concurrent accept of the same token waits
+    // here and then sees it consumed (410) instead of racing the user insert.
+    let still_valid: Option<bool> = match sqlx::query_scalar(
+        "SELECT status = 'pending' AND expires_at > now() FROM tenant_invitations \
+         WHERE id = $1 AND tenant_id = $2 FOR UPDATE",
+    )
+    .bind(invitation_id)
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            return ApiError::internal_error(format!("Invitation lock failed: {e}"))
+                .into_response();
+        }
+    };
+    if still_valid != Some(true) {
+        return ApiError::gone("Invitation is no longer valid").into_response();
+    }
 
     let tenant_status_inside: Option<String> = sqlx::query_scalar(
         "SELECT status FROM tenants WHERE id = $1 AND deleted_at IS NULL FOR SHARE",

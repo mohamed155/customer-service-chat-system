@@ -81,22 +81,24 @@ pub async fn touch_session(
     Ok(())
 }
 
+/// Link the session to its customer. Runs in the caller's transaction: the
+/// customer row may have just been created there and isn't visible to other
+/// connections until commit (the FK check would fail on a separate connection).
 pub async fn set_session_customer(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     session_id: Uuid,
     customer_id: Uuid,
 ) -> sqlx::Result<()> {
     sqlx::query("UPDATE widget_sessions SET customer_id = $1 WHERE id = $2")
         .bind(customer_id)
         .bind(session_id)
-        .execute(pool)
+        .execute(&mut **tx)
         .await?;
     Ok(())
 }
 
 pub async fn ensure_customer_for_session(
     tx: &mut Transaction<'_, Postgres>,
-    pool: &PgPool,
     session: &WidgetSessionRow,
 ) -> sqlx::Result<Uuid> {
     if let Some(customer_id) = session.customer_id {
@@ -112,7 +114,7 @@ pub async fn ensure_customer_for_session(
         &session.id.to_string(),
     )
     .await?;
-    set_session_customer(pool, session.id, customer_id).await?;
+    set_session_customer(tx, session.id, customer_id).await?;
     Ok(customer_id)
 }
 
@@ -223,8 +225,11 @@ pub async fn update_instance(
     .await
 }
 
+/// Runs in the caller's transaction: the delete handler holds the row with
+/// `SELECT … FOR UPDATE`, so updating through a separate pool connection
+/// blocked on that lock forever (DELETE never returned).
 pub async fn soft_delete_instance(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
     instance_id: Uuid,
 ) -> sqlx::Result<bool> {
@@ -234,7 +239,7 @@ pub async fn soft_delete_instance(
     )
     .bind(instance_id)
     .bind(tenant_id)
-    .execute(pool)
+    .execute(&mut **tx)
     .await?;
     Ok(result.rows_affected() > 0)
 }

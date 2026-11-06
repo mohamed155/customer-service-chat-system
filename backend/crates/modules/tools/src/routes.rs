@@ -146,7 +146,7 @@ impl From<ToolActivityQueryRow> for ToolActivityItem {
 
 #[utoipa::path(
     get,
-    path = "/api/v1/tenant/conversations/{id}/tool-activity",
+    path = "/tenant/conversations/{id}/tool-activity",
     tag = "tools",
     operation_id = "tool_activity",
     summary = "Get tool activity for a conversation",
@@ -229,7 +229,7 @@ pub async fn tool_activity(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/tenant/tool-requests/{id}/decide",
+    path = "/tenant/tool-requests/{id}/decide",
     tag = "tools",
     operation_id = "decide_tool_request",
     summary = "Decide (approve/deny) a pending tool request",
@@ -305,7 +305,7 @@ pub async fn decide_tool_request(
 
 #[utoipa::path(
     get,
-    path = "/api/v1/tenant/tool-requests",
+    path = "/tenant/tool-requests",
     tag = "tools",
     operation_id = "list_pending_tool_requests",
     summary = "List pending tool requests",
@@ -423,7 +423,7 @@ struct ListToolsItem {
 
 #[utoipa::path(
     get,
-    path = "/api/v1/tenant/tools",
+    path = "/tenant/tools",
     tag = "tools",
     operation_id = "list_tools",
     summary = "List all available tools",
@@ -434,10 +434,12 @@ struct ListToolsItem {
     ),
 )]
 pub async fn list_tools(State(pool): State<PgPool>, ctx: tenancy::TenantContext) -> Response {
-    let resolved = match crate::policy::resolve_available(&pool, ctx.tenant_id).await {
+    // Every built-in tool with its policy (disabled until a policy enables
+    // it), so the settings page can show and enable them.
+    let builtins = match crate::policy::builtin_settings(&pool, ctx.tenant_id).await {
         Ok(r) => r,
         Err(e) => {
-            tracing::error!(%e, "list_tools: resolve_available failed");
+            tracing::error!(%e, "list_tools: builtin_settings failed");
             return ApiError::internal_error("Failed to list tools")
                 .with_request_id(&ctx.request_id)
                 .into_response();
@@ -456,21 +458,20 @@ pub async fn list_tools(State(pool): State<PgPool>, ctx: tenancy::TenantContext)
 
     let mut items: Vec<ListToolsItem> = Vec::new();
 
-    for bt in &resolved {
-        let classification = if bt.approval_required {
-            "approval"
-        } else {
-            "auto"
-        };
+    for bt in &builtins {
         items.push(ListToolsItem {
             name: bt.spec.name.clone(),
             description: bt.spec.description.clone(),
-            source: bt.source.as_str().to_string(),
+            source: crate::model::ToolSource::Builtin.as_str().to_string(),
             has_credential: None,
-            classification: classification.to_string(),
-            enabled: true,
-            require_approval: bt.approval_required,
-            effective_approval: bt.approval_required,
+            classification: match bt.classification {
+                crate::model::Classification::Approval => "approval",
+                crate::model::Classification::Auto => "auto",
+            }
+            .to_string(),
+            enabled: bt.enabled,
+            require_approval: bt.require_approval,
+            effective_approval: bt.effective_approval,
         });
     }
 
@@ -501,7 +502,7 @@ pub struct UpdateBuiltinPolicyBody {
 
 #[utoipa::path(
     put,
-    path = "/api/v1/tenant/tools/builtin/{name}/policy",
+    path = "/tenant/tools/builtin/{name}/policy",
     tag = "tools",
     operation_id = "update_builtin_policy",
     summary = "Update policy for a built-in tool",
@@ -626,7 +627,7 @@ async fn validate_tool_name_unique(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/tenant/tools",
+    path = "/tenant/tools",
     tag = "tools",
     operation_id = "create_tenant_tool",
     summary = "Create a tenant-defined tool",
@@ -641,6 +642,7 @@ pub async fn create_tenant_tool(
     State(pool): State<PgPool>,
     ctx: tenancy::TenantContext,
     Extension(principal): Extension<identity::Principal>,
+    app_config: Option<Extension<std::sync::Arc<config::AppConfig>>>,
     kernel::ApiJson(payload): kernel::ApiJson<CreateTenantToolBody>,
 ) -> Response {
     let membership_id =
@@ -678,6 +680,7 @@ pub async fn create_tenant_tool(
     }
 
     let credential_ciphertext = seal_credential_if_provided(
+        app_config.as_ref().map(|Extension(c)| c.as_ref()),
         &payload.credential,
         ctx.tenant_id,
         &payload.name,
@@ -739,7 +742,7 @@ pub struct UpdateTenantToolBody {
 
 #[utoipa::path(
     put,
-    path = "/api/v1/tenant/tools/{id}",
+    path = "/tenant/tools/{id}",
     tag = "tools",
     operation_id = "update_tenant_tool",
     summary = "Update a tenant-defined tool",
@@ -759,6 +762,7 @@ pub async fn update_tenant_tool_route(
     ctx: tenancy::TenantContext,
     Extension(principal): Extension<identity::Principal>,
     Path(id): Path<Uuid>,
+    app_config: Option<Extension<std::sync::Arc<config::AppConfig>>>,
     kernel::ApiJson(payload): kernel::ApiJson<UpdateTenantToolBody>,
 ) -> Response {
     let membership_id =
@@ -767,10 +771,26 @@ pub async fn update_tenant_tool_route(
             Err(resp) => return resp,
         };
 
+    // The credential is scoped to the tool's (possibly new) name.
+    let scope_name = match payload.name.clone() {
+        Some(n) => n,
+        None if payload.credential.is_some() => sqlx::query_scalar::<_, String>(
+            "SELECT name FROM tenant_tools WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(id)
+        .bind(ctx.tenant_id)
+        .fetch_optional(&pool)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default(),
+        None => String::new(),
+    };
     let credential_ciphertext = seal_credential_if_provided(
+        app_config.as_ref().map(|Extension(c)| c.as_ref()),
         &payload.credential,
         ctx.tenant_id,
-        payload.name.as_deref().unwrap_or("unknown"),
+        &scope_name,
         &ctx.request_id,
     )
     .await;
@@ -853,7 +873,7 @@ pub async fn update_tenant_tool_route(
 
 #[utoipa::path(
     delete,
-    path = "/api/v1/tenant/tools/{id}",
+    path = "/tenant/tools/{id}",
     tag = "tools",
     operation_id = "delete_tenant_tool",
     summary = "Soft-delete a tenant-defined tool",
@@ -907,21 +927,35 @@ pub async fn delete_tenant_tool_route(
 }
 
 /// Shared helper: seal credential if provided, return Ok(None) if not provided.
-/// Stubbed until US4 activation — the encryption key is not available in
-/// the tools route handler scope.
+/// Stored as `base64(ciphertext)||base64(nonce)`, scoped to tenant + tool name
+/// (the format `executor::execute_tenant_tool` unseals).
 async fn seal_credential_if_provided(
-    _credential: &Option<String>,
-    _tenant_id: Uuid,
-    _tool_name: &str,
+    config: Option<&config::AppConfig>,
+    credential: &Option<String>,
+    tenant_id: Uuid,
+    tool_name: &str,
     request_id: &str,
 ) -> Result<Option<String>, Response> {
-    if _credential.is_some() {
-        Err(
-            ApiError::internal_error("Credential sealing not available in route handler")
-                .with_request_id(request_id)
-                .into_response(),
-        )
-    } else {
-        Ok(None)
-    }
+    let Some(plaintext) = credential else {
+        return Ok(None);
+    };
+    let unavailable = || {
+        ApiError::internal_error("Credential encryption is not configured")
+            .with_request_id(request_id)
+            .into_response()
+    };
+    let key_b64 = config
+        .and_then(|c| c.ai_key_encryption_key.as_deref())
+        .ok_or_else(unavailable)?;
+    let master =
+        ai_providers::crypto::MasterKey::from_base64(key_b64).map_err(|_| unavailable())?;
+    let scope = ai_providers::crypto::aad(Some(tenant_id), tool_name);
+    let (ct, nonce) =
+        ai_providers::crypto::seal(&master, &scope, plaintext).map_err(|_| unavailable())?;
+    let b64 = &base64::engine::general_purpose::STANDARD;
+    Ok(Some(format!(
+        "{}||{}",
+        base64::Engine::encode(b64, ct),
+        base64::Engine::encode(b64, nonce)
+    )))
 }

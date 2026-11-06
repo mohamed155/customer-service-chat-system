@@ -405,9 +405,13 @@ pub async fn generate(
                     final_model = result.model;
                     final_usage = result.usage;
                     finish_length = matches!(result.finish, ai_providers::FinishReason::Length);
-                    // Capture tool calls from non-streaming fallback path.
-                    // In streaming path they arrive as ToolCall events above.
-                    tool_calls_accumulated.extend(result.tool_calls);
+                    // Capture tool calls from the non-streaming fallback path.
+                    // When streaming, they already arrived as ToolCall events
+                    // and Done repeats them — extending again executed every
+                    // tool call twice.
+                    if tool_calls_accumulated.is_empty() {
+                        tool_calls_accumulated.extend(result.tool_calls);
+                    }
                 }
                 crate::AiStreamEvent::Error { category } => {
                     stream_failed = true;
@@ -425,9 +429,12 @@ pub async fn generate(
                 content = chunk;
             }
 
-            // Empty/whitespace-only is non-retriable failure
+            // Empty/whitespace-only is a non-retriable failure — unless the
+            // model answered with tool calls, where empty text is normal
+            // (OpenAI sends `content: null` alongside tool_calls). Treating
+            // that as a failure sent every tool call down the fallback path.
             let trimmed = content.trim();
-            if trimmed.is_empty() {
+            if trimmed.is_empty() && tool_calls_accumulated.is_empty() {
                 return Err(GenerateError::Provider(AiCallError::Provider {
                     category: ai_providers::ErrorCategory::InvalidRequest,
                     provider: final_provider,
@@ -613,6 +620,14 @@ pub async fn run_generation(
                                 }
                             };
 
+                            generation_record::ensure_provisional(
+                                pool,
+                                generation_id,
+                                tenant_id,
+                                conversation_id,
+                                trigger_message_id,
+                            )
+                            .await?;
                             let req_id = tools::queries::insert_request(
                                 pool,
                                 tools::queries::NewToolRequest {
@@ -674,6 +689,14 @@ pub async fn run_generation(
                         }
                         Ok(resolved) if resolved.approval_required => {
                             let expires_at = chrono::Utc::now() + chrono::Duration::minutes(5);
+                            generation_record::ensure_provisional(
+                                pool,
+                                generation_id,
+                                tenant_id,
+                                conversation_id,
+                                trigger_message_id,
+                            )
+                            .await?;
                             let req_id = tools::queries::insert_request(
                                 pool,
                                 tools::queries::NewToolRequest {
@@ -734,6 +757,14 @@ pub async fn run_generation(
                             break;
                         }
                         Ok(resolved) => {
+                            generation_record::ensure_provisional(
+                                pool,
+                                generation_id,
+                                tenant_id,
+                                conversation_id,
+                                trigger_message_id,
+                            )
+                            .await?;
                             let req_id = tools::queries::insert_request(
                                 pool,
                                 tools::queries::NewToolRequest {
@@ -910,9 +941,11 @@ pub async fn run_generation(
                 request_id: None,
                 created_at: Some(chrono::Utc::now()),
             };
-            let _ = generation_record::insert(pool, &rec).await;
-
+            // Commit first: the record references the reply message created
+            // in `tx`, which other connections can't see until commit (the
+            // FK failure was swallowed and the generation silently lost).
             tx.commit().await?;
+            let _ = generation_record::insert(pool, &rec).await;
             mid
         };
 
@@ -1436,6 +1469,16 @@ pub async fn run_followup_generation(
         sqlx::Error::Protocol("tool_request not found in run_followup_generation".into())
     })?;
 
+    // The follow-up answers the same customer message as the generation
+    // that requested the tool; ai_generations.trigger_message_id is a FK, so
+    // recording Uuid::nil() made every follow-up record fail.
+    let trigger_message_id: Uuid =
+        sqlx::query_scalar("SELECT trigger_message_id FROM ai_generations WHERE id = $1")
+            .bind(tool_row.generation_id)
+            .fetch_optional(pool)
+            .await?
+            .unwrap_or(Uuid::nil());
+
     let tool_message = if outcome == "approved" {
         // Execute the tool
         let resolved = tools::policy::ResolvedTool {
@@ -1597,7 +1640,7 @@ pub async fn run_followup_generation(
                 id: generation_id,
                 tenant_id,
                 conversation_id,
-                trigger_message_id: Uuid::nil(),
+                trigger_message_id,
                 response_message_id: None,
                 usage_record_id: None,
                 provider: None,
@@ -1672,7 +1715,7 @@ pub async fn run_followup_generation(
         id: generation_id,
         tenant_id,
         conversation_id,
-        trigger_message_id: Uuid::nil(),
+        trigger_message_id,
         response_message_id: Some(mid),
         usage_record_id: output.usage_record_id,
         provider: Some(output.provider),

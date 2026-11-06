@@ -8,7 +8,7 @@ import {
   withState,
 } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { EMPTY, finalize, interval, pipe, switchMap, takeWhile, tap } from 'rxjs';
+import { catchError, EMPTY, finalize, interval, pipe, switchMap, takeWhile, tap } from 'rxjs';
 import { ApiError } from '../../../core/api/api.models';
 import {
   CreateItemPayload,
@@ -114,6 +114,8 @@ export const KnowledgeStore = signalStore(
               error: (err: unknown) =>
                 patchState(store, { loading: false, error: (err as ApiError).message }),
             }),
+            // Error is recorded above; swallow it so the rxMethod keeps working.
+            catchError(() => EMPTY),
           ),
         ),
       ),
@@ -139,6 +141,7 @@ export const KnowledgeStore = signalStore(
               error: (err: unknown) =>
                 patchState(store, { loading: false, error: (err as ApiError).message }),
             }),
+            catchError(() => EMPTY),
           );
         }),
       ),

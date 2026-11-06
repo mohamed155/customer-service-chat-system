@@ -118,6 +118,10 @@ impl RateLimiter for RedisRateLimiter {
             }
         };
 
+        // A pipeline replies with an array even when only one command's result
+        // is kept, so decode a 1-tuple. Decoding straight into i64 fails on
+        // redis-rs 1.x, which sent every check down the degraded path — and in
+        // the default `auth_closed` mode that refused every sign-in with 429.
         let current_count: i64 = match redis::pipe()
             .atomic()
             .cmd("INCR")
@@ -126,10 +130,10 @@ impl RateLimiter for RedisRateLimiter {
             .arg(&current_key)
             .arg(ttl)
             .ignore()
-            .query_async(&mut conn)
+            .query_async::<(i64,)>(&mut conn)
             .await
         {
-            Ok(c) => c,
+            Ok((c,)) => c,
             Err(e) => {
                 warn!("RedisRateLimiter: INCR error: {e}");
                 return self.degrade(scope, identifier, budget).await;
@@ -145,8 +149,7 @@ impl RateLimiter for RedisRateLimiter {
             _ => 0,
         };
 
-        let correction = elapsed as f64 / window_secs as f64;
-        let weighted = current_count as f64 + prev_count as f64 * correction;
+        let weighted = sliding_window_count(current_count, prev_count, elapsed, window_secs);
         let current_u32 = current_count.max(0) as u32;
         let remaining_secs = window_secs.saturating_sub(elapsed);
 
@@ -323,8 +326,31 @@ impl BudgetResolver {
     }
 }
 
+/// Sliding-window estimate: the current window's count plus the share of the
+/// previous window that still overlaps the trailing `window_secs`. Right
+/// after a boundary the previous window counts in full, fading to nothing by
+/// the end of the current window — so a burst cannot reset at a boundary.
+fn sliding_window_count(current: i64, previous: u32, elapsed: u64, window_secs: u64) -> f64 {
+    let overlap = 1.0 - (elapsed as f64 / window_secs as f64);
+    current as f64 + previous as f64 * overlap
+}
+
 #[cfg(test)]
 mod tests {
+    use super::sliding_window_count;
+
+    #[test]
+    fn previous_window_counts_in_full_right_after_a_boundary() {
+        // 10 attempts just before the boundary, 1 just after: still 11.
+        assert_eq!(sliding_window_count(1, 10, 0, 60), 11.0);
+    }
+
+    #[test]
+    fn previous_window_fades_out_across_the_current_window() {
+        assert_eq!(sliding_window_count(1, 10, 30, 60), 6.0);
+        assert!((sliding_window_count(1, 10, 59, 60) - (1.0 + 10.0 / 60.0)).abs() < 1e-9);
+    }
+
     use super::*;
 
     #[test]
@@ -375,7 +401,7 @@ mod tests {
             max_requests: 10,
             window: Duration::from_secs(60),
         };
-        let id = "allows_up_to_limit:key";
+        let id = &format!("allows_up_to_limit:{}", uuid::Uuid::new_v4());
         for i in 0..10 {
             match limiter.check(Scope::Login, id, budget).await {
                 Decision::Allowed { .. } => {}
@@ -393,7 +419,7 @@ mod tests {
             max_requests: 10,
             window: Duration::from_secs(60),
         };
-        let id = "refuses_past_limit:key";
+        let id = &format!("refuses_past_limit:{}", uuid::Uuid::new_v4());
         for i in 0..10 {
             match limiter.check(Scope::Login, id, budget).await {
                 Decision::Allowed { .. } => {}
@@ -416,7 +442,7 @@ mod tests {
             max_requests: 3,
             window: Duration::from_secs(1),
         };
-        let id = "resets_after_window:key";
+        let id = &format!("resets_after_window:{}", uuid::Uuid::new_v4());
         for i in 0..3 {
             match limiter.check(Scope::Login, id, budget).await {
                 Decision::Allowed { .. } => {}
@@ -428,7 +454,9 @@ mod tests {
             matches!(decision, Decision::Refused { .. }),
             "4th request should be refused, got {decision:?}"
         );
-        tokio::time::sleep(Duration::from_millis(1200)).await;
+        // Sliding window: the previous window still weighs in until it has
+        // fully aged out, so wait two whole windows for a clean slate.
+        tokio::time::sleep(Duration::from_millis(2100)).await;
         match limiter.check(Scope::Login, id, budget).await {
             Decision::Allowed { .. } => {}
             other => panic!("request after window should be allowed, got {other:?}"),
@@ -444,8 +472,9 @@ mod tests {
             max_requests: 5,
             window: Duration::from_secs(60),
         };
-        let id_a = "different_keys:tenant-a";
-        let id_b = "different_keys:tenant-b";
+        let run = uuid::Uuid::new_v4();
+        let id_a = &format!("different_keys:{run}:tenant-a");
+        let id_b = &format!("different_keys:{run}:tenant-b");
         for _ in 0..5 {
             limiter.check(Scope::Login, id_a, budget).await;
         }

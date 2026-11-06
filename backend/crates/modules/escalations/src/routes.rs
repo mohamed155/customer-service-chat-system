@@ -124,7 +124,9 @@ pub async fn escalate(
         }
     };
 
-    let conv = match sqlx::query_as::<_, (String, Option<String>)>(
+    // assigned_membership_id is a UUID column; decoding it as String failed
+    // (500) as soon as a conversation was assigned, e.g. on a second escalate.
+    let conv = match sqlx::query_as::<_, (String, Option<Uuid>)>(
         "SELECT status, assigned_membership_id FROM conversations \
          WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
     )
@@ -755,7 +757,7 @@ pub async fn set_my_availability(
 
     audit::record_availability_changed(
         &mut tx,
-        principal.user_id,
+        Some(principal.user_id),
         ctx.tenant_id,
         membership_id,
         Some(prev_state_str),

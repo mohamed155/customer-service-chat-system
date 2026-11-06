@@ -453,7 +453,8 @@ export class CustomerDialogComponent {
     const details = err.details ?? [];
 
     if (details.length === 0) {
-      if (err.status >= 400) {
+      // conflictError() already renders a bare conflict; don't show it twice.
+      if (err.status >= 400 && err.code !== 'conflict') {
         return [{ field: '', message: err.message }];
       }
       return [];

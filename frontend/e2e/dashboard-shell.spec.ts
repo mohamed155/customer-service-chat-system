@@ -123,7 +123,7 @@ test.describe('dashboard shell', () => {
     await expect(page).toHaveURL(/\/tenant\/settings$/);
     const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' });
     await expect(breadcrumb).toHaveText(/Workspace\s*Settings/);
-    await expect(breadcrumb.getByText('Settings')).toHaveAttribute('aria-current', 'page');
+    await expect(breadcrumb.locator('[aria-current="page"]')).toHaveText('Settings');
   });
 
   test('dismisses the mobile drawer by scrim, Escape, and navigation', async ({ page }) => {
@@ -135,7 +135,11 @@ test.describe('dashboard shell', () => {
 
     await toggle.click();
     await expect(drawer).toHaveClass(/open/);
-    await page.getByRole('button', { name: 'Close navigation drawer' }).click();
+    // The open drawer covers the scrim's centre on a 360px screen; tap the
+    // uncovered strip on the right like a user would.
+    await page
+      .getByRole('button', { name: 'Close navigation drawer' })
+      .click({ position: { x: 345, y: 400 } });
     await expect(drawer).not.toHaveClass(/open/);
 
     await toggle.click();
@@ -164,7 +168,7 @@ test.describe('dashboard shell', () => {
     expect(sizes.bodyScroll).toBeLessThanOrEqual(sizes.bodyClient);
 
     await page.getByRole('button', { name: 'Platform' }).click();
-    await expect(page.getByRole('menuitem', { name: 'Platform overview' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Tenants' })).toBeVisible();
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Switch tenant' }).click();
     await expect(page.getByPlaceholder('Search tenants...')).toBeVisible();
@@ -251,7 +255,7 @@ test.describe('dashboard shell', () => {
     await mockApi(page, identities.platform);
     await page.goto('/tenant/select');
     await page.getByRole('button', { name: 'Platform' }).click();
-    await page.getByRole('menuitem', { name: 'Platform overview' }).click();
+    await page.getByRole('menuitem', { name: 'Tenants' }).click();
     await expect(page).toHaveURL(/\/platform\/tenants$/);
   });
 

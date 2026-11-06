@@ -54,6 +54,39 @@ impl Cache {
             .await
     }
 
+    /// Delete every key starting with `prefix` (SCAN + DEL). Test support:
+    /// integration tests share one Redis, and IP-keyed rate-limit buckets
+    /// (all test requests come from the same "unknown" client) would
+    /// otherwise carry over from one test to the next.
+    pub async fn delete_by_prefix(&self, prefix: &str) -> Result<u64, String> {
+        let mut mgr = self.manager().await?.clone();
+        let pattern = format!("{prefix}*");
+        let mut cursor: u64 = 0;
+        let mut deleted: u64 = 0;
+        loop {
+            let (next, keys): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg(&pattern)
+                .arg("COUNT")
+                .arg(500)
+                .query_async(&mut mgr)
+                .await
+                .map_err(|e| format!("cache error: {e}"))?;
+            if !keys.is_empty() {
+                deleted += redis::cmd("DEL")
+                    .arg(&keys)
+                    .query_async::<u64>(&mut mgr)
+                    .await
+                    .map_err(|e| format!("cache error: {e}"))?;
+            }
+            if next == 0 {
+                return Ok(deleted);
+            }
+            cursor = next;
+        }
+    }
+
     pub async fn ping(&self) -> Result<(), String> {
         let mut mgr = self.manager().await?.clone();
         redis::cmd("PING")

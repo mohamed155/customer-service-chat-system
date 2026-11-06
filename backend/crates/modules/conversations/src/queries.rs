@@ -302,7 +302,7 @@ pub async fn inbox_query(
                 cu.display_name AS customer_display_name, \
                 c.channel, c.status, c.assigned_membership_id, \
                 mu.display_name AS assignee_display_name, \
-                (mu.status = 'active') AS assignee_active, \
+                (tm.status = 'active') AS assignee_active, \
                 preview.kind AS last_message_kind, \
                 LEFT(preview.body, 140) AS last_message_preview, \
                 c.last_activity_at, c.created_at, \
@@ -1229,17 +1229,21 @@ pub async fn create_conversation_in_tx(
         .await?
     };
 
-    // 3. Insert first message (kind='reply', sender=actor)
-    sqlx::query(
-        "INSERT INTO messages (tenant_id, conversation_id, kind, body, sender_membership_id) \
-         VALUES ($1, $2, 'reply', $3, $4)",
-    )
-    .bind(tenant_id)
-    .bind(conv_id)
-    .bind(body)
-    .bind(actor_membership_id)
-    .execute(&mut **tx)
-    .await?;
+    // 3. Insert first message (kind='reply', sender=actor). The widget opens a
+    //    conversation before the visitor has typed anything, so an empty body
+    //    means "no first message" (messages.body must be 1..=10000 chars).
+    if !body.is_empty() {
+        sqlx::query(
+            "INSERT INTO messages (tenant_id, conversation_id, kind, body, sender_membership_id) \
+             VALUES ($1, $2, 'reply', $3, $4)",
+        )
+        .bind(tenant_id)
+        .bind(conv_id)
+        .bind(body)
+        .bind(actor_membership_id)
+        .execute(&mut **tx)
+        .await?;
+    }
 
     // 4. Bump last_activity_at
     sqlx::query(

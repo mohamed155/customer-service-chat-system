@@ -108,12 +108,16 @@ export class ConversationsComponent {
   protected readonly hasManagePerm = () => this.permissions.has('conversations.manage' as const);
 
   protected onSelectConversation(id: string): void {
-    this.router.navigate(['/', APP_PATHS.tenant.base, APP_PATHS.tenant.conversationDetail(id)]);
+    this.router.navigateByUrl(
+      `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.conversationDetail(id)}`,
+    );
   }
 
   protected onConversationCreated(id: string): void {
     this.showNewDialog.set(false);
-    this.router.navigate(['/', APP_PATHS.tenant.base, APP_PATHS.tenant.conversationDetail(id)]);
+    this.router.navigateByUrl(
+      `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.conversationDetail(id)}`,
+    );
   }
 
   protected onChannelChange(event: Event): void {

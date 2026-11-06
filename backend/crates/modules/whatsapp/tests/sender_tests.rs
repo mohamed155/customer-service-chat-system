@@ -229,13 +229,32 @@ async fn setup_sender_fixture(
         .unwrap();
     }
 
+    // Staff sender for the reply (messages_kind_consistency requires one).
+    let sender_user: Uuid = sqlx::query_scalar(
+        "INSERT INTO users (email, display_name) VALUES ($1, 'Agent') RETURNING id",
+    )
+    .bind(format!("wa-agent-{}@test.com", Uuid::new_v4()))
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let sender_membership: Uuid = sqlx::query_scalar(
+        "INSERT INTO tenant_memberships (tenant_id, user_id, role, status) \
+         VALUES ($1, $2, 'agent', 'active') RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind(sender_user)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+
     // Outbound message (kind='reply')
     let message_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
-         VALUES ($1, $2, 'reply', 'This is a reply') RETURNING id",
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body, sender_membership_id) \
+         VALUES ($1, $2, 'reply', 'This is a reply', $3) RETURNING id",
     )
     .bind(tenant_id)
     .bind(conversation_id)
+    .bind(sender_membership)
     .fetch_one(pool)
     .await
     .unwrap();
@@ -477,15 +496,18 @@ async fn status_webhook_does_not_downgrade_read_to_delivered() {
     let fixture = setup_sender_fixture(&pool, &mk, true, 3600).await;
     let wamid = "wamid.monotonicity.test";
 
-    // Set up meta with a 'sent' delivery_status and the target wamid
+    // Set up meta with a 'sent' delivery_status and the target wamid (the
+    // fixture's reply has not been sent, so no meta row exists yet).
     sqlx::query(
-        "UPDATE whatsapp_message_meta \
-         SET delivery_status = 'sent', wamid = $1 \
-         WHERE tenant_id = $2 AND message_id = $3",
+        "INSERT INTO whatsapp_message_meta \
+         (tenant_id, message_id, conversation_id, direction, wamid, delivery_status) \
+         VALUES ($2, $3, $4, 'outbound', $1, 'sent') \
+         ON CONFLICT (message_id) DO UPDATE SET delivery_status = 'sent', wamid = $1",
     )
     .bind(wamid)
     .bind(fixture.tenant_id)
     .bind(fixture.message_id)
+    .bind(fixture.conversation_id)
     .execute(&pool)
     .await
     .unwrap();

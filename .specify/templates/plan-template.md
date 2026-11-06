@@ -36,11 +36,41 @@
 
 **Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
+**Performance Budget** (Constitution XI — required if hot paths are touched): [e.g., API p95 < 300 ms
+excluding AI generation; first AI token p95 < 2.5 s, or N/A with reason]
+
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Mark each gate ✅ pass, ⚠ deviation (record in Complexity Tracking), or N/A with a one-line reason.
+See `.specify/memory/constitution.md` for the full rule text.
+
+- [ ] **I. Tenant isolation**: `tenant_id` on every tenant-owned table; `TenantContext` in repositories;
+  RLS policies; composite `(tenant_id, id)` FKs; tenant-namespaced caches/keys/queues; cross-tenant tests
+- [ ] **II. Secure by default**: permission declared per endpoint (permission, not role name);
+  input validated at boundary; webhook signatures + replay protection; SSRF guard; audit records;
+  no secrets client-side or in logs
+- [ ] **III. AI constrained**: tool-mediated access only; tool declarations complete; LLM args
+  schema-validated + authz-checked; prompts versioned; per-turn telemetry; safe fallback/escalation;
+  provider abstraction only
+- [ ] **IV. Module boundaries**: no cross-module table access; `api → application → domain`;
+  domain free of Axum/SQLx/Redis/vendor SDKs; no circular crate deps
+- [ ] **V. Spec-driven**: bounded scope; no stubs/placeholder logic shipped as complete
+- [ ] **VI. Tests**: unit / integration (real Postgres + Redis) / contract / component / e2e as
+  applicable; negative security tests; regression tests for fixes; eval suite for AI changes
+- [ ] **VII. Observability**: structured logs with tenant + actor; trace propagation; RED metrics;
+  queue depth/age; readiness reflects dependencies
+- [ ] **VIII. Contracts & types**: `/api/v1`; OpenAPI generated from code; generated TS client;
+  RFC 9457 errors; ID newtypes; no `unwrap`/`expect`/`panic!` in request/job paths; strict TS
+- [ ] **IX. Simplicity**: no new infrastructure without ADR; module README updated
+- [ ] **X. Data integrity**: expand → migrate → contract migrations; idempotent retryable writes;
+  transactional outbox; optimistic concurrency or row locks; PII export/deletion
+- [ ] **XI. Resilience & scale**: timeouts on all outbound calls; backoff + jitter; circuit breakers;
+  background workers for bursty work; per-tenant rate limits; keyset pagination;
+  performance budget stated (default API p95 < 300 ms, first AI token p95 < 2.5 s)
+- [ ] **XII. UX**: Design System components + tokens; WCAG 2.2 AA; keyboard; light/dark/RTL;
+  loading/empty/error/permission-denied states; i18n-externalized text
 
 ## Project Structure
 
@@ -105,9 +135,10 @@ directories captured above]
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
+> **Fill ONLY if Constitution Check has violations that must be justified.**
+> Every deviation MUST link an ADR in `docs/adr/` (Constitution preamble and Principle IX).
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+| Violation (Principle) | Why Needed | Simpler Alternative Rejected Because | ADR |
+|-----------------------|------------|-------------------------------------|-----|
+| [e.g., XI — synchronous call in handler] | [current need] | [why a worker is insufficient] | [docs/adr/NNNN-title.md] |
+| [e.g., IX — new message broker] | [specific problem + measurement] | [why Postgres outbox insufficient] | [docs/adr/NNNN-title.md] |

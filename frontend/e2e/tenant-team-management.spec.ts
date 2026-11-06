@@ -317,8 +317,9 @@ async function installTeamApi(page: Page, state: TeamState) {
         role: body.role,
         status: 'pending',
         invitedByName: currentUser?.displayName ?? 'Olivia Owner',
-        createdAt: '2026-07-12T09:00:00Z',
-        expiresAt: '2026-07-19T09:00:00Z',
+        // Relative to now: fixed dates went stale and turned new invites "expired".
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       };
       state.invitationsByTenant[tenant.id].unshift(invitation);
       return json(
@@ -521,7 +522,9 @@ test.describe('tenant team management', () => {
 
     await expect(page.getByRole('heading', { name: 'Invitation sent' })).toBeVisible();
     const invitation = state.invitationsByTenant[tenantA.id][0];
-    await expect(page.getByText(invitation.token)).toBeVisible();
+    await expect(
+      page.getByRole('textbox', { name: 'Invitation link for manual copying' }),
+    ).toHaveValue(new RegExp(`/invite/${invitation.token}$`));
 
     state.currentUser = null;
     state.activeTenantId = null;

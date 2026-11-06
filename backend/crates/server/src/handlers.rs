@@ -182,6 +182,7 @@ pub async fn list_members_with_skills(
 
     let next_cursor = items
         .last()
+        .filter(|_| has_more)
         .map(|last| format!("{}_{}", last.joined_at.format("%+"), last.id));
 
     Json(Page {
@@ -317,7 +318,7 @@ pub struct DecideRequest {
 
 #[utoipa::path(
     post,
-    path = "/tenant/tools/requests/{id}/decide",
+    path = "/tenant/tool-requests/{id}/decide",
     tag = "tools",
     operation_id = "decide_tool_request",
     summary = "Decide (approve/deny) a pending tool request",

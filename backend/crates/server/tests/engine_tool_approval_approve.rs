@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -283,10 +285,10 @@ async fn engine_tool_approval_approve() {
         "name": "T041 Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let bytes = serde_json::to_vec(&agent_payload).unwrap();
     let put_resp =
@@ -347,8 +349,8 @@ async fn engine_tool_approval_approve() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -368,8 +370,8 @@ async fn engine_tool_approval_approve() {
 
     let responder = ApprovalFlowResponder {
         call_count: AtomicU8::new(0),
-        tool_call: ResponseTemplate::new(200).set_body_json(tool_resp),
-        text: ResponseTemplate::new(200).set_body_json(text_resp),
+        tool_call: openai_mock::streaming_template(&tool_resp),
+        text: openai_mock::streaming_template(&text_resp),
     };
 
     Mock::given(wiremock::matchers::method("POST"))

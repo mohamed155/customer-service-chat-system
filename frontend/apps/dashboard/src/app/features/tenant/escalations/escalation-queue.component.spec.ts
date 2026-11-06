@@ -70,6 +70,10 @@ describe('EscalationQueueComponent', () => {
         { provide: APP_CONFIG, useValue: { apiBaseUrl: '/api/v1', production: false } },
       ],
     });
+    // The component provides its own EscalationQueueStore; swap in the mock there.
+    TestBed.overrideComponent(EscalationQueueComponent, {
+      set: { providers: [{ provide: EscalationQueueStore, useValue: storeMock }] },
+    });
   });
 
   it('renders empty state when no items', async () => {

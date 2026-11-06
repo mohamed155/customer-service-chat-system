@@ -14,25 +14,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           {
-            node-version: 20,
+            node-version: 22,
             cache: pnpm,
             cache-dependency-path: frontend/pnpm-lock.yaml,
           }
       - run: pnpm install --frozen-lockfile
-      - name: Install Playwright browsers
-        working-directory: frontend
-        run: npx playwright install chromium --with-deps
-      - name: Run E2E tests
-        working-directory: frontend
-        run: pnpm test:e2e
       - run: pnpm run lint
       - name: Check formatting
-        working-directory: frontend
         run: pnpm format:check
       - run: pnpm exec ng build dashboard
       - run: pnpm exec ng build widget
-      - run: pnpm exec ng test dashboard --watch=false --browsers=ChromeHeadless
-      - run: pnpm exec ng test widget --watch=false --browsers=ChromeHeadless
+      - name: Build widget loader
+        run: pnpm build:widget-loader
+      - run: pnpm exec ng test dashboard --watch=false
+      - run: pnpm exec ng test widget --watch=false
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install chromium --with-deps
+      # Runs after the widget build: the widget specs serve dist/widget.
+      - name: Run E2E tests
+        run: pnpm test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: frontend/test-results
+          retention-days: 7
 
   real-backend-e2e:
     runs-on: ubuntu-latest
@@ -65,6 +72,11 @@ jobs:
       CI_REAL_BACKEND: "true"
     steps:
       - uses: actions/checkout@v4
+      - name: Generate ephemeral AI key encryption key
+        run: |
+          KEY=$(openssl rand -base64 32)
+          echo "::add-mask::$KEY"
+          echo "APP_AI_KEY_ENCRYPTION_KEY=$KEY" >> "$GITHUB_ENV"
       - name: Install toolchain from rust-toolchain.toml
         run: rustup show active-toolchain || rustup toolchain install
         working-directory: backend
@@ -75,7 +87,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           {
-            node-version: 20,
+            node-version: 22,
             cache: pnpm,
             cache-dependency-path: frontend/pnpm-lock.yaml,
           }

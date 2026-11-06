@@ -368,7 +368,7 @@ async fn signed_unknown_number_creates_customer_conversation_message_outbox() {
     // Outbox event
     let outbox_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'conversation.customer_message'",
+         WHERE tenant_id = $1::text AND event_type = 'conversation.customer_message'",
     )
     .bind(conn.tenant_id)
     .fetch_one(&pool)
@@ -382,7 +382,7 @@ async fn signed_unknown_number_creates_customer_conversation_message_outbox() {
     // Verify outbox payload contains channel = "whatsapp"
     let channel: Option<String> = sqlx::query_scalar(
         "SELECT payload->>'channel' FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'conversation.customer_message'",
+         WHERE tenant_id = $1::text AND event_type = 'conversation.customer_message'",
     )
     .bind(conn.tenant_id)
     .fetch_optional(&pool)

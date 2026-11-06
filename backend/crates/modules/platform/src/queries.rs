@@ -82,18 +82,18 @@ pub async fn provider_metrics(
 ) -> sqlx::Result<Vec<ProviderMetricsRow>> {
     sqlx::query_as(
         "SELECT provider,
-                COUNT(*)::bigint,
-                COUNT(*) FILTER (WHERE status = 'success')::bigint,
-                COUNT(*) FILTER (WHERE status = 'failure')::bigint,
-                COALESCE(SUM(input_tokens), 0)::bigint,
-                COALESCE(SUM(output_tokens), 0)::bigint,
-                (percentile_cont(0.5)  WITHIN GROUP (ORDER BY latency_ms::float8))::bigint,
-                (percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms::float8))::bigint,
-                COUNT(*) FILTER (WHERE error_category = 'authentication')::bigint,
-                COUNT(*) FILTER (WHERE error_category = 'rate_limited')::bigint,
-                COUNT(*) FILTER (WHERE error_category = 'unavailable')::bigint,
-                COUNT(*) FILTER (WHERE error_category = 'timeout')::bigint,
-                COUNT(*) FILTER (WHERE error_category = 'invalid_request')::bigint
+                COUNT(*)::bigint AS total,
+                COUNT(*) FILTER (WHERE status = 'success')::bigint AS successes,
+                COUNT(*) FILTER (WHERE status = 'failure')::bigint AS failures,
+                COALESCE(SUM(input_tokens), 0)::bigint AS input_tokens,
+                COALESCE(SUM(output_tokens), 0)::bigint AS output_tokens,
+                (percentile_cont(0.5)  WITHIN GROUP (ORDER BY latency_ms::float8))::bigint AS p50_latency_ms,
+                (percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms::float8))::bigint AS p95_latency_ms,
+                COUNT(*) FILTER (WHERE error_category = 'authentication')::bigint AS authentication,
+                COUNT(*) FILTER (WHERE error_category = 'rate_limited')::bigint AS rate_limited,
+                COUNT(*) FILTER (WHERE error_category = 'unavailable')::bigint AS unavailable,
+                COUNT(*) FILTER (WHERE error_category = 'timeout')::bigint AS timeout,
+                COUNT(*) FILTER (WHERE error_category = 'invalid_request')::bigint AS invalid_request
          FROM ai_usage_records
          WHERE created_at >= $1 AND created_at < $2
          GROUP BY provider",

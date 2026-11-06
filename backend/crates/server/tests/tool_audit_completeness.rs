@@ -7,6 +7,8 @@
 //! - `denied` (via approval::decide)
 //! - `expired` (via approval::sweep_expired)
 //! - `cancelled` (via approval::cancel_pending_for_conversation)
+#[path = "support/tool_fixtures.rs"]
+mod tool_fixtures;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -100,15 +102,8 @@ async fn seed_minimal(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
     .await
     .expect("seed conversation");
 
-    let generation_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO ai_generations (tenant_id, conversation_id, trigger_message_id, outcome) \
-         VALUES ($1, $2, '00000000-0000-0000-0000-000000000000', 'success') RETURNING id",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_one(pool)
-    .await
-    .expect("seed generation");
+    // A real trigger message and generation (both FK-referenced; latency_ms is NOT NULL).
+    let generation_id = tool_fixtures::seed_generation(pool, tenant_id, conversation_id).await;
 
     (tenant_id, conversation_id, generation_id)
 }

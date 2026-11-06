@@ -239,10 +239,10 @@ async fn engine_retry_exhaustion_triggers_fallback() {
         "name": "T012 Fallback Agent",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
 
     let put_resp = send(
@@ -298,8 +298,8 @@ async fn engine_retry_exhaustion_triggers_fallback() {
         "channel": "web_chat",
     });
     sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4)",
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
     .bind(Uuid::new_v4())
     .bind(conversation_id)
@@ -361,7 +361,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
 
     // Also confirm via raw SQL
     let esc_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM escalations WHERE tenant_id = $1 AND conversation_id = $2 AND status = 'open'",
+        "SELECT COUNT(*) FROM escalations WHERE tenant_id = $1 AND conversation_id = $2 AND status IN ('queued', 'assigned')",
     )
     .bind(tenant_id)
     .bind(conversation_id)
@@ -372,7 +372,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
 
     // (c) Exactly one ai_generations row with outcome='fallback',
     //     non-null error_category, and attempts >= 1
-    let fallback_rows: Vec<(String, Option<String>, i32)> = sqlx::query_as(
+    let fallback_rows: Vec<(String, Option<String>, i16)> = sqlx::query_as(
         "SELECT outcome, error_category, attempts FROM ai_generations \
          WHERE tenant_id = $1 AND conversation_id = $2 AND outcome = 'fallback'",
     )

@@ -300,6 +300,25 @@ pub async fn url_parse_and_validate(url_str: &str) -> Result<String, String> {
         return Err("endpoint URL must use https scheme".into());
     }
 
+    // IP-literal hosts are checked directly; no DNS lookup is needed.
+    match url.host() {
+        Some(url::Host::Ipv4(ip)) => {
+            return if is_restricted(std::net::IpAddr::V4(ip)) {
+                Err("endpoint URL must not resolve to a private or loopback address".into())
+            } else {
+                Ok(url_str.to_string())
+            };
+        }
+        Some(url::Host::Ipv6(ip)) => {
+            return if is_restricted(std::net::IpAddr::V6(ip)) {
+                Err("endpoint URL must not resolve to a private or loopback address".into())
+            } else {
+                Ok(url_str.to_string())
+            };
+        }
+        _ => {}
+    }
+
     let host = url
         .host_str()
         .ok_or_else(|| "endpoint URL has no host".to_string())?;

@@ -1,3 +1,5 @@
+#[path = "support/openai_mock.rs"]
+mod openai_mock;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -238,7 +240,7 @@ async fn mock_openai(mock: &MockServer, api_key: &str, body: serde_json::Value) 
     Mock::given(wm_method("POST"))
         .and(wm_path("/v1/chat/completions"))
         .and(wm_header("Authorization", format!("Bearer {}", api_key)))
-        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .respond_with(openai_mock::OpenAiReply::new(body))
         .mount(mock)
         .await;
 }
@@ -271,10 +273,10 @@ async fn populated_conversation_returns_summary() {
         "name": "SummaryBot",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "professional",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     let agent_resp = send(
         &state,
@@ -320,8 +322,11 @@ async fn populated_conversation_returns_summary() {
     .enumerate()
     {
         sqlx::query(
-            "INSERT INTO messages (tenant_id, conversation_id, kind, body, created_at) \
-             VALUES ($1, $2, $3, $4, $5)",
+            // Staff replies need a sender (messages_kind_consistency).
+            "INSERT INTO messages (tenant_id, conversation_id, kind, body, created_at, sender_membership_id) \
+             VALUES ($1, $2, $3, $4, $5, \
+                     CASE WHEN $3 IN ('reply', 'note') \
+                          THEN (SELECT id FROM tenant_memberships WHERE tenant_id = $1 LIMIT 1) END)",
         )
         .bind(tenant_id)
         .bind(conversation_id)
@@ -398,10 +403,10 @@ async fn empty_conversation_returns_422() {
         "name": "EmptyBot",
         "avatar": { "kind": "preset", "preset": "spark" },
         "tone": "friendly",
-        "business_rules": [],
-        "escalation_rules": [],
-        "enabled_channels": ["web_chat"],
-        "provider_selection": { "provider": "openai", "model": "gpt-4" },
+        "businessRules": [],
+        "escalationRules": [],
+        "enabledChannels": ["web_chat"],
+        "providerSelection": { "provider": "openai", "model": "gpt-4" },
     });
     send(
         &state,

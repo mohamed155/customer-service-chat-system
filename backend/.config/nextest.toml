@@ -1,0 +1,19 @@
+# Integration tests share one Postgres database and many of them
+# TRUNCATE tenants ... CASCADE during setup. Run them one at a time so
+# one test can't wipe another's rows mid-flight. The few lib unit tests
+# that also use the database join the same group; all other unit tests
+# stay fully parallel.
+
+[profile.default]
+# Report every failing test in one run instead of stopping at the first.
+fail-fast = false
+# Flag tests slower than 60s and kill any still running after 3 minutes,
+# so one hung test fails loudly instead of stalling CI for hours.
+slow-timeout = { period = "60s", terminate-after = 3 }
+
+[test-groups]
+serial-db = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'kind(test) | (package(integrations) & test(/^retention::tests::/)) | (package(tenancy) & test(/^invitations::tests::/))'
+test-group = 'serial-db'

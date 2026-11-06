@@ -216,11 +216,12 @@ pub async fn stream_events(
     let (guard, rx) = runtime.connect(ctx.tenant_id, membership_id);
 
     // Reconnect drain: if the agent is already available (reconnect within grace window),
-    // drain one queued escalation for them.
+    // drain one queued escalation for them. Awaited before the stream is returned so the
+    // assignment is settled once the connection is up (no race with the caller).
     let pool_for_drain = pool.clone();
     let tenant_id = ctx.tenant_id;
     let runtime_for_drain = runtime.clone();
-    tokio::spawn(async move {
+    async move {
         let avail_state: Option<String> = sqlx::query_scalar(
             "SELECT state FROM agent_availability \
              WHERE tenant_id = $1 AND membership_id = $2",
@@ -254,7 +255,8 @@ pub async fn stream_events(
             }
             tx.commit().await.ok();
         }
-    });
+    }
+    .await;
 
     let stream = GuardedStream {
         guard,
@@ -279,7 +281,8 @@ pub async fn process_escalation_outbox_once(
     runtime: &Arc<presence::Runtime>,
 ) -> sqlx::Result<bool> {
     let claim_token = Uuid::new_v4();
-    let maybe_row: Option<(i64, Uuid, String, serde_json::Value)> = sqlx::query_as(
+    // outbox_events.id is UUID and tenant_id is TEXT (0002_outbox.sql).
+    let maybe_row: Option<(Uuid, Option<String>, String, serde_json::Value)> = sqlx::query_as(
         "UPDATE outbox_events \
          SET claimed_at = now(), claim_token = $1 \
          WHERE id = ( \
@@ -296,9 +299,17 @@ pub async fn process_escalation_outbox_once(
     .fetch_optional(pool)
     .await?;
 
-    let (event_id, tenant_id, event_type, payload) = match maybe_row {
+    let (event_id, tenant_text, event_type, payload) = match maybe_row {
         Some(row) => row,
         None => return Ok(false),
+    };
+    let Some(tenant_id) = tenant_text.as_deref().and_then(|t| Uuid::parse_str(t).ok()) else {
+        // Not a tenant-scoped event; nothing for escalations to do.
+        sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            .bind(event_id)
+            .execute(pool)
+            .await?;
+        return Ok(true);
     };
 
     let origin = payload.get("origin").and_then(|v| v.as_str()).unwrap_or("");
@@ -424,7 +435,7 @@ async fn close_active_escalation_in_tx(
 
     if let Some(eid) = escalation_id {
         conversations::queries::set_escalated_in_tx(tx, tenant_id, conversation_id, None).await?;
-        audit::record_escalation_closed(tx, Uuid::nil(), tenant_id, eid, cause).await?;
+        audit::record_escalation_closed(tx, None, tenant_id, eid, cause).await?;
         let notification =
             presence::Event::EscalationRemoved(crate::model::EscalationRemovedEvent {
                 v: 1,

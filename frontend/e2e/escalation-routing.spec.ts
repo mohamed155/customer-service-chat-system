@@ -1,4 +1,5 @@
 import { expect, Page, Route, test } from '@playwright/test';
+import type { ConversationDetailWire } from '../apps/dashboard/src/app/core/api/tenant-api.models';
 
 type EscalationStatus = 'queued' | 'assigned' | 'closed';
 type RoutingReason =
@@ -48,12 +49,31 @@ interface Availability {
   readonly stateChangedAt: string | null;
 }
 
-interface ConversationWire {
-  readonly id: string;
-  readonly customer: { readonly id: string; readonly displayName: string };
-  readonly channel: string;
-  readonly status: string;
-  readonly escalation: Escalation | null;
+/** Detail-shaped conversation (inbox rows are a subset of it). */
+type ConversationFixture = Omit<ConversationDetailWire, 'status' | 'participants'> & {
+  status: string;
+  participants: ConversationDetailWire['participants'];
+  escalation: Escalation | null;
+};
+
+function makeConversation(
+  id: string,
+  customer: { id: string; display_name: string },
+  channel: string,
+): ConversationFixture {
+  const now = new Date().toISOString();
+  return {
+    id,
+    customer,
+    channel,
+    status: 'open',
+    assignee: null,
+    last_message: null,
+    last_activity_at: now,
+    created_at: now,
+    participants: [{ type: 'customer', id: customer.id, display_name: customer.display_name }],
+    escalation: null,
+  };
 }
 
 const AGENT_A_MEMBERSHIP = 'member-agent-a';
@@ -98,28 +118,10 @@ function json(route: Route, data: unknown, status = 200) {
 }
 
 async function installEscalationApi(page: Page) {
-  const conversations: ConversationWire[] = [
-    {
-      id: 'conv-esc-1',
-      customer: { id: 'cust-1', displayName: 'One Customer' },
-      channel: 'web_chat',
-      status: 'open',
-      escalation: null,
-    },
-    {
-      id: 'conv-esc-2',
-      customer: { id: 'cust-2', displayName: 'Two Customer' },
-      channel: 'email',
-      status: 'open',
-      escalation: null,
-    },
-    {
-      id: 'conv-esc-3',
-      customer: { id: 'cust-3', displayName: 'Three Customer' },
-      channel: 'web_chat',
-      status: 'open',
-      escalation: null,
-    },
+  const conversations: ConversationFixture[] = [
+    makeConversation('conv-esc-1', { id: 'cust-1', display_name: 'One Customer' }, 'web_chat'),
+    makeConversation('conv-esc-2', { id: 'cust-2', display_name: 'Two Customer' }, 'email'),
+    makeConversation('conv-esc-3', { id: 'cust-3', display_name: 'Three Customer' }, 'web_chat'),
   ];
 
   const skillsStore: Skill[] = [
@@ -127,7 +129,35 @@ async function installEscalationApi(page: Page) {
     { id: 'skill-2', name: 'arabic', agentCount: 1 },
   ];
 
-  let escalationsStore: Escalation[] = [];
+  // conv-esc-2 is already routed to an agent; conv-esc-3 is waiting in the queue.
+  const assignedEscalation: Escalation = {
+    id: 'esc-assigned-1',
+    conversationId: 'conv-esc-2',
+    reason: 'Customer asked for a human',
+    requiredSkills: [{ id: 'skill-billing', name: 'billing' }],
+    status: 'assigned',
+    routing: {
+      reason: 'skill_match',
+      matchedSkills: ['billing'],
+      assignedMembershipId: AGENT_A_MEMBERSHIP,
+      assignedAt: new Date().toISOString(),
+    },
+    escalatedAt: new Date(Date.now() - 120_000).toISOString(),
+    closedAt: null,
+  };
+  const queuedEscalation: Escalation = {
+    id: 'esc-queued-1',
+    conversationId: 'conv-esc-3',
+    reason: 'Refund dispute',
+    requiredSkills: [{ id: 'skill-refunds', name: 'refunds' }],
+    status: 'queued',
+    routing: null,
+    escalatedAt: new Date(Date.now() - 300_000).toISOString(),
+    closedAt: null,
+  };
+  conversations[1].escalation = assignedEscalation;
+  conversations[2].escalation = queuedEscalation;
+  let escalationsStore: Escalation[] = [assignedEscalation, queuedEscalation];
   let availabilityStore: Record<string, AvailabilityState> = {};
 
   await page.route('**/api/v1/**', async (route) => {
@@ -217,7 +247,7 @@ async function installEscalationApi(page: Page) {
           },
           waitingSeconds: Math.floor((Date.now() - new Date(e.escalatedAt).getTime()) / 1000),
         })),
-        pagination: { nextCursor: null, hasMore: false },
+        pagination: { next_cursor: null, has_more: false },
       });
     }
 
@@ -310,7 +340,7 @@ async function installEscalationApi(page: Page) {
         );
       return json(route, {
         data: filtered,
-        pagination: { nextCursor: null, hasMore: false },
+        pagination: { next_cursor: null, has_more: false },
       });
     }
 
@@ -326,15 +356,15 @@ async function installEscalationApi(page: Page) {
       if (!conv) return json(route, { error: { message: 'not found' } }, 404);
       const patch = route.request().postDataJSON() as {
         status?: string;
-        assignedMembershipId?: string | null;
+        assigned_membership_id?: string | null;
       };
       if (patch.status) conv.status = patch.status;
-      if (patch.assignedMembershipId !== undefined) {
+      if (patch.assigned_membership_id !== undefined) {
         if (conv.escalation) {
           conv.escalation.routing = {
             reason: 'manual_reassignment',
             matchedSkills: [],
-            assignedMembershipId: patch.assignedMembershipId || AGENT_A_MEMBERSHIP,
+            assignedMembershipId: patch.assigned_membership_id || AGENT_A_MEMBERSHIP,
             assignedAt: new Date().toISOString(),
           };
           conv.escalation.status = 'assigned';
@@ -358,11 +388,9 @@ test.describe('Escalation Routing', () => {
 
     await expect(page.getByRole('heading', { name: 'Conversations' })).toBeVisible();
 
-    const convLink = page.getByRole('link', { name: /conv-esc-1/i });
-    if (await convLink.isVisible().catch(() => false)) {
-      await convLink.click();
-    }
+    await page.getByRole('button', { name: /One Customer/ }).click();
     await page.waitForURL(/\/tenant\/conversations\/conv-esc-1/);
+    await expect(page.getByText('One Customer', { exact: true })).toBeVisible();
   });
 
   test('Agent: can open the escalation queue and claim an entry', async ({ page }) => {
@@ -373,7 +401,16 @@ test.describe('Escalation Routing', () => {
 
     await page.goto('/tenant/escalations');
 
-    await expect(page.getByRole('heading', { name: /escalat/i })).toBeVisible();
+    const row = page.getByRole('row', { name: /Refund dispute/ });
+    await expect(row).toBeVisible();
+    const claim = page.waitForResponse(
+      (res) =>
+        res.url().includes('/api/v1/tenant/escalations/esc-queued-1/claim') &&
+        res.request().method() === 'POST',
+    );
+    await row.getByRole('button', { name: 'Claim' }).click();
+    expect((await claim).status()).toBe(200);
+    await expect(page.getByText('No escalations in queue')).toBeVisible();
   });
 
   test('Agent: availability toggle appears in topbar', async ({ page }) => {
@@ -396,8 +433,10 @@ test.describe('Escalation Routing', () => {
       localStorage.setItem('app.tenant', JSON.stringify(tenant));
     }, testTenant);
 
-    await page.goto('/tenant/conversations/conv-esc-1');
-    await expect(page.getByRole('heading', { name: /conversation/i })).toBeVisible();
+    await page.goto('/tenant/conversations/conv-esc-3');
+    await expect(page.getByText('Three Customer', { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Escalated · /)).toBeVisible();
+    await expect(page.getByText('Waiting in queue')).toBeVisible();
   });
 
   test('Agent: can manage skills on the team page', async ({ page }) => {
@@ -437,11 +476,8 @@ test.describe('Escalation Routing', () => {
     }, testTenant);
 
     await page.goto('/tenant/conversations/conv-esc-2');
-    await expect(page.getByRole('heading', { name: /conversation/i })).toBeVisible();
-
-    const banner = page.getByText(/escalat/i);
-    if (await banner.isVisible().catch(() => false)) {
-      await expect(banner).toBeVisible();
-    }
+    await expect(page.getByText('Two Customer', { exact: true })).toBeVisible();
+    await expect(page.getByText('Escalated · Skill match')).toBeVisible();
+    await expect(page.getByText('Assigned to agent')).toBeVisible();
   });
 });

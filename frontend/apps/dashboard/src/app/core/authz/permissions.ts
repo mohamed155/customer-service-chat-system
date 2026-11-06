@@ -32,7 +32,8 @@ export type Permission =
   | 'platform.diagnostics.view'
   | 'platform.audit.view'
   | 'widgets.view'
-  | 'widgets.manage';
+  | 'widgets.manage'
+  | 'tools.view';
 
 export const PAGE_PERMISSIONS = {
   [APP_PATHS.tenant.overview]: 'overview.view',
@@ -47,7 +48,7 @@ export const PAGE_PERMISSIONS = {
   [APP_PATHS.tenant.integrationDetail]: 'integrations.view',
   [APP_PATHS.tenant.analytics]: 'analytics.view',
   [APP_PATHS.tenant.settings]: 'settings.view',
-  [APP_PATHS.tenant.settingsTools]: 'settings.view',
+  [APP_PATHS.tenant.settingsTools]: 'tools.view',
   [APP_PATHS.tenant.team]: 'members.view',
   [APP_PATHS.platform.base]: 'platform.admin',
   [APP_PATHS.platform.overviewPlaceholder]: 'platform.analytics.view',

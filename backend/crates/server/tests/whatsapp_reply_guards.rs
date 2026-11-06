@@ -497,7 +497,7 @@ async fn reply_whatsapp_success_emits_outbound() {
     // Verify outbox event was emitted
     let outbox_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+         WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
     .fetch_one(&pool)
@@ -512,7 +512,7 @@ async fn reply_whatsapp_success_emits_outbound() {
     // Verify the payload contains the conversation_id
     let payload_conv_id: Option<Uuid> = sqlx::query_scalar(
         "SELECT (payload->>'conversationId')::uuid FROM outbox_events \
-         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+         WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
     .fetch_optional(&pool)
@@ -557,9 +557,22 @@ async fn whatsapp_webhook_rate_limiter_wired() {
         .await
         .unwrap();
     let status = response.status();
-    assert!(
-        status != StatusCode::NOT_FOUND && status != StatusCode::INTERNAL_SERVER_ERROR,
-        "whatsapp webhook rate limiter must be wired: expected neither 404 nor 500, got {}",
-        status
+    // A missing extension fails extraction with 500. An unknown token is the
+    // handler's own opaque 404 (`{"error":"not found"}`), which proves the
+    // route is mounted and every extractor (incl. the limiter) resolved —
+    // unlike the router fallback's `route not found` envelope.
+    assert_ne!(
+        status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "whatsapp webhook rate limiter must be wired"
     );
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+    if status == StatusCode::NOT_FOUND {
+        assert_eq!(
+            body,
+            json!({ "error": "not found" }),
+            "404 must come from the whatsapp handler, not the router fallback"
+        );
+    }
 }

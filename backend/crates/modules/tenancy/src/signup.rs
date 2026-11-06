@@ -261,21 +261,36 @@ pub async fn signup(
             format!("{prefix}-{}", random_suffix())
         };
 
+        // Each attempt runs in a savepoint: a unique violation aborts the
+        // enclosing transaction in Postgres, so without it every retry failed
+        // with "current transaction is aborted" and signup returned 500.
+        let mut attempt_tx = match sqlx::Acquire::begin(&mut *tx).await {
+            Ok(sp) => sp,
+            Err(e) => {
+                return ApiError::internal_error(format!("Tenant insert failed: {e}"))
+                    .into_response();
+            }
+        };
         let result: Result<Uuid, sqlx::Error> = sqlx::query_scalar(
             "INSERT INTO tenants (name, slug, plan) VALUES ($1, $2, 'trial') RETURNING id",
         )
         .bind(&input.workspace_name)
         .bind(&candidate)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut *attempt_tx)
         .await;
 
         match result {
             Ok(id) => {
+                if let Err(e) = attempt_tx.commit().await {
+                    return ApiError::internal_error(format!("Tenant insert failed: {e}"))
+                        .into_response();
+                }
                 tenant_id = Some(id);
                 slug_used = candidate;
                 break;
             }
             Err(sqlx::Error::Database(dbe)) if dbe.code().as_deref() == Some("23505") => {
+                let _ = attempt_tx.rollback().await;
                 continue;
             }
             Err(e) => {

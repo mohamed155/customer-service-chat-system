@@ -1,3 +1,5 @@
+#[path = "support/tool_fixtures.rs"]
+mod tool_fixtures;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -177,7 +179,7 @@ async fn tool_decide_endpoint() {
     .await
     .unwrap();
 
-    let gen_id = Uuid::new_v4();
+    let gen_id = tool_fixtures::seed_generation(&pool, tenant_id, conversation_id).await;
 
     let tool_request_id = sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO tool_requests \
@@ -191,19 +193,6 @@ async fn tool_decide_endpoint() {
     .bind(conversation_id)
     .bind(gen_id)
     .fetch_one(&pool)
-    .await
-    .unwrap();
-
-    sqlx::query(
-        "INSERT INTO ai_generations (id, tenant_id, conversation_id, trigger_message_id, \
-         outcome, attempts, latency_ms) \
-         VALUES ($1, $2, $3, $4, 'awaiting_tool_approval', 1, 0)",
-    )
-    .bind(gen_id)
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .bind(Uuid::new_v4())
-    .execute(&pool)
     .await
     .unwrap();
 

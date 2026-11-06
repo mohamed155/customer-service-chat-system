@@ -1,6 +1,6 @@
 # Contract: Tenant Tool Settings API
 
-All routes under the authenticated tenant context (`X-Tenant-ID`, existing middleware). RBAC: read = Manager+; mutate = Admin+ (tenant), platform operators via existing tenant-switch rules. Standard error envelope; all mutations audited.
+All routes under the authenticated tenant context (`X-Tenant-ID`, existing middleware). RBAC: read = Manager+ (`tools.view`: Owner, Admin, Manager); mutate = Admin+ (`ai_agent.manage`) (tenant), platform operators via existing tenant-switch rules. Standard error envelope; all mutations audited.
 
 ## `GET /tenant/tools`
 

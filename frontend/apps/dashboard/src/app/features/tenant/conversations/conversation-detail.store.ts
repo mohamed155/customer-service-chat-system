@@ -146,7 +146,7 @@ export const ConversationDetailStore = signalStore(
         ),
         tap((result) => {
           const map: Record<string, ToolRequest> = {};
-          for (const item of result.items) {
+          for (const item of result?.items ?? []) {
             map[item.id] = item;
           }
           patchState(store, { toolActivity: map });

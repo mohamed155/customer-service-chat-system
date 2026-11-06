@@ -131,7 +131,7 @@ pub async fn attach_identifier_in_tx(
     sqlx::query(
         "INSERT INTO customer_channel_identifiers (tenant_id, customer_id, channel, identifier) \
          VALUES ($1, $2, $3, $4) \
-         ON CONFLICT (tenant_id, customer_id, channel) WHERE deleted_at IS NULL DO NOTHING",
+         ON CONFLICT (tenant_id, channel, identifier) WHERE deleted_at IS NULL DO NOTHING",
     )
     .bind(tenant_id)
     .bind(customer_id)

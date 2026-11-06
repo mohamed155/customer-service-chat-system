@@ -163,7 +163,8 @@ describe('ComposerComponent', () => {
     const sendSpy = vi.fn();
     component.send.subscribe(sendSpy);
 
-    const longText = 'A'.repeat(5000);
+    // 4096 characters is the maximum the composer (and backend) accepts.
+    const longText = 'A'.repeat(4096);
     component['form'].controls.body.setValue(longText);
     component['submit']();
 
@@ -171,6 +172,17 @@ describe('ComposerComponent', () => {
       kind: 'reply',
       body: longText,
     });
+  });
+
+  it('does not emit a message over the 4096-character limit', () => {
+    const { component } = createComponent();
+    const sendSpy = vi.fn();
+    component.send.subscribe(sendSpy);
+
+    component['form'].controls.body.setValue('A'.repeat(4097));
+    component['submit']();
+
+    expect(sendSpy).not.toHaveBeenCalled();
   });
 
   it('trims whitespace from message body before emitting', () => {

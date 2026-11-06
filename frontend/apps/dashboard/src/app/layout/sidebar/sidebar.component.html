@@ -64,6 +64,7 @@
 
     @if (
       permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.aiAgent]) ||
+      permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.settingsTools]) ||
       permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase]) ||
       permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.integrations]) ||
       permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.widgets])
@@ -74,6 +75,14 @@
             icon="@tui.bot"
             label="AI Agent"
             [link]="links.aiAgent"
+            [collapsed]="collapsed()"
+          />
+        }
+        @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.settingsTools])) {
+          <app-sidebar-nav-item
+            icon="@tui.wrench"
+            label="AI Tools"
+            [link]="links.aiTools"
             [collapsed]="collapsed()"
           />
         }

@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { openWidgetHost } from './support/widget-harness';
 
 test.describe('Widget Handoff (US3)', () => {
   test('handoff banner shows when conversation is handed to human', async ({ page }) => {
-    await page.goto('/fixtures/widget-host.html');
+    await openWidgetHost(page, { conversation: { handling: 'human', teamOnline: true } });
 
     const launcher = page.locator('button[aria-label="Open chat"]');
     await expect(launcher).toBeVisible({ timeout: 10000 });

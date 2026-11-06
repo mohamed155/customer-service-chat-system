@@ -39,6 +39,7 @@ const TENANT_PERMISSIONS: &[&str] = &[
     "audit.view",
     "widgets.view",
     "widgets.manage",
+    "tools.view",
 ];
 
 const VIEWER_PERMISSIONS: &[&str] = &[
@@ -347,7 +348,14 @@ async fn assert_status(
         authenticated_request(uri, Method::GET, user_id, tenant_id, environment),
     )
     .await;
-    assert_eq!(response.status(), expected, "unexpected status for {uri}");
+    let status = response.status();
+    if status != expected {
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        panic!(
+            "unexpected status for {uri}: {status} (expected {expected}): {}",
+            String::from_utf8_lossy(&bytes)
+        );
+    }
 }
 
 #[tokio::test]
@@ -1386,6 +1394,39 @@ async fn staff_tenant_access_is_environment_aware() {
     let Some(pool) = get_pool().await else { return };
     db::run_migrations(&pool).await.unwrap();
     let tenant_id = seed_tenant(&pool).await;
+    // Real conversation for the `/conversations/{id}` routes.
+    let customer_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO customers (tenant_id, display_name) VALUES ($1, 'RBAC Customer') RETURNING id",
+    )
+    .bind(tenant_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let conversation_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status) \
+         VALUES ($1, $2, 'web_chat', 'open') RETURNING id",
+    )
+    .bind(tenant_id)
+    .bind(customer_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    // `/tenant/ai/config` answers 404 until the tenant has an AI config.
+    sqlx::query(
+        "INSERT INTO ai_configurations (tenant_id, provider, model, fallbacks) \
+         VALUES ($1, 'openai', 'gpt-4', '[]'::jsonb)",
+    )
+    .bind(tenant_id)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let resolve = |uri: &str| {
+        if uri.starts_with("/api/v1/tenant/conversations/") {
+            uri.replace("{id}", &conversation_id.to_string())
+        } else {
+            uri.to_string()
+        }
+    };
     let roles = ["super_admin", "developer", "support", "sales", "finance"];
 
     for role in roles {
@@ -1394,7 +1435,7 @@ async fn staff_tenant_access_is_environment_aware() {
             assert_status(
                 &pool,
                 Environment::Development,
-                uri,
+                &resolve(uri),
                 user_id,
                 Some(tenant_id),
                 StatusCode::OK,
@@ -1406,39 +1447,26 @@ async fn staff_tenant_access_is_environment_aware() {
     for role in roles {
         let user_id = seed_user(&pool, Some(role)).await;
         let cookie = session_cookie(user_id, Environment::Production);
-        // Positions correspond to TENANT_OPERATIONS: overview.view,
-        // conversations.view (x3 routes: /conversations, /conversations/{id},
-        // /conversations/{id}/messages), conversations.manage,
-        // members.manage (x2 synthetic routes), members.view (x2 synthetic routes),
-        // settings.manage, billing.view, billing.manage, customers.view,
-        // customers.manage, ai_agent.view (x2), ai_agent.manage — must match
-        // `staff_tenant_permissions` matrix asserted in
-        // `me_staff_tenant_permissions_follow_environment_for_every_platform_role`.
-        let expected = match role {
-            "super_admin" => [
-                true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-                true, true, true, true,
-            ],
-            "developer" => [
-                true, true, true, false, true, false, false, true, true, false, false, false,
-                false, true, false, false, false, false,
-            ],
-            "support" => [
-                true, true, true, true, true, false, false, false, false, false, false, false,
-                false, true, true, false, false, false,
-            ],
-            "sales" => [
-                true, false, false, false, false, false, false, true, true, false, false, false,
-                false, false, false, false, false, false,
-            ],
-            "finance" => [
-                true, false, false, false, false, false, false, true, true, false, false, true,
-                false, false, false, false, false, false,
-            ],
+        // Expected access is derived from the authoritative staff matrix so
+        // the list of routes and the matrix cannot drift apart.
+        let platform_role = match role {
+            "super_admin" => identity::PlatformRole::SuperAdmin,
+            "developer" => identity::PlatformRole::Developer,
+            "support" => identity::PlatformRole::Support,
+            "sales" => identity::PlatformRole::Sales,
+            "finance" => identity::PlatformRole::Finance,
             _ => unreachable!(),
         };
+        let granted = authz::staff_tenant_permissions(platform_role, true);
+        let expected: Vec<bool> = TENANT_OPERATIONS
+            .iter()
+            .map(|(_, code)| {
+                let permission: authz::Permission = code.parse().expect("known permission code");
+                granted.contains(&permission)
+            })
+            .collect();
         for ((uri, _), allowed) in TENANT_OPERATIONS.iter().zip(expected) {
-            let request = Request::get(*uri)
+            let request = Request::get(resolve(uri))
                 .header("cookie", &cookie)
                 .header("X-Tenant-ID", tenant_id.to_string())
                 .body(Body::empty())

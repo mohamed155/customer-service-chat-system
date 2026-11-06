@@ -16,6 +16,7 @@ import { FormFieldComponent } from '../../../../shared/components/form-field/for
 import { InlineAlertComponent } from '../../../../shared/components/inline-alert/inline-alert.component';
 import { SectionHeaderComponent } from '../../../../shared/components/section-header/section-header.component';
 import { StatusBadgeComponent } from '../../../../shared/components/status-badge/status-badge.component';
+import { PermissionsService } from '../../../../core/authz/permissions.service';
 import { ToolsSettingsApiService } from './tools-settings-api.service';
 
 @Component({
@@ -177,6 +178,10 @@ import { ToolsSettingsApiService } from './tools-settings-api.service';
 })
 export class ToolsSettingsComponent {
   private readonly api = inject(ToolsSettingsApiService);
+  private readonly permissions = inject(PermissionsService);
+
+  /** Managers can read tool settings (`tools.view`); changes need `ai_agent.manage`. */
+  protected readonly canManage = () => this.permissions.has('ai_agent.manage');
 
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);

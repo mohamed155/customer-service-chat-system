@@ -729,16 +729,28 @@ async fn platform_user_sees_all_tenants_and_platform_rows() {
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
     let platform_user = seed_user(&pool, Some("super_admin")).await;
+    // audit_logs is append-only, so rows from earlier tests/runs remain.
+    // Seed this test's rows newest (so they lead the first page) and tag
+    // them with a per-run nonce to pick them out.
+    let nonce = Uuid::new_v4().to_string();
+    let base = chrono::Utc::now() + chrono::Duration::days(1);
+    let ts = |secs: i64| (base + chrono::Duration::seconds(secs)).to_rfc3339();
+    let (ts0, ts1, ts2) = (ts(0), ts(1), ts(2));
+    let (rid0, rid1, rid2) = (
+        format!("a@example.com-{nonce}"),
+        format!("id-a-{nonce}"),
+        format!("id-b-{nonce}"),
+    );
 
     seed_audit_row(
         &pool,
         None,
         "auth.login_failed",
         "auth",
-        "a@example.com",
+        &rid0,
         None,
         r#"{}"#,
-        "2026-07-18T14:00:00Z",
+        &ts0,
     )
     .await;
     seed_audit_row(
@@ -746,10 +758,10 @@ async fn platform_user_sees_all_tenants_and_platform_rows() {
         None,
         "member.role_changed",
         "membership",
-        "id-a",
+        &rid1,
         Some(tenant_a),
         r#"{}"#,
-        "2026-07-18T14:01:00Z",
+        &ts1,
     )
     .await;
     seed_audit_row(
@@ -757,10 +769,10 @@ async fn platform_user_sees_all_tenants_and_platform_rows() {
         None,
         "member.role_changed",
         "membership",
-        "id-b",
+        &rid2,
         Some(tenant_b),
         r#"{}"#,
-        "2026-07-18T14:02:00Z",
+        &ts2,
     )
     .await;
 
@@ -778,7 +790,16 @@ async fn platform_user_sees_all_tenants_and_platform_rows() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let json = body_json(response).await;
-    let entries = json["data"].as_array().unwrap();
+    let entries: Vec<&serde_json::Value> = json["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| {
+            e["resource_id"]
+                .as_str()
+                .is_some_and(|r| r.ends_with(&nonce))
+        })
+        .collect();
     assert_eq!(entries.len(), 3, "platform user should see all 3 rows");
     let tenant_ids: Vec<Option<String>> = entries
         .iter()
@@ -918,7 +939,7 @@ async fn tool_execution_emits_audit_row() {
     .unwrap();
 
     let conversation_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO conversations (tenant_id, customer_id, channel, status) VALUES ($1, $2, 'chat', 'active') RETURNING id",
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status) VALUES ($1, $2, 'web_chat', 'open') RETURNING id",
     )
     .bind(tenant_id)
     .bind(customer_id)
@@ -1000,7 +1021,7 @@ async fn failed_tool_execution_emits_audit_row() {
     .unwrap();
 
     let conversation_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO conversations (tenant_id, customer_id, channel, status) VALUES ($1, $2, 'chat', 'active') RETURNING id",
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status) VALUES ($1, $2, 'web_chat', 'open') RETURNING id",
     )
     .bind(tenant_id)
     .bind(customer_id)

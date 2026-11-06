@@ -279,6 +279,21 @@ pub struct AddMessagePayload {
 pub struct PatchConversationPayload {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<ConversationStatus>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_nullable",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub assigned_membership_id: Option<Option<Uuid>>,
+}
+
+/// Distinguish an explicit `null` (→ `Some(None)`) from an absent field
+/// (→ `None` via `#[serde(default)]`). Plain `Option<Option<T>>` collapses
+/// both to `None`, which made "unassign" impossible.
+fn deserialize_present_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Some)
 }

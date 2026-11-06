@@ -95,6 +95,7 @@ export class SidebarComponent {
     customers: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.customers}`,
     escalations: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.escalations}`,
     aiAgent: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.aiAgent}`,
+    aiTools: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.settingsTools}`,
     knowledgeBase: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.knowledgeBase}`,
     integrations: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.integrations}`,
     analytics: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.analytics}`,

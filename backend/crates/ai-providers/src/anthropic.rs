@@ -476,9 +476,7 @@ fn anthropic_sse_to_events(
                                 let delta_type = json["delta"]["type"].as_str().unwrap_or("");
                                 if delta_type == "input_json_delta" {
                                     let index = json["index"].as_i64().unwrap_or(0) as usize;
-                                    if let Some(partial) =
-                                        json["delta"]["partial_delta_json"].as_str()
-                                    {
+                                    if let Some(partial) = json["delta"]["partial_json"].as_str() {
                                         let mut accs = tc_accs.lock().unwrap();
                                         if let Some(acc) = accs.get_mut(&index) {
                                             acc.arguments.push_str(partial);
@@ -1034,10 +1032,10 @@ event: content_block_start
 data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_abc\",\"name\":\"get_weather\",\"input\":{}}}
 
 event: content_block_delta
-data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_delta_json\":\"{\\\"location\\\":\"}}
+data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"location\\\":\"}}
 
 event: content_block_delta
-data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_delta_json\":\" \\\"NYC\\\"}\"}}
+data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\" \\\"NYC\\\"}\"}}
 
 event: content_block_stop
 data: {\"type\":\"content_block_stop\",\"index\":1}

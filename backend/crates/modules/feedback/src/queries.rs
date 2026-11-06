@@ -117,7 +117,6 @@ pub async fn resolve_ai_agent_configuration(
     sqlx::query_scalar::<_, Uuid>(
         "SELECT ac.id FROM agent_configurations ac \
          WHERE ac.tenant_id = $1 \
-           AND ac.status = 'live' \
            AND ac.deleted_at IS NULL \
            AND EXISTS (SELECT 1 FROM ai_generations g \
                        WHERE g.tenant_id = $1 AND g.conversation_id = $2) \

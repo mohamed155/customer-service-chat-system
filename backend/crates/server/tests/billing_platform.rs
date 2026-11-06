@@ -229,7 +229,7 @@ async fn super_admin_can_create_plan() {
     let Some(pool) = get_pool().await else { return };
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("super_admin")).await;
-    let body = json!({"name": "SA Plan", "monthly_price_cents": 1000});
+    let body = json!({"name": format!("SA Plan {}", Uuid::new_v4()), "monthly_price_cents": 1000});
     let response = send(
         pool,
         platform_request(CREATE_PLAN, Method::POST, user, Some(body)),
@@ -244,7 +244,8 @@ async fn finance_can_create_plan() {
     let Some(pool) = get_pool().await else { return };
     db::run_migrations(&pool).await.unwrap();
     let user = seed_user(&pool, Some("finance")).await;
-    let body = json!({"name": "Finance Plan", "monthly_price_cents": 500});
+    let body =
+        json!({"name": format!("Finance Plan {}", Uuid::new_v4()), "monthly_price_cents": 500});
     let response = send(
         pool,
         platform_request(CREATE_PLAN, Method::POST, user, Some(body)),

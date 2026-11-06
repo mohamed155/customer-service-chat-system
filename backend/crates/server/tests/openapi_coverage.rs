@@ -50,6 +50,7 @@ const EXPECTED: &[(&str, &str)] = &[
     // Public (auth, invitations)
     ("POST", "/auth/login"),
     ("POST", "/auth/logout"),
+    ("POST", "/auth/signup"),
     ("GET", "/invitations/{token}"),
     ("POST", "/invitations/{token}/accept"),
     // Authenticated (identity)
@@ -139,14 +140,14 @@ const EXPECTED: &[(&str, &str)] = &[
     ("PATCH", "/tenant/knowledge/categories/{category_id}"),
     ("DELETE", "/tenant/knowledge/categories/{category_id}"),
     // Tool routes
-    ("GET", "/api/v1/tenant/conversations/{id}/tool-activity"),
-    ("POST", "/api/v1/tenant/tools/requests/{id}/decide"),
-    ("GET", "/api/v1/tenant/tool-requests"),
-    ("GET", "/api/v1/tenant/tools"),
-    ("PUT", "/api/v1/tenant/tools/builtin/{name}/policy"),
-    ("POST", "/api/v1/tenant/tools"),
-    ("PUT", "/api/v1/tenant/tools/{id}"),
-    ("DELETE", "/api/v1/tenant/tools/{id}"),
+    ("GET", "/tenant/conversations/{id}/tool-activity"),
+    ("POST", "/tenant/tool-requests/{id}/decide"),
+    ("GET", "/tenant/tool-requests"),
+    ("GET", "/tenant/tools"),
+    ("PUT", "/tenant/tools/builtin/{name}/policy"),
+    ("POST", "/tenant/tools"),
+    ("PUT", "/tenant/tools/{id}"),
+    ("DELETE", "/tenant/tools/{id}"),
     // Widget public API (023)
     ("GET", "/widget/v1/config"),
     ("POST", "/widget/v1/sessions"),

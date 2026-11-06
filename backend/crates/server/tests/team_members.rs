@@ -499,7 +499,7 @@ async fn cursor_pagination_works() {
     let items = body["items"].as_array().unwrap();
     assert_eq!(items.len(), 1);
     assert!(!body["hasMore"].as_bool().unwrap());
-    assert!(body["nextCursor"].is_null());
+    assert!(body["nextCursor"].is_null(), "body: {body}");
 }
 
 #[tokio::test]
@@ -589,14 +589,14 @@ async fn scale_500_members() {
 
     let body = assert_ok_response(
         &pool,
-        "/api/v1/tenant/members?q=User 42",
+        "/api/v1/tenant/members?q=User%20421",
         admin_id,
         tenant_id,
     )
     .await;
     let items = body["items"].as_array().unwrap();
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0]["displayName"], "User 42");
+    assert_eq!(items[0]["displayName"], "User 421");
 }
 
 // ---------------------------------------------------------------------------

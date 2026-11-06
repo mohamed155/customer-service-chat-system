@@ -197,6 +197,20 @@ export const TENANT_ROUTES: Routes = [
     },
     title: PAGE_TITLES.auditLogs.title,
   },
+  // Tool settings live at settings/tools but have their own permission
+  // (`tools.view`, Manager+), so they sit before — not under — the
+  // `settings.view`-guarded settings route.
+  {
+    path: APP_PATHS.tenant.settingsTools,
+    canMatch: [permissionGuard],
+    loadComponent: () =>
+      import('./settings/tools/tools-settings.component').then((m) => m.ToolsSettingsComponent),
+    data: {
+      pageTitle: 'toolsSettings',
+      requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.settingsTools],
+    },
+    title: PAGE_TITLES.toolsSettings.title,
+  },
   {
     path: APP_PATHS.tenant.settings,
     canMatch: [permissionGuard],
@@ -210,17 +224,6 @@ export const TENANT_ROUTES: Routes = [
         path: '',
         loadComponent: () =>
           import('./settings/settings.component').then((m) => m.SettingsComponent),
-      },
-      {
-        path: 'tools',
-        canMatch: [permissionGuard],
-        loadComponent: () =>
-          import('./settings/tools/tools-settings.component').then((m) => m.ToolsSettingsComponent),
-        data: {
-          pageTitle: 'toolsSettings',
-          requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.settingsTools],
-        },
-        title: PAGE_TITLES.toolsSettings.title,
       },
     ],
   },

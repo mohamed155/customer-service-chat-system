@@ -46,7 +46,7 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
     SelectFilterComponent,
     StatusBadgeComponent,
   ],
-  providers: [],
+  providers: [ConversationDetailStore],
   templateUrl: './conversation-detail.component.html',
   styles: [
     `

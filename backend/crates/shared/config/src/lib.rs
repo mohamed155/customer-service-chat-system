@@ -479,6 +479,54 @@ mod tests {
     struct EnvGuard;
     impl EnvGuard {
         fn setup(vars: &[(&str, &str)]) -> Self {
+            // Start from a clean slate: the process may inherit any of these
+            // (e.g. CI sets AUTH_JWT_SECRET for the whole job).
+            for key in &[
+                "DATABASE_URL",
+                "REDIS_URL",
+                "APP_ENVIRONMENT",
+                "PORT",
+                "BIND_ADDRESS",
+                "CORS_ALLOWED_ORIGINS",
+                "LOG_FORMAT",
+                "AUTH_JWT_SECRET",
+                "AUTH_SESSION_TTL_SECONDS",
+                "DB_MAX_CONNECTIONS",
+                "DB_ACQUIRE_TIMEOUT_MS",
+                "READY_PROBE_TIMEOUT_MS",
+                "SHUTDOWN_GRACE_SECONDS",
+                "APP_DOCS_ENABLED",
+                "SMTP_URL",
+                "SMTP_FROM",
+                "PUBLIC_DASHBOARD_URL",
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "APP_INTEGRATION_SECRETS_KEY",
+                "APP_AI_OPENAI_BASE_URL",
+                "APP_AI_ANTHROPIC_BASE_URL",
+                "APP_AI_GEMINI_BASE_URL",
+                "APP_S3_ENDPOINT",
+                "APP_S3_REGION",
+                "APP_S3_BUCKET",
+                "APP_S3_ACCESS_KEY_ID",
+                "APP_S3_SECRET_ACCESS_KEY",
+                "APP_S3_FORCE_PATH_STYLE",
+                "APP_RATE_LIMIT_ENABLED",
+                "APP_RATE_LIMIT_LOGIN_MAX",
+                "APP_RATE_LIMIT_LOGIN_WINDOW_SECS",
+                "APP_RATE_LIMIT_MAX_OVERRIDE",
+                "APP_RATE_LIMIT_FAIL_MODE",
+                "APP_SECURITY_HEADERS_ENABLED",
+                "APP_CSP_POLICY",
+                "APP_CSP_REPORT_ONLY",
+                "APP_HSTS_MAX_AGE",
+                "APP_OTLP_ENDPOINT",
+                "APP_TRACE_SAMPLE_RATIO",
+                "APP_SENTRY_DSN",
+                "APP_RELEASE_SHA",
+                "APP_TRUSTED_PROXY",
+            ] {
+                env::remove_var(key);
+            }
             for (k, v) in vars {
                 env::set_var(k, v);
             }

@@ -4,10 +4,22 @@ use serde::Serialize;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::broadcast;
 use tracing::error;
 use uuid::Uuid;
+
+type Registry = Mutex<HashMap<Uuid, TenantPresence>>;
+
+/// Lock the presence registry. It is a plain `std` mutex: every critical
+/// section is short and synchronous, so it is safe to take from both sync and
+/// async code (a `tokio` mutex's `blocking_lock` panics inside the runtime).
+fn lock_registry(registry: &Registry) -> MutexGuard<'_, HashMap<Uuid, TenantPresence>> {
+    registry
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 #[derive(Debug, Clone)]
 pub enum ConversationToolEvent {
@@ -44,7 +56,7 @@ struct TenantPresence {
 pub struct PresenceGuard {
     tenant_id: Uuid,
     membership_id: Uuid,
-    registry: Arc<Mutex<HashMap<Uuid, TenantPresence>>>,
+    registry: Arc<Registry>,
     runtime: Arc<RuntimeInner>,
 }
 
@@ -56,7 +68,7 @@ impl Drop for PresenceGuard {
         let runtime = self.runtime.clone();
         tokio::spawn(async move {
             let should_revert = {
-                let mut map = registry.lock().await;
+                let mut map = lock_registry(&registry);
                 if let Some(tp) = map.get_mut(&tenant_id) {
                     if let Some(count) = tp.members.get_mut(&membership_id) {
                         *count = count.saturating_sub(1);
@@ -83,7 +95,7 @@ impl Drop for PresenceGuard {
 struct RuntimeInner {
     pool: PgPool,
     grace: Duration,
-    registry: Arc<Mutex<HashMap<Uuid, TenantPresence>>>,
+    registry: Arc<Registry>,
 }
 
 #[derive(Clone)]
@@ -103,23 +115,14 @@ impl Runtime {
     }
 
     pub fn present_membership_ids(&self, tenant_id: Uuid) -> Vec<Uuid> {
-        let rt = tokio::runtime::Handle::try_current();
-        match rt {
-            Ok(handle) => {
-                let registry = self.inner.registry.clone();
-                handle.block_on(async move {
-                    let map = registry.lock().await;
-                    map.get(&tenant_id)
-                        .map(|tp| tp.members.keys().copied().collect())
-                        .unwrap_or_default()
-                })
-            }
-            Err(_) => Vec::new(),
-        }
+        let map = lock_registry(&self.inner.registry);
+        map.get(&tenant_id)
+            .map(|tp| tp.members.keys().copied().collect())
+            .unwrap_or_default()
     }
 
     pub async fn present_membership_ids_async(&self, tenant_id: Uuid) -> Vec<Uuid> {
-        let map = self.inner.registry.lock().await;
+        let map = lock_registry(&self.inner.registry);
         map.get(&tenant_id)
             .map(|tp| tp.members.keys().copied().collect())
             .unwrap_or_default()
@@ -132,7 +135,7 @@ impl Runtime {
     ) -> (PresenceGuard, broadcast::Receiver<Event>) {
         let registry = self.inner.registry.clone();
         let rx = {
-            let mut map = registry.blocking_lock();
+            let mut map = lock_registry(&registry);
             let tp = map.entry(tenant_id).or_insert_with(|| {
                 let (tx, _) = broadcast::channel(256);
                 TenantPresence {
@@ -153,19 +156,9 @@ impl Runtime {
     }
 
     pub fn broadcast(&self, tenant_id: Uuid, event: Event) {
-        let registry = self.inner.registry.clone();
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(async move {
-                let map = registry.lock().await;
-                if let Some(tp) = map.get(&tenant_id) {
-                    let _ = tp.tx.send(event);
-                }
-            });
-        } else {
-            let map = registry.blocking_lock();
-            if let Some(tp) = map.get(&tenant_id) {
-                let _ = tp.tx.send(event);
-            }
+        let map = lock_registry(&self.inner.registry);
+        if let Some(tp) = map.get(&tenant_id) {
+            let _ = tp.tx.send(event);
         }
     }
 
@@ -190,7 +183,7 @@ async fn schedule_presence_revert(
     tokio::spawn(async move {
         tokio::time::sleep(runtime.grace).await;
         let still_absent = {
-            let map = runtime.registry.lock().await;
+            let map = lock_registry(&runtime.registry);
             map.get(&tenant_id)
                 .and_then(|tp| tp.members.get(&membership_id))
                 .copied()
@@ -219,7 +212,7 @@ async fn schedule_presence_revert(
                     audit::record_availability_changed(
                         &mut tx,
                         // No actor user id for automated reverts
-                        Uuid::nil(),
+                        None,
                         tenant_id,
                         membership_id,
                         Some("available"),
@@ -247,7 +240,7 @@ async fn schedule_presence_revert(
                 cause: "presence_timeout".into(),
             };
             {
-                let map = runtime.registry.lock().await;
+                let map = lock_registry(&runtime.registry);
                 if let Some(tp) = map.get(&tenant_id) {
                     let _ = tp.tx.send(Event::AvailabilityChanged(event));
                 }
