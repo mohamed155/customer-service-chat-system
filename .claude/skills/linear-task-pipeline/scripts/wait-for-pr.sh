@@ -97,11 +97,18 @@ cr_trigger_requested() {
     --jq '.[] | select(.user.type != "Bot") | select(.created_at > env.SINCE) | select(.body | test("@coderabbitai\\s+(full\\s+)?review"; "i")) | .id' 2>/dev/null | grep -q .
 }
 
-cr_rate_limited() {
-  # A real rate-limit notice is a short bot comment; the long walkthrough is not one.
-  CRSINCE="$cr_since" gh api --paginate "repos/$repo/issues/$pr/comments" \
-    --jq ".[] | select($is_cr) | select(.updated_at > env.CRSINCE) | select((.body | length) < 3000) | .body" 2>/dev/null \
-    | grep -qiE 'rate.?limit'
+cr_rate_limit_notice() {
+  # Succeeds (and prints the wait time) when CodeRabbit answered the trigger with a limit notice.
+  # CodeRabbit posts two comments: "Review limit reached ... Next included review available in
+  # N minutes" (about 5k characters of markup, so no length filter) and "Review rate limited".
+  # Match those exact phrases, not the words "rate limit": a walkthrough of a PR that touches rate
+  # limiting code would match those.
+  local bodies wait
+  bodies=$(CRSINCE="$cr_since" gh api --paginate "repos/$repo/issues/$pr/comments" \
+    --jq ".[] | select($is_cr) | select(.updated_at > env.CRSINCE) | .body" 2>/dev/null | sed 's/<[^>]*>//g')
+  grep -qiE 'review limit reached|review rate limited' <<<"$bodies" || return 1
+  wait=$(grep -ioE 'next included review available in [^.*]*' <<<"$bodies" | head -1)
+  echo "${wait:-wait time not stated}"
 }
 
 while true; do
@@ -156,7 +163,8 @@ while true; do
         else
           echo "CODERABBIT could not post the trigger comment"; cr_result=failed
         fi
-      elif [ "$cr_triggered" = 1 ] && cr_rate_limited; then
+      elif [ "$cr_triggered" = 1 ] && notice=$(cr_rate_limit_notice); then
+        echo "CODERABBIT rate-limited: $notice"
         cr_result=rate-limited
       elif [ $(( (now - cr_start) / 60 )) -ge "$cr_timeout_min" ]; then
         cr_result=timeout   # triggered but never finished, or someone else started a review that never finished
