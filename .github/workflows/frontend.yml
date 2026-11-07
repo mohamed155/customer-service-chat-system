@@ -19,6 +19,13 @@ jobs:
             cache-dependency-path: frontend/pnpm-lock.yaml,
           }
       - run: pnpm install --frozen-lockfile
+      # infra/Dockerfile.frontend installs from package.json + lockfile only, with no git checkout.
+      # The release job (master only) builds that image, so reproduce its install on pull requests.
+      - name: Install works without a git checkout (Docker image build)
+        run: |
+          dir=$(mktemp -d)
+          cp package.json pnpm-lock.yaml "$dir"
+          cd "$dir" && pnpm install --frozen-lockfile
       - run: pnpm run lint
       - name: Check formatting
         run: pnpm format:check
