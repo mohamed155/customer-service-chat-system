@@ -1,13 +1,13 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 2.0.0 → 2.0.1 (PATCH — follow-up TODOs resolved; no principle changes)
+Version change: 2.0.1 → 2.0.2 (PATCH — compliance-gap tracking links only; no principle changes)
 
 Modified principles: none
 Added sections: none
 Removed sections: none
 
-Resolved follow-up TODOs (from 2.0.0):
+Resolved follow-up TODOs (in 2.0.1):
   - TODO(ARCH_DOC): `docs/architecture/system-architecture.md` is on master (MOH-14, PR #9).
   - TODO(ADR_DIR): `docs/adr/` is on master with the template, index and ADR-001–015,
     all Accepted (epic MOH-6, PRs #9–#12).
@@ -26,9 +26,11 @@ Follow-up TODOs:
       - No PostgreSQL RLS (I): MOH-31, blocked by MOH-23 (DB role split) — ADR-004 T1/T2
       - Internal error text returned to clients (II, VIII): MOH-32 — ADR-012 A1
       - Tenant secrets not envelope-encrypted (II): MOH-33 — ADR-014 E1
-    Still untracked: no i18n externalization (XII); UUIDv7 not used for new PKs
-    (Technology Standards, ADR-013 U1); no generated TypeScript client check in CI
-    (VIII, ADR-012 A5).
+      - No i18n externalization (XII): MOH-41
+      - UUIDv7 not used for new PKs (Technology Standards): MOH-42 — ADR-013 U1
+      - No OpenAPI breaking-change or generated-client check in CI (VIII): MOH-43 — ADR-012 A5
+    Other threat-model risks: MOH-34 (MFA), MOH-35 (login timing), MOH-36 (CSRF),
+    MOH-37 (gateway split), MOH-38 (CSP), MOH-39 (Actions SHA pinning), MOH-40 (circuit breakers).
 -->
 
 # AI Customer Service Platform Constitution
@@ -269,4 +271,4 @@ Adding or replacing a technology in this table requires an ADR and a constitutio
 - Compliance is reviewed at the end of each phase; recurring violations trigger an amendment or a
   corrective spec.
 
-**Version**: 2.0.1 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-11-07
+**Version**: 2.0.2 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-11-07

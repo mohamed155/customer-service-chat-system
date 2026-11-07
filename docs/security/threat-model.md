@@ -225,11 +225,11 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | 1 | Cross-tenant data exposure through a single missed filter: no RLS, and the app DB user is a superuser | 4.2 I, 4.14 E | ADR-004 T1, T2 · [MOH-31](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-31) (RLS), [MOH-23](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-23) (DB roles) |
 | 2 | Internal error text (including database errors) returned to clients | all API modules | ADR-012 A1 · [MOH-32](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-32) |
 | 3 | Tenant secrets under one static key per type, with no rotation or crypto-shredding | 4.9 I | ADR-014 E1 · [MOH-33](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-33) |
-| 4 | Platform accounts without MFA | 4.11 E | ADR-005 A6 |
-| 5 | Account enumeration through login timing | 4.1 S | ADR-005 A3 |
-| 6 | CSRF gaps (missing `Origin` allowed, login unchecked) | 4.1 E | ADR-005 A4 |
-| 7 | Public and internal traffic share one process and router | 4.4 D/E | ADR-010 G1 |
-| 8 | CSP not enforced (`report-only`); GitHub Actions pinned by tag, not SHA; no circuit breakers | 4.1 S, 4.6 D, 4.13 T, 4.14 S | this document |
+| 4 | Platform accounts without MFA | 4.11 E | ADR-005 A6 · [MOH-34](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-34) |
+| 5 | Account enumeration through login timing | 4.1 S | ADR-005 A3 · [MOH-35](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-35) |
+| 6 | CSRF gaps (missing `Origin` allowed, login unchecked) | 4.1 E | ADR-005 A4 · [MOH-36](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-36) |
+| 7 | Public and internal traffic share one process and router | 4.4 D/E | ADR-010 G1 · [MOH-37](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-37) |
+| 8 | CSP not enforced (`report-only`); GitHub Actions pinned by tag, not SHA; no circuit breakers | 4.1 S, 4.6 D, 4.13 T, 4.14 S | CSP [MOH-38](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-38) · Actions SHA pinning [MOH-39](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-39) · circuit breakers [MOH-40](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-40) |
 
 Each risk should become a Linear issue with an owner and target date; this table links them once
-created. Risks 1–3 are filed; 4–8 are not yet.
+created. All eight risks are filed.
