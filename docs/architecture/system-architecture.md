@@ -718,6 +718,9 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
 
 ## 22. ADR backlog (Phase 0)
 
+Status and links for each ADR live in the [ADR index](../adr/README.md). New ADRs start from
+[`0000-template.md`](../adr/0000-template.md).
+
 | ADR | Decision |
 | -- | -- |
 | ADR-001 | Modular monolith with hexagonal modules |
