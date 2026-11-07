@@ -1,0 +1,6 @@
+# Issues are tracked in Linear only. GitHub blank issues are disabled and point there.
+blank_issues_enabled: false
+contact_links:
+  - name: Create or find the work item in Linear
+    url: https://linear.app/mohamed-ahmed-ramadan
+    about: Bugs, features and tasks are tracked in Linear (team "Mohamed Ramadan"). Open or find the Linear issue there, then branch from it.
