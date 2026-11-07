@@ -1,6 +1,6 @@
 # ADR-005: Authentication — password hashing, tokens, cookies, CSRF, MFA
 
-- **Status:** Proposed. Becomes Accepted when the MOH-16 PR merges.
+- **Status:** Accepted (MOH-16 merged to master, 2026-11-07)
 - **Date:** 2026-11-06
 - **Deciders:** Platform engineering
 - **Related:** [System architecture §6.1](../architecture/system-architecture.md#61-authentication),

@@ -1,6 +1,6 @@
 # ADR-006: Authorization — permission-based RBAC, policies, impersonation, API keys
 
-- **Status:** Proposed. Becomes Accepted when the MOH-16 PR merges.
+- **Status:** Accepted (MOH-16 merged to master, 2026-11-07)
 - **Date:** 2026-11-06
 - **Deciders:** Platform engineering
 - **Related:** [System architecture §5.2–5.3 and §6.2](../architecture/system-architecture.md#62-authorization),
