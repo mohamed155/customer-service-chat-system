@@ -1,14 +1,17 @@
 ---
 name: linear-task-pipeline
-description: Take a Linear issue (or an epic and all its sub-issues) from Todo to Done — mark In Progress, implement on the issue's branch, open a PR, mark In Review, wait for CI and the Kilo Code review, fix CI failures and valid review comments, merge to master, mark Done. Use when the user says "run the pipeline on MOH-NN", "implement MOH-NN end to end", or "loop over the sub-tasks of MOH-NN".
+description: Take a Linear issue (or an epic and all its sub-issues, then the epic itself) from Todo to Done — mark In Progress, implement on the issue's branch, open a PR, mark In Review, wait for CI and the Kilo Code review, fix CI failures and valid review comments, merge to master, tick the description's checkboxes, mark Done. Use when the user says "run the pipeline on MOH-NN", "implement MOH-NN end to end", or "loop over the sub-tasks of MOH-NN".
 argument-hint: <linear-issue-id> (e.g. MOH-17, or an epic like MOH-6)
 ---
 
 # Linear task pipeline
 
-Run one Linear issue — or every open sub-issue of an epic — through the full delivery loop.
+Run one Linear issue — or every open sub-issue of an epic, followed by the epic itself — through
+the full delivery loop.
 Invoking this skill **is** the user's authorization to push branches, open PRs, merge them into
-`master` and change Linear statuses for the issues in scope. It is not authorization for
+`master`, change Linear statuses and tick checkboxes in the descriptions of the issues in scope.
+The parent of the issues worked on is in scope once all of its sub-issues are Done (see step 9).
+It is not authorization for
 anything outside that scope (force-pushes, rewriting `master`, closing other people's PRs,
 touching issues that aren't in scope).
 
@@ -33,7 +36,9 @@ Stop and tell the user if any check fails; don't work around it.
 
 - `get_issue` on the argument (with relations).
 - If it has sub-issues (`list_issues` with `parentId`), the queue is the sub-issues whose status
-  is not Done / Canceled / Duplicate. Otherwise the queue is just the issue itself.
+  is not Done / Canceled / Duplicate, **followed by the epic itself as the last item** (step 9).
+  Otherwise the queue is just the issue itself; if that issue has a parent, step 9 decides
+  whether the parent is appended after it.
 - Order: respect `blockedBy` relations first, then priority (Urgent → Low), then identifier.
   An issue blocked by something not Done waits until its blocker finishes in this run; if the
   blocker is outside the queue and not Done, skip the issue and report it.
@@ -70,6 +75,9 @@ the next — later ADRs and features usually build on earlier ones.
   test-driven-development for code, systematic-debugging for failures.
 - Every acceptance-criteria checkbox must be met. If one can't be met without a product
   decision, stop and ask the user — don't guess on decisions that are theirs.
+- Keep a list mapping **each checkbox line** in the description (`- [ ] …`) to its evidence: the
+  file/section that satisfies it, or the command you ran. Step 7 ticks the boxes from this list,
+  and the PR description and Done comment reuse it.
 - Verify locally before pushing (superpowers:verification-before-completion): run the checks CI
   will run for the areas you touched (see `.github/workflows/`: backend = cargo fmt/clippy/test,
   frontend = lint/test/build). Docs-only changes: check links and Markdown renders.
@@ -118,15 +126,15 @@ Don't poll by hand in a sleep loop, and never merge before `DONE`.
 ## 6. Fix and repeat
 
 **CI failed** — `gh pr checks <n>`. If the only failing check is `Kilo Code Review`, handle it
-as Kilo comments (below). Otherwise run `gh run view <run-id> --log-failed`.
+as Kilo comments (below). Otherwise run `gh run view <run-id> --log-failed`, find the root cause
+(systematic-debugging), fix it on the branch, verify locally, commit, push. Don't skip, disable
+or `#[ignore]` checks to get green. Go back to step 5.
 
 **Kilo's check failed but it posted nothing** — that's a Kilo-side error, not findings. Its
 check run says `Review failed.` (`gh api repos/{owner}/{repo}/commits/<sha>/check-runs`). The Kilo
 app doesn't support GitHub's re-run API, so push an empty commit
 (`git commit --allow-empty -m "chore: re-trigger Kilo Code review"`) and go back to step 5. If
-it fails the same way twice, stop and ask the user whether to merge without a Kilo review. Find the root cause
-(systematic-debugging), fix it on the branch, verify locally, commit, push. Don't skip, disable
-or `#[ignore]` checks to get green. Go back to step 5.
+it fails the same way twice, stop and ask the user whether to merge without a Kilo review.
 
 **Kilo commented** — read every item in full:
 ```bash
@@ -160,10 +168,57 @@ git switch master && git pull --ff-only origin master
 If master moved and the PR conflicts: `git merge origin/master` on the branch, resolve, push,
 back to step 5. Never force-push.
 
-Then `save_issue` → `state: "Done"`, and `save_comment` on the issue with the PR link, the
-merge commit, and anything notable (declined review comments, Kilo timeout).
+Then tick the checkboxes and close the issue:
 
-## 8. Next issue / report
+1. **Tick the description's checkboxes.** Re-fetch the description (`get_issue`) — someone may
+   have edited it — and check each `- [ ]` line against `master` using the evidence list from
+   step 3. For every box that is met, change only its marker: `save_issue` with `patch`
+   operations `{op: "replace", old_string: "- [ ] <exact line text>", new_string: "- [x] <exact line text>"}`.
+   Never resend the whole description and never reword, reorder or delete lines. If a line's text
+   isn't unique, include enough of the neighbouring text to make the anchor unique.
+   Re-fetch once more and confirm no box you meant to tick is still `[ ]`.
+2. **Any box not met** (out of scope, needs a decision, or not delivered): leave it unticked, do
+   **not** mark the issue Done, keep it In Review, and ask the user — either finish it (back to
+   step 3 on a new branch) or confirm it's dropped. Boxes that aren't deliverables (e.g. a
+   checklist of "out of scope" items) are left as they are and mentioned in the comment.
+3. `save_issue` → `state: "Done"`, and `save_comment` on the issue with the PR link, the merge
+   commit, the checkbox → evidence list, and anything notable (declined review comments, Kilo
+   timeout, boxes left unticked and why).
 
-Go to the next issue in the queue. When the queue is empty — or the run stops — give the user a
-short report: each issue, its PR, final status, and anything skipped or left for them.
+## 8. Next issue
+
+Go to the next issue in the queue. When only the parent is left, go to step 9.
+
+## 9. Parent issue (epic) — same steps
+
+When the last open sub-issue of a parent finishes, re-query its sub-issues (`list_issues` with
+`parentId`). If **every** sub-issue is Done, Canceled or Duplicate, run the parent through the
+same loop. If any is still open, parked or skipped in this run, don't touch the parent: report
+which sub-issues block it. This applies both when the skill was invoked on the epic and when it
+was invoked on a single sub-issue that turned out to be the last one open.
+
+For the parent:
+
+1. **Step 2** — mark it In Progress; read its description, comments and every sub-issue's Done
+   comment.
+2. **Step 3** — the epic's own acceptance criteria usually span sub-issues ("all ADRs linked from
+   the index", "module map exists"). Verify each one against `master`, not against the
+   sub-issues' claims. Build the checkbox → evidence list.
+   - **Something is missing** (a cross-link, an index row, a summary doc, a criterion no
+     sub-issue covered): implement it on the epic's `gitBranchName` and continue through
+     **steps 4–7 exactly as for any issue** — PR, In Review, CI and Kilo, fixes, gated merge.
+     If the gap is real work rather than a small fix, stop and ask whether to add a sub-issue.
+   - **Nothing is missing:** don't open an empty PR. Skip steps 4–6 and go to step 7's
+     checkbox/close part, with the evidence pointing at the sub-issues' merged PRs and files on
+     `master`.
+3. **Step 7** — tick the epic's checkboxes with the same rules (a box not met keeps the epic
+   open), mark it Done, and comment with the evidence list and the sub-issues' PRs.
+
+Only go one level up per run: if the epic itself has a parent, report that and leave it to
+the user.
+
+## 10. Report
+
+When the queue is empty — or the run stops — give the user a short report: each issue
+(including the parent), its PR, final status, checkboxes ticked or left open, and anything
+skipped or left for them.
