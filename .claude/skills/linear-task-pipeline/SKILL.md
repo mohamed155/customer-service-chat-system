@@ -161,9 +161,14 @@ merge conflicts, and the PR is still yours and open.
 # `gh pr checks` exits non-zero while any check is pending or failing, so this only merges
 # when everything is green. Don't pipe its output into anything before the `&&`: the pipe's
 # exit code would replace it, and the merge would run whatever the checks say.
-gh pr checks <n> >/dev/null 2>&1 && gh pr merge <n> --merge --delete-branch   # repo convention: merge commits
+gh pr checks <n> >/dev/null 2>&1 && gh pr merge <n> --squash --delete-branch   # squash-only, PR title becomes the commit
 git switch master && git pull --ff-only origin master
 ```
+
+`master` is squash-only with linear history: merge commits and rebase merges are disabled, and
+the **PR title becomes the commit message** (the body is dropped), so it must be a valid
+Conventional Commit. PRs can't be merged until the required checks (`verify`, `real-backend-e2e`,
+`secret-scan`, `commitlint`) pass. A direct push to `master` is rejected.
 
 If master moved and the PR conflicts: `git merge origin/master` on the branch, resolve, push,
 back to step 5. Never force-push.
