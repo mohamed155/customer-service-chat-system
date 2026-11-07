@@ -44,7 +44,9 @@ ADR with **ADR-NNN**. Its §22 holds the Phase 0 backlog, which this index track
 | [ADR-009](0009-realtime-sse-websocket-redis-fanout.md) | SSE for streaming, WebSocket for bidirectional chat | Accepted |
 | [ADR-010](0010-separate-gateway-unit.md) | Separate `gateway` deployment unit for public traffic | Accepted |
 | [ADR-011](0011-widget-web-component.md) | Widget as lightweight Web Component (non-Angular) | Accepted |
-| ADR-012 | API conventions: `/api/v1`, OpenAPI 3.1, RFC 9457 errors, keyset pagination | Not started |
-| ADR-013 | UUIDv7 identifiers | Not started |
-| ADR-014 | Envelope encryption for tenant secrets | Not started |
-| ADR-015 | Monorepo layout and tooling | Not started |
+| [ADR-012](0012-api-conventions.md) | API conventions: `/api/v1`, OpenAPI 3.1, RFC 9457 errors, keyset pagination | Accepted |
+| [ADR-013](0013-uuidv7-identifiers.md) | UUIDv7 identifiers | Accepted |
+| [ADR-014](0014-envelope-encryption-tenant-secrets.md) | Envelope encryption for tenant secrets | Accepted |
+| [ADR-015](0015-monorepo-layout-tooling.md) | Monorepo layout and tooling | Accepted |
+
+Related: the [v1 STRIDE threat model](../security/threat-model.md) maps each module's threats to controls and to the ADR gaps above.
