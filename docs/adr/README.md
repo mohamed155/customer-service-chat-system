@@ -10,8 +10,11 @@ ADR with **ADR-NNN**. Its §22 holds the Phase 0 backlog, which this index track
 
 1. Copy [`0000-template.md`](0000-template.md) to `NNNN-kebab-case-title.md`, using the number
    reserved below (or the next free number for a new decision).
-2. Open it as **Proposed** in its own PR, and update its row in this index in the same PR.
-3. The ADR becomes **Accepted** when that PR merges.
+2. Open it in its own PR with the status set to **Accepted** and the date, and update its row in
+   this index in the same PR. The open PR is the proposal; the file only reaches `master` by
+   being merged, so nothing on `master` says "Proposed".
+3. If the PR is closed without merging and the decision is worth keeping on record, merge it
+   as **Rejected** instead.
 4. Accepted ADRs are not rewritten. To change a decision, write a new ADR that supersedes it,
    and mark the old one **Superseded by ADR-XXX**.
 
@@ -20,7 +23,7 @@ ADR with **ADR-NNN**. Its §22 holds the Phase 0 backlog, which this index track
 | Status | Meaning |
 |---|---|
 | Not started | Number reserved in the backlog; no draft yet. |
-| Proposed | Draft is written and under review. |
+| Proposed | Under review in an open PR. Not used on `master`; see step 2 above. |
 | Accepted | Decision is in force. Code is expected to follow it. |
 | Rejected | Considered and declined. Kept for the record. |
 | Deprecated | No longer applies, with no replacement. |
@@ -30,10 +33,10 @@ ADR with **ADR-NNN**. Its §22 holds the Phase 0 backlog, which this index track
 
 | ADR | Decision | Status |
 |---|---|---|
-| ADR-001 | Modular monolith with hexagonal modules | Not started |
-| ADR-002 | Rust/Axum/SQLx backend stack | Not started |
-| ADR-003 | Angular 22 + NgRx Store/SignalStore state ownership | Not started |
-| ADR-004 | Multi-tenancy: shared schema + RLS + composite FKs + cell mapping | Not started |
+| [ADR-001](0001-modular-monolith-hexagonal-modules.md) | Modular monolith with hexagonal modules | Accepted |
+| [ADR-002](0002-rust-backend-stack.md) | Rust/Axum/SQLx backend stack | Accepted |
+| [ADR-003](0003-frontend-state-ownership.md) | Angular 22 + NgRx Store/SignalStore state ownership | Accepted |
+| [ADR-004](0004-multi-tenancy-rls-cells.md) | Multi-tenancy: shared schema + RLS + composite FKs + cell mapping | Accepted |
 | [ADR-005](0005-authentication-tokens.md) | Authentication: short JWT + rotating refresh tokens in HttpOnly cookies | Accepted |
 | [ADR-006](0006-authorization-model.md) | Authorization: permission-based RBAC + policy layer | Accepted |
 | ADR-007 | PostgreSQL job queue + transactional outbox | Not started |
