@@ -1,0 +1,23 @@
+# Code owners are requested for review automatically when a PR touches their paths.
+# The last matching pattern wins. Today the only collaborator is @mohamed155; split these
+# by team or person as people join (the threat model's owner roles map onto these paths).
+
+# Default owner for anything not listed below
+*                   @mohamed155
+
+# Application code
+/backend/           @mohamed155
+/frontend/          @mohamed155
+
+# Infrastructure, operations and delivery
+/infra/             @mohamed155
+/ops/               @mohamed155
+/loadtest/          @mohamed155
+/.github/           @mohamed155
+
+# Process and architecture
+/.specify/          @mohamed155
+/specs/             @mohamed155
+/docs/adr/          @mohamed155
+/docs/architecture/ @mohamed155
+/docs/security/     @mohamed155
