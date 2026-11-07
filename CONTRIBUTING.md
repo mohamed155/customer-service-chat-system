@@ -53,6 +53,19 @@ Refs MOH-20
   `pnpm --dir frontend exec lefthook install`.
 - **In CI:** the _Commitlint_ workflow checks the PR title and every commit in the PR.
 
+## Merging
+
+`master` is protected by a repository ruleset:
+
+- A pull request is required. Direct pushes, force pushes and branch deletion are blocked.
+- The checks `verify`, `real-backend-e2e`, `secret-scan` and `commitlint` must pass.
+- History is linear and merging is **squash only**. The PR title becomes the commit message on
+  `master` (the PR body is not copied), so the title must be a valid Conventional Commit.
+  `gh pr merge <n> --squash --delete-branch` does this from the CLI.
+- No approval is required while there is a single maintainer. Repository admins can bypass the
+  rule on a PR only, never with a direct push. Turn on "Require review from Code Owners" in the
+  ruleset when a second person joins (see [`.github/CODEOWNERS`](.github/CODEOWNERS)).
+
 ## Pull request checklist
 
 Every PR description includes the review checklist from the PR template. It mirrors the
