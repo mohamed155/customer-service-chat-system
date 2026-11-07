@@ -1,55 +1,34 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.2.0 → 2.0.0 (MAJOR — full rewrite; principles redefined and renumbered)
+Version change: 2.0.0 → 2.0.1 (PATCH — follow-up TODOs resolved; no principle changes)
 
-Principle mapping (old → new):
-  - I. Enterprise Modular Monolith           → IV. Modular Monolith With Enforced Boundaries
-  - II. Multi-Tenant Isolation, No Exceptions → I. Tenant Isolation Is Non-Negotiable
-                                               (now also requires PostgreSQL RLS + composite FKs)
-  - III. Zero-Trust Security & RBAC          → II. Secure by Default (permission-based, not role-name)
-  - IV. AI Provider Independence & Tool-Mediated Access → III. AI Is Constrained, Observable,
-                                               and Accountable
-  - V. API-First & Contract Consistency      → VIII. Explicit Contracts and Type Safety
-  - VI. Observability by Default             → VII. Observability Is a Feature
-  - VII. Test-First & Regression Discipline  → VI. Tests Are Part of the Change
-  - VIII. Database Integrity & Migration Discipline → X. Data Integrity and Safe Change
-  - IX. Design System Discipline             → XII. Consistent, Accessible User Experience
-  - X. Performance & Efficiency              → XI. Scalable and Resilient by Design
+Modified principles: none
+Added sections: none
+Removed sections: none
 
-Added sections:
-  - Principle V. Spec-Driven, Incremental Delivery
-  - Principle IX. Simplicity and Evolvability
-  - Technology Standards table (replaces "Technology Stack & Platform Requirements")
-  - Development Workflow and Quality Gates, Definition of Done
-
-Removed sections / rules (not carried forward from 1.2.0):
-  - Vision section
-  - Frontend RxJS-first rule (Observable composition over Promises)
-  - angular.json `standalone: true` schematics-enforcement rule
-  - Enumerated Platform User / Tenant User role sets
-  - "Deterministic prompt construction" and "inspectable AI execution timeline" wording
-  - Documentation & Future Readiness section (module doc fields, future channel list);
-    module READMEs are now covered by Principle IX
+Resolved follow-up TODOs (from 2.0.0):
+  - TODO(ARCH_DOC): `docs/architecture/system-architecture.md` is on master (MOH-14, PR #9).
+  - TODO(ADR_DIR): `docs/adr/` is on master with the template, index and ADR-001–015,
+    all Accepted (epic MOH-6, PRs #9–#12).
 
 Templates:
-  - .specify/templates/plan-template.md ✅ updated (Constitution Check lists I–XII; ADR column
-    in Complexity Tracking; performance budget field)
-  - .specify/templates/spec-template.md ✅ updated (Scope & Non-Goals, Users & Roles,
-    Security & Tenancy Impact, Data Changes, API Contracts, UX States, Test Strategy,
-    Acceptance Criteria)
-  - .specify/templates/tasks-template.md ✅ updated (tests mandatory; verification per story;
-    tenant-isolation/authorization and observability tasks)
-  - .specify/templates/checklist-template.md ✅ no change needed (generic)
-  - CLAUDE.md, frontend/CLAUDE.md, .claude/skills/speckit-*/SKILL.md ✅ no principle-number
-    references found
+  - .specify/templates/plan-template.md ✅ no change needed
+  - .specify/templates/spec-template.md ✅ no change needed
+  - .specify/templates/tasks-template.md ✅ no change needed
+  - .specify/templates/checklist-template.md ✅ no change needed
+  - CLAUDE.md, frontend/CLAUDE.md, CONTRIBUTING.md ✅ no principle references changed
 
 Follow-up TODOs:
-  - TODO(ARCH_DOC): `docs/architecture/system-architecture.md` is referenced but does not exist.
-  - TODO(ADR_DIR): `docs/adr/` is referenced but does not exist.
-  - TODO(COMPLIANCE_GAP): existing code (specs 005–033) was built under 1.2.0. Known gaps vs 2.0.0:
-    no PostgreSQL RLS policies (I), no i18n externalization (XII), UUIDv7 not used for PKs
-    (Technology Standards), generated TypeScript client not confirmed (VIII). Needs a corrective spec.
+  - TODO(COMPLIANCE_GAP): existing code (specs 005–033) was built under 1.2.0. Each ADR's
+    "Current state and migration" table in `docs/adr/` lists its gaps with file references,
+    and `docs/security/threat-model.md` §5 ranks the top risks. Tracked so far:
+      - No PostgreSQL RLS (I): MOH-31, blocked by MOH-23 (DB role split) — ADR-004 T1/T2
+      - Internal error text returned to clients (II, VIII): MOH-32 — ADR-012 A1
+      - Tenant secrets not envelope-encrypted (II): MOH-33 — ADR-014 E1
+    Still untracked: no i18n externalization (XII); UUIDv7 not used for new PKs
+    (Technology Standards, ADR-013 U1); no generated TypeScript client check in CI
+    (VIII, ADR-012 A5).
 -->
 
 # AI Customer Service Platform Constitution
@@ -290,4 +269,4 @@ Adding or replacing a technology in this table requires an ADR and a constitutio
 - Compliance is reviewed at the end of each phase; recurring violations trigger an amendment or a
   corrective spec.
 
-**Version**: 2.0.0 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-11-04
+**Version**: 2.0.1 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-11-07

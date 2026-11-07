@@ -222,9 +222,9 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 
 | # | Risk | Rows | Tracking |
 | -- | -- | -- | -- |
-| 1 | Cross-tenant data exposure through a single missed filter: no RLS, and the app DB user is a superuser | 4.2 I, 4.14 E | ADR-004 T1, T2 |
-| 2 | Internal error text (including database errors) returned to clients | all API modules | ADR-012 A1 |
-| 3 | Tenant secrets under one static key per type, with no rotation or crypto-shredding | 4.9 I | ADR-014 E1 |
+| 1 | Cross-tenant data exposure through a single missed filter: no RLS, and the app DB user is a superuser | 4.2 I, 4.14 E | ADR-004 T1, T2 · [MOH-31](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-31) (RLS), [MOH-23](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-23) (DB roles) |
+| 2 | Internal error text (including database errors) returned to clients | all API modules | ADR-012 A1 · [MOH-32](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-32) |
+| 3 | Tenant secrets under one static key per type, with no rotation or crypto-shredding | 4.9 I | ADR-014 E1 · [MOH-33](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-33) |
 | 4 | Platform accounts without MFA | 4.11 E | ADR-005 A6 |
 | 5 | Account enumeration through login timing | 4.1 S | ADR-005 A3 |
 | 6 | CSRF gaps (missing `Origin` allowed, login unchecked) | 4.1 E | ADR-005 A4 |
@@ -232,4 +232,4 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | 8 | CSP not enforced (`report-only`); GitHub Actions pinned by tag, not SHA; no circuit breakers | 4.1 S, 4.6 D, 4.13 T, 4.14 S | this document |
 
 Each risk should become a Linear issue with an owner and target date; this table links them once
-created.
+created. Risks 1–3 are filed; 4–8 are not yet.
