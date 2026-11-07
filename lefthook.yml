@@ -1,0 +1,6 @@
+# Local git hooks. Installed by `pnpm install` in frontend/ (the `prepare` script), or manually:
+#   pnpm --dir frontend exec lefthook install
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm --dir frontend exec commitlint --config ../commitlint.config.mjs --edit {1}

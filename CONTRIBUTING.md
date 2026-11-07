@@ -7,16 +7,51 @@ page covers the day-to-day workflow.
 ## Workflow
 
 1. **Start from a Linear issue.** Work is spec-driven: spec → clarify → plan → tasks →
-   implement (see `specs/` and the constitution's *Development Workflow and Quality Gates*).
-2. **Branch** from `master` using the Linear branch name (e.g.
-   `mohamedahmedramadan154/moh-13-...`). Keep branches short-lived.
-3. **Commit** with [Conventional Commits](https://www.conventionalcommits.org/)
+   implement (see `specs/` and the constitution's _Development Workflow and Quality Gates_).
+2. **Branch** from `master` using the Linear branch name (see
+   [Branch names](#branch-names)). Keep branches short-lived.
+3. **Commit** with [Conventional Commits](#commit-messages)
    (`feat(auth): ...`, `fix(db): ...`, `docs: ...`).
 4. **Run the checks** before pushing: format, lint, type check, build, and tests for the
    parts you touched. CI must be green before merge.
 5. **Open a pull request.** The PR template
    ([`.github/pull_request_template.md`](.github/pull_request_template.md)) loads
    automatically.
+
+## Branch names
+
+Use the branch name Linear generates for the issue (the issue's **Copy git branch name** action),
+for example `mohamedahmedramadan154/moh-20-commit-conventions-commitlint`. It contains the
+issue ID (`moh-20`), which is what links the branch and its pull request to the Linear issue
+automatically. Don't rename it. Work that has no Linear issue doesn't start until one exists.
+
+## Commit messages
+
+Commits **and pull request titles** follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <summary>
+
+<optional body: what and why>
+
+Refs MOH-20
+```
+
+- **Types:** `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `style`, `revert`.
+- **Scope** is optional, lowercase, and one of the names in
+  [`commitlint.config.mjs`](commitlint.config.mjs): the backend modules
+  (`conversations`, `knowledge`, `tenancy`, …), shared crates (`db`, `kernel`, …), the frontend
+  (`frontend`, `dashboard`, `widget`, `web`) and cross-cutting areas (`infra`, `ci`, `adr`, `deps`, …).
+  Add a new scope to that file in the PR that introduces the module.
+- Header is at most 100 characters. Merge commits are exempt.
+- A `!` after the type or scope (`feat(api)!:`) marks a breaking change.
+
+### Checks
+
+- **Locally:** `pnpm install` in `frontend/` installs a `commit-msg` hook (lefthook) that runs
+  commitlint on every commit. Without it, run
+  `pnpm --dir frontend exec lefthook install`.
+- **In CI:** the _Commitlint_ workflow checks the PR title and every commit in the PR.
 
 ## Pull request checklist
 
