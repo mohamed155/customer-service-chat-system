@@ -10,10 +10,10 @@ How to use this template:
    and set the old one's status to "Superseded by ADR-XXX".
 -->
 
-- **Status:** Proposed
-  <!-- One of: Proposed | Accepted | Rejected | Deprecated | Superseded by ADR-XXX.
-       While in review, say what moves it to Accepted, e.g.
-       "Proposed. Becomes Accepted when the MOH-NN PR merges." -->
+- **Status:** Accepted
+  <!-- One of: Accepted | Rejected | Deprecated | Superseded by ADR-XXX.
+       Write "Accepted" in the PR: the open PR is the proposal, and the file only reaches
+       master by being merged. See docs/adr/README.md. -->
 - **Date:** YYYY-MM-DD <!-- the date the status last changed -->
 - **Deciders:** <!-- people or team accountable for the decision -->
 - **Related:** <!-- architecture doc sections, other ADRs, specs, Linear issues -->
