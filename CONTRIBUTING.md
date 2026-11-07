@@ -18,6 +18,23 @@ page covers the day-to-day workflow.
    ([`.github/pull_request_template.md`](.github/pull_request_template.md)) loads
    automatically.
 
+## Trunk-based workflow
+
+`master` is the trunk. It is always releasable, and everything reaches it through a pull request.
+
+- **One trunk.** No long-lived `develop`, `release/*` or per-environment branches.
+- **Short-lived branches.** Branch from the latest `master`, one Linear issue per branch, and
+  merge within a day or two. Split work that would take longer into smaller issues and PRs.
+- **Small PRs, merged often.** Keep `master` green: a PR merges only when its required checks
+  pass (see [Merging](#merging)). Rebase or merge `master` into your branch if it falls behind;
+  never force-push `master`.
+- **Unfinished work ships dark.** If a feature can't land in one PR, merge it behind a flag or
+  without wiring it into the UI or routes, so `master` stays releasable.
+- **Releases come from `master`.** Each push to `master` that passes CI builds and publishes
+  SHA-tagged images and a release manifest (the `release` job in
+  [`backend.yml`](.github/workflows/backend.yml)). Fix forward with a new PR, or revert the
+  offending squash commit.
+
 ## Branch names
 
 Use the branch name Linear generates for the issue (the issue's **Copy git branch name** action),
