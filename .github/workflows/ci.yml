@@ -100,10 +100,12 @@ jobs:
           lycheeVersion: v0.24.2
           fail: false
           jobSummary: true
-          # 403 and 429 are bot blocking and rate limiting, not dead links.
+          # 403 and 429 are bot blocking and rate limiting, not dead links. Loopback addresses
+          # (the http://localhost:... dev URLs in the README) can never resolve on a runner, so they
+          # are skipped; otherwise the warning would be permanent and nobody would read it.
           args: >-
-            --scheme http --scheme https --no-progress --timeout 20 --max-retries 2
-            --accept '100..=103,200..=299,403,429' 'docs/**/*.md' '*.md'
+            --scheme http --scheme https --exclude-loopback --no-progress --timeout 20
+            --max-retries 2 --accept '100..=103,200..=299,403,429' 'docs/**/*.md' '*.md'
       - name: Warn about broken external links
         if: steps.lychee.outputs.exit_code != '0'
         run: echo "::warning title=Broken external links::lychee found external links that did not resolve. See the job summary. This does not fail the build."
