@@ -19,10 +19,10 @@ services:
       - postgres-data:/var/lib/postgresql/data
       # Runs once, on first start of an empty data volume (creates the vector / pg_trgm extensions).
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./postgres/healthcheck.sh:/healthcheck.sh:ro
     healthcheck:
-      # -h 127.0.0.1 matters: during first-run init the server only listens on the unix socket,
-      # so a TCP probe turns healthy only after the init scripts have finished.
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      # Authenticates as POSTGRES_USER over TCP and checks the extensions; see the script.
+      test: ["CMD", "/bin/bash", "/healthcheck.sh"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -76,6 +76,8 @@ services:
   mailpit:
     image: axllent/mailpit:v1.33.1
     environment:
+      # Without MP_DATABASE Mailpit keeps messages in memory and the volume below stays empty.
+      MP_DATABASE: /data/mailpit.db
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"
     ports:
