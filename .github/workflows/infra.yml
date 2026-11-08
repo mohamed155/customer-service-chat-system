@@ -1,12 +1,14 @@
 name: Infra
-# Checks the local development stack (infra/docker-compose.yml): it parses, every service becomes
-# healthy under `up --wait`, and the application database roles cannot bypass Row-Level Security.
+# Checks the local development setup from a clean checkout, the way the README describes it: the
+# compose files parse, `just doctor` and `just up` work and wait until every service is healthy,
+# the buckets exist, the application database roles cannot bypass Row-Level Security, and
+# `just reset` rebuilds the stack. This is the Linux leg of the clean-clone check (MOH-24).
 on:
   push:
     branches: [master]
-    paths: ["infra/**", ".env.example", ".github/workflows/infra.yml"]
+    paths: ["infra/**", "justfile", ".env.example", ".github/workflows/infra.yml"]
   pull_request:
-    paths: ["infra/**", ".env.example", ".github/workflows/infra.yml"]
+    paths: ["infra/**", "justfile", ".env.example", ".github/workflows/infra.yml"]
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -14,26 +16,58 @@ jobs:
   compose-stack:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # The same project name the justfile exports; needed here for the direct `docker compose` calls.
+      COMPOSE_PROJECT_NAME: customer-service-dev
+      JUST_VERSION: "1.59.0"
+      # From the SHA256SUMS file published with the release (just-1.59.0-x86_64-unknown-linux-musl.tar.gz).
+      JUST_SHA256: 409044617b6f06517c1035e55ca38c8c856ff8b650e41bc2aa1ef82d5903a23e
     steps:
       - uses: actions/checkout@v4
-      - name: Dev credentials come from .env.example
-        run: cp .env.example .env
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Install just (pinned, checksum verified)
+        run: |
+          curl -fsSL -o just.tar.gz "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          echo "${JUST_SHA256}  just.tar.gz" | sha256sum -c -
+          sudo tar -xzf just.tar.gz -C /usr/local/bin just
+          rm just.tar.gz
+          just --version
       - name: Compose files parse
         run: |
-          docker compose --env-file .env -f infra/docker-compose.yml config -q
-          docker compose --env-file .env --profile observability -f infra/docker-compose.yml config -q
+          docker compose --env-file .env.example -f infra/docker-compose.yml config -q
+          docker compose --env-file .env.example --profile observability -f infra/docker-compose.yml config -q
           touch .env.staging
           APP_RELEASE_SHA=ci APP_DOMAIN=example.test \
-            docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.staging.yml config -q
+            docker compose --env-file .env.example -f infra/docker-compose.yml -f infra/docker-compose.staging.yml config -q
+          rm .env.staging
+      - name: Doctor passes on a clean machine
+        run: just doctor
       - name: Start the stack and wait until every service is healthy
-        run: docker compose --env-file .env -f infra/docker-compose.yml up -d --wait
+        run: |
+          test ! -f .env   # clean checkout: `just up` must create it
+          just up
+          test -f .env
       - name: Buckets exist and are private
         run: |
-          docker compose --env-file .env -f infra/docker-compose.yml exec -T minio-init mc ls local | tee /dev/stderr | grep -q 'tenants/'
+          docker compose --env-file .env -f infra/docker-compose.yml exec -T minio-init mc ls local | grep -q 'tenants/'
           docker compose --env-file .env -f infra/docker-compose.yml exec -T minio-init mc ls local | grep -q 'quarantine/'
           docker compose --env-file .env -f infra/docker-compose.yml exec -T minio-init mc anonymous get local/tenants | grep -q private
       - name: Application roles cannot bypass Row-Level Security
-        run: docker compose --env-file .env -f infra/docker-compose.yml exec -T postgres bash -s < infra/postgres/verify-roles.sh
+        run: just verify-roles
+      - name: psql recipe works without a terminal
+        run: just psql -Atc "select count(*) from pg_roles where rolname in ('app_owner', 'app_runtime')" | grep -qx 2
+      - name: Reset rebuilds the stack from nothing
+        run: |
+          just psql -c "create table reset_marker (x int)"
+          just --yes reset
+          test "$(just psql -Atc "select count(*) from pg_tables where tablename = 'reset_marker'")" = "0"
+      - name: Down keeps data
+        run: |
+          just psql -c "create table keep_marker (x int)"
+          just down
+          just up
+          test "$(just psql -Atc "select count(*) from pg_tables where tablename = 'keep_marker'")" = "1"
       - name: Logs on failure
         if: failure()
         run: docker compose --env-file .env -f infra/docker-compose.yml logs --no-color --tail 200
