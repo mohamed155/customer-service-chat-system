@@ -84,7 +84,7 @@ pub async fn touch_session(
 ) -> sqlx::Result<()> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let result: sqlx::Result<()> = async {
-        sqlx::query(
+        let updated = sqlx::query(
             "UPDATE widget_sessions SET last_seen_at = now(), expires_at = $1 \
          WHERE id = $2 AND tenant_id = $3",
         )
@@ -93,6 +93,10 @@ pub async fn touch_session(
         .bind(tenant_id)
         .execute(uow.conn())
         .await?;
+        // No row means the session is gone (or belongs to another tenant): it was not refreshed.
+        if updated.rows_affected() == 0 {
+            return Err(sqlx::Error::RowNotFound);
+        }
         Ok(())
     }
     .await;
@@ -190,9 +194,11 @@ pub async fn list_instances(
     result
 }
 
+/// Runs in the caller's transaction so the widget row and its audit entry commit (or roll back)
+/// together; the handler commits after the audit insert succeeds.
 #[allow(clippy::too_many_arguments)]
 pub async fn insert_instance(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
     public_id: &str,
     name: &str,
@@ -203,39 +209,33 @@ pub async fn insert_instance(
     theme: Option<&str>,
     allowed_domains: &[String],
 ) -> sqlx::Result<WidgetInstanceRow> {
-    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let result: sqlx::Result<WidgetInstanceRow> = async {
-        sqlx::query_as::<_, WidgetInstanceRow>(
-            "INSERT INTO widget_instances \
+    sqlx::query_as::<_, WidgetInstanceRow>(
+        "INSERT INTO widget_instances \
          (tenant_id, public_id, name, display_name, primary_color, welcome_message, \
           position, theme, allowed_domains) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
          RETURNING id, tenant_id, public_id, name, display_name, primary_color, \
                    welcome_message, position, theme, enabled, allowed_domains, \
                    created_at, updated_at",
-        )
-        .bind(tenant_id)
-        .bind(public_id)
-        .bind(name)
-        .bind(display_name)
-        .bind(primary_color)
-        .bind(welcome_message)
-        .bind(position)
-        .bind(theme)
-        .bind(allowed_domains)
-        .fetch_one(uow.conn())
-        .await
-    }
-    .await;
-    if result.is_ok() {
-        uow.commit().await?;
-    }
-    result
+    )
+    .bind(tenant_id)
+    .bind(public_id)
+    .bind(name)
+    .bind(display_name)
+    .bind(primary_color)
+    .bind(welcome_message)
+    .bind(position)
+    .bind(theme)
+    .bind(allowed_domains)
+    .fetch_one(&mut **tx)
+    .await
 }
 
+/// Runs in the caller's transaction so the widget change and its audit entry commit (or roll back)
+/// together; the handler commits after the audit insert succeeds.
 #[allow(clippy::too_many_arguments)]
 pub async fn update_instance(
-    pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
     instance_id: Uuid,
     name: &str,
@@ -247,35 +247,27 @@ pub async fn update_instance(
     enabled: bool,
     allowed_domains: &[String],
 ) -> sqlx::Result<Option<WidgetInstanceRow>> {
-    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let result: sqlx::Result<Option<WidgetInstanceRow>> = async {
-        sqlx::query_as::<_, WidgetInstanceRow>(
-            "UPDATE widget_instances SET \
+    sqlx::query_as::<_, WidgetInstanceRow>(
+        "UPDATE widget_instances SET \
          name = $3, display_name = $4, primary_color = $5, welcome_message = $6, \
          position = $7, theme = $8, enabled = $9, allowed_domains = $10 \
          WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL \
          RETURNING id, tenant_id, public_id, name, display_name, primary_color, \
                    welcome_message, position, theme, enabled, allowed_domains, \
                    created_at, updated_at",
-        )
-        .bind(instance_id)
-        .bind(tenant_id)
-        .bind(name)
-        .bind(display_name)
-        .bind(primary_color)
-        .bind(welcome_message)
-        .bind(position)
-        .bind(theme)
-        .bind(enabled)
-        .bind(allowed_domains)
-        .fetch_optional(uow.conn())
-        .await
-    }
-    .await;
-    if result.is_ok() {
-        uow.commit().await?;
-    }
-    result
+    )
+    .bind(instance_id)
+    .bind(tenant_id)
+    .bind(name)
+    .bind(display_name)
+    .bind(primary_color)
+    .bind(welcome_message)
+    .bind(position)
+    .bind(theme)
+    .bind(enabled)
+    .bind(allowed_domains)
+    .fetch_optional(&mut **tx)
+    .await
 }
 
 /// Runs in the caller's transaction: the delete handler holds the row with

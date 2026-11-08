@@ -431,3 +431,39 @@ async fn t005_posting_to_closed_conversation_returns_409() {
     .await;
     assert_eq!(msg_resp.status(), StatusCode::CONFLICT);
 }
+
+/// `touch_session` only reports a refresh when it refreshed something: a session of another tenant
+/// or one that no longer exists is `RowNotFound`, which `session::authenticate` turns into a 401.
+#[tokio::test]
+async fn t006_touch_session_does_not_report_a_missing_or_foreign_session_as_refreshed() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    setup(&pool).await;
+
+    let tenant_id = seed_tenant(&pool, "Lifecycle6").await;
+    let other_tenant = seed_tenant(&pool, "Lifecycle6 Other").await;
+    let instance_id = seed_widget_instance(&pool, tenant_id, "wgt_lifecycle_006").await;
+    let customer_id = seed_customer(&pool, tenant_id, "Lifecycle Cust 6").await;
+    seed_session_with_customer(&pool, tenant_id, instance_id, customer_id, "lc6", 24).await;
+    let session_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM widget_sessions WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let later = chrono::Utc::now() + chrono::Duration::hours(48);
+
+    widgets::queries::touch_session(&pool, tenant_id, session_id, later)
+        .await
+        .expect("the owning tenant refreshes its own session");
+    assert!(matches!(
+        widgets::queries::touch_session(&pool, other_tenant, session_id, later).await,
+        Err(sqlx::Error::RowNotFound)
+    ));
+    assert!(matches!(
+        widgets::queries::touch_session(&pool, tenant_id, Uuid::new_v4(), later).await,
+        Err(sqlx::Error::RowNotFound)
+    ));
+}

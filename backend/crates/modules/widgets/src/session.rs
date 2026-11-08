@@ -55,7 +55,14 @@ pub async fn authenticate_session(
     let new_expires_at = chrono::Utc::now() + chrono::Duration::hours(SESSION_TTL_HOURS);
     super::queries::touch_session(pool, session.tenant_id, session.id, new_expires_at)
         .await
-        .map_err(|_| ApiError::internal_error("Failed to refresh session"))?;
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => ApiError::new_with_code(
+                StatusCode::UNAUTHORIZED,
+                "session_invalid",
+                "Session not found or expired",
+            ),
+            _ => ApiError::internal_error("Failed to refresh session"),
+        })?;
 
     Ok(session)
 }
