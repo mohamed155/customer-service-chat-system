@@ -191,12 +191,19 @@ After pushing the fixes, go back to step 5; the watcher asks CodeRabbit to revie
 **CodeRabbit rate-limited** (`coderabbit=rate-limited`) — the plan allows 1 review per hour, and
 **a rate limit never blocks the merge**. Don't wait for the window to reopen, don't start a
 timer and don't re-trigger. Carry on with step 7 as soon as CI and Kilo are done. The user decided
-this because the wait was costing more than the re-review was worth.
-- Findings from an **earlier** CodeRabbit review of this PR (before the push that got
-  rate-limited) still have to be fixed or answered. Only the *re-review of your fixes* is skipped.
-- Say in the Done comment and the final report that CodeRabbit did not review the final head,
-  and why (the notice's "Next included review available in N minutes" line).
-- A CodeRabbit review that happens to land before you merge still counts: read it (step 7).
+this because the wait was costing more than the review was worth.
+- There are two cases, and the report must say which one happened. **Re-review limited:**
+  CodeRabbit already reviewed an earlier head of this PR. Its findings must still be fixed or
+  answered; only the re-review of your fixes is skipped. **First review limited** (another PR used
+  the allowance): CodeRabbit never reviewed this PR at all. Merge anyway and say so plainly.
+- After a rate limit, run every later watcher for this PR with `CR_TRIGGER=0` (for example after a
+  push that fixes a Kilo finding). Otherwise step 5 asks CodeRabbit again and delays `DONE`.
+- In the Done comment and the final report, state the actual status of the **final head**: not
+  reviewed, with the notice's "Next included review available in N minutes" line (or "wait time not
+  given" if it has none), or reviewed after all if a review landed before the merge. Check which
+  commit the review covers (`commit_id` in `…/pulls/<n>/reviews`) before reporting.
+- A CodeRabbit review that lands before you merge still counts: handle its findings first (the
+  final read in step 7).
 
 **Other CodeRabbit results** — `failed`: read the `CodeRabbit` check output
 (`gh api repos/{owner}/{repo}/commits/<sha>/check-runs`), retry once with `CR_FORCE_TRIGGER=1`,
