@@ -1,0 +1,54 @@
+name: CI
+# Repository-level checks that do not belong to one app (Phase 0, MOH-25). Backend and frontend
+# keep their own workflows (backend.yml, frontend.yml). Jobs for docs, Compose and secret scanning
+# are added to this file by MOH-26 and MOH-27.
+#
+# - Runs on every pull request and on every push to master (the trunk).
+# - `edited` is in the pull_request types so the PR title is re-checked after a rename. A title edit
+#   changes nothing else, so every job except `commitlint` must skip it with
+#   `if: github.event.action != 'edited'`.
+# - Every action is pinned to a full commit SHA, with the tag in a trailing comment. Third-party
+#   code in CI can read secrets, and a tag can be moved.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [master]
+concurrency:
+  # A newer run cancels the older one for the same PR or branch. A title edit gets its own group so
+  # it never cancels a code run that is still going.
+  group: ci-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'edited' && 'title' || 'code' }}
+  cancel-in-progress: true
+# Least privilege for every job. A job that needs more declares it itself.
+permissions:
+  contents: read
+jobs:
+  # Conventional Commits on the PR title and on every commit in the PR (config: commitlint.config.mjs).
+  # The job name is a required status check on master: do not rename it without updating the ruleset.
+  commitlint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with: { version: 10.34.4, run_install: false }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          {
+            node-version: 22,
+            cache: pnpm,
+            cache-dependency-path: frontend/pnpm-lock.yaml,
+          }
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: frontend
+      - name: Lint PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$PR_TITLE" | pnpm --dir frontend exec commitlint --config ../commitlint.config.mjs
+      - name: Lint PR commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: pnpm --dir frontend exec commitlint --config ../commitlint.config.mjs --from "$BASE_SHA" --to "$HEAD_SHA" --verbose

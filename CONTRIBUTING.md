@@ -68,7 +68,8 @@ Refs MOH-20
 - **Locally:** `pnpm install` in `frontend/` installs a `commit-msg` hook (lefthook) that runs
   commitlint on every commit. Without it, run
   `pnpm --dir frontend exec lefthook install`.
-- **In CI:** the _Commitlint_ workflow checks the PR title and every commit in the PR.
+- **In CI:** the `commitlint` job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) checks the PR
+  title and every commit in the PR.
 
 ## Merging
 
