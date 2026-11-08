@@ -83,8 +83,10 @@ pub async fn ensure_provisional(
 /// Insert the generation record, or complete the provisional row written by
 /// [`ensure_provisional`] for the same id.
 pub async fn insert(pool: &PgPool, rec: &GenerationRecord) -> sqlx::Result<Uuid> {
-    let id = sqlx::query_scalar::<_, Uuid>(
-        r#"INSERT INTO ai_generations
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, rec.tenant_id).await?;
+    let result: sqlx::Result<Uuid> = async {
+        let id = sqlx::query_scalar::<_, Uuid>(
+            r#"INSERT INTO ai_generations
            (id, tenant_id, conversation_id, trigger_message_id, response_message_id,
             usage_record_id, provider, model, outcome, error_category, attempts,
             continuation_used, retrieval_chunk_count, retrieval_top_similarity,
@@ -106,29 +108,35 @@ pub async fn insert(pool: &PgPool, rec: &GenerationRecord) -> sqlx::Result<Uuid>
              latency_ms = EXCLUDED.latency_ms,
              request_id = EXCLUDED.request_id
            RETURNING id"#,
-    )
-    .bind(rec.id)
-    .bind(rec.tenant_id)
-    .bind(rec.conversation_id)
-    .bind(rec.trigger_message_id)
-    .bind(rec.response_message_id)
-    .bind(rec.usage_record_id)
-    .bind(&rec.provider)
-    .bind(&rec.model)
-    .bind(rec.outcome.as_str())
-    .bind(&rec.error_category)
-    .bind(rec.attempts)
-    .bind(rec.continuation_used)
-    .bind(rec.retrieval_chunk_count)
-    .bind(rec.retrieval_top_similarity)
-    .bind(rec.retrieval_degraded)
-    .bind(rec.confidence_score)
-    .bind(rec.latency_ms)
-    .bind(&rec.request_id)
-    .bind(rec.created_at)
-    .fetch_one(pool)
-    .await?;
-    Ok(id)
+        )
+        .bind(rec.id)
+        .bind(rec.tenant_id)
+        .bind(rec.conversation_id)
+        .bind(rec.trigger_message_id)
+        .bind(rec.response_message_id)
+        .bind(rec.usage_record_id)
+        .bind(&rec.provider)
+        .bind(&rec.model)
+        .bind(rec.outcome.as_str())
+        .bind(&rec.error_category)
+        .bind(rec.attempts)
+        .bind(rec.continuation_used)
+        .bind(rec.retrieval_chunk_count)
+        .bind(rec.retrieval_top_similarity)
+        .bind(rec.retrieval_degraded)
+        .bind(rec.confidence_score)
+        .bind(rec.latency_ms)
+        .bind(&rec.request_id)
+        .bind(rec.created_at)
+        .fetch_one(uow.conn())
+        .await?;
+        Ok(id)
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 #[cfg(test)]

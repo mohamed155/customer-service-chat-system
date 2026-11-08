@@ -132,28 +132,36 @@ mod tests {
 // ---------------------------------------------------------------------------
 
 pub async fn insert(pool: &PgPool, w: UsageWrite) -> Result<Uuid, sqlx::Error> {
-    sqlx::query_scalar(
-        "INSERT INTO ai_usage_records \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, w.tenant_id).await?;
+    let result: Result<Uuid, sqlx::Error> = async {
+        sqlx::query_scalar(
+            "INSERT INTO ai_usage_records \
          (tenant_id, provider, model, input_tokens, output_tokens, status, \
           error_category, streamed, latency_ms, request_id, \
           request_content, response_content) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
          RETURNING id",
-    )
-    .bind(w.tenant_id)
-    .bind(&w.provider)
-    .bind(&w.model)
-    .bind(w.input_tokens)
-    .bind(w.output_tokens)
-    .bind(w.status)
-    .bind(w.error_category)
-    .bind(w.streamed)
-    .bind(w.latency_ms)
-    .bind(&w.request_id)
-    .bind(&w.request_content)
-    .bind(&w.response_content)
-    .fetch_one(pool)
-    .await
+        )
+        .bind(w.tenant_id)
+        .bind(&w.provider)
+        .bind(&w.model)
+        .bind(w.input_tokens)
+        .bind(w.output_tokens)
+        .bind(w.status)
+        .bind(w.error_category)
+        .bind(w.streamed)
+        .bind(w.latency_ms)
+        .bind(&w.request_id)
+        .bind(&w.request_content)
+        .bind(&w.response_content)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 // ---------------------------------------------------------------------------

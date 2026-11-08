@@ -245,6 +245,7 @@ pub async fn receive_webhook(
 
     let (ct, nonce) = match queries::find_secret_ciphertext(
         &pool,
+        conn.tenant_id,
         conn.connection_id,
         SIGNING_SECRET_FIELD,
     )

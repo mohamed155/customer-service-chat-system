@@ -131,7 +131,7 @@ pub async fn list_items(
     let items = query.fetch_all(uow.conn()).await?;
     let has_more = items.len() > limit as usize;
     let items = items.into_iter().take(limit as usize).collect::<Vec<_>>();
-    let tags = load_tags_for_items(pool, &items).await?;
+    let tags = load_tags_for_items(pool, tenant_id, &items).await?;
     Ok((items, tags, has_more))
     }
     .await;
@@ -143,18 +143,27 @@ pub async fn list_items(
 
 async fn load_tags_for_items(
     pool: &PgPool,
+    tenant_id: uuid::Uuid,
     items: &[KnowledgeItemRow],
 ) -> sqlx::Result<Vec<KnowledgeItemTagRow>> {
-    if items.is_empty() {
-        return Ok(vec![]);
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Vec<KnowledgeItemTagRow>> = async {
+        if items.is_empty() {
+            return Ok(vec![]);
+        }
+        let ids: Vec<Uuid> = items.iter().map(|i| i.id).collect();
+        sqlx::query_as::<_, KnowledgeItemTagRow>(
+            "SELECT * FROM knowledge_item_tags WHERE item_id = ANY($1) ORDER BY item_id, tag",
+        )
+        .bind(&ids)
+        .fetch_all(uow.conn())
+        .await
     }
-    let ids: Vec<Uuid> = items.iter().map(|i| i.id).collect();
-    sqlx::query_as::<_, KnowledgeItemTagRow>(
-        "SELECT * FROM knowledge_item_tags WHERE item_id = ANY($1) ORDER BY item_id, tag",
-    )
-    .bind(&ids)
-    .fetch_all(pool)
-    .await
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn get_item(

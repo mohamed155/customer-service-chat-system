@@ -83,18 +83,27 @@ pub async fn get(
 
 pub async fn get_many(
     pool: &PgPool,
+    tenant_id: uuid::Uuid,
     item_ids: &[Uuid],
 ) -> Result<HashMap<Uuid, IndexState>, sqlx::Error> {
-    if item_ids.is_empty() {
-        return Ok(HashMap::new());
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<HashMap<Uuid, IndexState>, sqlx::Error> = async {
+        if item_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let rows: Vec<IndexState> = sqlx::query_as::<_, IndexState>(
+            "SELECT * FROM knowledge_index_state WHERE item_id = ANY($1)",
+        )
+        .bind(item_ids)
+        .fetch_all(uow.conn())
+        .await?;
+        Ok(rows.into_iter().map(|row| (row.item_id, row)).collect())
     }
-    let rows: Vec<IndexState> = sqlx::query_as::<_, IndexState>(
-        "SELECT * FROM knowledge_index_state WHERE item_id = ANY($1)",
-    )
-    .bind(item_ids)
-    .fetch_all(pool)
-    .await?;
-    Ok(rows.into_iter().map(|row| (row.item_id, row)).collect())
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn upsert_status(
@@ -129,54 +138,91 @@ pub async fn upsert_status(
     result
 }
 
-pub async fn set_failed(pool: &PgPool, item_id: Uuid, reason: &str) -> Result<(), sqlx::Error> {
+pub async fn set_failed(
+    pool: &PgPool,
+    tenant_id: uuid::Uuid,
+    item_id: Uuid,
+    reason: &str,
+) -> Result<(), sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<(), sqlx::Error> = async {
     sqlx::query(
         "UPDATE knowledge_index_state SET status = 'failed', failure_reason = $1, updated_at = now() \
          WHERE item_id = $2",
     )
     .bind(reason)
     .bind(item_id)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
     Ok(())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn set_indexed(
     pool: &PgPool,
+    tenant_id: uuid::Uuid,
     item_id: Uuid,
     content_hash: &str,
     chunk_count: i32,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "UPDATE knowledge_index_state \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<(), sqlx::Error> = async {
+        sqlx::query(
+            "UPDATE knowledge_index_state \
          SET status = 'indexed', indexed_content_hash = $1, chunk_count = $2, \
              last_indexed_at = now(), failure_reason = NULL, updated_at = now() \
          WHERE item_id = $3",
-    )
-    .bind(content_hash)
-    .bind(chunk_count)
-    .bind(item_id)
-    .execute(pool)
-    .await?;
-    Ok(())
+        )
+        .bind(content_hash)
+        .bind(chunk_count)
+        .bind(item_id)
+        .execute(uow.conn())
+        .await?;
+        Ok(())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
-pub async fn increment_attempts(pool: &PgPool, item_id: Uuid) -> Result<i32, sqlx::Error> {
-    let row: (i32,) = sqlx::query_as(
-        "UPDATE knowledge_index_state SET attempts = attempts + 1, updated_at = now() \
+pub async fn increment_attempts(
+    pool: &PgPool,
+    tenant_id: uuid::Uuid,
+    item_id: Uuid,
+) -> Result<i32, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<i32, sqlx::Error> = async {
+        let row: (i32,) = sqlx::query_as(
+            "UPDATE knowledge_index_state SET attempts = attempts + 1, updated_at = now() \
          WHERE item_id = $1 RETURNING attempts",
-    )
-    .bind(item_id)
-    .fetch_one(pool)
-    .await?;
-    Ok(row.0)
+        )
+        .bind(item_id)
+        .fetch_one(uow.conn())
+        .await?;
+        Ok(row.0)
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn set_not_indexable(
     pool: &PgPool,
+    tenant_id: uuid::Uuid,
     item_id: Uuid,
     reason: &str,
 ) -> Result<(), sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<(), sqlx::Error> = async {
     sqlx::query(
         // Upsert: an item can resolve to not_indexable before any state row
         // was written for it.
@@ -187,9 +233,15 @@ pub async fn set_not_indexable(
     )
     .bind(reason)
     .bind(item_id)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
     Ok(())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 #[cfg(test)]

@@ -28,6 +28,8 @@ pub async fn fan_out(
     req: &super::emit::NotificationRequest,
     recipients: &[Uuid],
 ) -> Result<Vec<(Uuid, Uuid)>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, req.tenant_id).await?;
+    let result: Result<Vec<(Uuid, Uuid)>, sqlx::Error> = async {
     let rows = sqlx::query(
         "INSERT INTO notifications \
          (tenant_id, recipient_membership_id, kind, state, title, body, subject_type, subject_id, dedupe_key, actor_membership_id) \
@@ -44,13 +46,19 @@ pub async fn fan_out(
     .bind(req.subject_id)
     .bind(&req.dedupe_key)
     .bind(req.actor_membership_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
 
     Ok(rows
         .into_iter()
         .map(|r| (r.get("id"), r.get("recipient_membership_id")))
         .collect())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn resolve_subject(

@@ -222,13 +222,25 @@ async fn get_category_name(pool: &PgPool, category_id: Option<Uuid>) -> Option<S
         .ok()?
 }
 
-async fn load_tags_for_item(pool: &PgPool, item_id: Uuid) -> sqlx::Result<Vec<String>> {
-    let rows: Vec<(String,)> =
-        sqlx::query_as("SELECT tag FROM knowledge_item_tags WHERE item_id = $1 ORDER BY tag")
-            .bind(item_id)
-            .fetch_all(pool)
-            .await?;
-    Ok(rows.into_iter().map(|r| r.0).collect())
+async fn load_tags_for_item(
+    pool: &PgPool,
+    tenant_id: uuid::Uuid,
+    item_id: Uuid,
+) -> sqlx::Result<Vec<String>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Vec<String>> = async {
+        let rows: Vec<(String,)> =
+            sqlx::query_as("SELECT tag FROM knowledge_item_tags WHERE item_id = $1 ORDER BY tag")
+                .bind(item_id)
+                .fetch_all(uow.conn())
+                .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 fn to_index_status_dto(state: &index_state::IndexState) -> IndexStatusDto {
@@ -330,7 +342,7 @@ pub async fn list_items(
     };
 
     let item_ids: Vec<Uuid> = items.iter().map(|i| i.id).collect();
-    let index_states = match index_state::get_many(&pool, &item_ids).await {
+    let index_states = match index_state::get_many(&pool, ctx.tenant_id, &item_ids).await {
         Ok(states) => states,
         Err(e) => {
             tracing::error!(%e, "list_items: load index states failed");
@@ -638,7 +650,7 @@ pub async fn get_item(
         }
     };
 
-    let tags = match load_tags_for_item(&pool, item_id).await {
+    let tags = match load_tags_for_item(&pool, ctx.tenant_id, item_id).await {
         Ok(t) => t,
         Err(e) => {
             tracing::error!(%e, "get_item: load_tags_for_item failed");
@@ -964,7 +976,7 @@ pub async fn update_item(
         }
     };
 
-    let updated_tags = match load_tags_for_item(&pool, item_id).await {
+    let updated_tags = match load_tags_for_item(&pool, ctx.tenant_id, item_id).await {
         Ok(t) => t,
         Err(e) => {
             tracing::error!(%e, "update_item: load final tags failed");

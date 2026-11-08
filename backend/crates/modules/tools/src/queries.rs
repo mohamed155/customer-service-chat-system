@@ -18,41 +18,49 @@ pub struct NewTenantTool {
 }
 
 pub async fn insert_tenant_tool(pool: &sqlx::PgPool, new: NewTenantTool) -> sqlx::Result<Uuid> {
-    // Enforce partial-unique (tenant_id, name) WHERE deleted_at IS NULL
-    let existing: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM tenant_tools \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, new.tenant_id).await?;
+    let result: sqlx::Result<Uuid> = async {
+        // Enforce partial-unique (tenant_id, name) WHERE deleted_at IS NULL
+        let existing: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM tenant_tools \
          WHERE tenant_id = $1 AND name = $2 AND deleted_at IS NULL",
-    )
-    .bind(new.tenant_id)
-    .bind(&new.name)
-    .fetch_optional(pool)
-    .await?;
+        )
+        .bind(new.tenant_id)
+        .bind(&new.name)
+        .fetch_optional(uow.conn())
+        .await?;
 
-    if existing.is_some() {
-        return Err(sqlx::Error::Protocol(format!(
-            "a tool named '{}' already exists in this tenant",
-            new.name
-        )));
-    }
+        if existing.is_some() {
+            return Err(sqlx::Error::Protocol(format!(
+                "a tool named '{}' already exists in this tenant",
+                new.name
+            )));
+        }
 
-    let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO tenant_tools \
+        let id: Uuid = sqlx::query_scalar(
+            "INSERT INTO tenant_tools \
          (tenant_id, name, description, input_schema, endpoint_url, \
           credential_ciphertext, classification, created_by_membership_id) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
          RETURNING id",
-    )
-    .bind(new.tenant_id)
-    .bind(&new.name)
-    .bind(&new.description)
-    .bind(&new.input_schema)
-    .bind(&new.endpoint_url)
-    .bind(new.credential_ciphertext)
-    .bind(&new.classification)
-    .bind(new.created_by_membership_id)
-    .fetch_one(pool)
-    .await?;
-    Ok(id)
+        )
+        .bind(new.tenant_id)
+        .bind(&new.name)
+        .bind(&new.description)
+        .bind(&new.input_schema)
+        .bind(&new.endpoint_url)
+        .bind(new.credential_ciphertext)
+        .bind(&new.classification)
+        .bind(new.created_by_membership_id)
+        .fetch_one(uow.conn())
+        .await?;
+        Ok(id)
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub struct TenantToolPatch {
@@ -331,27 +339,35 @@ pub struct NewToolRequest {
 }
 
 pub async fn insert_request(pool: &sqlx::PgPool, req: NewToolRequest) -> sqlx::Result<Uuid> {
-    let id: Uuid = sqlx::query_scalar(
-        "INSERT INTO tool_requests \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, req.tenant_id).await?;
+    let result: sqlx::Result<Uuid> = async {
+        let id: Uuid = sqlx::query_scalar(
+            "INSERT INTO tool_requests \
          (tenant_id, conversation_id, generation_id, tool_name, tool_source, \
           tenant_tool_id, arguments, status, approval_required, expires_at, chain_index) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
          RETURNING id",
-    )
-    .bind(req.tenant_id)
-    .bind(req.conversation_id)
-    .bind(req.generation_id)
-    .bind(&req.tool_name)
-    .bind(&req.tool_source)
-    .bind(req.tenant_tool_id)
-    .bind(&req.arguments)
-    .bind(&req.status)
-    .bind(req.approval_required)
-    .bind(req.expires_at)
-    .bind(req.chain_index)
-    .fetch_one(pool)
-    .await?;
-    Ok(id)
+        )
+        .bind(req.tenant_id)
+        .bind(req.conversation_id)
+        .bind(req.generation_id)
+        .bind(&req.tool_name)
+        .bind(&req.tool_source)
+        .bind(req.tenant_tool_id)
+        .bind(&req.arguments)
+        .bind(&req.status)
+        .bind(req.approval_required)
+        .bind(req.expires_at)
+        .bind(req.chain_index)
+        .fetch_one(uow.conn())
+        .await?;
+        Ok(id)
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Transition a request from `pending` or `approved` to `executing`.

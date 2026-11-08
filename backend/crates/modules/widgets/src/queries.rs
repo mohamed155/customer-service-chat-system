@@ -78,15 +78,26 @@ pub async fn find_session_by_token_hash(
 
 pub async fn touch_session(
     pool: &PgPool,
+    tenant_id: uuid::Uuid,
     session_id: Uuid,
     new_expires_at: DateTime<Utc>,
 ) -> sqlx::Result<()> {
-    sqlx::query("UPDATE widget_sessions SET last_seen_at = now(), expires_at = $1 WHERE id = $2")
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<()> = async {
+        sqlx::query(
+            "UPDATE widget_sessions SET last_seen_at = now(), expires_at = $1 WHERE id = $2",
+        )
         .bind(new_expires_at)
         .bind(session_id)
-        .execute(pool)
+        .execute(uow.conn())
         .await?;
-    Ok(())
+        Ok(())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Link the session to its customer. Runs in the caller's transaction: the

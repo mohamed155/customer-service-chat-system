@@ -130,9 +130,14 @@ async fn process_one_event(
         {
             Some(d) => d,
             None => {
-                index_state::set_not_indexable(pool, item_id, "Document record not found")
-                    .await
-                    .map_err(|e| format!("set_not_indexable: {e}"))?;
+                index_state::set_not_indexable(
+                    pool,
+                    tenant_id,
+                    item_id,
+                    "Document record not found",
+                )
+                .await
+                .map_err(|e| format!("set_not_indexable: {e}"))?;
                 sqlx::query("DELETE FROM outbox_events WHERE id = $1")
                     .bind(event.id)
                     .execute(pool)
@@ -145,9 +150,14 @@ async fn process_one_event(
         let (body_bytes, content_type) = match storage.get(&doc.storage_key).await {
             Ok(result) => result,
             Err(storage::StorageError::NotFound) => {
-                index_state::set_not_indexable(pool, item_id, "Document file not found in storage")
-                    .await
-                    .map_err(|e| format!("set_not_indexable: {e}"))?;
+                index_state::set_not_indexable(
+                    pool,
+                    tenant_id,
+                    item_id,
+                    "Document file not found in storage",
+                )
+                .await
+                .map_err(|e| format!("set_not_indexable: {e}"))?;
                 sqlx::query("DELETE FROM outbox_events WHERE id = $1")
                     .bind(event.id)
                     .execute(pool)
@@ -164,7 +174,7 @@ async fn process_one_event(
             Some(text) => text,
             None => {
                 let reason = format!("No extractable text from content type: {content_type}");
-                index_state::set_not_indexable(pool, item_id, &reason)
+                index_state::set_not_indexable(pool, tenant_id, item_id, &reason)
                     .await
                     .map_err(|e| format!("set_not_indexable: {e}"))?;
                 sqlx::query("DELETE FROM outbox_events WHERE id = $1")
@@ -184,7 +194,7 @@ async fn process_one_event(
     let chunk_result = chunking::chunk_text(&source_text);
 
     if chunk_result.not_indexable {
-        index_state::set_not_indexable(pool, item_id, "No extractable text content")
+        index_state::set_not_indexable(pool, tenant_id, item_id, "No extractable text content")
             .await
             .map_err(|e| format!("set_not_indexable: {e}"))?;
         sqlx::query("DELETE FROM outbox_events WHERE id = $1")
@@ -295,13 +305,13 @@ async fn process_one_event(
 
         // 9b. Retriable provider error — exponential backoff
         Err(EmbedError::Retriable(reason)) => {
-            let attempts = index_state::increment_attempts(pool, item_id)
+            let attempts = index_state::increment_attempts(pool, tenant_id, item_id)
                 .await
                 .map_err(|e| format!("increment attempts: {e}"))?;
 
             if attempts >= MAX_RETRIES {
                 let reason = format!("embedding failed after {MAX_RETRIES} attempts: {reason}",);
-                index_state::set_failed(pool, item_id, &reason)
+                index_state::set_failed(pool, tenant_id, item_id, &reason)
                     .await
                     .map_err(|e| format!("set_failed: {e}"))?;
                 sqlx::query("DELETE FROM outbox_events WHERE id = $1")
@@ -348,7 +358,7 @@ async fn process_one_event(
         // 9c. Permanent/non-retriable provider error
         Err(EmbedError::Permanent(reason)) => {
             let reason = format!("embedding error: {reason}");
-            index_state::set_failed(pool, item_id, &reason)
+            index_state::set_failed(pool, tenant_id, item_id, &reason)
                 .await
                 .map_err(|e| format!("set_failed: {e}"))?;
             sqlx::query("DELETE FROM outbox_events WHERE id = $1")
@@ -368,7 +378,7 @@ async fn process_one_event(
         // 9d. Not configured
         Err(EmbedError::NotConfigured) => {
             let reason = "Platform AI not configured for embeddings";
-            index_state::set_failed(pool, item_id, reason)
+            index_state::set_failed(pool, tenant_id, item_id, reason)
                 .await
                 .map_err(|e| format!("set_failed: {e}"))?;
             sqlx::query("DELETE FROM outbox_events WHERE id = $1")

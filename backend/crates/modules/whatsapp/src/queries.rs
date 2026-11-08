@@ -207,37 +207,58 @@ pub async fn claim_pending_attachment(
 /// Mark an attachment as stored with its file metadata.
 pub async fn mark_attachment_stored(
     pool: &sqlx::PgPool,
+    tenant_id: uuid::Uuid,
     id: Uuid,
     storage_key: &str,
     mime_type: &str,
     size_bytes: i64,
 ) -> sqlx::Result<()> {
-    sqlx::query(
-        "UPDATE message_attachments \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<()> = async {
+        sqlx::query(
+            "UPDATE message_attachments \
          SET status = 'stored', storage_key = $1, mime_type = $2, size_bytes = $3 \
          WHERE id = $4",
-    )
-    .bind(storage_key)
-    .bind(mime_type)
-    .bind(size_bytes)
-    .bind(id)
-    .execute(pool)
-    .await?;
-    Ok(())
+        )
+        .bind(storage_key)
+        .bind(mime_type)
+        .bind(size_bytes)
+        .bind(id)
+        .execute(uow.conn())
+        .await?;
+        Ok(())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Increment fetch_attempts and auto-fail if threshold reached.
-pub async fn mark_attachment_failed_attempt(pool: &sqlx::PgPool, id: Uuid) -> sqlx::Result<()> {
-    sqlx::query(
-        "UPDATE message_attachments \
+pub async fn mark_attachment_failed_attempt(
+    pool: &sqlx::PgPool,
+    tenant_id: uuid::Uuid,
+    id: Uuid,
+) -> sqlx::Result<()> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<()> = async {
+        sqlx::query(
+            "UPDATE message_attachments \
          SET fetch_attempts = fetch_attempts + 1, \
              status = CASE WHEN fetch_attempts + 1 >= 5 THEN 'failed' ELSE status END \
          WHERE id = $1",
-    )
-    .bind(id)
-    .execute(pool)
-    .await?;
-    Ok(())
+        )
+        .bind(id)
+        .execute(uow.conn())
+        .await?;
+        Ok(())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Fetch a stored attachment by id, verifying that it belongs to the right
