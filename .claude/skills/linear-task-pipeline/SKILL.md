@@ -188,11 +188,22 @@ Same rules as Kilo, with three differences:
 
 After pushing the fixes, go back to step 5; the watcher asks CodeRabbit to review the new head.
 
-**CodeRabbit rate-limited** (`coderabbit=rate-limited`) — the plan allows 1 review per hour. Read
-the notice for the wait time. Wait it out with one long Monitor (`until` loop, at most 60
-minutes), then re-run the watcher with `CR_FORCE_TRIGGER=1`. Don't merge while waiting. If the
-wait would be longer than an hour or it rate-limits twice in a row, stop and ask the user
-whether to merge without a re-review.
+**CodeRabbit rate-limited** (`coderabbit=rate-limited`) — the plan allows 1 review per hour, and
+**a rate limit never blocks the merge**. Don't wait for the window to reopen, don't start a
+timer and don't re-trigger. Carry on with step 7 as soon as CI and Kilo are done. The user decided
+this because the wait was costing more than the review was worth.
+- There are two cases, and the report must say which one happened. **Re-review limited:**
+  CodeRabbit already reviewed an earlier head of this PR. Its findings must still be fixed or
+  answered; only the re-review of your fixes is skipped. **First review limited** (another PR used
+  the allowance): CodeRabbit never reviewed this PR at all. Merge anyway and say so plainly.
+- After a rate limit, run every later watcher for this PR with `CR_TRIGGER=0` (for example after a
+  push that fixes a Kilo finding). Otherwise step 5 asks CodeRabbit again and delays `DONE`.
+- In the Done comment and the final report, state the actual status of the **final head**: not
+  reviewed, with the notice's "Next included review available in N minutes" line (or "wait time not
+  given" if it has none), or reviewed after all if a review landed before the merge. Check which
+  commit the review covers (`commit_id` in `…/pulls/<n>/reviews`) before reporting.
+- A CodeRabbit review that lands before you merge still counts: handle its findings first (the
+  final read in step 7).
 
 **Other CodeRabbit results** — `failed`: read the `CodeRabbit` check output
 (`gh api repos/{owner}/{repo}/commits/<sha>/check-runs`), retry once with `CR_FORCE_TRIGGER=1`,
@@ -207,7 +218,8 @@ fix would go beyond the issue's scope.
 ## 7. Merge and close
 
 Merge only when: CI all green on the head commit, `DONE` was printed for **this** head commit
-with `coderabbit=reviewed` (or a `skipped`/`off`/timeout outcome the user accepted),
+with `coderabbit=reviewed` or `coderabbit=rate-limited` (never wait for the limit; see step 6),
+or a `skipped`/`off`/timeout outcome the user accepted,
 every Kilo and CodeRabbit comment fixed or answered, no merge conflicts, and the PR is still yours
 and open. Right before merging, read the three `gh api` lists once more for both bots: a review
 that lands between `DONE` and the merge still counts (this is how PR #20 was merged with two
