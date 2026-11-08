@@ -1288,7 +1288,9 @@ pub async fn get_agent_avatar(
     .fetch_optional(uow.conn())
     .await
     .unwrap_or(None);
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let (bytes, content_type) = match maybe_upload {
         Some(row) => row,

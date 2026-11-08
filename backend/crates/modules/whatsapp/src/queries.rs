@@ -249,19 +249,26 @@ pub async fn attachment_for_download(
     attachment_id: Uuid,
 ) -> sqlx::Result<Option<MessageAttachmentRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, MessageAttachmentRow>(
-        "SELECT a.id, a.tenant_id, a.message_id, a.kind, a.status, a.provider_media_id, \
+    let result: sqlx::Result<Option<MessageAttachmentRow>> = async {
+        sqlx::query_as::<_, MessageAttachmentRow>(
+            "SELECT a.id, a.tenant_id, a.message_id, a.kind, a.status, a.provider_media_id, \
                 a.storage_key, a.mime_type, a.size_bytes, a.file_name, a.fetch_attempts, \
                 a.created_at, a.updated_at \
          FROM message_attachments a \
          JOIN messages m ON m.id = a.message_id AND m.tenant_id = a.tenant_id \
          WHERE a.tenant_id = $1 AND a.id = $2 AND m.conversation_id = $3 AND a.status = 'stored'",
-    )
-    .bind(tenant_id)
-    .bind(attachment_id)
-    .bind(conversation_id)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(attachment_id)
+        .bind(conversation_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Retrieve the WhatsApp identifier for a customer (from customer_channel_identifiers).
@@ -288,12 +295,19 @@ pub async fn message_body_for_outbound(
     message_id: Uuid,
 ) -> sqlx::Result<Option<String>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let row: Option<(String,)> = sqlx::query_as(
+    let result: sqlx::Result<Option<String>> = async {
+        let row: Option<(String,)> = sqlx::query_as(
         "SELECT body FROM messages WHERE tenant_id = $1 AND id = $2 AND kind IN ('reply', 'ai')",
     )
     .bind(tenant_id)
     .bind(message_id)
     .fetch_optional(uow.conn())
     .await?;
-    Ok(row.map(|r| r.0))
+        Ok(row.map(|r| r.0))
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }

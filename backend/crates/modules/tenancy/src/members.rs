@@ -671,7 +671,9 @@ pub async fn update_member(
     .bind(ctx.tenant_id)
     .fetch_one(uow.conn())
     .await;
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     match updated {
         Ok((id, user_id, display_name, email, role, status, joined_at)) => {

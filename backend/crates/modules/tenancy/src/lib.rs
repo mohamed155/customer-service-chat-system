@@ -48,6 +48,20 @@ impl TenantContext {
     }
 }
 
+impl TenantContext {
+    /// Commits a Unit of Work, or returns the 500 response a handler should return. A Unit of Work
+    /// that is dropped instead of committed is rolled back, so every handler path that wrote
+    /// something must end here (or in `UnitOfWork::commit`).
+    pub async fn commit(&self, uow: db::UnitOfWork) -> Result<(), Response> {
+        uow.commit().await.map_err(|error| {
+            tracing::error!(%error, "failed to commit tenant unit of work");
+            ApiError::internal_error("Database error")
+                .with_request_id(&self.request_id)
+                .into_response()
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct TenancyConfig {
     pub pool: sqlx::PgPool,

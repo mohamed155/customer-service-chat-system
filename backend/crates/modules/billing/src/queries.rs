@@ -27,20 +27,21 @@ pub async fn effective_plan(
     tenant_id: Uuid,
 ) -> sqlx::Result<(model::PlanDto, String)> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let row = sqlx::query_as::<
-        _,
-        (
-            Uuid,
-            String,
-            i32,
-            Option<i64>,
-            Option<i32>,
-            bool,
-            String,
-            String,
-        ),
-    >(
-        r#"
+    let result: sqlx::Result<(model::PlanDto, String)> = async {
+        let row = sqlx::query_as::<
+            _,
+            (
+                Uuid,
+                String,
+                i32,
+                Option<i64>,
+                Option<i32>,
+                bool,
+                String,
+                String,
+            ),
+        >(
+            r#"
         SELECT p.id, p.name, p.monthly_price_cents, p.token_allowance,
                p.conversation_allowance, p.is_default, p.status,
                s.status AS subscription_status
@@ -48,49 +49,55 @@ pub async fn effective_plan(
         JOIN billing_plans p ON p.id = s.plan_id
         WHERE s.tenant_id = $1
         "#,
-    )
-    .bind(tenant_id)
-    .fetch_optional(uow.conn())
-    .await?;
+        )
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await?;
 
-    if let Some((
-        id,
-        name,
-        monthly_price_cents,
-        token_allowance,
-        conversation_allowance,
-        is_default,
-        status,
-        subscription_status,
-    )) = row
-    {
-        Ok((
-            model::PlanDto {
-                id,
-                name,
-                monthly_price_cents,
-                token_allowance,
-                conversation_allowance,
-                is_default,
-                status,
-            },
+        if let Some((
+            id,
+            name,
+            monthly_price_cents,
+            token_allowance,
+            conversation_allowance,
+            is_default,
+            status,
             subscription_status,
-        ))
-    } else {
-        let default = sqlx::query_as::<_, model::PlanDto>(
-            r#"
+        )) = row
+        {
+            Ok((
+                model::PlanDto {
+                    id,
+                    name,
+                    monthly_price_cents,
+                    token_allowance,
+                    conversation_allowance,
+                    is_default,
+                    status,
+                },
+                subscription_status,
+            ))
+        } else {
+            let default = sqlx::query_as::<_, model::PlanDto>(
+                r#"
             SELECT id, name, monthly_price_cents, token_allowance,
                    conversation_allowance, is_default, status
             FROM billing_plans
             WHERE is_default = true
             LIMIT 1
             "#,
-        )
-        .fetch_one(uow.conn())
-        .await?;
+            )
+            .fetch_one(uow.conn())
+            .await?;
 
-        Ok((default, "active".into()))
+            Ok((default, "active".into()))
+        }
     }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn token_usage(
@@ -100,18 +107,25 @@ pub async fn token_usage(
     end: DateTime<Utc>,
 ) -> sqlx::Result<i64> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar::<_, i64>(
-        r#"
+    let result: sqlx::Result<i64> = async {
+        sqlx::query_scalar::<_, i64>(
+            r#"
         SELECT COALESCE(SUM(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)), 0)::BIGINT
         FROM ai_usage_records
         WHERE tenant_id = $1 AND created_at >= $2 AND created_at < $3
         "#,
-    )
-    .bind(tenant_id)
-    .bind(start)
-    .bind(end)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(start)
+        .bind(end)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn conversation_usage(
@@ -121,17 +135,24 @@ pub async fn conversation_usage(
     end: DateTime<Utc>,
 ) -> sqlx::Result<i64> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar::<_, i64>(
-        r#"
+    let result: sqlx::Result<i64> = async {
+        sqlx::query_scalar::<_, i64>(
+            r#"
         SELECT COUNT(*)::BIGINT FROM conversations
         WHERE tenant_id = $1 AND created_at >= $2 AND created_at < $3 AND deleted_at IS NULL
         "#,
-    )
-    .bind(tenant_id)
-    .bind(start)
-    .bind(end)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(start)
+        .bind(end)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 // ── T040: Platform plan catalog / subscription queries ─────────────────────
@@ -244,12 +265,19 @@ pub async fn subscription_for_tenant(
     tenant_id: Uuid,
 ) -> sqlx::Result<Option<(Uuid, Uuid, String)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, (Uuid, Uuid, String)>(
-        "SELECT id, plan_id, status FROM tenant_subscriptions WHERE tenant_id = $1",
-    )
-    .bind(tenant_id)
-    .fetch_optional(uow.conn())
-    .await
+    let result: sqlx::Result<Option<(Uuid, Uuid, String)>> = async {
+        sqlx::query_as::<_, (Uuid, Uuid, String)>(
+            "SELECT id, plan_id, status FROM tenant_subscriptions WHERE tenant_id = $1",
+        )
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn subscription_for_tenant_for_update(

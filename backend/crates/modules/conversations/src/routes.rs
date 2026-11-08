@@ -312,7 +312,9 @@ pub async fn list_conversations(
                 .into_response();
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
@@ -692,7 +694,9 @@ pub async fn add_message(
                 .into_response();
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let (sender_membership_id, logged_by_membership_id) = match &payload.kind {
         model::MessageKind::Customer => (None, Some(membership_id)),
@@ -1063,7 +1067,9 @@ pub async fn create_conversation(
                 .into_response();
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,

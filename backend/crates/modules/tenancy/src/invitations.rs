@@ -162,7 +162,9 @@ pub async fn get_invitation_delivery(
                 .into_response();
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
     let Some(status) = status else {
         return ApiError::not_found("Invitation not found").into_response();
     };
@@ -349,7 +351,9 @@ pub async fn create_invitation(
     .fetch_optional(uow.conn())
     .await
     .unwrap_or(None);
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     if let Some((status,)) = existing_member {
         return ApiError::conflict("User is already a member of this tenant")
@@ -379,7 +383,9 @@ pub async fn create_invitation(
     .fetch_optional(uow2.conn())
     .await
     .unwrap_or(None);
-    drop(uow2);
+    if let Err(r) = ctx.commit(uow2).await {
+        return r;
+    }
 
     if existing_pending.is_some() {
         return ApiError::conflict("A pending invitation already exists for this email")
@@ -516,7 +522,9 @@ pub async fn create_invitation(
             .fetch_one(uow3.conn())
             .await
             .unwrap_or_default();
-    drop(uow3);
+    if let Err(r) = ctx.commit(uow3).await {
+        return r;
+    }
 
     (
         StatusCode::CREATED,
@@ -885,7 +893,9 @@ pub async fn list_invitations(
             return ApiError::internal_error("Failed to list invitations").into_response();
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let row_count = rows.len();
     let items: Vec<InvitationListItem> = rows
@@ -987,7 +997,9 @@ pub async fn revoke_invitation(
             return ApiError::internal_error(format!("Database query failed: {e}")).into_response()
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let (_inv_id, email, role, status) = row;
 

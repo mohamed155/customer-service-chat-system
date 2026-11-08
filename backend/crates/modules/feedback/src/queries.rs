@@ -11,16 +11,23 @@ pub async fn find_conversation_for_session(
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<(String, String, Option<Uuid>)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, (String, String, Option<Uuid>)>(
-        "SELECT status, channel, assigned_membership_id \
+    let result: sqlx::Result<Option<(String, String, Option<Uuid>)>> = async {
+        sqlx::query_as::<_, (String, String, Option<Uuid>)>(
+            "SELECT status, channel, assigned_membership_id \
          FROM conversations \
          WHERE tenant_id = $1 AND customer_id = $2 AND id = $3 AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .bind(customer_id)
-    .bind(conversation_id)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(customer_id)
+        .bind(conversation_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -36,8 +43,9 @@ pub async fn insert_feedback(
     comment: Option<&str>,
 ) -> sqlx::Result<Option<ConversationFeedbackRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, ConversationFeedbackRow>(
-        "INSERT INTO conversation_feedback \
+    let result: sqlx::Result<Option<ConversationFeedbackRow>> = async {
+        sqlx::query_as::<_, ConversationFeedbackRow>(
+            "INSERT INTO conversation_feedback \
          (tenant_id, conversation_id, widget_session_id, channel, \
           agent_configuration_id, assigned_membership_id, rating, comment) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
@@ -45,17 +53,23 @@ pub async fn insert_feedback(
          RETURNING id, tenant_id, conversation_id, widget_session_id, channel, \
                    agent_configuration_id, assigned_membership_id, rating, comment, \
                    submitted_at, created_at",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .bind(widget_session_id)
-    .bind(channel)
-    .bind(agent_configuration_id)
-    .bind(assigned_membership_id)
-    .bind(rating)
-    .bind(comment)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .bind(widget_session_id)
+        .bind(channel)
+        .bind(agent_configuration_id)
+        .bind(assigned_membership_id)
+        .bind(rating)
+        .bind(comment)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn find_feedback_by_conversation(
@@ -64,17 +78,24 @@ pub async fn find_feedback_by_conversation(
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<ConversationFeedbackRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, ConversationFeedbackRow>(
-        "SELECT id, tenant_id, conversation_id, widget_session_id, channel, \
+    let result: sqlx::Result<Option<ConversationFeedbackRow>> = async {
+        sqlx::query_as::<_, ConversationFeedbackRow>(
+            "SELECT id, tenant_id, conversation_id, widget_session_id, channel, \
                 agent_configuration_id, assigned_membership_id, rating, comment, \
                 submitted_at, created_at \
          FROM conversation_feedback \
          WHERE tenant_id = $1 AND conversation_id = $2",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn find_pending_feedback(
@@ -83,8 +104,9 @@ pub async fn find_pending_feedback(
     customer_id: Uuid,
 ) -> sqlx::Result<Option<(Uuid, DateTime<Utc>)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, (Uuid, DateTime<Utc>)>(
-        "SELECT c.id, c.last_activity_at \
+    let result: sqlx::Result<Option<(Uuid, DateTime<Utc>)>> = async {
+        sqlx::query_as::<_, (Uuid, DateTime<Utc>)>(
+            "SELECT c.id, c.last_activity_at \
          FROM conversations c \
          LEFT JOIN conversation_feedback f \
            ON f.conversation_id = c.id AND f.tenant_id = c.tenant_id \
@@ -95,23 +117,36 @@ pub async fn find_pending_feedback(
            AND f.id IS NULL \
          ORDER BY c.last_activity_at DESC \
          LIMIT 1",
-    )
-    .bind(tenant_id)
-    .bind(customer_id)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(customer_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn feedback_summary(pool: &PgPool, tenant_id: Uuid) -> sqlx::Result<(Option<f64>, i64)> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, (Option<f64>, i64)>(
-        "SELECT AVG(rating)::float8, COUNT(*)::bigint \
+    let result: sqlx::Result<(Option<f64>, i64)> = async {
+        sqlx::query_as::<_, (Option<f64>, i64)>(
+            "SELECT AVG(rating)::float8, COUNT(*)::bigint \
          FROM conversation_feedback \
          WHERE tenant_id = $1",
-    )
-    .bind(tenant_id)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn resolve_ai_agent_configuration(
@@ -120,16 +155,23 @@ pub async fn resolve_ai_agent_configuration(
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<Uuid>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar::<_, Uuid>(
-        "SELECT ac.id FROM agent_configurations ac \
+    let result: sqlx::Result<Option<Uuid>> = async {
+        sqlx::query_scalar::<_, Uuid>(
+            "SELECT ac.id FROM agent_configurations ac \
          WHERE ac.tenant_id = $1 \
            AND ac.deleted_at IS NULL \
            AND EXISTS (SELECT 1 FROM ai_generations g \
                        WHERE g.tenant_id = $1 AND g.conversation_id = $2) \
          LIMIT 1",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }

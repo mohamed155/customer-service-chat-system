@@ -42,6 +42,7 @@ pub async fn insert_session(
     expires_at: DateTime<Utc>,
 ) -> sqlx::Result<WidgetSessionRow> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<WidgetSessionRow> = async {
     sqlx::query_as::<_, WidgetSessionRow>(
         "INSERT INTO widget_sessions (tenant_id, widget_instance_id, token_hash, expires_at) \
          VALUES ($1, $2, $3, $4) \
@@ -53,6 +54,12 @@ pub async fn insert_session(
     .bind(expires_at)
     .fetch_one(uow.conn())
     .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn find_session_by_token_hash(
@@ -125,17 +132,24 @@ pub async fn find_instance_by_id(
     instance_id: Uuid,
 ) -> sqlx::Result<Option<WidgetInstanceRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, WidgetInstanceRow>(
-        "SELECT id, tenant_id, public_id, name, display_name, primary_color, \
+    let result: sqlx::Result<Option<WidgetInstanceRow>> = async {
+        sqlx::query_as::<_, WidgetInstanceRow>(
+            "SELECT id, tenant_id, public_id, name, display_name, primary_color, \
                 welcome_message, position, theme, enabled, allowed_domains, \
                 created_at, updated_at \
          FROM widget_instances \
          WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
-    )
-    .bind(instance_id)
-    .bind(tenant_id)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(instance_id)
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn list_instances(
@@ -143,17 +157,24 @@ pub async fn list_instances(
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<WidgetInstanceRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, WidgetInstanceRow>(
-        "SELECT id, tenant_id, public_id, name, display_name, primary_color, \
+    let result: sqlx::Result<Vec<WidgetInstanceRow>> = async {
+        sqlx::query_as::<_, WidgetInstanceRow>(
+            "SELECT id, tenant_id, public_id, name, display_name, primary_color, \
                 welcome_message, position, theme, enabled, allowed_domains, \
                 created_at, updated_at \
          FROM widget_instances \
          WHERE tenant_id = $1 AND deleted_at IS NULL \
          ORDER BY created_at DESC",
-    )
-    .bind(tenant_id)
-    .fetch_all(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .fetch_all(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -170,26 +191,33 @@ pub async fn insert_instance(
     allowed_domains: &[String],
 ) -> sqlx::Result<WidgetInstanceRow> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, WidgetInstanceRow>(
-        "INSERT INTO widget_instances \
+    let result: sqlx::Result<WidgetInstanceRow> = async {
+        sqlx::query_as::<_, WidgetInstanceRow>(
+            "INSERT INTO widget_instances \
          (tenant_id, public_id, name, display_name, primary_color, welcome_message, \
           position, theme, allowed_domains) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
          RETURNING id, tenant_id, public_id, name, display_name, primary_color, \
                    welcome_message, position, theme, enabled, allowed_domains, \
                    created_at, updated_at",
-    )
-    .bind(tenant_id)
-    .bind(public_id)
-    .bind(name)
-    .bind(display_name)
-    .bind(primary_color)
-    .bind(welcome_message)
-    .bind(position)
-    .bind(theme)
-    .bind(allowed_domains)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(public_id)
+        .bind(name)
+        .bind(display_name)
+        .bind(primary_color)
+        .bind(welcome_message)
+        .bind(position)
+        .bind(theme)
+        .bind(allowed_domains)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -207,27 +235,34 @@ pub async fn update_instance(
     allowed_domains: &[String],
 ) -> sqlx::Result<Option<WidgetInstanceRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, WidgetInstanceRow>(
-        "UPDATE widget_instances SET \
+    let result: sqlx::Result<Option<WidgetInstanceRow>> = async {
+        sqlx::query_as::<_, WidgetInstanceRow>(
+            "UPDATE widget_instances SET \
          name = $3, display_name = $4, primary_color = $5, welcome_message = $6, \
          position = $7, theme = $8, enabled = $9, allowed_domains = $10 \
          WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL \
          RETURNING id, tenant_id, public_id, name, display_name, primary_color, \
                    welcome_message, position, theme, enabled, allowed_domains, \
                    created_at, updated_at",
-    )
-    .bind(instance_id)
-    .bind(tenant_id)
-    .bind(name)
-    .bind(display_name)
-    .bind(primary_color)
-    .bind(welcome_message)
-    .bind(position)
-    .bind(theme)
-    .bind(enabled)
-    .bind(allowed_domains)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(instance_id)
+        .bind(tenant_id)
+        .bind(name)
+        .bind(display_name)
+        .bind(primary_color)
+        .bind(welcome_message)
+        .bind(position)
+        .bind(theme)
+        .bind(enabled)
+        .bind(allowed_domains)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Runs in the caller's transaction: the delete handler holds the row with

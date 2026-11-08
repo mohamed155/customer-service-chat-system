@@ -65,13 +65,20 @@ pub async fn get(
     item_id: Uuid,
 ) -> Result<Option<IndexState>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, IndexState>(
-        "SELECT * FROM knowledge_index_state WHERE item_id = $1 AND tenant_id = $2",
-    )
-    .bind(item_id)
-    .bind(tenant_id)
-    .fetch_optional(uow.conn())
-    .await
+    let result: Result<Option<IndexState>, sqlx::Error> = async {
+        sqlx::query_as::<_, IndexState>(
+            "SELECT * FROM knowledge_index_state WHERE item_id = $1 AND tenant_id = $2",
+        )
+        .bind(item_id)
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn get_many(
@@ -97,22 +104,29 @@ pub async fn upsert_status(
     status: &IndexStatus,
 ) -> Result<(), sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let status_str = status.to_string();
-    sqlx::query(
-        "INSERT INTO knowledge_index_state (item_id, tenant_id, status) \
+    let result: Result<(), sqlx::Error> = async {
+        let status_str = status.to_string();
+        sqlx::query(
+            "INSERT INTO knowledge_index_state (item_id, tenant_id, status) \
          VALUES ($1, $2, $3) \
          ON CONFLICT (item_id) DO UPDATE SET status = $3, updated_at = now(), \
            chunk_count = CASE WHEN $3 = 'not_indexed' THEN 0 \
                               ELSE knowledge_index_state.chunk_count END, \
            indexed_content_hash = CASE WHEN $3 = 'not_indexed' THEN NULL \
                               ELSE knowledge_index_state.indexed_content_hash END",
-    )
-    .bind(item_id)
-    .bind(tenant_id)
-    .bind(&status_str)
-    .execute(uow.conn())
-    .await?;
-    Ok(())
+        )
+        .bind(item_id)
+        .bind(tenant_id)
+        .bind(&status_str)
+        .execute(uow.conn())
+        .await?;
+        Ok(())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn set_failed(pool: &PgPool, item_id: Uuid, reason: &str) -> Result<(), sqlx::Error> {

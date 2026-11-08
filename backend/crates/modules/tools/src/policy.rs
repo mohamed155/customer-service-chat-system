@@ -47,35 +47,42 @@ pub async fn builtin_settings(
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<BuiltinSetting>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let policies: Vec<(String, bool, bool)> = sqlx::query_as(
-        "SELECT tool_name, enabled, require_approval \
+    let result: sqlx::Result<Vec<BuiltinSetting>> = async {
+        let policies: Vec<(String, bool, bool)> = sqlx::query_as(
+            "SELECT tool_name, enabled, require_approval \
          FROM tenant_tool_policies \
          WHERE tenant_id = $1",
-    )
-    .bind(tenant_id)
-    .fetch_all(uow.conn())
-    .await?;
+        )
+        .bind(tenant_id)
+        .fetch_all(uow.conn())
+        .await?;
 
-    Ok(crate::registry::catalog()
-        .iter()
-        .map(|tool| {
-            let (enabled, require_approval) = policies
-                .iter()
-                .find(|(n, _, _)| n == tool.name())
-                .map(|(_, e, r)| (*e, *r))
-                .unwrap_or((false, false));
-            let classification = tool.classification();
-            let effective_approval =
-                matches!(classification, Classification::Approval) || require_approval;
-            BuiltinSetting {
-                spec: tool.spec(),
-                classification,
-                enabled,
-                require_approval,
-                effective_approval,
-            }
-        })
-        .collect())
+        Ok(crate::registry::catalog()
+            .iter()
+            .map(|tool| {
+                let (enabled, require_approval) = policies
+                    .iter()
+                    .find(|(n, _, _)| n == tool.name())
+                    .map(|(_, e, r)| (*e, *r))
+                    .unwrap_or((false, false));
+                let classification = tool.classification();
+                let effective_approval =
+                    matches!(classification, Classification::Approval) || require_approval;
+                BuiltinSetting {
+                    spec: tool.spec(),
+                    classification,
+                    enabled,
+                    require_approval,
+                    effective_approval,
+                }
+            })
+            .collect())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn resolve_available(
@@ -83,73 +90,80 @@ pub async fn resolve_available(
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<ResolvedTool>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let catalog = crate::registry::catalog();
+    let result: sqlx::Result<Vec<ResolvedTool>> = async {
+        let catalog = crate::registry::catalog();
 
-    // Fetch all policies for this tenant
-    let policies: Vec<(String, bool, bool)> = sqlx::query_as(
-        "SELECT tool_name, enabled, require_approval \
+        // Fetch all policies for this tenant
+        let policies: Vec<(String, bool, bool)> = sqlx::query_as(
+            "SELECT tool_name, enabled, require_approval \
          FROM tenant_tool_policies \
          WHERE tenant_id = $1",
-    )
-    .bind(tenant_id)
-    .fetch_all(uow.conn())
-    .await?;
+        )
+        .bind(tenant_id)
+        .fetch_all(uow.conn())
+        .await?;
 
-    let mut resolved: Vec<ResolvedTool> = Vec::new();
+        let mut resolved: Vec<ResolvedTool> = Vec::new();
 
-    // 1. Resolve built-in tools as before
-    for tool in &catalog {
-        let name = tool.name().to_string();
-        let policy = policies.iter().find(|(n, _, _)| n == &name);
-        let (policy_enabled, policy_require_approval) = match policy {
-            Some((_, enabled, require_approval)) => (*enabled, *require_approval),
-            None => continue,
-        };
+        // 1. Resolve built-in tools as before
+        for tool in &catalog {
+            let name = tool.name().to_string();
+            let policy = policies.iter().find(|(n, _, _)| n == &name);
+            let (policy_enabled, policy_require_approval) = match policy {
+                Some((_, enabled, require_approval)) => (*enabled, *require_approval),
+                None => continue,
+            };
 
-        if let Some(approval_required) = resolve_builtin(
-            tool.classification(),
-            policy_enabled,
-            policy_require_approval,
-        ) {
+            if let Some(approval_required) = resolve_builtin(
+                tool.classification(),
+                policy_enabled,
+                policy_require_approval,
+            ) {
+                resolved.push(ResolvedTool {
+                    spec: tool.spec(),
+                    source: ToolSource::Builtin,
+                    approval_required,
+                    tenant_tool_id: None,
+                });
+            }
+        }
+
+        // 2. Fetch live, enabled tenant_tools for the tenant
+        let tenant_tools = crate::queries::list_tenant_tools(pool, tenant_id).await?;
+        for tt in &tenant_tools {
+            if !tt.enabled {
+                continue;
+            }
+            let spec = ai_providers::ToolSpec {
+                name: tt.name.clone(),
+                description: tt.description.clone(),
+                input_schema: tt.input_schema.clone(),
+            };
+            let approval_required = tt.classification == "approval";
             resolved.push(ResolvedTool {
-                spec: tool.spec(),
-                source: ToolSource::Builtin,
+                spec,
+                source: ToolSource::Tenant,
                 approval_required,
-                tenant_tool_id: None,
+                tenant_tool_id: Some(tt.id),
             });
         }
-    }
 
-    // 2. Fetch live, enabled tenant_tools for the tenant
-    let tenant_tools = crate::queries::list_tenant_tools(pool, tenant_id).await?;
-    for tt in &tenant_tools {
-        if !tt.enabled {
-            continue;
-        }
-        let spec = ai_providers::ToolSpec {
-            name: tt.name.clone(),
-            description: tt.description.clone(),
-            input_schema: tt.input_schema.clone(),
-        };
-        let approval_required = tt.classification == "approval";
-        resolved.push(ResolvedTool {
-            spec,
-            source: ToolSource::Tenant,
-            approval_required,
-            tenant_tool_id: Some(tt.id),
+        // 3. Sort by (source, name) for deterministic prompt assembly
+        resolved.sort_by(|a, b| {
+            let source_a = a.source.as_str();
+            let source_b = b.source.as_str();
+            source_a
+                .cmp(source_b)
+                .then_with(|| a.spec.name.cmp(&b.spec.name))
         });
+
+        Ok(resolved)
     }
-
-    // 3. Sort by (source, name) for deterministic prompt assembly
-    resolved.sort_by(|a, b| {
-        let source_a = a.source.as_str();
-        let source_b = b.source.as_str();
-        source_a
-            .cmp(source_b)
-            .then_with(|| a.spec.name.cmp(&b.spec.name))
-    });
-
-    Ok(resolved)
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Retained for backward compatibility — delegates to [`resolve_available`].

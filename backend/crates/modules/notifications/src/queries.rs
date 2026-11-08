@@ -61,24 +61,31 @@ pub async fn resolve_subject(
     resolved_by: Option<Uuid>,
 ) -> Result<Vec<Uuid>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let rows = sqlx::query(
-        "UPDATE notifications SET state = 'resolved', updated_at = now() \
+    let result: Result<Vec<Uuid>, sqlx::Error> = async {
+        let rows = sqlx::query(
+            "UPDATE notifications SET state = 'resolved', updated_at = now() \
          WHERE tenant_id = $1 AND subject_type = $2 AND subject_id = $3 \
            AND state = 'unread' \
            AND recipient_membership_id IS DISTINCT FROM $4 \
          RETURNING recipient_membership_id",
-    )
-    .bind(tenant_id)
-    .bind(subject_type.as_str())
-    .bind(subject_id)
-    .bind(resolved_by)
-    .fetch_all(uow.conn())
-    .await?;
+        )
+        .bind(tenant_id)
+        .bind(subject_type.as_str())
+        .bind(subject_id)
+        .bind(resolved_by)
+        .fetch_all(uow.conn())
+        .await?;
 
-    Ok(rows
-        .into_iter()
-        .map(|r| r.get("recipient_membership_id"))
-        .collect())
+        Ok(rows
+            .into_iter()
+            .map(|r| r.get("recipient_membership_id"))
+            .collect())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 // ── Read paths ──────────────────────────────────────────────────────
@@ -92,49 +99,56 @@ pub async fn list(
     limit: i64,
 ) -> Result<(Vec<NotificationRow>, Option<String>), sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let limit = limit.clamp(1, 50);
-    let mut builder = sqlx::QueryBuilder::new(
-        "SELECT id, tenant_id, recipient_membership_id, kind, state, title, body, \
+    let result: Result<(Vec<NotificationRow>, Option<String>), sqlx::Error> = async {
+        let limit = limit.clamp(1, 50);
+        let mut builder = sqlx::QueryBuilder::new(
+            "SELECT id, tenant_id, recipient_membership_id, kind, state, title, body, \
                 subject_type, subject_id, dedupe_key, actor_membership_id, \
                 created_at, updated_at, read_at \
          FROM notifications \
          WHERE tenant_id = ",
-    );
-    builder.push_bind(tenant_id);
-    builder.push(" AND recipient_membership_id = ");
-    builder.push_bind(membership_id);
+        );
+        builder.push_bind(tenant_id);
+        builder.push(" AND recipient_membership_id = ");
+        builder.push_bind(membership_id);
 
-    if let Some(nd_state) = state {
-        builder.push(" AND state = ");
-        builder.push_bind(nd_state.as_str());
-    }
-
-    if let Some(cursor_str) = cursor {
-        if let Some((ts, id)) = decode_cursor(cursor_str) {
-            builder.push(" AND (created_at, id) < (");
-            builder.push_bind(ts);
-            builder.push(", ");
-            builder.push_bind(id);
-            builder.push(")");
+        if let Some(nd_state) = state {
+            builder.push(" AND state = ");
+            builder.push_bind(nd_state.as_str());
         }
+
+        if let Some(cursor_str) = cursor {
+            if let Some((ts, id)) = decode_cursor(cursor_str) {
+                builder.push(" AND (created_at, id) < (");
+                builder.push_bind(ts);
+                builder.push(", ");
+                builder.push_bind(id);
+                builder.push(")");
+            }
+        }
+
+        builder.push(" ORDER BY created_at DESC, id DESC LIMIT ");
+        builder.push_bind(limit + 1);
+
+        let rows = builder
+            .build_query_as::<NotificationRow>()
+            .fetch_all(uow.conn())
+            .await?;
+
+        let has_more = rows.len() > limit as usize;
+        let data: Vec<NotificationRow> = rows.into_iter().take(limit as usize).collect();
+
+        let next_cursor = data
+            .last()
+            .map(|last| encode_cursor(last.created_at, last.id));
+
+        Ok((data, if has_more { next_cursor } else { None }))
     }
-
-    builder.push(" ORDER BY created_at DESC, id DESC LIMIT ");
-    builder.push_bind(limit + 1);
-
-    let rows = builder
-        .build_query_as::<NotificationRow>()
-        .fetch_all(uow.conn())
-        .await?;
-
-    let has_more = rows.len() > limit as usize;
-    let data: Vec<NotificationRow> = rows.into_iter().take(limit as usize).collect();
-
-    let next_cursor = data
-        .last()
-        .map(|last| encode_cursor(last.created_at, last.id));
-
-    Ok((data, if has_more { next_cursor } else { None }))
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn unread_count(
@@ -143,16 +157,23 @@ pub async fn unread_count(
     membership_id: Uuid,
 ) -> Result<i64, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let row = sqlx::query(
-        "SELECT COUNT(*) as count FROM notifications \
+    let result: Result<i64, sqlx::Error> = async {
+        let row = sqlx::query(
+            "SELECT COUNT(*) as count FROM notifications \
          WHERE tenant_id = $1 AND recipient_membership_id = $2 AND state = 'unread'",
-    )
-    .bind(tenant_id)
-    .bind(membership_id)
-    .fetch_one(uow.conn())
-    .await?;
+        )
+        .bind(tenant_id)
+        .bind(membership_id)
+        .fetch_one(uow.conn())
+        .await?;
 
-    Ok(row.get("count"))
+        Ok(row.get("count"))
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn mark_read(
@@ -162,18 +183,25 @@ pub async fn mark_read(
     notification_id: Uuid,
 ) -> Result<Option<NotificationRow>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let result = sqlx::query_as::<_, NotificationRow>(
-        "UPDATE notifications SET state = 'read', read_at = now(), updated_at = now() \
+    let result: Result<Option<NotificationRow>, sqlx::Error> = async {
+        let result = sqlx::query_as::<_, NotificationRow>(
+            "UPDATE notifications SET state = 'read', read_at = now(), updated_at = now() \
          WHERE id = $1 AND tenant_id = $2 AND recipient_membership_id = $3 \
          RETURNING *",
-    )
-    .bind(notification_id)
-    .bind(tenant_id)
-    .bind(membership_id)
-    .fetch_optional(uow.conn())
-    .await?;
+        )
+        .bind(notification_id)
+        .bind(tenant_id)
+        .bind(membership_id)
+        .fetch_optional(uow.conn())
+        .await?;
 
-    Ok(result)
+        Ok(result)
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn mark_all_read(
@@ -182,14 +210,21 @@ pub async fn mark_all_read(
     membership_id: Uuid,
 ) -> Result<u64, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let result = sqlx::query(
-        "UPDATE notifications SET state = 'read', read_at = now(), updated_at = now() \
+    let result: Result<u64, sqlx::Error> = async {
+        let result = sqlx::query(
+            "UPDATE notifications SET state = 'read', read_at = now(), updated_at = now() \
          WHERE tenant_id = $1 AND recipient_membership_id = $2 AND state = 'unread'",
-    )
-    .bind(tenant_id)
-    .bind(membership_id)
-    .execute(uow.conn())
-    .await?;
+        )
+        .bind(tenant_id)
+        .bind(membership_id)
+        .execute(uow.conn())
+        .await?;
 
-    Ok(result.rows_affected())
+        Ok(result.rows_affected())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }

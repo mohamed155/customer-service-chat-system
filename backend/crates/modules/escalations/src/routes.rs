@@ -486,7 +486,9 @@ pub async fn claim(
                 .into_response();
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
@@ -640,7 +642,9 @@ pub async fn get_my_availability(
                 .into_response();
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
@@ -733,7 +737,9 @@ pub async fn set_my_availability(
                 .into_response();
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let new_state = match payload.state {
         AvailabilityState::Available => "available",
@@ -1206,7 +1212,9 @@ pub async fn set_member_skills(
     .fetch_optional(uow.conn())
     .await
     .unwrap_or(None);
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     match role.as_deref() {
         Some("owner" | "admin" | "manager" | "agent") => {}

@@ -287,7 +287,9 @@ pub async fn decide_tool_request(
                 .into_response();
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     match crate::approval::decide(&pool, ctx.tenant_id, id, membership_id, approve).await {
         Ok(crate::approval::DecideOutcome::Applied(row)) => {

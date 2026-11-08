@@ -167,18 +167,25 @@ pub async fn list_recent_for_customer(
     customer_id: Uuid,
 ) -> sqlx::Result<Vec<ConversationSummary>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, ConversationSummary>(
-        "SELECT id, channel, status, last_activity_at, created_at \
+    let result: sqlx::Result<Vec<ConversationSummary>> = async {
+        sqlx::query_as::<_, ConversationSummary>(
+            "SELECT id, channel, status, last_activity_at, created_at \
          FROM conversations \
          WHERE tenant_id = $1 AND customer_id = $2 AND deleted_at IS NULL \
          ORDER BY last_activity_at DESC \
          LIMIT $3",
-    )
-    .bind(tenant_id)
-    .bind(customer_id)
-    .bind(HISTORY_PAGE_SIZE + 1)
-    .fetch_all(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(customer_id)
+        .bind(HISTORY_PAGE_SIZE + 1)
+        .fetch_all(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Transaction-aware variant — same query but runs inside an existing

@@ -608,7 +608,9 @@ pub async fn get_tenant(State(pool): State<sqlx::PgPool>, ctx: TenantContext) ->
             return ApiError::internal_error(format!("Database query failed: {e}")).into_response()
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     Json(TenantSummary {
         id: row.0,

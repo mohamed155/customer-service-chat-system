@@ -94,18 +94,25 @@ pub async fn find_connection(
     catalog_id: Uuid,
 ) -> Result<Option<ConnectionRow>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, ConnectionRow>(
-        "SELECT id, tenant_id, catalog_id, is_active, config, \
+    let result: Result<Option<ConnectionRow>, sqlx::Error> = async {
+        sqlx::query_as::<_, ConnectionRow>(
+            "SELECT id, tenant_id, catalog_id, is_active, config, \
                 webhook_token_hash, webhook_token_ciphertext, webhook_token_nonce, \
                 connected_at, connected_by_membership_id, \
                 disconnected_at, disconnected_by_membership_id \
          FROM integration_connections \
          WHERE tenant_id = $1 AND catalog_id = $2",
-    )
-    .bind(tenant_id)
-    .bind(catalog_id)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(catalog_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn find_connection_by_id(
@@ -145,8 +152,9 @@ pub async fn list_catalog_with_status(
     tenant_id: Uuid,
 ) -> Result<Vec<CatalogWithStatusRow>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, CatalogWithStatusRow>(
-        "SELECT cat.id, cat.slug, cat.name, cat.description, cat.category, \
+    let result: Result<Vec<CatalogWithStatusRow>, sqlx::Error> = async {
+        sqlx::query_as::<_, CatalogWithStatusRow>(
+            "SELECT cat.id, cat.slug, cat.name, cat.description, cat.category, \
                 cat.is_available, cat.config_schema, \
                 c.id AS connection_id, c.is_active, ev.outcomes \
          FROM integration_catalog cat \
@@ -162,10 +170,16 @@ pub async fn list_catalog_with_status(
            ) e \
          ) ev ON TRUE \
          ORDER BY cat.name",
-    )
-    .bind(tenant_id)
-    .fetch_all(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .fetch_all(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn recent_event_outcomes(
@@ -505,6 +519,7 @@ pub async fn active_connection_for_slug(
     slug: &str,
 ) -> Result<Option<Uuid>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<Option<Uuid>, sqlx::Error> = async {
     sqlx::query_scalar::<_, Uuid>(
         "SELECT c.id FROM integration_connections c \
          JOIN integration_catalog cat ON cat.id = c.catalog_id \
@@ -514,4 +529,10 @@ pub async fn active_connection_for_slug(
     .bind(slug)
     .fetch_optional(uow.conn())
     .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }

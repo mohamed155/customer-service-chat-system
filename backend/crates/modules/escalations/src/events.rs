@@ -216,7 +216,9 @@ pub async fn stream_events(
                 .into_response();
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let (guard, rx) = runtime.connect(ctx.tenant_id, membership_id);
 

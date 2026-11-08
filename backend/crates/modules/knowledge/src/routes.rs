@@ -1897,7 +1897,9 @@ pub async fn rename_knowledge_category(
             0
         }
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     if let Err(e) = tx.commit().await {
         tracing::error!(%e, "rename_knowledge_category: commit failed");

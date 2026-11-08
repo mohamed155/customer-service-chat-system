@@ -33,23 +33,21 @@ pub async fn record(
             }
             Err(e) => Err(e),
         },
-        None => {
-            match pool.acquire().await {
-                Ok(mut conn) => {
-                    insert_audit(
-                        &mut conn,
-                        action,
-                        actor_user_id,
-                        tenant_id,
-                        resource_type,
-                        resource_id,
-                        details,
-                    )
-                    .await
-                }
-                Err(e) => Err(e),
+        None => match pool.acquire().await {
+            Ok(mut conn) => {
+                insert_audit(
+                    &mut conn,
+                    action,
+                    actor_user_id,
+                    tenant_id,
+                    resource_type,
+                    resource_id,
+                    details,
+                )
+                .await
             }
-        }
+            Err(e) => Err(e),
+        },
     };
 
     if let Err(e) = result {

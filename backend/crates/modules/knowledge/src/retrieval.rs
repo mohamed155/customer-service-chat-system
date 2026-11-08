@@ -20,22 +20,23 @@ pub async fn search(
     threshold: f32,
 ) -> Result<Vec<RetrievedChunk>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query("SET hnsw.iterative_scan = 'relaxed_order'")
-        .execute(uow.conn())
-        .await?;
+    let result: Result<Vec<RetrievedChunk>, sqlx::Error> = async {
+        sqlx::query("SET hnsw.iterative_scan = 'relaxed_order'")
+            .execute(uow.conn())
+            .await?;
 
-    sqlx::query("SET hnsw.ef_search = 100")
-        .execute(uow.conn())
-        .await?;
+        sqlx::query("SET hnsw.ef_search = 100")
+            .execute(uow.conn())
+            .await?;
 
-    let vec_str = query_embedding
-        .iter()
-        .map(|v| v.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
+        let vec_str = query_embedding
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
 
-    sqlx::query_as::<_, RetrievedChunk>(sqlx::AssertSqlSafe(format!(
-        "SELECT kc.id AS chunk_id, \
+        sqlx::query_as::<_, RetrievedChunk>(sqlx::AssertSqlSafe(format!(
+            "SELECT kc.id AS chunk_id, \
                     kc.item_id, \
                     kc.tenant_id, \
                     kc.content, \
@@ -51,11 +52,17 @@ pub async fn search(
                AND (1 - (kc.embedding <=> '[{v}]'::vector)) >= $2 \
              ORDER BY similarity DESC \
              LIMIT $3",
-        v = vec_str
-    )))
-    .bind(tenant_id)
-    .bind(threshold)
-    .bind(top_k)
-    .fetch_all(uow.conn())
-    .await
+            v = vec_str
+        )))
+        .bind(tenant_id)
+        .bind(threshold)
+        .bind(top_k)
+        .fetch_all(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }

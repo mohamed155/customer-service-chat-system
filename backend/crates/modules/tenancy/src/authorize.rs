@@ -42,7 +42,9 @@ pub async fn fetch_membership_role(
     tenant_id: Uuid,
     user_id: Uuid,
 ) -> Option<String> {
-    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await.ok()?;
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
+        .await
+        .ok()?;
     sqlx::query_scalar::<_, String>(
         "SELECT role \
          FROM tenant_memberships \

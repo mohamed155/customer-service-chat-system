@@ -83,6 +83,7 @@ pub async fn list_items(
     before: Option<(DateTime<Utc>, Uuid)>,
 ) -> sqlx::Result<(Vec<KnowledgeItemRow>, Vec<KnowledgeItemTagRow>, bool)> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<(Vec<KnowledgeItemRow>, Vec<KnowledgeItemTagRow>, bool)> = async {
     let fetch_limit = limit + 1;
 
     let sql = if let Some((_, _)) = before {
@@ -132,6 +133,12 @@ pub async fn list_items(
     let items = items.into_iter().take(limit as usize).collect::<Vec<_>>();
     let tags = load_tags_for_items(pool, &items).await?;
     Ok((items, tags, has_more))
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 async fn load_tags_for_items(
@@ -156,13 +163,20 @@ pub async fn get_item(
     item_id: Uuid,
 ) -> sqlx::Result<Option<KnowledgeItemRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, KnowledgeItemRow>(
-        "SELECT * FROM knowledge_items WHERE id = $1 AND tenant_id = $2",
-    )
-    .bind(item_id)
-    .bind(tenant_id)
-    .fetch_optional(uow.conn())
-    .await
+    let result: sqlx::Result<Option<KnowledgeItemRow>> = async {
+        sqlx::query_as::<_, KnowledgeItemRow>(
+            "SELECT * FROM knowledge_items WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(item_id)
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -296,17 +310,24 @@ pub async fn list_categories(
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<CategoryWithCount>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, CategoryWithCount>(
-        "SELECT c.*, COUNT(i.id)::bigint AS item_count \
+    let result: sqlx::Result<Vec<CategoryWithCount>> = async {
+        sqlx::query_as::<_, CategoryWithCount>(
+            "SELECT c.*, COUNT(i.id)::bigint AS item_count \
          FROM knowledge_categories c \
          LEFT JOIN knowledge_items i ON i.category_id = c.id \
          WHERE c.tenant_id = $1 \
          GROUP BY c.id \
          ORDER BY c.name",
-    )
-    .bind(tenant_id)
-    .fetch_all(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .fetch_all(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn create_category_in_tx(
@@ -409,15 +430,22 @@ pub async fn get_document(
     item_id: Uuid,
 ) -> sqlx::Result<Option<KnowledgeDocumentRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, KnowledgeDocumentRow>(
-        "SELECT d.* FROM knowledge_documents d \
+    let result: sqlx::Result<Option<KnowledgeDocumentRow>> = async {
+        sqlx::query_as::<_, KnowledgeDocumentRow>(
+            "SELECT d.* FROM knowledge_documents d \
          JOIN knowledge_items i ON i.id = d.item_id \
          WHERE d.item_id = $1 AND d.tenant_id = $2 AND i.tenant_id = $2",
-    )
-    .bind(item_id)
-    .bind(tenant_id)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(item_id)
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn enqueue_index_requested_in_tx(

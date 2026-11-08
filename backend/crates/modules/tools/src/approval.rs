@@ -197,17 +197,24 @@ pub async fn fetch_awaiting_approval_for_conversation(
     conversation_id: Uuid,
 ) -> sqlx::Result<Vec<ToolRequestRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let rows = sqlx::query_as::<_, ToolRequestRow>(
-        "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
+    let result: sqlx::Result<Vec<ToolRequestRow>> = async {
+        let rows = sqlx::query_as::<_, ToolRequestRow>(
+            "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
          tool_source, tenant_tool_id, arguments, status, approval_required, \
          expires_at, chain_index, started_at, finished_at, result, error, \
          created_at, decided_by_membership_id, decided_at \
          FROM tool_requests \
          WHERE tenant_id = $1 AND conversation_id = $2 AND status = 'awaiting_approval'",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_all(uow.conn())
-    .await?;
-    Ok(rows)
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_all(uow.conn())
+        .await?;
+        Ok(rows)
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }

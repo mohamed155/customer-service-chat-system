@@ -58,19 +58,26 @@ pub async fn ensure_provisional(
     trigger_message_id: Uuid,
 ) -> sqlx::Result<()> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query(
-        "INSERT INTO ai_generations \
+    let result: sqlx::Result<()> = async {
+        sqlx::query(
+            "INSERT INTO ai_generations \
          (id, tenant_id, conversation_id, trigger_message_id, outcome, attempts, latency_ms) \
          VALUES ($1, $2, $3, $4, 'awaiting_tool_approval', 1, 0) \
          ON CONFLICT (id) DO NOTHING",
-    )
-    .bind(id)
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .bind(trigger_message_id)
-    .execute(uow.conn())
-    .await?;
-    Ok(())
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .bind(trigger_message_id)
+        .execute(uow.conn())
+        .await?;
+        Ok(())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Insert the generation record, or complete the provisional row written by

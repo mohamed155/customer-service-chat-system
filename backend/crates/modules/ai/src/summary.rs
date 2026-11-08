@@ -63,7 +63,9 @@ pub async fn handle_summary(
         Ok(e) => e,
         Err(_) => return err(axum::http::StatusCode::INTERNAL_SERVER_ERROR, "internal_error", "Database error"),
     };
-    drop(uow);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     if !conv_exists {
         return err(

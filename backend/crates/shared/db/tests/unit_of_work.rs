@@ -57,7 +57,9 @@ impl TenantScoped for Ctx {
 
 #[tokio::test]
 async fn setting_is_visible_inside_the_transaction() {
-    let Some(pool) = get_pool(1).await else { return };
+    let Some(pool) = get_pool(1).await else {
+        return;
+    };
     let tenant = Uuid::new_v4();
 
     let mut uow = UnitOfWork::begin(&pool, &Ctx(tenant)).await.unwrap();
@@ -68,7 +70,9 @@ async fn setting_is_visible_inside_the_transaction() {
 
 #[tokio::test]
 async fn setting_is_gone_after_commit() {
-    let Some(pool) = get_pool(1).await else { return };
+    let Some(pool) = get_pool(1).await else {
+        return;
+    };
 
     let uow = UnitOfWork::begin_for_tenant(&pool, Uuid::new_v4())
         .await
@@ -85,7 +89,9 @@ async fn setting_is_gone_after_commit() {
 
 #[tokio::test]
 async fn setting_is_gone_after_rollback_and_after_drop() {
-    let Some(pool) = get_pool(1).await else { return };
+    let Some(pool) = get_pool(1).await else {
+        return;
+    };
 
     let uow = UnitOfWork::begin_for_tenant(&pool, Uuid::new_v4())
         .await
@@ -109,7 +115,9 @@ async fn setting_is_gone_after_rollback_and_after_drop() {
 
 #[tokio::test]
 async fn next_unit_of_work_on_the_same_connection_sees_only_its_own_tenant() {
-    let Some(pool) = get_pool(1).await else { return };
+    let Some(pool) = get_pool(1).await else {
+        return;
+    };
     let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
 
     let uow = UnitOfWork::begin_for_tenant(&pool, a).await.unwrap();
@@ -122,7 +130,9 @@ async fn next_unit_of_work_on_the_same_connection_sees_only_its_own_tenant() {
 
 #[tokio::test]
 async fn concurrent_units_of_work_keep_separate_tenants() {
-    let Some(pool) = get_pool(2).await else { return };
+    let Some(pool) = get_pool(2).await else {
+        return;
+    };
     let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
 
     let mut ua = UnitOfWork::begin_for_tenant(&pool, a).await.unwrap();
@@ -135,7 +145,9 @@ async fn concurrent_units_of_work_keep_separate_tenants() {
 
 #[tokio::test]
 async fn work_done_through_the_unit_of_work_commits_and_rolls_back_like_a_transaction() {
-    let Some(pool) = get_pool(1).await else { return };
+    let Some(pool) = get_pool(1).await else {
+        return;
+    };
 
     let mut uow = UnitOfWork::begin_for_tenant(&pool, Uuid::new_v4())
         .await

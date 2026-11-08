@@ -13,8 +13,9 @@ pub async fn conversation_counts(
     channel: Option<&str>,
 ) -> sqlx::Result<(i64, i64, i64, i64)> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, (i64, i64, i64, i64)>(
-        r#"
+    let result: sqlx::Result<(i64, i64, i64, i64)> = async {
+        sqlx::query_as::<_, (i64, i64, i64, i64)>(
+            r#"
         SELECT
             COUNT(*)::bigint,
             COUNT(*) FILTER (WHERE c.status IN ('resolved','closed'))::bigint,
@@ -33,13 +34,19 @@ pub async fn conversation_counts(
           AND c.created_at < $3
           AND ($4::text IS NULL OR c.channel = $4)
         "#,
-    )
-    .bind(tenant_id)
-    .bind(from_ts)
-    .bind(to_ts)
-    .bind(channel)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(from_ts)
+        .bind(to_ts)
+        .bind(channel)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn avg_first_response_seconds(
@@ -50,8 +57,9 @@ pub async fn avg_first_response_seconds(
     channel: Option<&str>,
 ) -> sqlx::Result<Option<f64>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar::<_, Option<f64>>(
-        r#"
+    let result: sqlx::Result<Option<f64>> = async {
+        sqlx::query_scalar::<_, Option<f64>>(
+            r#"
         WITH cohort AS (
             SELECT c.id FROM conversations c
             WHERE c.tenant_id = $1 AND c.deleted_at IS NULL
@@ -75,13 +83,19 @@ pub async fn avg_first_response_seconds(
         FROM first_customer fc
         JOIN first_reply fr ON fr.conversation_id = fc.conversation_id
         "#,
-    )
-    .bind(tenant_id)
-    .bind(from_ts)
-    .bind(to_ts)
-    .bind(channel)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(from_ts)
+        .bind(to_ts)
+        .bind(channel)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn avg_response_seconds(
@@ -92,8 +106,9 @@ pub async fn avg_response_seconds(
     channel: Option<&str>,
 ) -> sqlx::Result<Option<f64>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar::<_, Option<f64>>(
-        r#"
+    let result: sqlx::Result<Option<f64>> = async {
+        sqlx::query_scalar::<_, Option<f64>>(
+            r#"
         WITH cohort AS (
             SELECT c.id FROM conversations c
             WHERE c.tenant_id = $1 AND c.deleted_at IS NULL
@@ -113,13 +128,19 @@ pub async fn avg_response_seconds(
         ) r
         WHERE m.tenant_id = $1 AND m.kind = 'customer' AND r.replied_at IS NOT NULL
         "#,
-    )
-    .bind(tenant_id)
-    .bind(from_ts)
-    .bind(to_ts)
-    .bind(channel)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(from_ts)
+        .bind(to_ts)
+        .bind(channel)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn satisfaction(
@@ -130,8 +151,9 @@ pub async fn satisfaction(
     channel: Option<&str>,
 ) -> sqlx::Result<(Option<f64>, i64)> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, (Option<f64>, i64)>(
-        r#"
+    let result: sqlx::Result<(Option<f64>, i64)> = async {
+        sqlx::query_as::<_, (Option<f64>, i64)>(
+            r#"
         SELECT AVG(f.rating)::float8, COUNT(*)::bigint
         FROM conversation_feedback f
         WHERE f.tenant_id = $1
@@ -139,13 +161,19 @@ pub async fn satisfaction(
           AND f.submitted_at < $3
           AND ($4::text IS NULL OR f.channel = $4)
         "#,
-    )
-    .bind(tenant_id)
-    .bind(from_ts)
-    .bind(to_ts)
-    .bind(channel)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(from_ts)
+        .bind(to_ts)
+        .bind(channel)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn token_totals(
@@ -155,8 +183,9 @@ pub async fn token_totals(
     to_ts: DateTime<Utc>,
 ) -> sqlx::Result<(i64, i64)> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, (i64, i64)>(
-        r#"
+    let result: sqlx::Result<(i64, i64)> = async {
+        sqlx::query_as::<_, (i64, i64)>(
+            r#"
         SELECT
             COALESCE(SUM(COALESCE(u.input_tokens,0) + COALESCE(u.output_tokens,0)), 0)::bigint,
             COALESCE(SUM(COALESCE(u.input_tokens,0) + COALESCE(u.output_tokens,0))
@@ -169,12 +198,18 @@ pub async fn token_totals(
         ) g ON TRUE
         WHERE u.tenant_id = $1 AND u.created_at >= $2 AND u.created_at < $3
         "#,
-    )
-    .bind(tenant_id)
-    .bind(from_ts)
-    .bind(to_ts)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(from_ts)
+        .bind(to_ts)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn channel_breakdown(
@@ -185,25 +220,32 @@ pub async fn channel_breakdown(
     channel: Option<&str>,
 ) -> sqlx::Result<Vec<(String, i64)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let mut sql = String::from(
-        "SELECT c.channel, COUNT(*)::bigint \
+    let result: sqlx::Result<Vec<(String, i64)>> = async {
+        let mut sql = String::from(
+            "SELECT c.channel, COUNT(*)::bigint \
          FROM conversations c \
          WHERE c.tenant_id = $1 AND c.deleted_at IS NULL \
            AND c.created_at >= $2 AND c.created_at < $3",
-    );
-    if channel.is_some() {
-        sql.push_str(" AND c.channel = $4");
-    }
-    sql.push_str(" GROUP BY c.channel ORDER BY COUNT(*) DESC, c.channel ASC");
+        );
+        if channel.is_some() {
+            sql.push_str(" AND c.channel = $4");
+        }
+        sql.push_str(" GROUP BY c.channel ORDER BY COUNT(*) DESC, c.channel ASC");
 
-    let mut q = sqlx::query_as::<_, (String, i64)>(sqlx::AssertSqlSafe(sql))
-        .bind(tenant_id)
-        .bind(from_ts)
-        .bind(to_ts);
-    if let Some(ch) = channel {
-        q = q.bind(ch);
+        let mut q = sqlx::query_as::<_, (String, i64)>(sqlx::AssertSqlSafe(sql))
+            .bind(tenant_id)
+            .bind(from_ts)
+            .bind(to_ts);
+        if let Some(ch) = channel {
+            q = q.bind(ch);
+        }
+        q.fetch_all(uow.conn()).await
     }
-    q.fetch_all(uow.conn()).await
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn token_totals_for_channel(
@@ -214,8 +256,9 @@ pub async fn token_totals_for_channel(
     channel: &str,
 ) -> sqlx::Result<i64> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar::<_, i64>(
-        r#"
+    let result: sqlx::Result<i64> = async {
+        sqlx::query_scalar::<_, i64>(
+            r#"
         SELECT COALESCE(SUM(COALESCE(u.input_tokens,0) + COALESCE(u.output_tokens,0)), 0)::bigint
         FROM ai_usage_records u
         WHERE u.tenant_id = $1 AND u.created_at >= $2 AND u.created_at < $3
@@ -226,13 +269,19 @@ pub async fn token_totals_for_channel(
                 AND c.channel = $4 AND c.deleted_at IS NULL
           )
         "#,
-    )
-    .bind(tenant_id)
-    .bind(from_ts)
-    .bind(to_ts)
-    .bind(channel)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(from_ts)
+        .bind(to_ts)
+        .bind(channel)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn daily_series(
@@ -245,6 +294,7 @@ pub async fn daily_series(
     channel: Option<&str>,
 ) -> sqlx::Result<Vec<(NaiveDate, i64, i64, i64, Option<f64>, i64, i64)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Vec<(NaiveDate, i64, i64, i64, Option<f64>, i64, i64)>> = async {
     sqlx::query_as::<_, (NaiveDate, i64, i64, i64, Option<f64>, i64, i64)>(
         r#"
         WITH days AS (
@@ -305,4 +355,10 @@ pub async fn daily_series(
     .bind(to_date)
     .fetch_all(uow.conn())
     .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }

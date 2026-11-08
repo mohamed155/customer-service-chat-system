@@ -1283,15 +1283,22 @@ pub async fn conversation_ai_state(
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<(String, Option<String>)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, (String, Option<String>)>(
-        "SELECT status, ai_handling \
+    let result: sqlx::Result<Option<(String, Option<String>)>> = async {
+        sqlx::query_as::<_, (String, Option<String>)>(
+            "SELECT status, ai_handling \
          FROM conversations \
          WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn has_system_message(
@@ -1300,16 +1307,23 @@ pub async fn has_system_message(
     conversation_id: Uuid,
 ) -> sqlx::Result<bool> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar(
-        "SELECT EXISTS( \
+    let result: sqlx::Result<bool> = async {
+        sqlx::query_scalar(
+            "SELECT EXISTS( \
          SELECT 1 FROM messages \
          WHERE tenant_id = $1 AND conversation_id = $2 AND kind = 'system' \
          )",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn has_system_message_batch(
@@ -1318,23 +1332,30 @@ pub async fn has_system_message_batch(
     conversation_ids: &[Uuid],
 ) -> sqlx::Result<Vec<(Uuid, bool)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    if conversation_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-    let rows: Vec<(Uuid, bool)> = sqlx::query_as(
-        "SELECT conversation_id, EXISTS( \
+    let result: sqlx::Result<Vec<(Uuid, bool)>> = async {
+        if conversation_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows: Vec<(Uuid, bool)> = sqlx::query_as(
+            "SELECT conversation_id, EXISTS( \
          SELECT 1 FROM messages m \
          WHERE m.tenant_id = $1 \
          AND m.conversation_id = ANY($2) \
          AND m.kind = 'system' \
          ) AS has_ack \
          FROM unnest($2::uuid[]) AS conversation_id",
-    )
-    .bind(tenant_id)
-    .bind(conversation_ids)
-    .fetch_all(uow.conn())
-    .await?;
-    Ok(rows)
+        )
+        .bind(tenant_id)
+        .bind(conversation_ids)
+        .fetch_all(uow.conn())
+        .await?;
+        Ok(rows)
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn insert_auto_ack_in_tx(
@@ -1431,50 +1452,57 @@ pub async fn load_citations_for_messages(
     message_ids: &[Uuid],
 ) -> sqlx::Result<HashMap<Uuid, Vec<CitationView>>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    if message_ids.is_empty() {
-        return Ok(HashMap::new());
-    }
+    let result: sqlx::Result<HashMap<Uuid, Vec<CitationView>>> = async {
+        if message_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
 
-    let rows: Vec<(Uuid, Uuid, String, String, f32)> = sqlx::query_as(
-        "SELECT message_id, knowledge_item_id, item_title, passage_text, relevance_score \
+        let rows: Vec<(Uuid, Uuid, String, String, f32)> = sqlx::query_as(
+            "SELECT message_id, knowledge_item_id, item_title, passage_text, relevance_score \
          FROM message_citations \
          WHERE tenant_id = $1 AND message_id = ANY($2) \
          ORDER BY ordinal ASC",
-    )
-    .bind(tenant_id)
-    .bind(message_ids)
-    .fetch_all(uow.conn())
-    .await?;
-
-    let mut item_ids: Vec<Uuid> = rows.iter().map(|r| r.1).collect();
-    item_ids.sort();
-    item_ids.dedup();
-
-    let available: std::collections::HashSet<Uuid> = if item_ids.is_empty() {
-        std::collections::HashSet::new()
-    } else {
-        let existing: Vec<(Uuid,)> = sqlx::query_as(
-            "SELECT id FROM knowledge_items \
-             WHERE id = ANY($1) AND deleted_at IS NULL",
         )
-        .bind(&item_ids)
+        .bind(tenant_id)
+        .bind(message_ids)
         .fetch_all(uow.conn())
         .await?;
-        existing.into_iter().map(|r| r.0).collect()
-    };
 
-    let mut map: HashMap<Uuid, Vec<CitationView>> = HashMap::new();
-    for (message_id, knowledge_item_id, item_title, passage_text, relevance_score) in rows {
-        let item_available = available.contains(&knowledge_item_id);
-        map.entry(message_id).or_default().push(CitationView {
-            knowledge_item_id,
-            item_title,
-            passage_text,
-            relevance_score,
-            item_available,
-        });
+        let mut item_ids: Vec<Uuid> = rows.iter().map(|r| r.1).collect();
+        item_ids.sort();
+        item_ids.dedup();
+
+        let available: std::collections::HashSet<Uuid> = if item_ids.is_empty() {
+            std::collections::HashSet::new()
+        } else {
+            let existing: Vec<(Uuid,)> = sqlx::query_as(
+                "SELECT id FROM knowledge_items \
+             WHERE id = ANY($1) AND deleted_at IS NULL",
+            )
+            .bind(&item_ids)
+            .fetch_all(uow.conn())
+            .await?;
+            existing.into_iter().map(|r| r.0).collect()
+        };
+
+        let mut map: HashMap<Uuid, Vec<CitationView>> = HashMap::new();
+        for (message_id, knowledge_item_id, item_title, passage_text, relevance_score) in rows {
+            let item_available = available.contains(&knowledge_item_id);
+            map.entry(message_id).or_default().push(CitationView {
+                knowledge_item_id,
+                item_title,
+                passage_text,
+                relevance_score,
+                item_available,
+            });
+        }
+        Ok(map)
     }
-    Ok(map)
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn has_ai_reply_since(
@@ -1484,18 +1512,25 @@ pub async fn has_ai_reply_since(
     since_message_id: Uuid,
 ) -> sqlx::Result<bool> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar(
-        "SELECT EXISTS( \
+    let result: sqlx::Result<bool> = async {
+        sqlx::query_scalar(
+            "SELECT EXISTS( \
          SELECT 1 FROM messages \
          WHERE tenant_id = $1 AND conversation_id = $2 AND kind = 'ai' \
          AND created_at > (SELECT created_at FROM messages WHERE id = $3 AND tenant_id = $1) \
          )",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .bind(since_message_id)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .bind(since_message_id)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn customer_display_name(
@@ -1504,15 +1539,22 @@ pub async fn customer_display_name(
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<String>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar(
-        "SELECT c.display_name FROM conversations conv \
+    let result: sqlx::Result<Option<String>> = async {
+        sqlx::query_scalar(
+            "SELECT c.display_name FROM conversations conv \
          JOIN customers c ON c.id = conv.customer_id \
          WHERE conv.tenant_id = $1 AND conv.id = $2 AND conv.deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_optional(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn message_body(
@@ -1521,11 +1563,18 @@ pub async fn message_body(
     message_id: Uuid,
 ) -> sqlx::Result<Option<String>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar("SELECT body FROM messages WHERE tenant_id = $1 AND id = $2")
-        .bind(tenant_id)
-        .bind(message_id)
-        .fetch_optional(uow.conn())
-        .await
+    let result: sqlx::Result<Option<String>> = async {
+        sqlx::query_scalar("SELECT body FROM messages WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant_id)
+            .bind(message_id)
+            .fetch_optional(uow.conn())
+            .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn set_ai_handling_in_tx(
@@ -1554,17 +1603,24 @@ pub async fn recent_history(
     limit: i64,
 ) -> sqlx::Result<Vec<(String, String)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_as::<_, (String, String)>(
-        "SELECT kind, body FROM messages \
+    let result: sqlx::Result<Vec<(String, String)>> = async {
+        sqlx::query_as::<_, (String, String)>(
+            "SELECT kind, body FROM messages \
          WHERE tenant_id = $1 AND conversation_id = $2 AND kind IN ('customer', 'reply', 'ai') \
          ORDER BY created_at ASC, seq ASC \
          LIMIT $3",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .bind(limit)
-    .fetch_all(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .bind(limit)
+        .fetch_all(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn insert_fallback_in_tx(
@@ -1602,6 +1658,7 @@ pub async fn summary_history(
     limit: i64,
 ) -> sqlx::Result<Vec<(String, String)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Vec<(String, String)>> = async {
     sqlx::query_as::<_, (String, String)>(
         "SELECT kind, body FROM messages \
          WHERE tenant_id = $1 AND conversation_id = $2 AND kind IN ('customer', 'ai', 'reply', 'system') \
@@ -1613,6 +1670,12 @@ pub async fn summary_history(
     .bind(limit)
     .fetch_all(uow.conn())
     .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn customer_id_for_conversation(
@@ -1621,15 +1684,22 @@ pub async fn customer_id_for_conversation(
     conversation_id: Uuid,
 ) -> sqlx::Result<Uuid> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar(
-        "SELECT customer_id FROM conversations \
+    let result: sqlx::Result<Uuid> = async {
+        sqlx::query_scalar(
+            "SELECT customer_id FROM conversations \
          WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_optional(uow.conn())
-    .await?
-    .ok_or_else(|| sqlx::Error::Protocol("Conversation not found or soft-deleted".into()))
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_optional(uow.conn())
+        .await?
+        .ok_or_else(|| sqlx::Error::Protocol("Conversation not found or soft-deleted".into()))
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn find_open_conversation_in_tx(
@@ -1659,14 +1729,21 @@ pub async fn last_customer_message_at(
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<chrono::DateTime<chrono::Utc>>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar(
-        "SELECT MAX(created_at) FROM messages \
+    let result: sqlx::Result<Option<chrono::DateTime<chrono::Utc>>> = async {
+        sqlx::query_scalar(
+            "SELECT MAX(created_at) FROM messages \
          WHERE tenant_id = $1 AND conversation_id = $2 AND kind = 'customer'",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn load_attachments_for_messages(
@@ -1675,7 +1752,9 @@ pub async fn load_attachments_for_messages(
     message_ids: &[Uuid],
 ) -> sqlx::Result<std::collections::HashMap<Uuid, Vec<crate::model::AttachmentInfo>>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    #[allow(clippy::type_complexity)]
+    let result: sqlx::Result<std::collections::HashMap<Uuid, Vec<crate::model::AttachmentInfo>>> =
+        async {
+            #[allow(clippy::type_complexity)]
     let rows: Vec<(
         Uuid,
         Uuid,
@@ -1694,27 +1773,35 @@ pub async fn load_attachments_for_messages(
     .fetch_all(uow.conn())
     .await?;
 
-    let mut map: std::collections::HashMap<Uuid, Vec<crate::model::AttachmentInfo>> =
-        std::collections::HashMap::new();
-    for (id, message_id, kind, status, mime_type, size_bytes, file_name, storage_key) in rows {
-        let has_storage = storage_key.is_some();
-        map.entry(message_id)
-            .or_default()
-            .push(crate::model::AttachmentInfo {
-                id,
-                kind,
-                status,
-                mime_type,
-                size_bytes,
-                file_name,
-                url: if has_storage {
-                    Some(String::new())
-                } else {
-                    None
-                },
-            });
+            let mut map: std::collections::HashMap<Uuid, Vec<crate::model::AttachmentInfo>> =
+                std::collections::HashMap::new();
+            for (id, message_id, kind, status, mime_type, size_bytes, file_name, storage_key) in
+                rows
+            {
+                let has_storage = storage_key.is_some();
+                map.entry(message_id)
+                    .or_default()
+                    .push(crate::model::AttachmentInfo {
+                        id,
+                        kind,
+                        status,
+                        mime_type,
+                        size_bytes,
+                        file_name,
+                        url: if has_storage {
+                            Some(String::new())
+                        } else {
+                            None
+                        },
+                    });
+            }
+            Ok(map)
+        }
+        .await;
+    if result.is_ok() {
+        uow.commit().await?;
     }
-    Ok(map)
+    result
 }
 
 pub async fn load_whatsapp_meta_for_messages(
@@ -1723,27 +1810,34 @@ pub async fn load_whatsapp_meta_for_messages(
     message_ids: &[Uuid],
 ) -> sqlx::Result<std::collections::HashMap<Uuid, crate::model::DeliveryInfo>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
-        "SELECT message_id, COALESCE(delivery_status, 'pending'), failure_reason \
+    let result: sqlx::Result<std::collections::HashMap<Uuid, crate::model::DeliveryInfo>> = async {
+        let rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
+            "SELECT message_id, COALESCE(delivery_status, 'pending'), failure_reason \
          FROM whatsapp_message_meta \
          WHERE tenant_id = $1 AND message_id = ANY($2) AND direction = 'outbound'",
-    )
-    .bind(tenant_id)
-    .bind(message_ids)
-    .fetch_all(uow.conn())
-    .await?;
+        )
+        .bind(tenant_id)
+        .bind(message_ids)
+        .fetch_all(uow.conn())
+        .await?;
 
-    let mut map = std::collections::HashMap::new();
-    for (message_id, status, failure_reason) in rows {
-        map.insert(
-            message_id,
-            crate::model::DeliveryInfo {
-                status,
-                failure_reason,
-            },
-        );
+        let mut map = std::collections::HashMap::new();
+        for (message_id, status, failure_reason) in rows {
+            map.insert(
+                message_id,
+                crate::model::DeliveryInfo {
+                    status,
+                    failure_reason,
+                },
+            );
+        }
+        Ok(map)
     }
-    Ok(map)
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn has_customer_message_after(
@@ -1753,30 +1847,37 @@ pub async fn has_customer_message_after(
     after_message_id: Uuid,
 ) -> sqlx::Result<bool> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let created_at: Option<chrono::DateTime<chrono::Utc>> =
-        sqlx::query_scalar("SELECT created_at FROM messages WHERE tenant_id = $1 AND id = $2")
-            .bind(tenant_id)
-            .bind(after_message_id)
-            .fetch_optional(uow.conn())
-            .await?;
+    let result: sqlx::Result<bool> = async {
+        let created_at: Option<chrono::DateTime<chrono::Utc>> =
+            sqlx::query_scalar("SELECT created_at FROM messages WHERE tenant_id = $1 AND id = $2")
+                .bind(tenant_id)
+                .bind(after_message_id)
+                .fetch_optional(uow.conn())
+                .await?;
 
-    let after = match created_at {
-        Some(t) => t,
-        None => return Ok(false),
-    };
+        let after = match created_at {
+            Some(t) => t,
+            None => return Ok(false),
+        };
 
-    sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS ( \
+        sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS ( \
          SELECT 1 FROM messages \
          WHERE tenant_id = $1 AND conversation_id = $2 \
          AND kind = 'customer' \
          AND created_at > $3 \
          LIMIT 1 \
          )",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .bind(after)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .bind(after)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }

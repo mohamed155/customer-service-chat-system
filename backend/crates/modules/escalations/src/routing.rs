@@ -667,14 +667,21 @@ pub async fn has_open_escalation(
     conversation_id: Uuid,
 ) -> sqlx::Result<bool> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    sqlx::query_scalar(
-        "SELECT EXISTS( \
+    let result: sqlx::Result<bool> = async {
+        sqlx::query_scalar(
+            "SELECT EXISTS( \
          SELECT 1 FROM escalations \
          WHERE tenant_id = $1 AND conversation_id = $2 AND status IN ('queued', 'assigned') \
          )",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_one(uow.conn())
-    .await
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
