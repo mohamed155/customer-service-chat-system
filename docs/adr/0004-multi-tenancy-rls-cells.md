@@ -37,6 +37,7 @@ are explicitly listed as non-tenant in the schema conventions.
 ### 2. Row-Level Security as the database layer of defence
 
 - Every tenant-owned table has RLS **enabled and forced**:
+
   ```sql
   ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
   ALTER TABLE conversations FORCE ROW LEVEL SECURITY;
@@ -44,6 +45,7 @@ are explicitly listed as non-tenant in the schema conventions.
     USING      (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
     WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
   ```
+
 - Each transaction sets the tenant **transaction-locally** before touching tenant data:
   `SELECT set_config('app.tenant_id', $1, true)` (equivalent to `SET LOCAL`). Transaction-local
   settings are safe with PgBouncer transaction pooling; session-level `SET` is forbidden.
@@ -76,10 +78,12 @@ migrations run as `app_owner` in a separate step before rollout.
 
 - Every tenant-owned table has `UNIQUE (tenant_id, id)`.
 - Every reference from one tenant-owned table to another is composite:
+
   ```sql
   FOREIGN KEY (tenant_id, conversation_id)
     REFERENCES conversations (tenant_id, id)
   ```
+
 - Single-column FKs are allowed only to **global** tables (`users`, `tenants`).
   This makes a cross-tenant reference impossible at the database level, independent of RLS.
 

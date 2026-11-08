@@ -1,7 +1,7 @@
 name: CI
 # Repository-level checks that do not belong to one app (Phase 0, MOH-25). Backend and frontend
-# keep their own workflows (backend.yml, frontend.yml). Jobs for docs, Compose and secret scanning
-# are added to this file by MOH-26 and MOH-27.
+# keep their own workflows (backend.yml, frontend.yml). This file holds the commit lint (MOH-25) and
+# the docs and Compose checks (MOH-26). Secret scanning is added by MOH-27.
 #
 # - Runs on every pull request and on every push to master (the trunk).
 # - `edited` is in the pull_request types so the PR title is re-checked after a rename. A title edit
@@ -52,3 +52,78 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: pnpm --dir frontend exec commitlint --config ../commitlint.config.mjs --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
+
+  # markdownlint on docs/ and the root markdown files. Rules and the disabled ones are in
+  # .markdownlint-cli2.jsonc. The action bundles markdownlint-cli2 0.24.0; keep the globs below in
+  # step with that file. Run it locally with: npx markdownlint-cli2@0.24.0
+  docs-lint:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: DavidAnson/markdownlint-cli2-action@696eb3f2509270d7b882d2aa68347bc676e7af34 # v25.0.0
+        with:
+          globs: |
+            docs/**/*.md
+            *.md
+
+  # Internal links must resolve: a relative link to a file that does not exist, or to a heading that
+  # does not exist, fails the build. --offline means lychee never touches the network here, so this
+  # job cannot flake.
+  docs-links:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          lycheeVersion: v0.24.2
+          jobSummary: true
+          args: --offline --include-fragments --no-progress 'docs/**/*.md' '*.md'
+
+  # External links only warn. A third-party site being down or slow must not block a merge, so this
+  # job never fails on a broken link: it annotates the run instead. Do not make it a required check.
+  docs-links-external:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - id: lychee
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          lycheeVersion: v0.24.2
+          fail: false
+          jobSummary: true
+          # 403 and 429 are bot blocking and rate limiting, not dead links. Loopback addresses
+          # (the http://localhost:... dev URLs in the README) can never resolve on a runner, so they
+          # are skipped; otherwise the warning would be permanent and nobody would read it.
+          args: >-
+            --scheme http --scheme https --exclude-loopback --no-progress --timeout 20
+            --max-retries 2 --accept '100..=103,200..=299,403,429' 'docs/**/*.md' '*.md'
+      - name: Warn about broken external links
+        if: steps.lychee.outputs.exit_code != '0'
+        run: echo "::warning title=Broken external links::lychee found external links that did not resolve. See the job summary. This does not fail the build."
+
+  # The Compose files must parse for every profile and for the staging overlay. Same commands as the
+  # "Compose files parse" step in infra.yml, but they run on every pull request, not only when infra/
+  # changes.
+  compose-config:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - name: docker compose config
+        run: |
+          docker compose --env-file .env.example -f infra/docker-compose.yml config -q
+          docker compose --env-file .env.example --profile observability -f infra/docker-compose.yml config -q
+          touch .env.staging
+          APP_RELEASE_SHA=ci APP_DOMAIN=example.test \
+            docker compose --env-file .env.example -f infra/docker-compose.yml -f infra/docker-compose.staging.yml config -q

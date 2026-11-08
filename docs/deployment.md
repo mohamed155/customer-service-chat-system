@@ -6,22 +6,30 @@
 2. **Clone the repository** and check out the target release tag.
 3. **Create `.env.staging`** from `.env.staging.example` with real secrets.
 4. **Create the node-exporter textfile collector directory:**
+
    ```bash
    sudo mkdir -p /var/lib/node_exporter/textfile_collector
    ```
+
 5. **Start infrastructure services:**
-   ```
+
+   ```bash
    docker compose --profile observability -f infra/docker-compose.yml up -d
    ```
-5. **Run initial migrations:**
-   ```
+
+6. **Run initial migrations:**
+
+   ```bash
    docker compose -f infra/docker-compose.yml -f infra/docker-compose.staging.yml run --rm backend migrate
    ```
-6. **Start the full stack:**
-   ```
+
+7. **Start the full stack:**
+
+   ```bash
    APP_RELEASE_SHA=<sha> docker compose --profile observability -f infra/docker-compose.yml -f infra/docker-compose.staging.yml up -d
    ```
-7. **Verify:** the `/api/v1/health` and `/ready` endpoints respond, and the dashboard loads at the configured `PUBLIC_DASHBOARD_URL`.
+
+8. **Verify:** the `/api/v1/health` and `/ready` endpoints respond, and the dashboard loads at the configured `PUBLIC_DASHBOARD_URL`.
 
 > **Note:** Omitting `--profile observability` from the docker compose commands leaves the platform running with no metrics, dashboards, logs, or alerting.
 

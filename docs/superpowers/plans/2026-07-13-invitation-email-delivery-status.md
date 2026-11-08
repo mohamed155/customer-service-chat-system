@@ -21,6 +21,7 @@
 ### Task 1: Persisted Backend Delivery State
 
 **Files:**
+
 - Create: `backend/migrations/0020_invitation_email_delivery_status.sql`
 - Modify: `backend/crates/shared/db/tests/schema.rs`
 - Modify: `backend/crates/modules/tenancy/src/invitations.rs`
@@ -28,6 +29,7 @@
 - Test: `backend/crates/server/tests/team_members.rs`
 
 **Interfaces:**
+
 - Produces: `EmailDeliveryStatus`, persisted `email_delivery_status`, and invitation create/list JSON projections.
 
 - [ ] Write schema and deterministic endpoint tests that require the new column, immediate queued/unconfigured creation result, and eventual sent/failed list result.
@@ -39,6 +41,7 @@
 ### Task 2: Frontend Projection and Eventual Truth
 
 **Files:**
+
 - Modify: `frontend/apps/dashboard/src/app/core/api/tenant-api.models.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/invitation-table.component.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/invite-dialog.component.ts`
@@ -47,6 +50,7 @@
 - Test: `frontend/apps/dashboard/src/app/features/tenant/team/team.store.spec.ts`
 
 **Interfaces:**
+
 - Consumes: list item `emailDeliveryStatus: 'unconfigured' | 'queued' | 'sent' | 'failed'`.
 - Produces: status text visible after the existing list refresh/poll path.
 
@@ -58,6 +62,7 @@
 ### Task 3: Contract and Verification
 
 **Files:**
+
 - Modify: `specs/011-tenant-team-management/contracts/rest-api.md`
 
 - [ ] Update create/list response documentation and define `email_sent` as true only for `sent`.

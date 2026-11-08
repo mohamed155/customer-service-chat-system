@@ -20,11 +20,13 @@
 ### Task 1: Shared dialog shell for invitation modal
 
 **Files:**
+
 - Create: `frontend/apps/dashboard/src/app/shared/components/dialog-shell/dialog-shell.component.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/invite-dialog.component.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/invite-dialog.component.spec.ts`
 
 **Interfaces:**
+
 - Consumes: projected title/content/actions, `open`, `ariaLabelledby`, `ariaDescribedby`, optional submit-guard flag, Escape/backdrop dismissal, focus restoration.
 - Produces: a reusable dialog shell that restores focus to the trigger on close and blocks backdrop/Escape dismissal while submitting.
 
@@ -53,12 +55,14 @@ Run: `pnpm vitest frontend/apps/dashboard/src/app/features/tenant/team/invite-di
 ### Task 2: Invitation status filter and cursor handling
 
 **Files:**
+
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/team.store.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/team-list.component.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/team.store.spec.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/team-list.component.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `InvitationQuery.status`, cursor-based pagination, invitation load/reload methods.
 - Produces: `setInvitationStatusFilter(status)`, reset-on-filter-change behavior, appended pages when loading more, pending/expired sections that remain visible by default.
 
@@ -92,10 +96,12 @@ Run: `pnpm vitest frontend/apps/dashboard/src/app/features/tenant/team/team-list
 ### Task 3: Invitation acceptance shell cleanup
 
 **Files:**
+
 - Modify: `frontend/apps/dashboard/src/app/features/auth/invite/accept-invitation.component.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/auth/invite/accept-invitation.component.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `AuthCardComponent`, existing validation/error mapping, `CurrentUserService.load`, permission-based landing resolution.
 - Produces: auth-card-based invitation accept page with the same acceptance flow and error handling.
 
@@ -120,9 +126,11 @@ Run: `pnpm vitest frontend/apps/dashboard/src/app/features/auth/invite/accept-in
 ### Task 4: Verification and report
 
 **Files:**
+
 - Add: `.superpowers/sdd/frontend-remaining-report.md`
 
 **Interfaces:**
+
 - Produces: concise implementation report with status, commits, tests, and concerns.
 
 - [ ] **Step 1: Run the relevant frontend test files**

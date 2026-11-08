@@ -63,23 +63,27 @@ migration state:
 If the automated script is unavailable, follow these steps:
 
 1. Download and decrypt the backup:
+
    ```bash
    mc cp remote/BUCKET/db/backup-20260726T020000Z.dump.age .
    age --decrypt -i /path/to/age-key.txt backup-20260726T020000Z.dump.age > backup.dump
    ```
 
 2. Restore objects first:
+
    ```bash
    mc mirror --overwrite remote/BUCKET/objects/20260726T020000Z/ local/APP_S3_BUCKET/
    ```
 
 3. Restore the database:
+
    ```bash
     pg_restore --clean --if-exists --no-owner --no-privileges \
       --dbname postgresql://<user>:<password>@<host>:5432/<dbname> backup.dump
    ```
 
 4. Apply any pending migrations if the backup was older:
+
    ```bash
    sqlx migrate run
    ```
@@ -115,6 +119,7 @@ target SHAs. It prints the migration list and directs the operator here.
 ### Assessing safety
 
 1. Identify the migrations that ran between the two SHAs:
+
    ```bash
    git log --oneline <target-sha>..<current-sha> -- backend/migrations/
    ```
@@ -134,9 +139,11 @@ If a destructive migration must be rolled back:
 
 1. Restore the latest pre-migration backup using `ops/restore.sh` with `--force-live`.
 2. Deploy the target SHA:
+
    ```bash
    ops/deploy.sh <target-sha>
    ```
+
 3. Confirm data integrity with application health checks.
 
 ### Preventive measures

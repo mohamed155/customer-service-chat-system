@@ -10,28 +10,39 @@ Five common operational tasks for the AI Customer Service Platform.
 
 1. Identify the commit SHA to promote (e.g. from CI on `main`).
 2. Verify the SHA has passed CI:
+
    ```bash
    gh run list --commit <sha> --workflow backend.yml
    gh run list --commit <sha> --workflow frontend.yml
    ```
+
 3. Push the Docker image tag if the registry does not follow Git SHAs:
+
    ```bash
    docker tag app:<sha> registry.example.com/app:<sha>
    docker push registry.example.com/app:<sha>
    ```
+
 4. On the target host, pull the new image:
+
    ```bash
    docker compose -f infra/docker-compose.yml pull
    ```
+
 5. Run migrations:
+
    ```bash
    cd backend && sqlx migrate run
    ```
+
 6. Restart the service:
+
    ```bash
    docker compose -f infra/docker-compose.yml up -d --no-deps app
    ```
+
 7. Poll the readiness endpoint:
+
    ```bash
    ok=0; for i in $(seq 1 30); do
      if curl -sf http://localhost:8080/ready; then ok=1; break; fi
@@ -63,13 +74,17 @@ Five common operational tasks for the AI Customer Service Platform.
 
 1. Identify the previous known-good SHA.
 2. Check whether any migrations ran between the current and target SHA:
+
    ```bash
    git log --oneline <target-sha>..<current-sha> -- backend/migrations/
    ```
+
 3. **If no migrations ran between the two SHAs**, proceed:
+
    ```bash
     ops/rollback.sh <target-sha>
    ```
+
 4. **If migrations did run**, the rollback is more involved:
    - The deployment script (`ops/rollback.sh`) **refuses by default** when
      migrations intervened. Use `--force` only after reading
@@ -80,6 +95,7 @@ Five common operational tasks for the AI Customer Service Platform.
    - If the migration was destructive (dropped columns, deleted data), you
      must restore from backup first (see §3), then deploy the old SHA.
 5. Confirm readiness after rollback:
+
    ```bash
    curl -sf http://localhost:8080/ready
    ```
@@ -107,29 +123,40 @@ Five common operational tasks for the AI Customer Service Platform.
 ### Steps
 
 1. Identify the backup to restore. Backups are named by timestamp:
-   ```
+
+   ```text
    backup-<YYYYMMDDTHHMMSSZ>.sql.gz.age
    ```
+
 2. Decrypt the backup (requires the `age` private key):
+
    ```bash
    age --decrypt -i /path/to/age-key.txt \
      backup-20260726T120000Z.sql.gz.age > backup.sql.gz
    ```
+
 3. Verify the backup is not corrupt:
+
    ```bash
    gzip -t backup.sql.gz
    ```
+
 4. **(Off-host restore preferred)** Restore into a fresh database container:
+
    ```bash
    createdb temp_restore
    gunzip -c backup.sql.gz | psql temp_restore
    ```
+
 5. Run the migration checker to confirm the schema version matches the current
    code:
+
    ```bash
     ops/verify-backup.sh
    ```
+
 6. To restore the live database:
+
    ```bash
    # Stop the app
    docker compose stop app
@@ -171,18 +198,22 @@ credentials.
 ### Steps
 
 1. Generate the new value:
+
    ```bash
    # For keys requiring base64 of 32 bytes:
    openssl rand -base64 32
    # For AUTH_JWT_SECRET (also base64 of 32+ bytes):
    openssl rand -base64 32
    ```
+
 2. Update the secret in the deployment environment (Docker secrets, Vault,
    Kubernetes secret, or `.env` file).
 3. Restart the service without downtime (rolling restart if multi-instance):
+
    ```bash
    docker compose up -d --no-deps app
    ```
+
 4. **For `APP_AI_KEY_ENCRYPTION_KEY` and `APP_INTEGRATION_SECRETS_KEY`**:
    Existing encrypted values become **unreadable** after rotation. The system
    uses a single active key with no previous-key fallback or transparent
@@ -221,30 +252,38 @@ credentials.
    - **One feature affected**: Likely an application bug.
 
 2. Check the health endpoint:
+
    ```bash
    curl -sf http://localhost:8080/api/v1/health | jq .
    ```
+
    If a dependency is `"down"`, address that first.
 
 3. Check application logs:
+
    ```bash
    docker compose logs app --tail 200 --since 10m
    ```
+
    If structured logging (`LOG_FORMAT=json`) is on, pipe through `jq`:
+
    ```bash
    docker compose logs app --since 10m | grep -v "^[a-z]" | jq 'select(.level == "ERROR")'
    ```
 
 4. Check Sentry (if configured) for grouped errors with stack traces:
+
    ```bash
    # Sentry UI at https://<org>.sentry.io
    # Filter by release SHA or environment
    ```
 
 5. Check metrics:
+
    ```bash
    curl -sf http://localhost:8080/metrics | grep -E '(http_requests_total|http_request_duration_seconds|rate_limit_refusals_total)'
    ```
+
    Look for error rate spikes or latency degradation.
 
 6. Trace a specific request through the system using the correlation ID

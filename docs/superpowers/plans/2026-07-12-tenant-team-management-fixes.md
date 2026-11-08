@@ -21,10 +21,12 @@
 ### Task 1: Harden backend invitation creation
 
 **Files:**
+
 - Modify: `backend/crates/modules/tenancy/src/invitations.rs`
 - Modify: `backend/crates/server/tests/team_members.rs`
 
 **Interfaces:**
+
 - Consumes: `routes::is_valid_email`, `notifications::EmailSender::is_configured`, existing create-invitation response shape.
 - Produces: 422 for malformed invite emails, `email_sent` that reflects configuration state, and stable contract coverage for the invitation response.
 
@@ -68,10 +70,12 @@ Run: `cargo test -p server --test team_members create_invitation_success create_
 ### Task 2: Make last-owner locking deterministic
 
 **Files:**
+
 - Modify: `backend/crates/modules/tenancy/src/members.rs`
 - Modify: `backend/crates/server/tests/team_members.rs`
 
 **Interfaces:**
+
 - Consumes: the existing `update_member` transaction and audit helpers.
 - Produces: a deterministic owner-row locking order that preserves the last-owner guard under concurrent demotion/disable.
 
@@ -107,12 +111,14 @@ Run: `cargo test -p server --test team_members last_owner_changes_remain_conflic
 ### Task 3: Surface invite acceptance mismatch and invitation-load failures
 
 **Files:**
+
 - Modify: `frontend/apps/dashboard/src/app/features/auth/invite/accept-invitation.component.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/auth/invite/accept-invitation.component.spec.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/team-list.component.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/team-list.component.spec.ts`
 
 **Interfaces:**
+
 - Consumes: invitation preview `email`, current signed-in user email, and `TeamStore.invitationsStatus()/invitationsError()`.
 - Produces: explicit signed-in email mismatch guidance and a visible invitation-load error state.
 
@@ -142,9 +148,11 @@ Run: `pnpm vitest frontend/apps/dashboard/src/app/features/auth/invite/accept-in
 ### Task 4: Final verification
 
 **Files:**
+
 - Modify: `specs/011-tenant-team-management/tasks.md` only if any task status needs correction after implementation.
 
 **Interfaces:**
+
 - Produces: a validated implementation with the remaining backend and frontend gaps closed.
 
 - [ ] **Step 1: Run the focused backend and frontend tests**
