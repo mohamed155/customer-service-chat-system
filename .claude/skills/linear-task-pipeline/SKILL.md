@@ -1,6 +1,6 @@
 ---
 name: linear-task-pipeline
-description: Take a Linear issue (or an epic and all its sub-issues, then the epic itself; finishing the last open sub-issue also finishes its parent) from Todo to Done — mark In Progress, implement on the issue's branch, open a PR, mark In Review, wait for CI, the Kilo Code review and the CodeRabbit review (requesting it by comment), fix CI failures and valid review comments, merge to master, tick the description's checkboxes, mark Done. Use when the user says "run the pipeline on MOH-NN", "implement MOH-NN end to end", or "loop over the sub-tasks of MOH-NN".
+description: Take a Linear issue (or an epic and all its sub-issues, then the epic itself; finishing the last open sub-issue also finishes its parent unless one of the parent's own criteria is unmet) from Todo to Done — mark In Progress, implement on the issue's branch, open a PR, mark In Review, wait for CI, the Kilo Code review and the CodeRabbit review (requesting it by comment), fix CI failures and valid review comments, merge to master, tick the description's checkboxes, mark Done. Use when the user says "run the pipeline on MOH-NN", "implement MOH-NN end to end", or "loop over the sub-tasks of MOH-NN".
 argument-hint: <linear-issue-id> (e.g. MOH-17, or an epic like MOH-6)
 ---
 
@@ -40,8 +40,9 @@ Stop and tell the user if any check fails; don't work around it.
   is not Done / Canceled / Duplicate, **followed by the epic itself as the last item** (step 9).
   Otherwise the queue is just the issue itself; if that issue has a parent, look at the parent's
   other sub-issues now. When this issue is the last one open (all the others are Done, Canceled
-  or Duplicate), **append the parent as the last item**, so it is finished in this same run
-  (step 9). Otherwise leave the parent alone and say which sub-issues are still open.
+  or Duplicate) and the parent itself is not Done, Canceled or Duplicate, **append the parent as
+  the last item**, so it is finished in this same run (step 9). Otherwise leave the parent alone
+  and say why (which sub-issues are still open, or that the parent is already closed).
 - Order: respect `blockedBy` relations first, then priority (Urgent → Low), then identifier.
   An issue blocked by something not Done waits until its blocker finishes in this run; if the
   blocker is outside the queue and not Done, skip the issue and report it.
@@ -263,7 +264,9 @@ Then tick the checkboxes and close the issue:
 ## 8. Next issue
 
 Go to the next issue in the queue. When only the parent is left, go to step 9 and finish it as
-well; the run is not over until the parent is Done or a named box is holding it open.
+well; the run is not over until the parent is Done or a named box is holding it open. The one
+exception is a sub-issue skipped because its blocker is outside the queue: then the run may stop
+after reporting that sub-issue, and the parent stays untouched (step 9).
 
 ## 9. Parent issue (epic) — finished in the same run
 
@@ -272,9 +275,11 @@ whether to continue, and don't leave the parent for a second invocation: the use
 have to re-run the skill to close an epic.
 
 When the last open sub-issue of a parent finishes, re-query its sub-issues (`list_issues` with
-`parentId`). If **every** sub-issue is Done, Canceled or Duplicate, run the parent through the
-same loop straight away. If any is still open, parked or skipped in this run, don't touch the
-parent: report which sub-issues block it. This applies both when the skill was invoked on the
+`parentId`) and read the parent's own status. Decide from those current statuses: if **every**
+sub-issue is Done, Canceled or Duplicate, and the parent is not itself Done, Canceled or
+Duplicate, run the parent through the same loop straight away. If any sub-issue is still open,
+or was parked or skipped and has not reached one of those states, don't touch the parent: report
+which sub-issues block it. Leave a terminal parent as it is. This applies both when the skill was invoked on the
 epic and when it was invoked on a single sub-issue that turned out to be the last one open.
 
 For the parent:
@@ -292,8 +297,11 @@ For the parent:
      checkbox/close part, with the evidence pointing at the sub-issues' merged PRs and files on
      `master`.
 3. **Step 7** — tick the epic's checkboxes with the same rules, mark it **Done**, and comment
-   with the evidence list and the sub-issues' PRs. Mark it Done in this run whenever every box
-   is met. The epic stays open only for a box that is genuinely not met (not delivered, or not
+   with the evidence list and the sub-issues' PRs. Re-query the sub-issues right before marking
+   it Done: one that was added or reopened meanwhile stops the close (Linear can auto-close
+   sub-issues together with their parent, which would hide unfinished work). Mark it Done in
+   this run whenever every deliverable box is met; boxes that aren't deliverables (see step 7.2)
+   don't count. The epic stays open only for a box that is genuinely not met (not delivered, or not
    verifiable by anything this run can do, such as a platform nobody tested). In that case tick
    the boxes that are met, leave the others unticked, keep the epic In Progress, and ask the
    user in the final report what to do about exactly those boxes. Never tick a box on a guess to
