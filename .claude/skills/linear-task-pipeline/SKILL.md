@@ -188,11 +188,15 @@ Same rules as Kilo, with three differences:
 
 After pushing the fixes, go back to step 5; the watcher asks CodeRabbit to review the new head.
 
-**CodeRabbit rate-limited** (`coderabbit=rate-limited`) — the plan allows 1 review per hour. Read
-the notice for the wait time. Wait it out with one long Monitor (`until` loop, at most 60
-minutes), then re-run the watcher with `CR_FORCE_TRIGGER=1`. Don't merge while waiting. If the
-wait would be longer than an hour or it rate-limits twice in a row, stop and ask the user
-whether to merge without a re-review.
+**CodeRabbit rate-limited** (`coderabbit=rate-limited`) — the plan allows 1 review per hour, and
+**a rate limit never blocks the merge**. Don't wait for the window to reopen, don't start a
+timer and don't re-trigger. Carry on with step 7 as soon as CI and Kilo are done. The user decided
+this because the wait was costing more than the re-review was worth.
+- Findings from an **earlier** CodeRabbit review of this PR (before the push that got
+  rate-limited) still have to be fixed or answered. Only the *re-review of your fixes* is skipped.
+- Say in the Done comment and the final report that CodeRabbit did not review the final head,
+  and why (the notice's "Next included review available in N minutes" line).
+- A CodeRabbit review that happens to land before you merge still counts: read it (step 7).
 
 **Other CodeRabbit results** — `failed`: read the `CodeRabbit` check output
 (`gh api repos/{owner}/{repo}/commits/<sha>/check-runs`), retry once with `CR_FORCE_TRIGGER=1`,
@@ -207,7 +211,8 @@ fix would go beyond the issue's scope.
 ## 7. Merge and close
 
 Merge only when: CI all green on the head commit, `DONE` was printed for **this** head commit
-with `coderabbit=reviewed` (or a `skipped`/`off`/timeout outcome the user accepted),
+with `coderabbit=reviewed` or `coderabbit=rate-limited` (never wait for the limit; see step 6),
+or a `skipped`/`off`/timeout outcome the user accepted,
 every Kilo and CodeRabbit comment fixed or answered, no merge conflicts, and the PR is still yours
 and open. Right before merging, read the three `gh api` lists once more for both bots: a review
 that lands between `DONE` and the merge still counts (this is how PR #20 was merged with two
