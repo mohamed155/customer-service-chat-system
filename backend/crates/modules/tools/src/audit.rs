@@ -18,18 +18,23 @@ pub async fn record_execution(
         "request_id": tool_request_id,
     });
 
-    let result = sqlx::query(
-        "INSERT INTO audit_logs \
-         (actor_user_id, action, resource_type, resource_id, tenant_id, details) \
-         VALUES ($1, $2, $3, $4, $5, $6)",
-    )
-    .bind(Option::<Uuid>::None)
-    .bind("tool.executed")
-    .bind("tenant_tool")
-    .bind(resource_id)
-    .bind(tenant_id)
-    .bind(&details)
-    .execute(pool)
+    let result: sqlx::Result<()> = async {
+        let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+        sqlx::query(
+            "INSERT INTO audit_logs \
+             (actor_user_id, action, resource_type, resource_id, tenant_id, details) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+        )
+        .bind(Option::<Uuid>::None)
+        .bind("tool.executed")
+        .bind("tenant_tool")
+        .bind(resource_id)
+        .bind(tenant_id)
+        .bind(&details)
+        .execute(uow.conn())
+        .await?;
+        uow.commit().await
+    }
     .await;
 
     if let Err(e) = result {
@@ -50,13 +55,16 @@ pub async fn record_config_change(
     details: serde_json::Value,
 ) {
     // Resolve user_id from membership
-    let user_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT user_id FROM tenant_memberships WHERE id = $1 AND deleted_at IS NULL",
-    )
-    .bind(actor_membership_id)
-    .fetch_optional(pool)
-    .await
-    .unwrap_or(None);
+    let user_id: Option<Uuid> = match db::UnitOfWork::begin_for_tenant(pool, tenant_id).await {
+        Ok(mut uow) => sqlx::query_scalar(
+            "SELECT user_id FROM tenant_memberships WHERE id = $1 AND deleted_at IS NULL",
+        )
+        .bind(actor_membership_id)
+        .fetch_optional(uow.conn())
+        .await
+        .unwrap_or(None),
+        Err(_) => None,
+    };
 
     // audit_logs requires a resource_id (0013_audit_resource_required); a NULL
     // made every tool config audit fail. Tenant tools are identified by
@@ -71,18 +79,23 @@ pub async fn record_config_change(
         })
         .unwrap_or_else(|| tenant_id.to_string());
 
-    let result = sqlx::query(
-        "INSERT INTO audit_logs \
-         (actor_user_id, action, resource_type, resource_id, tenant_id, details) \
-         VALUES ($1, $2, $3, $4, $5, $6)",
-    )
-    .bind(user_id)
-    .bind(action)
-    .bind("tenant_tool")
-    .bind(resource_id)
-    .bind(tenant_id)
-    .bind(&details)
-    .execute(pool)
+    let result: sqlx::Result<()> = async {
+        let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+        sqlx::query(
+            "INSERT INTO audit_logs \
+             (actor_user_id, action, resource_type, resource_id, tenant_id, details) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+        )
+        .bind(user_id)
+        .bind(action)
+        .bind("tenant_tool")
+        .bind(resource_id)
+        .bind(tenant_id)
+        .bind(&details)
+        .execute(uow.conn())
+        .await?;
+        uow.commit().await
+    }
     .await;
 
     if let Err(e) = result {
