@@ -123,7 +123,7 @@ storage.
 ## Local development stack (not read by the backend)
 
 Read by `infra/docker-compose.yml` and the scripts mounted into its containers. Defaults are
-the dev values in `.env.example`; start the stack with `--env-file .env` so your `.env` applies.
+the dev values in `.env.example`. `just up` copies it to `.env` on first run and starts the stack with `--env-file .env`, so edit `.env`; `.env.example` documents every variable.
 
 | Variable | Purpose | Default | Secret |
 |----------|---------|---------|--------|

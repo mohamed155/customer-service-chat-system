@@ -11,23 +11,45 @@ widget with seed data.
 - **sqlx-cli** — `cargo install sqlx-cli --locked`
 - **Node.js** — v22 or later (use <https://nodejs.org> or `nvm`).
 - **pnpm** — `corepack enable && corepack prepare pnpm@10.34.4 --activate`
-- **Docker Desktop** (or Docker Compose standalone) — for PostgreSQL, Redis,
-  Mailpit, and MinIO.
+- **Docker** with Compose 2.20 or later — Docker Desktop (Windows, macOS) or Docker Engine
+  with the Compose plugin (Linux). It runs PostgreSQL, Redis, Mailpit and MinIO.
+- **just** — the task runner for the local services: `brew install just`,
+  `winget install Casey.Just`, `cargo install just --locked`, or your distro's package
+  (<https://github.com/casey/just#installation>).
+
+**Windows:** run the commands from **WSL2** (with Docker Desktop's WSL integration enabled) or
+from **Git Bash**. The recipes call `bash`, so PowerShell and cmd do not work.
 
 ### 1. Start infrastructure
 
 ```bash
-cp -n .env.example .env   # first time only: dev credentials, including the database role passwords
-docker compose --env-file .env -f infra/docker-compose.yml up -d --wait
+just doctor   # optional: checks Docker, Compose, Node, .env and that the host ports are free
+just up       # creates .env on first run, starts the services, waits until all are healthy
 ```
 
-This starts PostgreSQL with pgvector (port 5432), Redis (6379), Mailpit (1025
-SMTP, 8025 web), and MinIO (9000 S3, 9001 console), and returns once every
-service reports healthy. The `tenants` and `quarantine` buckets are created for
-you. Ports are bound to `127.0.0.1`; if one is taken, set `POSTGRES_PORT`,
-`REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `MAILPIT_SMTP_PORT` or
-`MAILPIT_UI_PORT` in `.env`. Data lives in named volumes, so it survives
-`docker compose down`.
+`just up` copies `.env.example` to `.env` the first time (dev-only values, never committed)
+and starts PostgreSQL with pgvector (port 5432), Redis (6379), Mailpit (1025 SMTP, 8025 web)
+and MinIO (9000 S3, 9001 console). It returns once every service reports healthy. The
+`tenants` and `quarantine` buckets are created for you. Ports are bound to `127.0.0.1`.
+
+| Recipe | What it does |
+| -- | -- |
+| `just up` | Start the services and wait until healthy |
+| `just down` | Stop them; data stays in the named volumes |
+| `just reset` | Delete **all** local data and start again (asks first) |
+| `just logs [service…]` | Follow the logs of everything, or of the services you name |
+| `just psql [args…]` | Open psql on the local database, or run `just psql -c "select 1"` |
+| `just doctor` | Check Docker, Compose, Node, `.env` and the host ports |
+| `just verify-roles` | Prove the database roles cannot bypass Row-Level Security (below) |
+
+The stack runs under its own Compose project name (`customer-service-dev`), so its volumes
+are called `customer-service-dev_*` and `just reset` can only ever delete those. Run
+`just` with no arguments to list the recipes; `.env.example` documents every variable.
+
+If a port is taken or reserved (`just doctor` says which; Windows reserves ranges that
+include 5432 on some machines), uncomment the matching line in `.env` (`POSTGRES_PORT`,
+`REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `MAILPIT_SMTP_PORT`,
+`MAILPIT_UI_PORT`) and update `DATABASE_URL` / `REDIS_URL` to match.
 
 #### Database roles
 
@@ -41,11 +63,8 @@ superuser today and switches to `app_runtime` with the RLS work (MOH-31). If the
 passwords are unset, the roles are skipped and the container logs a notice. Avoid the
 dollar sign in `.env` values, because Compose expands it.
 
-Check that the split holds (creates and drops a throwaway table with forced RLS):
-
-```bash
-docker compose --env-file .env -f infra/docker-compose.yml exec -T postgres bash -s < infra/postgres/verify-roles.sh
-```
+`just verify-roles` checks that the split holds: it creates and drops a throwaway table
+with forced RLS and tries to get around it as `app_runtime`.
 
 #### Resetting local data
 
@@ -56,8 +75,7 @@ unhealthy (its health check logs in with the configured credentials and checks t
 extensions). The role passwords are also read only at that point. Recreate the volume:
 
 ```bash
-docker compose -f infra/docker-compose.yml down -v   # DELETES all local Postgres, Redis, MinIO and Mailpit data
-docker compose --env-file .env -f infra/docker-compose.yml up -d --wait
+just reset   # DELETES all local Postgres, Redis, MinIO and Mailpit data; asks before it does
 ```
 
 ### 2. Configure environment
