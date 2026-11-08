@@ -41,6 +41,7 @@ pub async fn insert_session(
     token_hash: &[u8],
     expires_at: DateTime<Utc>,
 ) -> sqlx::Result<WidgetSessionRow> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, WidgetSessionRow>(
         "INSERT INTO widget_sessions (tenant_id, widget_instance_id, token_hash, expires_at) \
          VALUES ($1, $2, $3, $4) \
@@ -50,7 +51,7 @@ pub async fn insert_session(
     .bind(widget_instance_id)
     .bind(token_hash)
     .bind(expires_at)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -123,6 +124,7 @@ pub async fn find_instance_by_id(
     tenant_id: Uuid,
     instance_id: Uuid,
 ) -> sqlx::Result<Option<WidgetInstanceRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, WidgetInstanceRow>(
         "SELECT id, tenant_id, public_id, name, display_name, primary_color, \
                 welcome_message, position, theme, enabled, allowed_domains, \
@@ -132,7 +134,7 @@ pub async fn find_instance_by_id(
     )
     .bind(instance_id)
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -140,6 +142,7 @@ pub async fn list_instances(
     pool: &PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<WidgetInstanceRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, WidgetInstanceRow>(
         "SELECT id, tenant_id, public_id, name, display_name, primary_color, \
                 welcome_message, position, theme, enabled, allowed_domains, \
@@ -149,7 +152,7 @@ pub async fn list_instances(
          ORDER BY created_at DESC",
     )
     .bind(tenant_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
 }
 
@@ -166,6 +169,7 @@ pub async fn insert_instance(
     theme: Option<&str>,
     allowed_domains: &[String],
 ) -> sqlx::Result<WidgetInstanceRow> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, WidgetInstanceRow>(
         "INSERT INTO widget_instances \
          (tenant_id, public_id, name, display_name, primary_color, welcome_message, \
@@ -184,7 +188,7 @@ pub async fn insert_instance(
     .bind(position)
     .bind(theme)
     .bind(allowed_domains)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -202,6 +206,7 @@ pub async fn update_instance(
     enabled: bool,
     allowed_domains: &[String],
 ) -> sqlx::Result<Option<WidgetInstanceRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, WidgetInstanceRow>(
         "UPDATE widget_instances SET \
          name = $3, display_name = $4, primary_color = $5, welcome_message = $6, \
@@ -221,7 +226,7 @@ pub async fn update_instance(
     .bind(theme)
     .bind(enabled)
     .bind(allowed_domains)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 

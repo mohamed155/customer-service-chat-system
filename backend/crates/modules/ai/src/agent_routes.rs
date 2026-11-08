@@ -1231,7 +1231,7 @@ async fn fetch_conversation_detail(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<conversations::model::ConversationDetail>> {
-    let mut tx = pool.begin().await?;
+    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let detail =
         conversations::queries::detail_query_in_tx(&mut tx, tenant_id, conversation_id).await?;
     tx.commit().await?;

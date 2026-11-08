@@ -71,6 +71,7 @@ pub async fn update_tenant_tool(
     id: Uuid,
     patch: TenantToolPatch,
 ) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let rows = sqlx::query(
         "UPDATE tenant_tools SET \
          name = COALESCE($3, name), \
@@ -92,7 +93,7 @@ pub async fn update_tenant_tool(
     .bind(patch.credential_ciphertext)
     .bind(patch.classification)
     .bind(patch.enabled)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
     Ok(rows.rows_affected() > 0)
 }
@@ -102,13 +103,14 @@ pub async fn soft_delete_tenant_tool(
     tenant_id: Uuid,
     id: Uuid,
 ) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let rows = sqlx::query(
         "UPDATE tenant_tools SET deleted_at = now(), updated_at = now() \
          WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
     )
     .bind(tenant_id)
     .bind(id)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
     Ok(rows.rows_affected() > 0)
 }
@@ -132,6 +134,7 @@ pub async fn list_tenant_tools(
     pool: &sqlx::PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<TenantToolRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, TenantToolRow>(
         "SELECT id, tenant_id, name, description, input_schema, endpoint_url, \
          classification, enabled, created_at, updated_at \
@@ -140,7 +143,7 @@ pub async fn list_tenant_tools(
          ORDER BY name ASC",
     )
     .bind(tenant_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
 }
 
@@ -149,6 +152,7 @@ pub async fn fetch_tenant_tool_with_credential(
     tenant_id: Uuid,
     id: Uuid,
 ) -> sqlx::Result<Option<(TenantToolRow, Option<String>)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     #[derive(sqlx::FromRow)]
     struct TenantToolWithCredential {
         id: Uuid,
@@ -172,7 +176,7 @@ pub async fn fetch_tenant_tool_with_credential(
     )
     .bind(tenant_id)
     .bind(id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
 
     Ok(row.map(|r| {
@@ -204,6 +208,7 @@ pub async fn upsert_policy(
     require_approval: bool,
     updated_by_membership_id: Uuid,
 ) -> sqlx::Result<()> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query(
         "INSERT INTO tenant_tool_policies \
          (tenant_id, tool_name, enabled, require_approval, updated_by_membership_id) \
@@ -220,7 +225,7 @@ pub async fn upsert_policy(
     .bind(enabled)
     .bind(require_approval)
     .bind(updated_by_membership_id)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
     Ok(())
 }
@@ -234,6 +239,7 @@ pub struct PolicyRow {
 }
 
 pub async fn list_policies(pool: &sqlx::PgPool, tenant_id: Uuid) -> sqlx::Result<Vec<PolicyRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, PolicyRow>(
         "SELECT tool_name, enabled, require_approval, updated_at \
          FROM tenant_tool_policies \
@@ -241,7 +247,7 @@ pub async fn list_policies(pool: &sqlx::PgPool, tenant_id: Uuid) -> sqlx::Result
          ORDER BY tool_name ASC",
     )
     .bind(tenant_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
 }
 
@@ -309,6 +315,7 @@ pub async fn insert_request(pool: &sqlx::PgPool, req: NewToolRequest) -> sqlx::R
 /// Transition a request from `pending` or `approved` to `executing`.
 /// Returns `false` if no row matched (race lost, wrong prior state).
 pub async fn mark_executing(pool: &sqlx::PgPool, id: Uuid, tenant_id: Uuid) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let rows = sqlx::query(
         "UPDATE tool_requests \
          SET status = 'executing', started_at = now() \
@@ -316,7 +323,7 @@ pub async fn mark_executing(pool: &sqlx::PgPool, id: Uuid, tenant_id: Uuid) -> s
     )
     .bind(id)
     .bind(tenant_id)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
     Ok(rows.rows_affected() > 0)
 }
@@ -332,6 +339,7 @@ pub async fn mark_terminal(
     result: Option<Value>,
     error: Option<String>,
 ) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let rows = sqlx::query(
         "UPDATE tool_requests \
          SET status = $3, result = $4, error = $5, finished_at = now() \
@@ -342,7 +350,7 @@ pub async fn mark_terminal(
     .bind(status)
     .bind(result)
     .bind(error)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
     Ok(rows.rows_affected() > 0)
 }

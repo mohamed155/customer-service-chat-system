@@ -60,6 +60,7 @@ pub async fn resolve_subject(
     subject_id: Uuid,
     resolved_by: Option<Uuid>,
 ) -> Result<Vec<Uuid>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let rows = sqlx::query(
         "UPDATE notifications SET state = 'resolved', updated_at = now() \
          WHERE tenant_id = $1 AND subject_type = $2 AND subject_id = $3 \
@@ -71,7 +72,7 @@ pub async fn resolve_subject(
     .bind(subject_type.as_str())
     .bind(subject_id)
     .bind(resolved_by)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
 
     Ok(rows
@@ -90,6 +91,7 @@ pub async fn list(
     cursor: Option<&str>,
     limit: i64,
 ) -> Result<(Vec<NotificationRow>, Option<String>), sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let limit = limit.clamp(1, 50);
     let mut builder = sqlx::QueryBuilder::new(
         "SELECT id, tenant_id, recipient_membership_id, kind, state, title, body, \
@@ -122,7 +124,7 @@ pub async fn list(
 
     let rows = builder
         .build_query_as::<NotificationRow>()
-        .fetch_all(pool)
+        .fetch_all(uow.conn())
         .await?;
 
     let has_more = rows.len() > limit as usize;
@@ -140,13 +142,14 @@ pub async fn unread_count(
     tenant_id: Uuid,
     membership_id: Uuid,
 ) -> Result<i64, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let row = sqlx::query(
         "SELECT COUNT(*) as count FROM notifications \
          WHERE tenant_id = $1 AND recipient_membership_id = $2 AND state = 'unread'",
     )
     .bind(tenant_id)
     .bind(membership_id)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await?;
 
     Ok(row.get("count"))
@@ -158,6 +161,7 @@ pub async fn mark_read(
     membership_id: Uuid,
     notification_id: Uuid,
 ) -> Result<Option<NotificationRow>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let result = sqlx::query_as::<_, NotificationRow>(
         "UPDATE notifications SET state = 'read', read_at = now(), updated_at = now() \
          WHERE id = $1 AND tenant_id = $2 AND recipient_membership_id = $3 \
@@ -166,7 +170,7 @@ pub async fn mark_read(
     .bind(notification_id)
     .bind(tenant_id)
     .bind(membership_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
 
     Ok(result)
@@ -177,13 +181,14 @@ pub async fn mark_all_read(
     tenant_id: Uuid,
     membership_id: Uuid,
 ) -> Result<u64, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let result = sqlx::query(
         "UPDATE notifications SET state = 'read', read_at = now(), updated_at = now() \
          WHERE tenant_id = $1 AND recipient_membership_id = $2 AND state = 'unread'",
     )
     .bind(tenant_id)
     .bind(membership_id)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
 
     Ok(result.rows_affected())

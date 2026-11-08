@@ -168,6 +168,7 @@ pub async fn list(
     cursor: Option<String>,
     limit: i64,
 ) -> Result<PaginatedResponse<UsageListItem>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let decoded = cursor.as_ref().and_then(|c| decode_cursor(c));
 
     let mut sql = String::from(
@@ -215,7 +216,7 @@ pub async fn list(
 
     query = query.bind(limit + 1);
 
-    let rows = query.fetch_all(pool).await?;
+    let rows = query.fetch_all(uow.conn()).await?;
     let has_more = rows.len() > limit as usize;
     let items: Vec<UsageListItem> = rows.into_iter().take(limit as usize).collect();
 
@@ -252,6 +253,7 @@ pub async fn summary(
     from: Option<DateTime<Utc>>,
     to: Option<DateTime<Utc>>,
 ) -> Result<UsageSummary, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let mut sql = String::from(
         "SELECT COUNT(*)::bigint AS calls, \
                 COALESCE(SUM(input_tokens), 0)::bigint AS input_tokens, \
@@ -281,7 +283,7 @@ pub async fn summary(
         query = query.bind(t);
     }
 
-    let row = query.fetch_one(pool).await?;
+    let row = query.fetch_one(uow.conn()).await?;
 
     Ok(UsageSummary {
         from,

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+db = { path = "../../shared/db" }
 aes-gcm.workspace = true
 axum.workspace = true
 base64.workspace = true
@@ -25,4 +26,3 @@ utoipa.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-db = { path = "../../shared/db" }

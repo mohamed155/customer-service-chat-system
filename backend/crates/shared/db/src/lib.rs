@@ -8,6 +8,7 @@
 //! # Public Interfaces
 //! - `lazy_pool(&str, u32, Duration) -> PgPool`
 //! - `run_migrations(&pool)`
+//! - `UnitOfWork` / `TenantScoped` (tenant transaction that sets `app.tenant_id`, see `tenant`)
 //! - `PgHealthCheck`
 //!
 //! # Dependencies
@@ -15,6 +16,9 @@
 //!
 //! # Extension Points
 //! - `PgHealthCheck` is one of many possible `HealthCheck` implementations.
+
+pub mod tenant;
+pub use tenant::{TenantScoped, UnitOfWork};
 
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::PgPool;

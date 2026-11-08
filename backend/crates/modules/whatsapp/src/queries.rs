@@ -248,6 +248,7 @@ pub async fn attachment_for_download(
     conversation_id: Uuid,
     attachment_id: Uuid,
 ) -> sqlx::Result<Option<MessageAttachmentRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, MessageAttachmentRow>(
         "SELECT a.id, a.tenant_id, a.message_id, a.kind, a.status, a.provider_media_id, \
                 a.storage_key, a.mime_type, a.size_bytes, a.file_name, a.fetch_attempts, \
@@ -259,7 +260,7 @@ pub async fn attachment_for_download(
     .bind(tenant_id)
     .bind(attachment_id)
     .bind(conversation_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -286,12 +287,13 @@ pub async fn message_body_for_outbound(
     tenant_id: Uuid,
     message_id: Uuid,
 ) -> sqlx::Result<Option<String>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT body FROM messages WHERE tenant_id = $1 AND id = $2 AND kind IN ('reply', 'ai')",
     )
     .bind(tenant_id)
     .bind(message_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
     Ok(row.map(|r| r.0))
 }

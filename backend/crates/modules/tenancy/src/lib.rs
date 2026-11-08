@@ -26,6 +26,15 @@ pub struct TenantContext {
     pub request_id: String,
 }
 
+/// Lets the Unit of Work (`db::UnitOfWork::begin(&pool, &ctx)`) bind a transaction to this tenant.
+/// Only the tenant-context middleware builds a `TenantContext`, so a Unit of Work started from one
+/// is always for a tenant the caller was authorised for.
+impl db::TenantScoped for TenantContext {
+    fn tenant_id(&self) -> Uuid {
+        self.tenant_id
+    }
+}
+
 #[derive(Clone)]
 pub struct TenancyConfig {
     pub pool: sqlx::PgPool,

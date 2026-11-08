@@ -26,6 +26,7 @@ pub async fn effective_plan(
     pool: &PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<(model::PlanDto, String)> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let row = sqlx::query_as::<
         _,
         (
@@ -49,7 +50,7 @@ pub async fn effective_plan(
         "#,
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
 
     if let Some((
@@ -85,7 +86,7 @@ pub async fn effective_plan(
             LIMIT 1
             "#,
         )
-        .fetch_one(pool)
+        .fetch_one(uow.conn())
         .await?;
 
         Ok((default, "active".into()))
@@ -98,6 +99,7 @@ pub async fn token_usage(
     start: DateTime<Utc>,
     end: DateTime<Utc>,
 ) -> sqlx::Result<i64> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar::<_, i64>(
         r#"
         SELECT COALESCE(SUM(COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0)), 0)::BIGINT
@@ -108,7 +110,7 @@ pub async fn token_usage(
     .bind(tenant_id)
     .bind(start)
     .bind(end)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -118,6 +120,7 @@ pub async fn conversation_usage(
     start: DateTime<Utc>,
     end: DateTime<Utc>,
 ) -> sqlx::Result<i64> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar::<_, i64>(
         r#"
         SELECT COUNT(*)::BIGINT FROM conversations
@@ -127,7 +130,7 @@ pub async fn conversation_usage(
     .bind(tenant_id)
     .bind(start)
     .bind(end)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -240,11 +243,12 @@ pub async fn subscription_for_tenant(
     pool: &PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<Option<(Uuid, Uuid, String)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (Uuid, Uuid, String)>(
         "SELECT id, plan_id, status FROM tenant_subscriptions WHERE tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 

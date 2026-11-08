@@ -82,6 +82,7 @@ pub async fn list_items(
     limit: i64,
     before: Option<(DateTime<Utc>, Uuid)>,
 ) -> sqlx::Result<(Vec<KnowledgeItemRow>, Vec<KnowledgeItemTagRow>, bool)> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let fetch_limit = limit + 1;
 
     let sql = if let Some((_, _)) = before {
@@ -126,7 +127,7 @@ pub async fn list_items(
         query = query.bind(fetch_limit);
     }
 
-    let items = query.fetch_all(pool).await?;
+    let items = query.fetch_all(uow.conn()).await?;
     let has_more = items.len() > limit as usize;
     let items = items.into_iter().take(limit as usize).collect::<Vec<_>>();
     let tags = load_tags_for_items(pool, &items).await?;
@@ -154,12 +155,13 @@ pub async fn get_item(
     tenant_id: Uuid,
     item_id: Uuid,
 ) -> sqlx::Result<Option<KnowledgeItemRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, KnowledgeItemRow>(
         "SELECT * FROM knowledge_items WHERE id = $1 AND tenant_id = $2",
     )
     .bind(item_id)
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -293,6 +295,7 @@ pub async fn list_categories(
     pool: &PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<CategoryWithCount>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, CategoryWithCount>(
         "SELECT c.*, COUNT(i.id)::bigint AS item_count \
          FROM knowledge_categories c \
@@ -302,7 +305,7 @@ pub async fn list_categories(
          ORDER BY c.name",
     )
     .bind(tenant_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
 }
 
@@ -405,6 +408,7 @@ pub async fn get_document(
     tenant_id: Uuid,
     item_id: Uuid,
 ) -> sqlx::Result<Option<KnowledgeDocumentRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, KnowledgeDocumentRow>(
         "SELECT d.* FROM knowledge_documents d \
          JOIN knowledge_items i ON i.id = d.item_id \
@@ -412,7 +416,7 @@ pub async fn get_document(
     )
     .bind(item_id)
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 

@@ -166,6 +166,7 @@ pub async fn list_recent_for_customer(
     tenant_id: Uuid,
     customer_id: Uuid,
 ) -> sqlx::Result<Vec<ConversationSummary>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, ConversationSummary>(
         "SELECT id, channel, status, last_activity_at, created_at \
          FROM conversations \
@@ -176,7 +177,7 @@ pub async fn list_recent_for_customer(
     .bind(tenant_id)
     .bind(customer_id)
     .bind(HISTORY_PAGE_SIZE + 1)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
 }
 

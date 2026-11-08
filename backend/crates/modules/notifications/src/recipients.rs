@@ -52,6 +52,7 @@ async fn resolve_target(
     target_membership_id: Uuid,
     actor_membership_id: Option<Uuid>,
 ) -> Result<Vec<Uuid>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let rows = sqlx::query(
         "SELECT id FROM tenant_memberships \
          WHERE id = $1 AND tenant_id = $2 AND status = 'active' AND deleted_at IS NULL \
@@ -60,7 +61,7 @@ async fn resolve_target(
     .bind(target_membership_id)
     .bind(tenant_id)
     .bind(actor_membership_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
 
     Ok(rows.into_iter().map(|r| r.get("id")).collect())
@@ -72,6 +73,7 @@ async fn resolve_role_based(
     roles: &[String],
     actor_membership_id: Option<Uuid>,
 ) -> Result<Vec<Uuid>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     if roles.is_empty() {
         return Ok(Vec::new());
     }
@@ -84,7 +86,7 @@ async fn resolve_role_based(
     .bind(tenant_id)
     .bind(roles)
     .bind(actor_membership_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
 
     Ok(rows.into_iter().map(|r| r.get("id")).collect())
@@ -96,6 +98,7 @@ async fn resolve_ai_failed(
     conversation_id: Uuid,
     actor_membership_id: Option<Uuid>,
 ) -> Result<Vec<Uuid>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let rows = sqlx::query(
         "SELECT tm.id FROM tenant_memberships tm \
          WHERE tm.tenant_id = $1 AND tm.status = 'active' AND tm.deleted_at IS NULL \
@@ -106,7 +109,7 @@ async fn resolve_ai_failed(
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(actor_membership_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
 
     Ok(rows.into_iter().map(|r| r.get("id")).collect())

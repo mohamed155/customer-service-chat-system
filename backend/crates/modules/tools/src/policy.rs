@@ -46,13 +46,14 @@ pub async fn builtin_settings(
     pool: &sqlx::PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<BuiltinSetting>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let policies: Vec<(String, bool, bool)> = sqlx::query_as(
         "SELECT tool_name, enabled, require_approval \
          FROM tenant_tool_policies \
          WHERE tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
 
     Ok(crate::registry::catalog()
@@ -81,6 +82,7 @@ pub async fn resolve_available(
     pool: &sqlx::PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<ResolvedTool>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let catalog = crate::registry::catalog();
 
     // Fetch all policies for this tenant
@@ -90,7 +92,7 @@ pub async fn resolve_available(
          WHERE tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
 
     let mut resolved: Vec<ResolvedTool> = Vec::new();

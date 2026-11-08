@@ -38,6 +38,7 @@ pub async fn decide(
     decided_by: Uuid,
     approve: bool,
 ) -> sqlx::Result<DecideOutcome> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let new_status = if approve { "approved" } else { "denied" };
 
     let updated = sqlx::query(
@@ -49,7 +50,7 @@ pub async fn decide(
     .bind(decided_by)
     .bind(tool_request_id)
     .bind(tenant_id)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
 
     if updated.rows_affected() == 0 {
@@ -63,14 +64,14 @@ pub async fn decide(
         )
         .bind(tool_request_id)
         .bind(tenant_id)
-        .fetch_one(pool)
+        .fetch_one(uow.conn())
         .await?;
         return Ok(DecideOutcome::AlreadySettled(row));
     }
 
     let outcome = if approve { "approved" } else { "denied" };
 
-    let mut tx = pool.begin().await?;
+    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
 
     let row: ToolRequestRow = sqlx::query_as(
         "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
@@ -82,7 +83,7 @@ pub async fn decide(
     )
     .bind(tool_request_id)
     .bind(tenant_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.conn())
     .await?;
 
     conversations::outbox::emit_tool_decision_in_tx(
@@ -195,6 +196,7 @@ pub async fn fetch_awaiting_approval_for_conversation(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Vec<ToolRequestRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let rows = sqlx::query_as::<_, ToolRequestRow>(
         "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
          tool_source, tenant_tool_id, arguments, status, approval_required, \
@@ -205,7 +207,7 @@ pub async fn fetch_awaiting_approval_for_conversation(
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
     Ok(rows)
 }

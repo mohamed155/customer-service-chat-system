@@ -19,12 +19,13 @@ pub async fn search(
     top_k: i32,
     threshold: f32,
 ) -> Result<Vec<RetrievedChunk>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query("SET hnsw.iterative_scan = 'relaxed_order'")
-        .execute(pool)
+        .execute(uow.conn())
         .await?;
 
     sqlx::query("SET hnsw.ef_search = 100")
-        .execute(pool)
+        .execute(uow.conn())
         .await?;
 
     let vec_str = query_embedding
@@ -55,6 +56,6 @@ pub async fn search(
     .bind(tenant_id)
     .bind(threshold)
     .bind(top_k)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
 }

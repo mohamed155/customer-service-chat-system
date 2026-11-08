@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 authz = { path = "../authz" }
 axum.workspace = true
+db = { path = "../../shared/db" }
 identity = { path = "../identity" }
 kernel = { path = "../../shared/kernel" }
 serde.workspace = true

@@ -10,6 +10,7 @@ pub async fn find_conversation_for_session(
     customer_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<(String, String, Option<Uuid>)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (String, String, Option<Uuid>)>(
         "SELECT status, channel, assigned_membership_id \
          FROM conversations \
@@ -18,7 +19,7 @@ pub async fn find_conversation_for_session(
     .bind(tenant_id)
     .bind(customer_id)
     .bind(conversation_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -34,6 +35,7 @@ pub async fn insert_feedback(
     rating: i16,
     comment: Option<&str>,
 ) -> sqlx::Result<Option<ConversationFeedbackRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, ConversationFeedbackRow>(
         "INSERT INTO conversation_feedback \
          (tenant_id, conversation_id, widget_session_id, channel, \
@@ -52,7 +54,7 @@ pub async fn insert_feedback(
     .bind(assigned_membership_id)
     .bind(rating)
     .bind(comment)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -61,6 +63,7 @@ pub async fn find_feedback_by_conversation(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<ConversationFeedbackRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, ConversationFeedbackRow>(
         "SELECT id, tenant_id, conversation_id, widget_session_id, channel, \
                 agent_configuration_id, assigned_membership_id, rating, comment, \
@@ -70,7 +73,7 @@ pub async fn find_feedback_by_conversation(
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -79,6 +82,7 @@ pub async fn find_pending_feedback(
     tenant_id: Uuid,
     customer_id: Uuid,
 ) -> sqlx::Result<Option<(Uuid, DateTime<Utc>)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (Uuid, DateTime<Utc>)>(
         "SELECT c.id, c.last_activity_at \
          FROM conversations c \
@@ -94,18 +98,19 @@ pub async fn find_pending_feedback(
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
 pub async fn feedback_summary(pool: &PgPool, tenant_id: Uuid) -> sqlx::Result<(Option<f64>, i64)> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (Option<f64>, i64)>(
         "SELECT AVG(rating)::float8, COUNT(*)::bigint \
          FROM conversation_feedback \
          WHERE tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -114,6 +119,7 @@ pub async fn resolve_ai_agent_configuration(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<Uuid>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar::<_, Uuid>(
         "SELECT ac.id FROM agent_configurations ac \
          WHERE ac.tenant_id = $1 \
@@ -124,6 +130,6 @@ pub async fn resolve_ai_agent_configuration(
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }

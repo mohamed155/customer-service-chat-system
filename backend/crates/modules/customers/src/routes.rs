@@ -310,7 +310,16 @@ pub async fn list_customers(
     if let Some((created_at, id)) = cursor {
         query = query.bind(created_at).bind(id);
     }
-    let rows = match query.bind(i64::from(limit) + 1).fetch_all(&pool).await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
+        Ok(tx) => tx,
+        Err(error) => {
+            tracing::error!(%error, "failed to begin transaction for list_customers");
+            return kernel::ApiError::internal_error("Failed to list customers")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+    let rows = match query.bind(i64::from(limit) + 1).fetch_all(tx.conn()).await {
         Ok(rows) => rows,
         Err(error) => {
             tracing::error!(%error, "failed to list customers");
@@ -384,7 +393,7 @@ pub async fn get_customer(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(error) => {
             tracing::error!(%error, "failed to begin transaction for get_customer");
@@ -412,7 +421,7 @@ pub async fn get_customer(
     )
     .bind(customer_id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     {
         Ok(Some(row)) => row,
@@ -437,7 +446,7 @@ pub async fn get_customer(
     )
     .bind(customer_id)
     .bind(ctx.tenant_id)
-    .fetch_all(&mut *tx)
+    .fetch_all(tx.conn())
     .await
     {
         Ok(rows) => rows,
@@ -589,7 +598,7 @@ pub async fn create_customer(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(error) => {
             tracing::error!(error = %error, "failed to begin create-customer transaction");
@@ -620,7 +629,7 @@ pub async fn create_customer(
     .bind(email.as_deref())
     .bind(phone.as_deref())
     .bind(&metadata_value)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.conn())
     .await;
 
     let (customer_id, row_name, row_email, row_phone, row_metadata, created_at, updated_at) =
@@ -796,7 +805,7 @@ pub async fn update_customer(
         return error.with_request_id(&ctx.request_id).into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(error) => {
             tracing::error!(error = %error, "failed to begin update-customer transaction");
@@ -825,7 +834,7 @@ pub async fn update_customer(
     )
     .bind(customer_id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await;
 
     let (
@@ -953,7 +962,7 @@ pub async fn update_customer(
         }
         query = query.bind(customer_id).bind(ctx.tenant_id);
 
-        if let Err(error) = query.execute(&mut *tx).await {
+        if let Err(error) = query.execute(tx.conn()).await {
             tracing::error!(error = %error, "failed to update customer row");
             return ApiError::internal_error("Failed to update customer")
                 .with_request_id(&ctx.request_id)
@@ -972,7 +981,7 @@ pub async fn update_customer(
         )
         .bind(customer_id)
         .bind(ctx.tenant_id)
-        .fetch_all(&mut *tx)
+        .fetch_all(tx.conn())
         .await
         {
             Ok(rows) => rows,
@@ -1011,7 +1020,7 @@ pub async fn update_customer(
             )
             .bind(customer_id)
             .bind(ctx.tenant_id)
-            .execute(&mut *tx)
+            .execute(tx.conn())
             .await
             {
                 tracing::error!(error = %e, "failed to soft-delete existing identifiers");
@@ -1048,7 +1057,7 @@ pub async fn update_customer(
             sqlx::query("UPDATE customers SET updated_at = now() WHERE id = $1 AND tenant_id = $2")
                 .bind(customer_id)
                 .bind(ctx.tenant_id)
-                .execute(&mut *tx)
+                .execute(tx.conn())
                 .await
         {
             tracing::error!(error = %error, "failed to refresh updated_at for identifier change");
@@ -1093,7 +1102,7 @@ pub async fn update_customer(
     )
     .bind(customer_id)
     .bind(ctx.tenant_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.conn())
     .await;
 
     let (final_name, final_email, final_phone, final_metadata, final_created_at, final_updated_at) =
@@ -1115,7 +1124,7 @@ pub async fn update_customer(
     )
     .bind(customer_id)
     .bind(ctx.tenant_id)
-    .fetch_all(&mut *tx)
+    .fetch_all(tx.conn())
     .await;
 
     let identifiers: Vec<ChannelIdentifier> = match identifier_rows {

@@ -1282,6 +1282,7 @@ pub async fn conversation_ai_state(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<(String, Option<String>)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (String, Option<String>)>(
         "SELECT status, ai_handling \
          FROM conversations \
@@ -1289,7 +1290,7 @@ pub async fn conversation_ai_state(
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -1298,6 +1299,7 @@ pub async fn has_system_message(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar(
         "SELECT EXISTS( \
          SELECT 1 FROM messages \
@@ -1306,7 +1308,7 @@ pub async fn has_system_message(
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -1315,6 +1317,7 @@ pub async fn has_system_message_batch(
     tenant_id: Uuid,
     conversation_ids: &[Uuid],
 ) -> sqlx::Result<Vec<(Uuid, bool)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     if conversation_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -1329,7 +1332,7 @@ pub async fn has_system_message_batch(
     )
     .bind(tenant_id)
     .bind(conversation_ids)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
     Ok(rows)
 }
@@ -1427,6 +1430,7 @@ pub async fn load_citations_for_messages(
     tenant_id: Uuid,
     message_ids: &[Uuid],
 ) -> sqlx::Result<HashMap<Uuid, Vec<CitationView>>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     if message_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -1439,7 +1443,7 @@ pub async fn load_citations_for_messages(
     )
     .bind(tenant_id)
     .bind(message_ids)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
 
     let mut item_ids: Vec<Uuid> = rows.iter().map(|r| r.1).collect();
@@ -1454,7 +1458,7 @@ pub async fn load_citations_for_messages(
              WHERE id = ANY($1) AND deleted_at IS NULL",
         )
         .bind(&item_ids)
-        .fetch_all(pool)
+        .fetch_all(uow.conn())
         .await?;
         existing.into_iter().map(|r| r.0).collect()
     };
@@ -1479,6 +1483,7 @@ pub async fn has_ai_reply_since(
     conversation_id: Uuid,
     since_message_id: Uuid,
 ) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar(
         "SELECT EXISTS( \
          SELECT 1 FROM messages \
@@ -1489,7 +1494,7 @@ pub async fn has_ai_reply_since(
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(since_message_id)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -1498,6 +1503,7 @@ pub async fn customer_display_name(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<String>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar(
         "SELECT c.display_name FROM conversations conv \
          JOIN customers c ON c.id = conv.customer_id \
@@ -1505,7 +1511,7 @@ pub async fn customer_display_name(
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -1514,10 +1520,11 @@ pub async fn message_body(
     tenant_id: Uuid,
     message_id: Uuid,
 ) -> sqlx::Result<Option<String>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar("SELECT body FROM messages WHERE tenant_id = $1 AND id = $2")
         .bind(tenant_id)
         .bind(message_id)
-        .fetch_optional(pool)
+        .fetch_optional(uow.conn())
         .await
 }
 
@@ -1546,6 +1553,7 @@ pub async fn recent_history(
     conversation_id: Uuid,
     limit: i64,
 ) -> sqlx::Result<Vec<(String, String)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (String, String)>(
         "SELECT kind, body FROM messages \
          WHERE tenant_id = $1 AND conversation_id = $2 AND kind IN ('customer', 'reply', 'ai') \
@@ -1555,7 +1563,7 @@ pub async fn recent_history(
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(limit)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
 }
 
@@ -1593,6 +1601,7 @@ pub async fn summary_history(
     conversation_id: Uuid,
     limit: i64,
 ) -> sqlx::Result<Vec<(String, String)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (String, String)>(
         "SELECT kind, body FROM messages \
          WHERE tenant_id = $1 AND conversation_id = $2 AND kind IN ('customer', 'ai', 'reply', 'system') \
@@ -1602,7 +1611,7 @@ pub async fn summary_history(
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(limit)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
 }
 
@@ -1611,13 +1620,14 @@ pub async fn customer_id_for_conversation(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Uuid> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar(
         "SELECT customer_id FROM conversations \
          WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?
     .ok_or_else(|| sqlx::Error::Protocol("Conversation not found or soft-deleted".into()))
 }
@@ -1648,13 +1658,14 @@ pub async fn last_customer_message_at(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Option<chrono::DateTime<chrono::Utc>>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar(
         "SELECT MAX(created_at) FROM messages \
          WHERE tenant_id = $1 AND conversation_id = $2 AND kind = 'customer'",
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -1663,6 +1674,7 @@ pub async fn load_attachments_for_messages(
     tenant_id: Uuid,
     message_ids: &[Uuid],
 ) -> sqlx::Result<std::collections::HashMap<Uuid, Vec<crate::model::AttachmentInfo>>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     #[allow(clippy::type_complexity)]
     let rows: Vec<(
         Uuid,
@@ -1679,7 +1691,7 @@ pub async fn load_attachments_for_messages(
     )
     .bind(tenant_id)
     .bind(message_ids)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
 
     let mut map: std::collections::HashMap<Uuid, Vec<crate::model::AttachmentInfo>> =
@@ -1710,6 +1722,7 @@ pub async fn load_whatsapp_meta_for_messages(
     tenant_id: Uuid,
     message_ids: &[Uuid],
 ) -> sqlx::Result<std::collections::HashMap<Uuid, crate::model::DeliveryInfo>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
         "SELECT message_id, COALESCE(delivery_status, 'pending'), failure_reason \
          FROM whatsapp_message_meta \
@@ -1717,7 +1730,7 @@ pub async fn load_whatsapp_meta_for_messages(
     )
     .bind(tenant_id)
     .bind(message_ids)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
 
     let mut map = std::collections::HashMap::new();
@@ -1739,11 +1752,12 @@ pub async fn has_customer_message_after(
     conversation_id: Uuid,
     after_message_id: Uuid,
 ) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let created_at: Option<chrono::DateTime<chrono::Utc>> =
         sqlx::query_scalar("SELECT created_at FROM messages WHERE tenant_id = $1 AND id = $2")
             .bind(tenant_id)
             .bind(after_message_id)
-            .fetch_optional(pool)
+            .fetch_optional(uow.conn())
             .await?;
 
     let after = match created_at {
@@ -1763,6 +1777,6 @@ pub async fn has_customer_message_after(
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(after)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }

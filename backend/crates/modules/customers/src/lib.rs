@@ -104,6 +104,7 @@ pub async fn customer_exists(
     tenant_id: uuid::Uuid,
     customer_id: uuid::Uuid,
 ) -> sqlx::Result<bool> {
+    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar(
         "SELECT EXISTS( \
          SELECT 1 FROM customers \
@@ -112,7 +113,7 @@ pub async fn customer_exists(
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(pool)
+    .fetch_one(tx.conn())
     .await
 }
 

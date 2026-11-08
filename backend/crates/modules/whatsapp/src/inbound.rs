@@ -61,14 +61,14 @@ pub async fn process_message(
     msg: &IncomingMessage,
     contact: Option<&Contact>,
 ) -> sqlx::Result<()> {
-    let mut tx = pool.begin().await?;
+    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
 
     let exists: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM whatsapp_message_meta WHERE tenant_id = $1 AND wamid = $2)",
     )
     .bind(tenant_id)
     .bind(&msg.id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.conn())
     .await?;
 
     if exists {
@@ -93,7 +93,7 @@ pub async fn process_message(
             )
             .bind(tenant_id)
             .bind(customer_id)
-            .fetch_one(&mut *tx)
+            .fetch_one(tx.conn())
             .await?,
         };
 
@@ -105,7 +105,7 @@ pub async fn process_message(
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(&body)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.conn())
     .await?;
 
     if let Some((kind, media)) = extract_media(msg) {
@@ -130,12 +130,12 @@ pub async fn process_message(
     .bind(conversation_id)
     .bind(&msg.id)
     .bind(provider_ts)
-    .execute(&mut *tx)
+    .execute(tx.conn())
     .await?;
 
     sqlx::query("UPDATE conversations SET last_activity_at = now() WHERE id = $1")
         .bind(conversation_id)
-        .execute(&mut *tx)
+        .execute(tx.conn())
         .await?;
 
     conversations::outbox::emit_customer_message_in_tx(

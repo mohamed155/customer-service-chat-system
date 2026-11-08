@@ -246,11 +246,12 @@ pub async fn load_live(
     pool: &PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<Option<AgentConfigurationRow>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, AgentConfigurationRow>(
         "SELECT * FROM agent_configurations WHERE tenant_id = $1 AND deleted_at IS NULL",
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -328,6 +329,7 @@ pub async fn live_skill_ids(
     tenant_id: Uuid,
     ids: &[Uuid],
 ) -> sqlx::Result<Vec<Uuid>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     if ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -338,17 +340,18 @@ pub async fn live_skill_ids(
     )
     .bind(tenant_id)
     .bind(ids)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await?;
     Ok(rows.into_iter().map(|r| r.0).collect())
 }
 
 pub async fn agent_exists(pool: &PgPool, tenant_id: Uuid) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM agent_configurations WHERE tenant_id = $1 AND deleted_at IS NULL)",
     )
     .bind(tenant_id)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 

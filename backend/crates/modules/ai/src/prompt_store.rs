@@ -27,13 +27,14 @@ pub struct PromptVersionRow {
 }
 
 pub async fn active_content(pool: &PgPool, tenant_id: Uuid) -> sqlx::Result<Option<String>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar(
         "SELECT v.content FROM agent_prompts p \
          JOIN agent_prompt_versions v ON v.prompt_id = p.id AND v.version_number = p.active_version \
          WHERE p.tenant_id = $1 AND p.prompt_kind = 'system' AND p.deleted_at IS NULL",
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -41,12 +42,13 @@ pub async fn load_bootstrap(
     pool: &PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<Option<(AgentPromptRow, PromptVersionRow)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let prompt = sqlx::query_as::<_, AgentPromptRow>(
         "SELECT * FROM agent_prompts \
          WHERE tenant_id = $1 AND prompt_kind = 'system' AND deleted_at IS NULL",
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
 
     let prompt = match prompt {
@@ -60,7 +62,7 @@ pub async fn load_bootstrap(
     )
     .bind(prompt.id)
     .bind(prompt.active_version)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
 
     let version = match version {
@@ -210,6 +212,7 @@ pub async fn list_versions(
     limit: i64,
     before: Option<i32>,
 ) -> sqlx::Result<(Vec<PromptVersionRow>, bool)> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let fetch_limit = limit + 1;
 
     let rows = match before {
@@ -225,7 +228,7 @@ pub async fn list_versions(
             .bind(tenant_id)
             .bind(b)
             .bind(fetch_limit)
-            .fetch_all(pool)
+            .fetch_all(uow.conn())
             .await?
         }
         None => {
@@ -238,7 +241,7 @@ pub async fn list_versions(
             )
             .bind(tenant_id)
             .bind(fetch_limit)
-            .fetch_all(pool)
+            .fetch_all(uow.conn())
             .await?
         }
     };
@@ -258,6 +261,7 @@ pub async fn get_version(
     tenant_id: Uuid,
     version_number: i32,
 ) -> sqlx::Result<Option<(PromptVersionRow, bool)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let row = sqlx::query_as::<_, PromptVersionRow>(
         "SELECT v.* FROM agent_prompt_versions v \
          JOIN agent_prompts p ON p.id = v.prompt_id \
@@ -266,7 +270,7 @@ pub async fn get_version(
     )
     .bind(tenant_id)
     .bind(version_number)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
 
     let row = match row {
@@ -280,18 +284,19 @@ pub async fn get_version(
     )
     .bind(row.prompt_id)
     .bind(version_number)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
 
     Ok(Some((row, is_active.is_some())))
 }
 
 pub async fn active_version_number(pool: &PgPool, tenant_id: Uuid) -> sqlx::Result<Option<i32>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar(
         "SELECT active_version FROM agent_prompts \
          WHERE tenant_id = $1 AND prompt_kind = 'system' AND deleted_at IS NULL",
     )
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }

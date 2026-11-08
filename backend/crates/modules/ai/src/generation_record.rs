@@ -57,6 +57,7 @@ pub async fn ensure_provisional(
     conversation_id: Uuid,
     trigger_message_id: Uuid,
 ) -> sqlx::Result<()> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query(
         "INSERT INTO ai_generations \
          (id, tenant_id, conversation_id, trigger_message_id, outcome, attempts, latency_ms) \
@@ -67,7 +68,7 @@ pub async fn ensure_provisional(
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(trigger_message_id)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
     Ok(())
 }

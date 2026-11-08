@@ -76,13 +76,14 @@ async fn active_membership_id(
     tenant_id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<Uuid>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT id FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
     Ok(row.map(|(id,)| id))
 }

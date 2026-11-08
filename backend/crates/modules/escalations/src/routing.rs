@@ -666,6 +666,7 @@ pub async fn has_open_escalation(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar(
         "SELECT EXISTS( \
          SELECT 1 FROM escalations \
@@ -674,6 +675,6 @@ pub async fn has_open_escalation(
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }

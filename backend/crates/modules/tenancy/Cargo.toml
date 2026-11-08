@@ -8,6 +8,7 @@ authz = { path = "../authz" }
 axum.workspace = true
 chrono.workspace = true
 config = { path = "../../shared/config" }
+db = { path = "../../shared/db" }
 hex.workspace = true
 identity = { path = "../identity" }
 kernel = { path = "../../shared/kernel" }

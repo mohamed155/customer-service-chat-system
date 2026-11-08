@@ -235,7 +235,7 @@ async fn handle_status_update(
     let failure_reason = status.errors.first().map(|e| e.title.as_str());
     // Keep the transaction in a binding and commit it: a temporary
     // `&mut pool.begin()` is dropped (rolled back) at the end of the call.
-    let mut tx = pool.begin().await?;
+    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     match crate::queries::update_status_by_wamid_in_tx(
         &mut tx,
         tenant_id,

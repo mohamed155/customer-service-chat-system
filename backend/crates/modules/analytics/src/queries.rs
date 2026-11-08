@@ -12,6 +12,7 @@ pub async fn conversation_counts(
     to_ts: DateTime<Utc>,
     channel: Option<&str>,
 ) -> sqlx::Result<(i64, i64, i64, i64)> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (i64, i64, i64, i64)>(
         r#"
         SELECT
@@ -37,7 +38,7 @@ pub async fn conversation_counts(
     .bind(from_ts)
     .bind(to_ts)
     .bind(channel)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -48,6 +49,7 @@ pub async fn avg_first_response_seconds(
     to_ts: DateTime<Utc>,
     channel: Option<&str>,
 ) -> sqlx::Result<Option<f64>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar::<_, Option<f64>>(
         r#"
         WITH cohort AS (
@@ -78,7 +80,7 @@ pub async fn avg_first_response_seconds(
     .bind(from_ts)
     .bind(to_ts)
     .bind(channel)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -89,6 +91,7 @@ pub async fn avg_response_seconds(
     to_ts: DateTime<Utc>,
     channel: Option<&str>,
 ) -> sqlx::Result<Option<f64>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar::<_, Option<f64>>(
         r#"
         WITH cohort AS (
@@ -115,7 +118,7 @@ pub async fn avg_response_seconds(
     .bind(from_ts)
     .bind(to_ts)
     .bind(channel)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -126,6 +129,7 @@ pub async fn satisfaction(
     to_ts: DateTime<Utc>,
     channel: Option<&str>,
 ) -> sqlx::Result<(Option<f64>, i64)> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (Option<f64>, i64)>(
         r#"
         SELECT AVG(f.rating)::float8, COUNT(*)::bigint
@@ -140,7 +144,7 @@ pub async fn satisfaction(
     .bind(from_ts)
     .bind(to_ts)
     .bind(channel)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -150,6 +154,7 @@ pub async fn token_totals(
     from_ts: DateTime<Utc>,
     to_ts: DateTime<Utc>,
 ) -> sqlx::Result<(i64, i64)> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (i64, i64)>(
         r#"
         SELECT
@@ -168,7 +173,7 @@ pub async fn token_totals(
     .bind(tenant_id)
     .bind(from_ts)
     .bind(to_ts)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -179,6 +184,7 @@ pub async fn channel_breakdown(
     to_ts: DateTime<Utc>,
     channel: Option<&str>,
 ) -> sqlx::Result<Vec<(String, i64)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let mut sql = String::from(
         "SELECT c.channel, COUNT(*)::bigint \
          FROM conversations c \
@@ -197,7 +203,7 @@ pub async fn channel_breakdown(
     if let Some(ch) = channel {
         q = q.bind(ch);
     }
-    q.fetch_all(pool).await
+    q.fetch_all(uow.conn()).await
 }
 
 pub async fn token_totals_for_channel(
@@ -207,6 +213,7 @@ pub async fn token_totals_for_channel(
     to_ts: DateTime<Utc>,
     channel: &str,
 ) -> sqlx::Result<i64> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_scalar::<_, i64>(
         r#"
         SELECT COALESCE(SUM(COALESCE(u.input_tokens,0) + COALESCE(u.output_tokens,0)), 0)::bigint
@@ -224,7 +231,7 @@ pub async fn token_totals_for_channel(
     .bind(from_ts)
     .bind(to_ts)
     .bind(channel)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
 }
 
@@ -237,6 +244,7 @@ pub async fn daily_series(
     to_ts: DateTime<Utc>,
     channel: Option<&str>,
 ) -> sqlx::Result<Vec<(NaiveDate, i64, i64, i64, Option<f64>, i64, i64)>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (NaiveDate, i64, i64, i64, Option<f64>, i64, i64)>(
         r#"
         WITH days AS (
@@ -295,6 +303,6 @@ pub async fn daily_series(
     .bind(channel)
     .bind(from_date)
     .bind(to_date)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
 }

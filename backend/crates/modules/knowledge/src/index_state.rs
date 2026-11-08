@@ -64,12 +64,13 @@ pub async fn get(
     tenant_id: Uuid,
     item_id: Uuid,
 ) -> Result<Option<IndexState>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, IndexState>(
         "SELECT * FROM knowledge_index_state WHERE item_id = $1 AND tenant_id = $2",
     )
     .bind(item_id)
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
 }
 
@@ -95,6 +96,7 @@ pub async fn upsert_status(
     item_id: Uuid,
     status: &IndexStatus,
 ) -> Result<(), sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let status_str = status.to_string();
     sqlx::query(
         "INSERT INTO knowledge_index_state (item_id, tenant_id, status) \
@@ -108,7 +110,7 @@ pub async fn upsert_status(
     .bind(item_id)
     .bind(tenant_id)
     .bind(&status_str)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
     Ok(())
 }
