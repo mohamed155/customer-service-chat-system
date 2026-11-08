@@ -323,6 +323,9 @@ pub async fn summary(
 // ---------------------------------------------------------------------------
 
 pub async fn detail(pool: &PgPool, tenant_id: Uuid, id: Uuid) -> Option<UsageDetailRow> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
+        .await
+        .ok()?;
     sqlx::query_as::<_, UsageDetailRow>(
         "SELECT id, tenant_id, provider, model, input_tokens, output_tokens, \
                 status, error_category, streamed, latency_ms, request_id, \
@@ -332,7 +335,7 @@ pub async fn detail(pool: &PgPool, tenant_id: Uuid, id: Uuid) -> Option<UsageDet
     )
     .bind(tenant_id)
     .bind(id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
     .ok()?
 }

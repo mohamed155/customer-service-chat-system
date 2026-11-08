@@ -95,7 +95,7 @@ async fn log_rejection_event(
     connection_id: uuid::Uuid,
     reason: &str,
 ) {
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin_for_tenant(pool, tenant_id).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::warn!(%e, "log_rejection_event: begin failed");

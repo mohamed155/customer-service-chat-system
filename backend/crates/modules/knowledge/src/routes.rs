@@ -213,11 +213,18 @@ fn build_tag_map(tags: &[store::KnowledgeItemTagRow]) -> HashMap<Uuid, Vec<Strin
     map
 }
 
-async fn get_category_name(pool: &PgPool, category_id: Option<Uuid>) -> Option<String> {
+async fn get_category_name(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    category_id: Option<Uuid>,
+) -> Option<String> {
     let id = category_id?;
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
+        .await
+        .ok()?;
     sqlx::query_scalar::<_, String>("SELECT name FROM knowledge_categories WHERE id = $1")
         .bind(id)
-        .fetch_optional(pool)
+        .fetch_optional(uow.conn())
         .await
         .ok()?
 }
@@ -324,11 +331,15 @@ pub async fn list_items(
     let cat_names: HashMap<Uuid, String> = if cat_ids.is_empty() {
         HashMap::new()
     } else {
+        let mut uow = match ctx.unit_of_work(&pool).await {
+            Ok(u) => u,
+            Err(r) => return r,
+        };
         match sqlx::query_as::<_, (Uuid, String)>(
             "SELECT id, name FROM knowledge_categories WHERE id = ANY($1)",
         )
         .bind(&cat_ids)
-        .fetch_all(&pool)
+        .fetch_all(uow.conn())
         .await
         {
             Ok(rows) => rows.into_iter().collect(),
@@ -467,12 +478,16 @@ pub async fn create_item(
     };
 
     let category_name = if let Some(cid) = payload.category_id {
+        let mut uow = match ctx.unit_of_work(&pool).await {
+            Ok(u) => u,
+            Err(r) => return r,
+        };
         match sqlx::query_scalar::<_, String>(
             "SELECT name FROM knowledge_categories WHERE id = $1 AND tenant_id = $2",
         )
         .bind(cid)
         .bind(ctx.tenant_id)
-        .fetch_optional(&pool)
+        .fetch_optional(uow.conn())
         .await
         {
             Ok(Some(name)) => Some(name),
@@ -497,7 +512,7 @@ pub async fn create_item(
         None
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "create_item: begin tx failed");
@@ -660,7 +675,7 @@ pub async fn get_item(
         }
     };
 
-    let category_name = get_category_name(&pool, item.category_id).await;
+    let category_name = get_category_name(&pool, ctx.tenant_id, item.category_id).await;
 
     let document = if item.item_type == "document" {
         match store::get_document(&pool, ctx.tenant_id, item_id).await {
@@ -984,7 +999,7 @@ pub async fn update_item(
         }
     };
 
-    let category_name = get_category_name(&pool, updated.category_id).await;
+    let category_name = get_category_name(&pool, ctx.tenant_id, updated.category_id).await;
 
     let dto = KnowledgeItemDetailDto {
         id: updated.id,
@@ -1481,7 +1496,7 @@ pub async fn upload_document(
             &content_type,
             bytes,
             || async move {
-                let mut tx = persist_pool.begin().await?;
+                let mut tx = db::UnitOfWork::begin_for_tenant(&persist_pool, ctx.tenant_id).await?;
 
                 let item = store::create_document_in_tx(
                     &mut tx,
@@ -1569,7 +1584,7 @@ pub async fn upload_document(
         title: item.title,
         status: item.status,
         category_id: item.category_id,
-        category_name: get_category_name(&pool, item.category_id).await,
+        category_name: get_category_name(&pool, ctx.tenant_id, item.category_id).await,
         created_by_display: item.created_by_display,
         created_at: item.created_at,
         updated_at: item.updated_at,

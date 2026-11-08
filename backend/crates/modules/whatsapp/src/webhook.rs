@@ -72,21 +72,28 @@ pub async fn verify_subscription(
     let challenge = q.challenge.as_deref().unwrap_or("");
     let verify_token_input = q.verify_token.as_deref().unwrap_or("");
 
-    let stored_verify_token =
-        match queries::decrypted_secret(&pool, &master_key, conn.id, "verify_token").await {
-            Ok(Some(t)) => t,
-            Ok(None) => {
-                tracing::error!(
-                    "verify_subscription: verify_token secret not found for connection {}",
-                    conn.id
-                );
-                return not_found_response();
-            }
-            Err(e) => {
-                tracing::error!(%e, "verify_subscription: decryption failed");
-                return not_found_response();
-            }
-        };
+    let stored_verify_token = match queries::decrypted_secret(
+        &pool,
+        conn.tenant_id,
+        &master_key,
+        conn.id,
+        "verify_token",
+    )
+    .await
+    {
+        Ok(Some(t)) => t,
+        Ok(None) => {
+            tracing::error!(
+                "verify_subscription: verify_token secret not found for connection {}",
+                conn.id
+            );
+            return not_found_response();
+        }
+        Err(e) => {
+            tracing::error!(%e, "verify_subscription: decryption failed");
+            return not_found_response();
+        }
+    };
 
     if mode == "subscribe" && verify_token_input == stored_verify_token {
         (StatusCode::OK, challenge.to_string()).into_response()
@@ -157,7 +164,9 @@ pub async fn receive_message(
         .unwrap_or("");
 
     let app_secret =
-        match queries::decrypted_secret(&pool, &master_key, conn.id, "app_secret").await {
+        match queries::decrypted_secret(&pool, conn.tenant_id, &master_key, conn.id, "app_secret")
+            .await
+        {
             Ok(Some(s)) => s,
             Ok(None) => {
                 tracing::error!("receive_message: app_secret not found");

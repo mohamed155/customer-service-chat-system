@@ -522,18 +522,21 @@ pub async fn connection_by_token_and_slug(
 
 pub async fn decrypted_secret(
     pool: &sqlx::PgPool,
+    tenant_id: Uuid,
     master_key: &crate::crypto::MasterKey,
     connection_id: Uuid,
     field_key: &str,
 ) -> Result<Option<String>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let conn_info = sqlx::query_as::<_, (Uuid, String)>(
         "SELECT c.tenant_id, cat.slug \
          FROM integration_connections c \
          JOIN integration_catalog cat ON cat.id = c.catalog_id \
-         WHERE c.id = $1",
+         WHERE c.id = $1 AND c.tenant_id = $2",
     )
     .bind(connection_id)
-    .fetch_optional(pool)
+    .bind(tenant_id)
+    .fetch_optional(uow.conn())
     .await?;
 
     let (tenant_id, slug) = match conn_info {
@@ -547,8 +550,9 @@ pub async fn decrypted_secret(
     )
     .bind(connection_id)
     .bind(field_key)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
+    drop(uow);
 
     match row {
         Some((ciphertext, nonce)) => {

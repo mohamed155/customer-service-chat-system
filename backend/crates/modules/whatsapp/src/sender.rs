@@ -75,12 +75,13 @@ pub async fn process_one(
         .ok_or_else(|| format!("message {} not found", event.message_id))?;
 
     // 2. Get customer's whatsapp identifier
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
     let customer_id: Uuid = sqlx::query_scalar(
         "SELECT customer_id FROM conversations WHERE tenant_id = $1 AND id = $2",
     )
     .bind(event.tenant_id)
     .bind(event.conversation_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?
     .ok_or_else(|| format!("conversation {} not found", event.conversation_id))?;
 
@@ -90,19 +91,20 @@ pub async fn process_one(
     )
     .bind(event.tenant_id)
     .bind(customer_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?
     .ok_or_else(|| format!("no whatsapp identifier for customer {}", customer_id))?;
+    drop(uow);
 
     // 3. Insert outbound meta (pending) in a transaction
-    let mut tx = pool.begin().await?;
+    let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
 
     let meta_exists: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM whatsapp_message_meta WHERE tenant_id = $1 AND message_id = $2)",
     )
     .bind(event.tenant_id)
     .bind(event.message_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.conn())
     .await?;
 
     if !meta_exists {
@@ -125,7 +127,7 @@ pub async fn process_one(
     .await?;
 
     if !window::window_open(last_customer, chrono::Utc::now()) {
-        let mut tx = pool.begin().await?;
+        let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
         queries::set_outbound_failed_in_tx(
             &mut tx,
             event.tenant_id,
@@ -144,7 +146,7 @@ pub async fn process_one(
         {
             Some(id) => id,
             None => {
-                let mut tx = pool.begin().await?;
+                let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
                 queries::set_outbound_failed_in_tx(
                     &mut tx,
                     event.tenant_id,
@@ -157,17 +159,19 @@ pub async fn process_one(
             }
         };
 
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
     let config = sqlx::query_scalar::<_, serde_json::Value>(
         "SELECT config FROM integration_connections WHERE id = $1",
     )
     .bind(connection_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
+    drop(uow);
 
     let config = match config {
         Some(c) => c,
         None => {
-            let mut tx = pool.begin().await?;
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
             queries::set_outbound_failed_in_tx(
                 &mut tx,
                 event.tenant_id,
@@ -183,7 +187,7 @@ pub async fn process_one(
     let phone_number_id = match config.get("phone_number_id").and_then(|v| v.as_str()) {
         Some(id) => id.to_string(),
         None => {
-            let mut tx = pool.begin().await?;
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
             queries::set_outbound_failed_in_tx(
                 &mut tx,
                 event.tenant_id,
@@ -198,6 +202,7 @@ pub async fn process_one(
 
     let access_token = match integrations::queries::decrypted_secret(
         pool,
+        event.tenant_id,
         master_key,
         connection_id,
         "access_token",
@@ -206,7 +211,7 @@ pub async fn process_one(
     {
         Some(t) => t,
         None => {
-            let mut tx = pool.begin().await?;
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
             queries::set_outbound_failed_in_tx(
                 &mut tx,
                 event.tenant_id,
@@ -225,13 +230,13 @@ pub async fn process_one(
         .await
     {
         Ok(wamid) => {
-            let mut tx = pool.begin().await?;
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
             queries::set_outbound_sent_in_tx(&mut tx, event.tenant_id, event.message_id, &wamid)
                 .await?;
             tx.commit().await?;
         }
         Err(SendError::WindowExpired) => {
-            let mut tx = pool.begin().await?;
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
             queries::set_outbound_failed_in_tx(
                 &mut tx,
                 event.tenant_id,
@@ -242,7 +247,7 @@ pub async fn process_one(
             tx.commit().await?;
         }
         Err(SendError::Unauthorized) => {
-            let mut tx = pool.begin().await?;
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
             queries::set_outbound_failed_in_tx(
                 &mut tx,
                 event.tenant_id,
@@ -254,7 +259,7 @@ pub async fn process_one(
         }
         Err(SendError::Transient(msg)) => {
             tracing::warn!(%msg, "sender worker: transient error, will retry on next poll");
-            let mut tx = pool.begin().await?;
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
             queries::set_outbound_failed_in_tx(
                 &mut tx,
                 event.tenant_id,
@@ -265,7 +270,7 @@ pub async fn process_one(
             tx.commit().await?;
         }
         Err(SendError::Other(msg)) => {
-            let mut tx = pool.begin().await?;
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
             queries::set_outbound_failed_in_tx(
                 &mut tx,
                 event.tenant_id,

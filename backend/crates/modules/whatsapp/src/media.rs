@@ -134,5 +134,12 @@ async fn get_tenant_access_token(
             Some(id) => id,
             None => return Ok(None),
         };
-    integrations::queries::decrypted_secret(pool, master_key, connection_id, "access_token").await
+    integrations::queries::decrypted_secret(
+        pool,
+        tenant_id,
+        master_key,
+        connection_id,
+        "access_token",
+    )
+    .await
 }
