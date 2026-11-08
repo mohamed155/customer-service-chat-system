@@ -1,6 +1,6 @@
 ---
 name: linear-task-pipeline
-description: Take a Linear issue (or an epic and all its sub-issues, then the epic itself) from Todo to Done — mark In Progress, implement on the issue's branch, open a PR, mark In Review, wait for CI, the Kilo Code review and the CodeRabbit review (requesting it by comment), fix CI failures and valid review comments, merge to master, tick the description's checkboxes, mark Done. Use when the user says "run the pipeline on MOH-NN", "implement MOH-NN end to end", or "loop over the sub-tasks of MOH-NN".
+description: Take a Linear issue (or an epic and all its sub-issues, then the epic itself; finishing the last open sub-issue also finishes its parent) from Todo to Done — mark In Progress, implement on the issue's branch, open a PR, mark In Review, wait for CI, the Kilo Code review and the CodeRabbit review (requesting it by comment), fix CI failures and valid review comments, merge to master, tick the description's checkboxes, mark Done. Use when the user says "run the pipeline on MOH-NN", "implement MOH-NN end to end", or "loop over the sub-tasks of MOH-NN".
 argument-hint: <linear-issue-id> (e.g. MOH-17, or an epic like MOH-6)
 ---
 
@@ -38,8 +38,10 @@ Stop and tell the user if any check fails; don't work around it.
 - `get_issue` on the argument (with relations).
 - If it has sub-issues (`list_issues` with `parentId`), the queue is the sub-issues whose status
   is not Done / Canceled / Duplicate, **followed by the epic itself as the last item** (step 9).
-  Otherwise the queue is just the issue itself; if that issue has a parent, step 9 decides
-  whether the parent is appended after it.
+  Otherwise the queue is just the issue itself; if that issue has a parent, look at the parent's
+  other sub-issues now. When this issue is the last one open (all the others are Done, Canceled
+  or Duplicate), **append the parent as the last item**, so it is finished in this same run
+  (step 9). Otherwise leave the parent alone and say which sub-issues are still open.
 - Order: respect `blockedBy` relations first, then priority (Urgent → Low), then identifier.
   An issue blocked by something not Done waits until its blocker finishes in this run; if the
   blocker is outside the queue and not Done, skip the issue and report it.
@@ -260,15 +262,20 @@ Then tick the checkboxes and close the issue:
 
 ## 8. Next issue
 
-Go to the next issue in the queue. When only the parent is left, go to step 9.
+Go to the next issue in the queue. When only the parent is left, go to step 9 and finish it as
+well; the run is not over until the parent is Done or a named box is holding it open.
 
-## 9. Parent issue (epic) — same steps
+## 9. Parent issue (epic) — finished in the same run
+
+Finishing the last sub-issue **also finishes the parent**. Don't stop after the sub-issue to ask
+whether to continue, and don't leave the parent for a second invocation: the user should never
+have to re-run the skill to close an epic.
 
 When the last open sub-issue of a parent finishes, re-query its sub-issues (`list_issues` with
 `parentId`). If **every** sub-issue is Done, Canceled or Duplicate, run the parent through the
-same loop. If any is still open, parked or skipped in this run, don't touch the parent: report
-which sub-issues block it. This applies both when the skill was invoked on the epic and when it
-was invoked on a single sub-issue that turned out to be the last one open.
+same loop straight away. If any is still open, parked or skipped in this run, don't touch the
+parent: report which sub-issues block it. This applies both when the skill was invoked on the
+epic and when it was invoked on a single sub-issue that turned out to be the last one open.
 
 For the parent:
 
@@ -284,8 +291,13 @@ For the parent:
    - **Nothing is missing:** don't open an empty PR. Skip steps 4–6 and go to step 7's
      checkbox/close part, with the evidence pointing at the sub-issues' merged PRs and files on
      `master`.
-3. **Step 7** — tick the epic's checkboxes with the same rules (a box not met keeps the epic
-   open), mark it Done, and comment with the evidence list and the sub-issues' PRs.
+3. **Step 7** — tick the epic's checkboxes with the same rules, mark it **Done**, and comment
+   with the evidence list and the sub-issues' PRs. Mark it Done in this run whenever every box
+   is met. The epic stays open only for a box that is genuinely not met (not delivered, or not
+   verifiable by anything this run can do, such as a platform nobody tested). In that case tick
+   the boxes that are met, leave the others unticked, keep the epic In Progress, and ask the
+   user in the final report what to do about exactly those boxes. Never tick a box on a guess to
+   get the epic closed.
 
 Only go one level up per run: if the epic itself has a parent, report that and leave it to
 the user.
