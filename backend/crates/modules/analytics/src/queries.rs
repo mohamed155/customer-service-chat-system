@@ -294,7 +294,7 @@ pub async fn daily_series(
     channel: Option<&str>,
 ) -> sqlx::Result<Vec<(NaiveDate, i64, i64, i64, Option<f64>, i64, i64)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let result: sqlx::Result<Vec<(NaiveDate, i64, i64, i64, Option<f64>, i64, i64)>> = async {
+    let result: sqlx::Result<Vec<DailyRow>> = async {
     sqlx::query_as::<_, (NaiveDate, i64, i64, i64, Option<f64>, i64, i64)>(
         r#"
         WITH days AS (
@@ -362,3 +362,6 @@ pub async fn daily_series(
     }
     result
 }
+
+/// One row of the daily series query.
+type DailyRow = (NaiveDate, i64, i64, i64, Option<f64>, i64, i64);

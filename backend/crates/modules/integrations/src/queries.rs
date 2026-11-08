@@ -476,7 +476,7 @@ pub async fn find_secret_ciphertext(
     field_key: &str,
 ) -> Result<Option<(Vec<u8>, Vec<u8>)>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let result: Result<Option<(Vec<u8>, Vec<u8>)>, sqlx::Error> = async {
+    let result: Result<Option<CiphertextAndNonce>, sqlx::Error> = async {
         let row: Option<(Vec<u8>, Vec<u8>)> = sqlx::query_as(
             "SELECT ciphertext, nonce FROM integration_secrets \
          WHERE connection_id = $1 AND field_key = $2",
@@ -588,3 +588,6 @@ pub async fn active_connection_for_slug(
     }
     result
 }
+
+/// A stored secret: (ciphertext, nonce).
+type CiphertextAndNonce = (Vec<u8>, Vec<u8>);

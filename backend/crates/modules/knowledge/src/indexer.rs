@@ -238,11 +238,13 @@ async fn process_one_event(
     {
         // 9a. Success — atomic replace
         Ok(embeddings) => {
-            let mut tx = pool.begin().await.map_err(|e| format!("begin tx: {e}"))?;
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
+                .await
+                .map_err(|e| format!("begin tx: {e}"))?;
 
             sqlx::query("DELETE FROM knowledge_chunks WHERE item_id = $1")
                 .bind(item_id)
-                .execute(&mut *tx)
+                .execute(tx.conn())
                 .await
                 .map_err(|e| format!("delete chunks: {e}"))?;
 
@@ -267,7 +269,7 @@ async fn process_one_event(
                 .bind(&chunk.content)
                 .bind(&emb_str)
                 .bind(&chunk_result.content_hash)
-                .execute(&mut *tx)
+                .execute(tx.conn())
                 .await
                 .map_err(|e| format!("insert chunk {i}: {e}"))?;
             }
@@ -282,13 +284,13 @@ async fn process_one_event(
             .bind(&chunk_result.content_hash)
             .bind(chunk_count)
             .bind(item_id)
-            .execute(&mut *tx)
+            .execute(tx.conn())
             .await
             .map_err(|e| format!("update index state: {e}"))?;
 
             sqlx::query("DELETE FROM outbox_events WHERE id = $1")
                 .bind(event.id)
-                .execute(&mut *tx)
+                .execute(tx.conn())
                 .await
                 .map_err(|e| format!("delete outbox: {e}"))?;
 
