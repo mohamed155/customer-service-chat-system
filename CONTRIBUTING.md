@@ -75,6 +75,16 @@ Refs MOH-20
   heading anchor; `docs-links-external` only warns about dead external links. The `compose-config` job
   runs `docker compose config` for every profile and the staging overlay.
 
+### Dependencies and secrets
+
+- **Dependabot** ([`.github/dependabot.yml`](.github/dependabot.yml)) opens pull requests every Monday for
+  GitHub Actions, the frontend (npm/pnpm) and the backend (Cargo). Minor and patch updates are grouped
+  into one pull request per ecosystem; major updates come one by one. Titles use `ci(deps)` or
+  `build(deps)` so they pass commitlint.
+- **Secret scanning:** the `secret-scan` job runs gitleaks over the full git history and fails the build
+  on any finding. Rules and the list of known fake values are in [`.gitleaks.toml`](.gitleaks.toml). If a
+  test fixture trips it, add that exact value to the allowlist there, in the same pull request.
+
 ## Merging
 
 `master` is protected by a repository ruleset:

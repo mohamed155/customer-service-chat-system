@@ -1,0 +1,47 @@
+# Dependabot version updates (MOH-27): GitHub Actions, npm (pnpm) and Cargo, weekly.
+#
+# - Minor and patch updates are grouped into one pull request per ecosystem. Major updates stay one
+#   pull request each, so a breaking change is reviewed on its own.
+# - Pull request titles and commits must pass commitlint (commitlint.config.mjs). Its scope list has
+#   `deps` but not `deps-dev`, so both prefixes below use `(deps)`. `ci(deps)` for workflows and
+#   `build(deps)` for application dependencies. A prefix can be at most 15 characters.
+# - For Actions pinned by commit SHA, Dependabot updates the SHA and the version in the trailing
+#   comment together.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # The frontend is one pnpm workspace; only frontend/package.json and its lockfile exist.
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps)"
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # The backend is one Cargo workspace with a single Cargo.lock.
+  - package-ecosystem: cargo
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps)"
+    groups:
+      cargo-minor-patch:
+        update-types: ["minor", "patch"]
