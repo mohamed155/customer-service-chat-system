@@ -46,7 +46,7 @@ automatically. Don't rename it. Work that has no Linear issue doesn't start unti
 
 Commits **and pull request titles** follow [Conventional Commits](https://www.conventionalcommits.org/):
 
-```
+```text
 <type>(<scope>): <summary>
 
 <optional body: what and why>
@@ -70,6 +70,10 @@ Refs MOH-20
   `pnpm --dir frontend exec lefthook install`.
 - **In CI:** the `commitlint` job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) checks the PR
   title and every commit in the PR.
+- **Docs and Compose:** the `docs-lint` job runs markdownlint on `docs/` and the root markdown files
+  (locally: `npx markdownlint-cli2@0.24.0`). The `docs-links` job fails on a broken internal link or
+  heading anchor; `docs-links-external` only warns about dead external links. The `compose-config` job
+  runs `docker compose config` for every profile and the staging overlay.
 
 ## Merging
 

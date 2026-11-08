@@ -1,0 +1,20 @@
+// markdownlint-cli2 config for docs/ and the root markdown files (checked by the docs-lint job in
+// .github/workflows/ci.yml). Run locally from the repo root with: npx markdownlint-cli2@0.24.0
+// Only rules this repository's docs deliberately do not follow are off. Everything else is on.
+{
+  "config": {
+    "default": true,
+    // Prose and tables are not hard-wrapped, so a line length limit only produces noise.
+    "MD013": false,
+    // Repeated headings are fine under different parents (for example "Context" in every ADR).
+    "MD024": { "siblings_only": true },
+    // specs.md has one top-level heading per spec, by design.
+    "MD025": false,
+    // Bold lines are used as labels (for example "**Note:**"), not as headings.
+    "MD036": false,
+    // Table column alignment style; tables are not padded to a fixed width.
+    "MD060": false
+  },
+  // Keep in step with the globs in the docs-lint job.
+  "globs": ["docs/**/*.md", "*.md"]
+}
