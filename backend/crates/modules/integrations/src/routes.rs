@@ -76,15 +76,23 @@ async fn active_membership_id(
     tenant_id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<Uuid>, sqlx::Error> {
-    let row: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT id FROM tenant_memberships \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<Option<Uuid>, sqlx::Error> = async {
+        let row: Option<(Uuid,)> = sqlx::query_as(
+            "SELECT id FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .bind(user_id)
-    .fetch_optional(pool)
-    .await?;
-    Ok(row.map(|(id,)| id))
+        )
+        .bind(tenant_id)
+        .bind(user_id)
+        .fetch_optional(uow.conn())
+        .await?;
+        Ok(row.map(|(id,)| id))
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 #[allow(clippy::result_large_err)]
@@ -233,14 +241,14 @@ async fn build_detail_dto(
             connection: None,
         },
         Some(c) => {
-            let outcomes = queries::recent_event_outcomes(pool, c.id)
+            let outcomes = queries::recent_event_outcomes(pool, c.tenant_id, c.id)
                 .await
                 .unwrap_or_default();
             let outcome_refs: Vec<&str> = outcomes.iter().map(String::as_str).collect();
             let derived = status::derive_status(Some(c.is_active), &outcome_refs);
 
             let secrets: Vec<IntegrationSecretRefDto> = if c.is_active {
-                queries::list_secret_refs(pool, c.id)
+                queries::list_secret_refs(pool, c.tenant_id, c.id)
                     .await
                     .unwrap_or_default()
                     .into_iter()
@@ -299,7 +307,7 @@ async fn build_detail_dto_for_connection(
     connection_id: Uuid,
     webhook_token_plain: Option<&str>,
 ) -> IntegrationDetailDto {
-    let connection = queries::find_connection_by_id(pool, connection_id)
+    let connection = queries::find_connection_by_id(pool, tenant_id, connection_id)
         .await
         .ok()
         .flatten();
@@ -322,14 +330,14 @@ async fn build_detail_dto_for_connection(
     let schema: Vec<ConfigFieldDto> =
         serde_json::from_value(catalog.config_schema.clone()).unwrap_or_default();
 
-    let outcomes = queries::recent_event_outcomes(pool, connection.id)
+    let outcomes = queries::recent_event_outcomes(pool, connection.tenant_id, connection.id)
         .await
         .unwrap_or_default();
     let outcome_refs: Vec<&str> = outcomes.iter().map(String::as_str).collect();
     let derived = status::derive_status(Some(connection.is_active), &outcome_refs);
 
     let secrets: Vec<IntegrationSecretRefDto> = if connection.is_active {
-        queries::list_secret_refs(pool, connection.id)
+        queries::list_secret_refs(pool, connection.tenant_id, connection.id)
             .await
             .unwrap_or_default()
             .into_iter()
@@ -476,7 +484,7 @@ pub async fn connect_integration(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "connect_integration: begin tx failed");
@@ -701,7 +709,9 @@ pub async fn list_integration_events(
     };
 
     let fetch_limit = limit + 1;
-    let rows = match queries::list_events(&pool, connection.id, cursor, fetch_limit).await {
+    let rows = match queries::list_events(&pool, ctx.tenant_id, connection.id, cursor, fetch_limit)
+        .await
+    {
         Ok(r) => r,
         Err(e) => {
             tracing::error!(%e, "list_integration_events: list_events failed");
@@ -822,7 +832,7 @@ pub async fn update_integration_config(
         && serde_json::Value::Object(payload.config.clone()) != connection.config;
     let secrets_changed = !secrets_ref.is_empty();
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "update_integration_config: begin tx failed");
@@ -1053,7 +1063,7 @@ pub async fn disconnect_integration(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "disconnect_integration: begin tx failed");

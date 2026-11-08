@@ -26,6 +26,42 @@ pub struct TenantContext {
     pub request_id: String,
 }
 
+/// Lets the Unit of Work (`db::UnitOfWork::begin(&pool, &ctx)`) bind a transaction to this tenant.
+/// Only the tenant-context middleware builds a `TenantContext`, so a Unit of Work started from one
+/// is always for a tenant the caller was authorised for.
+impl db::TenantScoped for TenantContext {
+    fn tenant_id(&self) -> Uuid {
+        self.tenant_id
+    }
+}
+
+impl TenantContext {
+    /// Opens this tenant's Unit of Work (`app.tenant_id` set for the transaction), or the 500
+    /// response a handler should return when the database cannot start a transaction.
+    pub async fn unit_of_work(&self, pool: &sqlx::PgPool) -> Result<db::UnitOfWork, Response> {
+        db::UnitOfWork::begin(pool, self).await.map_err(|error| {
+            tracing::error!(%error, "failed to begin tenant unit of work");
+            ApiError::internal_error("Database error")
+                .with_request_id(&self.request_id)
+                .into_response()
+        })
+    }
+}
+
+impl TenantContext {
+    /// Commits a Unit of Work, or returns the 500 response a handler should return. A Unit of Work
+    /// that is dropped instead of committed is rolled back, so every handler path that wrote
+    /// something must end here (or in `UnitOfWork::commit`).
+    pub async fn commit(&self, uow: db::UnitOfWork) -> Result<(), Response> {
+        uow.commit().await.map_err(|error| {
+            tracing::error!(%error, "failed to commit tenant unit of work");
+            ApiError::internal_error("Database error")
+                .with_request_id(&self.request_id)
+                .into_response()
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct TenancyConfig {
     pub pool: sqlx::PgPool,

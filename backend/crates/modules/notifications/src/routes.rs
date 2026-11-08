@@ -29,13 +29,20 @@ async fn active_membership_id(
     tenant_id: Uuid,
     user_id: Uuid,
 ) -> Result<Uuid, Response> {
+    let mut uow = match db::UnitOfWork::begin_for_tenant(pool, tenant_id).await {
+        Ok(u) => u,
+        Err(e) => {
+            tracing::error!(%e, "active_membership_id: begin unit of work failed");
+            return Err(ApiError::internal_error("Database error").into_response());
+        }
+    };
     match sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => Ok(mid),
@@ -49,10 +56,17 @@ async fn active_membership_id(
     }
 }
 
-async fn actor_display_names(pool: &PgPool, membership_ids: &[Uuid]) -> HashMap<Uuid, String> {
+async fn actor_display_names(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    membership_ids: &[Uuid],
+) -> HashMap<Uuid, String> {
     if membership_ids.is_empty() {
         return HashMap::new();
     }
+    let Ok(mut uow) = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await else {
+        return HashMap::new();
+    };
     let rows = sqlx::query_as::<_, (Uuid, String)>(
         "SELECT DISTINCT ON (tm.id) tm.id, u.display_name \
          FROM tenant_memberships tm \
@@ -60,7 +74,7 @@ async fn actor_display_names(pool: &PgPool, membership_ids: &[Uuid]) -> HashMap<
          WHERE tm.id = ANY($1)",
     )
     .bind(membership_ids)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
     .unwrap_or_default();
     rows.into_iter().collect()
@@ -156,7 +170,7 @@ pub async fn list_notifications(
     };
 
     let actor_mids: Vec<Uuid> = rows.iter().filter_map(|r| r.actor_membership_id).collect();
-    let names = actor_display_names(&pool, &actor_mids).await;
+    let names = actor_display_names(&pool, ctx.tenant_id, &actor_mids).await;
 
     let data: Vec<NotificationDto> = rows.iter().map(|r| row_to_dto(r, &names)).collect();
 
@@ -240,7 +254,7 @@ pub async fn mark_notification_read(
     };
 
     let mids: Vec<Uuid> = row.actor_membership_id.into_iter().collect();
-    let names = actor_display_names(&pool, &mids).await;
+    let names = actor_display_names(&pool, ctx.tenant_id, &mids).await;
     let dto = row_to_dto(&row, &names);
 
     (StatusCode::OK, Json(dto)).into_response()

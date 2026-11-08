@@ -95,7 +95,7 @@ async fn log_rejection_event(
     connection_id: uuid::Uuid,
     reason: &str,
 ) {
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin_for_tenant(pool, tenant_id).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::warn!(%e, "log_rejection_event: begin failed");
@@ -245,6 +245,7 @@ pub async fn receive_webhook(
 
     let (ct, nonce) = match queries::find_secret_ciphertext(
         &pool,
+        conn.tenant_id,
         conn.connection_id,
         SIGNING_SECRET_FIELD,
     )
@@ -307,7 +308,9 @@ pub async fn receive_webhook(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    // The tenant is known now (it came from the webhook token), so the delivery is written in
+    // that tenant's Unit of Work. Only the token lookup above is a pre-tenant query.
+    let mut tx = match db::UnitOfWork::begin_for_tenant(&pool, conn.tenant_id).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "receive_webhook: begin tx failed");

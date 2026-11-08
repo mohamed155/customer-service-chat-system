@@ -48,17 +48,24 @@ pub async fn handle_summary(
     };
 
     // Verify the conversation belongs to the tenant
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let conv_exists: bool = match sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM conversations WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL)",
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(uow.conn())
     .await
     {
         Ok(e) => e,
         Err(_) => return err(axum::http::StatusCode::INTERNAL_SERVER_ERROR, "internal_error", "Database error"),
     };
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     if !conv_exists {
         return err(

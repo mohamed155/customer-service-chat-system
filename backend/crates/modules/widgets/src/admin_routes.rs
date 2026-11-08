@@ -210,7 +210,7 @@ pub async fn create_instance(
     let position = position.filter(|s| !s.is_empty()).unwrap_or("bottom-right");
     let theme = theme.filter(|s| !s.is_empty()).unwrap_or("light");
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "create_instance: begin tx failed");
@@ -371,7 +371,7 @@ pub async fn update_instance(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "update_instance: begin tx failed");
@@ -463,7 +463,7 @@ pub async fn delete_instance(
     Extension(principal): Extension<Principal>,
     Path(instance_id): Path<Uuid>,
 ) -> Response {
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "delete_instance: begin tx failed");
@@ -483,7 +483,7 @@ pub async fn delete_instance(
     )
     .bind(instance_id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     {
         Ok(Some(i)) => i,

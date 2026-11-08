@@ -97,7 +97,18 @@ pub async fn list_entries(
     builder.push(" ORDER BY a.created_at DESC, a.id DESC LIMIT ");
     builder.push_bind(limit + 1);
 
-    let rows = builder.build_query_as::<AuditRow>().fetch_all(pool).await?;
+    // A tenant-scoped listing runs in that tenant's Unit of Work; the platform-wide listing (no
+    // tenant scope) is a cross-tenant read and stays on the pool (MOH-31 cross-tenant path).
+    let rows = match tenant_scope {
+        Some(tenant_id) => {
+            let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+            builder
+                .build_query_as::<AuditRow>()
+                .fetch_all(uow.conn())
+                .await?
+        }
+        None => builder.build_query_as::<AuditRow>().fetch_all(pool).await?,
+    };
 
     let _has_more = rows.len() > limit as usize;
     let data: Vec<AuditRow> = rows.into_iter().take(limit as usize).collect();

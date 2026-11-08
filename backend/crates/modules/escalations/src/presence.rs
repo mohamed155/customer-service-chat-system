@@ -191,7 +191,7 @@ async fn schedule_presence_revert(
                 == 0
         };
         if still_absent {
-            let mut tx = match runtime.pool.begin().await {
+            let mut tx = match db::UnitOfWork::begin_for_tenant(&runtime.pool, tenant_id).await {
                 Ok(tx) => tx,
                 Err(e) => {
                     error!(%e, "presence revert: failed to begin transaction");
@@ -206,7 +206,7 @@ async fn schedule_presence_revert(
                 )
                 .bind(tenant_id)
                 .bind(membership_id)
-                .fetch_optional(&mut *tx)
+                .fetch_optional(tx.conn())
                 .await?;
                 if updated.is_some() {
                     audit::record_availability_changed(

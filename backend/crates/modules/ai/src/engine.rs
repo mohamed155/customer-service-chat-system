@@ -1450,6 +1450,7 @@ pub async fn run_followup_generation(
     tool_request_id: Uuid,
     outcome: &str,
 ) -> sqlx::Result<()> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let generation_id = Uuid::new_v4();
     let start = Instant::now();
 
@@ -1463,7 +1464,7 @@ pub async fn run_followup_generation(
     )
     .bind(tool_request_id)
     .bind(tenant_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?
     .ok_or_else(|| {
         sqlx::Error::Protocol("tool_request not found in run_followup_generation".into())
@@ -1475,9 +1476,12 @@ pub async fn run_followup_generation(
     let trigger_message_id: Uuid =
         sqlx::query_scalar("SELECT trigger_message_id FROM ai_generations WHERE id = $1")
             .bind(tool_row.generation_id)
-            .fetch_optional(pool)
+            .fetch_optional(uow.conn())
             .await?
             .unwrap_or(Uuid::nil());
+    // Both reads are done. Release the connection now: the tool call and the model call below
+    // can take a long time and must not hold a pooled connection in an open transaction.
+    drop(uow);
 
     let tool_message = if outcome == "approved" {
         // Execute the tool
@@ -1684,7 +1688,7 @@ pub async fn run_followup_generation(
 
     // Store the reply and write generation record
     let mid = {
-        let mut tx = pool.begin().await?;
+        let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
         let mid = conversations::queries::insert_ai_reply_in_tx(
             &mut tx,
             tenant_id,

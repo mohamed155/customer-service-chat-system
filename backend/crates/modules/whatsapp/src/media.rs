@@ -40,7 +40,12 @@ async fn process_one(
     {
         Some(token) => token,
         None => {
-            crate::queries::mark_attachment_failed_attempt(pool, attachment.id).await?;
+            crate::queries::mark_attachment_failed_attempt(
+                pool,
+                attachment.tenant_id,
+                attachment.id,
+            )
+            .await?;
             return Ok(());
         }
     };
@@ -48,7 +53,12 @@ async fn process_one(
     let provider_media_id = match &attachment.provider_media_id {
         Some(id) => id.clone(),
         None => {
-            crate::queries::mark_attachment_failed_attempt(pool, attachment.id).await?;
+            crate::queries::mark_attachment_failed_attempt(
+                pool,
+                attachment.tenant_id,
+                attachment.id,
+            )
+            .await?;
             return Ok(());
         }
     };
@@ -57,7 +67,12 @@ async fn process_one(
         Ok(info) => info,
         Err(e) => {
             tracing::warn!(%e, provider_media_id, "media worker: media_url failed");
-            crate::queries::mark_attachment_failed_attempt(pool, attachment.id).await?;
+            crate::queries::mark_attachment_failed_attempt(
+                pool,
+                attachment.tenant_id,
+                attachment.id,
+            )
+            .await?;
             return Ok(());
         }
     };
@@ -66,7 +81,12 @@ async fn process_one(
         Ok(b) => b,
         Err(e) => {
             tracing::warn!(%e, provider_media_id, "media worker: download failed");
-            crate::queries::mark_attachment_failed_attempt(pool, attachment.id).await?;
+            crate::queries::mark_attachment_failed_attempt(
+                pool,
+                attachment.tenant_id,
+                attachment.id,
+            )
+            .await?;
             return Ok(());
         }
     };
@@ -81,6 +101,7 @@ async fn process_one(
             let size = bytes.len() as i64;
             crate::queries::mark_attachment_stored(
                 pool,
+                attachment.tenant_id,
                 attachment.id,
                 &storage_key,
                 &media_info.mime_type,
@@ -90,7 +111,12 @@ async fn process_one(
         }
         Err(e) => {
             tracing::warn!(%e, %storage_key, "media worker: storage put failed");
-            crate::queries::mark_attachment_failed_attempt(pool, attachment.id).await?;
+            crate::queries::mark_attachment_failed_attempt(
+                pool,
+                attachment.tenant_id,
+                attachment.id,
+            )
+            .await?;
         }
     }
 
@@ -108,5 +134,12 @@ async fn get_tenant_access_token(
             Some(id) => id,
             None => return Ok(None),
         };
-    integrations::queries::decrypted_secret(pool, master_key, connection_id, "access_token").await
+    integrations::queries::decrypted_secret(
+        pool,
+        tenant_id,
+        master_key,
+        connection_id,
+        "access_token",
+    )
+    .await
 }

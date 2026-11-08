@@ -132,28 +132,36 @@ mod tests {
 // ---------------------------------------------------------------------------
 
 pub async fn insert(pool: &PgPool, w: UsageWrite) -> Result<Uuid, sqlx::Error> {
-    sqlx::query_scalar(
-        "INSERT INTO ai_usage_records \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, w.tenant_id).await?;
+    let result: Result<Uuid, sqlx::Error> = async {
+        sqlx::query_scalar(
+            "INSERT INTO ai_usage_records \
          (tenant_id, provider, model, input_tokens, output_tokens, status, \
           error_category, streamed, latency_ms, request_id, \
           request_content, response_content) \
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
          RETURNING id",
-    )
-    .bind(w.tenant_id)
-    .bind(&w.provider)
-    .bind(&w.model)
-    .bind(w.input_tokens)
-    .bind(w.output_tokens)
-    .bind(w.status)
-    .bind(w.error_category)
-    .bind(w.streamed)
-    .bind(w.latency_ms)
-    .bind(&w.request_id)
-    .bind(&w.request_content)
-    .bind(&w.response_content)
-    .fetch_one(pool)
-    .await
+        )
+        .bind(w.tenant_id)
+        .bind(&w.provider)
+        .bind(&w.model)
+        .bind(w.input_tokens)
+        .bind(w.output_tokens)
+        .bind(w.status)
+        .bind(w.error_category)
+        .bind(w.streamed)
+        .bind(w.latency_ms)
+        .bind(&w.request_id)
+        .bind(&w.request_content)
+        .bind(&w.response_content)
+        .fetch_one(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -168,69 +176,78 @@ pub async fn list(
     cursor: Option<String>,
     limit: i64,
 ) -> Result<PaginatedResponse<UsageListItem>, sqlx::Error> {
-    let decoded = cursor.as_ref().and_then(|c| decode_cursor(c));
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<PaginatedResponse<UsageListItem>, sqlx::Error> = async {
+        let decoded = cursor.as_ref().and_then(|c| decode_cursor(c));
 
-    let mut sql = String::from(
-        "SELECT id, provider, model, input_tokens, output_tokens, status, \
+        let mut sql = String::from(
+            "SELECT id, provider, model, input_tokens, output_tokens, status, \
                 error_category, streamed, latency_ms, request_id, created_at \
          FROM ai_usage_records \
          WHERE tenant_id = $1",
-    );
+        );
 
-    let mut next_bind = 2u16;
+        let mut next_bind = 2u16;
 
-    if from.is_some() {
-        sql.push_str(&format!(" AND created_at >= ${next_bind}::timestamptz"));
-        next_bind += 1;
-    }
-    if to.is_some() {
-        sql.push_str(&format!(" AND created_at < ${next_bind}::timestamptz"));
-        next_bind += 1;
-    }
+        if from.is_some() {
+            sql.push_str(&format!(" AND created_at >= ${next_bind}::timestamptz"));
+            next_bind += 1;
+        }
+        if to.is_some() {
+            sql.push_str(&format!(" AND created_at < ${next_bind}::timestamptz"));
+            next_bind += 1;
+        }
 
-    if decoded.is_some() {
+        if decoded.is_some() {
+            sql.push_str(&format!(
+                " AND (created_at, id) < (${a}::timestamptz, ${b}::uuid)",
+                a = next_bind,
+                b = next_bind + 1
+            ));
+            next_bind += 2;
+        }
+
         sql.push_str(&format!(
-            " AND (created_at, id) < (${a}::timestamptz, ${b}::uuid)",
-            a = next_bind,
-            b = next_bind + 1
+            " ORDER BY created_at DESC, id DESC LIMIT ${next_bind}"
         ));
-        next_bind += 2;
+
+        let mut query =
+            sqlx::query_as::<_, UsageListItem>(sqlx::AssertSqlSafe(sql)).bind(tenant_id);
+
+        if let Some(f) = from {
+            query = query.bind(f);
+        }
+        if let Some(t) = to {
+            query = query.bind(t);
+        }
+        if let Some((ts, id_)) = decoded {
+            query = query.bind(ts).bind(id_);
+        }
+
+        query = query.bind(limit + 1);
+
+        let rows = query.fetch_all(uow.conn()).await?;
+        let has_more = rows.len() > limit as usize;
+        let items: Vec<UsageListItem> = rows.into_iter().take(limit as usize).collect();
+
+        let next_cursor = has_more.then(|| {
+            let last = items.last().expect("page with more rows has a last item");
+            encode_cursor(last.created_at, last.id)
+        });
+
+        Ok(PaginatedResponse {
+            data: items,
+            pagination: Pagination {
+                next_cursor,
+                has_more,
+            },
+        })
     }
-
-    sql.push_str(&format!(
-        " ORDER BY created_at DESC, id DESC LIMIT ${next_bind}"
-    ));
-
-    let mut query = sqlx::query_as::<_, UsageListItem>(sqlx::AssertSqlSafe(sql)).bind(tenant_id);
-
-    if let Some(f) = from {
-        query = query.bind(f);
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
     }
-    if let Some(t) = to {
-        query = query.bind(t);
-    }
-    if let Some((ts, id_)) = decoded {
-        query = query.bind(ts).bind(id_);
-    }
-
-    query = query.bind(limit + 1);
-
-    let rows = query.fetch_all(pool).await?;
-    let has_more = rows.len() > limit as usize;
-    let items: Vec<UsageListItem> = rows.into_iter().take(limit as usize).collect();
-
-    let next_cursor = has_more.then(|| {
-        let last = items.last().expect("page with more rows has a last item");
-        encode_cursor(last.created_at, last.id)
-    });
-
-    Ok(PaginatedResponse {
-        data: items,
-        pagination: Pagination {
-            next_cursor,
-            has_more,
-        },
-    })
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -252,6 +269,8 @@ pub async fn summary(
     from: Option<DateTime<Utc>>,
     to: Option<DateTime<Utc>>,
 ) -> Result<UsageSummary, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<UsageSummary, sqlx::Error> = async {
     let mut sql = String::from(
         "SELECT COUNT(*)::bigint AS calls, \
                 COALESCE(SUM(input_tokens), 0)::bigint AS input_tokens, \
@@ -281,7 +300,7 @@ pub async fn summary(
         query = query.bind(t);
     }
 
-    let row = query.fetch_one(pool).await?;
+    let row = query.fetch_one(uow.conn()).await?;
 
     Ok(UsageSummary {
         from,
@@ -291,6 +310,12 @@ pub async fn summary(
         output_tokens: row.output_tokens,
         unreported_calls: row.unreported_calls,
     })
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -298,6 +323,9 @@ pub async fn summary(
 // ---------------------------------------------------------------------------
 
 pub async fn detail(pool: &PgPool, tenant_id: Uuid, id: Uuid) -> Option<UsageDetailRow> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
+        .await
+        .ok()?;
     sqlx::query_as::<_, UsageDetailRow>(
         "SELECT id, tenant_id, provider, model, input_tokens, output_tokens, \
                 status, error_category, streamed, latency_ms, request_id, \
@@ -307,7 +335,7 @@ pub async fn detail(pool: &PgPool, tenant_id: Uuid, id: Uuid) -> Option<UsageDet
     )
     .bind(tenant_id)
     .bind(id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
     .ok()?
 }

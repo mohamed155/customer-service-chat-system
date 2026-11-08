@@ -207,37 +207,60 @@ pub async fn claim_pending_attachment(
 /// Mark an attachment as stored with its file metadata.
 pub async fn mark_attachment_stored(
     pool: &sqlx::PgPool,
+    tenant_id: uuid::Uuid,
     id: Uuid,
     storage_key: &str,
     mime_type: &str,
     size_bytes: i64,
 ) -> sqlx::Result<()> {
-    sqlx::query(
-        "UPDATE message_attachments \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<()> = async {
+        sqlx::query(
+            "UPDATE message_attachments \
          SET status = 'stored', storage_key = $1, mime_type = $2, size_bytes = $3 \
-         WHERE id = $4",
-    )
-    .bind(storage_key)
-    .bind(mime_type)
-    .bind(size_bytes)
-    .bind(id)
-    .execute(pool)
-    .await?;
-    Ok(())
+         WHERE id = $4 AND tenant_id = $5",
+        )
+        .bind(storage_key)
+        .bind(mime_type)
+        .bind(size_bytes)
+        .bind(id)
+        .bind(tenant_id)
+        .execute(uow.conn())
+        .await?;
+        Ok(())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Increment fetch_attempts and auto-fail if threshold reached.
-pub async fn mark_attachment_failed_attempt(pool: &sqlx::PgPool, id: Uuid) -> sqlx::Result<()> {
-    sqlx::query(
-        "UPDATE message_attachments \
+pub async fn mark_attachment_failed_attempt(
+    pool: &sqlx::PgPool,
+    tenant_id: uuid::Uuid,
+    id: Uuid,
+) -> sqlx::Result<()> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<()> = async {
+        sqlx::query(
+            "UPDATE message_attachments \
          SET fetch_attempts = fetch_attempts + 1, \
              status = CASE WHEN fetch_attempts + 1 >= 5 THEN 'failed' ELSE status END \
-         WHERE id = $1",
-    )
-    .bind(id)
-    .execute(pool)
-    .await?;
-    Ok(())
+         WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(uow.conn())
+        .await?;
+        Ok(())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Fetch a stored attachment by id, verifying that it belongs to the right
@@ -248,19 +271,27 @@ pub async fn attachment_for_download(
     conversation_id: Uuid,
     attachment_id: Uuid,
 ) -> sqlx::Result<Option<MessageAttachmentRow>> {
-    sqlx::query_as::<_, MessageAttachmentRow>(
-        "SELECT a.id, a.tenant_id, a.message_id, a.kind, a.status, a.provider_media_id, \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Option<MessageAttachmentRow>> = async {
+        sqlx::query_as::<_, MessageAttachmentRow>(
+            "SELECT a.id, a.tenant_id, a.message_id, a.kind, a.status, a.provider_media_id, \
                 a.storage_key, a.mime_type, a.size_bytes, a.file_name, a.fetch_attempts, \
                 a.created_at, a.updated_at \
          FROM message_attachments a \
          JOIN messages m ON m.id = a.message_id AND m.tenant_id = a.tenant_id \
          WHERE a.tenant_id = $1 AND a.id = $2 AND m.conversation_id = $3 AND a.status = 'stored'",
-    )
-    .bind(tenant_id)
-    .bind(attachment_id)
-    .bind(conversation_id)
-    .fetch_optional(pool)
-    .await
+        )
+        .bind(tenant_id)
+        .bind(attachment_id)
+        .bind(conversation_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 /// Retrieve the WhatsApp identifier for a customer (from customer_channel_identifiers).
@@ -286,12 +317,20 @@ pub async fn message_body_for_outbound(
     tenant_id: Uuid,
     message_id: Uuid,
 ) -> sqlx::Result<Option<String>> {
-    let row: Option<(String,)> = sqlx::query_as(
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Option<String>> = async {
+        let row: Option<(String,)> = sqlx::query_as(
         "SELECT body FROM messages WHERE tenant_id = $1 AND id = $2 AND kind IN ('reply', 'ai')",
     )
     .bind(tenant_id)
     .bind(message_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
-    Ok(row.map(|r| r.0))
+        Ok(row.map(|r| r.0))
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }

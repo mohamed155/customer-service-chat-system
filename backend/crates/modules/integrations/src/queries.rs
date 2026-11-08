@@ -93,58 +93,88 @@ pub async fn find_connection(
     tenant_id: Uuid,
     catalog_id: Uuid,
 ) -> Result<Option<ConnectionRow>, sqlx::Error> {
-    sqlx::query_as::<_, ConnectionRow>(
-        "SELECT id, tenant_id, catalog_id, is_active, config, \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<Option<ConnectionRow>, sqlx::Error> = async {
+        sqlx::query_as::<_, ConnectionRow>(
+            "SELECT id, tenant_id, catalog_id, is_active, config, \
                 webhook_token_hash, webhook_token_ciphertext, webhook_token_nonce, \
                 connected_at, connected_by_membership_id, \
                 disconnected_at, disconnected_by_membership_id \
          FROM integration_connections \
          WHERE tenant_id = $1 AND catalog_id = $2",
-    )
-    .bind(tenant_id)
-    .bind(catalog_id)
-    .fetch_optional(pool)
-    .await
+        )
+        .bind(tenant_id)
+        .bind(catalog_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn find_connection_by_id(
     pool: &sqlx::PgPool,
+    tenant_id: uuid::Uuid,
     connection_id: Uuid,
 ) -> Result<Option<ConnectionRow>, sqlx::Error> {
-    sqlx::query_as::<_, ConnectionRow>(
-        "SELECT id, tenant_id, catalog_id, is_active, config, \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<Option<ConnectionRow>, sqlx::Error> = async {
+        sqlx::query_as::<_, ConnectionRow>(
+            "SELECT id, tenant_id, catalog_id, is_active, config, \
                 webhook_token_hash, webhook_token_ciphertext, webhook_token_nonce, \
                 connected_at, connected_by_membership_id, \
                 disconnected_at, disconnected_by_membership_id \
          FROM integration_connections \
-         WHERE id = $1",
-    )
-    .bind(connection_id)
-    .fetch_optional(pool)
-    .await
+         WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(connection_id)
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn list_secret_refs(
     pool: &sqlx::PgPool,
+    tenant_id: uuid::Uuid,
     connection_id: Uuid,
 ) -> Result<Vec<SecretRefRow>, sqlx::Error> {
-    sqlx::query_as::<_, SecretRefRow>(
-        "SELECT field_key, hint \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<Vec<SecretRefRow>, sqlx::Error> = async {
+        sqlx::query_as::<_, SecretRefRow>(
+            "SELECT field_key, hint \
          FROM integration_secrets \
-         WHERE connection_id = $1 \
+         WHERE connection_id = $1 AND tenant_id = $2 \
          ORDER BY field_key",
-    )
-    .bind(connection_id)
-    .fetch_all(pool)
-    .await
+        )
+        .bind(connection_id)
+        .bind(tenant_id)
+        .fetch_all(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn list_catalog_with_status(
     pool: &sqlx::PgPool,
     tenant_id: Uuid,
 ) -> Result<Vec<CatalogWithStatusRow>, sqlx::Error> {
-    sqlx::query_as::<_, CatalogWithStatusRow>(
-        "SELECT cat.id, cat.slug, cat.name, cat.description, cat.category, \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<Vec<CatalogWithStatusRow>, sqlx::Error> = async {
+        sqlx::query_as::<_, CatalogWithStatusRow>(
+            "SELECT cat.id, cat.slug, cat.name, cat.description, cat.category, \
                 cat.is_available, cat.config_schema, \
                 c.id AS connection_id, c.is_active, ev.outcomes \
          FROM integration_catalog cat \
@@ -160,53 +190,83 @@ pub async fn list_catalog_with_status(
            ) e \
          ) ev ON TRUE \
          ORDER BY cat.name",
-    )
-    .bind(tenant_id)
-    .fetch_all(pool)
-    .await
+        )
+        .bind(tenant_id)
+        .fetch_all(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn recent_event_outcomes(
     pool: &sqlx::PgPool,
+    tenant_id: uuid::Uuid,
     connection_id: Uuid,
 ) -> Result<Vec<String>, sqlx::Error> {
-    let rows: Vec<(String,)> = sqlx::query_as(
-        "SELECT outcome FROM integration_events \
-         WHERE connection_id = $1 \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<Vec<String>, sqlx::Error> = async {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT outcome FROM integration_events \
+         WHERE connection_id = $1 AND tenant_id = $2 \
            AND created_at > now() - interval '24 hours' \
          ORDER BY created_at DESC LIMIT 3",
-    )
-    .bind(connection_id)
-    .fetch_all(pool)
-    .await?;
-    Ok(rows.into_iter().map(|(o,)| o).collect())
+        )
+        .bind(connection_id)
+        .bind(tenant_id)
+        .fetch_all(uow.conn())
+        .await?;
+        Ok(rows.into_iter().map(|(o,)| o).collect())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn list_events(
     pool: &sqlx::PgPool,
+    tenant_id: uuid::Uuid,
     connection_id: Uuid,
     cursor: Option<(DateTime<Utc>, Uuid)>,
     limit: i64,
 ) -> Result<Vec<EventRow>, sqlx::Error> {
-    let mut builder = sqlx::QueryBuilder::new(
-        "SELECT id, event_type, outcome, reason, actor_membership_id, created_at \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<Vec<EventRow>, sqlx::Error> = async {
+        let mut builder = sqlx::QueryBuilder::new(
+            "SELECT id, event_type, outcome, reason, actor_membership_id, created_at \
          FROM integration_events \
          WHERE connection_id = ",
-    );
-    builder.push_bind(connection_id);
+        );
+        builder.push_bind(connection_id);
+        builder.push(" AND tenant_id = ");
+        builder.push_bind(tenant_id);
 
-    if let Some((ts, id)) = cursor {
-        builder.push(" AND (created_at, id) < (");
-        builder.push_bind(ts);
-        builder.push(", ");
-        builder.push_bind(id);
-        builder.push(")");
+        if let Some((ts, id)) = cursor {
+            builder.push(" AND (created_at, id) < (");
+            builder.push_bind(ts);
+            builder.push(", ");
+            builder.push_bind(id);
+            builder.push(")");
+        }
+
+        builder.push(" ORDER BY created_at DESC, id DESC LIMIT ");
+        builder.push_bind(limit + 1);
+
+        builder
+            .build_query_as::<EventRow>()
+            .fetch_all(uow.conn())
+            .await
     }
-
-    builder.push(" ORDER BY created_at DESC, id DESC LIMIT ");
-    builder.push_bind(limit + 1);
-
-    builder.build_query_as::<EventRow>().fetch_all(pool).await
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn upsert_connection(
@@ -416,18 +476,28 @@ pub async fn insert_delivery(
 /// handler treats that as an `invalid_signature` rejection.
 pub async fn find_secret_ciphertext(
     pool: &sqlx::PgPool,
+    tenant_id: uuid::Uuid,
     connection_id: Uuid,
     field_key: &str,
 ) -> Result<Option<(Vec<u8>, Vec<u8>)>, sqlx::Error> {
-    let row: Option<(Vec<u8>, Vec<u8>)> = sqlx::query_as(
-        "SELECT ciphertext, nonce FROM integration_secrets \
-         WHERE connection_id = $1 AND field_key = $2",
-    )
-    .bind(connection_id)
-    .bind(field_key)
-    .fetch_optional(pool)
-    .await?;
-    Ok(row)
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<Option<CiphertextAndNonce>, sqlx::Error> = async {
+        let row: Option<(Vec<u8>, Vec<u8>)> = sqlx::query_as(
+            "SELECT ciphertext, nonce FROM integration_secrets \
+         WHERE connection_id = $1 AND field_key = $2 AND tenant_id = $3",
+        )
+        .bind(connection_id)
+        .bind(field_key)
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await?;
+        Ok(row)
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -458,18 +528,21 @@ pub async fn connection_by_token_and_slug(
 
 pub async fn decrypted_secret(
     pool: &sqlx::PgPool,
+    tenant_id: Uuid,
     master_key: &crate::crypto::MasterKey,
     connection_id: Uuid,
     field_key: &str,
 ) -> Result<Option<String>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let conn_info = sqlx::query_as::<_, (Uuid, String)>(
         "SELECT c.tenant_id, cat.slug \
          FROM integration_connections c \
          JOIN integration_catalog cat ON cat.id = c.catalog_id \
-         WHERE c.id = $1",
+         WHERE c.id = $1 AND c.tenant_id = $2",
     )
     .bind(connection_id)
-    .fetch_optional(pool)
+    .bind(tenant_id)
+    .fetch_optional(uow.conn())
     .await?;
 
     let (tenant_id, slug) = match conn_info {
@@ -483,8 +556,9 @@ pub async fn decrypted_secret(
     )
     .bind(connection_id)
     .bind(field_key)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await?;
+    drop(uow);
 
     match row {
         Some((ciphertext, nonce)) => {
@@ -502,6 +576,8 @@ pub async fn active_connection_for_slug(
     tenant_id: Uuid,
     slug: &str,
 ) -> Result<Option<Uuid>, sqlx::Error> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: Result<Option<Uuid>, sqlx::Error> = async {
     sqlx::query_scalar::<_, Uuid>(
         "SELECT c.id FROM integration_connections c \
          JOIN integration_catalog cat ON cat.id = c.catalog_id \
@@ -509,6 +585,15 @@ pub async fn active_connection_for_slug(
     )
     .bind(tenant_id)
     .bind(slug)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
+
+/// A stored secret: (ciphertext, nonce).
+type CiphertextAndNonce = (Vec<u8>, Vec<u8>);

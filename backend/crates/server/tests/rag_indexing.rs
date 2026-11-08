@@ -206,7 +206,9 @@ async fn publish_to_indexed_lifecycle() {
         .await
         .unwrap();
     seed_chunks(&pool, tenant_id, item_id, 3).await;
-    set_indexed(&pool, item_id, "abc123", 3).await.unwrap();
+    set_indexed(&pool, tenant_id, item_id, "abc123", 3)
+        .await
+        .unwrap();
 
     // Verify final indexed state
     let state_row = get(&pool, tenant_id, item_id)
@@ -248,7 +250,9 @@ async fn edit_published_item_resets_index_status() {
     upsert_status(&pool, tenant_id, item_id, &IndexStatus::Indexing)
         .await
         .unwrap();
-    set_indexed(&pool, item_id, "old_hash", 2).await.unwrap();
+    set_indexed(&pool, tenant_id, item_id, "old_hash", 2)
+        .await
+        .unwrap();
 
     // Simulate editing the published item by changing its content
     sqlx::query(
@@ -297,7 +301,9 @@ async fn archive_published_removes_chunks_and_resets_status() {
     upsert_status(&pool, tenant_id, item_id, &IndexStatus::Pending)
         .await
         .unwrap();
-    set_indexed(&pool, item_id, "hash_v1", 3).await.unwrap();
+    set_indexed(&pool, tenant_id, item_id, "hash_v1", 3)
+        .await
+        .unwrap();
     assert_eq!(
         count_chunks(&pool, item_id).await,
         3,
@@ -352,7 +358,9 @@ async fn revert_to_draft_removes_chunks_and_resets_status() {
     upsert_status(&pool, tenant_id, item_id, &IndexStatus::Pending)
         .await
         .unwrap();
-    set_indexed(&pool, item_id, "hash_v2", 2).await.unwrap();
+    set_indexed(&pool, tenant_id, item_id, "hash_v2", 2)
+        .await
+        .unwrap();
     assert_eq!(
         count_chunks(&pool, item_id).await,
         2,
@@ -413,7 +421,9 @@ async fn failed_embed_preserves_prior_chunks() {
     upsert_status(&pool, tenant_id, item_id, &IndexStatus::Pending)
         .await
         .unwrap();
-    set_indexed(&pool, item_id, "stable_hash", 3).await.unwrap();
+    set_indexed(&pool, tenant_id, item_id, "stable_hash", 3)
+        .await
+        .unwrap();
     let chunk_count_before = count_chunks(&pool, item_id).await;
     assert_eq!(
         chunk_count_before, 3,
@@ -428,9 +438,14 @@ async fn failed_embed_preserves_prior_chunks() {
     // the DELETE must also roll back.
     //
     // We simulate this by not deleting chunks and simply marking failed:
-    set_failed(&pool, item_id, "embedding failed: provider timeout")
-        .await
-        .unwrap();
+    set_failed(
+        &pool,
+        tenant_id,
+        item_id,
+        "embedding failed: provider timeout",
+    )
+    .await
+    .unwrap();
 
     // Prior chunks must still be present
     let chunk_count_after = count_chunks(&pool, item_id).await;

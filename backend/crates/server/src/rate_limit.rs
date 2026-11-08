@@ -162,6 +162,10 @@ async fn fetch_override(
     scope: kernel::Scope,
 ) -> Option<Budget> {
     let id = uuid::Uuid::parse_str(&tenant_id).ok()?;
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, id)
+        .await
+        .inspect_err(|e| tracing::warn!(error = %e, "fetch_override: begin failed, using defaults"))
+        .ok()?;
     let row: Option<(i32, i32)> = sqlx::query_as(
         "SELECT max_requests, window_seconds FROM tenant_rate_limit_overrides \
          WHERE tenant_id = $1 AND scope = $2 AND deleted_at IS NULL \
@@ -169,7 +173,7 @@ async fn fetch_override(
     )
     .bind(id)
     .bind(scope.as_str())
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
     .inspect_err(|e| tracing::warn!(error = %e, "fetch_override: query failed, using defaults"))
     .ok()

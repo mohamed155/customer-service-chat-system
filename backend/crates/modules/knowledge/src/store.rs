@@ -82,6 +82,8 @@ pub async fn list_items(
     limit: i64,
     before: Option<(DateTime<Utc>, Uuid)>,
 ) -> sqlx::Result<(Vec<KnowledgeItemRow>, Vec<KnowledgeItemTagRow>, bool)> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<(Vec<KnowledgeItemRow>, Vec<KnowledgeItemTagRow>, bool)> = async {
     let fetch_limit = limit + 1;
 
     let sql = if let Some((_, _)) = before {
@@ -126,15 +128,23 @@ pub async fn list_items(
         query = query.bind(fetch_limit);
     }
 
-    let items = query.fetch_all(pool).await?;
+    let items = query.fetch_all(uow.conn()).await?;
     let has_more = items.len() > limit as usize;
     let items = items.into_iter().take(limit as usize).collect::<Vec<_>>();
-    let tags = load_tags_for_items(pool, &items).await?;
+    let tags = load_tags_for_items(uow.conn(), &items).await?;
     Ok((items, tags, has_more))
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
+/// Runs on the caller's connection (the listing's Unit of Work) so a listing never needs a second
+/// pooled connection while it holds the first.
 async fn load_tags_for_items(
-    pool: &PgPool,
+    conn: &mut sqlx::PgConnection,
     items: &[KnowledgeItemRow],
 ) -> sqlx::Result<Vec<KnowledgeItemTagRow>> {
     if items.is_empty() {
@@ -145,7 +155,7 @@ async fn load_tags_for_items(
         "SELECT * FROM knowledge_item_tags WHERE item_id = ANY($1) ORDER BY item_id, tag",
     )
     .bind(&ids)
-    .fetch_all(pool)
+    .fetch_all(conn)
     .await
 }
 
@@ -154,13 +164,21 @@ pub async fn get_item(
     tenant_id: Uuid,
     item_id: Uuid,
 ) -> sqlx::Result<Option<KnowledgeItemRow>> {
-    sqlx::query_as::<_, KnowledgeItemRow>(
-        "SELECT * FROM knowledge_items WHERE id = $1 AND tenant_id = $2",
-    )
-    .bind(item_id)
-    .bind(tenant_id)
-    .fetch_optional(pool)
-    .await
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Option<KnowledgeItemRow>> = async {
+        sqlx::query_as::<_, KnowledgeItemRow>(
+            "SELECT * FROM knowledge_items WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(item_id)
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -293,17 +311,25 @@ pub async fn list_categories(
     pool: &PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<CategoryWithCount>> {
-    sqlx::query_as::<_, CategoryWithCount>(
-        "SELECT c.*, COUNT(i.id)::bigint AS item_count \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Vec<CategoryWithCount>> = async {
+        sqlx::query_as::<_, CategoryWithCount>(
+            "SELECT c.*, COUNT(i.id)::bigint AS item_count \
          FROM knowledge_categories c \
          LEFT JOIN knowledge_items i ON i.category_id = c.id \
          WHERE c.tenant_id = $1 \
          GROUP BY c.id \
          ORDER BY c.name",
-    )
-    .bind(tenant_id)
-    .fetch_all(pool)
-    .await
+        )
+        .bind(tenant_id)
+        .fetch_all(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn create_category_in_tx(
@@ -405,15 +431,23 @@ pub async fn get_document(
     tenant_id: Uuid,
     item_id: Uuid,
 ) -> sqlx::Result<Option<KnowledgeDocumentRow>> {
-    sqlx::query_as::<_, KnowledgeDocumentRow>(
-        "SELECT d.* FROM knowledge_documents d \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Option<KnowledgeDocumentRow>> = async {
+        sqlx::query_as::<_, KnowledgeDocumentRow>(
+            "SELECT d.* FROM knowledge_documents d \
          JOIN knowledge_items i ON i.id = d.item_id \
          WHERE d.item_id = $1 AND d.tenant_id = $2 AND i.tenant_id = $2",
-    )
-    .bind(item_id)
-    .bind(tenant_id)
-    .fetch_optional(pool)
-    .await
+        )
+        .bind(item_id)
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn enqueue_index_requested_in_tx(

@@ -586,13 +586,17 @@ fn permission_codes(permissions: &[authz::Permission]) -> Vec<String> {
     security(("session_cookie" = []))
 )]
 pub async fn get_tenant(State(pool): State<sqlx::PgPool>, ctx: TenantContext) -> Response {
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let row = match sqlx::query_as::<_, (Uuid, String, String, String, String)>(
         "SELECT id, name, slug, status, plan \
          FROM tenants \
          WHERE id = $1 AND deleted_at IS NULL",
     )
     .bind(ctx.tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(r)) => r,
@@ -604,6 +608,9 @@ pub async fn get_tenant(State(pool): State<sqlx::PgPool>, ctx: TenantContext) ->
             return ApiError::internal_error(format!("Database query failed: {e}")).into_response()
         }
     };
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     Json(TenantSummary {
         id: row.0,

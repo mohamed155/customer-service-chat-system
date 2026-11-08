@@ -57,6 +57,13 @@ pub async fn emit_requested_on_pool(pool: &PgPool, req: &NotificationRequest) {
         "body": req.body,
     });
 
+    let mut uow = match db::UnitOfWork::begin_for_tenant(pool, req.tenant_id).await {
+        Ok(u) => u,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to emit notification.requested");
+            return;
+        }
+    };
     let result = sqlx::query(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'notification', $2, $3, 'notification.requested', $4, now())",
@@ -65,8 +72,12 @@ pub async fn emit_requested_on_pool(pool: &PgPool, req: &NotificationRequest) {
     .bind(req.subject_id)
     .bind(req.tenant_id)
     .bind(payload)
-    .execute(pool)
+    .execute(uow.conn())
     .await;
+    let result = match result {
+        Ok(_) => uow.commit().await,
+        Err(e) => Err(e),
+    };
 
     if let Err(e) = result {
         tracing::error!(error = %e, "failed to emit notification.requested");
@@ -114,6 +125,13 @@ pub async fn emit_resolved_on_pool(
         "resolvedByMembershipId": resolved_by,
     });
 
+    let mut uow = match db::UnitOfWork::begin_for_tenant(pool, tenant_id).await {
+        Ok(u) => u,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to emit notification.resolved");
+            return;
+        }
+    };
     let result = sqlx::query(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'notification', $2, $3, 'notification.resolved', $4, now())",
@@ -122,8 +140,12 @@ pub async fn emit_resolved_on_pool(
     .bind(subject_id)
     .bind(tenant_id)
     .bind(payload)
-    .execute(pool)
+    .execute(uow.conn())
     .await;
+    let result = match result {
+        Ok(_) => uow.commit().await,
+        Err(e) => Err(e),
+    };
 
     if let Err(e) = result {
         tracing::error!(error = %e, "failed to emit notification.resolved");

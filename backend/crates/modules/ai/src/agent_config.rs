@@ -246,12 +246,20 @@ pub async fn load_live(
     pool: &PgPool,
     tenant_id: Uuid,
 ) -> sqlx::Result<Option<AgentConfigurationRow>> {
-    sqlx::query_as::<_, AgentConfigurationRow>(
-        "SELECT * FROM agent_configurations WHERE tenant_id = $1 AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .fetch_optional(pool)
-    .await
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Option<AgentConfigurationRow>> = async {
+        sqlx::query_as::<_, AgentConfigurationRow>(
+            "SELECT * FROM agent_configurations WHERE tenant_id = $1 AND deleted_at IS NULL",
+        )
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn load_live_in_tx(
@@ -328,28 +336,44 @@ pub async fn live_skill_ids(
     tenant_id: Uuid,
     ids: &[Uuid],
 ) -> sqlx::Result<Vec<Uuid>> {
-    if ids.is_empty() {
-        return Ok(Vec::new());
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Vec<Uuid>> = async {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows: Vec<(Uuid,)> = sqlx::query_as(
+            // Skills are hard-deleted (0035_agent_skills has no deleted_at column);
+            // the old `deleted_at IS NULL` filter made this query always fail.
+            "SELECT id FROM skills WHERE tenant_id = $1 AND id = ANY($2)",
+        )
+        .bind(tenant_id)
+        .bind(ids)
+        .fetch_all(uow.conn())
+        .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
     }
-    let rows: Vec<(Uuid,)> = sqlx::query_as(
-        // Skills are hard-deleted (0035_agent_skills has no deleted_at column);
-        // the old `deleted_at IS NULL` filter made this query always fail.
-        "SELECT id FROM skills WHERE tenant_id = $1 AND id = ANY($2)",
-    )
-    .bind(tenant_id)
-    .bind(ids)
-    .fetch_all(pool)
-    .await?;
-    Ok(rows.into_iter().map(|r| r.0).collect())
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub async fn agent_exists(pool: &PgPool, tenant_id: Uuid) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<bool> = async {
     sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM agent_configurations WHERE tenant_id = $1 AND deleted_at IS NULL)",
     )
     .bind(tenant_id)
-    .fetch_one(pool)
+    .fetch_one(uow.conn())
     .await
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 pub struct AiAgentStatusAdapter {

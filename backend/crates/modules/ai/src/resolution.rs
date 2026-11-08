@@ -23,14 +23,16 @@ pub async fn resolve_config(
 ) -> Result<Option<ResolvedConfig>, sqlx::Error> {
     match scope {
         Scope::Tenant(tenant_id) => {
+            let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
             let row = sqlx::query_as::<_, AiConfigRow>(
                 "SELECT * FROM ai_configurations \
                  WHERE (tenant_id = $1 OR tenant_id IS NULL) AND deleted_at IS NULL \
                  ORDER BY tenant_id NULLS LAST LIMIT 1",
             )
             .bind(tenant_id)
-            .fetch_optional(pool)
+            .fetch_optional(uow.conn())
             .await?;
+            drop(uow);
 
             Ok(row.map(|row| {
                 let is_tenant = row.tenant_id.is_some();
@@ -71,6 +73,9 @@ pub async fn resolve_credential(
 ) -> Result<Option<(SecretKey, bool)>, String> {
     match scope {
         Scope::Tenant(tenant_id) => {
+            let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
+                .await
+                .map_err(|e| format!("credential query: {e}"))?;
             let row = sqlx::query_as::<_, (Vec<u8>, Vec<u8>, Option<Uuid>)>(
                 "SELECT ciphertext, nonce, tenant_id FROM ai_credentials \
                  WHERE (tenant_id = $1 OR tenant_id IS NULL) AND provider = $2 AND deleted_at IS NULL \
@@ -78,9 +83,10 @@ pub async fn resolve_credential(
             )
             .bind(tenant_id)
             .bind(provider)
-            .fetch_optional(pool)
+            .fetch_optional(uow.conn())
             .await
             .map_err(|e| format!("credential query: {e}"))?;
+            drop(uow);
 
             if let Some((ciphertext, nonce, tid)) = row {
                 let aad = crypto::aad(tid, provider);
@@ -119,6 +125,9 @@ pub async fn resolve_credential_view(
 ) -> Option<CredentialView> {
     match scope {
         Scope::Tenant(tenant_id) => {
+            let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
+                .await
+                .ok()?;
             let row = sqlx::query_as::<_, (String, Option<Uuid>)>(
                 "SELECT key_hint, tenant_id FROM ai_credentials \
                  WHERE (tenant_id = $1 OR tenant_id IS NULL) AND provider = $2 AND deleted_at IS NULL \
@@ -126,9 +135,10 @@ pub async fn resolve_credential_view(
             )
             .bind(tenant_id)
             .bind(provider)
-            .fetch_optional(pool)
+            .fetch_optional(uow.conn())
             .await
             .ok()?;
+            drop(uow);
 
             row.map(|(hint, tid)| CredentialView {
                 source: if tid.is_some() {

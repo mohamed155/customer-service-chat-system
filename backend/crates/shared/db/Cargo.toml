@@ -8,6 +8,7 @@ async-trait.workspace = true
 observability = { path = "../observability" }
 sqlx.workspace = true
 tokio.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

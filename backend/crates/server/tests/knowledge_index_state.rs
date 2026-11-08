@@ -268,7 +268,7 @@ async fn set_failed_sets_status_and_reason() {
     knowledge::index_state::upsert_status(&pool, tenant_id, item_id, &IndexStatus::Pending)
         .await
         .unwrap();
-    knowledge::index_state::set_failed(&pool, item_id, "embedding failed: timeout")
+    knowledge::index_state::set_failed(&pool, tenant_id, item_id, "embedding failed: timeout")
         .await
         .unwrap();
 
@@ -297,7 +297,7 @@ async fn set_indexed_sets_status_hash_and_chunk_count() {
     knowledge::index_state::upsert_status(&pool, tenant_id, item_id, &IndexStatus::Pending)
         .await
         .unwrap();
-    knowledge::index_state::set_indexed(&pool, item_id, "abc123hash", 5)
+    knowledge::index_state::set_indexed(&pool, tenant_id, item_id, "abc123hash", 5)
         .await
         .unwrap();
 
@@ -326,12 +326,12 @@ async fn increment_attempts_returns_new_count() {
         .await
         .unwrap();
 
-    let count1 = knowledge::index_state::increment_attempts(&pool, item_id)
+    let count1 = knowledge::index_state::increment_attempts(&pool, tenant_id, item_id)
         .await
         .unwrap();
     assert_eq!(count1, 1);
 
-    let count2 = knowledge::index_state::increment_attempts(&pool, item_id)
+    let count2 = knowledge::index_state::increment_attempts(&pool, tenant_id, item_id)
         .await
         .unwrap();
     assert_eq!(count2, 2);
@@ -351,7 +351,7 @@ async fn set_not_indexable_sets_status_and_reason() {
     knowledge::index_state::upsert_status(&pool, tenant_id, item_id, &IndexStatus::Pending)
         .await
         .unwrap();
-    knowledge::index_state::set_not_indexable(&pool, item_id, "no extractable text")
+    knowledge::index_state::set_not_indexable(&pool, tenant_id, item_id, "no extractable text")
         .await
         .unwrap();
 
@@ -364,4 +364,51 @@ async fn set_not_indexable_sets_status_and_reason() {
         result.failure_reason.as_deref(),
         Some("no extractable text")
     );
+}
+
+/// Every index-state function filters by tenant itself, not only through the Unit of Work. Using
+/// another tenant's id with this tenant's item must read nothing and change nothing.
+#[tokio::test]
+async fn another_tenants_id_cannot_read_or_change_an_items_index_state() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    setup(&pool).await;
+
+    let owner = seed_tenant(&pool).await;
+    let other = seed_tenant(&pool).await;
+    let item_id = seed_item(&pool, owner).await;
+
+    knowledge::index_state::upsert_status(&pool, owner, item_id, &IndexStatus::Indexed)
+        .await
+        .unwrap();
+
+    let seen = knowledge::index_state::get_many(&pool, other, &[item_id])
+        .await
+        .unwrap();
+    assert!(
+        seen.is_empty(),
+        "get_many must not return another tenant's state"
+    );
+
+    // None of these may touch the owner's row. Whether each reports an error or not is not the
+    // point, so the results are ignored and the row is checked afterwards.
+    let _ =
+        knowledge::index_state::upsert_status(&pool, other, item_id, &IndexStatus::Pending).await;
+    let _ = knowledge::index_state::set_failed(&pool, other, item_id, "intruder").await;
+    let _ = knowledge::index_state::set_indexed(&pool, other, item_id, "hash", 9).await;
+    let _ = knowledge::index_state::increment_attempts(&pool, other, item_id).await;
+    let _ = knowledge::index_state::set_not_indexable(&pool, other, item_id, "intruder").await;
+
+    let state = knowledge::index_state::get(&pool, owner, item_id)
+        .await
+        .unwrap()
+        .expect("the owner's row must still exist");
+    assert_eq!(state.tenant_id, owner);
+    assert_eq!(state.status, IndexStatus::Indexed.to_string());
+    assert_eq!(state.failure_reason, None);
+    assert_eq!(state.attempts, 0);
+    assert_eq!(state.indexed_content_hash, None);
+    assert_eq!(state.chunk_count, 0);
 }

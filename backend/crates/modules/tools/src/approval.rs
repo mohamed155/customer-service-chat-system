@@ -38,6 +38,7 @@ pub async fn decide(
     decided_by: Uuid,
     approve: bool,
 ) -> sqlx::Result<DecideOutcome> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let new_status = if approve { "approved" } else { "denied" };
 
     let updated = sqlx::query(
@@ -49,7 +50,7 @@ pub async fn decide(
     .bind(decided_by)
     .bind(tool_request_id)
     .bind(tenant_id)
-    .execute(pool)
+    .execute(uow.conn())
     .await?;
 
     if updated.rows_affected() == 0 {
@@ -63,14 +64,15 @@ pub async fn decide(
         )
         .bind(tool_request_id)
         .bind(tenant_id)
-        .fetch_one(pool)
+        .fetch_one(uow.conn())
         .await?;
         return Ok(DecideOutcome::AlreadySettled(row));
     }
 
+    // The status change, the row read and the outbox events share this one Unit of Work, so a
+    // decision is never visible without its events (or the other way round). An early return
+    // above drops the Unit of Work, which is fine: nothing was written.
     let outcome = if approve { "approved" } else { "denied" };
-
-    let mut tx = pool.begin().await?;
 
     let row: ToolRequestRow = sqlx::query_as(
         "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
@@ -82,11 +84,11 @@ pub async fn decide(
     )
     .bind(tool_request_id)
     .bind(tenant_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(uow.conn())
     .await?;
 
     conversations::outbox::emit_tool_decision_in_tx(
-        &mut tx,
+        &mut uow,
         tenant_id,
         row.conversation_id,
         tool_request_id,
@@ -94,9 +96,9 @@ pub async fn decide(
     )
     .await?;
 
-    emit_tool_resolved_in_tx(&mut tx, tenant_id, tool_request_id, decided_by).await?;
+    emit_tool_resolved_in_tx(&mut uow, tenant_id, tool_request_id, decided_by).await?;
 
-    tx.commit().await?;
+    uow.commit().await?;
 
     Ok(DecideOutcome::Applied(row))
 }
@@ -195,17 +197,25 @@ pub async fn fetch_awaiting_approval_for_conversation(
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Vec<ToolRequestRow>> {
-    let rows = sqlx::query_as::<_, ToolRequestRow>(
-        "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Vec<ToolRequestRow>> = async {
+        let rows = sqlx::query_as::<_, ToolRequestRow>(
+            "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
          tool_source, tenant_tool_id, arguments, status, approval_required, \
          expires_at, chain_index, started_at, finished_at, result, error, \
          created_at, decided_by_membership_id, decided_at \
          FROM tool_requests \
          WHERE tenant_id = $1 AND conversation_id = $2 AND status = 'awaiting_approval'",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .fetch_all(pool)
-    .await?;
-    Ok(rows)
+        )
+        .bind(tenant_id)
+        .bind(conversation_id)
+        .fetch_all(uow.conn())
+        .await?;
+        Ok(rows)
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }

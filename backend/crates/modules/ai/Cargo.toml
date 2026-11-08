@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+db = { path = "../../shared/db" }
 ai-providers = { path = "../../ai-providers" }
 aes-gcm.workspace = true
 async-trait.workspace = true

@@ -143,12 +143,16 @@ pub async fn get_invitation_delivery(
     ctx: TenantContext,
     Path(invitation_id): Path<Uuid>,
 ) -> Response {
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let status: Option<String> = match sqlx::query_scalar(
         "SELECT email_delivery_status FROM tenant_invitations WHERE tenant_id = $1 AND id = $2",
     )
     .bind(ctx.tenant_id)
     .bind(invitation_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     {
         Ok(status) => status,
@@ -158,6 +162,9 @@ pub async fn get_invitation_delivery(
                 .into_response();
         }
     };
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
     let Some(status) = status else {
         return ApiError::not_found("Invitation not found").into_response();
     };
@@ -330,6 +337,10 @@ pub async fn create_invitation(
     }
 
     // ---- Check existing membership (active or disabled) ----
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let existing_member: Option<(String,)> = sqlx::query_as(
         "SELECT status FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id IN (SELECT id FROM users WHERE email = $2) \
@@ -337,9 +348,12 @@ pub async fn create_invitation(
     )
     .bind(ctx.tenant_id)
     .bind(&email)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     .unwrap_or(None);
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     if let Some((status,)) = existing_member {
         return ApiError::conflict("User is already a member of this tenant")
@@ -355,6 +369,10 @@ pub async fn create_invitation(
     // Only an active, unexpired pending invite blocks reissue: an expired
     // invitation whose 7-day window has passed is superseded automatically
     // below (inside the transaction), so it must not count here. ----
+    let mut uow2 = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let existing_pending: Option<(Uuid,)> = sqlx::query_as(
         "SELECT id FROM tenant_invitations \
          WHERE tenant_id = $1 AND email = $2 AND status = 'pending' AND expires_at > now() \
@@ -362,9 +380,12 @@ pub async fn create_invitation(
     )
     .bind(ctx.tenant_id)
     .bind(&email)
-    .fetch_optional(&pool)
+    .fetch_optional(uow2.conn())
     .await
     .unwrap_or(None);
+    if let Err(r) = ctx.commit(uow2).await {
+        return r;
+    }
 
     if existing_pending.is_some() {
         return ApiError::conflict("A pending invitation already exists for this email")
@@ -389,7 +410,7 @@ pub async fn create_invitation(
 
     // ---- Transaction: INSERT + audit ----
     let role = payload.role.clone();
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
@@ -408,7 +429,7 @@ pub async fn create_invitation(
     )
     .bind(ctx.tenant_id)
     .bind(&email)
-    .execute(&mut *tx)
+    .execute(tx.conn())
     .await
     {
         return ApiError::internal_error(format!("Failed to expire stale invitation: {e}"))
@@ -432,7 +453,7 @@ pub async fn create_invitation(
     .bind(principal.user_id)
     .bind(expires_at)
     .bind(initial_delivery_status.as_str())
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.conn())
     .await
     {
         Ok(id) => id,
@@ -465,7 +486,7 @@ pub async fn create_invitation(
         .bind(invitation_id.to_string())
         .bind(ctx.tenant_id.to_string())
         .bind(payload)
-        .execute(&mut *tx)
+        .execute(tx.conn())
         .await
         {
             return ApiError::internal_error(format!("Outbox insert failed: {e}")).into_response();
@@ -491,12 +512,26 @@ pub async fn create_invitation(
 
     let email_delivery_status = initial_delivery_status;
     let email_sent = email_delivery_status == email::EmailDeliveryStatus::Sent;
-    let invited_by_name: String =
-        sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
-            .bind(principal.user_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap_or_default();
+    // The invitation is already committed. Looking up the inviter's display name is cosmetic, so a
+    // failure here falls back to an empty name instead of failing a request that created the
+    // invitation (the caller would lose the accept URL and a retry would conflict).
+    let invited_by_name: String = match ctx.unit_of_work(&pool).await {
+        Ok(mut uow3) => {
+            let name = sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
+                .bind(principal.user_id)
+                .fetch_one(uow3.conn())
+                .await
+                .unwrap_or_default();
+            if let Err(error) = uow3.commit().await {
+                tracing::warn!(%error, "create_invitation: closing the inviter lookup failed");
+            }
+            name
+        }
+        Err(_) => {
+            tracing::warn!("create_invitation: could not start the inviter lookup");
+            String::new()
+        }
+    };
 
     (
         StatusCode::CREATED,
@@ -854,13 +889,20 @@ pub async fn list_invitations(
 
     query = query.bind(i64::from(limit + 1));
 
-    let rows = match query.fetch_all(&pool).await {
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
+    let rows = match query.fetch_all(uow.conn()).await {
         Ok(rows) => rows,
         Err(e) => {
             tracing::error!(error = %e, "failed to list invitations");
             return ApiError::internal_error("Failed to list invitations").into_response();
         }
     };
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let row_count = rows.len();
     let items: Vec<InvitationListItem> = rows
@@ -942,6 +984,10 @@ pub async fn revoke_invitation(
     Path(id): Path<Uuid>,
 ) -> Response {
     // ---- Fetch the invitation (must belong to current tenant) ----
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let row = match sqlx::query_as::<_, (Uuid, String, String, String)>(
         "SELECT id, email, role, status \
          FROM tenant_invitations \
@@ -949,7 +995,7 @@ pub async fn revoke_invitation(
     )
     .bind(id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(r)) => r,
@@ -958,6 +1004,9 @@ pub async fn revoke_invitation(
             return ApiError::internal_error(format!("Database query failed: {e}")).into_response()
         }
     };
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     let (_inv_id, email, role, status) = row;
 
@@ -990,7 +1039,7 @@ pub async fn revoke_invitation(
     }
 
     // ---- Transaction: UPDATE + audit ----
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
@@ -1006,7 +1055,7 @@ pub async fn revoke_invitation(
     .bind(principal.user_id)
     .bind(id)
     .bind(ctx.tenant_id)
-    .execute(&mut *tx)
+    .execute(tx.conn())
     .await
     {
         Ok(result) => result.rows_affected(),

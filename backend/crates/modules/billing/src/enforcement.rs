@@ -17,14 +17,14 @@ pub struct EnforcementDecision {
 }
 
 pub async fn check(pool: &PgPool, tenant_id: Uuid) -> Result<EnforcementDecision, sqlx::Error> {
-    let mut tx = pool.begin().await?;
+    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
 
     // Serialize concurrent enforcement checks for this tenant via advisory lock.
     // Uses the lower 64 bits of tenant_id as the lock key.
     let lock_key = (tenant_id.as_u128() & 0xFFFF_FFFF_FFFF_FFFF) as i64;
     sqlx::query("SELECT pg_advisory_xact_lock($1)")
         .bind(lock_key)
-        .execute(&mut *tx)
+        .execute(tx.conn())
         .await?;
 
     let (start, end) = queries::current_period(chrono::Utc::now());

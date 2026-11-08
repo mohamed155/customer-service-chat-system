@@ -22,18 +22,23 @@ pub async fn record_refusal(pool: &PgPool, tenant_id: Uuid) {
         cache.insert(tenant_id, Instant::now());
     }
 
-    let result = sqlx::query(
-        "INSERT INTO audit_logs \
-         (actor_user_id, action, resource_type, resource_id, tenant_id, details) \
-         VALUES ($1, $2, $3, $4, $5, $6)",
-    )
-    .bind(Option::<Uuid>::None)
-    .bind("security.rate_limit.refused")
-    .bind("rate_limit")
-    .bind(tenant_id.to_string())
-    .bind(tenant_id)
-    .bind(serde_json::json!({}))
-    .execute(pool)
+    let result: sqlx::Result<()> = async {
+        let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+        sqlx::query(
+            "INSERT INTO audit_logs \
+             (actor_user_id, action, resource_type, resource_id, tenant_id, details) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+        )
+        .bind(Option::<Uuid>::None)
+        .bind("security.rate_limit.refused")
+        .bind("rate_limit")
+        .bind(tenant_id.to_string())
+        .bind(tenant_id)
+        .bind(serde_json::json!({}))
+        .execute(uow.conn())
+        .await?;
+        uow.commit().await
+    }
     .await;
 
     if let Err(e) = result {

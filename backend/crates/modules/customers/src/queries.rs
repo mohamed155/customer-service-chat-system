@@ -12,6 +12,7 @@ pub async fn fetch_profile_for_tool(
     tenant_id: Uuid,
     customer_id: Uuid,
 ) -> sqlx::Result<Option<CustomerToolProfile>> {
+    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     sqlx::query_as::<_, (String, Option<String>, Option<String>, i64)>(
         "SELECT c.display_name, c.email, c.phone, \
          COALESCE(conv.count, 0) AS conversation_count \
@@ -24,7 +25,7 @@ pub async fn fetch_profile_for_tool(
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_optional(pool)
+    .fetch_optional(tx.conn())
     .await
     .map(|row| {
         row.map(

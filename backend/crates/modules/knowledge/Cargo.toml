@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+db = { path = "../../shared/db" }
 ammonia.workspace = true
 hex.workspace = true
 async-trait.workspace = true

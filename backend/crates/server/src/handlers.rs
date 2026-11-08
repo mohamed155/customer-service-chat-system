@@ -109,7 +109,7 @@ pub async fn list_members_with_skills(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(error = %e, "failed to begin transaction");
@@ -232,7 +232,7 @@ pub async fn get_conversation_with_escalation(
     Extension(ai_status): Extension<Arc<dyn conversations::AiAgentStatus>>,
     Path(conversation_id): Path<Uuid>,
 ) -> Response {
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(error = %e, "failed to begin transaction");
@@ -350,13 +350,17 @@ pub async fn decide_tool_request(
         }
     };
 
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let membership_id = match sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(ctx.tenant_id)
     .bind(principal.user_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => mid,
@@ -372,6 +376,9 @@ pub async fn decide_tool_request(
                 .into_response();
         }
     };
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     match tools::approval::decide(&pool, ctx.tenant_id, id, membership_id, approve).await {
         Ok(tools::approval::DecideOutcome::Applied(row)) => {

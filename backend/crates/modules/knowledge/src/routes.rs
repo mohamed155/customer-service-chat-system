@@ -213,22 +213,41 @@ fn build_tag_map(tags: &[store::KnowledgeItemTagRow]) -> HashMap<Uuid, Vec<Strin
     map
 }
 
-async fn get_category_name(pool: &PgPool, category_id: Option<Uuid>) -> Option<String> {
+async fn get_category_name(
+    pool: &PgPool,
+    tenant_id: Uuid,
+    category_id: Option<Uuid>,
+) -> Option<String> {
     let id = category_id?;
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
+        .await
+        .ok()?;
     sqlx::query_scalar::<_, String>("SELECT name FROM knowledge_categories WHERE id = $1")
         .bind(id)
-        .fetch_optional(pool)
+        .fetch_optional(uow.conn())
         .await
         .ok()?
 }
 
-async fn load_tags_for_item(pool: &PgPool, item_id: Uuid) -> sqlx::Result<Vec<String>> {
-    let rows: Vec<(String,)> =
-        sqlx::query_as("SELECT tag FROM knowledge_item_tags WHERE item_id = $1 ORDER BY tag")
-            .bind(item_id)
-            .fetch_all(pool)
-            .await?;
-    Ok(rows.into_iter().map(|r| r.0).collect())
+async fn load_tags_for_item(
+    pool: &PgPool,
+    tenant_id: uuid::Uuid,
+    item_id: Uuid,
+) -> sqlx::Result<Vec<String>> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let result: sqlx::Result<Vec<String>> = async {
+        let rows: Vec<(String,)> =
+            sqlx::query_as("SELECT tag FROM knowledge_item_tags WHERE item_id = $1 ORDER BY tag")
+                .bind(item_id)
+                .fetch_all(uow.conn())
+                .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+    .await;
+    if result.is_ok() {
+        uow.commit().await?;
+    }
+    result
 }
 
 fn to_index_status_dto(state: &index_state::IndexState) -> IndexStatusDto {
@@ -312,11 +331,15 @@ pub async fn list_items(
     let cat_names: HashMap<Uuid, String> = if cat_ids.is_empty() {
         HashMap::new()
     } else {
+        let mut uow = match ctx.unit_of_work(&pool).await {
+            Ok(u) => u,
+            Err(r) => return r,
+        };
         match sqlx::query_as::<_, (Uuid, String)>(
             "SELECT id, name FROM knowledge_categories WHERE id = ANY($1)",
         )
         .bind(&cat_ids)
-        .fetch_all(&pool)
+        .fetch_all(uow.conn())
         .await
         {
             Ok(rows) => rows.into_iter().collect(),
@@ -330,7 +353,7 @@ pub async fn list_items(
     };
 
     let item_ids: Vec<Uuid> = items.iter().map(|i| i.id).collect();
-    let index_states = match index_state::get_many(&pool, &item_ids).await {
+    let index_states = match index_state::get_many(&pool, ctx.tenant_id, &item_ids).await {
         Ok(states) => states,
         Err(e) => {
             tracing::error!(%e, "list_items: load index states failed");
@@ -455,12 +478,16 @@ pub async fn create_item(
     };
 
     let category_name = if let Some(cid) = payload.category_id {
+        let mut uow = match ctx.unit_of_work(&pool).await {
+            Ok(u) => u,
+            Err(r) => return r,
+        };
         match sqlx::query_scalar::<_, String>(
             "SELECT name FROM knowledge_categories WHERE id = $1 AND tenant_id = $2",
         )
         .bind(cid)
         .bind(ctx.tenant_id)
-        .fetch_optional(&pool)
+        .fetch_optional(uow.conn())
         .await
         {
             Ok(Some(name)) => Some(name),
@@ -485,7 +512,7 @@ pub async fn create_item(
         None
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "create_item: begin tx failed");
@@ -638,7 +665,7 @@ pub async fn get_item(
         }
     };
 
-    let tags = match load_tags_for_item(&pool, item_id).await {
+    let tags = match load_tags_for_item(&pool, ctx.tenant_id, item_id).await {
         Ok(t) => t,
         Err(e) => {
             tracing::error!(%e, "get_item: load_tags_for_item failed");
@@ -648,7 +675,7 @@ pub async fn get_item(
         }
     };
 
-    let category_name = get_category_name(&pool, item.category_id).await;
+    let category_name = get_category_name(&pool, ctx.tenant_id, item.category_id).await;
 
     let document = if item.item_type == "document" {
         match store::get_document(&pool, ctx.tenant_id, item_id).await {
@@ -796,7 +823,7 @@ pub async fn update_item(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "update_item: begin tx failed");
@@ -811,7 +838,7 @@ pub async fn update_item(
     )
     .bind(item_id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     {
         Ok(Some(row)) => row,
@@ -964,7 +991,7 @@ pub async fn update_item(
         }
     };
 
-    let updated_tags = match load_tags_for_item(&pool, item_id).await {
+    let updated_tags = match load_tags_for_item(&pool, ctx.tenant_id, item_id).await {
         Ok(t) => t,
         Err(e) => {
             tracing::error!(%e, "update_item: load final tags failed");
@@ -972,7 +999,7 @@ pub async fn update_item(
         }
     };
 
-    let category_name = get_category_name(&pool, updated.category_id).await;
+    let category_name = get_category_name(&pool, ctx.tenant_id, updated.category_id).await;
 
     let dto = KnowledgeItemDetailDto {
         id: updated.id,
@@ -1101,7 +1128,7 @@ pub async fn set_item_status(
         Ok(true) => {}
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "set_item_status: begin tx failed");
@@ -1232,7 +1259,7 @@ pub async fn reindex_item(
 ) -> Response {
     let start = std::time::Instant::now();
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "reindex_item: begin tx failed");
@@ -1247,7 +1274,7 @@ pub async fn reindex_item(
     )
     .bind(item_id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     {
         Ok(Some(item)) => item,
@@ -1284,7 +1311,7 @@ pub async fn reindex_item(
     )
     .bind(item_id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await;
 
     let already_active = match current_status {
@@ -1469,7 +1496,7 @@ pub async fn upload_document(
             &content_type,
             bytes,
             || async move {
-                let mut tx = persist_pool.begin().await?;
+                let mut tx = db::UnitOfWork::begin_for_tenant(&persist_pool, ctx.tenant_id).await?;
 
                 let item = store::create_document_in_tx(
                     &mut tx,
@@ -1557,7 +1584,7 @@ pub async fn upload_document(
         title: item.title,
         status: item.status,
         category_id: item.category_id,
-        category_name: get_category_name(&pool, item.category_id).await,
+        category_name: get_category_name(&pool, ctx.tenant_id, item.category_id).await,
         created_by_display: item.created_by_display,
         created_at: item.created_at,
         updated_at: item.updated_at,
@@ -1744,7 +1771,7 @@ pub async fn create_knowledge_category(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "create_knowledge_category: begin tx failed");
@@ -1840,7 +1867,7 @@ pub async fn rename_knowledge_category(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "rename_knowledge_category: begin tx failed");
@@ -1880,11 +1907,15 @@ pub async fn rename_knowledge_category(
         }
     };
 
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let item_count: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM knowledge_items WHERE category_id = $1",
     )
     .bind(category_id)
-    .fetch_one(&pool)
+    .fetch_one(uow.conn())
     .await
     {
         Ok(count) => count,
@@ -1893,6 +1924,9 @@ pub async fn rename_knowledge_category(
             0
         }
     };
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
 
     if let Err(e) = tx.commit().await {
         tracing::error!(%e, "rename_knowledge_category: commit failed");
@@ -1946,7 +1980,7 @@ pub async fn delete_knowledge_category(
     Path(category_id): Path<Uuid>,
 ) -> Response {
     let start = std::time::Instant::now();
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "delete_knowledge_category: begin tx failed");
