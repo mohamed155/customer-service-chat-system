@@ -1479,6 +1479,9 @@ pub async fn run_followup_generation(
             .fetch_optional(uow.conn())
             .await?
             .unwrap_or(Uuid::nil());
+    // Both reads are done. Release the connection now: the tool call and the model call below
+    // can take a long time and must not hold a pooled connection in an open transaction.
+    drop(uow);
 
     let tool_message = if outcome == "approved" {
         // Execute the tool

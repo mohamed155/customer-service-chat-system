@@ -69,6 +69,10 @@ pub async fn decide(
         return Ok(DecideOutcome::AlreadySettled(row));
     }
 
+    // The status change commits on its own (it used to auto-commit on the pool); the outbox
+    // rows below are written in a second unit of work.
+    uow.commit().await?;
+
     let outcome = if approve { "approved" } else { "denied" };
 
     let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
