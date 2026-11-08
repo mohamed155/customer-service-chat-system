@@ -1,0 +1,42 @@
+name: Infra
+# Checks the local development stack (infra/docker-compose.yml): it parses, every service becomes
+# healthy under `up --wait`, and the application database roles cannot bypass Row-Level Security.
+on:
+  push:
+    branches: [master]
+    paths: ["infra/**", ".env.example", ".github/workflows/infra.yml"]
+  pull_request:
+    paths: ["infra/**", ".env.example", ".github/workflows/infra.yml"]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  compose-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dev credentials come from .env.example
+        run: cp .env.example .env
+      - name: Compose files parse
+        run: |
+          docker compose --env-file .env -f infra/docker-compose.yml config -q
+          docker compose --env-file .env --profile observability -f infra/docker-compose.yml config -q
+          touch .env.staging
+          APP_RELEASE_SHA=ci APP_DOMAIN=example.test \
+            docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.staging.yml config -q
+      - name: Start the stack and wait until every service is healthy
+        run: docker compose --env-file .env -f infra/docker-compose.yml up -d --wait
+      - name: Buckets exist and are private
+        run: |
+          docker compose --env-file .env -f infra/docker-compose.yml exec -T minio-init mc ls local | tee /dev/stderr | grep -q 'tenants/'
+          docker compose --env-file .env -f infra/docker-compose.yml exec -T minio-init mc ls local | grep -q 'quarantine/'
+          docker compose --env-file .env -f infra/docker-compose.yml exec -T minio-init mc anonymous get local/tenants | grep -q private
+      - name: Application roles cannot bypass Row-Level Security
+        run: docker compose --env-file .env -f infra/docker-compose.yml exec -T postgres bash -s < infra/postgres/verify-roles.sh
+      - name: Logs on failure
+        if: failure()
+        run: docker compose --env-file .env -f infra/docker-compose.yml logs --no-color --tail 200
+      - name: Tear down
+        if: always()
+        run: docker compose --env-file .env -f infra/docker-compose.yml down -v

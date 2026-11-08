@@ -17,7 +17,8 @@ widget with seed data.
 ### 1. Start infrastructure
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d --wait
+cp -n .env.example .env   # first time only: dev credentials, including the database role passwords
+docker compose --env-file .env -f infra/docker-compose.yml up -d --wait
 ```
 
 This starts PostgreSQL with pgvector (port 5432), Redis (6379), Mailpit (1025
@@ -25,9 +26,26 @@ SMTP, 8025 web), and MinIO (9000 S3, 9001 console), and returns once every
 service reports healthy. The `tenants` and `quarantine` buckets are created for
 you. Ports are bound to `127.0.0.1`; if one is taken, set `POSTGRES_PORT`,
 `REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `MAILPIT_SMTP_PORT` or
-`MAILPIT_UI_PORT` (in your shell, or in `.env` with `--env-file .env` after
-step 2). Data lives in named volumes, so it survives
+`MAILPIT_UI_PORT` in `.env`. Data lives in named volumes, so it survives
 `docker compose down`.
+
+#### Database roles
+
+On first start the Postgres container also creates two non-superuser roles from the
+`APP_OWNER_PASSWORD` and `APP_RUNTIME_PASSWORD` values in `.env`:
+`app_owner` (owns the schema, runs migrations) and `app_runtime` (read/write rows
+only, `NOBYPASSRLS`, owns nothing). Row-Level Security only protects tenants when the
+application connects as a role like `app_runtime`; the bootstrap superuser
+(`customer_service`) ignores every policy. The backend still connects as that
+superuser today and switches to `app_runtime` with the RLS work (MOH-31). If the two
+passwords are unset, the roles are skipped and the container logs a notice. Avoid the
+dollar sign in `.env` values, because Compose expands it.
+
+Check that the split holds (creates and drops a throwaway table with forced RLS):
+
+```bash
+docker compose --env-file .env -f infra/docker-compose.yml exec -T postgres bash -s < infra/postgres/verify-roles.sh
+```
 
 #### Resetting local data
 
@@ -35,20 +53,16 @@ Postgres reads `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` only when 
 volume is first created, and the extension setup runs only then too. If you change
 those values later, or a first start was interrupted, the `postgres` service stays
 unhealthy (its health check logs in with the configured credentials and checks the
-extensions). Recreate the volume:
+extensions). The role passwords are also read only at that point. Recreate the volume:
 
 ```bash
 docker compose -f infra/docker-compose.yml down -v   # DELETES all local Postgres, Redis, MinIO and Mailpit data
-docker compose -f infra/docker-compose.yml up -d --wait
+docker compose --env-file .env -f infra/docker-compose.yml up -d --wait
 ```
 
 ### 2. Configure environment
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and fill in both encryption keys:
+`.env` already exists from step 1. Edit it and fill in both encryption keys:
 
 ```bash
 # Generate suitable values:
