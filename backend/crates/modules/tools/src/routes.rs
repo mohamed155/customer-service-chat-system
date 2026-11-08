@@ -180,6 +180,10 @@ pub async fn tool_activity(
                       ON tr.decided_by_membership_id = tm.id AND tm.deleted_at IS NULL \
                     LEFT JOIN users u ON tm.user_id = u.id";
 
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let result = match params.cursor {
         Some(cursor) => {
             sqlx::query_as::<_, ToolActivityQueryRow>(
@@ -194,7 +198,7 @@ pub async fn tool_activity(
             .bind(conversation_id)
             .bind(cursor)
             .bind(limit)
-            .fetch_all(&pool)
+            .fetch_all(uow.conn())
             .await
         }
         None => {
@@ -208,10 +212,11 @@ pub async fn tool_activity(
             .bind(ctx.tenant_id)
             .bind(conversation_id)
             .bind(limit)
-            .fetch_all(&pool)
+            .fetch_all(uow.conn())
             .await
         }
     };
+    drop(uow);
 
     match result {
         Ok(rows) => {
@@ -333,6 +338,10 @@ pub async fn list_pending_tool_requests(
 ) -> Response {
     let limit = params.limit.unwrap_or(50).min(100);
 
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let result = match params.cursor {
         Some(cursor) => {
             sqlx::query_as::<_, ToolRequestRow>(
@@ -350,7 +359,7 @@ pub async fn list_pending_tool_requests(
             .bind(ctx.tenant_id)
             .bind(cursor)
             .bind(limit)
-            .fetch_all(&pool)
+            .fetch_all(uow.conn())
             .await
         }
         None => {
@@ -366,10 +375,11 @@ pub async fn list_pending_tool_requests(
             )
             .bind(ctx.tenant_id)
             .bind(limit)
-            .fetch_all(&pool)
+            .fetch_all(uow.conn())
             .await
         }
     };
+    drop(uow);
 
     match result {
         Ok(items) => Json(serde_json::json!({ "items": items })).into_response(),
@@ -393,13 +403,22 @@ async fn resolve_membership(
     user_id: Uuid,
     request_id: &str,
 ) -> Result<Uuid, Response> {
+    let mut uow = match db::UnitOfWork::begin_for_tenant(pool, tenant_id).await {
+        Ok(u) => u,
+        Err(e) => {
+            tracing::error!(%e, "resolve_membership: begin unit of work failed");
+            return Err(ApiError::internal_error("Database error")
+                .with_request_id(request_id)
+                .into_response());
+        }
+    };
     match sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => Ok(mid),
@@ -610,13 +629,16 @@ async fn validate_tool_name_unique(
         ));
     }
 
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
+        .await
+        .map_err(|e| format!("database error: {e}"))?;
     let existing: Option<Uuid> = sqlx::query_scalar(
         "SELECT id FROM tenant_tools \
          WHERE tenant_id = $1 AND name = $2 AND deleted_at IS NULL",
     )
     .bind(tenant_id)
     .bind(name)
-    .fetch_optional(pool)
+    .fetch_optional(uow.conn())
     .await
     .map_err(|e| format!("database error: {e}"))?;
 
@@ -779,6 +801,10 @@ pub async fn update_tenant_tool_route(
         };
 
     // The credential is scoped to the tool's (possibly new) name.
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let scope_name = match payload.name.clone() {
         Some(n) => n,
         None if payload.credential.is_some() => sqlx::query_scalar::<_, String>(
@@ -786,13 +812,14 @@ pub async fn update_tenant_tool_route(
         )
         .bind(id)
         .bind(ctx.tenant_id)
-        .fetch_optional(&pool)
+        .fetch_optional(uow.conn())
         .await
         .ok()
         .flatten()
         .unwrap_or_default(),
         None => String::new(),
     };
+    drop(uow);
     let credential_ciphertext = seal_credential_if_provided(
         app_config.as_ref().map(|Extension(c)| c.as_ref()),
         &payload.credential,

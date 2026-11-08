@@ -692,7 +692,7 @@ async fn document_no_extractable_text_resolves_to_not_indexable() {
 
     // 4. The indexer calls set_not_indexable with a descriptive reason
     let reason = format!("No extractable text from content type: {content_type}");
-    knowledge::index_state::set_not_indexable(&pool, item_id, &reason)
+    knowledge::index_state::set_not_indexable(&pool, tenant_id, item_id, &reason)
         .await
         .unwrap();
 
@@ -754,9 +754,14 @@ async fn authored_article_empty_body_resolves_to_not_indexable() {
     );
 
     // The indexer calls set_not_indexable
-    knowledge::index_state::set_not_indexable(&pool, item_id, "No extractable text content")
-        .await
-        .unwrap();
+    knowledge::index_state::set_not_indexable(
+        &pool,
+        tenant_id,
+        item_id,
+        "No extractable text content",
+    )
+    .await
+    .unwrap();
 
     let result = knowledge::index_state::get(&pool, tenant_id, item_id)
         .await

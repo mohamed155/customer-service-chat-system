@@ -268,7 +268,7 @@ async fn set_failed_sets_status_and_reason() {
     knowledge::index_state::upsert_status(&pool, tenant_id, item_id, &IndexStatus::Pending)
         .await
         .unwrap();
-    knowledge::index_state::set_failed(&pool, item_id, "embedding failed: timeout")
+    knowledge::index_state::set_failed(&pool, tenant_id, item_id, "embedding failed: timeout")
         .await
         .unwrap();
 
@@ -297,7 +297,7 @@ async fn set_indexed_sets_status_hash_and_chunk_count() {
     knowledge::index_state::upsert_status(&pool, tenant_id, item_id, &IndexStatus::Pending)
         .await
         .unwrap();
-    knowledge::index_state::set_indexed(&pool, item_id, "abc123hash", 5)
+    knowledge::index_state::set_indexed(&pool, tenant_id, item_id, "abc123hash", 5)
         .await
         .unwrap();
 
@@ -326,12 +326,12 @@ async fn increment_attempts_returns_new_count() {
         .await
         .unwrap();
 
-    let count1 = knowledge::index_state::increment_attempts(&pool, item_id)
+    let count1 = knowledge::index_state::increment_attempts(&pool, tenant_id, item_id)
         .await
         .unwrap();
     assert_eq!(count1, 1);
 
-    let count2 = knowledge::index_state::increment_attempts(&pool, item_id)
+    let count2 = knowledge::index_state::increment_attempts(&pool, tenant_id, item_id)
         .await
         .unwrap();
     assert_eq!(count2, 2);
@@ -351,7 +351,7 @@ async fn set_not_indexable_sets_status_and_reason() {
     knowledge::index_state::upsert_status(&pool, tenant_id, item_id, &IndexStatus::Pending)
         .await
         .unwrap();
-    knowledge::index_state::set_not_indexable(&pool, item_id, "no extractable text")
+    knowledge::index_state::set_not_indexable(&pool, tenant_id, item_id, "no extractable text")
         .await
         .unwrap();
 

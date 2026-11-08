@@ -200,18 +200,26 @@ pub async fn stream_events(
         .into_response();
     }
 
+    let mut uow = match db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id).await {
+        Ok(u) => u,
+        Err(e) => {
+            error!(%e, "stream_events: begin unit of work failed");
+            return ApiError::not_found("Conversation not found").into_response();
+        }
+    };
     let conv_owner: Option<(Uuid, Uuid)> = sqlx::query_as(
         "SELECT customer_id, tenant_id FROM conversations \
          WHERE id = $1 AND deleted_at IS NULL",
     )
     .bind(conversation_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     .map_err(|e| {
         error!(%e, "stream_events: lookup failed");
     })
     .ok()
     .flatten();
+    drop(uow);
 
     let (customer_id, conv_tenant_id) = match conv_owner {
         Some(c) => c,

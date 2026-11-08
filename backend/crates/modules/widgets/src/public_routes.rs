@@ -255,6 +255,13 @@ pub async fn get_conversation(
     }
     let customer_id = session.customer_id.unwrap();
 
+    let mut uow = match db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id).await {
+        Ok(u) => u,
+        Err(e) => {
+            tracing::error!(%e, "get_conversation: begin unit of work failed");
+            return ApiError::internal_error("Failed to look up conversation").into_response();
+        }
+    };
     let conv_row: Option<(Uuid, String, bool, bool)> = sqlx::query_as(
         "SELECT id, status, escalated_at IS NOT NULL, assigned_membership_id IS NOT NULL \
          FROM conversations \
@@ -266,7 +273,7 @@ pub async fn get_conversation(
     )
     .bind(session.tenant_id)
     .bind(customer_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     .map_err(|e| {
         tracing::error!(%e, "get_conversation: db error");
@@ -274,6 +281,7 @@ pub async fn get_conversation(
     })
     .ok()
     .flatten();
+    drop(uow);
 
     let conv = match conv_row {
         Some(c) => c,
@@ -287,7 +295,9 @@ pub async fn get_conversation(
     };
 
     let messages = conversations::queries::timeline_query_in_tx(
-        &mut pool.begin().await.unwrap(),
+        &mut db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id)
+            .await
+            .unwrap(),
         &pool,
         session.tenant_id,
         conv.0,
@@ -335,7 +345,7 @@ pub async fn create_conversation(
         Err(e) => return e.into_response(),
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id).await {
         Ok(t) => t,
         Err(e) => {
             tracing::error!(%e, "create_conversation: begin tx failed");
@@ -367,7 +377,7 @@ pub async fn create_conversation(
     )
     .bind(session.tenant_id)
     .bind(customer_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     .map_err(|e| {
         tracing::error!(%e, "create_conversation: find existing failed");
@@ -521,7 +531,7 @@ pub async fn send_message(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id).await {
         Ok(t) => t,
         Err(e) => {
             error!(%e, "send_message: begin tx failed");
@@ -544,7 +554,7 @@ pub async fn send_message(
     .bind(session.tenant_id)
     .bind(conversation_id)
     .bind(session_customer_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     .map_err(|e| {
         error!(%e, "send_message: select for update failed");
