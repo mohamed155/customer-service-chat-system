@@ -55,7 +55,7 @@ strum = { version = "0.28", default-features = false, features = ["derive"] }
 regex = "1"
 metrics = "0.24"
 metrics-exporter-prometheus = "0.18"
-opentelemetry = { version = "0.32", features = ["metrics", "trace"] }
+opentelemetry = { version = "0.33", features = ["metrics", "trace"] }
 opentelemetry_sdk = { version = "0.32", features = ["trace", "metrics"] }
 opentelemetry-otlp = { version = "0.32", features = ["trace", "metrics", "grpc-tonic"] }
 tracing-opentelemetry = "0.33"
