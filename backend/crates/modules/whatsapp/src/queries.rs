@@ -218,12 +218,13 @@ pub async fn mark_attachment_stored(
         sqlx::query(
             "UPDATE message_attachments \
          SET status = 'stored', storage_key = $1, mime_type = $2, size_bytes = $3 \
-         WHERE id = $4",
+         WHERE id = $4 AND tenant_id = $5",
         )
         .bind(storage_key)
         .bind(mime_type)
         .bind(size_bytes)
         .bind(id)
+        .bind(tenant_id)
         .execute(uow.conn())
         .await?;
         Ok(())
@@ -247,9 +248,10 @@ pub async fn mark_attachment_failed_attempt(
             "UPDATE message_attachments \
          SET fetch_attempts = fetch_attempts + 1, \
              status = CASE WHEN fetch_attempts + 1 >= 5 THEN 'failed' ELSE status END \
-         WHERE id = $1",
+         WHERE id = $1 AND tenant_id = $2",
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(uow.conn())
         .await?;
         Ok(())

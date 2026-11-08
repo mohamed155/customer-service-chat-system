@@ -69,13 +69,10 @@ pub async fn decide(
         return Ok(DecideOutcome::AlreadySettled(row));
     }
 
-    // The status change commits on its own (it used to auto-commit on the pool); the outbox
-    // rows below are written in a second unit of work.
-    uow.commit().await?;
-
+    // The status change, the row read and the outbox events share this one Unit of Work, so a
+    // decision is never visible without its events (or the other way round). An early return
+    // above drops the Unit of Work, which is fine: nothing was written.
     let outcome = if approve { "approved" } else { "denied" };
-
-    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
 
     let row: ToolRequestRow = sqlx::query_as(
         "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
@@ -87,11 +84,11 @@ pub async fn decide(
     )
     .bind(tool_request_id)
     .bind(tenant_id)
-    .fetch_one(tx.conn())
+    .fetch_one(uow.conn())
     .await?;
 
     conversations::outbox::emit_tool_decision_in_tx(
-        &mut tx,
+        &mut uow,
         tenant_id,
         row.conversation_id,
         tool_request_id,
@@ -99,9 +96,9 @@ pub async fn decide(
     )
     .await?;
 
-    emit_tool_resolved_in_tx(&mut tx, tenant_id, tool_request_id, decided_by).await?;
+    emit_tool_resolved_in_tx(&mut uow, tenant_id, tool_request_id, decided_by).await?;
 
-    tx.commit().await?;
+    uow.commit().await?;
 
     Ok(DecideOutcome::Applied(row))
 }

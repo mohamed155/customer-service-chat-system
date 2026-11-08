@@ -308,7 +308,9 @@ pub async fn receive_webhook(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    // The tenant is known now (it came from the webhook token), so the delivery is written in
+    // that tenant's Unit of Work. Only the token lookup above is a pre-tenant query.
+    let mut tx = match db::UnitOfWork::begin_for_tenant(&pool, conn.tenant_id).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "receive_webhook: begin tx failed");

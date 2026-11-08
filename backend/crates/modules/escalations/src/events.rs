@@ -229,21 +229,29 @@ pub async fn stream_events(
     let tenant_id = ctx.tenant_id;
     let runtime_for_drain = runtime.clone();
     async move {
-        let avail_state: Option<String> = sqlx::query_scalar(
-            "SELECT state FROM agent_availability \
-             WHERE tenant_id = $1 AND membership_id = $2",
-        )
-        .bind(tenant_id)
-        .bind(membership_id)
-        .fetch_optional(&pool_for_drain)
-        .await
-        .ok()
-        .flatten();
+        let avail_state: Option<String> =
+            match db::UnitOfWork::begin_for_tenant(&pool_for_drain, tenant_id).await {
+                Ok(mut lookup) => {
+                    let state = sqlx::query_scalar(
+                        "SELECT state FROM agent_availability \
+                         WHERE tenant_id = $1 AND membership_id = $2",
+                    )
+                    .bind(tenant_id)
+                    .bind(membership_id)
+                    .fetch_optional(lookup.conn())
+                    .await
+                    .ok()
+                    .flatten();
+                    lookup.commit().await.ok();
+                    state
+                }
+                Err(_) => None,
+            };
         if avail_state.as_deref() == Some("available") {
             let present_ids = runtime_for_drain
                 .present_membership_ids_async(tenant_id)
                 .await;
-            let mut tx = match pool_for_drain.begin().await {
+            let mut tx = match db::UnitOfWork::begin_for_tenant(&pool_for_drain, tenant_id).await {
                 Ok(tx) => tx,
                 Err(_) => return,
             };

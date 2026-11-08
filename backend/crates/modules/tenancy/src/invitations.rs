@@ -512,19 +512,26 @@ pub async fn create_invitation(
 
     let email_delivery_status = initial_delivery_status;
     let email_sent = email_delivery_status == email::EmailDeliveryStatus::Sent;
-    let mut uow3 = match ctx.unit_of_work(&pool).await {
-        Ok(u) => u,
-        Err(r) => return r,
+    // The invitation is already committed. Looking up the inviter's display name is cosmetic, so a
+    // failure here falls back to an empty name instead of failing a request that created the
+    // invitation (the caller would lose the accept URL and a retry would conflict).
+    let invited_by_name: String = match ctx.unit_of_work(&pool).await {
+        Ok(mut uow3) => {
+            let name = sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
+                .bind(principal.user_id)
+                .fetch_one(uow3.conn())
+                .await
+                .unwrap_or_default();
+            if let Err(error) = uow3.commit().await {
+                tracing::warn!(%error, "create_invitation: closing the inviter lookup failed");
+            }
+            name
+        }
+        Err(_) => {
+            tracing::warn!("create_invitation: could not start the inviter lookup");
+            String::new()
+        }
     };
-    let invited_by_name: String =
-        sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
-            .bind(principal.user_id)
-            .fetch_one(uow3.conn())
-            .await
-            .unwrap_or_default();
-    if let Err(r) = ctx.commit(uow3).await {
-        return r;
-    }
 
     (
         StatusCode::CREATED,

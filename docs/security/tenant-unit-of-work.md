@@ -57,7 +57,7 @@ on for the tables they touch.
 
 | Where | What it resolves |
 | --- | --- |
-| `integrations`: `find_connection_by_token_hash`, `connection_by_token_and_slug`, `webhook::receive_webhook` | webhook token to connection to tenant |
+| `integrations`: `find_connection_by_token_hash`, `connection_by_token_and_slug`, and the token lookup at the start of `webhook::receive_webhook` (its delivery writes run in the tenant's Unit of Work) | webhook token to connection to tenant |
 | `widgets`: `find_instance_by_public_id`, `find_session_by_token_hash` | public widget id or session token to tenant |
 | `tenancy`: `invitations::preview_invitation`, `invitations::accept_invitation` | invitation token to tenant |
 | `tenancy`: `signup::signup`, `routes::build_me_response` | creates a user, tenant and membership; lists one user's memberships across tenants |

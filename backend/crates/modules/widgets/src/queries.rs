@@ -85,10 +85,12 @@ pub async fn touch_session(
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let result: sqlx::Result<()> = async {
         sqlx::query(
-            "UPDATE widget_sessions SET last_seen_at = now(), expires_at = $1 WHERE id = $2",
+            "UPDATE widget_sessions SET last_seen_at = now(), expires_at = $1 \
+         WHERE id = $2 AND tenant_id = $3",
         )
         .bind(new_expires_at)
         .bind(session_id)
+        .bind(tenant_id)
         .execute(uow.conn())
         .await?;
         Ok(())

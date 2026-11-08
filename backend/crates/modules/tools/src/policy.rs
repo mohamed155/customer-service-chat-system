@@ -129,7 +129,7 @@ pub async fn resolve_available(
         }
 
         // 2. Fetch live, enabled tenant_tools for the tenant
-        let tenant_tools = crate::queries::list_tenant_tools(pool, tenant_id).await?;
+        let tenant_tools = crate::queries::list_tenant_tools_on(uow.conn(), tenant_id).await?;
         for tt in &tenant_tools {
             if !tt.enabled {
                 continue;

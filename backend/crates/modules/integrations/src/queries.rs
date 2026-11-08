@@ -128,9 +128,10 @@ pub async fn find_connection_by_id(
                 connected_at, connected_by_membership_id, \
                 disconnected_at, disconnected_by_membership_id \
          FROM integration_connections \
-         WHERE id = $1",
+         WHERE id = $1 AND tenant_id = $2",
         )
         .bind(connection_id)
+        .bind(tenant_id)
         .fetch_optional(uow.conn())
         .await
     }
@@ -151,10 +152,11 @@ pub async fn list_secret_refs(
         sqlx::query_as::<_, SecretRefRow>(
             "SELECT field_key, hint \
          FROM integration_secrets \
-         WHERE connection_id = $1 \
+         WHERE connection_id = $1 AND tenant_id = $2 \
          ORDER BY field_key",
         )
         .bind(connection_id)
+        .bind(tenant_id)
         .fetch_all(uow.conn())
         .await
     }
@@ -209,11 +211,12 @@ pub async fn recent_event_outcomes(
     let result: Result<Vec<String>, sqlx::Error> = async {
         let rows: Vec<(String,)> = sqlx::query_as(
             "SELECT outcome FROM integration_events \
-         WHERE connection_id = $1 \
+         WHERE connection_id = $1 AND tenant_id = $2 \
            AND created_at > now() - interval '24 hours' \
          ORDER BY created_at DESC LIMIT 3",
         )
         .bind(connection_id)
+        .bind(tenant_id)
         .fetch_all(uow.conn())
         .await?;
         Ok(rows.into_iter().map(|(o,)| o).collect())
@@ -240,6 +243,8 @@ pub async fn list_events(
          WHERE connection_id = ",
         );
         builder.push_bind(connection_id);
+        builder.push(" AND tenant_id = ");
+        builder.push_bind(tenant_id);
 
         if let Some((ts, id)) = cursor {
             builder.push(" AND (created_at, id) < (");
@@ -479,10 +484,11 @@ pub async fn find_secret_ciphertext(
     let result: Result<Option<CiphertextAndNonce>, sqlx::Error> = async {
         let row: Option<(Vec<u8>, Vec<u8>)> = sqlx::query_as(
             "SELECT ciphertext, nonce FROM integration_secrets \
-         WHERE connection_id = $1 AND field_key = $2",
+         WHERE connection_id = $1 AND field_key = $2 AND tenant_id = $3",
         )
         .bind(connection_id)
         .bind(field_key)
+        .bind(tenant_id)
         .fetch_optional(uow.conn())
         .await?;
         Ok(row)

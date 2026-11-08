@@ -157,23 +157,29 @@ pub async fn list_tenant_tools(
     tenant_id: Uuid,
 ) -> sqlx::Result<Vec<TenantToolRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let result: sqlx::Result<Vec<TenantToolRow>> = async {
-        sqlx::query_as::<_, TenantToolRow>(
-            "SELECT id, tenant_id, name, description, input_schema, endpoint_url, \
-         classification, enabled, created_at, updated_at \
-         FROM tenant_tools \
-         WHERE tenant_id = $1 AND deleted_at IS NULL \
-         ORDER BY name ASC",
-        )
-        .bind(tenant_id)
-        .fetch_all(uow.conn())
-        .await
-    }
-    .await;
+    let result = list_tenant_tools_on(uow.conn(), tenant_id).await;
     if result.is_ok() {
         uow.commit().await?;
     }
     result
+}
+
+/// [`list_tenant_tools`] on a connection the caller already holds (a Unit of Work for
+/// `tenant_id`), for callers that must not take a second pooled connection.
+pub async fn list_tenant_tools_on(
+    conn: &mut sqlx::PgConnection,
+    tenant_id: Uuid,
+) -> sqlx::Result<Vec<TenantToolRow>> {
+    sqlx::query_as::<_, TenantToolRow>(
+        "SELECT id, tenant_id, name, description, input_schema, endpoint_url, \
+         classification, enabled, created_at, updated_at \
+         FROM tenant_tools \
+         WHERE tenant_id = $1 AND deleted_at IS NULL \
+         ORDER BY name ASC",
+    )
+    .bind(tenant_id)
+    .fetch_all(conn)
+    .await
 }
 
 pub async fn fetch_tenant_tool_with_credential(

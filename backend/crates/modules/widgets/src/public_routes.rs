@@ -294,10 +294,15 @@ pub async fn get_conversation(
         }
     };
 
+    let mut timeline_uow = match db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id).await {
+        Ok(u) => u,
+        Err(e) => {
+            tracing::error!(%e, "get_conversation: begin timeline unit of work failed");
+            return ApiError::internal_error("Failed to look up conversation").into_response();
+        }
+    };
     let messages = conversations::queries::timeline_query_in_tx(
-        &mut db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id)
-            .await
-            .unwrap(),
+        &mut timeline_uow,
         &pool,
         session.tenant_id,
         conv.0,
@@ -307,6 +312,7 @@ pub async fn get_conversation(
     .await
     .map(|(msgs, _, _)| msgs)
     .unwrap_or_default();
+    drop(timeline_uow);
 
     let team_online = !runtime
         .present_membership_ids_async(session.tenant_id)

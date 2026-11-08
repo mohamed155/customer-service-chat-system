@@ -144,7 +144,7 @@ async fn concurrent_units_of_work_keep_separate_tenants() {
 }
 
 #[tokio::test]
-async fn work_done_through_the_unit_of_work_commits_and_rolls_back_like_a_transaction() {
+async fn work_done_through_the_unit_of_work_is_visible_to_itself() {
     let Some(pool) = get_pool(1).await else {
         return;
     };
@@ -166,4 +166,50 @@ async fn work_done_through_the_unit_of_work_commits_and_rolls_back_like_a_transa
         .unwrap();
     assert_eq!(n, 1);
     uow.commit().await.unwrap();
+}
+
+/// A write survives only if the Unit of Work was committed. A dropped Unit of Work rolls back, which
+/// is the defect MOH-44 hit when auto-committing pool writes were moved onto it without a commit.
+/// The table is a real one and is read on the pool afterwards, so it proves what other connections
+/// see.
+#[tokio::test]
+async fn only_committed_work_survives_a_commit_a_rollback_and_a_drop() {
+    let Some(pool) = get_pool(2).await else {
+        return;
+    };
+    let table = format!("uow_probe_{}", Uuid::new_v4().simple());
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE TABLE {table} (n int)")))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    for (n, how) in [(1, "commit"), (2, "rollback"), (3, "drop")] {
+        let mut uow = UnitOfWork::begin_for_tenant(&pool, Uuid::new_v4())
+            .await
+            .unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "INSERT INTO {table} VALUES ({n})"
+        )))
+        .execute(uow.conn())
+        .await
+        .unwrap();
+        match how {
+            "commit" => uow.commit().await.unwrap(),
+            "rollback" => uow.rollback().await.unwrap(),
+            _ => drop(uow),
+        }
+    }
+
+    let survivors: Vec<i32> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT n FROM {table} ORDER BY n"
+    )))
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!("DROP TABLE {table}")))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(survivors, vec![1]);
 }

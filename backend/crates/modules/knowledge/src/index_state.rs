@@ -92,9 +92,10 @@ pub async fn get_many(
             return Ok(HashMap::new());
         }
         let rows: Vec<IndexState> = sqlx::query_as::<_, IndexState>(
-            "SELECT * FROM knowledge_index_state WHERE item_id = ANY($1)",
+            "SELECT * FROM knowledge_index_state WHERE item_id = ANY($1) AND tenant_id = $2",
         )
         .bind(item_ids)
+        .bind(tenant_id)
         .fetch_all(uow.conn())
         .await?;
         Ok(rows.into_iter().map(|row| (row.item_id, row)).collect())
@@ -122,7 +123,8 @@ pub async fn upsert_status(
            chunk_count = CASE WHEN $3 = 'not_indexed' THEN 0 \
                               ELSE knowledge_index_state.chunk_count END, \
            indexed_content_hash = CASE WHEN $3 = 'not_indexed' THEN NULL \
-                              ELSE knowledge_index_state.indexed_content_hash END",
+                              ELSE knowledge_index_state.indexed_content_hash END \
+         WHERE knowledge_index_state.tenant_id = $2",
         )
         .bind(item_id)
         .bind(tenant_id)
@@ -148,10 +150,11 @@ pub async fn set_failed(
     let result: Result<(), sqlx::Error> = async {
     sqlx::query(
         "UPDATE knowledge_index_state SET status = 'failed', failure_reason = $1, updated_at = now() \
-         WHERE item_id = $2",
+         WHERE item_id = $2 AND tenant_id = $3",
     )
     .bind(reason)
     .bind(item_id)
+    .bind(tenant_id)
     .execute(uow.conn())
     .await?;
     Ok(())
@@ -176,11 +179,12 @@ pub async fn set_indexed(
             "UPDATE knowledge_index_state \
          SET status = 'indexed', indexed_content_hash = $1, chunk_count = $2, \
              last_indexed_at = now(), failure_reason = NULL, updated_at = now() \
-         WHERE item_id = $3",
+         WHERE item_id = $3 AND tenant_id = $4",
         )
         .bind(content_hash)
         .bind(chunk_count)
         .bind(item_id)
+        .bind(tenant_id)
         .execute(uow.conn())
         .await?;
         Ok(())
@@ -201,9 +205,10 @@ pub async fn increment_attempts(
     let result: Result<i32, sqlx::Error> = async {
         let row: (i32,) = sqlx::query_as(
             "UPDATE knowledge_index_state SET attempts = attempts + 1, updated_at = now() \
-         WHERE item_id = $1 RETURNING attempts",
+         WHERE item_id = $1 AND tenant_id = $2 RETURNING attempts",
         )
         .bind(item_id)
+        .bind(tenant_id)
         .fetch_one(uow.conn())
         .await?;
         Ok(row.0)
@@ -227,12 +232,15 @@ pub async fn set_not_indexable(
         // Upsert: an item can resolve to not_indexable before any state row
         // was written for it.
         "INSERT INTO knowledge_index_state (item_id, tenant_id, status, failure_reason, chunk_count) \
-         SELECT id, tenant_id, 'not_indexable', $1, 0 FROM knowledge_items WHERE id = $2 \
+         SELECT id, tenant_id, 'not_indexable', $1, 0 FROM knowledge_items \
+         WHERE id = $2 AND tenant_id = $3 \
          ON CONFLICT (item_id) DO UPDATE SET status = 'not_indexable', failure_reason = $1, \
-           chunk_count = 0, updated_at = now()",
+           chunk_count = 0, updated_at = now() \
+         WHERE knowledge_index_state.tenant_id = $3",
     )
     .bind(reason)
     .bind(item_id)
+    .bind(tenant_id)
     .execute(uow.conn())
     .await?;
     Ok(())

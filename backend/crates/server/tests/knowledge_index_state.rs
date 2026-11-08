@@ -365,3 +365,50 @@ async fn set_not_indexable_sets_status_and_reason() {
         Some("no extractable text")
     );
 }
+
+/// Every index-state function filters by tenant itself, not only through the Unit of Work. Using
+/// another tenant's id with this tenant's item must read nothing and change nothing.
+#[tokio::test]
+async fn another_tenants_id_cannot_read_or_change_an_items_index_state() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    setup(&pool).await;
+
+    let owner = seed_tenant(&pool).await;
+    let other = seed_tenant(&pool).await;
+    let item_id = seed_item(&pool, owner).await;
+
+    knowledge::index_state::upsert_status(&pool, owner, item_id, &IndexStatus::Indexed)
+        .await
+        .unwrap();
+
+    let seen = knowledge::index_state::get_many(&pool, other, &[item_id])
+        .await
+        .unwrap();
+    assert!(
+        seen.is_empty(),
+        "get_many must not return another tenant's state"
+    );
+
+    // None of these may touch the owner's row. Whether each reports an error or not is not the
+    // point, so the results are ignored and the row is checked afterwards.
+    let _ =
+        knowledge::index_state::upsert_status(&pool, other, item_id, &IndexStatus::Pending).await;
+    let _ = knowledge::index_state::set_failed(&pool, other, item_id, "intruder").await;
+    let _ = knowledge::index_state::set_indexed(&pool, other, item_id, "hash", 9).await;
+    let _ = knowledge::index_state::increment_attempts(&pool, other, item_id).await;
+    let _ = knowledge::index_state::set_not_indexable(&pool, other, item_id, "intruder").await;
+
+    let state = knowledge::index_state::get(&pool, owner, item_id)
+        .await
+        .unwrap()
+        .expect("the owner's row must still exist");
+    assert_eq!(state.tenant_id, owner);
+    assert_eq!(state.status, IndexStatus::Indexed.to_string());
+    assert_eq!(state.failure_reason, None);
+    assert_eq!(state.attempts, 0);
+    assert_eq!(state.indexed_content_hash, None);
+    assert_eq!(state.chunk_count, 0);
+}

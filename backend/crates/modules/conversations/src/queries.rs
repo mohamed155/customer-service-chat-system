@@ -1331,11 +1331,11 @@ pub async fn has_system_message_batch(
     tenant_id: Uuid,
     conversation_ids: &[Uuid],
 ) -> sqlx::Result<Vec<(Uuid, bool)>> {
+    if conversation_ids.is_empty() {
+        return Ok(Vec::new());
+    }
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let result: sqlx::Result<Vec<(Uuid, bool)>> = async {
-        if conversation_ids.is_empty() {
-            return Ok(Vec::new());
-        }
         let rows: Vec<(Uuid, bool)> = sqlx::query_as(
             "SELECT conversation_id, EXISTS( \
          SELECT 1 FROM messages m \
@@ -1451,12 +1451,11 @@ pub async fn load_citations_for_messages(
     tenant_id: Uuid,
     message_ids: &[Uuid],
 ) -> sqlx::Result<HashMap<Uuid, Vec<CitationView>>> {
+    if message_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let result: sqlx::Result<HashMap<Uuid, Vec<CitationView>>> = async {
-        if message_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-
         let rows: Vec<(Uuid, Uuid, String, String, f32)> = sqlx::query_as(
             "SELECT message_id, knowledge_item_id, item_title, passage_text, relevance_score \
          FROM message_citations \
