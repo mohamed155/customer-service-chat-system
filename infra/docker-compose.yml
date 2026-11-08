@@ -14,6 +14,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-customer_service}
       POSTGRES_USER: ${POSTGRES_USER:-customer_service}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-customer_service_dev}
+      # Passwords for the app_owner / app_runtime roles (init/02-roles.sh). No defaults on purpose:
+      # when unset the roles are not created. Set them in .env and pass --env-file .env.
+      APP_OWNER_PASSWORD: ${APP_OWNER_PASSWORD:-}
+      APP_RUNTIME_PASSWORD: ${APP_RUNTIME_PASSWORD:-}
     ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
     volumes:
       - postgres-data:/var/lib/postgresql/data

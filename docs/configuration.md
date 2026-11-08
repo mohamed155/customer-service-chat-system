@@ -120,6 +120,21 @@ storage.
 
 ---
 
+## Local development stack (not read by the backend)
+
+Read by `infra/docker-compose.yml` and the scripts mounted into its containers. Defaults are
+the dev values in `.env.example`; start the stack with `--env-file .env` so your `.env` applies.
+
+| Variable | Purpose | Default | Secret |
+|----------|---------|---------|--------|
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Database and bootstrap superuser, read only when the Postgres volume is first created. | `customer_service`, `customer_service`, `customer_service_dev` | yes (password) |
+| `APP_OWNER_PASSWORD` | Password of the `app_owner` role (owns the schema, runs migrations). Read on first volume creation by `infra/postgres/init/02-roles.sh`. When this or `APP_RUNTIME_PASSWORD` is empty, neither role is created. | unset (no roles) | yes |
+| `APP_RUNTIME_PASSWORD` | Password of the `app_runtime` role (DML only, `NOBYPASSRLS`, owns nothing). The backend does not connect as it yet (MOH-31). | unset (no roles) | yes |
+| `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | MinIO root credentials, also used by the bucket bootstrap. | `minioadmin` | yes (password) |
+| `POSTGRES_PORT`, `REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `MAILPIT_SMTP_PORT`, `MAILPIT_UI_PORT` | Host ports (bound to `127.0.0.1`). Override when a default is taken. | `5432`, `6379`, `9000`, `9001`, `1025`, `8025` | no |
+
+Avoid the dollar sign in these values: Compose expands it.
+
 ## Deployment-time variables (not read by the backend)
 
 These variables are consumed by **infrastructure tooling** (Docker Compose,
