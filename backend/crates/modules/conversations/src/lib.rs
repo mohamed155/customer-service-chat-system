@@ -252,7 +252,7 @@ pub async fn get_conversation_history(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(error) => {
             tracing::error!(%error, "failed to begin history transaction");

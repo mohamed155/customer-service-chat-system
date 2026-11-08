@@ -249,7 +249,7 @@ pub async fn put_prompt(
         }
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "put_prompt: begin tx failed");
@@ -537,7 +537,7 @@ pub async fn restore_prompt_version(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "restore_prompt_version: begin tx failed");

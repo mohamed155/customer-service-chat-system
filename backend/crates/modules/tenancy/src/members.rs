@@ -303,7 +303,7 @@ pub async fn list_members(
 
     let limit = params.limit;
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(error = %e, "failed to begin transaction");
@@ -420,7 +420,7 @@ pub async fn update_member(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(error = %e, "failed to begin transaction");
@@ -434,7 +434,7 @@ pub async fn update_member(
         "SELECT pg_advisory_xact_lock(hashtextextended('tenant_members:' || $1::text, 0))",
     )
     .bind(ctx.tenant_id)
-    .execute(&mut *tx)
+    .execute(tx.conn())
     .await
     {
         tracing::error!(error = %e, "failed to take roster lock");
@@ -449,7 +449,7 @@ pub async fn update_member(
     )
     .bind(id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await;
 
     let (membership_id, current_role, current_status, target_user_id) = match target {
@@ -518,7 +518,7 @@ pub async fn update_member(
                   FOR UPDATE",
             )
             .bind(ctx.tenant_id)
-            .fetch_all(&mut *tx)
+            .fetch_all(tx.conn())
             .await
             {
                 Ok(rows) => rows,
@@ -539,7 +539,7 @@ pub async fn update_member(
             .bind(new_role)
             .bind(membership_id)
             .bind(ctx.tenant_id)
-            .execute(&mut *tx)
+            .execute(tx.conn())
             .await
         {
             tracing::error!(error = %e, "failed to update member role");
@@ -583,7 +583,7 @@ pub async fn update_member(
                   FOR UPDATE",
             )
             .bind(ctx.tenant_id)
-            .fetch_all(&mut *tx)
+            .fetch_all(tx.conn())
             .await
             {
                 Ok(rows) => rows,
@@ -604,7 +604,7 @@ pub async fn update_member(
             .bind(new_status)
             .bind(membership_id)
             .bind(ctx.tenant_id)
-            .execute(&mut *tx)
+            .execute(tx.conn())
             .await
         {
             tracing::error!(error = %e, "failed to update member status");
@@ -646,6 +646,10 @@ pub async fn update_member(
         return ApiError::internal_error("Failed to commit transaction").into_response();
     }
 
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let updated = sqlx::query_as::<
         _,
         (
@@ -665,8 +669,9 @@ pub async fn update_member(
     )
     .bind(membership_id)
     .bind(ctx.tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(uow.conn())
     .await;
+    drop(uow);
 
     match updated {
         Ok((id, user_id, display_name, email, role, status, joined_at)) => {

@@ -35,6 +35,19 @@ impl db::TenantScoped for TenantContext {
     }
 }
 
+impl TenantContext {
+    /// Opens this tenant's Unit of Work (`app.tenant_id` set for the transaction), or the 500
+    /// response a handler should return when the database cannot start a transaction.
+    pub async fn unit_of_work(&self, pool: &sqlx::PgPool) -> Result<db::UnitOfWork, Response> {
+        db::UnitOfWork::begin(pool, self).await.map_err(|error| {
+            tracing::error!(%error, "failed to begin tenant unit of work");
+            ApiError::internal_error("Database error")
+                .with_request_id(&self.request_id)
+                .into_response()
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct TenancyConfig {
     pub pool: sqlx::PgPool,

@@ -190,13 +190,17 @@ pub async fn stream_events(
     Extension(principal): Extension<Principal>,
     Extension(runtime): Extension<Arc<presence::Runtime>>,
 ) -> Response {
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let membership_id = match sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(ctx.tenant_id)
     .bind(principal.user_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => mid,
@@ -212,6 +216,7 @@ pub async fn stream_events(
                 .into_response();
         }
     };
+    drop(uow);
 
     let (guard, rx) = runtime.connect(ctx.tenant_id, membership_id);
 

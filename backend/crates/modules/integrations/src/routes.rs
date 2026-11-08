@@ -477,7 +477,7 @@ pub async fn connect_integration(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "connect_integration: begin tx failed");
@@ -823,7 +823,7 @@ pub async fn update_integration_config(
         && serde_json::Value::Object(payload.config.clone()) != connection.config;
     let secrets_changed = !secrets_ref.is_empty();
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "update_integration_config: begin tx failed");
@@ -1054,7 +1054,7 @@ pub async fn disconnect_integration(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "disconnect_integration: begin tx failed");

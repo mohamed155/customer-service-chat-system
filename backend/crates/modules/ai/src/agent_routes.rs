@@ -471,7 +471,7 @@ pub async fn put_agent_config(
         }
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "put_agent_config: begin tx failed");
@@ -578,7 +578,7 @@ pub async fn put_agent_config(
                     "SELECT EXISTS(SELECT 1 FROM agent_avatar_uploads WHERE agent_id = $1 AND deleted_at IS NULL)",
                 )
                 .bind(existing_row.id)
-                .fetch_one(&mut *tx)
+                .fetch_one(tx.conn())
                 .await
                 .unwrap_or(false);
                 if !has_upload {
@@ -600,7 +600,7 @@ pub async fn put_agent_config(
                      WHERE agent_id = $1 AND deleted_at IS NULL",
                 )
                 .bind(existing_row.id)
-                .execute(&mut *tx)
+                .execute(tx.conn())
                 .await
                 {
                     tracing::error!(%e, "put_agent_config: retire avatar upload failed");
@@ -753,7 +753,7 @@ pub async fn put_agent_avatar(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "put_agent_avatar: begin tx failed");
@@ -769,7 +769,7 @@ pub async fn put_agent_avatar(
          WHERE agent_id = $1 AND deleted_at IS NULL",
     )
     .bind(agent_id)
-    .execute(&mut *tx)
+    .execute(tx.conn())
     .await
     {
         tracing::error!(%e, "put_agent_avatar: soft-delete prior failed");
@@ -788,7 +788,7 @@ pub async fn put_agent_avatar(
     .bind(agent_id)
     .bind(&content_type)
     .bind(&body[..])
-    .execute(&mut *tx)
+    .execute(tx.conn())
     .await
     {
         tracing::error!(%e, "put_agent_avatar: insert failed");
@@ -806,7 +806,7 @@ pub async fn put_agent_avatar(
          RETURNING version",
     )
     .bind(agent_id)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.conn())
     .await
     {
         Ok(v) => v,
@@ -998,7 +998,7 @@ pub async fn set_conversation_ai_handling(
                 .into_response();
             }
 
-            let mut tx = match pool.begin().await {
+            let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
                 Ok(tx) => tx,
                 Err(e) => {
                     tracing::error!(%e, "set_ai_handling: begin tx failed");
@@ -1076,7 +1076,7 @@ pub async fn set_conversation_ai_handling(
         "human" => {
             let present_ids = presence.present_membership_ids_async(ctx.tenant_id).await;
 
-            let mut tx = match pool.begin().await {
+            let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
                 Ok(tx) => tx,
                 Err(e) => {
                     tracing::error!(%e, "set_ai_handling: begin tx failed");
@@ -1276,14 +1276,19 @@ pub async fn get_agent_avatar(
         }
     };
 
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let maybe_upload: Option<(Vec<u8>, String)> = sqlx::query_as(
         "SELECT bytes, content_type FROM agent_avatar_uploads \
          WHERE agent_id = $1 AND deleted_at IS NULL",
     )
     .bind(agent_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     .unwrap_or(None);
+    drop(uow);
 
     let (bytes, content_type) = match maybe_upload {
         Some(row) => row,

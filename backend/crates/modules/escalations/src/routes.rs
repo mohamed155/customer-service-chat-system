@@ -114,7 +114,7 @@ pub async fn escalate(
 
     let required_skill_ids = payload.required_skill_ids.unwrap_or_default();
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "escalate: begin tx failed");
@@ -132,7 +132,7 @@ pub async fn escalate(
     )
     .bind(ctx.tenant_id)
     .bind(conversation_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     {
         Ok(Some(c)) => c,
@@ -324,7 +324,7 @@ pub async fn list_queue(
     let limit = params.limit.map(|l| l.clamp(1, 100) as i64).unwrap_or(25);
     let cursor = params.cursor.as_deref();
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "list_queue: begin tx failed");
@@ -355,7 +355,7 @@ pub async fn list_queue(
     .bind(cursor_ts)
     .bind(cursor_id)
     .bind(limit + 1)
-    .fetch_all(&mut *tx)
+    .fetch_all(tx.conn())
     .await;
 
     let rows = match rows {
@@ -460,13 +460,17 @@ pub async fn claim(
     Extension(runtime): Extension<Arc<presence::Runtime>>,
     Path(escalation_id): Path<Uuid>,
 ) -> Response {
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let membership_id = match sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(ctx.tenant_id)
     .bind(principal.user_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => mid,
@@ -482,8 +486,9 @@ pub async fn claim(
                 .into_response();
         }
     };
+    drop(uow);
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "claim: begin tx failed");
@@ -609,13 +614,17 @@ pub async fn get_my_availability(
     ctx: TenantContext,
     Extension(principal): Extension<Principal>,
 ) -> Response {
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let membership_id = match sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(ctx.tenant_id)
     .bind(principal.user_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => mid,
@@ -631,8 +640,9 @@ pub async fn get_my_availability(
                 .into_response();
         }
     };
+    drop(uow);
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "get_availability: begin tx failed");
@@ -697,13 +707,17 @@ pub async fn set_my_availability(
     Extension(runtime): Extension<Arc<presence::Runtime>>,
     ApiJson(payload): ApiJson<SetAvailabilityPayload>,
 ) -> Response {
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let membership_id = match sqlx::query_scalar::<_, Uuid>(
         "SELECT id FROM tenant_memberships \
          WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
     )
     .bind(ctx.tenant_id)
     .bind(principal.user_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => mid,
@@ -719,13 +733,14 @@ pub async fn set_my_availability(
                 .into_response();
         }
     };
+    drop(uow);
 
     let new_state = match payload.state {
         AvailabilityState::Available => "available",
         AvailabilityState::Away => "away",
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "set_availability: begin tx failed");
@@ -784,7 +799,7 @@ pub async fn set_my_availability(
 
     if new_state == "available" && prev_state_str != "available" {
         let present_ids = runtime.present_membership_ids_async(ctx.tenant_id).await;
-        let mut drain_tx = match pool.begin().await {
+        let mut drain_tx = match db::UnitOfWork::begin(&pool, &ctx).await {
             Ok(tx) => tx,
             Err(_) => return Json(json!(availability)).into_response(),
         };
@@ -859,7 +874,7 @@ pub async fn set_my_availability(
     security(("session_cookie" = []))
 )]
 pub async fn list_skills(State(pool): State<PgPool>, ctx: TenantContext) -> Response {
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "list_skills: begin tx failed");
@@ -919,7 +934,7 @@ pub async fn create_skill(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "create_skill: begin tx failed");
@@ -1001,7 +1016,7 @@ pub async fn rename_skill(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "rename_skill: begin tx failed");
@@ -1015,7 +1030,7 @@ pub async fn rename_skill(
         sqlx::query_scalar("SELECT name FROM skills WHERE tenant_id = $1 AND id = $2")
             .bind(ctx.tenant_id)
             .bind(skill_id)
-            .fetch_optional(&mut *tx)
+            .fetch_optional(tx.conn())
             .await
             .unwrap_or(None);
 
@@ -1096,7 +1111,7 @@ pub async fn delete_skill(
     Extension(principal): Extension<Principal>,
     Path(skill_id): Path<Uuid>,
 ) -> Response {
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "delete_skill: begin tx failed");
@@ -1110,7 +1125,7 @@ pub async fn delete_skill(
         sqlx::query_scalar("SELECT name FROM skills WHERE tenant_id = $1 AND id = $2")
             .bind(ctx.tenant_id)
             .bind(skill_id)
-            .fetch_optional(&mut *tx)
+            .fetch_optional(tx.conn())
             .await
             .unwrap_or(None);
 
@@ -1178,15 +1193,20 @@ pub async fn set_member_skills(
     Path(membership_id): Path<Uuid>,
     ApiJson(payload): ApiJson<SetMemberSkillsPayload>,
 ) -> Response {
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let role: Option<String> = sqlx::query_scalar(
         "SELECT role FROM tenant_memberships \
          WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
     )
     .bind(ctx.tenant_id)
     .bind(membership_id)
-    .fetch_optional(&pool)
+    .fetch_optional(uow.conn())
     .await
     .unwrap_or(None);
+    drop(uow);
 
     match role.as_deref() {
         Some("owner" | "admin" | "manager" | "agent") => {}
@@ -1202,7 +1222,7 @@ pub async fn set_member_skills(
         }
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "set_member_skills: begin tx failed");

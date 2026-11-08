@@ -796,7 +796,7 @@ pub async fn update_item(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "update_item: begin tx failed");
@@ -811,7 +811,7 @@ pub async fn update_item(
     )
     .bind(item_id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     {
         Ok(Some(row)) => row,
@@ -1101,7 +1101,7 @@ pub async fn set_item_status(
         Ok(true) => {}
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "set_item_status: begin tx failed");
@@ -1232,7 +1232,7 @@ pub async fn reindex_item(
 ) -> Response {
     let start = std::time::Instant::now();
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "reindex_item: begin tx failed");
@@ -1247,7 +1247,7 @@ pub async fn reindex_item(
     )
     .bind(item_id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     {
         Ok(Some(item)) => item,
@@ -1284,7 +1284,7 @@ pub async fn reindex_item(
     )
     .bind(item_id)
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await;
 
     let already_active = match current_status {
@@ -1744,7 +1744,7 @@ pub async fn create_knowledge_category(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "create_knowledge_category: begin tx failed");
@@ -1840,7 +1840,7 @@ pub async fn rename_knowledge_category(
             .into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "rename_knowledge_category: begin tx failed");
@@ -1880,11 +1880,15 @@ pub async fn rename_knowledge_category(
         }
     };
 
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
     let item_count: i64 = match sqlx::query_scalar(
         "SELECT COUNT(*)::bigint FROM knowledge_items WHERE category_id = $1",
     )
     .bind(category_id)
-    .fetch_one(&pool)
+    .fetch_one(uow.conn())
     .await
     {
         Ok(count) => count,
@@ -1893,6 +1897,7 @@ pub async fn rename_knowledge_category(
             0
         }
     };
+    drop(uow);
 
     if let Err(e) = tx.commit().await {
         tracing::error!(%e, "rename_knowledge_category: commit failed");
@@ -1946,7 +1951,7 @@ pub async fn delete_knowledge_category(
     Path(category_id): Path<Uuid>,
 ) -> Response {
     let start = std::time::Instant::now();
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "delete_knowledge_category: begin tx failed");

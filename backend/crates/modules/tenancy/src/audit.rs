@@ -11,17 +11,46 @@ pub async fn record(
     resource_id: Option<&str>,
     details: &serde_json::Value,
 ) {
-    let result = sqlx::query(
-        "INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, tenant_id, details) VALUES ($1, $2, $3, $4, $5, $6)",
-    )
-    .bind(actor_user_id)
-    .bind(action)
-    .bind(resource_type)
-    .bind(resource_id)
-    .bind(tenant_id)
-    .bind(details)
-    .execute(pool)
-    .await;
+    // A row for a tenant is written inside that tenant's Unit of Work (app.tenant_id set). A row
+    // without a tenant is a platform-level event (MOH-31 cross-tenant path), written on the pool.
+    let result = match tenant_id {
+        Some(tenant) => match db::UnitOfWork::begin_for_tenant(pool, tenant).await {
+            Ok(mut uow) => {
+                match insert_audit(
+                    uow.conn(),
+                    action,
+                    actor_user_id,
+                    tenant_id,
+                    resource_type,
+                    resource_id,
+                    details,
+                )
+                .await
+                {
+                    Ok(()) => uow.commit().await,
+                    Err(e) => Err(e),
+                }
+            }
+            Err(e) => Err(e),
+        },
+        None => {
+            match pool.acquire().await {
+                Ok(mut conn) => {
+                    insert_audit(
+                        &mut conn,
+                        action,
+                        actor_user_id,
+                        tenant_id,
+                        resource_type,
+                        resource_id,
+                        details,
+                    )
+                    .await
+                }
+                Err(e) => Err(e),
+            }
+        }
+    };
 
     if let Err(e) = result {
         error!(
@@ -31,6 +60,29 @@ pub async fn record(
             "failed to record audit log entry"
         );
     }
+}
+
+async fn insert_audit(
+    conn: &mut sqlx::PgConnection,
+    action: &str,
+    actor_user_id: Option<uuid::Uuid>,
+    tenant_id: Option<uuid::Uuid>,
+    resource_type: &str,
+    resource_id: Option<&str>,
+    details: &serde_json::Value,
+) -> sqlx::Result<()> {
+    sqlx::query(
+        "INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, tenant_id, details) VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(actor_user_id)
+    .bind(action)
+    .bind(resource_type)
+    .bind(resource_id)
+    .bind(tenant_id)
+    .bind(details)
+    .execute(conn)
+    .await
+    .map(|_| ())
 }
 
 /// Transactional variant: writes the audit row inside the caller's open

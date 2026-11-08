@@ -178,7 +178,7 @@ pub async fn put_tenant_config(
     let fallbacks_json = serde_json::to_value(&fallbacks_vec).unwrap();
     let capture = payload.capture_content.unwrap_or(false);
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "put_tenant_config: begin tx failed");
@@ -195,7 +195,7 @@ pub async fn put_tenant_config(
          FOR UPDATE",
     )
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     .map_err(|e| {
         tracing::error!(%e, "put_tenant_config: select for update failed");
@@ -223,7 +223,7 @@ pub async fn put_tenant_config(
         .bind(&fallbacks_json)
         .bind(capture)
         .bind(id)
-        .execute(&mut *tx)
+        .execute(tx.conn())
         .await
         .map_err(|e| {
             tracing::error!(%e, "put_tenant_config: update failed");
@@ -244,7 +244,7 @@ pub async fn put_tenant_config(
         .bind(payload.temperature)
         .bind(&fallbacks_json)
         .bind(capture)
-        .fetch_one(&mut *tx)
+        .fetch_one(tx.conn())
         .await
         {
             Ok(id) => id,
@@ -356,7 +356,7 @@ pub async fn delete_tenant_config(
     ctx: TenantContext,
     Extension(principal): Extension<Principal>,
 ) -> Response {
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "delete_tenant_config: begin tx failed");
@@ -372,7 +372,7 @@ pub async fn delete_tenant_config(
          FOR UPDATE",
     )
     .bind(ctx.tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     .unwrap_or(None);
 
@@ -387,7 +387,7 @@ pub async fn delete_tenant_config(
 
     sqlx::query("UPDATE ai_configurations SET deleted_at = now() WHERE id = $1")
         .bind(config_id)
-        .execute(&mut *tx)
+        .execute(tx.conn())
         .await
         .map_err(|e| {
             tracing::error!(%e, "delete_tenant_config: soft delete failed");
@@ -681,7 +681,7 @@ pub async fn put_tenant_credential(
         }
     };
 
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "put_tenant_credential: begin tx failed");
@@ -698,7 +698,7 @@ pub async fn put_tenant_credential(
     )
     .bind(ctx.tenant_id)
     .bind(&provider)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     {
         Ok(row) => row,
@@ -720,7 +720,7 @@ pub async fn put_tenant_credential(
             .bind(&nonce)
             .bind(&key_hint)
             .bind(id)
-            .execute(&mut *tx)
+            .execute(tx.conn())
             .await
             {
                 tracing::error!(%e, "put_tenant_credential: update failed");
@@ -740,7 +740,7 @@ pub async fn put_tenant_credential(
             .bind(&ciphertext)
             .bind(&nonce)
             .bind(&key_hint)
-            .fetch_one(&mut *tx)
+            .fetch_one(tx.conn())
             .await
             {
                 Ok(id) => id,
@@ -817,7 +817,7 @@ pub async fn delete_tenant_credential(
     Extension(principal): Extension<Principal>,
     Path(provider): Path<String>,
 ) -> Response {
-    let mut tx = match pool.begin().await {
+    let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
             tracing::error!(%e, "delete_tenant_credential: begin tx failed");
@@ -834,7 +834,7 @@ pub async fn delete_tenant_credential(
     )
     .bind(ctx.tenant_id)
     .bind(&provider)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     {
         Ok(row) => row,
@@ -857,7 +857,7 @@ pub async fn delete_tenant_credential(
 
     if let Err(e) = sqlx::query("UPDATE ai_credentials SET deleted_at = now() WHERE id = $1")
         .bind(credential_id)
-        .execute(&mut *tx)
+        .execute(tx.conn())
         .await
     {
         tracing::error!(%e, "delete_tenant_credential: soft delete failed");
