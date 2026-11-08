@@ -221,7 +221,7 @@ pub async fn create_instance(
     };
 
     let instance = match queries::insert_instance(
-        &pool,
+        &mut tx,
         ctx.tenant_id,
         &public_id,
         &name,
@@ -382,7 +382,7 @@ pub async fn update_instance(
     };
 
     let updated = match queries::update_instance(
-        &pool,
+        &mut tx,
         ctx.tenant_id,
         instance_id,
         &name,
