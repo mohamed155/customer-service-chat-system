@@ -58,7 +58,7 @@ Splitting `gateway` from `api` early isolates untrusted public traffic (widget, 
 the authenticated dashboard and lets each scale independently, while staying one codebase.
 **ADR-010.**
 
-```
+```text
                    ┌──────────────┐      ┌──────────────┐
  Customers ───────▶│   gateway    │      │  Angular SPA │◀──── Business users
  (widget, WA, TG)  │ (public edge)│      └──────┬───────┘      Platform users
@@ -116,7 +116,7 @@ Rules:
 
 ### 4.1 Backend (Cargo workspace)
 
-```
+```text
 backend/
   Cargo.toml                    # workspace
   crates/
@@ -150,7 +150,7 @@ backend/
 
 ### 4.2 Frontend (Angular)
 
-```
+```text
 frontend/src/app/
   core/          # auth, tenant context, http interceptors, error handling, app shell, global store
   shared/        # design-system wrappers, pipes, directives, utilities (no feature logic)
@@ -316,7 +316,7 @@ Redis is treated as **disposable**: losing it degrades performance, never correc
 
 ### 8.1 Transactional outbox
 
-```
+```sql
 BEGIN;
   UPDATE conversations SET status = 'escalated' ...;
   INSERT INTO outbox (id, tenant_id, type, payload, trace_context) VALUES (...);
@@ -461,7 +461,7 @@ Implemented as a **pipeline of stages** (Chain of Responsibility), each stage a 
 
 ### 11.1 Algorithm
 
-```
+```text
 eligible = agents where tenant matches
                    and status = online
                    and active_count < capacity

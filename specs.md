@@ -324,7 +324,7 @@ Implement:
 
 # Spec 07 — RBAC & Permissions
 
-## Goal** chang**
+## Goal
 
 Implement role-based access control.
 

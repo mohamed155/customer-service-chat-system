@@ -165,18 +165,18 @@ Infrastructure URLs below use the default ports; use your override if you set on
 
 | Component | URL |
 |-----------|-----|
-| Backend API | http://localhost:8080 |
-| Dashboard | http://localhost:4200 |
-| Widget | http://localhost:4201 |
-| Mailpit UI | http://localhost:8025 |
-| MinIO console | http://localhost:9001 |
+| Backend API | <http://localhost:8080> |
+| Dashboard | <http://localhost:4200> |
+| Widget | <http://localhost:4201> |
+| Mailpit UI | <http://localhost:8025> |
+| MinIO console | <http://localhost:9001> |
 
 ## Environment — AI Provider Abstraction
 
 The AI module encrypts provider API keys at rest using AES-256-GCM. The key is
 configured via:
 
-```
+```bash
 APP_AI_KEY_ENCRYPTION_KEY=<base64-of-32-bytes>
 ```
 
@@ -193,7 +193,7 @@ effectively disabled for test helpers).
 The integrations module also encrypts per-connection secrets (webhook signing
 secrets and per-field user secrets) at rest using AES-256-GCM, via:
 
-```
+```bash
 APP_INTEGRATION_SECRETS_KEY=<base64-of-32-bytes>
 ```
 
@@ -223,7 +223,7 @@ or mock in development / CI.
 The knowledge base feature stores uploaded documents in S3-compatible object
 storage. Configure it via these environment variables (all or none):
 
-```
+```bash
 APP_S3_ENDPOINT=http://localhost:9000
 APP_S3_REGION=us-east-1
 APP_S3_BUCKET=app-dev

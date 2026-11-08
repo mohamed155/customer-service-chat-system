@@ -26,7 +26,7 @@
 
 ## 2. Trust boundaries
 
-```
+```text
   Internet (untrusted)                       Our infrastructure                     Third parties
   ───────────────────                        ─────────────────                      ─────────────
   Host websites + widget  ──(B1)──▶  gateway ─┐

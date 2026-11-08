@@ -28,7 +28,7 @@ The decision has to balance these forces:
 
 ### 1. One repository, top-level directories by concern
 
-```
+```text
 backend/      Rust Cargo workspace (ADR-001/002): crates/{server or apps/*, modules/*, shared/*},
               migrations/, rust-toolchain.toml
 frontend/     pnpm workspace: apps/dashboard (Angular), apps/widget (ADR-011), libs/* (only

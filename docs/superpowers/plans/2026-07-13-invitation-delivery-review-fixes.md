@@ -20,6 +20,7 @@
 ### Task 1: Durable Backend Delivery
 
 **Files:**
+
 - Create: `backend/migrations/0021_invitation_delivery_outbox.sql`
 - Modify: `backend/crates/modules/tenancy/src/invitations.rs`
 - Modify: `backend/crates/server/src/main.rs`
@@ -28,6 +29,7 @@
 - Test: `backend/crates/shared/db/tests/schema.rs`
 
 **Interfaces:**
+
 - Produces: `process_invitation_deliveries_once(pool, sender)` and `run_invitation_delivery_worker(pool, sender)`.
 
 - [ ] Add failing tests for blocked transport response latency, seeded queued-event recovery, exact camelCase create/list shape with inviter, and rejected invalid delivery status.
@@ -40,6 +42,7 @@
 ### Task 2: Observable Frontend Delivery
 
 **Files:**
+
 - Modify: `frontend/apps/dashboard/src/app/core/api/tenant-api.models.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/team.store.ts`
 - Modify: `frontend/apps/dashboard/src/app/features/tenant/team/team-list.component.ts`
@@ -49,6 +52,7 @@
 - Test: `frontend/apps/dashboard/src/app/features/tenant/team/team-list.component.spec.ts`
 
 **Interfaces:**
+
 - Consumes: full camelCase `TenantInvitation` in create and list responses.
 - Produces: queued-to-terminal polling that patches list and dialog result.
 
@@ -61,6 +65,7 @@
 ### Task 3: Contract and Focused Verification
 
 **Files:**
+
 - Modify: `specs/011-tenant-team-management/contracts/rest-api.md`
 
 - [ ] Document exact camelCase create/list fields, full inviter shape, outbox recovery, and `emailSent` semantics.

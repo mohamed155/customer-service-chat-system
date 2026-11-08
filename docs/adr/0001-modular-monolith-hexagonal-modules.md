@@ -53,7 +53,7 @@ The backend is **one Rust Cargo workspace** producing one artifact. Bounded cont
 
 ### 3. Hexagonal layering inside each module
 
-```
+```text
 api/             → Axum routes, DTOs, extractors, OpenAPI annotations
 application/     → commands, queries, ports (traits), use-case services
 domain/          → aggregates, value objects, events, invariants (pure Rust)

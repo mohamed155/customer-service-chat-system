@@ -53,6 +53,7 @@ The decision has to balance these forces:
 ### 3. Errors: RFC 9457 Problem Details
 
 - Every error response is `application/problem+json`:
+
   ```json
   {
     "type": "https://docs.example.com/problems/validation-failed",
@@ -65,6 +66,7 @@ The decision has to balance these forces:
     "errors": [{ "field": "email", "code": "invalid_format" }]
   }
   ```
+
 - `code` is a stable, documented machine code; clients branch on `code`, never on `detail` text.
 - **5xx responses never include internal detail.** The handler logs the real error with the
   request ID; the client gets a generic `detail` and the `request_id` to quote to support.
