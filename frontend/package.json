@@ -13,7 +13,7 @@
     "quality": "pnpm ng build dashboard && pnpm ng test dashboard && pnpm test:e2e && pnpm lint && pnpm format:check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "node -e \"try{require('child_process').execSync('lefthook install',{stdio:'ignore'})}catch{console.warn('lefthook install skipped (no git repository); run: pnpm exec lefthook install')}\""
+    "prepare": "node tools/install-git-hooks.mjs || echo lefthook install skipped"
   },
   "dependencies": {
     "@angular/common": "^22.1.6",
