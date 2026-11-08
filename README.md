@@ -12,16 +12,35 @@ widget with seed data.
 - **Node.js** — v22 or later (use <https://nodejs.org> or `nvm`).
 - **pnpm** — `corepack enable && corepack prepare pnpm@10.34.4 --activate`
 - **Docker Desktop** (or Docker Compose standalone) — for PostgreSQL, Redis,
-  Mailhog, and MinIO.
+  Mailpit, and MinIO.
 
 ### 1. Start infrastructure
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d
+docker compose -f infra/docker-compose.yml up -d --wait
 ```
 
-This starts PostgreSQL (port 5432), Redis (6379), Mailhog (1025 SMTP,
-8025 web), and MinIO (9000 S3, 9001 console).
+This starts PostgreSQL with pgvector (port 5432), Redis (6379), Mailpit (1025
+SMTP, 8025 web), and MinIO (9000 S3, 9001 console), and returns once every
+service reports healthy. The `tenants` and `quarantine` buckets are created for
+you. Ports are bound to `127.0.0.1`; if one is taken, set `POSTGRES_PORT`,
+`REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `MAILPIT_SMTP_PORT` or
+`MAILPIT_UI_PORT` (in your shell, or in `.env` with `--env-file .env` after
+step 2). Data lives in named volumes, so it survives
+`docker compose down`.
+
+#### Resetting local data
+
+Postgres reads `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` only when its
+volume is first created, and the extension setup runs only then too. If you change
+those values later, or a first start was interrupted, the `postgres` service stays
+unhealthy (its health check logs in with the configured credentials and checks the
+extensions). Recreate the volume:
+
+```bash
+docker compose -f infra/docker-compose.yml down -v   # DELETES all local Postgres, Redis, MinIO and Mailpit data
+docker compose -f infra/docker-compose.yml up -d --wait
+```
 
 ### 2. Configure environment
 
@@ -103,18 +122,21 @@ The widget dev server is at `http://localhost:4201`.
   pinning `localhost` to HTTPS. A non-zero value is painful to unpin.
 - **API docs**: Swagger UI is at `http://localhost:8080/swagger-ui/` in
   non-production environments without needing `APP_DOCS_ENABLED=true`.
-- **Mailhog**: Outgoing emails appear at `http://localhost:8025`.
+- **Mailpit**: Outgoing emails appear at `http://localhost:8025` (the default;
+  use `MAILPIT_UI_PORT` if you changed it).
 - **MinIO console**: Object storage at `http://localhost:9001` (credentials
   from `.env`).
 
 ### What runs where
+
+Infrastructure URLs below use the default ports; use your override if you set one.
 
 | Component | URL |
 |-----------|-----|
 | Backend API | http://localhost:8080 |
 | Dashboard | http://localhost:4200 |
 | Widget | http://localhost:4201 |
-| Mailhog UI | http://localhost:8025 |
+| Mailpit UI | http://localhost:8025 |
 | MinIO console | http://localhost:9001 |
 
 ## Environment — AI Provider Abstraction

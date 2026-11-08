@@ -1,3 +1,11 @@
+# Local development services (PostgreSQL + pgvector, Redis, MinIO, Mailpit) plus the optional
+# `observability` profile. Staging reuses this file as its base (see docker-compose.staging.yml).
+#
+#   docker compose -f infra/docker-compose.yml up -d --wait
+#
+# Published ports of the four core services are bound to 127.0.0.1 so the dev credentials are not
+# reachable from the network. Image tags are pinned; bump them deliberately.
+
 services:
   postgres:
     # pgvector >= 0.8.0 required for hnsw.iterative_scan support
@@ -6,38 +14,82 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-customer_service}
       POSTGRES_USER: ${POSTGRES_USER:-customer_service}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-customer_service_dev}
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Runs once, on first start of an empty data volume (creates the vector / pg_trgm extensions).
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./postgres/healthcheck.sh:/healthcheck.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      # Authenticates as POSTGRES_USER over TCP and checks the extensions; see the script.
+      test: ["CMD", "/bin/bash", "/healthcheck.sh"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 12
+      start_period: 10s
   redis:
     image: redis:8.10.1
-    ports: ["6379:6379"]
+    ports: ["127.0.0.1:${REDIS_PORT:-6379}:6379"]
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 12
   minio:
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address :9001
-    # Note: the MinIO bucket named by APP_S3_BUCKET must be created manually
-    # (e.g. via mc, the MinIO console at port 9001, or an init script).
-    # The application does not auto-create buckets.
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    ports: ["9000:9000", "9001:9001"]
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
-      retries: 10
-  mailhog:
-    image: mailhog/mailhog:v1.0.1
-    ports: ["1025:1025", "8025:8025"]
+      retries: 12
+      start_period: 5s
+  # Bootstrap: creates the `tenants` and `quarantine` buckets (private), then stays running and
+  # reports healthy. It does not exit, because `up --wait` treats an exited container as a failure.
+  # Same pinned MinIO build as above, which ships `mc` and `curl`. Idempotent.
+  minio-init:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    entrypoint: ["/bin/sh", "/create-buckets.sh"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - ./minio/create-buckets.sh:/create-buckets.sh:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/buckets-ready"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    environment:
+      # Without MP_DATABASE Mailpit keeps messages in memory and the volume below stays empty.
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    volumes:
+      - mailpit-data:/data
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
   otel-collector:
     profiles:
@@ -153,6 +205,10 @@ services:
       - "3200:3200"
 
 volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  mailpit-data:
   prometheus-data:
   grafana-data:
   loki-data:
