@@ -33,8 +33,7 @@ _Development Workflow and Quality Gates_, and each one has a command. Agents run
 | 5. Implement | `speckit.implement` | The code, one task per cycle, with format, lint, build and tests run each time |
 
 Each feature gets its own folder in [`specs/`](specs/), numbered in order (`033-production-hardening`).
-Templates are in `.specify/templates/`. Small fixes and chores that change no behaviour (a typo, a
-dependency bump) don't need a spec, but they still need a Linear issue.
+Templates are in `.specify/templates/`.
 
 ## Trunk-based workflow
 
@@ -145,6 +144,9 @@ An issue is Done only when all of these hold (from the constitution):
 - OpenAPI, ADRs, module READMEs and user docs updated to match the code.
 - Observability (logs, traces, metrics) in place for new flows.
 - Migrations reversible, or explicitly documented as forward-only.
+
+The workflow's last step adds one more: acceptance criteria are verified in the QA environment
+before the issue is Done.
 
 ## Where to read more
 
