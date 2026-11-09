@@ -1,13 +1,48 @@
 # AI Customer Service Platform
 
+A multi-tenant SaaS platform for AI-driven customer service. Businesses (tenants) configure AI
+agents, knowledge bases, prompts and integrations, and serve their own customers through an
+embeddable web chat widget and messaging channels such as WhatsApp. When the AI can't help, the
+conversation is escalated to a human agent. Platform operators manage tenants, billing and system
+health. The full product scope is in the
+[software requirements specification](specs/001-ai-customer-service-platform/spec.md).
+
+## Architecture
+
+The backend is a Rust modular monolith (one deployable, hexagonal modules). The frontend is an
+Angular workspace with a dashboard and a chat widget. PostgreSQL with pgvector, Redis and
+S3-compatible storage sit underneath.
+
+- [System architecture](docs/architecture/system-architecture.md): style, modules, tenancy,
+  security, scalability and the AI runtime
+- [Architecture Decision Records](docs/adr/README.md): the decisions behind it
+- [Constitution](.specify/memory/constitution.md): the rules every change follows
+
+## Repository map
+
+| Path | What it holds |
+| -- | -- |
+| `backend/` | Rust Cargo workspace. `crates/server` is the HTTP binary, `crates/modules/*` the business modules (conversations, knowledge, tenancy, …), `crates/shared/*` shared crates (db, config, kernel, …), `crates/ai-providers` the LLM provider adapters, `migrations/` the SQL migrations |
+| `frontend/` | Angular + pnpm workspace. `apps/dashboard` (tenant and platform admin) and `apps/widget` (embeddable chat), shared code in `libs/`, Playwright tests in `e2e/`. Conventions are in [`frontend/CLAUDE.md`](frontend/CLAUDE.md) |
+| `infra/` | Docker Compose stack for local development and staging, Dockerfiles, and Prometheus, Grafana and Loki configuration |
+| `ops/` | Staging deploy, rollback, backup and restore scripts |
+| `loadtest/` | k6 load tests |
+| `docs/` | Architecture, ADRs, security notes, configuration, deployment and runbooks |
+| `specs/` | One folder per feature (spec, plan, tasks) from the Spec Kit workflow |
+| `.specify/` | Spec Kit setup: the constitution, templates and scripts |
+| `.github/` | CI workflows, Dependabot, the PR template and CODEOWNERS |
+| `justfile` | Recipes for the local services (`just up`, `just down`, …) |
+
+Contributing: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Quickstart
 
-This guide takes you from a clean machine to a running backend, dashboard, and
-widget with seed data.
+This guide takes you from a clean machine to a running backend, dashboard and widget.
 
 ### Prerequisites
 
-- **Rust** — Install via <https://rustup.rs> (stable, minimum 1.84).
+- **Rust** — Install `rustup` from <https://rustup.rs>. The first `cargo` command in `backend/`
+  installs the pinned toolchain from `backend/rust-toolchain.toml` (currently 1.97.0).
 - **sqlx-cli** — `cargo install sqlx-cli --locked`
 - **Node.js** — v22 or later (use <https://nodejs.org> or `nvm`).
 - **pnpm** — `corepack enable && corepack prepare pnpm@10.34.4 --activate`
@@ -47,9 +82,18 @@ are called `customer-service-dev_*` and `just reset` can only ever delete those.
 `just` with no arguments to list the recipes; `.env.example` documents every variable.
 
 If a port is taken or reserved (`just doctor` says which; Windows reserves ranges that
-include 5432 on some machines), uncomment the matching line in `.env` (`POSTGRES_PORT`,
-`REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `MAILPIT_SMTP_PORT`,
-`MAILPIT_UI_PORT`) and update `DATABASE_URL` / `REDIS_URL` to match.
+include 5432 on some machines, and a native PostgreSQL install holds 5432), uncomment the
+matching line in `.env` (`POSTGRES_PORT`, `REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`,
+`MAILPIT_SMTP_PORT`, `MAILPIT_UI_PORT`) and update whichever URL points at that port to match:
+`DATABASE_URL`, `REDIS_URL`, or `APP_S3_ENDPOINT` if you set it.
+Then run `just up` again. On a first run `.env` doesn't exist yet: either run
+`cp .env.example .env` before `just up`, or let `just up` create it (it stops with
+`address already in use`), edit it, and run `just up` again. For example, with PostgreSQL on 5433:
+
+```bash
+POSTGRES_PORT=5433
+DATABASE_URL=postgres://customer_service:customer_service_dev@localhost:5433/customer_service
+```
 
 #### Database roles
 
@@ -89,11 +133,11 @@ openssl rand -base64 32
 # APP_AI_KEY_ENCRYPTION_KEY=<paste here>
 # Also generate the integration secrets key:
 head -c 32 /dev/urandom | base64
-# Paste as:
+# Uncomment the line in .env and paste it there:
 # APP_INTEGRATION_SECRETS_KEY=<paste here>
 ```
 
-Then export the variables:
+Then export the variables (from the repository root):
 
 ```bash
 set -a && source .env && set +a
@@ -105,30 +149,28 @@ set -a && source .env && set +a
 cd backend && sqlx migrate run
 ```
 
-### 4. Seed the database
+If you'd rather not install sqlx-cli, `cargo run -p server -- migrate` (also from `backend/`)
+applies the same migrations.
 
-```bash
-cargo run -p server --bin seed
-```
+### 4. Start the backend
 
-If no seed binary exists, the server auto-seeds on first start with default
-data (admin user, sample tenant, Free plan).
-
-### 5. Start the backend
+From `backend/`:
 
 ```bash
 cargo run -p server
 ```
 
-The API listens on `http://localhost:8080`. Verify:
+The first build takes several minutes. The API listens on `http://localhost:8080`, under
+`/api/v1`. Verify:
 
 ```bash
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8080/health   # liveness
+curl http://localhost:8080/ready    # readiness: database and Redis reachable
 ```
 
-### 6. Start the dashboard
+### 5. Start the dashboard
 
-In a new terminal:
+In a new terminal, from the repository root:
 
 ```bash
 cd frontend && pnpm install --frozen-lockfile && pnpm exec ng serve dashboard
@@ -136,15 +178,31 @@ cd frontend && pnpm install --frozen-lockfile && pnpm exec ng serve dashboard
 
 The dashboard is at `http://localhost:4200`.
 
+### 6. Create your first account
+
+The database starts empty: there is no seed data and no default user. Open
+<http://localhost:4200/auth/signup> and sign up. This creates a workspace (tenant) with you as
+its Owner and signs you in.
+
+Use Chrome or Firefox for this. The session cookie is marked `Secure`, and some Safari versions
+don't keep a `Secure` cookie on `http://localhost`, so you'd land back on the sign-in page.
+
 ### 7. Start the widget
 
-In another terminal:
+In another terminal, from the repository root:
 
 ```bash
-cd frontend && pnpm exec ng serve widget
+cd frontend && pnpm exec ng serve widget --port 4201
 ```
 
-The widget dev server is at `http://localhost:4201`.
+The widget dev server is at `http://localhost:4201`. Without `--port` it also tries 4200, which
+the dashboard already uses.
+
+This server is for working on the widget's UI. The widget calls the public `/widget/v1` API on
+the origin it is served from, and the dev server doesn't forward those calls to the backend, so
+on its own it can't load a widget's configuration or start a conversation. To try the widget end
+to end, create a widget in the dashboard and embed its snippet, as described in the
+[widget quickstart](specs/023-website-chat-widget/quickstart.md).
 
 ### Local development notes
 
@@ -154,8 +212,11 @@ The widget dev server is at `http://localhost:4201`.
   pinning `localhost` to HTTPS. A non-zero value is painful to unpin.
 - **API docs**: Swagger UI is at `http://localhost:8080/swagger-ui/` in
   non-production environments without needing `APP_DOCS_ENABLED=true`.
-- **Mailpit**: Outgoing emails appear at `http://localhost:8025` (the default;
-  use `MAILPIT_UI_PORT` if you changed it).
+- **Email**: Unless both `SMTP_URL` and `SMTP_FROM` are set, the backend doesn't send email: it
+  writes each message to its log instead. Mailpit (web UI at `http://localhost:8025`, or your
+  `MAILPIT_UI_PORT`) catches mail sent to its SMTP port, but the backend's SMTP sender always
+  uses TLS (STARTTLS for `smtp://`, implicit TLS for `smtps://`), and Mailpit doesn't offer TLS
+  in this setup, so the backend can't deliver to it as configured.
 - **MinIO console**: Object storage at `http://localhost:9001` (credentials
   from `.env`).
 
