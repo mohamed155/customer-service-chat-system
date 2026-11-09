@@ -82,9 +82,17 @@ are called `customer-service-dev_*` and `just reset` can only ever delete those.
 `just` with no arguments to list the recipes; `.env.example` documents every variable.
 
 If a port is taken or reserved (`just doctor` says which; Windows reserves ranges that
-include 5432 on some machines), uncomment the matching line in `.env` (`POSTGRES_PORT`,
-`REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `MAILPIT_SMTP_PORT`,
-`MAILPIT_UI_PORT`) and update `DATABASE_URL` / `REDIS_URL` to match.
+include 5432 on some machines, and a native PostgreSQL install holds 5432), uncomment the
+matching line in `.env` (`POSTGRES_PORT`, `REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`,
+`MAILPIT_SMTP_PORT`, `MAILPIT_UI_PORT`) and update `DATABASE_URL` / `REDIS_URL` to match.
+Then run `just up` again. On a first run `.env` doesn't exist yet: either run
+`cp .env.example .env` before `just up`, or let `just up` create it (it stops with
+`address already in use`), edit it, and run `just up` again. For example, with PostgreSQL on 5433:
+
+```bash
+POSTGRES_PORT=5433
+DATABASE_URL=postgres://customer_service:customer_service_dev@localhost:5433/customer_service
+```
 
 #### Database roles
 
