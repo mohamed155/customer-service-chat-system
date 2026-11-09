@@ -1,0 +1,17 @@
+# Configuration for `cargo audit`, which the Backend `verify` job runs in backend/.
+# Every ignore needs a reason and an exit condition. A new advisory still fails the job.
+
+[advisories]
+ignore = [
+    # RUSTSEC-2026-0459: libsqlite3-sys < 0.39.0 (C SQLite CVE-2026-119375).
+    #
+    # Safe to ignore: libsqlite3-sys is in Cargo.lock only, through sqlx-sqlite, which sqlx
+    # resolves for every driver. The backend builds sqlx with the `postgres` driver and no
+    # SQLite feature, so no SQLite code is compiled or linked (`cargo tree -i libsqlite3-sys`
+    # finds nothing).
+    #
+    # Remove this entry when a sqlx release allows libsqlite3-sys >= 0.39.0 (sqlx 0.9.0 is the
+    # latest at the time of writing and pins an older range), then run `cargo update -p
+    # libsqlite3-sys`.
+    "RUSTSEC-2026-0459",
+]
