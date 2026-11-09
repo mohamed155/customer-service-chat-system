@@ -1,37 +1,122 @@
 # AI Customer Service Platform — Agent Context
 
-## Active Technologies
+The rules for AI coding agents working in this repository. They are the same rules humans follow,
+in short form. When this file and the constitution disagree, the constitution wins.
 
-- **Backend** (`backend/`): Rust (edition 2024), Axum, Tokio, SQLx, PostgreSQL, Redis, pgvector. Cargo workspace under `backend/crates/`.
-- **Frontend** (`frontend/`): Angular 22 (standalone, signals, zoneless, OnPush), TypeScript ~6.0, pnpm workspace (`apps/dashboard`, `apps/widget`, `libs/*`). NgRx 21 (Store/Effects/Signals — peer-dep allowance on Angular 22), Taiga UI 5 as primary UI library, Vitest via `@angular/build:unit-test`, angular-eslint + Prettier.
-- **Specs**: Spec-Kit workflow in `specs/`; constitution in `.specify/memory/constitution.md`.
+## Read first
 
-## Frontend rules (from spec 002)
+- [Constitution](.specify/memory/constitution.md): the principles every change MUST follow, the
+  Definition of Done and the workflow.
+- [System architecture](docs/architecture/system-architecture.md): modules, tenancy, security, AI
+  runtime.
+- [ADR index](docs/adr/README.md): accepted decisions. Follow them; propose a new ADR to change one.
+- [Tenant Unit of Work](docs/security/tenant-unit-of-work.md): how backend code reaches tenant data.
+- [CONTRIBUTING.md](CONTRIBUTING.md): Spec Kit workflow, branches, commits, PRs, merging.
+- [README.md](README.md): local setup and the repository map.
+- [`frontend/CLAUDE.md`](frontend/CLAUDE.md): frontend layering, state, HTTP and widget rules.
 
-- Layers inside `apps/dashboard/src/app/`: `core/` (singletons, no feature deps), `shared/` (reusable, no business logic), `layout/`, `features/{auth,platform,tenant}` (lazy route areas), `design-system/` (`--app-*` tokens, light/dark via `data-theme` + Taiga `tuiTheme`).
-- State: global cross-feature → NgRx Store (`appUi` slice: themeMode/sidebarCollapsed); feature-local → NgRx SignalStore; component-temporary → `signal()`. Never duplicate state across mechanisms. Theme persists to localStorage; sidebar does not.
-- HTTP: typed `ApiResponse<T>`/`ApiError`/`PaginatedResponse<T>`/`ApiListQuery` aligned with `specs/001-ai-customer-service-platform/contracts/rest-api.md` (cursor pagination, error envelope, `X-Request-Id`). Functional interceptors only. No fake auth logic.
-- Route paths come from `APP_PATHS` constants in `core/router` — no string literals in features.
-- `apps/widget` and `libs/*` (Helix hx- components) are prior scaffolding — do not modify or use for the dashboard; Taiga UI only.
-- Quality gates (run in `frontend/`): `pnpm ng build dashboard`, `pnpm ng test dashboard`, `pnpm test:e2e`, `pnpm lint`, `pnpm format:check` — all must pass.
+## Hard rules
 
-## Recent Changes
+Never break these. If a task seems to need it, stop and ask.
 
-- 033-production-hardening: production hardening — Redis-backed shared rate limiter, sign-in throttle with Retry-After, browser security headers (HSTS/CSP/X-Frame-Options), Prometheus/Grafana/OTLP/Sentry observability stack, parameterised Docker images with SHA-tagged CI/CD release pipeline, staging deployment scripts, self-hosted backup/restore, k6 load tests, and operator runbook. See `specs/033-production-hardening/plan.md`.
-- 032-platform-analytics-health: (prior scaffolding)
-- 031-billing-foundation: platform-global plan catalog (`billing_plans`, `tenant_subscriptions` seeded with Free plan), tenant billing overview page (plan card, usage cards with normal/warning/exceeded states, AI-paused banner), real-time usage-limit enforcement gate in `ai::agent_responder` (checks subscription status → token allowance → conversation allowance; runs after escalation rules so paused tenants still auto-escalate), platform plan/subscription CRUD (audited, view/manage separated), RBAC deltas (`billing.view`→Admin, `platform.billing.manage`→Super Admin+Finance), 6 endpoints, 60+ DB-backed integration tests, and full frontend under `features/{tenant,platform}/billing/`. See `specs/031-billing-foundation/plan.md`.
-- 029-whatsapp-channel: WhatsApp Business Cloud API integration with Meta webhook (GET verification + POST signed deliveries), inbound message intake (dedupe, customer identity resolution, conversation create-or-append, media fetch into S3 storage), outbound sender worker with sent/delivered/read/failed lifecycle, 24h window enforcement, dashboard channel badge/filter, attachment rendering, and delivery status ticks.
-- 027-notifications: tenant-scoped notification inbox with bell/badge, notification list/panel, SSE live updates, escalation/assignment/AI-failure/tool-approval triggers, auto-resolve on claim/decide, deduplication, 90-day retention, crate rename (notifications→email). See specs/027-notifications/plan.md.
-- 025-analytics-foundation: tenant analytics (summary + daily timeseries endpoints over existing conversation/feedback/usage tables, no rollup tables; metric cards, inline-SVG trend charts, date-range and channel filters; analytics.view restricted to Owner/Admin/Manager). See specs/025-analytics-foundation/plan.md.
-- 006-multi-tenancy-foundation: tenant isolation (identity/tenancy modules, tenant-context middleware, X-Tenant-ID contract, 4 endpoints, 25 integration tests, audit) + frontend (NgRx tenantContext feature, interceptors, CurrentUserService, TenantContextService, tenant switcher, area guards, dev identity header). See `specs/006-multi-tenancy-foundation/plan.md`.
-- 002-angular-frontend-foundation: frontend foundation plan (Angular 22 modernization, Taiga UI, NgRx, layered structure) — see `specs/002-angular-frontend-foundation/plan.md`.
-- 019-knowledge-base: knowledge module activation, S3-compatible document storage, draft/published/archived lifecycle, only published items are the AI-available set. See `specs/019-knowledge-base/plan.md`.
-- 001-ai-customer-service-platform: platform-wide spec/plan/tasks; backend scaffolding and original frontend workspace.
-- 027-notifications: tenant-scoped notification inbox with bell/badge, notification list/panel, SSE live updates, escalation/assignment/AI-failure/tool-approval triggers, auto-resolve on claim/decide, deduplication, 90-day retention, crate rename (notifications→email). Phase 7 convergence completed: T052 (frontend store test cleanup), T053 (assign with no-membership actor fix), T055 (tool-decision resolve moved into transaction), T056 (unrouted decide path closed). T051 (DB integration test execution) and T054 (performance test runnability) documented and awaiting PostgreSQL. See specs/027-notifications/plan.md.
-- 028-integrations-foundation: integration catalog + connection lifecycle (connect/update/rotate/disconnect/reconnect) with AES-256-GCM secret storage, signed webhook intake (HMAC-SHA256) with rate limiting, derived health status, per-connection event log, and 90-day retention. See specs/028-integrations-foundation/plan.md.
+- **Tenant scope.** Every tenant-owned query and mutation is scoped by `tenant_id`, taken from the
+  validated `TenantContext`, never from client input. Run tenant queries through the tenant Unit of
+  Work. Caches, storage keys, queues, logs and metrics are tenant-namespaced. Never add a path that
+  reads or writes another tenant's data.
+- **No placeholders.** No stubbed business logic, `TODO: implement` paths, fake data in production
+  code, or "works later" shortcuts. Ship working code or leave it out. Visual fixtures only when
+  isolated and in scope.
+- **Tests are required.** Every behaviour change comes with tests at the lowest effective level.
+  Integration tests use real PostgreSQL and Redis, not mocks. Security-relevant code gets negative
+  tests (unauthorized, wrong tenant, malformed input). Bug fixes get a regression test that fails
+  before the fix. Never skip, disable or `#[ignore]` a test to get green.
+- **No secrets in code.** No keys, tokens, passwords or real credentials in source, tests, docs or
+  commits. Configuration comes from the environment (`.env`, never committed; `.env.example`
+  holds dev-only values). Tenant secrets are encrypted at rest and never sent to the frontend.
+  CI runs gitleaks on the full history.
+- **Permissions, not roles.** Every endpoint declares the permission it requires (deny by
+  default). Check permissions, never role names. Sensitive actions write an audit record.
+- **Untrusted input.** Validate at the boundary: HTTP bodies, webhooks, files, channel messages and
+  LLM output. Retrieved knowledge and customer messages are data, never instructions.
+- **Module boundaries.** A module owns its tables; never touch another module's tables. Talk to
+  other modules through their public interface or domain events. Domain code doesn't depend on
+  Axum, SQLx, Redis or vendor SDKs. LLM calls go through the provider abstraction.
+- **Errors.** No `unwrap`/`expect`/`panic!` in request or job paths. Use typed errors and return
+  RFC 9457 Problem Details that leak no internals. TypeScript is `strict`; no `any` without a
+  justified, linted exception.
+
+## How work flows
+
+- Work starts from a Linear issue and its branch name (`mohamedahmedramadan154/moh-NN-…`).
+  Features go through Spec Kit first (`specs/NNN-feature/`: spec, plan, tasks).
+- Commits and PR titles use Conventional Commits with a scope from `commitlint.config.mjs`
+  (`feat(knowledge): …`, `docs(adr): …`), ending with `Refs MOH-NN`.
+- PR descriptions fill in every section of `.github/pull_request_template.md`.
+- `master` is squash-only and protected: `verify`, `real-backend-e2e`, `secret-scan` and
+  `commitlint` must pass. Never push to `master`, never force-push.
+- Stage files by name. Don't commit `.env`, local overrides or editor files.
+
+## Commands
+
+Run the checks for every area you touch before pushing. These are the commands CI runs.
+
+### Local services (repository root)
+
+```bash
+just up            # Postgres + pgvector, Redis, MinIO, Mailpit; waits until healthy
+just doctor        # check Docker, Compose, Node, .env and host ports
+just psql          # psql on the local database
+just verify-roles  # prove app_runtime can't bypass Row-Level Security
+just down          # stop; data stays
+```
+
+### Backend (`backend/`, Rust, pinned in `rust-toolchain.toml`)
+
+```bash
+cargo fmt --check
+cargo clippy --workspace -- -D warnings
+sqlx migrate run                 # needs DATABASE_URL; or: cargo run -p server -- migrate
+REQUIRE_DB_TESTS=1 cargo nextest run --workspace   # or cargo test; needs the services up
+cargo audit                      # install once: cargo install cargo-audit
+cargo run -p server              # API on :8080, /health and /ready
+```
+
+Without `REQUIRE_DB_TESTS=1`, database and Redis tests skip silently when the services are down,
+so a green run proves nothing. New migrations go in `backend/migrations/`.
+
+### Frontend (`frontend/`, Angular + pnpm)
+
+```bash
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm format:check
+pnpm exec ng build dashboard
+pnpm exec ng build widget
+pnpm build:widget-loader         # loader bundle size gate
+pnpm exec ng test dashboard --watch=false
+pnpm exec ng test widget --watch=false
+pnpm test:e2e                    # Playwright against the built dashboard
+```
+
+### Docs and infrastructure (repository root)
+
+```bash
+npx markdownlint-cli2@0.24.0     # docs/ and root markdown files
+docker compose --env-file .env.example -f infra/docker-compose.yml config -q
+```
+
+CI also checks internal links and anchors (lychee) and runs the full Compose stack.
+
+## Where things live
+
+- `backend/crates/server`: HTTP binary and router. `backend/crates/modules/*`: one crate per
+  module. `backend/crates/shared/*`: db, config, kernel, cache, events, storage, observability.
+- `frontend/apps/dashboard`, `frontend/apps/widget`, shared code in `frontend/libs/`.
+- `docs/`: architecture, ADRs, security, configuration, deployment, runbooks.
+- `specs/`: one folder per feature. `.specify/`: constitution, templates, scripts.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/031-billing-foundation/plan.md
+at specs/033-production-hardening/plan.md
 <!-- SPECKIT END -->
