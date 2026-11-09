@@ -6,8 +6,8 @@ page covers the day-to-day workflow.
 
 ## Workflow
 
-1. **Start from a Linear issue.** Work is spec-driven: spec → clarify → plan → tasks →
-   implement (see `specs/` and the constitution's _Development Workflow and Quality Gates_).
+1. **Start from a Linear issue.** Features go through the
+   [Spec Kit workflow](#spec-kit-workflow) first: specify → clarify → plan → tasks → implement.
 2. **Branch** from `master` using the Linear branch name (see
    [Branch names](#branch-names)). Keep branches short-lived.
 3. **Commit** with [Conventional Commits](#commit-messages)
@@ -17,6 +17,24 @@ page covers the day-to-day workflow.
 5. **Open a pull request.** The PR template
    ([`.github/pull_request_template.md`](.github/pull_request_template.md)) loads
    automatically.
+
+## Spec Kit workflow
+
+Every feature is specified before it is built. The steps come from the constitution's
+_Development Workflow and Quality Gates_, and each one has a command. Agents run them as
+`/speckit.<step>` (OpenCode) or `/speckit-<step>` (Claude Code skills in `.claude/skills/`):
+
+| Step | Command | Output |
+| -- | -- | -- |
+| 1. Specify | `speckit.specify` | `specs/NNN-feature/spec.md`: problem, scope, non-goals, roles, tenancy and security impact, data, API, UX states, acceptance criteria |
+| 2. Clarify | `speckit.clarify` | Open questions answered and recorded in the spec, before planning |
+| 3. Plan | `speckit.plan` | `plan.md` with a Constitution Check against every principle; deviations listed under Complexity Tracking |
+| 4. Tasks | `speckit.tasks` | `tasks.md`: small, ordered tasks, each independently verifiable and with its tests |
+| 5. Implement | `speckit.implement` | The code, one task per cycle, with format, lint, build and tests run each time |
+
+Each feature gets its own folder in [`specs/`](specs/), numbered in order (`033-production-hardening`).
+Templates are in `.specify/templates/`. Small fixes and chores that change no behaviour (a typo, a
+dependency bump) don't need a spec, but they still need a Linear issue.
 
 ## Trunk-based workflow
 
@@ -112,8 +130,21 @@ constitution's Definition of Done, so reviewers and authors check the same thing
 - Tests added, including negative and cross-tenant isolation tests
 - Docs and ADRs updated
 
-Mark an item `N/A` with a one-line reason if it does not apply. At least one approval is
-required, and every reviewer confirms constitution compliance before approving.
+Mark an item `N/A` with a one-line reason if it does not apply. The constitution asks for at
+least one approval, and every reviewer confirms constitution compliance before approving. While
+there is a single maintainer the ruleset does not enforce approvals (see [Merging](#merging)).
+
+## Definition of Done
+
+An issue is Done only when all of these hold (from the constitution):
+
+- Acceptance criteria verified.
+- Tests added and passing; coverage of new domain logic at least 80% of lines.
+- Tenant-isolation and authorization tests present where tenant data or permissions are touched.
+- No new lint warnings and no unresolved review comments.
+- OpenAPI, ADRs, module READMEs and user docs updated to match the code.
+- Observability (logs, traces, metrics) in place for new flows.
+- Migrations reversible, or explicitly documented as forward-only.
 
 ## Where to read more
 
