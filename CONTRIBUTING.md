@@ -154,4 +154,5 @@ before the issue is Done.
   Definition of Done
 - [`frontend/CLAUDE.md`](frontend/CLAUDE.md): frontend conventions
 - [`README.md`](README.md): local setup and quickstart
-- [`docs/`](docs/): configuration, deployment, runbook, backup/restore
+- [`docs/`](docs/README.md): architecture, ADRs, specs index, runbooks (deployment, backup/restore, operations), security, configuration
+- [SECURITY.md](SECURITY.md): reporting a vulnerability

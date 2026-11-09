@@ -62,4 +62,4 @@ groups:
             The RPO objective is 24 hours. The backup job may have failed or
             been stopped. Check the backup script logs and the off-host storage
             destination.
-          runbook_url: "https://github.com/anomalyco/customer-service-chat-system/blob/main/docs/backup-restore.md"
+          runbook_url: "https://github.com/mohamed155/customer-service-chat-system/blob/master/docs/runbooks/backup-restore.md"

@@ -27,7 +27,7 @@ S3-compatible storage sit underneath.
 | `infra/` | Docker Compose stack for local development and staging, Dockerfiles, and Prometheus, Grafana and Loki configuration |
 | `ops/` | Staging deploy, rollback, backup and restore scripts |
 | `loadtest/` | k6 load tests |
-| `docs/` | Architecture, ADRs, security notes, configuration, deployment and runbooks |
+| `docs/` | Architecture, ADRs, specs index, runbooks, security notes and the configuration reference; start at [`docs/README.md`](docs/README.md) |
 | `specs/` | One folder per feature (spec, plan, tasks) from the Spec Kit workflow |
 | `.specify/` | Spec Kit setup: the constitution, templates and scripts |
 | `.github/` | CI workflows, Dependabot, the PR template and CODEOWNERS |

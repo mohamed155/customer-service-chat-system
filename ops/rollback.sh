@@ -112,7 +112,7 @@ if [[ -n "$CURRENT_SHA" ]] && ! $DRY_RUN; then
         echo "$MIGRATIONS" | while IFS= read -r m; do echo "  - $m"; done
         echo ""
         echo "Rolling back past these migrations may cause data loss or"
-        echo "schema incompatibility. See docs/backup-restore.md for guidance"
+        echo "schema incompatibility. See docs/runbooks/backup-restore.md for guidance"
         echo "on destructive migrations."
 
         if ! $FORCE; then
