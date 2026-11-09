@@ -199,7 +199,7 @@ tokens.
 **Negative and costs**
 
 - Two new tables, a refresh endpoint, a JWKS endpoint, and key-rotation runbook steps.
-- Ed25519 private keys need secure storage and a rotation procedure (documented in `runbook.md`
+- Ed25519 private keys need secure storage and a rotation procedure (documented in `docs/runbooks/operations.md`
   when implemented).
 - The SPA must deal with refresh races, and the 10-second reuse grace window has to be tested
   carefully, since it trades a little theft detection for usability.

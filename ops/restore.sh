@@ -17,7 +17,7 @@ set -euo pipefail
 #   DATABASE_URL  (alternative to individual PG vars, used for migration runner)
 #
 # References:
-#   docs/backup-restore.md — full restore procedure and destructive-migration path
+#   docs/runbooks/backup-restore.md — full restore procedure and destructive-migration path
 
 readonly SCRIPT_NAME=$(basename "$0")
 

@@ -88,7 +88,7 @@ Five common operational tasks for the AI Customer Service Platform.
 4. **If migrations did run**, the rollback is more involved:
    - The deployment script (`ops/rollback.sh`) **refuses by default** when
      migrations intervened. Use `--force` only after reading
-     `docs/backup-restore.md` — a destructive migration may have removed
+     `docs/runbooks/backup-restore.md` — a destructive migration may have removed
      columns or data that the old code expects.
    - If the migration was additive only (new columns/tables), rollback is
      safe and you can proceed.
