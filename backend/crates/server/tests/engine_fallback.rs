@@ -98,7 +98,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 }
 
 async fn setup(pool: &sqlx::PgPool) {
-    db::run_migrations(pool).await.unwrap();
+    db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE ai_generations, ai_usage_records, ai_credentials, ai_configurations, \
          agent_configurations, agent_avatar_uploads, \
@@ -107,7 +107,7 @@ async fn setup(pool: &sqlx::PgPool) {
          outbox_events, audit_logs, tenant_invitations, tenant_memberships, tenants, users \
          RESTART IDENTITY CASCADE",
     )
-    .execute(pool)
+    .execute(&db::testing::owner_pool())
     .await
     .expect("failed to reset test tables");
 }

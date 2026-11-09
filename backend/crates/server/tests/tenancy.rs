@@ -186,7 +186,7 @@ mod tests {
     #[tokio::test]
     async fn own_tenant_returns_200_with_tenant_summary() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_id = seed_tenant(&pool, None).await;
@@ -211,7 +211,7 @@ mod tests {
     #[tokio::test]
     async fn foreign_tenant_returns_403_unauthorized() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_a = seed_tenant(&pool, None).await;
@@ -237,7 +237,7 @@ mod tests {
     #[tokio::test]
     async fn nonexistent_tenant_returns_403_byte_identical() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_a = seed_tenant(&pool, None).await;
@@ -295,7 +295,7 @@ mod tests {
     #[tokio::test]
     async fn missing_x_tenant_id_returns_400() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
 
@@ -317,7 +317,7 @@ mod tests {
     #[tokio::test]
     async fn malformed_x_tenant_id_returns_400() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
 
@@ -340,7 +340,7 @@ mod tests {
     #[tokio::test]
     async fn suspended_tenant_tenant_user_returns_403() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_id = seed_tenant(&pool, Some("suspended")).await;
@@ -366,7 +366,7 @@ mod tests {
     #[tokio::test]
     async fn suspended_tenant_platform_user_returns_200() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let tenant_id = seed_tenant(&pool, Some("suspended")).await;
@@ -390,7 +390,7 @@ mod tests {
     #[tokio::test]
     async fn revoked_membership_returns_403() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_id = seed_tenant(&pool, None).await;
@@ -422,7 +422,7 @@ mod tests {
     #[tokio::test]
     async fn no_principal_returns_401() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let mut res = send_request(
             pool.clone(),
@@ -442,7 +442,7 @@ mod tests {
     #[tokio::test]
     async fn denial_writes_access_denied_audit_row() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_a = seed_tenant(&pool, None).await;
@@ -500,7 +500,7 @@ mod tests {
     #[tokio::test]
     async fn platform_tenants_directory_returns_page_for_platform_user() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let _tenant_a = seed_tenant(&pool, Some("active")).await;
@@ -526,7 +526,7 @@ mod tests {
     #[tokio::test]
     async fn platform_tenants_directory_excludes_deleted() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
         // Use unique names so we can filter to just our seeded rows,
@@ -585,7 +585,7 @@ mod tests {
     #[tokio::test]
     async fn platform_tenants_directory_q_filters_by_name_or_slug() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
         // Use unique slugs so re-runs don't collide with the unique constraint
@@ -637,7 +637,7 @@ mod tests {
     #[tokio::test]
     async fn platform_tenants_directory_tenant_user_returns_403() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_id = seed_tenant(&pool, None).await;
@@ -661,7 +661,7 @@ mod tests {
     #[tokio::test]
     async fn platform_tenants_directory_no_principal_returns_401() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let mut res = send_request(
             pool.clone(),
@@ -680,7 +680,7 @@ mod tests {
     #[tokio::test]
     async fn platform_tenants_switch_returns_200_and_tenant_summary() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let tenant_id = seed_tenant(&pool, Some("active")).await;
@@ -704,7 +704,7 @@ mod tests {
     #[tokio::test]
     async fn platform_tenants_switch_writes_audit_row() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let tenant_id = seed_tenant(&pool, Some("active")).await;
@@ -759,7 +759,7 @@ mod tests {
     #[tokio::test]
     async fn platform_tenants_switch_to_suspended_returns_200() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let tenant_id = seed_tenant(&pool, Some("suspended")).await;
@@ -783,7 +783,7 @@ mod tests {
     #[tokio::test]
     async fn platform_tenants_switch_nonexistent_returns_403() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let nonexistent_id = uuid::Uuid::new_v4();
@@ -810,7 +810,7 @@ mod tests {
     #[tokio::test]
     async fn platform_tenants_switch_tenant_user_returns_403() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_id = seed_tenant(&pool, Some("active")).await;
@@ -839,7 +839,7 @@ mod tests {
     #[tokio::test]
     async fn me_returns_200_with_me_response_for_platform_user() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let tenant_id = seed_tenant(&pool, None).await;
@@ -874,7 +874,7 @@ mod tests {
     #[tokio::test]
     async fn me_returns_200_with_me_response_for_tenant_user() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_id = seed_tenant(&pool, None).await;
@@ -907,7 +907,7 @@ mod tests {
     #[tokio::test]
     async fn me_excludes_soft_deleted_memberships() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_active = seed_tenant(&pool, None).await;
@@ -942,7 +942,7 @@ mod tests {
     #[tokio::test]
     async fn me_returns_401_without_principal() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let mut res = send_request(
             pool.clone(),
@@ -961,7 +961,7 @@ mod tests {
     #[tokio::test]
     async fn me_ignores_x_tenant_id() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, Some("super_admin")).await;
 

@@ -320,7 +320,7 @@ async fn drain_pending_notifications(state: &AppState) {
 #[tokio::test]
 async fn list_returns_newest_first() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -393,7 +393,7 @@ async fn list_returns_newest_first() {
 #[tokio::test]
 async fn cursor_pagination_returns_all_pages() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -482,7 +482,7 @@ async fn cursor_pagination_returns_all_pages() {
 #[tokio::test]
 async fn unread_count_counts_only_unread() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -562,7 +562,7 @@ async fn unread_count_counts_only_unread() {
 #[tokio::test]
 async fn mark_read_is_idempotent() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -621,7 +621,7 @@ async fn mark_read_is_idempotent() {
 #[tokio::test]
 async fn mark_all_read_returns_count_and_is_idempotent() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -682,7 +682,7 @@ async fn mark_all_read_returns_count_and_is_idempotent() {
 #[tokio::test]
 async fn reading_another_members_notification_returns_404_not_403() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_a = seed_user(&pool, None).await;
@@ -724,7 +724,7 @@ async fn reading_another_members_notification_returns_404_not_403() {
 #[tokio::test]
 async fn tenant_isolation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
@@ -768,7 +768,7 @@ async fn tenant_isolation() {
 #[tokio::test]
 async fn deactivated_membership_cannot_read_inbox() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -797,7 +797,7 @@ async fn deactivated_membership_cannot_read_inbox() {
 #[tokio::test]
 async fn all_five_tenant_roles_can_access_inbox() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
 
@@ -868,7 +868,7 @@ async fn all_five_tenant_roles_can_access_inbox() {
 #[ignore]
 async fn list_under_one_second_with_one_thousand_notifications() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -929,7 +929,7 @@ async fn list_under_one_second_with_one_thousand_notifications() {
 #[tokio::test]
 async fn tool_approval_notifies_conversations_manage_holders() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, None).await;
@@ -999,7 +999,7 @@ async fn tool_approval_notifies_conversations_manage_holders() {
 #[tokio::test]
 async fn tool_decision_resolves_other_holders_notifications() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let owner_user = seed_user(&pool, None).await;
@@ -1080,7 +1080,7 @@ async fn tool_decision_resolves_other_holders_notifications() {
 #[tokio::test]
 async fn multiple_ai_failures_within_15_min_produce_one_notification() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, None).await;
@@ -1169,7 +1169,7 @@ async fn multiple_ai_failures_within_15_min_produce_one_notification() {
 #[tokio::test]
 async fn ai_failure_in_later_bucket_produces_second_notification() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, None).await;
@@ -1249,7 +1249,7 @@ async fn ai_failure_in_later_bucket_produces_second_notification() {
 #[tokio::test]
 async fn assignment_notifies_only_new_assignee() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let assigner = seed_actor(&pool, tenant_id, "assign-notify@test.com", "admin").await;
@@ -1298,7 +1298,7 @@ async fn assignment_notifies_only_new_assignee() {
 #[tokio::test]
 async fn self_assignment_notifies_nobody() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let actor = seed_actor(&pool, tenant_id, "self-assign@test.com", "admin").await;
@@ -1338,7 +1338,7 @@ async fn self_assignment_notifies_nobody() {
 #[tokio::test]
 async fn escalation_routing_produces_one_notification() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let agent = seed_actor(&pool, tenant_id, "esc-routed@test.com", "agent").await;
@@ -1422,7 +1422,7 @@ async fn escalation_routing_produces_one_notification() {
 #[tokio::test]
 async fn queued_escalation_fans_out_to_manage_holders() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let agent_a = seed_actor(&pool, tenant_id, "queued-a@test.com", "agent").await;
@@ -1483,7 +1483,7 @@ async fn queued_escalation_fans_out_to_manage_holders() {
 #[tokio::test]
 async fn claiming_resolves_others_rows() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let agent_a = seed_actor(&pool, tenant_id, "claim-other-a@test.com", "agent").await;
@@ -1577,7 +1577,7 @@ async fn claiming_resolves_others_rows() {
 #[tokio::test]
 async fn auto_drain_resolves_others_rows() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let agent_a = seed_actor(&pool, tenant_id, "drain-other-a@test.com", "agent").await;
@@ -1685,7 +1685,7 @@ async fn auto_drain_resolves_others_rows() {
 #[tokio::test]
 async fn replay_dedup_produces_one_row_per_recipient() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let recipient = seed_actor(&pool, tenant_id, "dedup-rec@test.com", "agent").await;
@@ -1755,7 +1755,7 @@ async fn replay_dedup_produces_one_row_per_recipient() {
 #[tokio::test]
 async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -1855,7 +1855,7 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
 #[tokio::test]
 async fn assignment_by_actor_without_membership_notifies_assignee() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let assignee_user_id = seed_user(&pool, None).await;

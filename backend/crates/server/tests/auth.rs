@@ -242,7 +242,7 @@ mod tests {
     #[tokio::test]
     async fn login_success_sets_session_cookie_and_cookie_authenticates_me() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let email = unique_test_email();
         let user_id =
@@ -297,7 +297,7 @@ mod tests {
     #[tokio::test]
     async fn login_response_matches_me_with_membership_permissions() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
         let email = unique_test_email();
         let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
         let tenant_id: uuid::Uuid =
@@ -336,7 +336,7 @@ mod tests {
     #[tokio::test]
     async fn invalid_login_paths_return_byte_identical_401_bodies() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let active_email = unique_test_email();
         seed_user_with_password(&pool, &active_email, None, "Passw0rd!").await;
@@ -379,7 +379,7 @@ mod tests {
     #[tokio::test]
     async fn login_validation_errors_return_400() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let requests = [
             Request::builder()
@@ -417,7 +417,7 @@ mod tests {
     #[tokio::test]
     async fn login_ignores_x_tenant_id_and_refreshes_existing_session() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let email = unique_test_email();
         seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
@@ -454,7 +454,7 @@ mod tests {
     #[tokio::test]
     async fn login_attempts_write_audit_rows() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let email = unique_test_email();
         let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
@@ -485,7 +485,7 @@ mod tests {
     #[tokio::test]
     async fn invalid_session_cookies_return_401() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let config = test_config();
         let email = unique_test_email();
@@ -513,7 +513,7 @@ mod tests {
     #[tokio::test]
     async fn soft_deleted_user_token_returns_401() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let config = test_config();
         let email = unique_test_email();
@@ -536,7 +536,7 @@ mod tests {
     #[tokio::test]
     async fn production_ignores_dev_header_but_accepts_valid_cookie() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let mut config = test_config();
         config.environment = config::Environment::Production;
@@ -565,7 +565,7 @@ mod tests {
     #[tokio::test]
     async fn csrf_origin_policy_blocks_foreign_state_changing_requests_only() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let mut config = test_config();
         config.cors_allowed_origins = vec!["https://dashboard.example".into()];
@@ -628,7 +628,7 @@ mod tests {
     #[tokio::test]
     async fn logout_revokes_cookie_session_and_clears_cookie() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let email = unique_test_email();
         let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
@@ -684,7 +684,7 @@ mod tests {
     #[tokio::test]
     async fn logout_requires_principal() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let mut res = send_request(
             pool.clone(),
@@ -704,7 +704,7 @@ mod tests {
     #[tokio::test]
     async fn logout_with_dev_header_clears_cookie_without_revocation() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let email = unique_test_email();
         let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
@@ -741,7 +741,7 @@ mod tests {
     #[tokio::test]
     async fn signup_creates_tenant_owner_and_session() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let email = unique_test_email();
         let mut res = send_request(
@@ -795,7 +795,7 @@ mod tests {
     #[tokio::test]
     async fn signup_disambiguates_colliding_slugs() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let first = send_request(
             pool.clone(),
@@ -836,7 +836,7 @@ mod tests {
     #[tokio::test]
     async fn signup_rejects_duplicate_email_with_409() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let email = unique_test_email();
         seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
@@ -855,7 +855,7 @@ mod tests {
     #[tokio::test]
     async fn signup_validation_errors_return_422_with_field_details() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let mut res = send_request(
             pool.clone(),
@@ -881,7 +881,7 @@ mod tests {
     #[tokio::test]
     async fn signup_malformed_json_returns_400() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let mut res = send_request(
             pool.clone(),

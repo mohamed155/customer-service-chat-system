@@ -196,7 +196,7 @@ fn assert_no_plaintext_in(value: &Value, surface: &str) {
 #[tokio::test]
 async fn secret_never_appears_in_connect_response() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -229,7 +229,7 @@ async fn secret_never_appears_in_connect_response() {
 #[tokio::test]
 async fn secret_never_appears_in_detail_response() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -275,7 +275,7 @@ async fn secret_never_appears_in_detail_response() {
 #[tokio::test]
 async fn secret_never_appears_in_list_response() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -312,7 +312,7 @@ async fn secret_never_appears_in_list_response() {
 #[tokio::test]
 async fn secret_never_appears_in_events_response() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -353,7 +353,7 @@ async fn secret_never_appears_in_events_response() {
 #[tokio::test]
 async fn secret_never_appears_in_audit_logs_details() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -438,7 +438,7 @@ async fn secret_never_appears_in_audit_logs_details() {
 #[tokio::test]
 async fn secret_ciphertext_does_not_contain_plaintext_bytes() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;

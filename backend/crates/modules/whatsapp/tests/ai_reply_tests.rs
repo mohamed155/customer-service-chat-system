@@ -46,9 +46,7 @@ async fn get_pool() -> Option<PgPool> {
 }
 
 async fn setup(pool: &PgPool) {
-    db::run_migrations(pool)
-        .await
-        .expect("run_migrations should succeed");
+    db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE \
          integration_events, integration_webhook_deliveries, \
@@ -60,7 +58,7 @@ async fn setup(pool: &PgPool) {
          agent_configurations \
          RESTART IDENTITY CASCADE",
     )
-    .execute(pool)
+    .execute(&db::testing::owner_pool())
     .await
     .expect("truncate test tables");
 }

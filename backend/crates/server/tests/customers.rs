@@ -95,12 +95,12 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 }
 
 async fn setup(pool: &sqlx::PgPool) {
-    db::run_migrations(pool).await.unwrap();
+    db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE customer_channel_identifiers, customers, conversations, outbox_events, \
          audit_logs, tenant_invitations, tenant_memberships, tenants, users RESTART IDENTITY CASCADE",
     )
-    .execute(pool)
+    .execute(&db::testing::owner_pool())
     .await
     .expect("failed to reset customer test tables");
 }

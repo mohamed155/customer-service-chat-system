@@ -171,9 +171,7 @@ async fn response_bytes(resp: Response) -> Vec<u8> {
 // ---------------------------------------------------------------------------
 
 async fn setup(pool: &sqlx::PgPool) {
-    db::run_migrations(pool)
-        .await
-        .expect("run_migrations should succeed");
+    db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE \
          integration_events, integration_webhook_deliveries, \
@@ -184,7 +182,7 @@ async fn setup(pool: &sqlx::PgPool) {
          whatsapp_message_meta, outbox_events \
          RESTART IDENTITY CASCADE",
     )
-    .execute(pool)
+    .execute(&db::testing::owner_pool())
     .await
     .expect("truncate test tables");
 }

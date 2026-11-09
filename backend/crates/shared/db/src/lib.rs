@@ -8,6 +8,7 @@
 //! # Public Interfaces
 //! - `lazy_pool(&str, u32, Duration) -> PgPool`
 //! - `run_migrations(&pool)`
+//! - `testing` (schema-owner connection for test setup: migrations, table resets)
 //! - `UnitOfWork` / `TenantScoped` (tenant transaction that sets `app.tenant_id`, see `tenant`)
 //! - `PgHealthCheck`
 //!
@@ -18,6 +19,7 @@
 //! - `PgHealthCheck` is one of many possible `HealthCheck` implementations.
 
 pub mod tenant;
+pub mod testing;
 pub use tenant::{TenantScoped, UnitOfWork};
 
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};

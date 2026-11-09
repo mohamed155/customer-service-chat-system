@@ -154,7 +154,7 @@ async fn login_rate_limit_blocks_after_10_failures() {
     let Some(redis_url) = get_redis_url().await else {
         return;
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let email = unique_email();
     seed_user(&pool, &email).await;
@@ -193,7 +193,7 @@ async fn login_rate_limit_prevents_enumeration() {
     let Some(redis_url) = get_redis_url().await else {
         return;
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let existing = unique_email();
     seed_user(&pool, &existing).await;

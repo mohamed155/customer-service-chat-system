@@ -75,7 +75,7 @@ just down          # stop; data stays
 ```bash
 cargo fmt --check
 cargo clippy --workspace -- -D warnings
-sqlx migrate run                 # needs DATABASE_URL; or: cargo run -p server -- migrate
+cargo run -p server -- migrate   # as app_owner: needs MIGRATION_DATABASE_URL
 REQUIRE_DB_TESTS=1 cargo nextest run --workspace   # or cargo test; needs the services up
 cargo audit                      # install once: cargo install cargo-audit
 cargo run -p server              # API on :8080, /health and /ready

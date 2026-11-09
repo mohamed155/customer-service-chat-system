@@ -331,7 +331,7 @@ async fn count_all_events(pool: &sqlx::PgPool) -> i64 {
 #[tokio::test]
 async fn correctly_signed_delivery_returns_202_and_writes_event_and_delivery() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -361,7 +361,7 @@ async fn correctly_signed_delivery_returns_202_and_writes_event_and_delivery() {
 #[tokio::test]
 async fn bad_signature_returns_404_and_writes_invalid_signature_event() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -396,7 +396,7 @@ async fn bad_signature_returns_404_and_writes_invalid_signature_event() {
 #[tokio::test]
 async fn unknown_token_returns_404_with_no_new_events() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // Even though this tenant has no connection, we want the unknown-token
     // branch to be the one exercised. We use a random token that hashes to
@@ -432,7 +432,7 @@ async fn unknown_token_returns_404_with_no_new_events() {
 #[tokio::test]
 async fn disconnected_connection_returns_404_and_writes_inactive_event() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -472,7 +472,7 @@ async fn disconnected_connection_returns_404_and_writes_inactive_event() {
 #[tokio::test]
 async fn unknown_token_and_bad_signature_404_bodies_are_byte_identical() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -512,7 +512,7 @@ async fn unknown_token_and_bad_signature_404_bodies_are_byte_identical() {
 #[tokio::test]
 async fn body_larger_than_256kb_returns_413() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -532,7 +532,7 @@ async fn body_larger_than_256kb_returns_413() {
 #[tokio::test]
 async fn sixty_one_deliveries_produce_at_most_one_rate_limited_event() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;

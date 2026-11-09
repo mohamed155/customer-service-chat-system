@@ -23,11 +23,25 @@ respectively — not by the Rust backend at runtime.
 
 | Variable | Purpose | Required | Default | Secret |
 |----------|---------|----------|---------|--------|
-| `DATABASE_URL` | PostgreSQL connection string (e.g. `postgres://user:pass@host:5432/db`) | all environments | — | yes |
+| `DATABASE_URL` | PostgreSQL connection string the server uses. Must be the `app_runtime` role, never a superuser or the schema owner (see [Database roles](#database-roles)). Example: `postgres://app_runtime:pass@host:5432/db` | all environments | — | yes |
 | `REDIS_URL` | Redis connection string (e.g. `redis://host:6379`) | all environments | — | yes |
 | `APP_ENVIRONMENT` | Runtime environment: `production`, `staging`, `development`, or `test` | all environments | — | no |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins. Each must start with `http://` or `https://`. In production at least one origin is required. | all environments | — | no |
 | `AUTH_JWT_SECRET` | HMAC secret for JWT signing and verification. Must be **at least 32 bytes**. | all environments | — | yes |
+
+### Database roles
+
+The backend uses two PostgreSQL roles (ADR-004 §3), created by `infra/postgres/init/02-roles.sh`:
+
+| Variable | Role | Read by | Secret |
+|----------|------|---------|--------|
+| `DATABASE_URL` | `app_runtime`: reads and writes rows only. No DDL, no `TRUNCATE`, owns nothing, `NOBYPASSRLS`, so Row-Level Security applies to it. | the server | yes |
+| `MIGRATION_DATABASE_URL` | `app_owner`: owns the schema and every table. | `server migrate` only (also test setup) | yes |
+
+The server never runs migrations on startup. Run them as a separate step, before starting a new
+release: `cargo run -p server -- migrate` locally (or `sqlx migrate run --database-url
+"$MIGRATION_DATABASE_URL"`), `docker compose … run --rm backend migrate` on a host (`ops/deploy.sh`
+does it). `migrate` reads only `MIGRATION_DATABASE_URL` and refuses to fall back to `DATABASE_URL`.
 
 **Generate AUTH_JWT_SECRET:**
 
@@ -128,8 +142,8 @@ the dev values in `.env.example`. `just up` copies it to `.env` on first run and
 | Variable | Purpose | Default | Secret |
 |----------|---------|---------|--------|
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Database and bootstrap superuser, read only when the Postgres volume is first created. | `customer_service`, `customer_service`, `customer_service_dev` | yes (password) |
-| `APP_OWNER_PASSWORD` | Password of the `app_owner` role (owns the schema, runs migrations). Read on first volume creation by `infra/postgres/init/02-roles.sh`. When this or `APP_RUNTIME_PASSWORD` is empty, neither role is created. | unset (no roles) | yes |
-| `APP_RUNTIME_PASSWORD` | Password of the `app_runtime` role (DML only, `NOBYPASSRLS`, owns nothing). The backend does not connect as it yet (MOH-31). | unset (no roles) | yes |
+| `APP_OWNER_PASSWORD` | Password of the `app_owner` role (owns the schema, runs migrations; `MIGRATION_DATABASE_URL`). Read on first volume creation by `infra/postgres/init/02-roles.sh`. When this or `APP_RUNTIME_PASSWORD` is empty, neither role is created. | `app_owner_dev` in `.env.example` | yes |
+| `APP_RUNTIME_PASSWORD` | Password of the `app_runtime` role the backend connects as (`DATABASE_URL`): DML only, `NOBYPASSRLS`, owns nothing. | `app_runtime_dev` in `.env.example` | yes |
 | `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` | MinIO root credentials, also used by the bucket bootstrap. | `minioadmin` | yes (password) |
 | `POSTGRES_PORT`, `REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`, `MAILPIT_SMTP_PORT`, `MAILPIT_UI_PORT` | Host ports (bound to `127.0.0.1`). Override when a default is taken. | `5432`, `6379`, `9000`, `9001`, `1025`, `8025` | no |
 
@@ -168,6 +182,7 @@ reads them. They control which test suites run and how failures are reported.
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `REQUIRE_DB_TESTS` | Set to `1` to make database- and Redis-backed tests **fail** instead of silently skipping when the dependency is unreachable. **Required for any run whose result you intend to trust**; the CI gate sets it. | unset (tests self-skip) |
+| `MIGRATION_DATABASE_URL` | Test setup that needs the schema owner (applying migrations, `TRUNCATE` between tests) uses it, through `db::testing`; the code under test uses `DATABASE_URL` (`app_runtime`). Required when `REQUIRE_DB_TESTS=1`; otherwise falls back to `DATABASE_URL`. | unset |
 | `TEST_DATABASE_URL` | PostgreSQL connection string for live-dep tests. Read by `crates/server/tests/live_deps.rs`. | unset (suite skips) |
 | `TEST_REDIS_URL` | Redis connection string for live-dep tests. Read by `crates/server/tests/live_deps.rs`. | unset (suite skips) |
 | `LIVE_AI_OPENAI_KEY` | API key to opt into live-provider tests in `crates/server/tests/ai.rs`. Never commit a real key. | unset (suite skips) |

@@ -85,14 +85,15 @@ If a port is taken or reserved (`just doctor` says which; Windows reserves range
 include 5432 on some machines, and a native PostgreSQL install holds 5432), uncomment the
 matching line in `.env` (`POSTGRES_PORT`, `REDIS_PORT`, `MINIO_PORT`, `MINIO_CONSOLE_PORT`,
 `MAILPIT_SMTP_PORT`, `MAILPIT_UI_PORT`) and update whichever URL points at that port to match:
-`DATABASE_URL`, `REDIS_URL`, or `APP_S3_ENDPOINT` if you set it.
+`DATABASE_URL` and `MIGRATION_DATABASE_URL`, `REDIS_URL`, or `APP_S3_ENDPOINT` if you set it.
 Then run `just up` again. On a first run `.env` doesn't exist yet: either run
 `cp .env.example .env` before `just up`, or let `just up` create it (it stops with
 `address already in use`), edit it, and run `just up` again. For example, with PostgreSQL on 5433:
 
 ```bash
 POSTGRES_PORT=5433
-DATABASE_URL=postgres://customer_service:customer_service_dev@localhost:5433/customer_service
+DATABASE_URL=postgres://app_runtime:app_runtime_dev@localhost:5433/customer_service
+MIGRATION_DATABASE_URL=postgres://app_owner:app_owner_dev@localhost:5433/customer_service
 ```
 
 #### Database roles
@@ -102,10 +103,16 @@ On first start the Postgres container also creates two non-superuser roles from 
 `app_owner` (owns the schema, runs migrations) and `app_runtime` (read/write rows
 only, `NOBYPASSRLS`, owns nothing). Row-Level Security only protects tenants when the
 application connects as a role like `app_runtime`; the bootstrap superuser
-(`customer_service`) ignores every policy. The backend still connects as that
-superuser today and switches to `app_runtime` with the RLS work (MOH-31). If the two
+(`customer_service`) ignores every policy. So the backend connects as `app_runtime`
+(`DATABASE_URL`) and migrations run as `app_owner` (`MIGRATION_DATABASE_URL`). If the two
 passwords are unset, the roles are skipped and the container logs a notice. Avoid the
 dollar sign in `.env` values, because Compose expands it.
+
+A volume created before the roles existed (tables owned by `customer_service`) can keep its
+data. Copy `APP_OWNER_PASSWORD`, `APP_RUNTIME_PASSWORD`, `DATABASE_URL` and
+`MIGRATION_DATABASE_URL` from `.env.example` into `.env`, run `just up` (it recreates the
+container with the passwords), then `just roles` once. That creates the roles and hands the
+existing tables to `app_owner`.
 
 `just verify-roles` checks that the split holds: it creates and drops a throwaway table
 with forced RLS and tries to get around it as `app_runtime`.
@@ -145,12 +152,15 @@ set -a && source .env && set +a
 
 ### 3. Run database migrations
 
+Migrations run as `app_owner`, over `MIGRATION_DATABASE_URL`; the server itself never
+migrates. From `backend/`:
+
 ```bash
-cd backend && sqlx migrate run
+cargo run -p server -- migrate
 ```
 
-If you'd rather not install sqlx-cli, `cargo run -p server -- migrate` (also from `backend/`)
-applies the same migrations.
+With sqlx-cli installed, `sqlx migrate run --database-url "$MIGRATION_DATABASE_URL"` does the
+same. Don't run migrations over `DATABASE_URL`: `app_runtime` can't change the schema.
 
 ### 4. Start the backend
 

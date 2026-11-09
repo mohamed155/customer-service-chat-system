@@ -26,16 +26,14 @@ pub async fn get_pool() -> Option<sqlx::PgPool> {
 }
 
 pub async fn setup(pool: &sqlx::PgPool) {
-    db::run_migrations(pool)
-        .await
-        .expect("run_migrations should succeed");
+    db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE \
          ai_usage_records, tenant_subscriptions, conversations, \
          customers, tenants \
          RESTART IDENTITY CASCADE",
     )
-    .execute(pool)
+    .execute(&db::testing::owner_pool())
     .await
     .expect("truncate test tables");
 }

@@ -4,7 +4,12 @@
 
 1. **Provision the VM** with Docker Engine 24+ and `docker compose` plugin installed.
 2. **Clone the repository** and check out the target release tag.
-3. **Create `.env.staging`** from `.env.staging.example` with real secrets.
+3. **Create `.env.staging`** from `.env.staging.example` with real secrets. The backend uses two
+   database roles (ADR-004 §3): set `DATABASE_URL` to the `app_runtime` role and
+   `MIGRATION_DATABASE_URL` to the `app_owner` role (see
+   [configuration](../configuration.md#database-roles)). Also export `APP_OWNER_PASSWORD` and
+   `APP_RUNTIME_PASSWORD` (the same passwords) in the shell, or put them in the Compose `.env`, before
+   step 5: the Postgres container creates the roles from them on first start.
 4. **Create the node-exporter textfile collector directory:**
 
    ```bash
@@ -17,11 +22,14 @@
    docker compose --profile observability -f infra/docker-compose.yml up -d
    ```
 
-6. **Run initial migrations:**
+6. **Run initial migrations** (as `app_owner`, through `MIGRATION_DATABASE_URL`):
 
    ```bash
    docker compose -f infra/docker-compose.yml -f infra/docker-compose.staging.yml run --rm backend migrate
    ```
+
+   The server never migrates on startup. `migrate` refuses to run without
+   `MIGRATION_DATABASE_URL`.
 
 7. **Start the full stack:**
 
@@ -38,6 +46,30 @@
 Use `ops/deploy.sh <git-sha>` (see [contract](../../ops/deploy.sh)).
 
 The script runs migrations before touching the running stack. If migrations fail, the old release stays live. If the new stack fails its readiness check within 120 seconds, the old release is restored.
+
+Before migrating, it runs `infra/postgres/init/02-roles.sh` in the Postgres container. The script
+is idempotent and makes sure `app_owner` and `app_runtime` exist with the right attributes and
+grants. It fails the deploy if the container has no `APP_OWNER_PASSWORD` / `APP_RUNTIME_PASSWORD`.
+
+## Move an Existing Host to the Two Database Roles (once)
+
+Hosts created before MOH-45 have tables owned by the bootstrap superuser, and the backend
+connects as that superuser. Row-Level Security never applies to a superuser, so switch it over:
+
+1. Back up first: `ops/backup.sh`.
+2. Create the roles and hand the existing tables to `app_owner`. The script runs as the
+   superuser inside the container. Pass the passwords if the container was created without them:
+
+   ```bash
+   docker compose -f infra/docker-compose.yml -f infra/docker-compose.staging.yml exec -T \
+     -e ROLES_REQUIRED=1 -e APP_OWNER_PASSWORD -e APP_RUNTIME_PASSWORD \
+     postgres bash -s < infra/postgres/init/02-roles.sh
+   ```
+
+3. In `.env.staging`, set `DATABASE_URL` to `app_runtime` and add `MIGRATION_DATABASE_URL` for
+   `app_owner`.
+4. Deploy as usual with `ops/deploy.sh <git-sha>`. Migration 0066 grants `app_runtime` its DML
+   rights.
 
 ## Roll Back
 

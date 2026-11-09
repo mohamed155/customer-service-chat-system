@@ -232,7 +232,7 @@ async fn count_audit_for_action(
 #[tokio::test]
 async fn connect_returns_201_and_status_connected() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -275,7 +275,7 @@ async fn connect_returns_201_and_status_connected() {
 #[tokio::test]
 async fn second_connect_returns_409() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -319,7 +319,7 @@ async fn second_connect_returns_409() {
 #[tokio::test]
 async fn connecting_unavailable_slack_returns_422() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -347,7 +347,7 @@ async fn connecting_unavailable_slack_returns_422() {
 #[tokio::test]
 async fn connect_with_missing_required_field_returns_422() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -390,7 +390,7 @@ async fn connect_with_missing_required_field_returns_422() {
 #[tokio::test]
 async fn update_config_returns_200_and_changes_value() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -453,7 +453,7 @@ async fn update_config_returns_200_and_changes_value() {
 #[tokio::test]
 async fn disconnect_returns_200_with_disconnected_status_and_empty_secrets() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -505,7 +505,7 @@ async fn disconnect_returns_200_with_disconnected_status_and_empty_secrets() {
 #[tokio::test]
 async fn reconnect_keeps_exactly_one_connection_row() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -600,7 +600,7 @@ async fn reconnect_keeps_exactly_one_connection_row() {
 #[tokio::test]
 async fn sc_004_all_lifecycle_actions_land_in_both_logs() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;

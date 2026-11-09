@@ -17,7 +17,9 @@ const tenantA = {
   plan: 'trial' as const,
 };
 
-const database = new pg.Pool({ connectionString: process.env['DATABASE_URL'] });
+// Seeds TRUNCATE tables, which the backend's app_runtime role cannot do, so fixtures go through the
+// schema owner (MIGRATION_DATABASE_URL), like the backend tests' setup.
+const database = new pg.Pool({ connectionString: process.env['MIGRATION_DATABASE_URL'] });
 
 const REAL_BACKEND = process.env['CI_REAL_BACKEND'] === 'true';
 

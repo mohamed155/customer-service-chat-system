@@ -174,7 +174,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
 #[tokio::test]
 async fn admin_gets_200_on_list() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let user = seed_user(&pool).await;
@@ -193,7 +193,7 @@ async fn admin_gets_200_on_list() {
 #[tokio::test]
 async fn manager_gets_200_on_list_and_detail() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let user = seed_user(&pool).await;
@@ -226,7 +226,7 @@ async fn manager_gets_200_on_list_and_detail() {
 #[tokio::test]
 async fn viewer_gets_200_on_list_and_detail() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let user = seed_user(&pool).await;
@@ -259,7 +259,7 @@ async fn viewer_gets_200_on_list_and_detail() {
 #[tokio::test]
 async fn agent_gets_403_on_list_and_detail() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let user = seed_user(&pool).await;
@@ -294,7 +294,7 @@ async fn agent_gets_403_on_list_and_detail() {
 #[tokio::test]
 async fn viewer_gets_403_on_connect_update_disconnect() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let viewer = seed_user(&pool).await;
@@ -350,7 +350,7 @@ async fn viewer_gets_403_on_connect_update_disconnect() {
 #[tokio::test]
 async fn manager_gets_2xx_on_connect_update_disconnect() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let manager = seed_user(&pool).await;

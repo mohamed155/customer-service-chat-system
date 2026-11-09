@@ -48,6 +48,11 @@ logs *services: env
 psql *args: env
     {{compose}} exec $([ -t 0 ] || echo -T) postgres sh -c 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" "$@"' sh "$@"
 
+# Create (or repair) the app_owner and app_runtime roles on an existing volume and hand the
+# existing tables to app_owner. Idempotent. A fresh volume gets this on first start anyway.
+roles: env
+    {{compose}} exec -T -e ROLES_REQUIRED=1 postgres bash -s < infra/postgres/init/02-roles.sh
+
 # Prove the app_runtime role cannot bypass Row-Level Security (needs the stack running).
 verify-roles: env
     {{compose}} exec -T postgres bash -s < infra/postgres/verify-roles.sh

@@ -163,7 +163,7 @@ mod tests {
     #[tokio::test]
     async fn tenant_tool_full_crud_lifecycle() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_id = seed_tenant(&pool, None).await;
@@ -305,7 +305,7 @@ mod tests {
     #[tokio::test]
     async fn manager_gets_403_on_mutations() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_id = seed_tenant(&pool, None).await;
@@ -357,7 +357,7 @@ mod tests {
     #[tokio::test]
     async fn manager_can_read_tool_settings() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let mut res = get_tools_as(&pool, "manager").await;
         assert_eq!(res.status(), 200, "manager should read tool settings");
@@ -371,7 +371,7 @@ mod tests {
     #[tokio::test]
     async fn agent_and_viewer_cannot_read_tool_settings() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         for role in ["agent", "viewer"] {
             let res = get_tools_as(&pool, role).await;

@@ -36,9 +36,7 @@ async fn run_migrations_succeeds() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool)
-        .await
-        .expect("run_migrations should succeed");
+    db::testing::migrate().await;
     let rows: Vec<(i64, String)> =
         sqlx::query_as("SELECT version, description FROM _sqlx_migrations ORDER BY version")
             .fetch_all(&pool)
@@ -108,6 +106,7 @@ async fn run_migrations_succeeds() {
         (63, "platform analytics indexes outbox attempts"),
         (64, "platform analytics indexes conversations status"),
         (65, "customer identifier widget channel"),
+        (66, "runtime role grants"),
     ];
     assert_eq!(
         rows.len(),
@@ -130,12 +129,8 @@ async fn run_migrations_idempotent() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool)
-        .await
-        .expect("first run should succeed");
-    db::run_migrations(&pool)
-        .await
-        .expect("second run should succeed (no-op)");
+    db::testing::migrate().await;
+    db::testing::migrate().await;
 }
 
 fn valid_email() -> String {
@@ -167,7 +162,7 @@ async fn users_valid_insert_accepted() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let email = valid_email();
     let result = sqlx::query("INSERT INTO users (email, display_name) VALUES ($1, $2)")
         .bind(&email)
@@ -187,7 +182,7 @@ async fn users_duplicate_email_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let base = format!("dup_{}@example.com", uuid::Uuid::new_v4());
     sqlx::query("INSERT INTO users (email, display_name) VALUES ($1, $2)")
         .bind(&base)
@@ -210,7 +205,7 @@ async fn users_email_without_at_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let result = sqlx::query("INSERT INTO users (email, display_name) VALUES ($1, $2)")
         .bind("notanemail")
         .bind("No At")
@@ -225,7 +220,7 @@ async fn users_unknown_platform_role_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let result =
         sqlx::query("INSERT INTO users (email, display_name, platform_role) VALUES ($1, $2, $3)")
             .bind(valid_email())
@@ -246,7 +241,7 @@ async fn tenants_valid_insert_accepted() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let result = sqlx::query("INSERT INTO tenants (name, slug) VALUES ($1, $2)")
         .bind("Test Corp")
         .bind(valid_slug())
@@ -265,7 +260,7 @@ async fn tenants_duplicate_slug_rejected_case_insensitive() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let slug = format!(
         "corp-{}",
         uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
@@ -291,7 +286,7 @@ async fn tenants_malformed_slug_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let result = sqlx::query("INSERT INTO tenants (name, slug) VALUES ($1, $2)")
         .bind("Bad Slug Co")
         .bind("Bad_Slug!") // underscores and exclamation marks are invalid
@@ -306,7 +301,7 @@ async fn tenants_archived_status_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let result = sqlx::query("INSERT INTO tenants (name, slug, status) VALUES ($1, $2, $3)")
         .bind("Archived Co")
         .bind(valid_slug())
@@ -322,7 +317,7 @@ async fn tenants_slug_rename_to_free_succeeds() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let actor_id = seed_user(&pool).await;
     let slug = valid_slug();
     let mut conn = pool.acquire().await.expect("acquire conn");
@@ -363,7 +358,7 @@ async fn tenants_slug_rename_to_taken_active_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let actor_id = seed_user(&pool).await;
     let slug_a = valid_slug();
     let slug_b = valid_slug();
@@ -451,7 +446,7 @@ async fn memberships_fk_missing_user_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let fake_id = uuid::Uuid::nil();
     let result = sqlx::query(
@@ -474,7 +469,7 @@ async fn memberships_fk_missing_tenant_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user_id = seed_user(&pool).await;
     let fake_id = uuid::Uuid::nil();
     let result = sqlx::query(
@@ -497,7 +492,7 @@ async fn memberships_valid_insert_accepted() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user_id = seed_user(&pool).await;
     let tenant_id = seed_tenant(&pool).await;
     let result = sqlx::query(
@@ -521,7 +516,7 @@ async fn memberships_unknown_role_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user_id = seed_user(&pool).await;
     let tenant_id = seed_tenant(&pool).await;
     let result = sqlx::query(
@@ -541,7 +536,7 @@ async fn memberships_duplicate_active_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user_id = seed_user(&pool).await;
     let tenant_id = seed_tenant(&pool).await;
     sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
@@ -575,7 +570,7 @@ async fn audit_logs_full_insert_accepted() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user_id = seed_user(&pool).await;
     let tenant_id = seed_tenant(&pool).await;
     let details = serde_json::json!({"reason": "test"});
@@ -612,7 +607,7 @@ async fn audit_logs_platform_entry_tenant_null() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let result = sqlx::query(
         "INSERT INTO audit_logs (action, resource_type, resource_id, tenant_id) VALUES ($1, $2, $3, $4)",
     )
@@ -634,7 +629,7 @@ async fn audit_logs_system_entry_actor_null() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let result = sqlx::query(
         "INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id) VALUES ($1, $2, $3, $4)",
     )
@@ -656,7 +651,7 @@ async fn audit_logs_details_defaults_to_empty_jsonb() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let result: (serde_json::Value,) = sqlx::query_as(
         "INSERT INTO audit_logs (action, resource_type, resource_id) VALUES ('test.defaults', 'test', 'res-default') RETURNING details",
     )
@@ -680,7 +675,7 @@ async fn convention_users_bare_insert_receives_uuid_and_timestamps() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let row: (uuid::Uuid, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
         "INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id, created_at, updated_at",
     )
@@ -706,7 +701,7 @@ async fn convention_tenants_bare_insert_receives_uuid_and_timestamps() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let row: (
         uuid::Uuid,
         chrono::DateTime<chrono::Utc>,
@@ -736,7 +731,7 @@ async fn convention_memberships_bare_insert_receives_uuid_and_timestamps() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
     let row: (uuid::Uuid, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
@@ -765,7 +760,7 @@ async fn convention_audit_logs_bare_insert_receives_uuid_and_timestamps() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let row: (uuid::Uuid, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
         "INSERT INTO audit_logs (action, resource_type, resource_id) VALUES ($1, $2, $3) RETURNING id, created_at, updated_at",
     )
@@ -792,7 +787,7 @@ async fn convention_update_advances_updated_at() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (id, created, updated): (uuid::Uuid, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
         "INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id, created_at, updated_at",
     )
@@ -834,7 +829,7 @@ async fn soft_delete_user_same_email_reused() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let email = valid_email();
     let id: uuid::Uuid =
         sqlx::query_scalar("INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id")
@@ -865,7 +860,7 @@ async fn soft_delete_tenant_same_slug_reused() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let slug = valid_slug();
     let id: uuid::Uuid =
         sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
@@ -896,7 +891,7 @@ async fn soft_delete_membership_recreate_pair() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
     let mid: uuid::Uuid = sqlx::query_scalar(
@@ -937,7 +932,7 @@ async fn cascade_soft_delete_tenant_stamps_memberships() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
     sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
@@ -974,7 +969,7 @@ async fn cascade_soft_delete_user_stamps_memberships() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
     sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
@@ -1011,7 +1006,7 @@ async fn cascade_already_deleted_membership_unchanged() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
     let mid: uuid::Uuid = sqlx::query_scalar(
@@ -1055,7 +1050,7 @@ async fn cascade_audit_entries_survive_soft_delete() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
     sqlx::query(
@@ -1101,7 +1096,7 @@ async fn append_only_audit_update_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO audit_logs (action, resource_type, resource_id) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -1124,7 +1119,7 @@ async fn append_only_audit_delete_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO audit_logs (action, resource_type, resource_id) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -1147,7 +1142,7 @@ async fn append_only_audit_row_count_unchanged_after_failed_update() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let marker = format!("test.count.{}", uuid::Uuid::new_v4());
     sqlx::query("INSERT INTO audit_logs (action, resource_type, resource_id) VALUES ($1, 'test', 'res-count')")
         .bind(&marker)
@@ -1181,7 +1176,7 @@ async fn index_coverage_all_indexes_exist() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let expected_indexes = [
         "users_email_active_uniq",
         "tenants_slug_active_uniq",
@@ -1223,7 +1218,7 @@ async fn index_coverage_membership_tenant_query_uses_index() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     // Insert a user + membership to have data
     let uid = seed_user(&pool).await;
@@ -1270,7 +1265,7 @@ async fn explain_routing_candidate_selection_uses_index() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let uid = seed_user(&pool).await;
     let mid: uuid::Uuid = sqlx::query_scalar(
@@ -1342,7 +1337,7 @@ async fn explain_queue_list_uses_index() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let cid = seed_customer(&pool, tid, "QueueIdx").await;
     let conv_id: uuid::Uuid = sqlx::query_scalar(
@@ -1404,7 +1399,7 @@ async fn explain_escalated_inbox_filter_uses_index() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let cid = seed_customer(&pool, tid, "EscInbox").await;
     sqlx::query(
@@ -1457,7 +1452,7 @@ async fn convention_tenant_update_advances_updated_at() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (id, created, updated): (
         uuid::Uuid,
         chrono::DateTime<chrono::Utc>,
@@ -1499,7 +1494,7 @@ async fn convention_membership_update_advances_updated_at() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
     let (id, created, updated): (uuid::Uuid, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) = sqlx::query_as(
@@ -1543,7 +1538,7 @@ async fn cascade_user_delete_does_not_affect_tenant_scoped_memberships() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let shared_uuid = uuid::Uuid::new_v4();
     // Insert a tenant and user with the SAME UUID (different tables)
     sqlx::query("INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $3)")
@@ -1600,7 +1595,7 @@ async fn memberships_rejected_when_user_soft_deleted() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
     sqlx::query("UPDATE users SET deleted_at = now() WHERE id = $1")
@@ -1628,7 +1623,7 @@ async fn memberships_rejected_when_tenant_soft_deleted() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
     sqlx::query("UPDATE tenants SET deleted_at = now() WHERE id = $1")
@@ -1660,7 +1655,7 @@ async fn slug_change_writes_audit_entry() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let old_slug = valid_slug();
     let new_slug = valid_slug();
     let tenant_id: uuid::Uuid =
@@ -1724,7 +1719,7 @@ async fn audit_entry_without_resource_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let result = sqlx::query("INSERT INTO audit_logs (action, resource_type) VALUES ($1, $2)")
         .bind("test.anonymous")
         .bind("test")
@@ -1746,7 +1741,7 @@ async fn index_coverage_audit_tenant_time_query_uses_index() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     sqlx::query(
         "INSERT INTO audit_logs (action, resource_type, resource_id, tenant_id) VALUES ($1, $2, $3, $4)",
@@ -1795,7 +1790,7 @@ async fn customer_index_coverage_uses_intended_indexes() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     sqlx::query("INSERT INTO customers (tenant_id, display_name, email) VALUES ($1, $2, $3)")
         .bind(tid)
@@ -1970,7 +1965,7 @@ async fn tenant_directory_explain_cursor_only() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let mut tx = pool.begin().await.unwrap();
     sqlx::query("SET LOCAL enable_seqscan = off")
         .execute(&mut *tx)
@@ -1999,7 +1994,7 @@ async fn tenant_directory_explain_status_and_cursor() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let mut tx = pool.begin().await.unwrap();
     sqlx::query("SET LOCAL enable_seqscan = off")
         .execute(&mut *tx)
@@ -2029,7 +2024,7 @@ async fn tenant_directory_explain_search() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let mut tx = pool.begin().await.unwrap();
     sqlx::query("SET LOCAL enable_seqscan = off")
         .execute(&mut *tx)
@@ -2058,7 +2053,7 @@ async fn tenant_directory_explain_search_and_status() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let mut tx = pool.begin().await.unwrap();
     sqlx::query("SET LOCAL enable_seqscan = off")
         .execute(&mut *tx)
@@ -2094,7 +2089,7 @@ async fn memberships_reactivation_with_soft_deleted_user_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
     let mid: uuid::Uuid = sqlx::query_scalar(
@@ -2128,7 +2123,7 @@ async fn memberships_reparent_to_soft_deleted_user_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid1 = seed_user(&pool).await;
     let uid2 = seed_user(&pool).await;
     let tid = seed_tenant(&pool).await;
@@ -2163,7 +2158,7 @@ async fn memberships_reparent_to_soft_deleted_tenant_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let uid = seed_user(&pool).await;
     let tid1 = seed_tenant(&pool).await;
     let tid2 = seed_tenant(&pool).await;
@@ -2202,7 +2197,7 @@ async fn slug_change_without_actor_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let mut conn = pool.acquire().await.expect("acquire connection");
     sqlx::query("SELECT clear_audit_actor()")
         .execute(&mut *conn)
@@ -2240,7 +2235,7 @@ async fn membership_insert_races_parent_soft_delete() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // Seed parent user and tenant once.
     let uid: uuid::Uuid =
@@ -2372,7 +2367,7 @@ async fn actor_does_not_leak_across_pooled_transactions() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // Use a dedicated one-connection pool so both transactions are guaranteed to reuse the
     // same PostgreSQL backend session; this makes the test a true transaction-local check.
@@ -2474,7 +2469,7 @@ async fn migration_0025_customer_profile_columns_exist() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     for (table, columns) in [
         (
@@ -2538,7 +2533,7 @@ async fn migration_0025_0026_check_constraints_exist() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     for (table, constraint, expected_definition) in [
         (
@@ -2597,7 +2592,7 @@ async fn migration_0025_identifier_unique_index_exists() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let definition: String = sqlx::query_scalar(
         "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' \
@@ -2617,7 +2612,7 @@ async fn migration_0025_0026_foreign_keys_exist() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     for (table, column, referenced_table) in [
         ("customers", "tenant_id", "tenants"),
@@ -2626,6 +2621,8 @@ async fn migration_0025_0026_foreign_keys_exist() {
         ("conversations", "tenant_id", "tenants"),
         ("conversations", "customer_id", "customers"),
     ] {
+        // information_schema.constraint_column_usage only lists tables the current role owns,
+        // so this catalog check runs as the schema owner, not as app_runtime.
         let exists: (bool,) = sqlx::query_as(
             "SELECT EXISTS( \
                  SELECT 1 FROM information_schema.key_column_usage AS kcu \
@@ -2645,7 +2642,7 @@ async fn migration_0025_0026_foreign_keys_exist() {
         .bind(table)
         .bind(column)
         .bind(referenced_table)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::owner_pool())
         .await
         .expect("query foreign key");
         assert!(
@@ -2665,7 +2662,7 @@ async fn migration_0027_composite_fk_constraints_exist() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     for (table, constraint_name) in [
         (
@@ -2709,7 +2706,7 @@ async fn migration_0027_identifier_parent_tenant_fk_rejects_mismatch() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tid: uuid::Uuid =
         sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
@@ -2760,7 +2757,7 @@ async fn migration_0027_conversation_parent_tenant_fk_rejects_mismatch() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tid: uuid::Uuid =
         sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
@@ -2814,7 +2811,7 @@ async fn migration_0018_status_column_exists() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let exists: (bool,) = sqlx::query_as(
         "SELECT EXISTS( \
          SELECT 1 FROM information_schema.columns \
@@ -2832,7 +2829,7 @@ async fn migration_0018_status_check_constraint() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let exists: (bool,) = sqlx::query_as(
         "SELECT EXISTS( \
          SELECT 1 FROM information_schema.table_constraints \
@@ -2859,7 +2856,7 @@ async fn migration_0019_tenant_invitations_table_exists() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let exists: (bool,) = sqlx::query_as(
         "SELECT EXISTS( \
          SELECT 1 FROM information_schema.tables \
@@ -2877,7 +2874,7 @@ async fn migration_0019_tenant_invitations_columns_exist() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     for col in &[
         "id",
         "tenant_id",
@@ -2912,7 +2909,7 @@ async fn migration_0020_invitation_email_delivery_status_exists() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.expect("run migrations");
+    db::testing::migrate().await;
 
     let column: (bool,) = sqlx::query_as(
         "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
@@ -2943,7 +2940,7 @@ async fn invitation_email_delivery_status_constraint_rejects_invalid_value() {
         Some(pool) => pool,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let suffix = uuid::Uuid::new_v4();
     let user_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO users (email, display_name) VALUES ($1, 'Constraint User') RETURNING id",
@@ -2988,7 +2985,7 @@ async fn invitation_delivery_outbox_claim_index_has_production_predicate() {
         Some(pool) => pool,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let definition: String = sqlx::query_scalar(
         "SELECT indexdef FROM pg_indexes WHERE indexname = 'outbox_invitation_delivery_claimable_idx'",
     ).fetch_one(&pool).await.expect("claimable outbox index");
@@ -3004,7 +3001,7 @@ async fn migration_0019_tenant_invitations_unique_indexes_exist() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     for idx_name in &[
         "tenant_invitations_token_hash_uniq",
         "tenant_invitations_pending_email_uniq",
@@ -3029,7 +3026,7 @@ async fn migration_0023_allows_expired_and_rejects_unknown_invitation_status() {
         Some(pool) => pool,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let suffix = uuid::Uuid::new_v4();
     let user_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO users (email, display_name) VALUES ($1, 'Expiry Constraint User') RETURNING id",
@@ -3077,7 +3074,7 @@ async fn invitation_expired_status_rejects_future_expiry() {
         Some(pool) => pool,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let suffix = uuid::Uuid::new_v4();
     let user_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO users (email, display_name) VALUES ($1, 'Future Expiry User') RETURNING id",
@@ -3127,7 +3124,7 @@ async fn migration_0027_customers_tenant_id_id_uq_definition() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // customers_tenant_id_id_uq is the UNIQUE constraint backing the
     // composite FK target from migration 0027.
@@ -3176,7 +3173,7 @@ async fn migration_0028_trigram_index_definitions() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // customers_phone_trgm_idx — GIN trigram index on phone with partial filter.
     let phone_def: String = sqlx::query_scalar(
@@ -3227,7 +3224,7 @@ async fn migration_0025_trgm_extension_is_installed() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let exists: (bool,) =
         sqlx::query_as("SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm')")
             .fetch_one(&pool)
@@ -3242,7 +3239,7 @@ async fn migration_0028_supplementary_indexes_exist() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let expected_indexes = [
         "customers_phone_trgm_idx",
         "customer_channel_identifiers_identifier_trgm_idx",
@@ -3268,7 +3265,7 @@ async fn migration_0025_customer_trigram_index_names_exist() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     for idx_name in &[
         "customers_display_name_trgm_idx",
         "customers_email_trgm_idx",
@@ -3293,7 +3290,7 @@ async fn migration_0029_identifier_soft_delete_index_exists() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let old_idx: Option<(String,)> = sqlx::query_as(
         "SELECT indexname FROM pg_indexes WHERE indexname = 'customer_channel_identifiers_unique_idx'",
@@ -3321,7 +3318,7 @@ async fn migration_0029_identifier_soft_delete_column_exists() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let exists: (bool,) = sqlx::query_as(
         "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
          WHERE table_name = 'customer_channel_identifiers' AND column_name = 'deleted_at')",
@@ -3345,7 +3342,7 @@ async fn migration_0030_cascade_and_all_index_definitions() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // Assert the cascade trigger exists.
     let trigger_exists: (bool,) = sqlx::query_as(
@@ -3461,7 +3458,7 @@ async fn migration_0033_conversation_core_changes() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // 1. Status CHECK accepts open|pending|resolved|closed
     let definition: Option<String> = sqlx::query_scalar(
@@ -3551,7 +3548,7 @@ async fn migration_0034_messages_table() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // 4. Messages columns with correct types and nullability
     for (col, expected_udt, nullable) in [
@@ -3679,7 +3676,7 @@ async fn migration_0035_agent_skills() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // 1. skills columns exist with correct types
     for (col, udt, nullable) in [
@@ -3791,7 +3788,7 @@ async fn migration_0036_agent_availability() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // 1. Columns
     for (col, udt, nullable) in [
@@ -3853,7 +3850,7 @@ async fn migration_0037_escalations() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // 1. conversations.escalated_at
     let col: (bool,) = sqlx::query_as(
@@ -4012,7 +4009,7 @@ async fn migration_0038_ai_configurations() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // 1. Columns
     for (col, udt, nullable) in [
@@ -4151,7 +4148,7 @@ async fn migration_0039_ai_credentials() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // 1. Columns
     for (col, udt, nullable) in [
@@ -4245,7 +4242,7 @@ async fn migration_0040_ai_usage_records() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // 1. Columns
     for (col, udt, nullable) in [
@@ -4356,7 +4353,7 @@ async fn agent_configurations_empty_name_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
@@ -4372,7 +4369,7 @@ async fn agent_configurations_overlong_name_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let name = "a".repeat(81);
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
@@ -4389,7 +4386,7 @@ async fn agent_configurations_invalid_tone_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result =
         sqlx::query("INSERT INTO agent_configurations (tenant_id, name, tone) VALUES ($1, $2, $3)")
@@ -4409,7 +4406,7 @@ async fn agent_configurations_provider_without_model_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result = sqlx::query(
         "INSERT INTO agent_configurations (tenant_id, name, provider, model) VALUES ($1, $2, $3, $4)",
@@ -4432,7 +4429,7 @@ async fn agent_configurations_model_without_provider_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result = sqlx::query(
         "INSERT INTO agent_configurations (tenant_id, name, model, provider) VALUES ($1, $2, $3, $4)",
@@ -4455,7 +4452,7 @@ async fn agent_configurations_second_live_row_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
@@ -4480,7 +4477,7 @@ async fn agent_configurations_second_default_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     // Insert first agent with is_default=false so it doesn't enter default_uq
     let id_a: uuid::Uuid = sqlx::query_scalar(
@@ -4523,7 +4520,7 @@ async fn agent_configurations_duplicate_name_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     // Insert an agent with a name
     let id_a: uuid::Uuid = sqlx::query_scalar(
@@ -4565,7 +4562,7 @@ async fn agent_avatar_uploads_invalid_content_type_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let agent_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
@@ -4597,7 +4594,7 @@ async fn agent_avatar_uploads_oversized_bytes_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let agent_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
@@ -4626,7 +4623,7 @@ async fn agent_avatar_uploads_second_live_row_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let agent_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
@@ -4672,7 +4669,7 @@ async fn messages_kind_ai_with_membership_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let cid = seed_customer(&pool, tid, "MsgAI").await;
     let conv_id: uuid::Uuid = sqlx::query_scalar(
@@ -4705,7 +4702,7 @@ async fn messages_kind_system_null_membership_succeeds() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let cid = seed_customer(&pool, tid, "MsgSys").await;
     let conv_id: uuid::Uuid = sqlx::query_scalar(
@@ -4744,7 +4741,7 @@ async fn conversations_ai_handling_accepts_valid_values() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let cid = seed_customer(&pool, tid, "AIHandling").await;
     // 'platform_ai'
@@ -4786,7 +4783,7 @@ async fn conversations_ai_handling_invalid_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let cid = seed_customer(&pool, tid, "AIHandlingBad").await;
     let result = sqlx::query(
@@ -4811,7 +4808,7 @@ async fn migration_0041_agent_configurations_empty_name_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
@@ -4827,7 +4824,7 @@ async fn migration_0041_agent_configurations_invalid_tone_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result =
         sqlx::query("INSERT INTO agent_configurations (tenant_id, name, tone) VALUES ($1, $2, $3)")
@@ -4845,7 +4842,7 @@ async fn migration_0041_agent_configurations_provider_model_mismatch_rejected() 
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result = sqlx::query(
         "INSERT INTO agent_configurations (tenant_id, name, provider, model) \
@@ -4869,7 +4866,7 @@ async fn migration_0041_agent_configurations_second_live_row_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
@@ -4894,7 +4891,7 @@ async fn migration_0041_agent_configurations_second_default_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
@@ -4922,7 +4919,7 @@ async fn migration_0041_agent_configurations_duplicate_name_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
@@ -4947,7 +4944,7 @@ async fn migration_0041_agent_avatar_uploads_invalid_content_type_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let agent_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
@@ -4976,7 +4973,7 @@ async fn migration_0041_agent_avatar_uploads_oversized_bytes_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let agent_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
@@ -5006,7 +5003,7 @@ async fn migration_0041_agent_avatar_uploads_second_live_row_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let agent_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2) RETURNING id",
@@ -5049,7 +5046,7 @@ async fn migration_0042_messages_ai_kind_with_sender_membership_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let uid = seed_user(&pool).await;
     let mid: uuid::Uuid = sqlx::query_scalar(
@@ -5092,7 +5089,7 @@ async fn migration_0042_messages_system_kind_with_null_memberships_succeeds() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let cid = seed_customer(&pool, tid, "System Kind Test").await;
     let conv_id: uuid::Uuid = sqlx::query_scalar(
@@ -5128,7 +5125,7 @@ async fn migration_0043_conversation_ai_handling_constraint() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let cid = seed_customer(&pool, tid, "AI Handling Test").await;
     let conv_id: uuid::Uuid = sqlx::query_scalar(
@@ -5187,7 +5184,7 @@ async fn migration_0044_outbox_customer_message_idx() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let idx: String = sqlx::query_scalar(
         "SELECT indexdef FROM pg_indexes WHERE indexname = 'outbox_customer_message_claimable_idx'",
@@ -5215,7 +5212,7 @@ async fn migration_0045_agent_prompts_invalid_prompt_kind_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result = sqlx::query(
         "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3)",
@@ -5234,7 +5231,7 @@ async fn migration_0045_agent_prompt_versions_empty_content_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let prompt_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
@@ -5265,7 +5262,7 @@ async fn migration_0045_agent_prompt_versions_content_over_8000_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let prompt_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
@@ -5300,7 +5297,7 @@ async fn migration_0045_agent_prompt_versions_change_note_over_500_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let prompt_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
@@ -5336,7 +5333,7 @@ async fn migration_0045_agent_prompts_second_live_row_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     sqlx::query(
         "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3)",
@@ -5367,7 +5364,7 @@ async fn migration_0045_agent_prompt_versions_duplicate_version_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let prompt_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
@@ -5413,7 +5410,7 @@ async fn migration_0045_agent_prompt_versions_update_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let prompt_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
@@ -5452,7 +5449,7 @@ async fn migration_0045_agent_prompt_versions_delete_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let prompt_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, $2, $3) RETURNING id",
@@ -5491,7 +5488,7 @@ async fn migration_0045_agent_configurations_no_system_prompt() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let result = sqlx::query("SELECT system_prompt FROM agent_configurations")
         .execute(&pool)
         .await;
@@ -5507,7 +5504,7 @@ async fn migration_0045_agent_prompt_versions_user_delete_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = sqlx::query_scalar::<_, uuid::Uuid>(
         "INSERT INTO tenants (id, name, slug) VALUES (gen_random_uuid(), 'Test Tenant', 'test-tenant-0045-' || substr(md5(random()::text), 1, 12)) RETURNING id"
@@ -5562,7 +5559,7 @@ async fn migration_0046_knowledge_items_invalid_item_type_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result = sqlx::query(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
@@ -5587,7 +5584,7 @@ async fn migration_0046_knowledge_items_invalid_status_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result = sqlx::query(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, status, source, created_by_display) \
@@ -5610,7 +5607,7 @@ async fn migration_0046_knowledge_items_empty_title_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result = sqlx::query(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
@@ -5632,7 +5629,7 @@ async fn migration_0046_knowledge_items_title_over_200_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let long_title = "x".repeat(201);
     let result = sqlx::query(
@@ -5655,7 +5652,7 @@ async fn migration_0046_knowledge_items_body_over_100000_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let long_body = "x".repeat(100_001);
     let result = sqlx::query(
@@ -5679,7 +5676,7 @@ async fn migration_0046_knowledge_items_document_with_body_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let result = sqlx::query(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, body, source, created_by_display) \
@@ -5705,7 +5702,7 @@ async fn migration_0046_knowledge_categories_case_insensitive_unique() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     sqlx::query("INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
@@ -5730,7 +5727,7 @@ async fn migration_0046_knowledge_categories_diff_tenant_same_name_succeeds() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid1 = seed_tenant(&pool).await;
     let tid2 = seed_tenant(&pool).await;
     sqlx::query("INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2)")
@@ -5753,7 +5750,7 @@ async fn migration_0046_knowledge_categories_delete_sets_category_id_null() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let cat_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2) RETURNING id",
@@ -5799,7 +5796,7 @@ async fn migration_0046_knowledge_documents_size_bytes_zero_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let item_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
@@ -5835,7 +5832,7 @@ async fn migration_0046_knowledge_documents_size_bytes_over_max_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let item_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
@@ -5871,7 +5868,7 @@ async fn migration_0046_knowledge_documents_storage_key_unique() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     // Unique per run: rows from earlier runs persist in the shared test DB.
     let storage_key = format!("unique-key-{}", uuid::Uuid::new_v4());
     let tid = seed_tenant(&pool).await;
@@ -5935,7 +5932,7 @@ async fn migration_0046_knowledge_items_delete_cascades_to_documents_and_tags() 
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let item_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
@@ -6003,7 +6000,7 @@ async fn migration_0046_knowledge_item_tags_duplicate_pk_rejected() {
         Some(p) => p,
         None => return,
     };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tid = seed_tenant(&pool).await;
     let item_id: uuid::Uuid = sqlx::query_scalar(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, source, created_by_display) \
