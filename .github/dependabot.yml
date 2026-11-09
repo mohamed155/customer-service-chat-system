@@ -43,5 +43,9 @@ updates:
       prefix: "build(deps)"
       prefix-development: "build(deps)"
     groups:
+      # The OpenTelemetry crates only compile together at matching versions (a 0.x minor bump is
+      # breaking), so every update to them, major included, arrives as one pull request.
+      opentelemetry:
+        patterns: ["opentelemetry", "opentelemetry_sdk", "opentelemetry-*", "tracing-opentelemetry"]
       cargo-minor-patch:
         update-types: ["minor", "patch"]
