@@ -32,19 +32,11 @@ struct OutboundEvent {
 }
 
 async fn claim_outbound_event(pool: &PgPool) -> sqlx::Result<Option<OutboundEvent>> {
+    // Across tenants, so it goes through the audited function
+    // `xtenant.outbox_take_whatsapp_outbound`.
     let row: Option<(Uuid, Uuid, Uuid, Uuid)> = sqlx::query_as(
-        "WITH claimed AS ( \
-            SELECT id, tenant_id, \
-                   (payload->>'conversationId')::uuid AS conversation_id, \
-                   (payload->>'messageId')::uuid AS message_id \
-            FROM outbox_events \
-            WHERE event_type = 'whatsapp.outbound_message' \
-            ORDER BY created_at ASC \
-            LIMIT 1 \
-            FOR UPDATE SKIP LOCKED \
-        ) \
-        DELETE FROM outbox_events oe USING claimed c WHERE oe.id = c.id \
-        RETURNING oe.id, oe.tenant_id::uuid, c.conversation_id, c.message_id",
+        "SELECT id, tenant_id, conversation_id, message_id \
+         FROM xtenant.outbox_take_whatsapp_outbound()",
     )
     .fetch_optional(pool)
     .await?;

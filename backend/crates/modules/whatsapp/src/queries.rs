@@ -185,8 +185,8 @@ pub async fn insert_attachment_in_tx(
     Ok(row.0)
 }
 
-/// Claim the next pending attachment for processing (FOR UPDATE SKIP LOCKED).
-/// Only claims attachments with fewer than 5 fetch attempts.
+/// The next pending attachment to fetch, across tenants (fewer than 5 fetch attempts), through the
+/// audited function `xtenant.pending_attachment_next`.
 pub async fn claim_pending_attachment(
     pool: &sqlx::PgPool,
 ) -> sqlx::Result<Option<MessageAttachmentRow>> {
@@ -194,11 +194,7 @@ pub async fn claim_pending_attachment(
         "SELECT id, tenant_id, message_id, kind, status, provider_media_id, \
                 storage_key, mime_type, size_bytes, file_name, fetch_attempts, \
                 created_at, updated_at \
-         FROM message_attachments \
-         WHERE status = 'pending' AND fetch_attempts < 5 \
-         ORDER BY created_at ASC \
-         LIMIT 1 \
-         FOR UPDATE SKIP LOCKED",
+         FROM xtenant.pending_attachment_next()",
     )
     .fetch_optional(pool)
     .await

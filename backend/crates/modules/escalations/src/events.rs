@@ -297,18 +297,16 @@ pub async fn process_escalation_outbox_once(
 ) -> sqlx::Result<bool> {
     let claim_token = Uuid::new_v4();
     // outbox_events.id is UUID and tenant_id is TEXT (0002_outbox.sql).
+    // Across tenants, so it goes through the audited function `xtenant.outbox_claim`.
     let maybe_row: Option<(Uuid, Option<String>, String, serde_json::Value)> = sqlx::query_as(
-        "UPDATE outbox_events \
-         SET claimed_at = now(), claim_token = $1 \
-         WHERE id = ( \
-             SELECT id FROM outbox_events \
-             WHERE event_type IN ('conversation.status_changed', 'conversation.assignment_changed', 'conversation.message_status') \
-             AND claimed_at IS NULL \
-             ORDER BY created_at ASC \
-             LIMIT 1 \
-             FOR UPDATE SKIP LOCKED \
-         ) \
-         RETURNING id, tenant_id, event_type, payload",
+        "SELECT id, tenant_id, event_type, payload FROM xtenant.outbox_claim($1, $2)",
+    )
+    .bind(
+        &[
+            "conversation.status_changed",
+            "conversation.assignment_changed",
+            "conversation.message_status",
+        ][..],
     )
     .bind(claim_token)
     .fetch_optional(pool)
@@ -320,7 +318,7 @@ pub async fn process_escalation_outbox_once(
     };
     let Some(tenant_id) = tenant_text.as_deref().and_then(|t| Uuid::parse_str(t).ok()) else {
         // Not a tenant-scoped event; nothing for escalations to do.
-        sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+        sqlx::query("SELECT xtenant.outbox_ack($1)")
             .bind(event_id)
             .execute(pool)
             .await?;
@@ -329,7 +327,7 @@ pub async fn process_escalation_outbox_once(
 
     let origin = payload.get("origin").and_then(|v| v.as_str()).unwrap_or("");
     if origin == "escalations" {
-        sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+        sqlx::query("SELECT xtenant.outbox_ack($1)")
             .bind(event_id)
             .execute(pool)
             .await?;
@@ -412,7 +410,7 @@ pub async fn process_escalation_outbox_once(
     match result {
         Ok(()) => {
             tx.commit().await?;
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;
@@ -420,12 +418,10 @@ pub async fn process_escalation_outbox_once(
         }
         Err(e) => {
             tx.rollback().await?;
-            sqlx::query(
-                "UPDATE outbox_events SET claimed_at = NULL, claim_token = NULL WHERE id = $1",
-            )
-            .bind(event_id)
-            .execute(pool)
-            .await?;
+            sqlx::query("SELECT xtenant.outbox_release($1)")
+                .bind(event_id)
+                .execute(pool)
+                .await?;
             Err(e)
         }
     }

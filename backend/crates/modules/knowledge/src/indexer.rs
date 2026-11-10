@@ -66,20 +66,11 @@ async fn process_one_event(
     // 1. Claim one outbox event with FOR UPDATE SKIP LOCKED
     let claim_token = Uuid::new_v4();
     let claimed = sqlx::query_as::<_, ClaimedEvent>(
-        "UPDATE outbox_events \
-         SET claimed_at = now(), claim_token = $1, attempts = attempts + 1 \
-         WHERE id = ( \
-             SELECT id FROM outbox_events \
-             WHERE event_type = 'knowledge.index_requested' \
-               AND claimed_at IS NULL \
-               AND available_at <= now() \
-               AND dead_lettered_at IS NULL \
-             ORDER BY created_at ASC \
-             LIMIT 1 \
-             FOR UPDATE SKIP LOCKED \
-         ) \
-         RETURNING id, tenant_id, aggregate_id, payload, attempts",
+        // Across tenants, so it goes through the audited function `xtenant.outbox_claim_retryable`.
+        "SELECT id, tenant_id, aggregate_id, payload, attempts \
+         FROM xtenant.outbox_claim_retryable($1, $2)",
     )
+    .bind("knowledge.index_requested")
     .bind(claim_token)
     .fetch_optional(pool)
     .await
@@ -108,7 +99,7 @@ async fn process_one_event(
     {
         Some(item) => item,
         None => {
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event.id)
                 .execute(pool)
                 .await
@@ -138,7 +129,7 @@ async fn process_one_event(
                 )
                 .await
                 .map_err(|e| format!("set_not_indexable: {e}"))?;
-                sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                sqlx::query("SELECT xtenant.outbox_ack($1)")
                     .bind(event.id)
                     .execute(pool)
                     .await
@@ -158,7 +149,7 @@ async fn process_one_event(
                 )
                 .await
                 .map_err(|e| format!("set_not_indexable: {e}"))?;
-                sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                sqlx::query("SELECT xtenant.outbox_ack($1)")
                     .bind(event.id)
                     .execute(pool)
                     .await
@@ -177,7 +168,7 @@ async fn process_one_event(
                 index_state::set_not_indexable(pool, tenant_id, item_id, &reason)
                     .await
                     .map_err(|e| format!("set_not_indexable: {e}"))?;
-                sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                sqlx::query("SELECT xtenant.outbox_ack($1)")
                     .bind(event.id)
                     .execute(pool)
                     .await
@@ -197,7 +188,7 @@ async fn process_one_event(
         index_state::set_not_indexable(pool, tenant_id, item_id, "No extractable text content")
             .await
             .map_err(|e| format!("set_not_indexable: {e}"))?;
-        sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+        sqlx::query("SELECT xtenant.outbox_ack($1)")
             .bind(event.id)
             .execute(pool)
             .await
@@ -213,7 +204,7 @@ async fn process_one_event(
         if state.status == "indexed" {
             if let Some(ref indexed_hash) = state.indexed_content_hash {
                 if *indexed_hash == chunk_result.content_hash {
-                    sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                    sqlx::query("SELECT xtenant.outbox_ack($1)")
                         .bind(event.id)
                         .execute(pool)
                         .await
@@ -288,7 +279,7 @@ async fn process_one_event(
             .await
             .map_err(|e| format!("update index state: {e}"))?;
 
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event.id)
                 .execute(tx.conn())
                 .await
@@ -316,7 +307,7 @@ async fn process_one_event(
                 index_state::set_failed(pool, tenant_id, item_id, &reason)
                     .await
                     .map_err(|e| format!("set_failed: {e}"))?;
-                sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                sqlx::query("SELECT xtenant.outbox_ack($1)")
                     .bind(event.id)
                     .execute(pool)
                     .await
@@ -332,19 +323,14 @@ async fn process_one_event(
                 let backoff_secs = (5i64 * 2i64.pow(attempts as u32 - 1)).min(300);
                 let available_at = Utc::now() + chrono::Duration::seconds(backoff_secs);
 
-                sqlx::query(
-                    "UPDATE outbox_events \
-                     SET claimed_at = NULL, claim_token = NULL, \
-                         available_at = $1, last_error = $2 \
-                     WHERE id = $3 AND claim_token = $4",
-                )
-                .bind(available_at)
-                .bind(format!("retriable: {reason}"))
-                .bind(event.id)
-                .bind(claim_token)
-                .execute(pool)
-                .await
-                .map_err(|e| format!("reschedule outbox: {e}"))?;
+                sqlx::query("SELECT xtenant.outbox_reschedule($1, $2, $3, $4)")
+                    .bind(event.id)
+                    .bind(claim_token)
+                    .bind(available_at)
+                    .bind(format!("retriable: {reason}"))
+                    .execute(pool)
+                    .await
+                    .map_err(|e| format!("reschedule outbox: {e}"))?;
 
                 tracing::info!(
                     tenant_id = %tenant_id,
@@ -363,7 +349,7 @@ async fn process_one_event(
             index_state::set_failed(pool, tenant_id, item_id, &reason)
                 .await
                 .map_err(|e| format!("set_failed: {e}"))?;
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event.id)
                 .execute(pool)
                 .await
@@ -383,7 +369,7 @@ async fn process_one_event(
             index_state::set_failed(pool, tenant_id, item_id, reason)
                 .await
                 .map_err(|e| format!("set_failed: {e}"))?;
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event.id)
                 .execute(pool)
                 .await

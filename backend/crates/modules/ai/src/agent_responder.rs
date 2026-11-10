@@ -16,19 +16,12 @@ pub async fn process_agent_responder_once(
 
     // 1. Claim one unprocessed outbox_events row
     let claim_token = Uuid::new_v4();
+    // Across tenants, so it goes through the audited function `xtenant.outbox_claim`.
     let maybe_row: Option<(Uuid, Uuid, String, String, serde_json::Value)> = sqlx::query_as(
-        "UPDATE outbox_events \
-         SET claimed_at = now(), claim_token = $1 \
-         WHERE id = ( \
-             SELECT id FROM outbox_events \
-             WHERE event_type IN ('conversation.customer_message', 'ai.tool_decision') \
-             AND claimed_at IS NULL \
-             ORDER BY created_at ASC \
-             LIMIT 1 \
-             FOR UPDATE SKIP LOCKED \
-         ) \
-         RETURNING id, tenant_id::uuid, aggregate_id, event_type, payload",
+        "SELECT id, tenant_id::uuid, aggregate_id, event_type, payload \
+         FROM xtenant.outbox_claim($1, $2)",
     )
+    .bind(&["conversation.customer_message", "ai.tool_decision"][..])
     .bind(claim_token)
     .fetch_optional(pool)
     .await?;
@@ -67,7 +60,7 @@ pub async fn process_agent_responder_once(
         )
         .await?;
 
-        sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+        sqlx::query("SELECT xtenant.outbox_ack($1)")
             .bind(event_id)
             .execute(pool)
             .await?;
@@ -88,18 +81,11 @@ pub async fn process_agent_responder_once(
 
     // 2a. Claim-time coalescing: delete older unclaimed events for the same
     // conversation (their content is already in the history the engine loads)
-    let _ = sqlx::query(
-        "DELETE FROM outbox_events \
-         WHERE event_type = 'conversation.customer_message' \
-         AND claimed_at IS NULL \
-         AND payload->>'conversation_id' = $1::text \
-         AND id != $2 \
-         AND created_at < (SELECT created_at FROM outbox_events WHERE id = $2)",
-    )
-    .bind(conversation_id.to_string())
-    .bind(event_id)
-    .execute(pool)
-    .await;
+    let _ = sqlx::query("SELECT xtenant.outbox_coalesce_customer_messages($1, $2)")
+        .bind(conversation_id)
+        .bind(event_id)
+        .execute(pool)
+        .await;
 
     // 2b. Load live agent config
     let live_config = agent_config::load_live(pool, tenant_id).await?;
@@ -115,7 +101,7 @@ pub async fn process_agent_responder_once(
                 Some(s) => s,
                 None => {
                     // Conversation not found — delete event
-                    sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                    sqlx::query("SELECT xtenant.outbox_ack($1)")
                         .bind(event_id)
                         .execute(pool)
                         .await?;
@@ -126,7 +112,7 @@ pub async fn process_agent_responder_once(
             if matches!(status.as_str(), "resolved" | "closed")
                 || ai_handling.as_deref() == Some("human")
             {
-                sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                sqlx::query("SELECT xtenant.outbox_ack($1)")
                     .bind(event_id)
                     .execute(pool)
                     .await?;
@@ -156,7 +142,7 @@ pub async fn process_agent_responder_once(
                     }
                     tx.commit().await?;
                 }
-                sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                sqlx::query("SELECT xtenant.outbox_ack($1)")
                     .bind(event_id)
                     .execute(pool)
                     .await?;
@@ -192,7 +178,7 @@ pub async fn process_agent_responder_once(
         let channels: Vec<String> =
             serde_json::from_value(row.enabled_channels.clone()).unwrap_or_default();
         if channels.is_empty() || !channels.contains(&channel) {
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;
@@ -204,7 +190,7 @@ pub async fn process_agent_responder_once(
             conversations::queries::conversation_ai_state(pool, tenant_id, conversation_id).await?;
         if let Some((status, _)) = state {
             if matches!(status.as_str(), "resolved" | "closed") {
-                sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                sqlx::query("SELECT xtenant.outbox_ack($1)")
                     .bind(event_id)
                     .execute(pool)
                     .await?;
@@ -239,7 +225,7 @@ pub async fn process_agent_responder_once(
             if let Err(e) = crate::generation_record::insert(pool, &rec).await {
                 tracing::warn!(error = %e, "failed to record cancelled_escalation generation");
             }
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;
@@ -251,7 +237,7 @@ pub async fn process_agent_responder_once(
         let body = match body {
             Some(b) => b,
             None => {
-                sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                sqlx::query("SELECT xtenant.outbox_ack($1)")
                     .bind(event_id)
                     .execute(pool)
                     .await?;
@@ -303,7 +289,7 @@ pub async fn process_agent_responder_once(
                     }
                 }
                 handle_routing_outcome(outcome, tx, pool).await;
-                sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                sqlx::query("SELECT xtenant.outbox_ack($1)")
                     .bind(event_id)
                     .execute(pool)
                     .await?;
@@ -351,7 +337,7 @@ pub async fn process_agent_responder_once(
                     }
                 }
                 handle_routing_outcome(outcome, tx, pool).await;
-                sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+                sqlx::query("SELECT xtenant.outbox_ack($1)")
                     .bind(event_id)
                     .execute(pool)
                     .await?;
@@ -364,7 +350,7 @@ pub async fn process_agent_responder_once(
         let decision = billing::enforcement::check(pool, tenant_id).await?;
         if !decision.allowed {
             tracing::info!(?tenant_id, reason = ?decision.reason, "agent responder: billing gate paused AI reply");
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;
