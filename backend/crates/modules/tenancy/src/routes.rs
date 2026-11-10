@@ -514,20 +514,13 @@ pub async fn build_me_response(
     principal: Principal,
     is_production: bool,
 ) -> Result<MeResponse, ApiError> {
-    let rows = sqlx::query(
-        r#"
-        SELECT tm.tenant_id, t.name, t.slug, tm.role
-        FROM tenant_memberships tm
-        JOIN tenants t ON t.id = tm.tenant_id
-        WHERE tm.user_id = $1
-          AND tm.deleted_at IS NULL
-          AND t.deleted_at IS NULL
-        "#,
-    )
-    .bind(principal.user_id)
-    .fetch_all(pool)
-    .await
-    .map_err(|error| ApiError::internal_error(format!("Database query failed: {error}")))?;
+    // A user's memberships span tenants, so they come from the audited function
+    // `xtenant.user_memberships`.
+    let rows = sqlx::query("SELECT tenant_id, name, slug, role FROM xtenant.user_memberships($1)")
+        .bind(principal.user_id)
+        .fetch_all(pool)
+        .await
+        .map_err(|error| ApiError::internal_error(format!("Database query failed: {error}")))?;
 
     let memberships = rows
         .iter()

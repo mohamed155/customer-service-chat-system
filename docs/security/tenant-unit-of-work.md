@@ -55,13 +55,19 @@ on for the tables they touch.
 
 ### Pre-tenant lookups (the tenant is found from a token or an identifier)
 
-| Where | What it resolves |
-| --- | --- |
-| `integrations`: `find_connection_by_token_hash`, `connection_by_token_and_slug`, and the token lookup at the start of `webhook::receive_webhook` (its delivery writes run in the tenant's Unit of Work) | webhook token to connection to tenant |
-| `widgets`: `find_instance_by_public_id`, `find_session_by_token_hash` | public widget id or session token to tenant |
-| `tenancy`: `invitations::preview_invitation`, `invitations::accept_invitation` | invitation token to tenant |
-| `tenancy`: `signup::signup`, `routes::build_me_response` | creates a user, tenant and membership; lists one user's memberships across tenants |
-| `identity`: `audit::record` | authentication events, written with no tenant |
+Served by the audited functions in the `xtenant` schema (see [the audited cross-tenant
+path](#the-audited-cross-tenant-path)).
+
+| Where | What it resolves | Function |
+| --- | --- | --- |
+| `integrations`: `find_connection_by_token_hash`, and the token lookup at the start of `webhook::receive_webhook` (its delivery writes run in the tenant's Unit of Work) | webhook token to connection to tenant | `xtenant.webhook_connection_by_token` |
+| `integrations`: `connection_by_token_and_slug` (the WhatsApp webhooks) | webhook token and channel to connection to tenant | `xtenant.webhook_connection_by_token_and_slug` |
+| `widgets`: `find_instance_by_public_id` | public widget id to instance to tenant | `xtenant.widget_instance_by_public_id` |
+| `widgets`: `find_session_by_token_hash` | session token to session to tenant | `xtenant.widget_session_by_token` |
+| `tenancy`: `invitations::preview_invitation`, `invitations::accept_invitation` | invitation token to invitation to tenant; the accept then runs in that tenant's Unit of Work | `xtenant.invitation_by_token` |
+| `tenancy`: `routes::build_me_response` | the memberships of one user across tenants | `xtenant.user_memberships` |
+| `identity`: `audit::record` | authentication events, written with no tenant | `xtenant.record_auth_event` |
+| `tenancy`: `signup::signup` | none: it creates the tenant, then writes that tenant's own rows. The transaction carries the new tenant from the moment the tenant row exists (`db::set_tenant_in_tx`) | — |
 
 ### Cross-tenant jobs and platform routes
 
@@ -74,6 +80,35 @@ on for the tables they touch.
 | `ai::routes`: `put_platform_config`, `put_platform_credential`, `delete_platform_credential`; the platform branch of `ai::resolution` | Platform-wide rows (`tenant_id IS NULL`) in `ai_configurations` and `ai_credentials` |
 | `billing`: `list_subscriptions`, `routes::put_subscription` | A platform principal manages any tenant's subscription |
 | `audit::queries::list_entries` without a tenant scope | The platform-wide audit listing |
+
+## The audited cross-tenant path
+
+Row-Level Security has no way to say "this query may see every tenant". ADR-004 section 2 forbids
+the workaround of switching it off for the application, so work without a tenant, or across
+tenants, goes through one narrow `SECURITY DEFINER` function per job, in the `xtenant` schema:
+
+- **Owner.** The functions are owned by `app_platform` (no login, `BYPASSRLS`), not by `app_owner`.
+  `FORCE ROW LEVEL SECURITY` applies policies to the table owner too and `app_owner` is
+  `NOBYPASSRLS`, so a function it owned would return nothing as soon as a table's policy is on.
+  `app_owner` can switch to `app_platform` (`SET ROLE`, no inheritance) to create the functions in a
+  migration; `app_runtime` cannot.
+- **Calling them.** `app_runtime` is the only role that may execute them
+  (`SELECT … FROM xtenant.widget_session_by_token($1)`); `PUBLIC` may not. It still cannot read the
+  underlying tables without a tenant.
+- **Shape.** Each function sets `search_path = pg_catalog, public, pg_temp`, takes only the arguments
+  it needs and returns only the columns its caller uses.
+- **Audit.** A call that returns or changes something writes one `audit_logs` row through the
+  internal helper `xtenant._audit` (action `xtenant.<function>`, resource type `cross_tenant_access`,
+  the tenant and the resource id of what was resolved; no tokens or hashes). A call that finds
+  nothing writes nothing: the lookups sit behind public endpoints, and a row per miss would let
+  anyone flood `audit_logs`. The helper is not executable by `app_runtime`, so the application
+  cannot forge these rows.
+- **Adding one.** Follow `backend/migrations/0068_cross_tenant_lookups.sql`. The catalog test in
+  `backend/crates/shared/db/tests/xtenant.rs` checks owner, `search_path` and privileges for every
+  function in the schema, and each function needs a behaviour test there. The test helpers in
+  `db::testing` (`owner_tx`, `enforce_rls`, `become_runtime`) put forced Row-Level Security on the
+  tables in a transaction that is rolled back, drop to `app_runtime`, and check that the function
+  still works while a direct read returns nothing.
 
 ## Notes for the Row-Level Security steps
 

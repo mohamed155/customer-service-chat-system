@@ -423,16 +423,15 @@ pub struct ConnectionByToken {
 /// Look up a connection by the SHA-256 hash of its intake token. Used by the
 /// public `POST /hooks/v1/{token}` handler to resolve `{token}` → connection
 /// without leaking which tokens map to which tenants (the call site must
-/// treat unknown and inactive cases identically to the outside world).
+/// treat unknown and inactive cases identically to the outside world). The tenant is not known
+/// yet, so this goes through the audited function `xtenant.webhook_connection_by_token`.
 pub async fn find_connection_by_token_hash(
     pool: &sqlx::PgPool,
     hash: &[u8],
 ) -> Result<Option<ConnectionByToken>, sqlx::Error> {
     let row: Option<(Uuid, Uuid, String, bool)> = sqlx::query_as(
-        "SELECT c.id, c.tenant_id, cat.slug, c.is_active \
-         FROM integration_connections c \
-         JOIN integration_catalog cat ON cat.id = c.catalog_id \
-         WHERE c.webhook_token_hash = $1",
+        "SELECT connection_id, tenant_id, catalog_slug, is_active \
+         FROM xtenant.webhook_connection_by_token($1)",
     )
     .bind(hash)
     .fetch_optional(pool)
@@ -509,16 +508,16 @@ pub struct ConnectionByTokenRow {
     pub config: serde_json::Value,
 }
 
+/// Same lookup for a channel-specific webhook (WhatsApp), through
+/// `xtenant.webhook_connection_by_token_and_slug`.
 pub async fn connection_by_token_and_slug(
     pool: &sqlx::PgPool,
     token_hash: &[u8],
     slug: &str,
 ) -> Result<Option<ConnectionByTokenRow>, sqlx::Error> {
     sqlx::query_as::<_, ConnectionByTokenRow>(
-        "SELECT c.id, c.tenant_id, c.catalog_id, c.is_active, c.config \
-         FROM integration_connections c \
-         JOIN integration_catalog cat ON cat.id = c.catalog_id \
-         WHERE c.webhook_token_hash = $1 AND cat.slug = $2",
+        "SELECT id, tenant_id, catalog_id, is_active, config \
+         FROM xtenant.webhook_connection_by_token_and_slug($1, $2)",
     )
     .bind(token_hash)
     .bind(slug)

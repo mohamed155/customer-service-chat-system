@@ -1121,15 +1121,13 @@ pub async fn preview_invitation(
         None => return ApiError::not_found("Invitation not found").into_response(),
     };
 
-    // `t.deleted_at IS NULL` ensures a soft-deleted tenant is indistinguishable
-    // from an unknown token (404), same as a suspended tenant below — the
+    // The tenant is found from the token, so this goes through the audited function
+    // `xtenant.invitation_by_token`. It treats a soft-deleted tenant as a miss, which makes it
+    // indistinguishable from an unknown token (404), same as a suspended tenant below — the
     // contract requires both to be non-revealing.
     let row = match sqlx::query(
-        "SELECT ti.id, ti.email, ti.role, ti.status, ti.expires_at, \
-                t.name AS tenant_name, t.status AS tenant_status \
-         FROM tenant_invitations ti \
-         JOIN tenants t ON t.id = ti.tenant_id AND t.deleted_at IS NULL \
-         WHERE ti.token_hash = $1",
+        "SELECT id, email, role, status, expires_at, tenant_name, tenant_status \
+         FROM xtenant.invitation_by_token($1)",
     )
     .bind(&token_hash)
     .fetch_optional(&pool)
@@ -1223,14 +1221,13 @@ pub async fn accept_invitation(
     };
 
     // ---- Fetch invitation + tenant info ----
-    // `t.deleted_at IS NULL` ensures a soft-deleted tenant is indistinguishable
-    // from an unknown token (404), same as a suspended tenant below.
+    // The tenant is found from the token, so this goes through the audited function
+    // `xtenant.invitation_by_token`; a soft-deleted tenant is a miss there, so it is
+    // indistinguishable from an unknown token (404), same as a suspended tenant below.
     let row = match sqlx::query(
-        "SELECT ti.id, ti.tenant_id, ti.email, ti.role, ti.status, ti.expires_at, \
-                ti.accepted_at, t.name AS tenant_name, t.status AS tenant_status \
-         FROM tenant_invitations ti \
-         JOIN tenants t ON t.id = ti.tenant_id AND t.deleted_at IS NULL \
-         WHERE ti.token_hash = $1",
+        "SELECT id, tenant_id, email, role, status, expires_at, accepted_at, tenant_name, \
+                tenant_status \
+         FROM xtenant.invitation_by_token($1)",
     )
     .bind(&token_hash)
     .fetch_optional(&pool)
@@ -1269,7 +1266,8 @@ pub async fn accept_invitation(
         return ApiError::gone("Invitation has already been used").into_response();
     }
 
-    let mut tx = match pool.begin().await {
+    // The invitation fixed the tenant, so the rest of the accept runs in that tenant's Unit of Work.
+    let mut tx = match db::UnitOfWork::begin_for_tenant(&pool, tenant_id).await {
         Ok(tx) => tx,
         Err(e) => {
             return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
@@ -1285,7 +1283,7 @@ pub async fn accept_invitation(
     )
     .bind(invitation_id)
     .bind(tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     {
         Ok(v) => v,
@@ -1302,7 +1300,7 @@ pub async fn accept_invitation(
         "SELECT status FROM tenants WHERE id = $1 AND deleted_at IS NULL FOR SHARE",
     )
     .bind(tenant_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(tx.conn())
     .await
     .unwrap_or(None);
 
@@ -1324,7 +1322,7 @@ pub async fn accept_invitation(
         )
         .bind(tenant_id)
         .bind(principal.user_id)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(tx.conn())
         .await
         .unwrap_or(None);
 
@@ -1345,7 +1343,7 @@ pub async fn accept_invitation(
         .bind(principal.user_id)
         .bind(invitation_id)
         .bind(tenant_id)
-        .execute(&mut *tx)
+        .execute(tx.conn())
         .await
         {
             Ok(result) => result.rows_affected(),
@@ -1366,7 +1364,7 @@ pub async fn accept_invitation(
         .bind(tenant_id)
         .bind(principal.user_id)
         .bind(&role)
-        .execute(&mut *tx)
+        .execute(tx.conn())
         .await
         {
             return ApiError::internal_error(format!("Membership insert failed: {e}"))
@@ -1447,7 +1445,7 @@ pub async fn accept_invitation(
     .bind(&email)
     .bind(&display_name)
     .bind(&password_hash)
-    .fetch_one(&mut *tx)
+    .fetch_one(tx.conn())
     .await
     {
         Ok(id) => id,
@@ -1467,7 +1465,7 @@ pub async fn accept_invitation(
     .bind(new_user_id)
     .bind(invitation_id)
     .bind(tenant_id)
-    .execute(&mut *tx)
+    .execute(tx.conn())
     .await
     {
         Ok(result) => result.rows_affected(),
@@ -1488,7 +1486,7 @@ pub async fn accept_invitation(
     .bind(tenant_id)
     .bind(new_user_id)
     .bind(&role)
-    .execute(&mut *tx)
+    .execute(tx.conn())
     .await
     {
         return ApiError::internal_error(format!("Membership insert failed: {e}")).into_response();

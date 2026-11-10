@@ -7,6 +7,11 @@
 #   app_runtime  what the running application connects as (DATABASE_URL): DML only, cannot create
 #                or alter anything, owns nothing, NOBYPASSRLS.
 #
+#   app_platform owns the audited cross-tenant functions (schema `xtenant`, ADR-004 section 2 and 3):
+#                NOLOGIN, so nobody connects as it, and BYPASSRLS, so a function it owns still sees
+#                rows once Row-Level Security is forced. It exists because FORCE ROW LEVEL SECURITY
+#                applies to the table owner too: a function owned by app_owner would return nothing.
+#
 # The bootstrap superuser (POSTGRES_USER) stays for administration only.
 #
 # Where it runs (it is idempotent, so running it again is safe):
@@ -65,6 +70,23 @@ psql -v ON_ERROR_STOP=1 \
 	SELECT set_config('roles.owner_password', '', false),
 	       set_config('roles.runtime_password', '', false) \g /dev/null
 
+	-- app_platform: no password, no login. Only BYPASSRLS needs a superuser, which is why this lives
+	-- here and not in a migration. Attributes are re-applied on every run.
+	DO $$
+	BEGIN
+	  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_platform') THEN
+	    CREATE ROLE app_platform NOLOGIN;
+	  END IF;
+	  ALTER ROLE app_platform NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS;
+	END
+	$$;
+
+	-- Migrations (app_owner) create the functions as app_platform with SET LOCAL ROLE, and tests
+	-- drop to app_runtime to check what it can see. SET without INHERIT: being a member never
+	-- gives app_owner the other role's privileges (so not BYPASSRLS either).
+	GRANT app_platform TO app_owner WITH INHERIT FALSE, SET TRUE;
+	GRANT app_runtime TO app_owner WITH INHERIT FALSE, SET TRUE;
+
 	-- app_owner owns the database and the schema, so migrations need no superuser rights.
 	ALTER DATABASE :"dbname" OWNER TO app_owner;
 	ALTER SCHEMA public OWNER TO app_owner;
@@ -73,7 +95,7 @@ psql -v ON_ERROR_STOP=1 \
 	REVOKE ALL ON DATABASE :"dbname" FROM PUBLIC;
 	REVOKE ALL ON SCHEMA public FROM PUBLIC;
 	GRANT CONNECT ON DATABASE :"dbname" TO app_runtime;
-	GRANT USAGE ON SCHEMA public TO app_runtime;
+	GRANT USAGE ON SCHEMA public TO app_runtime, app_platform;
 
 	-- An existing database (created before the roles, by the superuser): hand its objects to
 	-- app_owner. Extension members (pgvector, pg_trgm, citext) stay with the extension. Indexes
@@ -142,14 +164,14 @@ psql -v ON_ERROR_STOP=1 \
 
 	-- Tables that already exist are DML-accessible to the runtime role (migration 0066 does the
 	-- same, for databases whose roles were created elsewhere) ...
-	GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_runtime;
-	GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
+	GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_runtime, app_platform;
+	GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_runtime, app_platform;
 
 	-- ... and so is everything migrations (run as app_owner) create later.
 	ALTER DEFAULT PRIVILEGES FOR ROLE app_owner IN SCHEMA public
-	  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_runtime;
+	  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_runtime, app_platform;
 	ALTER DEFAULT PRIVILEGES FOR ROLE app_owner IN SCHEMA public
-	  GRANT USAGE, SELECT ON SEQUENCES TO app_runtime;
+	  GRANT USAGE, SELECT ON SEQUENCES TO app_runtime, app_platform;
 SQL
 
-echo "02-roles.sh: app_owner and app_runtime are in place."
+echo "02-roles.sh: app_owner, app_runtime and app_platform are in place."

@@ -38,6 +38,15 @@ The backend uses two PostgreSQL roles (ADR-004 §3), created by `infra/postgres/
 | `DATABASE_URL` | `app_runtime`: reads and writes rows only. No DDL, no `TRUNCATE`, owns nothing, `NOBYPASSRLS`, so Row-Level Security applies to it. | the server | yes |
 | `MIGRATION_DATABASE_URL` | `app_owner`: owns the schema and every table. | `server migrate` only (also test setup) | yes |
 
+A third role, `app_platform`, has no password and no `DATABASE_URL`: it cannot log in. It owns the
+audited cross-tenant functions in the `xtenant` schema (see [Tenant Unit of Work](security/tenant-unit-of-work.md#the-audited-cross-tenant-path))
+and has `BYPASSRLS`, so a function it owns keeps working once Row-Level Security is forced on a
+table. `02-roles.sh` creates it, because only a superuser can grant `BYPASSRLS`. It also lets
+`app_owner` switch to `app_platform` and `app_runtime` (`SET ROLE`, without inheriting their
+privileges): migrations create the functions as `app_platform`, and tests check what `app_runtime`
+can see. Migration 0067 fails with a clear message when the role is missing; on an existing
+database run `just roles` (or the deployment runbook's role step) first.
+
 The server never runs migrations on startup. Run them as a separate step, before starting a new
 release: `cargo run -p server -- migrate` locally (or `sqlx migrate run --database-url
 "$MIGRATION_DATABASE_URL"`), `docker compose … run --rm backend migrate` on a host (`ops/deploy.sh`

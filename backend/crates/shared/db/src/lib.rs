@@ -20,7 +20,7 @@
 
 pub mod tenant;
 pub mod testing;
-pub use tenant::{TenantScoped, UnitOfWork};
+pub use tenant::{set_tenant_in_tx, TenantScoped, UnitOfWork};
 
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::PgPool;

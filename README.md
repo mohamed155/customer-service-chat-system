@@ -114,6 +114,10 @@ data. Copy `APP_OWNER_PASSWORD`, `APP_RUNTIME_PASSWORD`, `DATABASE_URL` and
 container with the passwords), then `just roles` once. That creates the roles and hands the
 existing tables to `app_owner`.
 
+A third role, `app_platform` (no login, `BYPASSRLS`), owns the audited cross-tenant functions in
+the `xtenant` schema. If a migration fails with "role app_platform is missing", run `just roles`
+once more: it is idempotent and creates it.
+
 `just verify-roles` checks that the split holds: it creates and drops a throwaway table
 with forced RLS and tries to get around it as `app_runtime`.
 

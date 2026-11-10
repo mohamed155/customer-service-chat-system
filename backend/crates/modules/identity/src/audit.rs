@@ -12,17 +12,15 @@ pub async fn record(
     resource_id: Option<&str>,
     details: &serde_json::Value,
 ) {
-    let result = sqlx::query(
-        "INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, tenant_id, details) VALUES ($1, $2, $3, $4, $5, $6)",
-    )
-    .bind(actor_user_id)
-    .bind(action)
-    .bind(RESOURCE_TYPE_USER)
-    .bind(resource_id)
-    .bind(Option::<Uuid>::None)
-    .bind(details)
-    .execute(pool)
-    .await;
+    // Authentication events have no tenant, so the row is written by the audited function
+    // `xtenant.record_auth_event`, which only accepts `auth.*` actions.
+    let result = sqlx::query("SELECT xtenant.record_auth_event($1, $2, $3, $4)")
+        .bind(action)
+        .bind(actor_user_id)
+        .bind(resource_id)
+        .bind(details)
+        .execute(pool)
+        .await;
 
     if let Err(e) = result {
         error!(
