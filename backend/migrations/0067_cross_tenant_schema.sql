@@ -16,8 +16,10 @@
 --   - EXECUTE revoked from PUBLIC and granted to app_runtime;
 --   - takes only the arguments it needs and returns only the columns its caller uses;
 --   - writes an audit row (xtenant._audit) when it returns or changes something. An empty result
---     (an unknown token, an idle poll) writes nothing: unauthenticated callers can reach the
---     lookups, and an audit row per miss would let anyone flood audit_logs.
+--     (an unknown token, an idle poll) writes nothing. Lookups that a client can repeat with a
+--     valid identifier (a widget's public id is printed on every page that embeds it) write at
+--     most one row per function and resource per hour: otherwise anyone could grow the
+--     append-only audit_logs table without limit by calling the endpoint in a loop.
 --
 -- No Row-Level Security policy is added here, so nothing the application can see changes.
 
@@ -51,6 +53,11 @@ ALTER DEFAULT PRIVILEGES FOR ROLE app_owner IN SCHEMA public
 ALTER DEFAULT PRIVILEGES FOR ROLE app_owner IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO app_platform;
 
+-- The throttle in xtenant._audit looks up the latest row for one function and resource.
+CREATE INDEX audit_logs_cross_tenant_idx
+  ON audit_logs (action, resource_id, created_at DESC)
+  WHERE resource_type = 'cross_tenant_access';
+
 SET LOCAL ROLE app_platform;
 
 -- Functions app_platform creates are not executable by PUBLIC (Postgres grants that by default;
@@ -61,20 +68,35 @@ ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 -- Internal helper: the one place a cross-tenant function writes its audit row. Not granted to
 -- app_runtime, so the application cannot forge these rows; only the other functions in this
 -- schema (same owner) call it.
+--
+-- p_once_per throttles repeatable lookups: when a row for the same function and resource exists
+-- within that interval, no new row is written. The count of rows is then bounded by the number of
+-- real resources, not by the number of requests. Pass NULL to always write.
 CREATE FUNCTION xtenant._audit(
   p_function    text,
   p_tenant_id   uuid,
   p_actor_id    uuid,
   p_resource_id text,
-  p_details     jsonb DEFAULT '{}'::jsonb
+  p_details     jsonb DEFAULT '{}'::jsonb,
+  p_once_per    interval DEFAULT NULL
 ) RETURNS void
-LANGUAGE sql
+LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $$
+BEGIN
+  IF p_once_per IS NOT NULL AND EXISTS (
+       SELECT 1 FROM audit_logs
+        WHERE resource_type = 'cross_tenant_access'
+          AND action = 'xtenant.' || p_function
+          AND resource_id = p_resource_id
+          AND created_at > now() - p_once_per) THEN
+    RETURN;
+  END IF;
   INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, tenant_id, details)
   VALUES (p_actor_id, 'xtenant.' || p_function, 'cross_tenant_access', p_resource_id, p_tenant_id,
           COALESCE(p_details, '{}'::jsonb));
+END
 $$;
 
 RESET ROLE;

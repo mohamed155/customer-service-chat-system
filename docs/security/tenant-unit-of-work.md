@@ -97,12 +97,14 @@ tenants, goes through one narrow `SECURITY DEFINER` function per job, in the `xt
   underlying tables without a tenant.
 - **Shape.** Each function sets `search_path = pg_catalog, public, pg_temp`, takes only the arguments
   it needs and returns only the columns its caller uses.
-- **Audit.** A call that returns or changes something writes one `audit_logs` row through the
-  internal helper `xtenant._audit` (action `xtenant.<function>`, resource type `cross_tenant_access`,
-  the tenant and the resource id of what was resolved; no tokens or hashes). A call that finds
-  nothing writes nothing: the lookups sit behind public endpoints, and a row per miss would let
-  anyone flood `audit_logs`. The helper is not executable by `app_runtime`, so the application
-  cannot forge these rows.
+- **Audit.** A call that returns or changes something writes an `audit_logs` row through the
+  internal helper `xtenant._audit` (action `xtenant.<function>`, resource type
+  `cross_tenant_access`, the tenant and the resource id of what was resolved; no tokens or
+  hashes). A call that finds nothing writes nothing. The lookups sit behind endpoints that a client
+  can repeat (a widget's public id is printed on every page that embeds it), and `audit_logs` is
+  append-only, so a lookup writes at most one row per function and resource per hour. The number of
+  rows is bounded by the number of real resources, not by the number of requests. The helper is not
+  executable by `app_runtime`, so the application cannot forge these rows.
 - **Adding one.** Follow `backend/migrations/0068_cross_tenant_lookups.sql`. The catalog test in
   `backend/crates/shared/db/tests/xtenant.rs` checks owner, `search_path` and privileges for every
   function in the schema, and each function needs a behaviour test there. The test helpers in

@@ -4,7 +4,8 @@
 -- Each one resolves a credential (a user id from a session, an invitation token, a widget public
 -- id or session token, a webhook token) to the rows it entitles the caller to, and returns only
 -- the columns its caller uses. A hit writes an audit row (action `xtenant.<function>`, resource
--- `cross_tenant_access`, tenant and resource id of what was resolved); a miss writes nothing.
+-- `cross_tenant_access`, tenant and resource id of what was resolved) at most once an hour per
+-- resource, so repeating a call cannot grow audit_logs; a miss writes nothing.
 
 SET LOCAL ROLE app_platform;
 
@@ -25,7 +26,7 @@ BEGIN
       AND tm.deleted_at IS NULL
       AND t.deleted_at IS NULL;
   IF FOUND THEN
-    PERFORM xtenant._audit('user_memberships', NULL, p_user_id, p_user_id::text);
+    PERFORM xtenant._audit('user_memberships', NULL, p_user_id, p_user_id::text, '{}'::jsonb, interval '1 hour');
   END IF;
 END
 $$;
@@ -82,7 +83,8 @@ BEGIN
   IF NOT FOUND THEN
     RETURN;
   END IF;
-  PERFORM xtenant._audit('invitation_by_token', r.tenant_id, NULL, r.id::text);
+  PERFORM xtenant._audit('invitation_by_token', r.tenant_id, NULL, r.id::text,
+                         '{}'::jsonb, interval '1 hour');
   RETURN QUERY SELECT r.id, r.tenant_id, r.email, r.role, r.status, r.expires_at, r.accepted_at,
                       r.tenant_name, r.tenant_status;
 END
@@ -122,7 +124,8 @@ BEGIN
   IF NOT FOUND THEN
     RETURN;
   END IF;
-  PERFORM xtenant._audit('widget_instance_by_public_id', r.tenant_id, NULL, r.id::text);
+  PERFORM xtenant._audit('widget_instance_by_public_id', r.tenant_id, NULL, r.id::text,
+                         '{}'::jsonb, interval '1 hour');
   RETURN QUERY SELECT r.id, r.tenant_id, r.public_id, r.name, r.display_name, r.primary_color,
                       r.welcome_message, r."position", r.theme, r.enabled, r.allowed_domains,
                       r.created_at, r.updated_at;
@@ -156,7 +159,8 @@ BEGIN
   IF NOT FOUND THEN
     RETURN;
   END IF;
-  PERFORM xtenant._audit('widget_session_by_token', r.tenant_id, NULL, r.id::text);
+  PERFORM xtenant._audit('widget_session_by_token', r.tenant_id, NULL, r.id::text,
+                         '{}'::jsonb, interval '1 hour');
   RETURN QUERY SELECT r.id, r.tenant_id, r.widget_instance_id, r.token_hash, r.customer_id,
                       r.expires_at, r.created_at;
 END
@@ -183,7 +187,8 @@ BEGIN
   IF NOT FOUND THEN
     RETURN;
   END IF;
-  PERFORM xtenant._audit('webhook_connection_by_token', r.tenant_id, NULL, r.connection_id::text);
+  PERFORM xtenant._audit('webhook_connection_by_token', r.tenant_id, NULL, r.connection_id::text,
+                         '{}'::jsonb, interval '1 hour');
   RETURN QUERY SELECT r.connection_id, r.tenant_id, r.catalog_slug, r.is_active;
 END
 $$;
@@ -206,7 +211,8 @@ BEGIN
   IF NOT FOUND THEN
     RETURN;
   END IF;
-  PERFORM xtenant._audit('webhook_connection_by_token_and_slug', r.tenant_id, NULL, r.id::text);
+  PERFORM xtenant._audit('webhook_connection_by_token_and_slug', r.tenant_id, NULL, r.id::text,
+                         '{}'::jsonb, interval '1 hour');
   RETURN QUERY SELECT r.id, r.tenant_id, r.catalog_id, r.is_active, r.config;
 END
 $$;

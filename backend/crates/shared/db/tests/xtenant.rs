@@ -510,6 +510,30 @@ async fn widget_lookups_resolve_instance_and_session_without_a_tenant() {
         .await,
         1
     );
+    // The public id is printed on every page that embeds the widget, so anyone can repeat the
+    // call. It must not grow audit_logs: one row per instance per hour, however often it runs.
+    for _ in 0..5 {
+        let again: Option<(Uuid,)> =
+            sqlx::query_as("SELECT id FROM xtenant.widget_instance_by_public_id($1)")
+                .bind(&public_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .unwrap();
+        assert!(
+            again.is_some(),
+            "the repeated lookups still return the instance"
+        );
+    }
+    assert_eq!(
+        audit_rows(
+            &mut tx,
+            "widget_instance_by_public_id",
+            &instance.to_string()
+        )
+        .await,
+        1,
+        "repeating a lookup within the hour writes no further audit rows"
+    );
     let no_instance: Option<(Uuid,)> =
         sqlx::query_as("SELECT id FROM xtenant.widget_instance_by_public_id('wgt_unknown')")
             .fetch_optional(&mut *tx)
@@ -636,4 +660,77 @@ async fn webhook_lookups_resolve_the_connection_and_tenant_from_the_token() {
             .await
             .unwrap();
     assert!(unknown.is_none());
+}
+
+#[tokio::test]
+async fn audit_throttle_is_per_resource_and_lapses_after_the_interval() {
+    if !can_run() {
+        return;
+    }
+    let mut tx = db::testing::owner_tx().await;
+    let tenant = seed_tenant(&mut tx).await;
+    let mut instances = Vec::new();
+    for _ in 0..2 {
+        let public_id = format!("wgt_{}", Uuid::new_v4().simple());
+        let id: Uuid = sqlx::query_scalar(
+            "INSERT INTO widget_instances (tenant_id, public_id, name) VALUES ($1, $2, 'Support') RETURNING id",
+        )
+        .bind(tenant)
+        .bind(&public_id)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+        instances.push((id, public_id));
+    }
+    db::testing::enforce_rls(&mut tx, &["widget_instances", "audit_logs"]).await;
+    db::testing::become_runtime(&mut tx).await;
+
+    for (_, public_id) in &instances {
+        for _ in 0..3 {
+            sqlx::query("SELECT id FROM xtenant.widget_instance_by_public_id($1)")
+                .bind(public_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .unwrap();
+        }
+    }
+    for (id, _) in &instances {
+        assert_eq!(
+            audit_rows(&mut tx, "widget_instance_by_public_id", &id.to_string()).await,
+            1,
+            "each resource gets its own row, once"
+        );
+    }
+
+    // After the interval the same lookup is audited again. Waiting an hour is not an option and
+    // audit_logs is append-only, so call the helper directly with a zero interval.
+    db::testing::become_platform(&mut tx).await;
+    let throttled: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM audit_logs WHERE action = 'xtenant.widget_instance_by_public_id' \
+         AND resource_id = $1 AND created_at > now() - interval '1 hour'",
+    )
+    .bind(instances[0].0.to_string())
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert_eq!(throttled, 1);
+    sqlx::query(
+        "SELECT xtenant._audit('widget_instance_by_public_id', $1, NULL, $2, '{}'::jsonb, interval '0 seconds')",
+    )
+    .bind(tenant)
+    .bind(instances[0].0.to_string())
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    let after: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM audit_logs WHERE action = 'xtenant.widget_instance_by_public_id' AND resource_id = $1",
+    )
+    .bind(instances[0].0.to_string())
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert_eq!(
+        after, 2,
+        "once the interval has passed (here: zero), the lookup is audited again"
+    );
 }
