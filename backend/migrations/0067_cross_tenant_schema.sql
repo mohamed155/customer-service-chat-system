@@ -53,11 +53,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE app_owner IN SCHEMA public
 ALTER DEFAULT PRIVILEGES FOR ROLE app_owner IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO app_platform;
 
--- The throttle in xtenant._audit looks up the latest row for one function and resource.
-CREATE INDEX audit_logs_cross_tenant_idx
-  ON audit_logs (action, resource_id, created_at DESC)
-  WHERE resource_type = 'cross_tenant_access';
-
 SET LOCAL ROLE app_platform;
 
 -- Functions app_platform creates are not executable by PUBLIC (Postgres grants that by default;
@@ -71,7 +66,8 @@ ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 --
 -- p_once_per throttles repeatable lookups: when a row for the same function and resource exists
 -- within that interval, no new row is written. The count of rows is then bounded by the number of
--- real resources, not by the number of requests. Pass NULL to always write.
+-- real resources, not by the number of requests. Pass NULL to always write. The lookup it does
+-- is served by the index created in 0069.
 CREATE FUNCTION xtenant._audit(
   p_function    text,
   p_tenant_id   uuid,
