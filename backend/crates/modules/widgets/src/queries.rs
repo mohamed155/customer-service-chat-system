@@ -18,16 +18,17 @@ pub fn generate_public_id() -> String {
     format!("wgt_{}", id)
 }
 
+/// Resolves the public id from the embed snippet to its widget instance. The tenant is not known
+/// yet, so this goes through the audited cross-tenant function `xtenant.widget_instance_by_public_id`.
 pub async fn find_instance_by_public_id(
     pool: &PgPool,
     public_id: &str,
 ) -> sqlx::Result<Option<WidgetInstanceRow>> {
     sqlx::query_as::<_, WidgetInstanceRow>(
         "SELECT id, tenant_id, public_id, name, display_name, primary_color, \
-                welcome_message, position, theme, enabled, allowed_domains, \
+                welcome_message, \"position\", theme, enabled, allowed_domains, \
                 created_at, updated_at \
-         FROM widget_instances \
-         WHERE public_id = $1 AND deleted_at IS NULL",
+         FROM xtenant.widget_instance_by_public_id($1)",
     )
     .bind(public_id)
     .fetch_optional(pool)
@@ -62,14 +63,15 @@ pub async fn insert_session(
     result
 }
 
+/// Resolves a widget session bearer token (by hash) to a live session. The tenant comes from the
+/// row, so this goes through the audited cross-tenant function `xtenant.widget_session_by_token`.
 pub async fn find_session_by_token_hash(
     pool: &PgPool,
     token_hash: &[u8],
 ) -> sqlx::Result<Option<WidgetSessionRow>> {
     sqlx::query_as::<_, WidgetSessionRow>(
         "SELECT id, tenant_id, widget_instance_id, token_hash, customer_id, expires_at, created_at \
-         FROM widget_sessions \
-         WHERE token_hash = $1 AND expires_at > now()",
+         FROM xtenant.widget_session_by_token($1)",
     )
     .bind(token_hash)
     .fetch_optional(pool)

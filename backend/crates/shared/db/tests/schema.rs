@@ -107,6 +107,9 @@ async fn run_migrations_succeeds() {
         (64, "platform analytics indexes conversations status"),
         (65, "customer identifier widget channel"),
         (66, "runtime role grants"),
+        (67, "cross tenant schema"),
+        (68, "cross tenant lookups"),
+        (69, "audit logs cross tenant idx"),
     ];
     assert_eq!(
         rows.len(),

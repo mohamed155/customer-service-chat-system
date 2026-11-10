@@ -19,7 +19,7 @@
 //! Repositories take `&mut PgConnection` (through `&mut *uow`) or `&mut Transaction` (through
 //! `&mut uow`), so a repository never opens its own pool connection for tenant data.
 
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{PgConnection, PgPool, Postgres, Transaction};
 use std::ops::{Deref, DerefMut};
 use uuid::Uuid;
 
@@ -32,6 +32,20 @@ impl TenantScoped for Uuid {
     fn tenant_id(&self) -> Uuid {
         *self
     }
+}
+
+/// Sets `app.tenant_id` for the rest of an already-open transaction.
+///
+/// Only for the one flow that creates the tenant inside the transaction: sign-up inserts the
+/// `tenants` row (a global table) and then writes that new tenant's own rows, so the tenant id
+/// does not exist when the transaction begins. Everything else opens a [`UnitOfWork`], which sets
+/// the tenant before the first query. The setting is transaction-local, like the Unit of Work's.
+pub async fn set_tenant_in_tx(conn: &mut PgConnection, tenant_id: Uuid) -> sqlx::Result<()> {
+    sqlx::query("SELECT set_config('app.tenant_id', $1, true)")
+        .bind(tenant_id.to_string())
+        .execute(conn)
+        .await?;
+    Ok(())
 }
 
 /// A database transaction whose `app.tenant_id` is set for its whole lifetime.

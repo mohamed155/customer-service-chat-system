@@ -305,6 +305,12 @@ pub async fn signup(
             .into_response();
     };
 
+    // The tenant exists now; everything from here writes its own rows, so carry it in the
+    // transaction (the Unit of Work does this up front for every other flow).
+    if let Err(e) = db::set_tenant_in_tx(&mut tx, tenant_id).await {
+        return ApiError::internal_error(format!("Tenant context failed: {e}")).into_response();
+    }
+
     let new_user_id: Uuid = match sqlx::query_scalar(
         "INSERT INTO users (email, display_name, password_hash) \
          VALUES ($1, $2, $3) RETURNING id",

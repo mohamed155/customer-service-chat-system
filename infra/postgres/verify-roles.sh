@@ -42,6 +42,14 @@ for role in app_owner app_runtime; do
   expect_eq "${role}: not superuser, no BYPASSRLS, no CREATEDB/CREATEROLE/REPLICATION" "00000" "${attrs}"
 done
 
+# app_platform owns the audited cross-tenant functions: it cannot log in, but it bypasses RLS so
+# those functions keep working once policies are forced.
+attrs="$(as_super "select concat(rolsuper::int, rolbypassrls::int, rolcreatedb::int, rolcreaterole::int, rolreplication::int, rolcanlogin::int) from pg_roles where rolname = 'app_platform'")"
+expect_eq "app_platform: BYPASSRLS, not superuser, no CREATEDB/CREATEROLE/REPLICATION, cannot log in" "010000" "${attrs}"
+expect_eq "app_owner can SET ROLE app_platform but does not inherit it" "t f" \
+  "$(as_super "select pg_has_role('app_owner', 'app_platform', 'SET'), pg_has_role('app_owner', 'app_platform', 'USAGE')" | tr '|' ' ')"
+expect_eq "app_runtime cannot become app_platform" "f" "$(as_super "select pg_has_role('app_runtime', 'app_platform', 'SET')")"
+
 echo "== sample RLS policy, set up as app_owner"
 setup() { local out; out="$("$@")" || { echo "FAIL  setup step failed: $*"; echo "      got: ${out}"; exit 1; }; }
 setup as_owner "create table ${probe} (id serial primary key, tenant_id uuid not null, note text not null)"
@@ -73,7 +81,11 @@ expect_denied "cannot disable RLS on the table (not the owner)" as_runtime "alte
 expect_denied "cannot drop the policy" as_runtime "drop policy tenant_isolation on ${probe}"
 expect_denied "cannot create tables (no DDL)" as_runtime "create table ${probe}_ddl (id int)"
 expect_denied "cannot become another role" as_runtime "set role app_owner"
+expect_denied "cannot become app_platform" as_runtime "set role app_platform"
 expect_denied "cannot grant itself BYPASSRLS" as_runtime "alter role app_runtime bypassrls"
+
+echo "== app_owner is a member of app_platform but still subject to the policy (FORCE applies to the owner)"
+expect_eq "app_owner reads no rows through the forced policy" "0" "$(as_owner "select count(*) from ${probe}")"
 
 echo "== for contrast: the bootstrap superuser ignores the policy, which is why the app must not use it"
 expect_eq "superuser sees all 3 rows" "3" "$(as_super "select count(*) from ${probe}")"

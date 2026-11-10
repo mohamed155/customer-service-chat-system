@@ -29,6 +29,15 @@ The server never runs migrations on startup.
 Tables and sequences a migration creates are readable and writable by `app_runtime` through the
 default privileges set in `0066_runtime_role_grants.sql`; don't add per-table grants.
 
+A function that must read across tenants (a lookup before the tenant is known, a job that spans
+tenants) goes in the `xtenant` schema, owned by `app_platform`: start the file with `SET LOCAL ROLE
+app_platform;`, create the function with `SECURITY DEFINER` and `SET search_path = pg_catalog,
+public, pg_temp`, `REVOKE ALL ... FROM PUBLIC`, `GRANT EXECUTE ... TO app_runtime` (still as
+`app_platform`), and end with `RESET ROLE;`. Call `xtenant._audit` when it returns or changes
+something. See `0068_cross_tenant_lookups.sql` and [the audited cross-tenant
+path](../../docs/security/tenant-unit-of-work.md#the-audited-cross-tenant-path). `cargo nextest run
+-p db --test xtenant` checks every function in the schema.
+
 ## Naming
 
 `NNNN_description.sql` — sequential zero-padded number, underscore-separated

@@ -48,8 +48,10 @@ Use `ops/deploy.sh <git-sha>` (see [contract](../../ops/deploy.sh)).
 The script runs migrations before touching the running stack. If migrations fail, the old release stays live. If the new stack fails its readiness check within 120 seconds, the old release is restored.
 
 Before migrating, it runs `infra/postgres/init/02-roles.sh` in the Postgres container. The script
-is idempotent and makes sure `app_owner` and `app_runtime` exist with the right attributes and
-grants. It fails the deploy if the container has no `APP_OWNER_PASSWORD` / `APP_RUNTIME_PASSWORD`.
+is idempotent and makes sure `app_owner`, `app_runtime` and `app_platform` (the login-less owner of
+the cross-tenant functions) exist with the right attributes and grants. It fails the deploy if the
+container has no `APP_OWNER_PASSWORD` / `APP_RUNTIME_PASSWORD`. Migration 0067 needs `app_platform`,
+so a host must run this step before it deploys that release (the script does it every time).
 
 ## Move an Existing Host to the Two Database Roles (once)
 
