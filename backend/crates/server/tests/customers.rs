@@ -251,7 +251,7 @@ async fn seed_customer(
     .bind(name)
     .bind(email)
     .bind(phone)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -271,7 +271,7 @@ async fn seed_identifier(
     .bind(customer_id)
     .bind(channel)
     .bind(identifier)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -293,7 +293,7 @@ async fn seed_conversation(
     .bind(channel)
     .bind(status)
     .bind(last_activity_at)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -490,7 +490,7 @@ async fn name_search_stays_within_the_sc_002_budget_at_ten_thousand_customers() 
          FROM generate_series(1, 10000) AS series",
     )
     .bind(tenant_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -645,7 +645,7 @@ async fn name_search_stays_within_the_sc_002_budget_at_ten_thousand_customers() 
     )
     .bind(tenant_id)
     .bind("%Customer 09999%")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let name_plan_text = name_plan.to_string();
@@ -663,7 +663,7 @@ async fn name_search_stays_within_the_sc_002_budget_at_ten_thousand_customers() 
     )
     .bind(tenant_id)
     .bind("%email-search-9999%")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let email_plan_text = email_plan.to_string();
@@ -681,7 +681,7 @@ async fn name_search_stays_within_the_sc_002_budget_at_ten_thousand_customers() 
     )
     .bind(tenant_id)
     .bind("%15559999999%")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let phone_plan_text = phone_plan.to_string();
@@ -702,7 +702,7 @@ async fn name_search_stays_within_the_sc_002_budget_at_ten_thousand_customers() 
     )
     .bind(tenant_id)
     .bind("%whatsapp-search-9999%")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let ident_plan_text = ident_plan.to_string();
@@ -722,7 +722,7 @@ async fn name_search_stays_within_the_sc_002_budget_at_ten_thousand_customers() 
          ORDER BY created_at DESC, id DESC LIMIT 25",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let first_page_text = first_page_plan.to_string();
@@ -742,7 +742,7 @@ async fn name_search_stays_within_the_sc_002_budget_at_ten_thousand_customers() 
     .bind(tenant_id)
     .bind(Utc::now())
     .bind(Uuid::nil())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let cursor_page_text = cursor_page_plan.to_string();
@@ -841,7 +841,7 @@ async fn get_customer_returns_full_detail_with_contact_identifiers_metadata_and_
     sqlx::query("UPDATE customers SET metadata = $1 WHERE id = $2")
         .bind(serde_json::json!({"plan": "enterprise", "region": "EMEA"}))
         .bind(customer_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("seed metadata");
 
@@ -1283,7 +1283,7 @@ fn json_request(
 async fn count_customers(pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE tenant_id = $1 AND deleted_at IS NULL")
         .bind(tenant_id)
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap()
 }
@@ -1291,7 +1291,7 @@ async fn count_customers(pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
 async fn count_identifiers(pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM customer_channel_identifiers WHERE tenant_id = $1")
         .bind(tenant_id)
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap()
 }
@@ -1499,7 +1499,7 @@ async fn patch_updates_contact_identifiers_metadata_refreshes_updated_at_and_wri
     let original_updated_at: DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -1569,7 +1569,7 @@ async fn patch_updates_contact_identifiers_metadata_refreshes_updated_at_and_wri
     let new_updated_at: DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(
@@ -2069,7 +2069,7 @@ async fn soft_deleted_holder_identifier_can_be_reused() {
     // identifiers so they are no longer covered by the partial unique index.
     sqlx::query("UPDATE customers SET deleted_at = now() WHERE id = $1")
         .bind(holder_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -2111,7 +2111,7 @@ async fn soft_deleted_holder_identifier_can_be_reused() {
     )
     .bind("+15551112222")
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -2126,7 +2126,7 @@ async fn soft_deleted_holder_identifier_can_be_reused() {
     )
     .bind("+15551112222")
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -2138,7 +2138,7 @@ async fn soft_deleted_holder_identifier_can_be_reused() {
     let total_customers: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(total_customers, 2, "two customer rows in the tenant");
@@ -2179,7 +2179,7 @@ async fn viewer_is_forbidden_manage_roles_succeed_and_cross_tenant_patch_returns
     let original_email: Option<String> =
         sqlx::query_scalar("SELECT email::text FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -2275,7 +2275,7 @@ async fn viewer_is_forbidden_manage_roles_succeed_and_cross_tenant_patch_returns
     let original_name: String =
         sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -2308,13 +2308,13 @@ async fn viewer_is_forbidden_manage_roles_succeed_and_cross_tenant_patch_returns
     // Row in tenant A is unchanged from its seed values.
     let row_name: String = sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
         .bind(customer_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     let row_email: Option<String> =
         sqlx::query_scalar("SELECT email::text FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -3296,7 +3296,7 @@ async fn patch_identifier_only_updates_updated_at() {
     let original_updated_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -3324,7 +3324,7 @@ async fn patch_identifier_only_updates_updated_at() {
     let new_updated_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(
@@ -3395,7 +3395,7 @@ async fn volume_search_performs_under_one_second_at_ten_thousand_customers() {
          FROM generate_series(1, 10000) AS series",
     )
     .bind(tenant_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3544,7 +3544,7 @@ async fn create_simultaneous_race_one_identifier() {
     )
     .bind("whatsapp")
     .bind("+15550000999")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -3580,7 +3580,7 @@ async fn search_at_10k_volume_under_one_second() {
          FROM generate_series(1, 10000) AS series",
     )
     .bind(tenant_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3637,7 +3637,7 @@ async fn list_and_search_use_index() {
          WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 10",
     )
     .bind(tenant_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     let list_plan_text = list_plan.join("\n");
@@ -3655,7 +3655,7 @@ async fn list_and_search_use_index() {
     )
     .bind(tenant_id)
     .bind("%explain%")
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     let search_plan_text = search_plan.join("\n");
@@ -3703,14 +3703,14 @@ async fn patch_rollback_on_duplicate_conflict() {
     let original_name: String =
         sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
             .bind(target_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let original_identifier_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM customer_channel_identifiers WHERE customer_id = $1",
     )
     .bind(target_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3744,7 +3744,7 @@ async fn patch_rollback_on_duplicate_conflict() {
     let current_name: String =
         sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
             .bind(target_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -3757,7 +3757,7 @@ async fn patch_rollback_on_duplicate_conflict() {
         "SELECT COUNT(*) FROM customer_channel_identifiers WHERE customer_id = $1",
     )
     .bind(target_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -3813,41 +3813,41 @@ async fn patch_complete_rollback_on_conflict_snapshots_all_state() {
     // Customer scalar fields.
     let pre_id: Uuid = sqlx::query_scalar("SELECT id FROM customers WHERE id = $1")
         .bind(customer_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     let pre_name: String = sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
         .bind(customer_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     let pre_email: Option<String> =
         sqlx::query_scalar("SELECT email::text FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let pre_phone: Option<String> = sqlx::query_scalar("SELECT phone FROM customers WHERE id = $1")
         .bind(customer_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     let pre_metadata: serde_json::Value =
         sqlx::query_scalar("SELECT metadata FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let pre_created_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT created_at FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let pre_updated_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -3859,7 +3859,7 @@ async fn patch_complete_rollback_on_conflict_snapshots_all_state() {
     )
     .bind(customer_id)
     .bind(tenant_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3872,7 +3872,7 @@ async fn patch_complete_rollback_on_conflict_snapshots_all_state() {
         )
         .bind(customer_id)
         .bind(tenant_id)
-        .fetch_all(&pool)
+        .fetch_all(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -3914,42 +3914,42 @@ async fn patch_complete_rollback_on_conflict_snapshots_all_state() {
     // --- POST snapshot assertions: every field and row must match ---
     let post_id: Uuid = sqlx::query_scalar("SELECT id FROM customers WHERE id = $1")
         .bind(customer_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     let post_name: String = sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
         .bind(customer_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     let post_email: Option<String> =
         sqlx::query_scalar("SELECT email::text FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let post_phone: Option<String> =
         sqlx::query_scalar("SELECT phone FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let post_metadata: serde_json::Value =
         sqlx::query_scalar("SELECT metadata FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let post_created_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT created_at FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let post_updated_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -3987,7 +3987,7 @@ async fn patch_complete_rollback_on_conflict_snapshots_all_state() {
     )
     .bind(customer_id)
     .bind(tenant_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -4004,7 +4004,7 @@ async fn patch_complete_rollback_on_conflict_snapshots_all_state() {
         )
         .bind(customer_id)
         .bind(tenant_id)
-        .fetch_all(&pool)
+        .fetch_all(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(
@@ -4047,7 +4047,7 @@ async fn patch_normalized_noop_suppresses_audit() {
     let original_updated_at: DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -4087,7 +4087,7 @@ async fn patch_normalized_noop_suppresses_audit() {
     let new_updated_at: DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4363,7 +4363,7 @@ async fn create_dual_tenant_isolation() {
          WHERE identifier = $1",
     )
     .bind(shared_ident)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -4421,7 +4421,7 @@ async fn create_dual_tenant_isolation() {
         "SELECT COUNT(*) FROM customer_channel_identifiers WHERE identifier = $1",
     )
     .bind(shared_ident)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -4582,7 +4582,7 @@ async fn identifier_normalization_e164_phone_whatsapp() {
          ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -4633,37 +4633,37 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     // --- Full pre-PATCH snapshot for tenant A ---
     let pre_a_name: String = sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
         .bind(customer_a_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     let pre_a_email: Option<String> =
         sqlx::query_scalar("SELECT email::text FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let pre_a_phone: Option<String> =
         sqlx::query_scalar("SELECT phone FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let pre_a_metadata: serde_json::Value =
         sqlx::query_scalar("SELECT metadata FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let pre_a_created_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT created_at FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let pre_a_updated_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let pre_a_live_idents: Vec<(Uuid, String, String)> = sqlx::query_as(
@@ -4672,7 +4672,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     )
     .bind(customer_a_id)
     .bind(tenant_a)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     let pre_a_audit_count: i64 =
@@ -4685,13 +4685,13 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     // Full pre-PATCH snapshot for tenant B
     let pre_b_name: String = sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
         .bind(customer_b_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     let pre_b_updated_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_b_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let pre_b_live_idents: Vec<(Uuid, String, String)> = sqlx::query_as(
@@ -4700,7 +4700,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     )
     .bind(customer_b_id)
     .bind(tenant_b)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     let pre_b_audit_count: i64 =
@@ -4738,7 +4738,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let post_a_name: String =
         sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4748,21 +4748,21 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let post_a_email: Option<String> =
         sqlx::query_scalar("SELECT email::text FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(post_a_email, pre_a_email, "email unchanged after no-op");
     let post_a_phone: Option<String> =
         sqlx::query_scalar("SELECT phone FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(post_a_phone, pre_a_phone, "phone unchanged after no-op");
     let post_a_metadata: serde_json::Value =
         sqlx::query_scalar("SELECT metadata FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4772,7 +4772,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let post_a_created_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT created_at FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4782,7 +4782,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let post_a_updated_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4795,7 +4795,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     )
     .bind(customer_a_id)
     .bind(tenant_a)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -4817,7 +4817,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let post_b_name: String =
         sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
             .bind(customer_b_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4827,7 +4827,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let post_b_updated_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_b_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4840,7 +4840,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     )
     .bind(customer_b_id)
     .bind(tenant_b)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -4889,7 +4889,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let roll_a_name: String =
         sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4899,7 +4899,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let roll_a_email: Option<String> =
         sqlx::query_scalar("SELECT email::text FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4909,7 +4909,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let roll_a_phone: Option<String> =
         sqlx::query_scalar("SELECT phone FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4919,7 +4919,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let roll_a_metadata: serde_json::Value =
         sqlx::query_scalar("SELECT metadata FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4929,14 +4929,14 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let roll_a_created_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT created_at FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(roll_a_created_at, pre_a_created_at, "created_at unchanged");
     let roll_a_updated_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_a_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4949,7 +4949,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     )
     .bind(customer_a_id)
     .bind(tenant_a)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -4971,7 +4971,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let roll_b_name: String =
         sqlx::query_scalar("SELECT display_name FROM customers WHERE id = $1")
             .bind(customer_b_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4981,7 +4981,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let roll_b_updated_at: chrono::DateTime<Utc> =
         sqlx::query_scalar("SELECT updated_at FROM customers WHERE id = $1")
             .bind(customer_b_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4994,7 +4994,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     )
     .bind(customer_b_id)
     .bind(tenant_b)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

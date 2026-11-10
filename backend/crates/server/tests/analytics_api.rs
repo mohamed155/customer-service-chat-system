@@ -102,7 +102,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 async fn setup(pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query("DELETE FROM escalations")
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("failed to delete escalations");
     sqlx::query(
@@ -225,7 +225,7 @@ async fn setup_ended_conversation(
     sqlx::query("UPDATE conversations SET status = $1 WHERE id = $2")
         .bind(status)
         .bind(conv_id)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -314,7 +314,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind("Analytics Customer A")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -323,7 +323,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_b)
     .bind("Analytics Customer B")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -337,7 +337,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(customer_a)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -350,7 +350,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(customer_a)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -363,7 +363,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(customer_a)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -376,7 +376,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(customer_a)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -389,7 +389,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(customer_a)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -400,7 +400,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c3)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -412,7 +412,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c1)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -422,7 +422,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c1)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -433,7 +433,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c2)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -443,7 +443,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c2)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -453,7 +453,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c2)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -463,7 +463,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c2)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -474,7 +474,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c3)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -484,7 +484,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c3)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -495,7 +495,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c4)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -572,7 +572,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c1)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -583,7 +583,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c2)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -594,7 +594,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_a)
     .bind(c3)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -608,7 +608,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_b)
     .bind(customer_b)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -619,7 +619,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     )
     .bind(tenant_b)
     .bind(conv_b)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1073,7 +1073,7 @@ async fn past_period_metrics_do_not_drift_when_new_activity_arrives() {
     let customer_id: Uuid =
         sqlx::query_scalar("SELECT id FROM customers WHERE tenant_id = $1 LIMIT 1")
             .bind(tenant_a)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -1086,7 +1086,7 @@ async fn past_period_metrics_do_not_drift_when_new_activity_arrives() {
     )
     .bind(tenant_a)
     .bind(customer_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1128,7 +1128,7 @@ async fn summary_and_timeseries_are_fast_on_a_large_tenant() {
     )
     .bind(tenant_id)
     .bind("Perf Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1145,7 +1145,7 @@ async fn summary_and_timeseries_are_fast_on_a_large_tenant() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

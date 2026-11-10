@@ -165,7 +165,7 @@ async fn tool_decide_endpoint() {
     )
     .bind(tenant_id)
     .bind("Decide Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -175,7 +175,7 @@ async fn tool_decide_endpoint() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

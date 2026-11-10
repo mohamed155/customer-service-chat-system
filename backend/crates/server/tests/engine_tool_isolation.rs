@@ -309,7 +309,7 @@ async fn engine_tool_isolation() {
     .bind("Alice TenantA")
     .bind("alice@tenanta.com")
     .bind("+1-555-0101")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -320,7 +320,7 @@ async fn engine_tool_isolation() {
     )
     .bind(tenant_a)
     .bind(customer_a)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -375,7 +375,7 @@ async fn engine_tool_isolation() {
     .bind("Bob TenantB")
     .bind("bob@tenantb.com")
     .bind("+1-555-0202")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -386,7 +386,7 @@ async fn engine_tool_isolation() {
     )
     .bind(tenant_b)
     .bind(customer_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -397,7 +397,7 @@ async fn engine_tool_isolation() {
     )
     .bind(tenant_b)
     .bind(conv_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -479,7 +479,7 @@ async fn engine_tool_isolation() {
     )
     .bind(tenant_b)
     .bind(conv_b)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(

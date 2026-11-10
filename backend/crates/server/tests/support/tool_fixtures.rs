@@ -19,7 +19,7 @@ pub async fn seed_generation(pool: &sqlx::PgPool, tenant_id: Uuid, conversation_
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed trigger message");
 

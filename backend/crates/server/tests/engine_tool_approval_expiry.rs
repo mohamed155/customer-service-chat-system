@@ -229,7 +229,7 @@ async fn engine_tool_approval_expiry() {
     )
     .bind(tenant_id)
     .bind("Expiry Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -239,7 +239,7 @@ async fn engine_tool_approval_expiry() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -326,7 +326,7 @@ async fn engine_tool_approval_expiry() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(

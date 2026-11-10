@@ -627,7 +627,7 @@ async fn responder_substitutes_prompt_variables() {
     )
     .bind(tenant_id)
     .bind("Jamie Test")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -638,7 +638,7 @@ async fn responder_substitutes_prompt_variables() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -649,7 +649,7 @@ async fn responder_substitutes_prompt_variables() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -683,7 +683,7 @@ async fn responder_substitutes_prompt_variables() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(ai_messages.len(), 1, "expected exactly one AI reply");
@@ -813,7 +813,7 @@ async fn second_save_rebinding_reflects_new_prompt() {
     )
     .bind(tenant_id)
     .bind("Rebind Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -823,7 +823,7 @@ async fn second_save_rebinding_reflects_new_prompt() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -833,7 +833,7 @@ async fn second_save_rebinding_reflects_new_prompt() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

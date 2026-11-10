@@ -340,7 +340,7 @@ pub async fn process_escalation_outbox_once(
         .and_then(|s| Uuid::parse_str(s).ok())
         .unwrap_or(Uuid::nil());
 
-    let mut tx = pool.begin().await?;
+    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
 
     let result: Result<(), sqlx::Error> = async {
         match event_type.as_str() {

@@ -297,7 +297,7 @@ async fn populated_conversation_returns_summary() {
     )
     .bind(tenant_id)
     .bind("Summary Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -307,7 +307,7 @@ async fn populated_conversation_returns_summary() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -333,7 +333,7 @@ async fn populated_conversation_returns_summary() {
         .bind(kind)
         .bind(body)
         .bind(now - chrono::Duration::minutes((4 - i as i64) * 5))
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -419,7 +419,7 @@ async fn empty_conversation_returns_422() {
     )
     .bind(tenant_id)
     .bind("Empty Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -429,7 +429,7 @@ async fn empty_conversation_returns_422() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -470,7 +470,7 @@ async fn cross_tenant_conversation_returns_404() {
     )
     .bind(tenant_a)
     .bind("Cross Tenant Customer A")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -480,7 +480,7 @@ async fn cross_tenant_conversation_returns_404() {
     )
     .bind(tenant_a)
     .bind(customer_a)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -529,7 +529,7 @@ async fn disabled_membership_returns_403() {
     )
     .bind(tenant_id)
     .bind("Disabled Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -539,7 +539,7 @@ async fn disabled_membership_returns_403() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

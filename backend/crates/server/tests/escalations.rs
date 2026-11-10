@@ -241,7 +241,7 @@ async fn wait_for_queued_count(pool: &sqlx::PgPool, tenant_id: Uuid, expected: i
             "SELECT COUNT(*) FROM escalations WHERE tenant_id = $1 AND status = 'queued'",
         )
         .bind(tenant_id)
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         if queued == expected {
@@ -344,7 +344,7 @@ async fn seed_customer(
     .bind(name)
     .bind(email)
     .bind(phone)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -367,7 +367,7 @@ async fn seed_conversation(
     .bind(channel)
     .bind(status)
     .bind(assigned_membership_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -946,7 +946,7 @@ async fn escalated_at_set_on_conversation() {
     let escalated_at: Option<chrono::DateTime<chrono::Utc>> =
         sqlx::query_scalar("SELECT escalated_at FROM conversations WHERE id = $1")
             .bind(conv)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(escalated_at.is_some(), "escalated_at must be set");
@@ -1470,7 +1470,7 @@ async fn resolve_queued_removes_from_queue() {
     )
     .bind(tenant)
     .bind(conv)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(escalation_status, "closed");
@@ -1894,7 +1894,7 @@ async fn delete_skill_removes_agent_skills_and_queue_refs() {
     )
     .bind(tenant)
     .bind(conv)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -2193,7 +2193,7 @@ async fn patch_assignee_escalated_conversation_relabels() {
     )
     .bind(tenant)
     .bind(conv)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(routing_reason.as_deref(), Some("manual_reassignment"));
@@ -2232,7 +2232,7 @@ async fn routing_engine_origin_does_not_relabel() {
     )
     .bind(tenant)
     .bind(conv)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_ne!(routing_reason, "manual_reassignment");

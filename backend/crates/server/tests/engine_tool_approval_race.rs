@@ -145,7 +145,7 @@ async fn engine_tool_approval_race() {
     )
     .bind(tenant_id)
     .bind("Race Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -155,7 +155,7 @@ async fn engine_tool_approval_race() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

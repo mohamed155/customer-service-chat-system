@@ -152,7 +152,7 @@ async fn seed_customer(
     )
     .bind(tenant_id)
     .bind(display_name)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -164,7 +164,7 @@ async fn seed_customer(
     .bind(tenant_id)
     .bind(customer_id)
     .bind(wa_identifier)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -184,7 +184,7 @@ async fn seed_conversation(
     .bind(tenant_id)
     .bind(customer_id)
     .bind(channel)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -211,7 +211,7 @@ async fn emit_whatsapp_outbound_for_ai_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -292,7 +292,7 @@ async fn auto_ack_system_message_with_whatsapp_outbound() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -352,7 +352,7 @@ async fn non_whatsapp_channel_does_not_emit_whatsapp_outbound() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -363,7 +363,7 @@ async fn non_whatsapp_channel_does_not_emit_whatsapp_outbound() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -387,7 +387,7 @@ async fn non_whatsapp_channel_does_not_emit_whatsapp_outbound() {
         sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE tenant_id = $1 AND id = $2")
             .bind(tenant_id)
             .bind(message_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(msg_count, 1, "the AI message should exist");

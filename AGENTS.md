@@ -29,7 +29,9 @@ Never break these. If a task seems to need it, stop and ask.
 - **Tests are required.** Every behaviour change comes with tests at the lowest effective level.
   Integration tests use real PostgreSQL and Redis, not mocks. Security-relevant code gets negative
   tests (unauthorized, wrong tenant, malformed input). Bug fixes get a regression test that fails
-  before the fix. Never skip, disable or `#[ignore]` a test to get green.
+  before the fix. A table under Row-Level Security is covered by the
+  [tenant-isolation harness](docs/security/tenant-unit-of-work.md#the-tenant-isolation-harness).
+  Never skip, disable or `#[ignore]` a test to get green.
 - **No secrets in code.** No keys, tokens, passwords or real credentials in source, tests, docs or
   commits. Configuration comes from the environment (`.env`, never committed; `.env.example`
   holds dev-only values). Tenant secrets are encrypted at rest and never sent to the frontend.

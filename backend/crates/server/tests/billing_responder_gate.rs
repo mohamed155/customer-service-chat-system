@@ -331,7 +331,7 @@ async fn exhausted_allowance_gate_deletes_outbox_and_blocks_ai() {
     )
     .bind(tenant_id)
     .bind("Exhausted Gate Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -341,7 +341,7 @@ async fn exhausted_allowance_gate_deletes_outbox_and_blocks_ai() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -351,7 +351,7 @@ async fn exhausted_allowance_gate_deletes_outbox_and_blocks_ai() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -401,7 +401,7 @@ async fn exhausted_allowance_gate_deletes_outbox_and_blocks_ai() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(ai_msgs, 0, "no AI message should have been inserted");
@@ -435,7 +435,7 @@ async fn conversation_and_customer_message_survive_gate() {
     )
     .bind(tenant_id)
     .bind("Survive Gate Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -445,7 +445,7 @@ async fn conversation_and_customer_message_survive_gate() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -455,7 +455,7 @@ async fn conversation_and_customer_message_survive_gate() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -495,7 +495,7 @@ async fn conversation_and_customer_message_survive_gate() {
         "SELECT EXISTS(SELECT 1 FROM conversations WHERE id = $1 AND deleted_at IS NULL)",
     )
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(conv_exists, "conversation should still exist");
@@ -504,7 +504,7 @@ async fn conversation_and_customer_message_survive_gate() {
     let msg_exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1)")
             .bind(message_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(msg_exists, "customer message should still exist");
@@ -548,7 +548,7 @@ async fn escalation_rule_still_matches_while_over_limit() {
     )
     .bind(tenant_id)
     .bind("Escalation Gate Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -558,7 +558,7 @@ async fn escalation_rule_still_matches_while_over_limit() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -568,7 +568,7 @@ async fn escalation_rule_still_matches_while_over_limit() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -617,7 +617,7 @@ async fn escalation_rule_still_matches_while_over_limit() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(ai_msgs, 0);
@@ -652,7 +652,7 @@ async fn human_agent_reply_succeeds_while_ai_paused() {
     )
     .bind(tenant_id)
     .bind("Human Reply Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -662,7 +662,7 @@ async fn human_agent_reply_succeeds_while_ai_paused() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -717,7 +717,7 @@ async fn allowance_available_responder_proceeds_normally() {
     )
     .bind(tenant_id)
     .bind("Allowed Gate Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -727,7 +727,7 @@ async fn allowance_available_responder_proceeds_normally() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -737,7 +737,7 @@ async fn allowance_available_responder_proceeds_normally() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -778,7 +778,7 @@ async fn allowance_available_responder_proceeds_normally() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(!ai_messages.is_empty(), "expected at least one AI reply");

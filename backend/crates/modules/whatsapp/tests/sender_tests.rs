@@ -171,7 +171,7 @@ async fn setup_sender_fixture(
          VALUES ($1, 'Sender Test Customer') RETURNING id",
     )
     .bind(tenant_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -185,7 +185,7 @@ async fn setup_sender_fixture(
     .bind(tenant_id)
     .bind(customer_id)
     .bind(wa_identifier)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -196,7 +196,7 @@ async fn setup_sender_fixture(
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -211,7 +211,7 @@ async fn setup_sender_fixture(
         .bind(tenant_id)
         .bind(conversation_id)
         .bind(customer_msg_time)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -222,7 +222,7 @@ async fn setup_sender_fixture(
         .bind(customer_msg_time)
         .bind(tenant_id)
         .bind(conversation_id)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -253,7 +253,7 @@ async fn setup_sender_fixture(
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(sender_membership)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -396,7 +396,7 @@ async fn sender_success_path() {
     )
     .bind(fixture.tenant_id)
     .bind(fixture.message_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("meta row should exist");
 
@@ -408,7 +408,7 @@ async fn sender_success_path() {
     )
     .bind(fixture.tenant_id)
     .bind(fixture.message_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("wamid should be set");
 
@@ -438,7 +438,7 @@ async fn sender_window_expired() {
     )
     .bind(fixture.tenant_id)
     .bind(fixture.message_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("meta row should exist");
 
@@ -470,7 +470,7 @@ async fn sender_unauthorized() {
     )
     .bind(fixture.tenant_id)
     .bind(fixture.message_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("meta row should exist");
 
@@ -506,7 +506,7 @@ async fn status_webhook_does_not_downgrade_read_to_delivered() {
     .bind(fixture.tenant_id)
     .bind(fixture.message_id)
     .bind(fixture.conversation_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -532,7 +532,7 @@ async fn status_webhook_does_not_downgrade_read_to_delivered() {
     )
     .bind(fixture.tenant_id)
     .bind(fixture.message_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -562,7 +562,7 @@ async fn status_webhook_does_not_downgrade_read_to_delivered() {
     )
     .bind(fixture.tenant_id)
     .bind(fixture.message_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

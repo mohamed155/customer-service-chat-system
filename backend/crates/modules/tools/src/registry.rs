@@ -125,9 +125,7 @@ impl BuiltinTool for UpdateCustomerContact {
         .await
         .map_err(|e| format!("failed to resolve conversation customer: {e}"))?;
 
-        let mut tx = ctx
-            .pool
-            .begin()
+        let mut tx = db::UnitOfWork::begin_for_tenant(&ctx.pool, ctx.tenant_id)
             .await
             .map_err(|e| format!("failed to begin transaction: {e}"))?;
 

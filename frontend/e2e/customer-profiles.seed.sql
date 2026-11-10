@@ -1,5 +1,10 @@
 TRUNCATE audit_logs, conversations, customer_channel_identifiers, customers, tenant_memberships, tenant_invitations, tenants, users RESTART IDENTITY CASCADE;
 
+-- customers, customer_channel_identifiers and conversations are under forced Row-Level Security,
+-- which applies to the schema owner too, so the rows below are inserted as app_platform
+-- (BYPASSRLS). The TRUNCATE above is only allowed for the owner, hence the order.
+SET ROLE app_platform;
+
 INSERT INTO users (id, email, display_name) VALUES
   ('c0a00000-0000-0000-0000-000000000001', 'agent@customer-profiles.test', 'Agent User'),
   ('c0a00000-0000-0000-0000-000000000002', 'viewer@customer-profiles.test', 'Viewer User'),
@@ -38,3 +43,5 @@ VALUES ('c0e00000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-0000000
 
 INSERT INTO customers (id, tenant_id, display_name, email, phone, created_at)
 VALUES ('c0c00000-0000-0000-0000-0000000000ff', '20000000-0000-0000-0000-000000000002', 'Foreign Customer', 'foreign@test.com', '+15550000999', now() - interval '5 days');
+
+RESET ROLE;

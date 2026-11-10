@@ -284,7 +284,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid
     )
     .bind(tenant_id)
     .bind(name)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -306,7 +306,7 @@ async fn seed_conversation(
     .bind(channel)
     .bind(status)
     .bind(last_activity_at)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -326,7 +326,7 @@ async fn seed_customer_message(
     .bind(conversation_id)
     .bind(body)
     .bind(created_at)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -344,7 +344,7 @@ async fn seed_reply_message(
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(body)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }

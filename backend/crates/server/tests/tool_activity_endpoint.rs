@@ -166,7 +166,7 @@ async fn tool_activity_endpoint_returns_succeeded_tool() {
     )
     .bind(tenant_a)
     .bind("Activity Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -176,7 +176,7 @@ async fn tool_activity_endpoint_returns_succeeded_tool() {
     )
     .bind(tenant_a)
     .bind(customer_a)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let gen_id = tool_fixtures::seed_generation(&pool, tenant_a, conversation_id).await;

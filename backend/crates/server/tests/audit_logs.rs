@@ -934,7 +934,7 @@ async fn tool_execution_emits_audit_row() {
     )
     .bind(tenant_id)
     .bind("Test Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -943,7 +943,7 @@ async fn tool_execution_emits_audit_row() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1016,7 +1016,7 @@ async fn failed_tool_execution_emits_audit_row() {
     )
     .bind(tenant_id)
     .bind("Test Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1025,7 +1025,7 @@ async fn failed_tool_execution_emits_audit_row() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

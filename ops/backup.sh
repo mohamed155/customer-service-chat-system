@@ -18,7 +18,9 @@ set -euo pipefail
 #   APP_S3_BUCKET             (required) Local MinIO bucket
 #   APP_S3_ACCESS_KEY         (required) Local MinIO access key
 #   APP_S3_SECRET_KEY         (required) Local MinIO secret key
-#   PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD  (standard PG env vars)
+#   PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD  (standard PG env vars). PGUSER must be the
+#                            bootstrap superuser: pg_dump cannot dump tables with forced
+#                            Row-Level Security as app_owner or app_runtime.
 #   NODE_EXPORTER_TEXTFILE_DIR  (optional, default /var/lib/node_exporter/textfile_collector)
 
 readonly SCRIPT_NAME=$(basename "$0")
@@ -135,6 +137,13 @@ if [[ "$TARGET" =~ ^(db|all)$ ]]; then
     echo "[DRY-RUN] nice -n 19 ionice -c 2 -n 7 pg_dump --format=custom --no-owner --compress=6 | age --encrypt --recipient ... > ${BACKUP_FILENAME}"
     echo "[DRY-RUN] mc cp ... remote/${BACKUP_S3_BUCKET}/db/${BACKUP_FILENAME}"
   else
+    # Tables under forced Row-Level Security cannot be dumped by a role the policies apply to:
+    # pg_dump stops with an error. app_owner and app_runtime are such roles; the bootstrap
+    # superuser (POSTGRES_USER) is not.
+    if [[ "$(psql -AtX -c "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")" != "t" ]]; then
+      error "PGUSER must be a role that bypasses Row-Level Security (the bootstrap superuser): pg_dump cannot dump tables with forced policies as app_owner or app_runtime"
+      exit 1
+    fi
     nice -n 19 ionice -c 2 -n 7 \
       pg_dump --format=custom --no-owner --compress=6 \
       | age --encrypt --recipient "$BACKUP_AGE_PUBLIC_KEY" \

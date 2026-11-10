@@ -264,6 +264,8 @@ async fn tool_request_expiry_sweep_expires_overdue_requests_and_queues_the_decis
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    // Rows for tables under forced Row-Level Security are seeded as the bypass role.
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let customer: Uuid = sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name) VALUES ($1, 'C') RETURNING id",
@@ -315,6 +317,7 @@ async fn tool_request_expiry_sweep_expires_overdue_requests_and_queues_the_decis
         .unwrap();
         ids.push(id);
     }
+    db::testing::become_owner(&mut tx).await;
     db::testing::enforce_rls(&mut tx, &["tool_requests", "outbox_events", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
@@ -409,6 +412,8 @@ async fn platform_dashboard_functions_aggregate_across_tenants() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    // Rows for tables under forced Row-Level Security are seeded as the bypass role.
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let customer: Uuid = sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name) VALUES ($1, 'C') RETURNING id",
@@ -448,6 +453,7 @@ async fn platform_dashboard_functions_aggregate_across_tenants() {
     .execute(&mut *tx)
     .await
     .unwrap();
+    db::testing::become_owner(&mut tx).await;
     db::testing::enforce_rls(
         &mut tx,
         &[

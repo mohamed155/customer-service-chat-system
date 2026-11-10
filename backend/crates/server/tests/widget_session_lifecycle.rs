@@ -160,7 +160,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, display_name: &str)
     )
     .bind(tenant_id)
     .bind(display_name)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -367,7 +367,7 @@ async fn t004_resolved_conversation_not_returned_by_get_conversation() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -410,7 +410,7 @@ async fn t005_posting_to_closed_conversation_returns_409() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

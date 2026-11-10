@@ -239,7 +239,7 @@ mod tests {
             "INSERT INTO customers (tenant_id, display_name) VALUES ($1, 'Cred Customer') RETURNING id",
         )
         .bind(tenant_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         sqlx::query(
@@ -249,7 +249,7 @@ mod tests {
         .bind(conversation_id)
         .bind(tenant_id)
         .bind(customer_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -260,7 +260,7 @@ mod tests {
         )
         .bind(tenant_id)
         .bind(conversation_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         sqlx::query(

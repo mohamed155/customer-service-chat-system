@@ -306,7 +306,7 @@ async fn engine_tool_approval_deny() {
     .bind(tenant_id)
     .bind("Denise Deny")
     .bind("denise@example.com")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -316,7 +316,7 @@ async fn engine_tool_approval_deny() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -326,7 +326,7 @@ async fn engine_tool_approval_deny() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -427,7 +427,7 @@ async fn engine_tool_approval_deny() {
     let customer_email: Option<String> =
         sqlx::query_scalar("SELECT email FROM customers WHERE id = $1")
             .bind(customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -442,7 +442,7 @@ async fn engine_tool_approval_deny() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(

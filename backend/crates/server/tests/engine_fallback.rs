@@ -265,7 +265,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
     )
     .bind(tenant_id)
     .bind("T012 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -276,7 +276,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -287,7 +287,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -339,7 +339,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -365,7 +365,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(esc_count, 1, "expected exactly one open escalation row");
@@ -402,7 +402,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(ai_count, 0, "expected no ai-kind messages after fallback");

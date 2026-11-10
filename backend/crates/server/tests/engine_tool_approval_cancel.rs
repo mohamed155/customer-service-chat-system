@@ -152,7 +152,7 @@ async fn engine_tool_approval_cancel() {
     )
     .bind(tenant_id)
     .bind("Cancel Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -162,7 +162,7 @@ async fn engine_tool_approval_cancel() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -239,7 +239,7 @@ async fn engine_tool_approval_cancel() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -289,7 +289,7 @@ async fn engine_tool_approval_cancel_via_claim_endpoint() {
     )
     .bind(tenant_id)
     .bind("Claim Cancel Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -299,7 +299,7 @@ async fn engine_tool_approval_cancel_via_claim_endpoint() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -329,7 +329,7 @@ async fn engine_tool_approval_cancel_via_claim_endpoint() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -379,7 +379,7 @@ async fn engine_tool_approval_cancel_via_claim_endpoint() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

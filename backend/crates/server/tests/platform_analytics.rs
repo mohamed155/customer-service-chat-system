@@ -99,7 +99,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 async fn setup(pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query("DELETE FROM escalations")
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     sqlx::query(
@@ -208,7 +208,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
     )
     .bind(tenant_id)
     .bind("Platform Analytics Customer")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -220,7 +220,7 @@ async fn seed_conversation(pool: &sqlx::PgPool, tenant_id: Uuid, customer_id: Uu
     .bind(tenant_id)
     .bind(customer_id)
     .bind(status)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }

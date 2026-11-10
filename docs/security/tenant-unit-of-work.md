@@ -2,8 +2,10 @@
 
 How backend code reaches tenant data, and which queries deliberately do not. This is the application
 half of the two-layer tenant isolation in [ADR-004](../adr/0004-multi-tenancy-rls-cells.md) (gap T1).
-It was introduced by MOH-44; the Row-Level Security policies that depend on it come in later steps of
-MOH-31.
+It was introduced by MOH-44; the Row-Level Security policies that depend on it come in steps of MOH-31.
+The first group is live (MOH-47): `customers`, `customer_channel_identifiers`, `conversations`,
+`messages`, `message_attachments`, `message_citations`, `conversation_feedback`, `escalations` and
+`whatsapp_message_meta`. A query on one of them without a tenant returns no rows and writes nothing.
 
 ## What it is
 
@@ -86,18 +88,17 @@ path](#the-audited-cross-tenant-path)).
 ### Writes for a known tenant that still use a bare pool transaction
 
 These are not cross-tenant: the tenant is known (from the event, the URL or the claimed row). They run
-in a plain `pool.begin()` transaction, so `app.tenant_id` is not set, and MOH-44 did not move them onto
-a Unit of Work. A tenant policy will block them. **MOH-47 to MOH-49 must change them to
-`db::UnitOfWork::begin_for_tenant` for the table group they touch** (the change is mechanical: the
-`*_in_tx` helpers they call take `&mut uow`).
+in a plain `pool.begin()` transaction, so `app.tenant_id` is not set, and a tenant policy will block them.
+MOH-47 moved the ones that write the tables of its group (the AI responder, the AI engine, the
+escalation consumer and the `update_contact` tool) onto `db::UnitOfWork::begin_for_tenant`. What is left
+is for **MOH-48 and MOH-49 to change for the table group they touch** (the change is mechanical: the
+`*_in_tx` helpers take `&mut uow`):
 
 | Where | Main tenant tables touched (confirm when moving each) |
 | --- | --- |
-| `ai::agent_responder` (`process_agent_responder_once`: auto-acknowledge, baseline escalation, rule escalation) | `messages`, `conversations`, `escalations`, `outbox_events` |
-| `ai::engine` (`run_generation`, `run_followup_generation`: fallback message, auto-acknowledge, tool approval, reply) | `messages`, `conversations`, `tool_requests`, `outbox_events` |
-| `escalations::events::process_escalation_outbox_once` (the event's transaction) | `escalations`, `conversations` |
-| `tenancy::routes::create_tenant`, `update_tenant` | `tenants` (global) and the audit row for that tenant (`audit_logs`) |
-| `billing::routes::create_plan`, `update_plan` | `billing_plans` (global) and an audit row with no tenant (`audit_logs`) |
+| `ai::engine` and `ai::agent_responder` (`generation_record::insert`, the usage record) | `ai_generations`, `ai_usage_records` (MOH-48) |
+| `tenancy::routes::create_tenant`, `update_tenant` | `tenants` (global) and the audit row for that tenant (`audit_logs`, MOH-49) |
+| `billing::routes::create_plan`, `update_plan` | `billing_plans` (global) and an audit row with no tenant (`audit_logs`, MOH-49) |
 
 Audit rows with no tenant are written straight into `audit_logs` by the platform plan routes and
 similar platform routes (`tenancy::audit::record_in_tx` with `tenant_id = None`). The `audit_logs`
@@ -136,6 +137,42 @@ tenants, goes through one narrow `SECURITY DEFINER` function per job, in the `xt
   `db::testing` (`owner_tx`, `enforce_rls`, `become_runtime`) put forced Row-Level Security on the
   tables in a transaction that is rolled back, drop to `app_runtime`, and check that the function
   still works while a direct read returns nothing.
+
+## The tenant-isolation harness
+
+ADR-004 section 7 requires every tenant table to be proven against the wrong tenant. The harness is
+the shared way to do it; **a table is not under Row-Level Security until it is in the harness**.
+
+- **Database level, per table** (`backend/crates/shared/db/tests/tenant_isolation.rs`, built on
+  `db::testing::isolation::assert_isolated`). For each table it creates a row in each of two tenants
+  and, as `app_runtime`, checks: the owning tenant sees its row; the wrong tenant cannot read it by
+  a guessed id, list it, update it or delete it, and cannot move its own row to the other tenant
+  (the `WITH CHECK`); with no tenant at all nothing is visible, nothing is updated or deleted and an
+  insert is refused; and the rows are untouched afterwards.
+- **Self-enforcing.** The last test in that file compares its table list with the tables that have
+  forced Row-Level Security (`relforcerowsecurity`) and fails if they differ in either direction. A
+  migration that forces RLS on a new table fails the build until the table has an entry (a seed for
+  one row, an insert statement and the ids it needs).
+- **Repository level** (`backend/crates/server/tests/tenant_isolation_repositories.rs`). Repository
+  functions are called with tenant B and tenant A's real ids and must find nothing; the same call for
+  tenant A finds it. Add the repository functions of a new module here.
+- **Endpoint level.** Each feature suite keeps its wrong-tenant endpoint tests (404 for another
+  tenant's id, no rows in lists): `customers.rs`, `conversations.rs`, `escalations.rs`,
+  `feedback_api.rs`, `rag_citations.rs` and `engine_isolation.rs` in `backend/crates/server/tests/`
+  for the conversations and customers group. A new endpoint on a tenant table needs one.
+- **Fixtures.** `db::testing::seed_pool()` is a pool on the owner connection that runs `SET ROLE
+  app_platform` (BYPASSRLS), for creating and reading back rows for any tenant in test setup and
+  assertions. **Never give it to the application** (state, router, worker or the repository under
+  test): code that runs on it bypasses the policies and hides the bugs they exist to catch. Use
+  `db::testing::owner_pool()` for `TRUNCATE`, and `db::testing::migrate()` for migrations.
+
+Adding a table group:
+
+1. Write the migration (copy `0072_rls_conversations_customers.sql`).
+2. Add an `Entry` per table to `entries()` in `tenant_isolation.rs` (and seed its parents in `seed_graph`).
+3. Run `REQUIRE_DB_TESTS=1 cargo nextest run --workspace` as `app_runtime`: the failures are fixtures that
+   seed through the runtime pool (move them to `seed_pool()`) and source queries that run without a tenant
+   (move them to a Unit of Work, or to a function in the `xtenant` schema if they span tenants).
 
 ## Notes for the Row-Level Security steps
 
