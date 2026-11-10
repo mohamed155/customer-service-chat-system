@@ -416,6 +416,7 @@ dependencies = [
  "chrono",
  "db",
  "hex",
+ "identity",
  "kernel",
  "serde",
  "serde_json",

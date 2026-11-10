@@ -48,13 +48,11 @@ pub async fn resolve_config(
             }))
         }
         Scope::Platform => {
-            let row = sqlx::query_as::<_, AiConfigRow>(
-                "SELECT * FROM ai_configurations \
-                 WHERE tenant_id IS NULL AND deleted_at IS NULL \
-                 LIMIT 1",
-            )
-            .fetch_optional(pool)
-            .await?;
+            // The platform default has no tenant: audited function `xtenant.platform_ai_config`.
+            let row =
+                sqlx::query_as::<_, AiConfigRow>("SELECT * FROM xtenant.platform_ai_config()")
+                    .fetch_optional(pool)
+                    .await?;
 
             Ok(row.map(|row| ResolvedConfig {
                 capture_content: false,
@@ -97,10 +95,9 @@ pub async fn resolve_credential(
             Ok(None)
         }
         Scope::Platform => {
+            // No tenant: audited function `xtenant.platform_ai_credential_secret`.
             let row = sqlx::query_as::<_, (Vec<u8>, Vec<u8>)>(
-                "SELECT ciphertext, nonce FROM ai_credentials \
-                 WHERE tenant_id IS NULL AND provider = $1 AND deleted_at IS NULL \
-                 LIMIT 1",
+                "SELECT ciphertext, nonce FROM xtenant.platform_ai_credential_secret($1)",
             )
             .bind(provider)
             .fetch_optional(pool)
@@ -151,10 +148,9 @@ pub async fn resolve_credential_view(
             })
         }
         Scope::Platform => {
+            // No tenant: audited function `xtenant.platform_ai_credential_hint`.
             let row = sqlx::query_as::<_, (String,)>(
-                "SELECT key_hint FROM ai_credentials \
-                 WHERE tenant_id IS NULL AND provider = $1 AND deleted_at IS NULL \
-                 LIMIT 1",
+                "SELECT key_hint FROM xtenant.platform_ai_credential_hint($1)",
             )
             .bind(provider)
             .fetch_optional(pool)

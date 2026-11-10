@@ -174,14 +174,13 @@ async fn main() {
             let mut interval = tokio::time::interval(Duration::from_secs(6 * 3600));
             loop {
                 interval.tick().await;
-                match sqlx::query(
-                    "DELETE FROM notifications WHERE created_at < now() - interval '90 days'",
-                )
-                .execute(&pool)
-                .await
+                // Spans every tenant, so it goes through the audited function
+                // `xtenant.notification_retention_sweep`.
+                match sqlx::query_scalar::<_, i64>("SELECT xtenant.notification_retention_sweep()")
+                    .fetch_one(&pool)
+                    .await
                 {
-                    Ok(result) => {
-                        let count = result.rows_affected();
+                    Ok(count) => {
                         if count > 0 {
                             tracing::info!(
                                 count,

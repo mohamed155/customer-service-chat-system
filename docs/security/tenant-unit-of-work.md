@@ -39,10 +39,11 @@ let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
 
 ## Queries that do not use it
 
-These run directly on the pool because no single tenant applies. They are the input for MOH-46 (the
-audited cross-tenant path, one narrow `SECURITY DEFINER` function per job) and for the table groups
-in MOH-47, MOH-48 and MOH-49, which must give each of them a deliberate rule before RLS is switched
-on for the tables they touch.
+These run on the pool, not in a Unit of Work, because no single tenant applies. Every one that reads
+or writes a tenant-owned table now goes through an audited function in the `xtenant` schema (see [the
+audited cross-tenant path](#the-audited-cross-tenant-path)), which is what keeps it working once a
+table's Row-Level Security policy is on. The tables below list each entry point with the function
+that serves it, or the reason it needs none.
 
 ### Global tables (no `tenant_id`, never covered by RLS)
 
@@ -75,11 +76,33 @@ path](#the-audited-cross-tenant-path)).
 | --- | --- |
 | Outbox claim, acknowledge and release (`outbox_events`): `ai::agent_responder::process_agent_responder_once`, `ai::engine::run_generation`, `escalations::events::process_escalation_outbox_once`, `knowledge::indexer::process_one_event`, `notifications::worker::process_notification_outbox_once`, `tenancy::invitations::process_invitation_deliveries_once`, `whatsapp::sender::claim_outbound_event` | A worker claims the oldest event across all tenants, then processes it. The processing itself (reading and writing tenant data) already runs in the event's Unit of Work. **Served by:** `xtenant.outbox_claim` (AI responder, escalations, notifications), `xtenant.outbox_claim_retryable` and `xtenant.outbox_reschedule` (knowledge indexer), `xtenant.outbox_ack` and `xtenant.outbox_release` (all of them), `xtenant.outbox_coalesce_customer_messages` (AI responder), `xtenant.outbox_take_whatsapp_outbound` (WhatsApp sender), `xtenant.invitation_delivery_expire_exhausted`, `_claim`, `_retry` and `_finalize` (invitation delivery) |
 | `whatsapp::queries::claim_pending_attachment` | The next pending attachment across tenants. **Served by:** `xtenant.pending_attachment_next` |
-| Sweeps: `integrations::retention::sweep_expired`, `tools::approval::sweep_expired`, `widgets::queries::delete_expired_sessions`, `escalations::presence::startup_sweep`, and the notification retention sweep in `server/src/main.rs` | Delete or revert rows older than a threshold in every tenant |
-| `platform::queries` (six functions) | Platform dashboards aggregate over all tenants |
-| `ai::routes`: `put_platform_config`, `put_platform_credential`, `delete_platform_credential`; the platform branch of `ai::resolution` | Platform-wide rows (`tenant_id IS NULL`) in `ai_configurations` and `ai_credentials` |
-| `billing`: `list_subscriptions`, `routes::put_subscription` | A platform principal manages any tenant's subscription |
-| `audit::queries::list_entries` without a tenant scope | The platform-wide audit listing |
+| Sweeps: `integrations::retention::sweep_expired`, `tools::approval::sweep_expired`, `widgets::queries::delete_expired_sessions`, `escalations::presence::startup_sweep`, and the notification retention sweep in `server/src/main.rs` | Delete or revert rows older than a threshold in every tenant. **Served by:** `xtenant.integration_retention_sweep`, `xtenant.tool_request_expiry_sweep` (expires the requests and queues their decision events), `xtenant.widget_session_sweep`, `xtenant.available_agents`, `xtenant.notification_retention_sweep`. Each sweep writes one audit row per run with the count, and none when it changed nothing |
+| `platform::queries`: `tenant_counts` | Reads `tenants` only (no `tenant_id`, never under RLS). **No function needed** |
+| `platform::queries`: `active_conversation_count`, `ai_usage_totals`, `queue_health`, `provider_metrics`, `recent_provider_failures` | Platform dashboards aggregate over all tenants. **Served by:** `xtenant.platform_active_conversation_count`, `platform_ai_usage_totals`, `platform_queue_health`, `platform_provider_metrics`, `platform_recent_provider_failures` |
+| `ai::routes`: `put_platform_config`, `put_platform_credential`, `delete_platform_credential`; the platform branch of `ai::resolution` | Platform-wide rows (`tenant_id IS NULL`) in `ai_configurations` and `ai_credentials`. **Served by:** `xtenant.platform_ai_config_set`, `platform_ai_credential_set`, `platform_ai_credential_delete` (each also writes the `ai_config.updated`, `ai_credential.set` and `ai_credential.deleted` audit rows), and `platform_ai_config`, `platform_ai_credential_secret`, `platform_ai_credential_hint` for the reads |
+| `billing`: `list_subscriptions`, `routes::put_subscription` | A platform principal manages any tenant's subscription. **Served by:** `xtenant.platform_subscriptions_list`, `xtenant.platform_subscription_set` (applies the retired-plan rule and writes the `billing_subscription.changed` audit row for the tenant) |
+| `audit::queries::list_entries` without a tenant scope | The platform-wide audit listing. **Served by:** `xtenant.platform_audit_entries` (records who asked) |
+
+### Writes for a known tenant that still use a bare pool transaction
+
+These are not cross-tenant: the tenant is known (from the event, the URL or the claimed row). They run
+in a plain `pool.begin()` transaction, so `app.tenant_id` is not set, and MOH-44 did not move them onto
+a Unit of Work. A tenant policy will block them. **MOH-47 to MOH-49 must change them to
+`db::UnitOfWork::begin_for_tenant` for the table group they touch** (the change is mechanical: the
+`*_in_tx` helpers they call take `&mut uow`).
+
+| Where | Main tenant tables touched (confirm when moving each) |
+| --- | --- |
+| `ai::agent_responder` (`process_agent_responder_once`: auto-acknowledge, baseline escalation, rule escalation) | `messages`, `conversations`, `escalations`, `outbox_events` |
+| `ai::engine` (`run_generation`, `run_followup_generation`: fallback message, auto-acknowledge, tool approval, reply) | `messages`, `conversations`, `tool_requests`, `outbox_events` |
+| `escalations::events::process_escalation_outbox_once` (the event's transaction) | `escalations`, `conversations` |
+| `tenancy::routes::create_tenant`, `update_tenant` | `tenants` (global) and the audit row for that tenant (`audit_logs`) |
+| `billing::routes::create_plan`, `update_plan` | `billing_plans` (global) and an audit row with no tenant (`audit_logs`) |
+
+Audit rows with no tenant are written straight into `audit_logs` by the platform plan routes and
+similar platform routes (`tenancy::audit::record_in_tx` with `tenant_id = None`). The `audit_logs`
+policy (MOH-49) must either accept inserts with `tenant_id IS NULL` or route them through a function.
+Authentication events already use `xtenant.record_auth_event`.
 
 ## The audited cross-tenant path
 

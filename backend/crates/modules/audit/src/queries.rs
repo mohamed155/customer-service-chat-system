@@ -34,10 +34,45 @@ pub struct AuditRow {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
+/// The platform-wide listing: every tenant's entries plus the platform's own. It reads across
+/// tenants, so it goes through the audited function `xtenant.platform_audit_entries`, which records
+/// who asked. `requested_by` is required: the platform path never runs without an identity.
+#[allow(clippy::too_many_arguments)]
+pub async fn list_platform_entries(
+    pool: &sqlx::PgPool,
+    requested_by: Uuid,
+    filter_tenant_id: Option<Uuid>,
+    from_ts: Option<DateTime<Utc>>,
+    to_ts: Option<DateTime<Utc>>,
+    category_prefixes: Option<Vec<String>>,
+    actor_id: Option<Uuid>,
+    cursor: Option<(DateTime<Utc>, Uuid)>,
+    limit: i64,
+) -> Result<Vec<AuditRow>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, AuditRow>(
+        "SELECT id, action, actor_user_id, resource_type, resource_id, tenant_id, details, \
+                created_at, display_name, email, platform_role, deleted_at \
+         FROM xtenant.platform_audit_entries($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+    )
+    .bind(requested_by)
+    .bind(filter_tenant_id)
+    .bind(from_ts)
+    .bind(to_ts)
+    .bind(category_prefixes)
+    .bind(actor_id)
+    .bind(cursor.map(|(ts, _)| ts))
+    .bind(cursor.map(|(_, id)| id))
+    .bind(limit + 1)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().take(limit as usize).collect())
+}
+
+/// One tenant's entries, in that tenant's Unit of Work.
 #[allow(clippy::too_many_arguments)]
 pub async fn list_entries(
     pool: &sqlx::PgPool,
-    tenant_scope: Option<Uuid>,
+    tenant_id: Uuid,
     filter_tenant_id: Option<Uuid>,
     from_ts: Option<DateTime<Utc>>,
     to_ts: Option<DateTime<Utc>>,
@@ -52,13 +87,9 @@ pub async fn list_entries(
                 u.display_name, u.email, u.platform_role, u.deleted_at \
          FROM audit_logs a \
          LEFT JOIN users u ON u.id = a.actor_user_id \
-         WHERE 1=1",
+         WHERE a.tenant_id = ",
     );
-
-    if let Some(ts) = tenant_scope {
-        builder.push(" AND a.tenant_id = ");
-        builder.push_bind(ts);
-    }
+    builder.push_bind(tenant_id);
 
     if let Some(tid) = filter_tenant_id {
         builder.push(" AND a.tenant_id = ");
@@ -97,18 +128,11 @@ pub async fn list_entries(
     builder.push(" ORDER BY a.created_at DESC, a.id DESC LIMIT ");
     builder.push_bind(limit + 1);
 
-    // A tenant-scoped listing runs in that tenant's Unit of Work; the platform-wide listing (no
-    // tenant scope) is a cross-tenant read and stays on the pool (MOH-31 cross-tenant path).
-    let rows = match tenant_scope {
-        Some(tenant_id) => {
-            let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-            builder
-                .build_query_as::<AuditRow>()
-                .fetch_all(uow.conn())
-                .await?
-        }
-        None => builder.build_query_as::<AuditRow>().fetch_all(pool).await?,
-    };
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let rows = builder
+        .build_query_as::<AuditRow>()
+        .fetch_all(uow.conn())
+        .await?;
 
     let _has_more = rows.len() > limit as usize;
     let data: Vec<AuditRow> = rows.into_iter().take(limit as usize).collect();

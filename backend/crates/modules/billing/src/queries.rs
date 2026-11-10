@@ -224,20 +224,12 @@ pub async fn set_plan_status(
     .await
 }
 
+/// Every tenant's subscription, for the platform billing page. Spans tenants, so it goes through
+/// the audited function `xtenant.platform_subscriptions_list`.
 pub async fn list_subscriptions(pool: &PgPool) -> sqlx::Result<Vec<model::SubscriptionRowDto>> {
     let rows = sqlx::query_as::<_, (Uuid, String, Uuid, String, bool, String, bool)>(
-        "SELECT t.id, t.name, \
-         COALESCE(p.id, d.id), \
-         COALESCE(p.name, d.name), \
-         COALESCE(p.is_default, d.is_default), \
-         COALESCE(s.status, 'active'), \
-         (s.id IS NOT NULL) \
-         FROM tenants t \
-         LEFT JOIN tenant_subscriptions s ON s.tenant_id = t.id \
-         LEFT JOIN billing_plans p ON p.id = s.plan_id \
-         LEFT JOIN LATERAL (SELECT id, name, is_default FROM billing_plans WHERE is_default LIMIT 1) d ON true \
-         WHERE t.deleted_at IS NULL \
-         ORDER BY t.name",
+        "SELECT tenant_id, tenant_name, plan_id, plan_name, plan_is_default, status, explicit \
+         FROM xtenant.platform_subscriptions_list()",
     )
     .fetch_all(pool)
     .await?;
