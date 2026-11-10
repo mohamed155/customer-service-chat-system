@@ -1,0 +1,10 @@
+# cargo-audit configuration (run from backend/ in CI: `cargo audit`).
+
+[advisories]
+ignore = [
+  # libsqlite3-sys 0.37.0, "via C SQLite". It is in Cargo.lock only because sqlx-sqlite 0.9.0
+  # (sqlx's SQLite driver) is a lockfile entry of sqlx; `cargo tree --target all -i libsqlite3-sys`
+  # prints nothing, so no crate we build links SQLite. The backend is PostgreSQL-only.
+  # Remove this entry once sqlx resolves libsqlite3-sys >= 0.39.
+  "RUSTSEC-2026-0459",
+]
