@@ -236,7 +236,7 @@ async fn seed_customer(
     .bind(name)
     .bind(email)
     .bind(phone)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -261,7 +261,7 @@ async fn seed_conversation(
     .bind(status)
     .bind(assigned_membership_id)
     .bind(last_activity_at)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -1156,7 +1156,7 @@ async fn seed_message(
     .bind(logged_by_membership_id)
     .bind(body)
     .bind(created_at)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -1790,7 +1790,7 @@ async fn last_activity_at_bumps_on_message() {
     let orig_activity: chrono::DateTime<chrono::Utc> =
         sqlx::query_scalar("SELECT last_activity_at FROM conversations WHERE id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -1812,7 +1812,7 @@ async fn last_activity_at_bumps_on_message() {
     let new_activity: chrono::DateTime<chrono::Utc> =
         sqlx::query_scalar("SELECT last_activity_at FROM conversations WHERE id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(
@@ -1955,7 +1955,7 @@ async fn reply_on_resolved_reopens_and_audits() {
     // Verify the DB row was updated
     let db_status: String = sqlx::query_scalar("SELECT status FROM conversations WHERE id = $1")
         .bind(conv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(db_status, "open", "DB row must reflect open status");
@@ -2003,7 +2003,7 @@ async fn note_never_changes_status() {
     // Status must remain closed
     let db_status: String = sqlx::query_scalar("SELECT status FROM conversations WHERE id = $1")
         .bind(conv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(
@@ -2144,7 +2144,7 @@ async fn patch_status_any_to_any() {
         let db_status: String =
             sqlx::query_scalar("SELECT status FROM conversations WHERE id = $1")
                 .bind(conv_id)
-                .fetch_one(&pool)
+                .fetch_one(&db::testing::seed_pool())
                 .await
                 .unwrap();
         assert_eq!(db_status, status, "DB status must be {status}");
@@ -2192,7 +2192,7 @@ async fn patch_assign_to_active_member() {
     let db_assignee: Option<Uuid> =
         sqlx::query_scalar("SELECT assigned_membership_id FROM conversations WHERE id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(db_assignee, Some(agent.membership_id));
@@ -2238,7 +2238,7 @@ async fn patch_unassign() {
     let db_assignee: Option<Uuid> =
         sqlx::query_scalar("SELECT assigned_membership_id FROM conversations WHERE id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(db_assignee, None, "DB assigned_membership_id must be null");
@@ -3140,13 +3140,13 @@ async fn two_members_update_status_and_assignment_concurrently() {
 
     let db_status: String = sqlx::query_scalar("SELECT status FROM conversations WHERE id = $1")
         .bind(conv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     let db_assignee: Option<Uuid> =
         sqlx::query_scalar("SELECT assigned_membership_id FROM conversations WHERE id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -3187,7 +3187,7 @@ async fn viewer_403_for_create() {
     let conv_count_before: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM conversations WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let audit_count_before: i64 = // Denials are audited as tenant.access_denied by design; only conversation
@@ -3221,7 +3221,7 @@ async fn viewer_403_for_create() {
     let conv_count_after: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM conversations WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let audit_count_after: i64 = // Denials are audited as tenant.access_denied by design; only conversation

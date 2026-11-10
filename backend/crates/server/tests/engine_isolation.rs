@@ -299,7 +299,7 @@ async fn engine_cross_tenant_isolation() {
     )
     .bind(tenant_a)
     .bind("Customer A")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -309,7 +309,7 @@ async fn engine_cross_tenant_isolation() {
     )
     .bind(tenant_a)
     .bind(customer_a)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -319,7 +319,7 @@ async fn engine_cross_tenant_isolation() {
     )
     .bind(tenant_a)
     .bind(conv_a)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -377,7 +377,7 @@ async fn engine_cross_tenant_isolation() {
     )
     .bind(tenant_b)
     .bind("Customer B")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -387,7 +387,7 @@ async fn engine_cross_tenant_isolation() {
     )
     .bind(tenant_b)
     .bind(customer_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -397,7 +397,7 @@ async fn engine_cross_tenant_isolation() {
     )
     .bind(tenant_b)
     .bind(conv_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -441,7 +441,7 @@ async fn engine_cross_tenant_isolation() {
     )
     .bind(tenant_b)
     .bind(conv_b)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

@@ -154,7 +154,7 @@ async fn seed_user(pool: &sqlx::PgPool, platform_role: Option<&str>) -> Uuid {
 async fn setup(pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query("DELETE FROM escalations")
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     sqlx::query(

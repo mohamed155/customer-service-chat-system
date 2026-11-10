@@ -316,7 +316,7 @@ async fn engine_tool_approval_approve() {
     .bind("Anna Approve")
     .bind("anna.old@example.com")
     .bind("+1-555-0303")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -327,7 +327,7 @@ async fn engine_tool_approval_approve() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -338,7 +338,7 @@ async fn engine_tool_approval_approve() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -402,7 +402,7 @@ async fn engine_tool_approval_approve() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -502,7 +502,7 @@ async fn engine_tool_approval_approve() {
         sqlx::query_scalar("SELECT email FROM customers WHERE id = $1 AND tenant_id = $2")
             .bind(customer_id)
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -517,7 +517,7 @@ async fn engine_tool_approval_approve() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(

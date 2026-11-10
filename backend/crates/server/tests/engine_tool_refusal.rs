@@ -297,7 +297,7 @@ async fn engine_tool_refusal_creates_refused_row_and_stores_reply() {
     )
     .bind(tenant_id)
     .bind("Refusal Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -308,7 +308,7 @@ async fn engine_tool_refusal_creates_refused_row_and_stores_reply() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -319,7 +319,7 @@ async fn engine_tool_refusal_creates_refused_row_and_stores_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -393,7 +393,7 @@ async fn engine_tool_refusal_creates_refused_row_and_stores_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(

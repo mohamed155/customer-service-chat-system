@@ -238,7 +238,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
     )
     .bind(tenant_id)
     .bind("Notifications Test Customer")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -250,7 +250,7 @@ async fn seed_conversation(pool: &sqlx::PgPool, tenant_id: Uuid, customer_id: Uu
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -1519,7 +1519,7 @@ async fn claiming_resolves_others_rows() {
     )
     .bind(tenant_id)
     .bind(conv_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1593,7 +1593,7 @@ async fn auto_drain_resolves_others_rows() {
     )
     .bind(tenant_id)
     .bind(conv_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1628,7 +1628,9 @@ async fn auto_drain_resolves_others_rows() {
     .unwrap();
 
     // Call drain_one_for_membership_in_tx directly
-    let mut tx = pool.begin().await.unwrap();
+    let mut tx = db::UnitOfWork::begin_for_tenant(&pool, tenant_id)
+        .await
+        .unwrap();
     let drained = escalations::routing::drain_one_for_membership_in_tx(
         &mut tx,
         tenant_id,

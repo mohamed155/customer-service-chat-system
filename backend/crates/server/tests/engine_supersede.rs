@@ -279,7 +279,7 @@ async fn engine_supersede_rapid_second_message() {
     )
     .bind(tenant_id)
     .bind("T021 SC2 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -290,7 +290,7 @@ async fn engine_supersede_rapid_second_message() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -301,7 +301,7 @@ async fn engine_supersede_rapid_second_message() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -329,7 +329,7 @@ async fn engine_supersede_rapid_second_message() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -376,7 +376,7 @@ async fn engine_supersede_rapid_second_message() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -505,7 +505,7 @@ async fn engine_supersede_escalation_cancels_generation() {
     )
     .bind(tenant_id)
     .bind("T021 SC3 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -516,7 +516,7 @@ async fn engine_supersede_escalation_cancels_generation() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -527,7 +527,7 @@ async fn engine_supersede_escalation_cancels_generation() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -557,7 +557,7 @@ async fn engine_supersede_escalation_cancels_generation() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -579,7 +579,7 @@ async fn engine_supersede_escalation_cancels_generation() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

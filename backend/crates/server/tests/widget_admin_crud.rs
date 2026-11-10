@@ -571,7 +571,7 @@ async fn widget_conversation_has_channel_and_attribution() {
     )
     .bind(tenant_id)
     .bind("Widget Visitor")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -583,14 +583,14 @@ async fn widget_conversation_has_channel_and_attribution() {
     .bind(tenant_id)
     .bind(customer_id)
     .bind(widget_instance_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
     // Bump last_activity_at
     sqlx::query("UPDATE conversations SET last_activity_at = now() WHERE id = $1")
         .bind(conv_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 

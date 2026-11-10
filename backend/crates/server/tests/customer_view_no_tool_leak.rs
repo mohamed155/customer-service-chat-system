@@ -134,7 +134,7 @@ async fn customer_view_contains_no_tool_request_data() {
     .bind(tenant_id)
     .bind("Test Customer")
     .bind("customer@example.com")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed customer");
 
@@ -144,7 +144,7 @@ async fn customer_view_contains_no_tool_request_data() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed conversation");
 
@@ -155,7 +155,7 @@ async fn customer_view_contains_no_tool_request_data() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("seed customer message");
 
@@ -166,7 +166,7 @@ async fn customer_view_contains_no_tool_request_data() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed AI message");
 

@@ -293,7 +293,7 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
     )
     .bind(tenant_id)
     .bind("T006 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -304,7 +304,7 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -315,7 +315,7 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -360,7 +360,7 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(!ai_messages.is_empty(), "expected at least one AI reply");

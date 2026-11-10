@@ -220,7 +220,7 @@ async fn t001_creating_conversation_persists_with_channel_widget() {
 
     let row: (String,) = sqlx::query_as("SELECT channel FROM conversations WHERE id = $1")
         .bind(Uuid::parse_str(conv_id).unwrap())
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(row.0, "widget");
@@ -255,7 +255,7 @@ async fn t002_creating_conversation_creates_anonymous_customer() {
     let customer_id: Uuid =
         sqlx::query_scalar("SELECT customer_id FROM conversations WHERE id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -263,7 +263,7 @@ async fn t002_creating_conversation_creates_anonymous_customer() {
         "SELECT EXISTS(SELECT 1 FROM customers WHERE id = $1 AND deleted_at IS NULL)",
     )
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(customer_exists, "anonymous customer must exist");
@@ -273,7 +273,7 @@ async fn t002_creating_conversation_creates_anonymous_customer() {
          WHERE customer_id = $1 AND channel = 'widget')",
     )
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -311,7 +311,7 @@ async fn t003_creating_conversation_has_widget_instance_id() {
     let widget_instance_id: Option<Uuid> =
         sqlx::query_scalar("SELECT widget_instance_id FROM conversations WHERE id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(
@@ -362,7 +362,7 @@ async fn t004_posting_message_stores_with_customer_sender() {
         "SELECT kind FROM messages WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
     .bind(Uuid::parse_str(&conv_id).unwrap())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(message_kind, "customer");
@@ -517,7 +517,7 @@ async fn t008_posting_to_resolved_conversation_returns_409() {
 
     sqlx::query("UPDATE conversations SET status = 'resolved' WHERE id = $1")
         .bind(conv_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -534,7 +534,7 @@ async fn t008_posting_to_resolved_conversation_returns_409() {
 
     let status: String = sqlx::query_scalar("SELECT status FROM conversations WHERE id = $1")
         .bind(conv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(

@@ -15,6 +15,14 @@ The backup captures:
 | Object storage (MinIO) | `mc mirror` | Off-host S3 bucket |
 | Database (PostgreSQL) | `pg_dump --format=custom` → `age` encryption | Off-host S3 bucket |
 
+## Which database role dumps
+
+`ops/backup.sh` connects with the standard `PG*` variables, and **`PGUSER` must be the bootstrap
+superuser** (`POSTGRES_USER`). Tables with forced Row-Level Security (ADR-004) cannot be dumped by a
+role the policies apply to, which includes `app_owner` and `app_runtime`: `pg_dump` stops with an
+error. The script checks this before dumping and exits with a message when the role would fail.
+Restores run as the superuser as well.
+
 ## Ordering
 
 Objects are mirrored **first**, then the database is dumped. This ordering preserves

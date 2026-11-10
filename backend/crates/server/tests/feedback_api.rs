@@ -221,7 +221,7 @@ async fn setup_ended_conversation(
     sqlx::query("UPDATE conversations SET status = $1 WHERE id = $2")
         .bind(status)
         .bind(conv_id)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -299,7 +299,7 @@ async fn t050_channel_widget_regression() {
 
     let row: (String,) = sqlx::query_as("SELECT channel FROM conversations WHERE id = $1")
         .bind(conv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(row.0, "widget");
@@ -336,7 +336,7 @@ async fn t008a_submit_on_ended_conversation_returns_201() {
     let count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM conversation_feedback WHERE conversation_id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(count, 1);
@@ -385,7 +385,7 @@ async fn t008b_duplicate_submission_returns_200() {
     let count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM conversation_feedback WHERE conversation_id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(count, 1);
@@ -598,7 +598,7 @@ async fn t021b_2001_char_comment_rejected() {
     let count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM conversation_feedback WHERE conversation_id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(count, 0);
@@ -632,7 +632,7 @@ async fn t021c_whitespace_only_comment_stored_as_null() {
     let comment: Option<String> =
         sqlx::query_scalar("SELECT comment FROM conversation_feedback WHERE conversation_id = $1")
             .bind(conv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(
@@ -726,7 +726,7 @@ async fn t035a_ai_only_conversation_attribution() {
     )
     .bind(tenant_id)
     .bind(conv_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -759,7 +759,7 @@ async fn t035a_ai_only_conversation_attribution() {
          FROM conversation_feedback WHERE conversation_id = $1",
     )
     .bind(conv_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(row.0, "widget");
@@ -810,7 +810,7 @@ async fn t035b_human_assigned_conversation_attribution() {
     )
     .bind(membership_id)
     .bind(conv_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -832,7 +832,7 @@ async fn t035b_human_assigned_conversation_attribution() {
     )
     .bind(tenant_id)
     .bind(conv_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -864,7 +864,7 @@ async fn t035b_human_assigned_conversation_attribution() {
          FROM conversation_feedback WHERE conversation_id = $1",
     )
     .bind(conv_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(row.0, "widget");
@@ -910,7 +910,7 @@ async fn t035c_neither_ai_nor_human_attribution() {
          FROM conversation_feedback WHERE conversation_id = $1",
     )
     .bind(conv_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(row.0, "widget");
@@ -951,7 +951,7 @@ async fn t038a_feedback_summary_with_data() {
     )
     .bind(tenant_id)
     .bind("Test Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -962,7 +962,7 @@ async fn t038a_feedback_summary_with_data() {
         )
         .bind(tenant_id)
         .bind(customer_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -975,7 +975,7 @@ async fn t038a_feedback_summary_with_data() {
         .bind(conv_id)
         .bind("web_chat")
         .bind(rating)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -1042,7 +1042,7 @@ async fn t038c_cross_tenant_isolation() {
     )
     .bind(tenant_a)
     .bind("Cust A")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1053,7 +1053,7 @@ async fn t038c_cross_tenant_isolation() {
     )
     .bind(tenant_a)
     .bind(customer_a)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query(
@@ -1063,7 +1063,7 @@ async fn t038c_cross_tenant_isolation() {
     .bind(tenant_a)
     .bind(conv_a)
     .bind("web_chat")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

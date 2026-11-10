@@ -129,7 +129,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, display_name: &str)
     )
     .bind(tenant_id)
     .bind(display_name)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -359,7 +359,7 @@ async fn billing_overview_tenant_isolation() {
         .bind(tenant_a)
         .bind(customer_a)
         .bind(period_start)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -388,7 +388,7 @@ async fn billing_overview_tenant_isolation() {
         .bind(tenant_b)
         .bind(customer_b)
         .bind(period_start)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }

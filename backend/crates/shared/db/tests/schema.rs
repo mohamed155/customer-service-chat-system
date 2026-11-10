@@ -112,6 +112,7 @@ async fn run_migrations_succeeds() {
         (69, "audit logs cross tenant idx"),
         (70, "cross tenant outbox"),
         (71, "cross tenant sweeps and platform"),
+        (72, "rls conversations customers"),
     ];
     assert_eq!(
         rows.len(),
@@ -440,7 +441,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: uuid::Uuid, name: &str) -
     .bind(tenant_id)
     .bind(name)
     .bind(format!("{}@example.com", name))
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed customer")
 }
@@ -1351,7 +1352,7 @@ async fn explain_queue_list_uses_index() {
     )
     .bind(tid)
     .bind(cid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query(
@@ -1360,7 +1361,7 @@ async fn explain_queue_list_uses_index() {
     )
     .bind(tid)
     .bind(conv_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1413,7 +1414,7 @@ async fn explain_escalated_inbox_filter_uses_index() {
     )
     .bind(tid)
     .bind(cid)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1801,7 +1802,7 @@ async fn customer_index_coverage_uses_intended_indexes() {
         .bind(tid)
         .bind("Test Customer")
         .bind("test@example.com")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     let mut tx = pool.begin().await.unwrap();
@@ -2726,7 +2727,7 @@ async fn migration_0027_identifier_parent_tenant_fk_rejects_mismatch() {
     )
     .bind(tid)
     .bind("FK Reject Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2747,7 +2748,7 @@ async fn migration_0027_identifier_parent_tenant_fk_rejects_mismatch() {
     .bind(cid)
     .bind("email")
     .bind("cross-tenant@example.com")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
 
     assert!(
@@ -2777,7 +2778,7 @@ async fn migration_0027_conversation_parent_tenant_fk_rejects_mismatch() {
     )
     .bind(tid)
     .bind("FK Reject Customer 2")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2797,7 +2798,7 @@ async fn migration_0027_conversation_parent_tenant_fk_rejects_mismatch() {
     .bind(cid)
     .bind("web_chat")
     .bind("open")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
 
     assert!(
@@ -4683,7 +4684,7 @@ async fn messages_kind_ai_with_membership_rejected() {
     )
     .bind(tid)
     .bind(cid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert conversation");
     let result = sqlx::query(
@@ -4693,7 +4694,7 @@ async fn messages_kind_ai_with_membership_rejected() {
     .bind(tid)
     .bind(conv_id)
     .bind(uuid::Uuid::nil())
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -4716,7 +4717,7 @@ async fn messages_kind_system_null_membership_succeeds() {
     )
     .bind(tid)
     .bind(cid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert conversation");
     let result = sqlx::query(
@@ -4727,7 +4728,7 @@ async fn messages_kind_system_null_membership_succeeds() {
     .bind(conv_id)
     .bind(Option::<uuid::Uuid>::None)
     .bind(Option::<uuid::Uuid>::None)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_ok(),
@@ -4756,7 +4757,7 @@ async fn conversations_ai_handling_accepts_valid_values() {
     )
     .bind(tid)
     .bind(cid)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(r1.is_ok(), "ai_handling='platform_ai' should be accepted");
     // 'human'
@@ -4766,7 +4767,7 @@ async fn conversations_ai_handling_accepts_valid_values() {
     )
     .bind(tid)
     .bind(cid)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(r2.is_ok(), "ai_handling='human' should be accepted");
     // NULL
@@ -4777,7 +4778,7 @@ async fn conversations_ai_handling_accepts_valid_values() {
     .bind(tid)
     .bind(cid)
     .bind(Option::<String>::None)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(r3.is_ok(), "ai_handling=NULL should be accepted");
 }
@@ -4797,7 +4798,7 @@ async fn conversations_ai_handling_invalid_rejected() {
     )
     .bind(tid)
     .bind(cid)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "ai_handling='ai' should be rejected");
 }
@@ -5070,7 +5071,7 @@ async fn migration_0042_messages_ai_kind_with_sender_membership_rejected() {
     )
     .bind(tid)
     .bind(cid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed conversation");
     let result = sqlx::query(
@@ -5080,7 +5081,7 @@ async fn migration_0042_messages_ai_kind_with_sender_membership_rejected() {
     .bind(tid)
     .bind(conv_id)
     .bind(mid)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -5103,7 +5104,7 @@ async fn migration_0042_messages_system_kind_with_null_memberships_succeeds() {
     )
     .bind(tid)
     .bind(cid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed conversation");
     let result = sqlx::query(
@@ -5115,7 +5116,7 @@ async fn migration_0042_messages_system_kind_with_null_memberships_succeeds() {
     .bind(conv_id)
     .bind(Option::<uuid::Uuid>::None)
     .bind(Option::<uuid::Uuid>::None)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_ok(),
@@ -5139,7 +5140,7 @@ async fn migration_0043_conversation_ai_handling_constraint() {
     )
     .bind(tid)
     .bind(cid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed conversation");
 
@@ -5147,7 +5148,7 @@ async fn migration_0043_conversation_ai_handling_constraint() {
     let result = sqlx::query("UPDATE conversations SET ai_handling = $1 WHERE id = $2")
         .bind(Option::<&str>::None)
         .bind(conv_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(result.is_ok(), "ai_handling NULL should be accepted");
 
@@ -5155,7 +5156,7 @@ async fn migration_0043_conversation_ai_handling_constraint() {
     let result = sqlx::query("UPDATE conversations SET ai_handling = $1 WHERE id = $2")
         .bind("platform_ai")
         .bind(conv_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_ok(),
@@ -5166,7 +5167,7 @@ async fn migration_0043_conversation_ai_handling_constraint() {
     let result = sqlx::query("UPDATE conversations SET ai_handling = $1 WHERE id = $2")
         .bind("human")
         .bind(conv_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(result.is_ok(), "ai_handling 'human' should be accepted");
 
@@ -5174,7 +5175,7 @@ async fn migration_0043_conversation_ai_handling_constraint() {
     let result = sqlx::query("UPDATE conversations SET ai_handling = $1 WHERE id = $2")
         .bind("unknown")
         .bind(conv_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(result.is_err(), "ai_handling 'unknown' should be rejected");
 }

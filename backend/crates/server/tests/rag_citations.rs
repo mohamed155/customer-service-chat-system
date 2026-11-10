@@ -83,7 +83,7 @@ async fn seed_customer(pool: &PgPool, tenant_id: Uuid) -> Uuid {
     )
     .bind(tenant_id)
     .bind("Citations Customer")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -95,7 +95,7 @@ async fn seed_conversation(pool: &PgPool, tenant_id: Uuid, customer_id: Uuid) ->
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -120,7 +120,7 @@ async fn seed_message(
     .bind(conversation_id)
     .bind(kind)
     .bind(body)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -160,7 +160,7 @@ async fn seed_citation(
     .bind(passage_text)
     .bind(relevance_score)
     .bind(ordinal)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -221,7 +221,7 @@ async fn grounded_ai_reply_persists_citations() {
          FROM message_citations WHERE message_id = $1 ORDER BY ordinal",
     )
     .bind(msg_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -277,7 +277,7 @@ async fn ungrounded_ai_reply_persists_zero_citations() {
     let count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM message_citations WHERE message_id = $1")
             .bind(msg_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -344,7 +344,7 @@ async fn non_ai_and_ungrounded_messages_have_empty_citations_in_timeline() {
     let reply_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM message_citations WHERE message_id = $1")
             .bind(reply_msg)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(reply_count, 0, "reply (non-AI) must have 0 citations");
@@ -352,7 +352,7 @@ async fn non_ai_and_ungrounded_messages_have_empty_citations_in_timeline() {
     let grounded_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM message_citations WHERE message_id = $1")
             .bind(grounded_ai)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(grounded_count, 1, "grounded AI must have 1 citation");
@@ -360,7 +360,7 @@ async fn non_ai_and_ungrounded_messages_have_empty_citations_in_timeline() {
     let ungrounded_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM message_citations WHERE message_id = $1")
             .bind(ungrounded_ai)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(ungrounded_count, 0, "ungrounded AI must have 0 citations");
@@ -368,7 +368,7 @@ async fn non_ai_and_ungrounded_messages_have_empty_citations_in_timeline() {
     let note_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM message_citations WHERE message_id = $1")
             .bind(note_msg)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(note_count, 0, "note (non-AI) must have 0 citations");
@@ -421,7 +421,7 @@ async fn citation_snapshot_survives_knowledge_item_deletion() {
     let pre_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM message_citations WHERE message_id = $1")
             .bind(msg_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(pre_count, 1, "citation must exist before item deletion");
@@ -438,7 +438,7 @@ async fn citation_snapshot_survives_knowledge_item_deletion() {
         "SELECT item_title, passage_text FROM message_citations WHERE message_id = $1",
     )
     .bind(msg_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -525,7 +525,7 @@ async fn citation_snapshot_survives_knowledge_item_archive() {
         "SELECT item_title, passage_text FROM message_citations WHERE message_id = $1",
     )
     .bind(msg_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -605,7 +605,7 @@ async fn citation_snapshot_unchanged_when_item_edited_after_reply() {
         "SELECT item_title, passage_text FROM message_citations WHERE message_id = $1",
     )
     .bind(msg_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -691,7 +691,7 @@ async fn batch_load_citations_for_multiple_messages_in_single_query() {
          ORDER BY mc.message_id, mc.ordinal",
     )
     .bind(&msg_ids)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -790,7 +790,7 @@ async fn batch_load_handles_messages_without_citations() {
         "SELECT DISTINCT message_id FROM message_citations WHERE message_id = ANY($1) ORDER BY message_id",
     )
     .bind(&all_msg_ids)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -868,7 +868,7 @@ async fn batch_load_respects_tenant_isolation() {
     )
     .bind(vec![msg_a, msg_b])
     .bind(tenant_a)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -883,7 +883,7 @@ async fn batch_load_respects_tenant_isolation() {
     )
     .bind(vec![msg_a, msg_b])
     .bind(tenant_b)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 

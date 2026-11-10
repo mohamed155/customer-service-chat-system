@@ -83,7 +83,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, display_name: &str)
     )
     .bind(tenant_id)
     .bind(display_name)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -131,7 +131,7 @@ async fn seed_conversation(
         None
     })
     .bind(assigned_membership_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -182,7 +182,7 @@ async fn t001_escalated_conversation_handling_is_human() {
          FROM conversations WHERE id = $1",
     )
     .bind(conv_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -209,7 +209,7 @@ async fn t002_resolved_conversation_handling_is_closed() {
 
     let status: String = sqlx::query_scalar("SELECT status FROM conversations WHERE id = $1")
         .bind(conv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(status, "resolved");
@@ -248,7 +248,7 @@ async fn t003_agent_reply_exposed_with_sender_agent_and_display_name_only() {
     .bind(conv_id)
     .bind("I can help with that")
     .bind(membership_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -261,7 +261,7 @@ async fn t003_agent_reply_exposed_with_sender_agent_and_display_name_only() {
          LIMIT 1",
     )
     .bind(conv_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

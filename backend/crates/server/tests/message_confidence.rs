@@ -303,7 +303,7 @@ async fn ai_message_has_confidence_customer_message_does_not() {
     )
     .bind(tenant_id)
     .bind("T029 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -314,7 +314,7 @@ async fn ai_message_has_confidence_customer_message_does_not() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -325,7 +325,7 @@ async fn ai_message_has_confidence_customer_message_does_not() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

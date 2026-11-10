@@ -32,7 +32,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
     )
     .bind(tenant_id)
     .bind("Enf Test Customer")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -51,7 +51,7 @@ async fn insert_conversation(
     .bind(tenant_id)
     .bind(customer_id)
     .bind(at)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }

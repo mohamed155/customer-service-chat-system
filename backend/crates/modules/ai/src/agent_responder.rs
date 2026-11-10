@@ -123,7 +123,7 @@ pub async fn process_agent_responder_once(
                 if !conversations::queries::has_system_message(pool, tenant_id, conversation_id)
                     .await?
                 {
-                    let mut tx = pool.begin().await?;
+                    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
                     let ack_mid = conversations::queries::insert_auto_ack_in_tx(
                         &mut tx,
                         tenant_id,
@@ -253,7 +253,7 @@ pub async fn process_agent_responder_once(
         match rule_match {
             RuleMatch::Baseline => {
                 let present_ids = presence.present_membership_ids_async(tenant_id).await;
-                let mut tx = pool.begin().await?;
+                let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
                 let outcome = escalations::routing::route_new_escalation_in_tx(
                     &mut tx,
                     pool,
@@ -301,7 +301,7 @@ pub async fn process_agent_responder_once(
                 ..
             } => {
                 let present_ids = presence.present_membership_ids_async(tenant_id).await;
-                let mut tx = pool.begin().await?;
+                let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
                 let outcome = escalations::routing::route_new_escalation_in_tx(
                     &mut tx,
                     pool,
@@ -378,7 +378,7 @@ pub async fn process_agent_responder_once(
 
 async fn handle_routing_outcome(
     outcome: Result<escalations::routing::RouteOutcome, escalations::routing::RouteError>,
-    tx: sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: db::UnitOfWork,
     _pool: &PgPool,
 ) {
     match outcome {

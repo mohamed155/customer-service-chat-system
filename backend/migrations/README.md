@@ -29,6 +29,12 @@ The server never runs migrations on startup.
 Tables and sequences a migration creates are readable and writable by `app_runtime` through the
 default privileges set in `0066_runtime_role_grants.sql`; don't add per-table grants.
 
+A migration that changes **rows** (an `UPDATE`, a backfill, a data fix) in a table with forced
+Row-Level Security touches zero rows when run as `app_owner`, because the policy applies to the owner
+too, and it reports success. Start such a migration with `SET LOCAL ROLE app_platform;` (BYPASSRLS) and end
+it with `RESET ROLE;`, or set `app.tenant_id` for one tenant. Check `relforcerowsecurity` in `pg_class`
+for the tables that are covered.
+
 A function that must read across tenants (a lookup before the tenant is known, a job that spans
 tenants) goes in the `xtenant` schema, owned by `app_platform`: start the file with `SET LOCAL ROLE
 app_platform;`, create the function with `SECURITY DEFINER` and `SET search_path = pg_catalog,

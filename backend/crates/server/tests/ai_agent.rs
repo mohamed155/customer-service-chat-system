@@ -779,7 +779,7 @@ async fn configured_agent_drives_ai_reply() {
     )
     .bind(tenant_id)
     .bind("Test Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -790,7 +790,7 @@ async fn configured_agent_drives_ai_reply() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -801,7 +801,7 @@ async fn configured_agent_drives_ai_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -835,7 +835,7 @@ async fn configured_agent_drives_ai_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(ai_messages.len(), 1, "expected exactly one AI reply");
@@ -1058,7 +1058,7 @@ async fn unconfigured_tenant_sends_single_auto_ack() {
     )
     .bind(tenant_id)
     .bind("T038 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1113,7 +1113,7 @@ async fn unconfigured_tenant_sends_single_auto_ack() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(system_count, 1, "expected exactly one system message");
@@ -1162,7 +1162,7 @@ async fn unconfigured_tenant_sends_single_auto_ack() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1194,7 +1194,7 @@ async fn ai_handling_platform_ai_requires_resolvable_layer() {
     )
     .bind(tenant_id)
     .bind("T039 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1204,7 +1204,7 @@ async fn ai_handling_platform_ai_requires_resolvable_layer() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1270,7 +1270,7 @@ async fn ai_handling_platform_ai_then_ai_reply() {
     )
     .bind(tenant_id)
     .bind("T040 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1280,7 +1280,7 @@ async fn ai_handling_platform_ai_then_ai_reply() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1331,7 +1331,7 @@ async fn ai_handling_platform_ai_then_ai_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(ai_messages.len(), 1, "expected exactly one AI reply");
@@ -1372,7 +1372,7 @@ async fn ai_handling_human_escalates_immediately() {
     )
     .bind(tenant_id)
     .bind("T041 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1382,7 +1382,7 @@ async fn ai_handling_human_escalates_immediately() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1411,7 +1411,7 @@ async fn ai_handling_human_escalates_immediately() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(esc_reason.is_some(), "expected an escalation");
@@ -1447,7 +1447,7 @@ async fn ai_handling_human_escalates_immediately() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1461,7 +1461,7 @@ async fn ai_handling_human_escalates_immediately() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1493,7 +1493,7 @@ async fn ai_handling_rejects_once_agent_configured() {
     )
     .bind(tenant_id)
     .bind("T042 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1503,7 +1503,7 @@ async fn ai_handling_rejects_once_agent_configured() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1562,7 +1562,7 @@ async fn ai_handling_human_to_platform_ai_blocked_once_escalated() {
     )
     .bind(tenant_id)
     .bind("T043 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1572,7 +1572,7 @@ async fn ai_handling_human_to_platform_ai_blocked_once_escalated() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1632,7 +1632,7 @@ async fn unresolvable_platform_ai_returns_to_awaiting_decision() {
     )
     .bind(tenant_id)
     .bind("T043b Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1642,7 +1642,7 @@ async fn unresolvable_platform_ai_returns_to_awaiting_decision() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1778,7 +1778,7 @@ async fn unresolvable_platform_ai_returns_to_awaiting_decision() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1792,7 +1792,7 @@ async fn unresolvable_platform_ai_returns_to_awaiting_decision() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(ai_count, 0, "expected no AI reply after human handling");
@@ -1845,7 +1845,7 @@ async fn business_rule_appears_in_composed_prompt() {
     )
     .bind(tenant_id)
     .bind("T058 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1855,7 +1855,7 @@ async fn business_rule_appears_in_composed_prompt() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1865,7 +1865,7 @@ async fn business_rule_appears_in_composed_prompt() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1968,7 +1968,7 @@ async fn keyword_rule_escalates_with_rule_name_reason() {
     )
     .bind(tenant_id)
     .bind("T059 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1978,7 +1978,7 @@ async fn keyword_rule_escalates_with_rule_name_reason() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1989,7 +1989,7 @@ async fn keyword_rule_escalates_with_rule_name_reason() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2021,7 +2021,7 @@ async fn keyword_rule_escalates_with_rule_name_reason() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -2036,7 +2036,7 @@ async fn keyword_rule_escalates_with_rule_name_reason() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (reason, skill_ids) = escalation.expect("escalation should have been created");
@@ -2096,7 +2096,7 @@ async fn baseline_escalation_survives_zero_tenant_rules() {
     )
     .bind(tenant_id)
     .bind("T060 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2106,7 +2106,7 @@ async fn baseline_escalation_survives_zero_tenant_rules() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2117,7 +2117,7 @@ async fn baseline_escalation_survives_zero_tenant_rules() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2150,7 +2150,7 @@ async fn baseline_escalation_survives_zero_tenant_rules() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -2433,7 +2433,7 @@ async fn disabled_channel_blocks_ai_reply() {
     )
     .bind(tenant_id)
     .bind("T066 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2443,7 +2443,7 @@ async fn disabled_channel_blocks_ai_reply() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2453,7 +2453,7 @@ async fn disabled_channel_blocks_ai_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2490,7 +2490,7 @@ async fn disabled_channel_blocks_ai_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -2505,7 +2505,7 @@ async fn disabled_channel_blocks_ai_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(escalation_count, 0, "no escalation should be created");
@@ -2569,7 +2569,7 @@ async fn re_enabled_channel_resumes_replies() {
     )
     .bind(tenant_id)
     .bind("T067 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2579,7 +2579,7 @@ async fn re_enabled_channel_resumes_replies() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2598,7 +2598,7 @@ async fn re_enabled_channel_resumes_replies() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2631,7 +2631,7 @@ async fn re_enabled_channel_resumes_replies() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(ai_messages.len(), 1, "expected exactly one AI reply");
@@ -3178,7 +3178,7 @@ async fn provider_override_serves_ai_reply() {
     )
     .bind(tenant_id)
     .bind("T051 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3188,7 +3188,7 @@ async fn provider_override_serves_ai_reply() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3198,7 +3198,7 @@ async fn provider_override_serves_ai_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3230,7 +3230,7 @@ async fn provider_override_serves_ai_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(ai_messages.len(), 1, "expected exactly one AI reply");
@@ -3326,7 +3326,7 @@ async fn stale_override_falls_back() {
     )
     .bind(tenant_id)
     .bind("T052 Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3336,7 +3336,7 @@ async fn stale_override_falls_back() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3346,7 +3346,7 @@ async fn stale_override_falls_back() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3378,7 +3378,7 @@ async fn stale_override_falls_back() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(ai_messages.len(), 1, "expected exactly one AI reply");

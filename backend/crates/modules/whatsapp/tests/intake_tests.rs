@@ -330,7 +330,7 @@ async fn signed_unknown_number_creates_customer_conversation_message_outbox() {
     )
     .bind(conn.tenant_id)
     .bind(&normalized)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -345,7 +345,7 @@ async fn signed_unknown_number_creates_customer_conversation_message_outbox() {
     )
     .bind(conn.tenant_id)
     .bind(customer_id.unwrap())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(conv_count, 1, "one open whatsapp conversation should exist");
@@ -358,7 +358,7 @@ async fn signed_unknown_number_creates_customer_conversation_message_outbox() {
     )
     .bind(conn.tenant_id)
     .bind(customer_id.unwrap())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(msg_count, 1, "one customer message should exist");
@@ -441,7 +441,7 @@ async fn second_message_from_same_number_uses_same_conversation() {
     )
     .bind(conn.tenant_id)
     .bind(&normalized)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(conv_count, 1, "both messages should share one conversation");
@@ -458,7 +458,7 @@ async fn second_message_from_same_number_uses_same_conversation() {
     .bind(conn.tenant_id)
     .bind(conn.tenant_id)
     .bind(&normalized)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(msg_count, 2, "two customer messages should exist");
@@ -493,7 +493,7 @@ async fn identical_redelivery_creates_nothing_new() {
     let msg_count_before: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE tenant_id = $1")
             .bind(conn.tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(msg_count_before, 1, "first delivery created one message");
@@ -519,7 +519,7 @@ async fn identical_redelivery_creates_nothing_new() {
     let msg_count_after: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE tenant_id = $1")
             .bind(conn.tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(msg_count_after, 1, "dedup should prevent a second message");
@@ -540,7 +540,7 @@ async fn phone_identifier_attaches_without_new_customer_profile() {
          VALUES ($1, 'Phone Customer Pre-existing') RETURNING id",
     )
     .bind(conn.tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query(
@@ -551,14 +551,14 @@ async fn phone_identifier_attaches_without_new_customer_profile() {
     .bind(conn.tenant_id)
     .bind(existing_customer_id)
     .bind(&normalized)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
     let initial_customer_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE tenant_id = $1")
             .bind(conn.tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(initial_customer_count, 1, "one customer pre-exists");
@@ -582,7 +582,7 @@ async fn phone_identifier_attaches_without_new_customer_profile() {
     let customer_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE tenant_id = $1")
             .bind(conn.tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(customer_count, 1, "no new customer should be created");
@@ -598,7 +598,7 @@ async fn phone_identifier_attaches_without_new_customer_profile() {
     .bind(conn.tenant_id)
     .bind(existing_customer_id)
     .bind(&normalized)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -611,7 +611,7 @@ async fn phone_identifier_attaches_without_new_customer_profile() {
         sqlx::query_scalar("SELECT display_name FROM customers WHERE tenant_id = $1 AND id = $2")
             .bind(conn.tenant_id)
             .bind(existing_customer_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -659,7 +659,7 @@ async fn message_after_conversation_closed_opens_new_conversation() {
     .bind(conn.tenant_id)
     .bind(conn.tenant_id)
     .bind(&normalized)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -692,7 +692,7 @@ async fn message_after_conversation_closed_opens_new_conversation() {
     .bind(conn.tenant_id)
     .bind(conn.tenant_id)
     .bind(&normalized)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(conv_rows.len(), 2, "two conversations should exist");
@@ -713,7 +713,7 @@ async fn message_after_conversation_closed_opens_new_conversation() {
          WHERE wmm.tenant_id = $1 AND wmm.wamid = 'wamid.intake.005b'",
     )
     .bind(conn.tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -752,7 +752,7 @@ async fn wrong_signature_returns_404_and_writes_nothing() {
     let customer_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE tenant_id = $1")
             .bind(conn.tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(customer_count, 0, "no customers should be created");
@@ -760,14 +760,14 @@ async fn wrong_signature_returns_404_and_writes_nothing() {
     let conv_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM conversations WHERE tenant_id = $1")
             .bind(conn.tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(conv_count, 0, "no conversations should be created");
 
     let msg_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM messages WHERE tenant_id = $1")
         .bind(conn.tenant_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(msg_count, 0, "no messages should be created");
@@ -805,7 +805,7 @@ async fn image_message_creates_pending_attachment() {
          WHERE tenant_id = $1 AND status = 'pending'",
     )
     .bind(conn.tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(attachment_count, 1, "one pending attachment should exist");
@@ -815,7 +815,7 @@ async fn image_message_creates_pending_attachment() {
          WHERE tenant_id = $1 AND status = 'pending'",
     )
     .bind(conn.tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

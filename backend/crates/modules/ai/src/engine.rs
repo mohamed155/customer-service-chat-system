@@ -897,7 +897,7 @@ pub async fn run_generation(
     // Handle awaiting_approval case — post interim holding message
     if awaiting_approval {
         let interim_id = {
-            let mut tx = pool.begin().await?;
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
             let mid = conversations::queries::insert_ai_reply_in_tx(
                 &mut tx,
                 tenant_id,
@@ -1018,7 +1018,7 @@ pub async fn run_generation(
                 let tid = tenant_id;
                 let cid = conversation_id;
                 tokio::spawn(async move {
-                    let mut tx = match pool.begin().await {
+                    let mut tx = match db::UnitOfWork::begin_for_tenant(&pool, tid).await {
                         Ok(tx) => tx,
                         Err(_) => return,
                     };
@@ -1053,7 +1053,7 @@ pub async fn run_generation(
             let confidence_score = crate::confidence::confidence_score(&confidence_inputs);
 
             let mid = {
-                let mut tx = pool.begin().await?;
+                let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
                 let mid = conversations::queries::insert_ai_reply_in_tx(
                     &mut tx,
                     tenant_id,
@@ -1229,7 +1229,7 @@ pub async fn run_generation(
                     conversations::queries::has_system_message(pool, tenant_id, conversation_id)
                         .await?;
                 if !has_ack {
-                    let mut tx = pool.begin().await?;
+                    let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
                     let ack_mid = conversations::queries::insert_auto_ack_in_tx(
                         &mut tx,
                         tenant_id,
@@ -1259,7 +1259,7 @@ pub async fn run_generation(
             let last_category = Some(category.as_str().to_string());
 
             let fallback_ok = match async {
-                let mut tx = pool.begin().await?;
+                let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
                 let fallback_mid = conversations::queries::insert_fallback_in_tx(
                     &mut tx,
                     tenant_id,

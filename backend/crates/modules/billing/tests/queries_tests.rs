@@ -194,7 +194,7 @@ async fn conversation_usage_excludes_soft_deleted() {
     )
     .bind(tenant_id)
     .bind("Conv Test Customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -208,7 +208,7 @@ async fn conversation_usage_excludes_soft_deleted() {
     .bind(tenant_id)
     .bind(customer_id)
     .bind(Utc.with_ymd_and_hms(2026, 7, 5, 0, 0, 0).unwrap())
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -220,7 +220,7 @@ async fn conversation_usage_excludes_soft_deleted() {
     .bind(customer_id)
     .bind(Utc.with_ymd_and_hms(2026, 7, 10, 0, 0, 0).unwrap())
     .bind(Utc.with_ymd_and_hms(2026, 7, 12, 0, 0, 0).unwrap())
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -231,7 +231,7 @@ async fn conversation_usage_excludes_soft_deleted() {
     .bind(tenant_id)
     .bind(customer_id)
     .bind(Utc.with_ymd_and_hms(2026, 7, 15, 0, 0, 0).unwrap())
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

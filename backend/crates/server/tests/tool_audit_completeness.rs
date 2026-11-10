@@ -88,7 +88,7 @@ async fn seed_minimal(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
     .bind(tenant_id)
     .bind("Audit Customer")
     .bind("audit@example.com")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed customer");
 
@@ -98,7 +98,7 @@ async fn seed_minimal(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed conversation");
 

@@ -1399,7 +1399,7 @@ async fn staff_tenant_access_is_environment_aware() {
         "INSERT INTO customers (tenant_id, display_name) VALUES ($1, 'RBAC Customer') RETURNING id",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let conversation_id: Uuid = sqlx::query_scalar(
@@ -1408,7 +1408,7 @@ async fn staff_tenant_access_is_environment_aware() {
     )
     .bind(tenant_id)
     .bind(customer_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     // `/tenant/ai/config` answers 404 until the tenant has an AI config.
@@ -1951,7 +1951,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid
     .bind(tenant_id)
     .bind(name)
     .bind(format!("{}-{}@example.com", name, Uuid::new_v4().simple()))
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }

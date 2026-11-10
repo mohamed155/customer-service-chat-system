@@ -106,6 +106,17 @@ pub async fn enforce_rls(conn: &mut PgConnection, tables: &[&str]) {
     }
 }
 
+/// Goes back to the owner role (undoes [`become_runtime`] and [`become_platform`]).
+///
+/// The owner is **not** exempt from Row-Level Security on a table whose policy is forced, so seed
+/// rows for such tables as [`become_platform`] and come back here only for DDL (`enforce_rls`).
+pub async fn become_owner(conn: &mut PgConnection) {
+    sqlx::query("RESET ROLE")
+        .execute(conn)
+        .await
+        .expect("RESET ROLE failed");
+}
+
 /// Runs the rest of the transaction as `app_runtime`.
 pub async fn become_runtime(conn: &mut PgConnection) {
     set_role(conn, "app_runtime").await;
@@ -129,4 +140,249 @@ async fn set_role(conn: &mut PgConnection, role: &'static str) {
         .unwrap_or_else(|e| {
             panic!("SET LOCAL ROLE {role} failed (is the roles script current?): {e}")
         });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Seeding and inspecting rows once Row-Level Security is on
+// ---------------------------------------------------------------------------------------------
+
+use std::cell::RefCell;
+
+thread_local! {
+    static SEED_POOL: RefCell<Option<PgPool>> = const { RefCell::new(None) };
+}
+
+/// A pool for test **fixtures and assertions** on tables under forced Row-Level Security.
+///
+/// `app_runtime`, the role the code under test runs as, sees only the tenant the transaction set,
+/// so a test cannot create a customer, a conversation or a message for a tenant, nor read one back,
+/// through the runtime pool. This pool connects as the schema owner and runs `SET ROLE
+/// app_platform` (BYPASSRLS, DML only), so it can seed and read every tenant. It cannot change the
+/// schema or `TRUNCATE`: use [`owner_pool`] for that.
+///
+/// One pool is kept per test thread, so a test reuses its connections.
+///
+/// **Never hand this pool to the application** (`AppState`, a router, a worker, a repository under
+/// test). Code that runs on it bypasses Row-Level Security and hides the bugs the policies exist to
+/// catch. Use it only in raw `sqlx::query` fixture and assertion statements.
+pub fn seed_pool() -> PgPool {
+    SEED_POOL.with(|cell| {
+        cell.borrow_mut()
+            .get_or_insert_with(|| {
+                sqlx::postgres::PgPoolOptions::new()
+                    .max_connections(3)
+                    .acquire_timeout(Duration::from_secs(10))
+                    .after_connect(|conn, _meta| {
+                        Box::pin(async move {
+                            sqlx::query("SET ROLE app_platform").execute(conn).await?;
+                            Ok(())
+                        })
+                    })
+                    .connect_lazy(&owner_url())
+                    .expect("invalid MIGRATION_DATABASE_URL")
+            })
+            .clone()
+    })
+}
+
+// ---------------------------------------------------------------------------------------------
+// Tenant-isolation harness (ADR-004 section 7, gap T5)
+// ---------------------------------------------------------------------------------------------
+
+/// The wrong-tenant checks every table under forced Row-Level Security must pass. See
+/// `docs/security/tenant-unit-of-work.md` ("The tenant-isolation harness") for how to use it.
+pub mod isolation {
+    use super::PgPool;
+    use crate::UnitOfWork;
+    use uuid::Uuid;
+
+    /// A table under test and one row in each of two tenants. The rows must already exist; create
+    /// them as the bypass role ([`super::seed_pool`]).
+    pub struct Probe<'a> {
+        pub table: &'a str,
+        pub id_column: &'a str,
+        pub tenant_a: Uuid,
+        pub tenant_b: Uuid,
+        pub row_a: Uuid,
+        pub row_b: Uuid,
+        /// A statement that inserts a valid row for the tenant bound as `$1`. Its other
+        /// placeholders (`$2` onwards) are bound to `insert_args`.
+        pub insert_sql: &'a str,
+        pub insert_args: &'a [Uuid],
+    }
+
+    fn assert_plain(name: &str) {
+        assert!(
+            name.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+            "not a plain identifier: {name}"
+        );
+    }
+
+    async fn count(uow: &mut UnitOfWork, sql: String, bind: Option<Uuid>) -> i64 {
+        let q = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(sql));
+        let q = if let Some(b) = bind { q.bind(b) } else { q };
+        q.fetch_one(uow.conn()).await.expect("count failed")
+    }
+
+    async fn affected(uow: &mut UnitOfWork, sql: String, bind: Uuid) -> u64 {
+        sqlx::query(sqlx::AssertSqlSafe(sql))
+            .bind(bind)
+            .execute(uow.conn())
+            .await
+            .expect("statement failed")
+            .rows_affected()
+    }
+
+    /// Runs the whole battery on `runtime_pool` (the app's pool, `app_runtime`):
+    ///
+    /// - as the right tenant: its own row is visible (so the denials below are the policy, not an
+    ///   empty table);
+    /// - as the wrong tenant: reading by id, listing, a no-op update, a delete and moving its own
+    ///   row to the other tenant all fail to reach the other tenant's row, and the row is intact;
+    /// - with no tenant at all: nothing is visible, nothing is updated or deleted, and an insert
+    ///   is refused.
+    ///
+    /// # Panics
+    /// With a message naming the table and the check that leaked.
+    pub async fn assert_isolated(runtime_pool: &PgPool, p: &Probe<'_>) {
+        assert_plain(p.table);
+        assert_plain(p.id_column);
+        let (t, id) = (p.table, p.id_column);
+
+        // The right tenant sees its own row.
+        let mut uow = UnitOfWork::begin_for_tenant(runtime_pool, p.tenant_a)
+            .await
+            .unwrap();
+        assert_eq!(
+            count(
+                &mut uow,
+                format!("SELECT count(*) FROM {t} WHERE {id} = $1"),
+                Some(p.row_a)
+            )
+            .await,
+            1,
+            "{t}: the owning tenant must see its own row"
+        );
+        drop(uow);
+
+        // The wrong tenant.
+        let mut uow = UnitOfWork::begin_for_tenant(runtime_pool, p.tenant_b)
+            .await
+            .unwrap();
+        assert_eq!(
+            count(
+                &mut uow,
+                format!("SELECT count(*) FROM {t} WHERE {id} = $1"),
+                Some(p.row_a)
+            )
+            .await,
+            0,
+            "{t}: read by guessed id leaked another tenant's row"
+        );
+        assert_eq!(
+            count(
+                &mut uow,
+                format!("SELECT count(*) FROM {t} WHERE tenant_id = $1"),
+                Some(p.tenant_a)
+            )
+            .await,
+            0,
+            "{t}: listing leaked another tenant's rows"
+        );
+        assert_eq!(
+            affected(
+                &mut uow,
+                format!("UPDATE {t} SET tenant_id = tenant_id WHERE {id} = $1"),
+                p.row_a
+            )
+            .await,
+            0,
+            "{t}: update reached another tenant's row"
+        );
+        assert_eq!(
+            affected(
+                &mut uow,
+                format!("DELETE FROM {t} WHERE {id} = $1"),
+                p.row_a
+            )
+            .await,
+            0,
+            "{t}: delete reached another tenant's row"
+        );
+        // Handing one's own row to the other tenant must be refused (WITH CHECK).
+        let moved = sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE {t} SET tenant_id = $1 WHERE {id} = $2"
+        )))
+        .bind(p.tenant_a)
+        .bind(p.row_b)
+        .execute(uow.conn())
+        .await;
+        assert!(
+            moved.is_err(),
+            "{t}: a tenant could move its row to another tenant"
+        );
+        drop(uow); // rolled back
+
+        // No tenant at all (a plain pool transaction, as the application never does).
+        let mut tx = runtime_pool.begin().await.unwrap();
+        for (what, sql) in [("read", format!("SELECT count(*) FROM {t}"))] {
+            let n: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
+            assert_eq!(n, 0, "{t}: {what} without a tenant returned rows");
+        }
+        for (what, sql) in [
+            (
+                "update",
+                format!("UPDATE {t} SET tenant_id = tenant_id WHERE {id} = $1"),
+            ),
+            ("delete", format!("DELETE FROM {t} WHERE {id} = $1")),
+        ] {
+            let n = sqlx::query(sqlx::AssertSqlSafe(sql))
+                .bind(p.row_a)
+                .execute(&mut *tx)
+                .await
+                .unwrap()
+                .rows_affected();
+            assert_eq!(n, 0, "{t}: {what} without a tenant reached a row");
+        }
+        let mut insert =
+            sqlx::query(sqlx::AssertSqlSafe(p.insert_sql.to_string())).bind(p.tenant_a);
+        for arg in p.insert_args {
+            insert = insert.bind(*arg);
+        }
+        assert!(
+            insert.execute(&mut *tx).await.is_err(),
+            "{t}: an insert without a tenant was accepted"
+        );
+        drop(tx);
+
+        // Nothing above changed the rows (read as the bypass role).
+        let seed = super::seed_pool();
+        for row in [p.row_a, p.row_b] {
+            let n: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "SELECT count(*) FROM {t} WHERE {id} = $1"
+            )))
+            .bind(row)
+            .fetch_one(&seed)
+            .await
+            .unwrap();
+            assert_eq!(n, 1, "{t}: a row changed during the isolation checks");
+        }
+    }
+
+    /// The tables that currently have forced Row-Level Security (`relforcerowsecurity`), in byte order
+    /// (`COLLATE "C"`, the order of a Rust `sort`), independent of the database collation.
+    pub async fn forced_rls_tables(pool: &PgPool) -> Vec<String> {
+        sqlx::query_scalar(
+            "SELECT c.relname::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+             WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relforcerowsecurity \
+             ORDER BY c.relname::text COLLATE \"C\"",
+        )
+        .fetch_all(pool)
+        .await
+        .expect("could not list forced-RLS tables")
+    }
 }
