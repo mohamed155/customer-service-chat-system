@@ -100,7 +100,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 
 #[allow(dead_code)]
 async fn setup(pool: &sqlx::PgPool) {
-    db::run_migrations(pool).await.unwrap();
+    db::testing::migrate().await;
     sqlx::query("DELETE FROM escalations")
         .execute(pool)
         .await
@@ -113,7 +113,7 @@ async fn setup(pool: &sqlx::PgPool) {
          tenant_invitations, tenant_memberships, tenants, users \
          RESTART IDENTITY CASCADE",
     )
-    .execute(pool)
+    .execute(&db::testing::owner_pool())
     .await
     .expect("failed to reset analytics test tables");
 }
@@ -642,7 +642,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
 #[tokio::test]
 async fn summary_returns_expected_metrics_for_seeded_tenant() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tenant_a, _tenant_b) = seed_canonical_dataset(&pool).await;
     let user = seed_member(&pool, tenant_a, "admin@analytics-t014.test", "admin").await;
     let response = send(
@@ -671,7 +671,7 @@ async fn summary_returns_expected_metrics_for_seeded_tenant() {
 #[tokio::test]
 async fn summary_is_tenant_isolated() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tenant_a, tenant_b) = seed_canonical_dataset(&pool).await;
     let user_b = seed_member(&pool, tenant_b, "admin@analytics-t015.test", "admin").await;
     let response = send(
@@ -705,7 +705,7 @@ async fn summary_is_tenant_isolated() {
 #[tokio::test]
 async fn summary_enforces_rbac() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tenant_a, _tenant_b) = seed_canonical_dataset(&pool).await;
     let uri = "/api/v1/tenant/analytics/summary?from=2026-03-10&to=2026-03-12";
     let roles: [&str; 5] = ["owner", "admin", "manager", "agent", "viewer"];
@@ -745,7 +745,7 @@ async fn summary_enforces_rbac() {
 #[tokio::test]
 async fn summary_empty_range_returns_zeroes_not_error() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tenant_a, _tenant_b) = seed_canonical_dataset(&pool).await;
     let user = seed_member(&pool, tenant_a, "admin@analytics-t017.test", "admin").await;
     let response = send(

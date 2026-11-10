@@ -138,7 +138,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_succeeds_with_default_plan() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -201,7 +201,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_audit_row_records_actor() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -260,7 +260,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_missing_name_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -297,7 +297,7 @@ mod tests {
         // lowercase the slug before validation; an uppercase character
         // is an invalid format and must produce 422.
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
 
@@ -337,7 +337,7 @@ mod tests {
         // T044: Same contract on PATCH — supplied uppercase slug is rejected
         // with 422, never silently rewritten.
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -379,7 +379,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_malformed_slug_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
 
@@ -412,7 +412,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_duplicate_live_slug_returns_409() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -459,7 +459,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_malformed_contact_email_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -494,7 +494,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_switches_in_successfully() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -578,7 +578,7 @@ mod tests {
     #[tokio::test]
     async fn list_tenants_status_filter_returns_matching_subset() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -657,7 +657,7 @@ mod tests {
     #[tokio::test]
     async fn list_tenants_q_and_status_combine() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -724,7 +724,7 @@ mod tests {
     #[tokio::test]
     async fn list_tenants_pagination_traverses_full_set() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -764,7 +764,7 @@ mod tests {
     #[tokio::test]
     async fn get_tenant_detail_returns_200_for_live_tenant() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -805,7 +805,7 @@ mod tests {
     #[tokio::test]
     async fn get_tenant_detail_returns_404_for_unknown() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unknown_id = Uuid::new_v4();
@@ -825,7 +825,7 @@ mod tests {
     #[tokio::test]
     async fn get_tenant_detail_returns_404_for_soft_deleted() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -895,7 +895,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_persists_name_plan_contact() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -954,7 +954,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_slug_change_writes_audit_via_trigger() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1008,7 +1008,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_slug_collision_returns_409() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1067,7 +1067,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_status_change_to_suspended_blocks_member_next_request() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1175,7 +1175,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_status_change_audit_asserts_old_and_new() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1221,7 +1221,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_field_change_audit_asserts_old_and_new() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1277,7 +1277,7 @@ mod tests {
         // without any sleep. Inserting the audit row inside the same
         // transaction as the tenant row guarantees they commit together.
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1335,7 +1335,7 @@ mod tests {
         // 23505, the transaction drops, and nothing — neither the tenant
         // update nor the audit insert — may be observable afterwards.
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1458,7 +1458,7 @@ mod tests {
         // PATCH must carry that PATCH's own `old` value, not the latest
         // committed value at the time the audit insert runs.
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1608,7 +1608,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_two_sequential_patches_both_audit() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1661,7 +1661,7 @@ mod tests {
     #[tokio::test]
     async fn list_tenants_status_filter_alone_returns_matching_subset() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1800,7 +1800,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_anonymous_returns_401() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let unique = Uuid::new_v4().simple().to_string();
         let mut res = send_request(
@@ -1826,7 +1826,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_each_tenant_role_returns_403() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         // Seed a tenant so the role-bearing users have a valid scope.
         let admin = seed_user(&pool, Some("super_admin")).await;
@@ -1901,7 +1901,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_invalid_plan_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1940,7 +1940,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_invalid_email_format_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -1979,7 +1979,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_soft_deleted_slug_reuse_succeeds() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2031,7 +2031,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_invalid_plan_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2074,7 +2074,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_blank_plan_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2116,7 +2116,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_invalid_status_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2157,7 +2157,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_combined_status_and_field_change_emits_both_audits() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2228,7 +2228,7 @@ mod tests {
     #[tokio::test]
     async fn get_tenant_detail_anonymous_returns_401() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let unique = Uuid::new_v4().simple().to_string();
         let tenant_id = sqlx::query_scalar::<_, Uuid>(
@@ -2256,7 +2256,7 @@ mod tests {
     #[tokio::test]
     async fn get_tenant_detail_each_tenant_role_returns_403() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let unique = Uuid::new_v4().simple().to_string();
         let tenant_id = sqlx::query_scalar::<_, Uuid>(
@@ -2319,7 +2319,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_blank_plan_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2360,7 +2360,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_blank_contact_name_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2401,7 +2401,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_blank_contact_email_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2442,7 +2442,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_multiple_invalid_fields_returns_all_details() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
 
@@ -2491,7 +2491,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_multiple_invalid_fields_returns_all_details() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2553,7 +2553,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_unknown_field_returns_422_with_detail() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2595,7 +2595,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_truly_malformed_json_returns_400() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
 
@@ -2624,7 +2624,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_omitted_plan_defaults_to_trial() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2675,7 +2675,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_null_name_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2729,7 +2729,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_blank_name_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2782,7 +2782,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_null_plan_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2826,7 +2826,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_null_slug_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2878,7 +2878,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_blank_slug_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2930,7 +2930,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_null_status_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -2982,7 +2982,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_absent_fields_preserved() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3041,7 +3041,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_empty_body_preserves_all_fields() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3080,7 +3080,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_blank_status_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3124,7 +3124,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_explicit_null_contact_clears_field() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3178,7 +3178,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_blank_contact_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3225,7 +3225,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_blank_name_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3263,7 +3263,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_multibyte_name_under_200_chars_accepted() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3305,7 +3305,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_multibyte_name_under_200_chars_accepted() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3362,7 +3362,7 @@ mod tests {
     #[tokio::test]
     async fn t054_member_suspend_refuse_reactivate_recover_with_audits() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3556,7 +3556,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_slug_with_leading_space_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3595,7 +3595,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_slug_trailing_hyphen_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3630,7 +3630,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_slug_trailing_hyphen_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3672,7 +3672,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_slug_with_leading_space_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3719,7 +3719,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_plan_with_leading_space_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3760,7 +3760,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_plan_with_leading_space_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3804,7 +3804,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_status_trailing_space_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3849,7 +3849,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_contact_email_with_leading_space_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3895,7 +3895,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_null_plan_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3957,7 +3957,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_multibyte_name_over_200_chars_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -3999,7 +3999,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_multibyte_name_over_200_chars_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -4046,7 +4046,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_multibyte_contact_name_under_200_chars_accepted() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -4088,7 +4088,7 @@ mod tests {
     #[tokio::test]
     async fn create_tenant_multibyte_contact_name_over_200_chars_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -4131,7 +4131,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_multibyte_contact_name_under_200_chars_accepted() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -4172,7 +4172,7 @@ mod tests {
     #[tokio::test]
     async fn update_tenant_multibyte_contact_name_over_200_chars_returns_422() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();
@@ -4217,7 +4217,7 @@ mod tests {
     #[tokio::test]
     async fn t074_pagination_traverses_500_tenants_without_gaps() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let admin = seed_user(&pool, Some("super_admin")).await;
         let unique = Uuid::new_v4().simple().to_string();

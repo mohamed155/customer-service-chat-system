@@ -95,6 +95,6 @@ async fn quickstart_db_connectivity() {
         eprintln!("skipping quickstart_validation: DATABASE_URL is unreachable");
         return;
     }
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     eprintln!("quickstart_validation: DB connectivity OK");
 }

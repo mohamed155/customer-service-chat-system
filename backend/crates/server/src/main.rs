@@ -30,6 +30,13 @@ async fn main() {
     // No-op if `.env` is absent; never overrides vars already set in the environment.
     dotenvy::dotenv().ok();
 
+    // Migrations are a separate step, never part of serving: they run as the schema owner
+    // (`app_owner`) over their own connection string, while the server connects as
+    // `app_runtime`, which cannot change the schema (ADR-004 section 3).
+    if std::env::args().nth(1).as_deref() == Some("migrate") {
+        std::process::exit(migrate().await);
+    }
+
     let config = match AppConfig::from_env() {
         Ok(c) => c,
         Err(e) => {
@@ -37,24 +44,6 @@ async fn main() {
             std::process::exit(1);
         }
     };
-
-    if std::env::args().nth(1).as_deref() == Some("migrate") {
-        let pool = db::lazy_pool(
-            &config.database_url,
-            config.db_max_connections,
-            Duration::from_millis(config.db_acquire_timeout_ms),
-        );
-        match db::run_migrations(&pool).await {
-            Ok(()) => {
-                println!("migrations applied");
-                std::process::exit(0);
-            }
-            Err(e) => {
-                eprintln!("migration failed: {e}");
-                std::process::exit(1);
-            }
-        }
-    }
 
     observability::init_observability(
         config.log_format.clone(),
@@ -332,4 +321,32 @@ async fn shutdown_signal() {
     }
 
     tracing::info!("shutdown signal received, starting graceful shutdown");
+}
+
+/// `server migrate`: applies the embedded migrations as the schema owner and returns the process
+/// exit code. Reads only `MIGRATION_DATABASE_URL`; there is deliberately no fallback to
+/// `DATABASE_URL`, which points at `app_runtime` and cannot run DDL.
+async fn migrate() -> i32 {
+    let url = match std::env::var("MIGRATION_DATABASE_URL") {
+        Ok(url) if !url.trim().is_empty() => url,
+        _ => {
+            eprintln!(
+                "migration failed: MIGRATION_DATABASE_URL is not set. Point it at the app_owner \
+                 role (see docs/configuration.md); DATABASE_URL is the runtime role and cannot \
+                 change the schema."
+            );
+            return 1;
+        }
+    };
+    let pool = db::lazy_pool(&url, 1, Duration::from_secs(30));
+    match db::run_migrations(&pool).await {
+        Ok(()) => {
+            println!("migrations applied");
+            0
+        }
+        Err(e) => {
+            eprintln!("migration failed: {e}");
+            1
+        }
+    }
 }

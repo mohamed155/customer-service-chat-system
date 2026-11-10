@@ -162,7 +162,7 @@ mod tests {
     #[tokio::test]
     async fn tighten_only_approval_builtin_cannot_be_relaxed() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool, None).await;
         let tenant_id = seed_tenant(&pool, None).await;

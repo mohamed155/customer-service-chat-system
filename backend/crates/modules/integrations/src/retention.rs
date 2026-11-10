@@ -64,7 +64,7 @@ mod tests {
     #[tokio::test]
     async fn sweep_expired_deletes_only_old_rows() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         // Seed a tenant + catalog connection so the FK on integration_events
         // and integration_webhook_deliveries is satisfied.

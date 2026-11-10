@@ -152,7 +152,7 @@ async fn seed_user(pool: &sqlx::PgPool, platform_role: Option<&str>) -> Uuid {
 }
 
 async fn setup(pool: &sqlx::PgPool) {
-    db::run_migrations(pool).await.unwrap();
+    db::testing::migrate().await;
     sqlx::query("DELETE FROM escalations")
         .execute(pool)
         .await
@@ -165,7 +165,7 @@ async fn setup(pool: &sqlx::PgPool) {
          tenant_invitations, tenant_memberships, tenants, users \
          RESTART IDENTITY CASCADE",
     )
-    .execute(pool)
+    .execute(&db::testing::owner_pool())
     .await
     .unwrap();
 }

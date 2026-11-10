@@ -176,7 +176,7 @@ mod tests {
     #[tokio::test]
     async fn tenant_a_tool_not_visible_in_tenant_b() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         // Create two tenants each with a user
         let tenant_a = seed_tenant(&pool, "A").await;

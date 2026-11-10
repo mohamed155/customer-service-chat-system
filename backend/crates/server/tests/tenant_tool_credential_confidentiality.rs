@@ -183,7 +183,7 @@ mod tests {
     #[tokio::test]
     async fn credential_not_exposed_in_get_tools() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool).await;
         let tenant_id = seed_tenant(&pool).await;
@@ -224,7 +224,7 @@ mod tests {
     #[tokio::test]
     async fn credential_not_exposed_in_tool_activity() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool).await;
         let tenant_id = seed_tenant(&pool).await;
@@ -318,7 +318,7 @@ mod tests {
     #[tokio::test]
     async fn credential_not_exposed_in_error_text() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         let user_id = seed_user(&pool).await;
         let tenant_id = seed_tenant(&pool).await;

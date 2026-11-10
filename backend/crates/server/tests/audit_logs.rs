@@ -193,7 +193,7 @@ async fn seed_audit_row(
 #[tokio::test]
 async fn tenant_isolation_tenant_a_does_not_see_tenant_b_rows() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
@@ -248,7 +248,7 @@ async fn tenant_isolation_tenant_a_does_not_see_tenant_b_rows() {
 #[tokio::test]
 async fn platform_level_rows_are_excluded_from_tenant_endpoint() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool, None).await;
@@ -299,7 +299,7 @@ async fn platform_level_rows_are_excluded_from_tenant_endpoint() {
 #[tokio::test]
 async fn ordering_is_newest_first() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool, None).await;
@@ -352,7 +352,7 @@ async fn ordering_is_newest_first() {
 #[tokio::test]
 async fn cursor_pagination_returns_all_pages() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool, None).await;
@@ -432,7 +432,7 @@ async fn cursor_pagination_returns_all_pages() {
 #[tokio::test]
 async fn category_filter_returns_only_matching_rows() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool, None).await;
@@ -483,7 +483,7 @@ async fn category_filter_returns_only_matching_rows() {
 #[tokio::test]
 async fn system_actor_returns_kind_system() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool, None).await;
@@ -522,7 +522,7 @@ async fn system_actor_returns_kind_system() {
 #[tokio::test]
 async fn deleted_actor_has_deleted_flag() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let actor_user = seed_user(&pool, None).await;
@@ -568,7 +568,7 @@ async fn deleted_actor_has_deleted_flag() {
 #[tokio::test]
 async fn platform_staff_actor_has_is_platform_staff_flag() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let staff_user = seed_user(&pool, Some("super_admin")).await;
@@ -674,7 +674,7 @@ async fn invalid_cursor_returns_422() {
 #[tokio::test]
 async fn immutability_update_and_delete_are_rejected_by_trigger() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool, None).await;
@@ -724,7 +724,7 @@ async fn immutability_update_and_delete_are_rejected_by_trigger() {
 #[tokio::test]
 async fn platform_user_sees_all_tenants_and_platform_rows() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
@@ -813,7 +813,7 @@ async fn platform_user_sees_all_tenants_and_platform_rows() {
 #[tokio::test]
 async fn platform_filter_by_tenant_narrows_results() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
@@ -867,7 +867,7 @@ async fn platform_filter_by_tenant_narrows_results() {
 #[tokio::test]
 async fn tenant_only_user_is_denied_platform_endpoint() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -891,7 +891,7 @@ async fn tenant_only_user_is_denied_platform_endpoint() {
 #[tokio::test]
 async fn all_five_platform_roles_can_access_platform_audit() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     for role in ["super_admin", "developer", "support", "sales", "finance"] {
         let user_id = seed_user(&pool, Some(role)).await;
@@ -923,7 +923,7 @@ async fn all_five_platform_roles_can_access_platform_audit() {
 #[tokio::test]
 async fn tool_execution_emits_audit_row() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -1005,7 +1005,7 @@ async fn tool_execution_emits_audit_row() {
 #[tokio::test]
 async fn failed_tool_execution_emits_audit_row() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
@@ -1090,7 +1090,7 @@ async fn failed_tool_execution_emits_audit_row() {
 #[ignore]
 async fn performance_list_under_two_seconds() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let actor_id = seed_user(&pool, None).await;

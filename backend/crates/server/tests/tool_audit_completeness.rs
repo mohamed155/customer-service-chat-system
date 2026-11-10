@@ -179,7 +179,7 @@ async fn fetch_json(pool: &PgPool, id: Uuid) -> serde_json::Value {
 #[tokio::test]
 async fn succeeded_has_complete_row_with_started_and_finished() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tid, cid, gid) = seed_minimal(&pool).await;
 
     let id = insert_request(&pool, tid, cid, gid, "succeeded", true, true).await;
@@ -200,7 +200,7 @@ async fn succeeded_has_complete_row_with_started_and_finished() {
 #[tokio::test]
 async fn failed_has_complete_row_with_error() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tid, cid, gid) = seed_minimal(&pool).await;
 
     let id = insert_request(&pool, tid, cid, gid, "failed", true, true).await;
@@ -218,7 +218,7 @@ async fn failed_has_complete_row_with_error() {
 #[tokio::test]
 async fn refused_has_started_at_null() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tid, cid, gid) = seed_minimal(&pool).await;
 
     let id = insert_request(&pool, tid, cid, gid, "refused", false, false).await;
@@ -238,7 +238,7 @@ async fn refused_has_started_at_null() {
 #[tokio::test]
 async fn denied_has_started_at_null_and_decision_fields() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tid, cid, gid) = seed_minimal(&pool).await;
 
     // Create an awaiting_approval row
@@ -300,7 +300,7 @@ async fn denied_has_started_at_null_and_decision_fields() {
 #[tokio::test]
 async fn expired_has_started_at_null_and_decision_fields() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tid, cid, gid) = seed_minimal(&pool).await;
 
     // Create an awaiting_approval row that has already expired
@@ -339,7 +339,7 @@ async fn expired_has_started_at_null_and_decision_fields() {
 #[tokio::test]
 async fn cancelled_has_started_at_null_and_decision_fields() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tid, cid, gid) = seed_minimal(&pool).await;
 
     // Create an awaiting_approval row
@@ -380,7 +380,7 @@ async fn cancelled_has_started_at_null_and_decision_fields() {
 #[tokio::test]
 async fn timed_out_has_started_at_finished_at_and_error() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let (tid, cid, gid) = seed_minimal(&pool).await;
 
     let id = insert_request(&pool, tid, cid, gid, "timed_out", true, true).await;

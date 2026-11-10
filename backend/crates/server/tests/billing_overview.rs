@@ -221,7 +221,7 @@ const URI: &str = "/api/v1/tenant/billing/overview";
 #[serial(billing_db)]
 async fn billing_overview_200_for_owner() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant = seed_tenant(&pool, "Owner Billing Tenant").await;
     subscribe(&pool, tenant, free_plan_id(&pool).await).await;
     let user = seed_member(&pool, tenant, "owner@bill-t001.test", "owner").await;
@@ -233,7 +233,7 @@ async fn billing_overview_200_for_owner() {
 #[serial(billing_db)]
 async fn billing_overview_200_for_admin() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant = seed_tenant(&pool, "Admin Billing Tenant").await;
     subscribe(&pool, tenant, free_plan_id(&pool).await).await;
     let user = seed_member(&pool, tenant, "admin@bill-t002.test", "admin").await;
@@ -245,7 +245,7 @@ async fn billing_overview_200_for_admin() {
 #[serial(billing_db)]
 async fn billing_overview_403_for_manager() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant = seed_tenant(&pool, "Manager Billing Tenant").await;
     subscribe(&pool, tenant, free_plan_id(&pool).await).await;
     let user = seed_member(&pool, tenant, "manager@bill-t003.test", "manager").await;
@@ -257,7 +257,7 @@ async fn billing_overview_403_for_manager() {
 #[serial(billing_db)]
 async fn billing_overview_403_for_agent() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant = seed_tenant(&pool, "Agent Billing Tenant").await;
     subscribe(&pool, tenant, free_plan_id(&pool).await).await;
     let user = seed_member(&pool, tenant, "agent@bill-t004.test", "agent").await;
@@ -269,7 +269,7 @@ async fn billing_overview_403_for_agent() {
 #[serial(billing_db)]
 async fn billing_overview_403_for_viewer() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant = seed_tenant(&pool, "Viewer Billing Tenant").await;
     subscribe(&pool, tenant, free_plan_id(&pool).await).await;
     let user = seed_member(&pool, tenant, "viewer@bill-t005.test", "viewer").await;
@@ -281,7 +281,7 @@ async fn billing_overview_403_for_viewer() {
 #[serial(billing_db)]
 async fn billing_overview_no_subscription_returns_free_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant = seed_tenant(&pool, "No Sub Billing Tenant").await;
     let user = seed_member(&pool, tenant, "admin@bill-t006.test", "admin").await;
     let response = send(pool.clone(), authenticated_request(URI, user, tenant)).await;
@@ -295,7 +295,7 @@ async fn billing_overview_no_subscription_returns_free_plan() {
 #[serial(billing_db)]
 async fn billing_overview_zero_usage() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant = seed_tenant(&pool, "Zero Usage Billing Tenant").await;
     subscribe(&pool, tenant, free_plan_id(&pool).await).await;
     let user = seed_member(&pool, tenant, "admin@bill-t007.test", "admin").await;
@@ -310,7 +310,7 @@ async fn billing_overview_zero_usage() {
 #[serial(billing_db)]
 async fn billing_overview_token_allowance_null() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant = seed_tenant(&pool, "Null Allowance Tenant").await;
     let plan_id = create_custom_plan(
         &pool,
@@ -336,7 +336,7 @@ async fn billing_overview_token_allowance_null() {
 #[serial(billing_db)]
 async fn billing_overview_tenant_isolation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_a = seed_tenant(&pool, "Isolation A Tenant").await;
     let tenant_b = seed_tenant(&pool, "Isolation B Tenant").await;
     let plan = free_plan_id(&pool).await;

@@ -100,7 +100,7 @@ async fn body_bytes(res: &mut axum::response::Response) -> Vec<u8> {
 #[tokio::test]
 async fn customer_view_contains_no_tool_request_data() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let user_id: Uuid =
         sqlx::query_scalar("INSERT INTO users (email, display_name) VALUES ($1, $2) RETURNING id")

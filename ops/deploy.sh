@@ -194,6 +194,25 @@ run_or_dry docker pull "$WIDGET_IMAGE"
 # ---------------------------------------------------------------------------
 echo "--- Step 4/6: Running migrations ---"
 
+# The backend connects as app_runtime and migrations run as app_owner (MIGRATION_DATABASE_URL in
+# .env.staging). Make sure both roles exist and own/can use the schema first. The script is
+# idempotent; on a database created before the role split it also hands the existing tables to
+# app_owner. It needs APP_OWNER_PASSWORD / APP_RUNTIME_PASSWORD in the postgres container.
+# A postgres container created before the passwords were configured doesn't have them. When they
+# are exported in this shell, hand them to the script; otherwise the container's own values apply.
+ROLE_ENV=(-e ROLES_REQUIRED=1)
+[[ -n "${APP_OWNER_PASSWORD:-}" ]] && ROLE_ENV+=(-e APP_OWNER_PASSWORD)
+[[ -n "${APP_RUNTIME_PASSWORD:-}" ]] && ROLE_ENV+=(-e APP_RUNTIME_PASSWORD)
+if $DRY_RUN; then
+    dry_run "docker compose $COMPOSE_FILES exec -T ${ROLE_ENV[*]} postgres bash -s < infra/postgres/init/02-roles.sh"
+elif ! $SKIP_MIGRATIONS; then
+    if ! docker compose $COMPOSE_FILES exec -T "${ROLE_ENV[@]}" postgres \
+        bash -s < infra/postgres/init/02-roles.sh; then
+        echo "ERROR: Database roles could not be set up. Aborting deploy — old release still serving." >&2
+        exit 1
+    fi
+fi
+
 if $DRY_RUN; then
     dry_run "docker compose $COMPOSE_FILES run --rm -e APP_RELEASE_SHA=$SHA backend migrate"
 elif $SKIP_MIGRATIONS; then

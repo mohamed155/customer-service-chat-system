@@ -143,29 +143,49 @@ async fn concurrent_units_of_work_keep_separate_tenants() {
     ub.rollback().await.unwrap();
 }
 
+/// Creates a throwaway table as the schema owner: the tests connect as `app_runtime`, which cannot
+/// run DDL (not even temporary tables). The default privileges give `app_runtime` DML on it.
+async fn create_probe_table() -> String {
+    db::testing::migrate().await;
+    let table = format!("uow_probe_{}", Uuid::new_v4().simple());
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE TABLE {table} (n int)")))
+        .execute(&db::testing::owner_pool())
+        .await
+        .unwrap();
+    table
+}
+
+async fn drop_probe_table(table: &str) {
+    sqlx::query(sqlx::AssertSqlSafe(format!("DROP TABLE {table}")))
+        .execute(&db::testing::owner_pool())
+        .await
+        .unwrap();
+}
+
 #[tokio::test]
 async fn work_done_through_the_unit_of_work_is_visible_to_itself() {
     let Some(pool) = get_pool(1).await else {
         return;
     };
+    let table = create_probe_table().await;
 
     let mut uow = UnitOfWork::begin_for_tenant(&pool, Uuid::new_v4())
         .await
         .unwrap();
-    sqlx::query("CREATE TEMP TABLE uow_probe (n int) ON COMMIT DROP")
-        .execute(uow.conn())
-        .await
-        .unwrap();
-    sqlx::query("INSERT INTO uow_probe VALUES (1)")
-        .execute(uow.conn())
-        .await
-        .unwrap();
-    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM uow_probe")
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "INSERT INTO {table} VALUES (1)"
+    )))
+    .execute(uow.conn())
+    .await
+    .unwrap();
+    let n: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
         .fetch_one(uow.conn())
         .await
         .unwrap();
+    uow.rollback().await.unwrap();
+    drop_probe_table(&table).await;
+
     assert_eq!(n, 1);
-    uow.commit().await.unwrap();
 }
 
 /// A write survives only if the Unit of Work was committed. A dropped Unit of Work rolls back, which
@@ -177,11 +197,7 @@ async fn only_committed_work_survives_a_commit_a_rollback_and_a_drop() {
     let Some(pool) = get_pool(2).await else {
         return;
     };
-    let table = format!("uow_probe_{}", Uuid::new_v4().simple());
-    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE TABLE {table} (n int)")))
-        .execute(&pool)
-        .await
-        .unwrap();
+    let table = create_probe_table().await;
 
     for (n, how) in [(1, "commit"), (2, "rollback"), (3, "drop")] {
         let mut uow = UnitOfWork::begin_for_tenant(&pool, Uuid::new_v4())
@@ -206,10 +222,7 @@ async fn only_committed_work_survives_a_commit_a_rollback_and_a_drop() {
     .fetch_all(&pool)
     .await
     .unwrap();
-    sqlx::query(sqlx::AssertSqlSafe(format!("DROP TABLE {table}")))
-        .execute(&pool)
-        .await
-        .unwrap();
+    drop_probe_table(&table).await;
 
     assert_eq!(survivors, vec![1]);
 }

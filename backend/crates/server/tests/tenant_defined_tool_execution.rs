@@ -207,7 +207,7 @@ mod tests {
     #[tokio::test]
     async fn tenant_tool_via_wiremock_gets_post() {
         let Some(pool) = get_pool().await else { return };
-        db::run_migrations(&pool).await.unwrap();
+        db::testing::migrate().await;
 
         // Start a mock server for the tenant tool endpoint
         let mock_server = MockServer::start().await;

@@ -153,7 +153,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
         "TRUNCATE TABLE outbox_events, audit_logs, tenant_invitations, tenant_memberships, tenants, users \
          RESTART IDENTITY CASCADE",
     )
-    .execute(&pool)
+    .execute(&db::testing::owner_pool())
     .await
     .expect("failed to reset team_members test tables");
 
@@ -315,7 +315,7 @@ async fn assert_ok_response(
 #[serial_test::serial(team_members_db)]
 async fn full_field_set_returned() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, "Alice Smith", "alice@example.com").await;
     seed_membership(&pool, tenant_id, user_id, "admin", "active").await;
@@ -338,7 +338,7 @@ async fn full_field_set_returned() {
 #[serial_test::serial(team_members_db)]
 async fn search_q_matches_name_and_email() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let alice = seed_user(&pool, "Alice Smith", "alice@example.com").await;
     let bob = seed_user(&pool, "Bob Jones", "bob@example.com").await;
@@ -372,7 +372,7 @@ async fn search_q_matches_name_and_email() {
 #[serial_test::serial(team_members_db)]
 async fn status_filter_works() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let active_user = seed_user(&pool, "Active User", "active@example.com").await;
     let disabled_user = seed_user(&pool, "Disabled User", "disabled@example.com").await;
@@ -406,7 +406,7 @@ async fn status_filter_works() {
 #[serial_test::serial(team_members_db)]
 async fn roster_query_validation_errors_return_422() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-query-validation@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -448,7 +448,7 @@ async fn roster_query_validation_errors_return_422() {
 #[serial_test::serial(team_members_db)]
 async fn cursor_pagination_works() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let mut member_ids = Vec::new();
     for i in 0..3 {
@@ -506,7 +506,7 @@ async fn cursor_pagination_works() {
 #[serial_test::serial(team_members_db)]
 async fn cross_tenant_isolation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
     let user_a = seed_user(&pool, "Tenant A User", "a@example.com").await;
@@ -529,7 +529,7 @@ async fn cross_tenant_isolation() {
 #[serial_test::serial(team_members_db)]
 async fn empty_roster() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, "Lonely User", "lonely@example.com").await;
     seed_membership(&pool, tenant_id, user_id, "admin", "active").await;
@@ -557,7 +557,7 @@ async fn empty_roster() {
 #[serial_test::serial(team_members_db)]
 async fn scale_500_members() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let admin_id = seed_user(&pool, "Admin", "admin@example.com").await;
     seed_membership(&pool, tenant_id, admin_id, "admin", "active").await;
@@ -687,7 +687,7 @@ async fn create_invitation(
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_success() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -726,7 +726,7 @@ async fn create_invitation_success() {
 
 async fn assert_configured_delivery_result(succeeds: bool, expected: &str) {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -832,7 +832,7 @@ async fn configured_email_failure_is_persisted_and_listed_without_losing_invitat
 #[serial_test::serial(team_members_db)]
 async fn blocked_sender_does_not_block_invitation_creation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -878,7 +878,7 @@ async fn blocked_sender_does_not_block_invitation_creation() {
 #[serial_test::serial(team_members_db)]
 async fn queued_outbox_delivery_is_recovered() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     let invitation_id = Uuid::new_v4();
@@ -930,7 +930,7 @@ async fn queued_outbox_delivery_is_recovered() {
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_returns_full_camel_case_inviter_shape() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner Name", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -945,7 +945,7 @@ async fn create_invitation_returns_full_camel_case_inviter_shape() {
 #[serial_test::serial(team_members_db)]
 async fn invitation_delivery_status_is_targeted_and_tenant_scoped() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -986,7 +986,7 @@ async fn invitation_delivery_status_is_targeted_and_tenant_scoped() {
 #[serial_test::serial(team_members_db)]
 async fn poison_delivery_is_terminal_and_does_not_starve_next_event() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     let poison_id = Uuid::new_v4();
@@ -1050,7 +1050,7 @@ async fn poison_delivery_is_terminal_and_does_not_starve_next_event() {
 #[serial_test::serial(team_members_db)]
 async fn smtp_wait_does_not_hold_the_outbox_row_lock() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     let invitation_id = Uuid::new_v4();
@@ -1093,7 +1093,7 @@ async fn smtp_wait_does_not_hold_the_outbox_row_lock() {
 #[serial_test::serial(team_members_db)]
 async fn stale_third_attempt_claim_is_terminally_failed_and_dead_lettered() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     let invitation_id = Uuid::new_v4();
@@ -1146,7 +1146,7 @@ async fn stale_third_attempt_claim_is_terminally_failed_and_dead_lettered() {
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_rejects_invalid_email() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1175,7 +1175,7 @@ async fn create_invitation_rejects_invalid_email() {
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_duplicate_active_member_409() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     let member = seed_user(&pool, "Existing Member", "existing@example.com").await;
@@ -1197,7 +1197,7 @@ async fn create_invitation_duplicate_active_member_409() {
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_duplicate_pending_409() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1220,7 +1220,7 @@ async fn create_invitation_duplicate_pending_409() {
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_hierarchy_refusal() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let manager = seed_user(&pool, "Manager", "manager@example.com").await;
     seed_membership(&pool, tenant_id, manager, "manager", "active").await;
@@ -1249,7 +1249,7 @@ async fn create_invitation_hierarchy_refusal() {
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_disabled_member_conflict() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-disabled@example.com").await;
     let disabled = seed_user(&pool, "Disabled", "disabled-invite@example.com").await;
@@ -1277,7 +1277,7 @@ async fn create_invitation_disabled_member_conflict() {
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_duplicate_race_returns_one_success() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-race@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1301,7 +1301,7 @@ async fn create_invitation_duplicate_race_returns_one_success() {
 #[serial_test::serial(team_members_db)]
 async fn list_invitations_filters_status_and_paginates() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-list@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1438,7 +1438,7 @@ async fn list_invitations_filters_status_and_paginates() {
 #[serial_test::serial(team_members_db)]
 async fn invitation_query_validation_errors_return_422() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-invite-query-validation@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1479,7 +1479,7 @@ async fn invitation_query_validation_errors_return_422() {
 #[serial_test::serial(team_members_db)]
 async fn accept_invitation_race_consumes_single_use_token() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-race-accept@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1542,7 +1542,7 @@ async fn accept_invitation_race_consumes_single_use_token() {
 #[serial_test::serial(team_members_db)]
 async fn accept_invitation_still_works_after_inviter_is_disabled() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-inviter@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1595,7 +1595,7 @@ async fn accept_invitation_still_works_after_inviter_is_disabled() {
 #[serial_test::serial(team_members_db)]
 async fn list_invitations() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1625,7 +1625,7 @@ async fn list_invitations() {
 #[serial_test::serial(team_members_db)]
 async fn revoke_invitation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1668,7 +1668,7 @@ async fn revoke_invitation() {
 #[serial_test::serial(team_members_db)]
 async fn revoked_token_unacceptable() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1709,7 +1709,7 @@ async fn revoked_token_unacceptable() {
 #[serial_test::serial(team_members_db)]
 async fn revoke_accepted_invitation_returns_409_not_404() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-revoke-accepted@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1749,7 +1749,7 @@ async fn revoke_accepted_invitation_returns_409_not_404() {
 #[serial_test::serial(team_members_db)]
 async fn revoke_already_revoked_invitation_returns_409() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-revoke-revoked@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1789,7 +1789,7 @@ async fn revoke_already_revoked_invitation_returns_409() {
 #[serial_test::serial(team_members_db)]
 async fn revoke_expired_pending_invitation_succeeds_as_noop_hardening() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-revoke-expired@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1870,7 +1870,7 @@ async fn revoke_expired_pending_invitation_succeeds_as_noop_hardening() {
 #[serial_test::serial(team_members_db)]
 async fn revoke_unknown_invitation_id_still_404() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-revoke-unknown@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1893,7 +1893,7 @@ async fn revoke_unknown_invitation_id_still_404() {
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_reissue_after_expiry_succeeds() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-reissue@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -1978,7 +1978,7 @@ async fn create_invitation_reissue_after_expiry_succeeds() {
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_still_blocks_active_unexpired_duplicate() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-still-blocks@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2013,7 +2013,7 @@ async fn create_invitation_still_blocks_active_unexpired_duplicate() {
 #[serial_test::serial(team_members_db)]
 async fn create_invitation_reissue_after_expiry_concurrent_race_returns_one_success() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-reissue-race@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2104,7 +2104,7 @@ async fn create_invitation_equal_rank_succeeds_by_design() {
     // the strict-below "manage" rule (rule 1) — do not regress this to
     // strict-below.
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let admin = seed_user(&pool, "Admin", "admin-equal-invite@example.com").await;
     seed_membership(&pool, tenant_id, admin, "admin", "active").await;
@@ -2128,7 +2128,7 @@ async fn create_invitation_equal_rank_succeeds_by_design() {
 #[serial_test::serial(team_members_db)]
 async fn revoke_invitation_equal_rank_succeeds_by_design() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let admin = seed_user(&pool, "Admin", "admin-equal-revoke@example.com").await;
     seed_membership(&pool, tenant_id, admin, "admin", "active").await;
@@ -2160,7 +2160,7 @@ async fn revoke_invitation_equal_rank_succeeds_by_design() {
 #[serial_test::serial(team_members_db)]
 async fn revoke_invitation_lower_rank_actor_refused() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let manager = seed_user(&pool, "Manager", "manager-revoke-lower@example.com").await;
     seed_membership(&pool, tenant_id, manager, "manager", "active").await;
@@ -2197,7 +2197,7 @@ async fn revoke_invitation_lower_rank_actor_refused() {
 #[serial_test::serial(team_members_db)]
 async fn patch_member_cross_tenant_id_404_no_mutation_no_audit() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
     let owner_a = seed_user(&pool, "Owner A", "owner-cta@example.com").await;
@@ -2255,7 +2255,7 @@ async fn patch_member_cross_tenant_id_404_no_mutation_no_audit() {
 #[serial_test::serial(team_members_db)]
 async fn revoke_invitation_cross_tenant_id_404_no_mutation_no_audit() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
     let owner_a = seed_user(&pool, "Owner A", "owner-cti@example.com").await;
@@ -2324,7 +2324,7 @@ async fn soft_delete_tenant(pool: &sqlx::PgPool, tenant_id: Uuid) {
 #[serial_test::serial(team_members_db)]
 async fn preview_invitation_suspended_tenant_404() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-sus-preview@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2345,7 +2345,7 @@ async fn preview_invitation_suspended_tenant_404() {
 #[serial_test::serial(team_members_db)]
 async fn preview_invitation_soft_deleted_tenant_404() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-del-preview@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2370,7 +2370,7 @@ async fn preview_invitation_soft_deleted_tenant_404() {
 #[serial_test::serial(team_members_db)]
 async fn accept_invitation_suspended_tenant_404_no_mutation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-sus-accept@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2416,7 +2416,7 @@ async fn accept_invitation_suspended_tenant_404_no_mutation() {
 #[serial_test::serial(team_members_db)]
 async fn accept_invitation_suspended_tenant_race_404_no_mutation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-sus-race@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2471,7 +2471,7 @@ async fn accept_invitation_suspended_tenant_race_404_no_mutation() {
 #[serial_test::serial(team_members_db)]
 async fn accept_invitation_soft_deleted_tenant_404_no_mutation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-del-accept@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2513,7 +2513,7 @@ async fn accept_invitation_soft_deleted_tenant_404_no_mutation() {
 #[serial_test::serial(team_members_db)]
 async fn accept_invitation_soft_deleted_tenant_race_404_no_mutation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-del-race@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2576,7 +2576,7 @@ async fn accept_invitation_soft_deleted_tenant_race_404_no_mutation() {
 #[serial_test::serial(team_members_db)]
 async fn accept_invitation_anonymous() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2666,7 +2666,7 @@ async fn accept_invitation_anonymous() {
 #[serial_test::serial(team_members_db)]
 async fn accept_invitation_anonymous_existing_account_returns_409_without_mutation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-existing-account@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2742,7 +2742,7 @@ async fn accept_invitation_anonymous_existing_account_returns_409_without_mutati
 #[serial_test::serial(team_members_db)]
 async fn accept_invitation_signed_in() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2802,7 +2802,7 @@ async fn accept_invitation_signed_in() {
 #[serial_test::serial(team_members_db)]
 async fn accept_expired_token_410() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2849,7 +2849,7 @@ async fn accept_expired_token_410() {
 #[serial_test::serial(team_members_db)]
 async fn preview_derived_and_persisted_expired_tokens_return_410() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-expired-preview@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2901,7 +2901,7 @@ async fn preview_derived_and_persisted_expired_tokens_return_410() {
 #[serial_test::serial(team_members_db)]
 async fn accept_unknown_token_404() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let request = Request::post("/api/v1/invitations/abcdef1234567890abcdef1234567890/accept")
         .header("content-type", "application/json")
@@ -2925,7 +2925,7 @@ async fn accept_unknown_token_404() {
 #[serial_test::serial(team_members_db)]
 async fn accept_email_mismatch_403() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -2971,7 +2971,7 @@ async fn accept_email_mismatch_403() {
 #[serial_test::serial(team_members_db)]
 async fn accept_consumed_token_410() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -3019,7 +3019,7 @@ async fn accept_consumed_token_410() {
 #[serial_test::serial(team_members_db)]
 async fn accept_disabled_member_409() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
 
     let mut bytes = [0u8; 32];
@@ -3071,7 +3071,7 @@ async fn accept_disabled_member_409() {
 #[serial_test::serial(team_members_db)]
 async fn role_change_success() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-rcs@example.com").await;
     let target = seed_user(&pool, "Target", "target-rcs@example.com").await;
@@ -3128,7 +3128,7 @@ async fn role_change_success() {
 #[serial_test::serial(team_members_db)]
 async fn role_change_hierarchy_refused() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let manager = seed_user(&pool, "Manager", "manager-hr@example.com").await;
     let admin = seed_user(&pool, "Admin", "admin-hr@example.com").await;
@@ -3168,7 +3168,7 @@ async fn role_change_hierarchy_refused() {
 #[serial_test::serial(team_members_db)]
 async fn role_change_non_owner_assigning_owner_refused() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let admin = seed_user(&pool, "Admin", "admin-noa@example.com").await;
     let target = seed_user(&pool, "Target", "target-noa@example.com").await;
@@ -3199,7 +3199,7 @@ async fn role_change_non_owner_assigning_owner_refused() {
 #[serial_test::serial(team_members_db)]
 async fn role_change_last_owner_demotion_refused() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let target = seed_user(&pool, "Only Owner", "only-owner@example.com").await;
     seed_membership(&pool, tenant_id, target, "owner", "active").await;
@@ -3235,7 +3235,7 @@ async fn role_change_last_owner_demotion_refused() {
 #[serial_test::serial(team_members_db)]
 async fn role_change_self_refused() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-self@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -3264,7 +3264,7 @@ async fn role_change_self_refused() {
 #[serial_test::serial(team_members_db)]
 async fn role_change_immediate_effect() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-ie@example.com").await;
     // Start as manager (has members.manage) so the pre-demotion check below
@@ -3329,7 +3329,7 @@ async fn role_change_immediate_effect() {
 #[serial_test::serial(team_members_db)]
 async fn role_change_uses_active_tenant_membership() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
     let actor = seed_user(&pool, "Actor", "actor-active-tenant@example.com").await;
@@ -3383,7 +3383,7 @@ async fn role_change_uses_active_tenant_membership() {
 #[serial_test::serial(team_members_db)]
 async fn role_change_concurrent_demotions() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner_a = seed_user(&pool, "Owner A", "owner-a@example.com").await;
     let owner_b = seed_user(&pool, "Owner B", "owner-b@example.com").await;
@@ -3450,7 +3450,7 @@ async fn role_change_concurrent_demotions() {
 #[serial_test::serial(team_members_db)]
 async fn last_owner_changes_remain_conflicted_under_concurrency() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner_a = seed_user(&pool, "Owner A", "owner-a-lock@example.com").await;
     let owner_b = seed_user(&pool, "Owner B", "owner-b-lock@example.com").await;
@@ -3522,7 +3522,7 @@ async fn last_owner_changes_remain_conflicted_under_concurrency() {
 #[serial_test::serial(team_members_db)]
 async fn disable_member() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-dm@example.com").await;
     let target = seed_user(&pool, "Target", "target-dm@example.com").await;
@@ -3575,7 +3575,7 @@ async fn disable_member() {
 #[serial_test::serial(team_members_db)]
 async fn disabled_member_immediate_access_loss() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-dmal@example.com").await;
     let target = seed_user(&pool, "Target", "target-dmal@example.com").await;
@@ -3619,7 +3619,7 @@ async fn disabled_member_immediate_access_loss() {
 #[serial_test::serial(team_members_db)]
 async fn re_enable_member() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-rem@example.com").await;
     let target = seed_user(&pool, "Target", "target-rem@example.com").await;
@@ -3664,7 +3664,7 @@ async fn re_enable_member() {
 #[serial_test::serial(team_members_db)]
 async fn patch_member_same_role_conflict_no_audit() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-same-role@example.com").await;
     let target = seed_user(&pool, "Target", "target-same-role@example.com").await;
@@ -3704,7 +3704,7 @@ async fn patch_member_same_role_conflict_no_audit() {
 #[serial_test::serial(team_members_db)]
 async fn patch_member_validation_errors_return_422_without_mutation() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-patch-validation@example.com").await;
     let target = seed_user(&pool, "Target", "target-patch-validation@example.com").await;
@@ -3782,7 +3782,7 @@ async fn patch_member_validation_errors_return_422_without_mutation() {
 #[serial_test::serial(team_members_db)]
 async fn disable_last_owner_refused() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let target = seed_user(&pool, "Only Owner", "only-owner-dlo@example.com").await;
     seed_membership(&pool, tenant_id, target, "owner", "active").await;
@@ -3818,7 +3818,7 @@ async fn disable_last_owner_refused() {
 #[serial_test::serial(team_members_db)]
 async fn self_disable_refused() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let owner = seed_user(&pool, "Owner", "owner-sd@example.com").await;
     seed_membership(&pool, tenant_id, owner, "owner", "active").await;
@@ -3847,7 +3847,7 @@ async fn self_disable_refused() {
 #[serial_test::serial(team_members_db)]
 async fn disable_in_tenant_a_does_not_affect_tenant_b() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
     let owner_a = seed_user(&pool, "Owner A", "owner-ta@example.com").await;

@@ -228,7 +228,7 @@ async fn seed_events(
 #[tokio::test]
 async fn events_are_returned_newest_first() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -267,7 +267,7 @@ async fn events_are_returned_newest_first() {
 #[tokio::test]
 async fn limit_is_honoured() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -297,7 +297,7 @@ async fn limit_is_honoured() {
 #[tokio::test]
 async fn limit_is_clamped_to_one_to_one_hundred() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -370,7 +370,7 @@ async fn limit_is_clamped_to_one_to_one_hundred() {
 #[tokio::test]
 async fn cursor_pagination_walks_all_pages_without_overlap() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -425,7 +425,7 @@ async fn cursor_pagination_walks_all_pages_without_overlap() {
 #[tokio::test]
 async fn invalid_cursor_returns_422() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -447,7 +447,7 @@ async fn invalid_cursor_returns_422() {
 #[tokio::test]
 async fn cross_tenant_tenant_b_admin_does_not_see_tenant_a_events() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // Tenant A: connection + events.
     let tenant_a = seed_tenant(&pool).await;
@@ -495,7 +495,7 @@ async fn cross_tenant_tenant_b_admin_does_not_see_tenant_a_events() {
 #[tokio::test]
 async fn cross_tenant_tenant_b_with_connection_does_not_see_tenant_a_events() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     // Tenant A: connection + events.
     let tenant_a = seed_tenant(&pool).await;

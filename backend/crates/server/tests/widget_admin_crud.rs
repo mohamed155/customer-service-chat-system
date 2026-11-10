@@ -94,7 +94,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 }
 
 async fn setup(pool: &sqlx::PgPool) {
-    db::run_migrations(pool).await.unwrap();
+    db::testing::migrate().await;
     // Widget rate-limit buckets are keyed by client IP, which is the same
     // ("unknown") for every test request; reset them so tests don't share budget.
     cache::Cache::new(
@@ -110,7 +110,7 @@ async fn setup(pool: &sqlx::PgPool) {
          tenant_invitations, tenant_memberships, tenants, users \
          RESTART IDENTITY CASCADE",
     )
-    .execute(pool)
+    .execute(&db::testing::owner_pool())
     .await
     .expect("failed to reset widget admin CRUD test tables");
 }

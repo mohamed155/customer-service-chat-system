@@ -38,7 +38,7 @@ test('T150 database setup and assertions use a portable client', () => {
   assert.doesNotMatch(t150Spec, /\b(?:psql|podman)\b/);
   assert.doesNotMatch(t150Spec, /E2E_POSTGRES_CONTAINER/);
   assert.match(t150Spec, /from ['"]pg['"]/);
-  assert.match(t150Spec, /process\.env\[['"]DATABASE_URL['"]\]/);
+  assert.match(t150Spec, /process\.env\[['"]MIGRATION_DATABASE_URL['"]\]/);
 });
 
 test('T155 customer profiles spec covers mandatory scenarios', () => {
@@ -64,7 +64,7 @@ test('T155 customer profiles uses portable DB client and env gating', () => {
   assert.doesNotMatch(customerProfilesSpec, /\b(?:psql|podman)\b/);
   assert.doesNotMatch(customerProfilesSpec, /E2E_POSTGRES_CONTAINER/);
   assert.match(customerProfilesSpec, /from ['"]pg['"]/);
-  assert.match(customerProfilesSpec, /process\.env\[['"]DATABASE_URL['"]\]/);
+  assert.match(customerProfilesSpec, /process\.env\[['"]MIGRATION_DATABASE_URL['"]\]/);
   assert.match(customerProfilesSpec, /CI_REAL_BACKEND/);
   assert.doesNotMatch(customerProfilesSpec, /test\.skip\(!REAL_BACKEND/);
   assert.match(customerProfilesSpec, /test\.describe\.serial/);

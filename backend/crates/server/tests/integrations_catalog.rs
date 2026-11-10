@@ -198,7 +198,7 @@ async fn seed_connection(
 #[tokio::test]
 async fn list_returns_all_seeded_catalog_entries() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -227,7 +227,7 @@ async fn list_returns_all_seeded_catalog_entries() {
 #[tokio::test]
 async fn unavailable_entries_have_is_available_false() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -252,7 +252,7 @@ async fn unavailable_entries_have_is_available_false() {
 #[tokio::test]
 async fn tenant_with_no_connections_sees_not_connected_everywhere() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -279,7 +279,7 @@ async fn tenant_with_no_connections_sees_not_connected_everywhere() {
 #[tokio::test]
 async fn active_connection_yields_connected_status() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -304,7 +304,7 @@ async fn active_connection_yields_connected_status() {
 #[tokio::test]
 async fn inactive_connection_yields_disconnected_status() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -329,7 +329,7 @@ async fn inactive_connection_yields_disconnected_status() {
 #[tokio::test]
 async fn detail_returns_404_for_unknown_slug() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -351,7 +351,7 @@ async fn detail_returns_404_for_unknown_slug() {
 #[tokio::test]
 async fn retired_entry_keeps_existing_connection_working() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -453,7 +453,7 @@ async fn count_recent_invalid_signature_events(pool: &sqlx::PgPool, connection_i
 #[tokio::test]
 async fn three_rejected_deliveries_yield_error_status() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;
@@ -554,7 +554,7 @@ async fn three_rejected_deliveries_yield_error_status() {
 #[tokio::test]
 async fn accepted_delivery_after_failures_returns_connected_status() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant = seed_tenant(&pool).await;
     let admin = seed_user(&pool).await;

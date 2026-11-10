@@ -207,7 +207,7 @@ fn put_sub_uri(tenant_id: Uuid) -> String {
 #[serial(billing_platform)]
 async fn super_admin_can_list_plans() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let response = send(pool, platform_request(LIST_PLANS, Method::GET, user, None)).await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -217,7 +217,7 @@ async fn super_admin_can_list_plans() {
 #[serial(billing_platform)]
 async fn finance_can_list_plans() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("finance")).await;
     let response = send(pool, platform_request(LIST_PLANS, Method::GET, user, None)).await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -227,7 +227,7 @@ async fn finance_can_list_plans() {
 #[serial(billing_platform)]
 async fn super_admin_can_create_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let body = json!({"name": format!("SA Plan {}", Uuid::new_v4()), "monthly_price_cents": 1000});
     let response = send(
@@ -242,7 +242,7 @@ async fn super_admin_can_create_plan() {
 #[serial(billing_platform)]
 async fn finance_can_create_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("finance")).await;
     let body =
         json!({"name": format!("Finance Plan {}", Uuid::new_v4()), "monthly_price_cents": 500});
@@ -258,7 +258,7 @@ async fn finance_can_create_plan() {
 #[serial(billing_platform)]
 async fn super_admin_can_update_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let plan_id = create_plan_via_api(&pool, user, "Updatable SA Plan").await;
     let body = json!({"status": "retired"});
@@ -274,7 +274,7 @@ async fn super_admin_can_update_plan() {
 #[serial(billing_platform)]
 async fn finance_can_update_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("finance")).await;
     let plan_id = create_plan_via_api(&pool, user, "Updatable Finance Plan").await;
     let body = json!({"status": "retired"});
@@ -290,7 +290,7 @@ async fn finance_can_update_plan() {
 #[serial(billing_platform)]
 async fn super_admin_can_list_subscriptions() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let response = send(pool, platform_request(LIST_SUBS, Method::GET, user, None)).await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -300,7 +300,7 @@ async fn super_admin_can_list_subscriptions() {
 #[serial(billing_platform)]
 async fn finance_can_list_subscriptions() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("finance")).await;
     let response = send(pool, platform_request(LIST_SUBS, Method::GET, user, None)).await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -310,7 +310,7 @@ async fn finance_can_list_subscriptions() {
 #[serial(billing_platform)]
 async fn super_admin_can_put_subscription() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let tenant = seed_tenant(&pool, "SA Sub Tenant").await;
     let plan_id = free_plan_id(&pool).await;
@@ -327,7 +327,7 @@ async fn super_admin_can_put_subscription() {
 #[serial(billing_platform)]
 async fn finance_can_put_subscription() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("finance")).await;
     let tenant = seed_tenant(&pool, "Finance Sub Tenant").await;
     let plan_id = free_plan_id(&pool).await;
@@ -346,7 +346,7 @@ async fn finance_can_put_subscription() {
 #[serial(billing_platform)]
 async fn developer_gets_403_on_list_plans() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("developer")).await;
     let response = send(pool, platform_request(LIST_PLANS, Method::GET, user, None)).await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
@@ -356,7 +356,7 @@ async fn developer_gets_403_on_list_plans() {
 #[serial(billing_platform)]
 async fn sales_gets_403_on_list_plans() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("sales")).await;
     let response = send(pool, platform_request(LIST_PLANS, Method::GET, user, None)).await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
@@ -366,7 +366,7 @@ async fn sales_gets_403_on_list_plans() {
 #[serial(billing_platform)]
 async fn support_gets_403_on_list_plans() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("support")).await;
     let response = send(pool, platform_request(LIST_PLANS, Method::GET, user, None)).await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
@@ -376,7 +376,7 @@ async fn support_gets_403_on_list_plans() {
 #[serial(billing_platform)]
 async fn developer_gets_403_on_create_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("developer")).await;
     let body = json!({"name": "Dev Plan", "monthly_price_cents": 0});
     let response = send(
@@ -391,7 +391,7 @@ async fn developer_gets_403_on_create_plan() {
 #[serial(billing_platform)]
 async fn sales_gets_403_on_create_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("sales")).await;
     let body = json!({"name": "Sales Plan", "monthly_price_cents": 0});
     let response = send(
@@ -406,7 +406,7 @@ async fn sales_gets_403_on_create_plan() {
 #[serial(billing_platform)]
 async fn support_gets_403_on_create_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("support")).await;
     let body = json!({"name": "Support Plan", "monthly_price_cents": 0});
     let response = send(
@@ -421,7 +421,7 @@ async fn support_gets_403_on_create_plan() {
 #[serial(billing_platform)]
 async fn developer_gets_403_on_update_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("developer")).await;
     let free_id = free_plan_id(&pool).await;
     let body = json!({"status": "retired"});
@@ -437,7 +437,7 @@ async fn developer_gets_403_on_update_plan() {
 #[serial(billing_platform)]
 async fn sales_gets_403_on_update_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("sales")).await;
     let free_id = free_plan_id(&pool).await;
     let body = json!({"status": "retired"});
@@ -453,7 +453,7 @@ async fn sales_gets_403_on_update_plan() {
 #[serial(billing_platform)]
 async fn support_gets_403_on_update_plan() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("support")).await;
     let free_id = free_plan_id(&pool).await;
     let body = json!({"status": "retired"});
@@ -469,7 +469,7 @@ async fn support_gets_403_on_update_plan() {
 #[serial(billing_platform)]
 async fn developer_gets_403_on_list_subscriptions() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("developer")).await;
     let response = send(pool, platform_request(LIST_SUBS, Method::GET, user, None)).await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
@@ -479,7 +479,7 @@ async fn developer_gets_403_on_list_subscriptions() {
 #[serial(billing_platform)]
 async fn sales_gets_403_on_list_subscriptions() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("sales")).await;
     let response = send(pool, platform_request(LIST_SUBS, Method::GET, user, None)).await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
@@ -489,7 +489,7 @@ async fn sales_gets_403_on_list_subscriptions() {
 #[serial(billing_platform)]
 async fn support_gets_403_on_list_subscriptions() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("support")).await;
     let response = send(pool, platform_request(LIST_SUBS, Method::GET, user, None)).await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
@@ -499,7 +499,7 @@ async fn support_gets_403_on_list_subscriptions() {
 #[serial(billing_platform)]
 async fn developer_gets_403_on_put_subscription() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("developer")).await;
     let tenant = seed_tenant(&pool, "Dev Sub").await;
     let plan_id = free_plan_id(&pool).await;
@@ -516,7 +516,7 @@ async fn developer_gets_403_on_put_subscription() {
 #[serial(billing_platform)]
 async fn sales_gets_403_on_put_subscription() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("sales")).await;
     let tenant = seed_tenant(&pool, "Sales Sub").await;
     let plan_id = free_plan_id(&pool).await;
@@ -533,7 +533,7 @@ async fn sales_gets_403_on_put_subscription() {
 #[serial(billing_platform)]
 async fn support_gets_403_on_put_subscription() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("support")).await;
     let tenant = seed_tenant(&pool, "Support Sub").await;
     let plan_id = free_plan_id(&pool).await;
@@ -552,7 +552,7 @@ async fn support_gets_403_on_put_subscription() {
 #[serial(billing_platform)]
 async fn duplicate_plan_name_returns_409() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let unique_name = format!("UniqueConflict {}", Uuid::new_v4().simple());
     let body = json!({"name": unique_name, "monthly_price_cents": 0});
@@ -576,7 +576,7 @@ async fn duplicate_plan_name_returns_409() {
 #[serial(billing_platform)]
 async fn empty_name_returns_422() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let body = json!({"name": "", "monthly_price_cents": 0});
     let response = send(
@@ -591,7 +591,7 @@ async fn empty_name_returns_422() {
 #[serial(billing_platform)]
 async fn negative_price_returns_422() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let body = json!({"name": "NegPrice", "monthly_price_cents": -1});
     let response = send(
@@ -606,7 +606,7 @@ async fn negative_price_returns_422() {
 #[serial(billing_platform)]
 async fn retiring_default_plan_returns_409() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let default_id = free_plan_id(&pool).await;
     let body = json!({"status": "retired"});
@@ -629,7 +629,7 @@ async fn retiring_default_plan_returns_409() {
 #[serial(billing_platform)]
 async fn assigning_unknown_plan_returns_404() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let tenant = seed_tenant(&pool, "Unknown Plan Tenant").await;
     let unknown_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
@@ -646,7 +646,7 @@ async fn assigning_unknown_plan_returns_404() {
 #[serial(billing_platform)]
 async fn assigning_retired_plan_to_new_tenant_returns_409() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     // Create a plan, retire it
     let plan_id = create_plan_via_api(&pool, user, "RetiredPlanTest").await;
@@ -677,7 +677,7 @@ async fn assigning_retired_plan_to_new_tenant_returns_409() {
 #[serial(billing_platform)]
 async fn changing_only_status_on_retired_plan_returns_200() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     // Create a plan, assign it, retire it, then change status
     let plan_id = create_plan_via_api(&pool, user, "RetiredThenChangeStatus").await;
@@ -717,7 +717,7 @@ async fn changing_only_status_on_retired_plan_returns_200() {
 #[serial(billing_platform)]
 async fn same_put_body_twice_is_idempotent() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let tenant = seed_tenant(&pool, "Idempotent Tenant").await;
     let plan_id = free_plan_id(&pool).await;
@@ -742,7 +742,7 @@ async fn same_put_body_twice_is_idempotent() {
 #[serial(billing_platform)]
 async fn list_subscriptions_shows_default_plan_for_unassigned_tenant() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let tenant = seed_tenant(&pool, "Unassigned Default Tenant").await;
     let response = send(pool, platform_request(LIST_SUBS, Method::GET, user, None)).await;
@@ -764,7 +764,7 @@ async fn list_subscriptions_shows_default_plan_for_unassigned_tenant() {
 #[serial(billing_platform)]
 async fn create_plan_writes_audit_log() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let unique_name = format!("AuditPlan {}", Uuid::new_v4().simple());
     let body = json!({"name": unique_name, "monthly_price_cents": 2000});
@@ -792,7 +792,7 @@ async fn create_plan_writes_audit_log() {
 #[serial(billing_platform)]
 async fn update_plan_writes_audit_log() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let plan_id = create_plan_via_api(&pool, user, "Audit Status Plan").await;
     let body = json!({"status": "retired"});
@@ -819,7 +819,7 @@ async fn update_plan_writes_audit_log() {
 #[serial(billing_platform)]
 async fn put_subscription_writes_audit_log() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
     let tenant = seed_tenant(&pool, "Audit Sub Tenant").await;
     let plan_id = free_plan_id(&pool).await;
@@ -850,7 +850,7 @@ async fn put_subscription_writes_audit_log() {
 #[serial(billing_platform)]
 async fn list_subscriptions_returns_one_row_per_tenant() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user = seed_user(&pool, Some("super_admin")).await;
 
     // Create a few tenants — including a deleted one

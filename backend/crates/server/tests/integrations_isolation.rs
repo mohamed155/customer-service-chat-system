@@ -215,7 +215,7 @@ async fn seed_connection_with_secrets(
 #[tokio::test]
 async fn tenant_b_does_not_see_tenant_a_connection_in_list() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
@@ -279,7 +279,7 @@ async fn tenant_b_does_not_see_tenant_a_connection_in_list() {
 #[tokio::test]
 async fn tenant_b_detail_returns_null_connection() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;
@@ -320,7 +320,7 @@ async fn tenant_b_detail_returns_null_connection() {
 #[tokio::test]
 async fn tenant_b_detail_does_not_expose_tenant_a_secrets_or_config() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_a = seed_tenant(&pool).await;
     let tenant_b = seed_tenant(&pool).await;

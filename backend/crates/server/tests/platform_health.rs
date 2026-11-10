@@ -171,7 +171,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
 }
 
 async fn setup(pool: &sqlx::PgPool) {
-    db::run_migrations(pool).await.unwrap();
+    db::testing::migrate().await;
 }
 
 async fn seed_outbox_event(pool: &sqlx::PgPool, created_at_minutes_ago: i64, attempts: i32) {

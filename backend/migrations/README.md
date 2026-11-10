@@ -21,7 +21,13 @@ sqlx migrate add description_of_change
 # NNNN_description.sql format (e.g. 0008_cascade_fix.sql)
 ```
 
-Run these from `backend/` with `DATABASE_URL` set.
+Run these from `backend/` as the schema owner, `app_owner`: pass
+`--database-url "$MIGRATION_DATABASE_URL"` (sqlx-cli reads `DATABASE_URL` by default, which is
+the `app_runtime` role and cannot change the schema), or use `cargo run -p server -- migrate`.
+The server never runs migrations on startup.
+
+Tables and sequences a migration creates are readable and writable by `app_runtime` through the
+default privileges set in `0066_runtime_role_grants.sql`; don't add per-table grants.
 
 ## Naming
 

@@ -18,7 +18,9 @@ const tenants = {
   beta: { id: BETA, name: 'T150 Beta', slug: 't150-beta', status: 'active', plan: 'trial' },
 };
 
-const database = new pg.Pool({ connectionString: process.env['DATABASE_URL'] });
+// Seeds TRUNCATE tables, which the backend's app_runtime role cannot do, so fixtures go through the
+// schema owner (MIGRATION_DATABASE_URL), like the backend tests' setup.
+const database = new pg.Pool({ connectionString: process.env['MIGRATION_DATABASE_URL'] });
 
 async function queryJson(sql: string): Promise<unknown> {
   const result = await database.query<Record<string, unknown>>(sql);

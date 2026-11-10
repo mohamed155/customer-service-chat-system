@@ -23,7 +23,8 @@ jobs:
           --health-timeout 5s --health-retries 10
     defaults: { run: { working-directory: backend } }
     env:
-      DATABASE_URL: postgres://customer_service:customer_service@localhost:5432/customer_service
+      MIGRATION_DATABASE_URL: postgres://app_owner:app_owner_ci@localhost:5432/customer_service
+      DATABASE_URL: postgres://app_runtime:app_runtime_ci@localhost:5432/customer_service
       AUTH_JWT_SECRET: 0123456789abcdef0123456789abcdef
       REQUIRE_DB_TESTS: "1"
       REDIS_URL: redis://localhost:6379
@@ -35,8 +36,21 @@ jobs:
         with: { workspaces: backend }
       - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with: { tool: cargo-nextest }
+      - name: Create database extensions and roles
+        working-directory: .
+        env:
+          PGHOST: localhost
+          PGPASSWORD: customer_service
+          POSTGRES_USER: customer_service
+          POSTGRES_DB: customer_service
+          APP_OWNER_PASSWORD: app_owner_ci
+          APP_RUNTIME_PASSWORD: app_runtime_ci
+          ROLES_REQUIRED: "1"
+        run: |
+          bash infra/postgres/init/01-extensions.sh
+          bash infra/postgres/init/02-roles.sh
       - run: cargo install sqlx-cli --no-default-features --features rustls,postgres
-      - run: sqlx migrate run
+      - run: sqlx migrate run --database-url "$MIGRATION_DATABASE_URL"
       - name: Apply deliberate break
         run: |
           perl -i -pe 's/StatusCode::OK/StatusCode::IM_A_TEAPOT/' crates/server/tests/health.rs

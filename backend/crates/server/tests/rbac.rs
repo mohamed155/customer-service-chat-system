@@ -424,7 +424,7 @@ async fn anonymous_foreign_origin_protected_request_returns_401_before_csrf() {
 #[tokio::test]
 async fn all_tenant_roles_have_representative_allows_and_denies() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let cases = [
         ("owner", "/api/v1/test/tenant/settings/manage", None),
@@ -501,7 +501,7 @@ async fn all_tenant_roles_have_representative_allows_and_denies() {
 #[tokio::test]
 async fn customer_operations_follow_the_tenant_role_matrix() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
 
     for (role, expected) in [
@@ -538,7 +538,7 @@ async fn customer_operations_follow_the_tenant_role_matrix() {
 #[tokio::test]
 async fn tenant_team_routes_cover_actual_methods_for_roles_and_anonymous_callers() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     for role in ["owner", "admin", "manager", "agent", "viewer"] {
         let tenant_id = seed_tenant(&pool).await;
@@ -686,7 +686,7 @@ async fn tenant_team_routes_cover_actual_methods_for_roles_and_anonymous_callers
 #[tokio::test]
 async fn anonymous_team_routes_are_rejected_before_authorization() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let target = seed_user(&pool, None).await;
     seed_membership(&pool, tenant_id, target, "agent").await;
@@ -742,7 +742,7 @@ async fn anonymous_team_routes_are_rejected_before_authorization() {
 #[tokio::test]
 async fn production_staff_team_route_matrix_is_method_aware() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let target = seed_user(&pool, Some("developer")).await;
     seed_membership(&pool, tenant_id, target, "agent").await;
@@ -961,7 +961,7 @@ async fn invalid_platform_role_can_authenticate_and_me_returns_empty_platform_pe
         invalid_platform_role: true,
     };
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     match tenancy::routes::build_me_response(&pool, principal, false).await {
         Ok(response) => {
             assert!(response.platform_role.is_none());
@@ -982,7 +982,7 @@ async fn invalid_platform_role_can_authenticate_and_me_returns_empty_platform_pe
 #[tokio::test]
 async fn all_platform_roles_have_representative_allows_and_denies() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let cases = [
         ("super_admin", "/api/v1/test/platform/admin", None),
@@ -1070,7 +1070,7 @@ async fn all_platform_roles_have_representative_allows_and_denies() {
 #[tokio::test]
 async fn protected_routes_distinguish_anonymous_401_from_permission_403() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let viewer = seed_user(&pool, None).await;
     seed_membership(&pool, tenant_id, viewer, "viewer").await;
@@ -1110,7 +1110,7 @@ async fn protected_routes_distinguish_anonymous_401_from_permission_403() {
 #[tokio::test]
 async fn no_role_user_is_denied_by_every_protected_api_route() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user_id = seed_user(&pool, None).await;
     let tenant_id = seed_tenant(&pool).await;
 
@@ -1154,7 +1154,7 @@ async fn no_role_user_is_denied_by_every_protected_api_route() {
 #[tokio::test]
 async fn permission_denial_writes_audit_reason_without_exposing_permission() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let viewer = seed_user(&pool, None).await;
     seed_membership(&pool, tenant_id, viewer, "viewer").await;
@@ -1194,7 +1194,7 @@ async fn permission_denial_writes_audit_reason_without_exposing_permission() {
 #[tokio::test]
 async fn me_returns_exact_tenant_permission_payloads() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     for (role, expected) in [
         ("owner", TENANT_PERMISSIONS),
@@ -1246,7 +1246,7 @@ async fn me_returns_exact_tenant_permission_payloads() {
 #[tokio::test]
 async fn me_returns_exact_platform_support_payload_in_production() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user_id = seed_user(&pool, Some("support")).await;
     let response = send(
         pool.clone(),
@@ -1299,7 +1299,7 @@ async fn me_returns_exact_platform_support_payload_in_production() {
 #[tokio::test]
 async fn tenant_role_change_takes_effect_on_the_next_request() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let user_id = seed_user(&pool, None).await;
     seed_membership(&pool, tenant_id, user_id, "owner").await;
@@ -1335,7 +1335,7 @@ async fn tenant_role_change_takes_effect_on_the_next_request() {
 #[tokio::test]
 async fn platform_role_change_takes_effect_on_the_next_request() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user_id = seed_user(&pool, Some("super_admin")).await;
 
     assert_status(
@@ -1366,7 +1366,7 @@ async fn platform_role_change_takes_effect_on_the_next_request() {
 #[tokio::test]
 async fn database_constraints_reject_unknown_role_values() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     let tenant_user = seed_user(&pool, None).await;
     seed_membership(&pool, tenant_id, tenant_user, "viewer").await;
@@ -1392,7 +1392,7 @@ async fn database_constraints_reject_unknown_role_values() {
 #[tokio::test]
 async fn staff_tenant_access_is_environment_aware() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let tenant_id = seed_tenant(&pool).await;
     // Real conversation for the `/conversations/{id}` routes.
     let customer_id: Uuid = sqlx::query_scalar(
@@ -1493,7 +1493,7 @@ async fn staff_tenant_access_is_environment_aware() {
 #[tokio::test]
 async fn platform_tenants_create_allow_manage_deny_others() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let unique = Uuid::new_v4().simple().to_string();
     let allowed = ["super-admin", "support"];
@@ -1592,7 +1592,7 @@ async fn platform_tenants_create_allow_manage_deny_others() {
 #[tokio::test]
 async fn me_staff_tenant_permissions_follow_environment_for_every_platform_role() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let production_expected = [
         ("super_admin", TENANT_PERMISSIONS),
         (
@@ -1675,7 +1675,7 @@ async fn me_staff_tenant_permissions_follow_environment_for_every_platform_role(
 #[tokio::test]
 async fn platform_tenant_detail_allowed_for_every_platform_role() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let roles = ["super_admin", "developer", "support", "sales", "finance"];
@@ -1705,7 +1705,7 @@ async fn platform_tenant_detail_allowed_for_every_platform_role() {
 #[tokio::test]
 async fn platform_tenant_detail_denied_for_every_tenant_role() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let roles = ["owner", "admin", "manager", "agent", "viewer"];
@@ -1741,7 +1741,7 @@ async fn platform_tenant_detail_denied_for_every_tenant_role() {
 #[tokio::test]
 async fn platform_tenants_list_invalid_status_filter_returns_422() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
@@ -1784,7 +1784,7 @@ async fn platform_tenants_list_invalid_status_filter_returns_422() {
 #[tokio::test]
 async fn platform_tenants_update_allow_manage_deny_others() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let tenant_id = seed_tenant(&pool).await;
     let unique = Uuid::new_v4().simple().to_string();
@@ -1884,7 +1884,7 @@ async fn platform_tenants_update_allow_manage_deny_others() {
 #[tokio::test]
 async fn no_role_user_is_denied_on_every_platform_tenant_endpoint() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
     let user_id = seed_user(&pool, None).await;
     let tenant_id = seed_tenant(&pool).await;
 
@@ -1976,7 +1976,7 @@ async fn assert_http_status(
 #[tokio::test]
 async fn customer_routes_respect_the_role_matrix() {
     let Some(pool) = get_pool().await else { return };
-    db::run_migrations(&pool).await.unwrap();
+    db::testing::migrate().await;
 
     let roles: &[(&str, bool, bool)] = &[
         ("owner", true, true),

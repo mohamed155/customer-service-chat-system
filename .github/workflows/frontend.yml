@@ -68,7 +68,10 @@ jobs:
           --health-cmd "redis-cli ping" --health-interval 5s
           --health-timeout 3s --health-retries 10
     env:
-      DATABASE_URL: postgres://customer_service:customer_service_e2e@127.0.0.1:5432/customer_service_e2e
+      # The backend runs as app_runtime; migrations and the e2e seed files (which TRUNCATE) use
+      # the schema owner.
+      MIGRATION_DATABASE_URL: postgres://app_owner:app_owner_e2e@127.0.0.1:5432/customer_service_e2e
+      DATABASE_URL: postgres://app_runtime:app_runtime_e2e@127.0.0.1:5432/customer_service_e2e
       REDIS_URL: redis://127.0.0.1:6379
       APP_ENVIRONMENT: development
       AUTH_JWT_SECRET: t150-ci-auth-jwt-secret-at-least-32-bytes
@@ -98,6 +101,18 @@ jobs:
             cache: pnpm,
             cache-dependency-path: frontend/pnpm-lock.yaml,
           }
+      - name: Create database extensions and roles
+        env:
+          PGHOST: 127.0.0.1
+          PGPASSWORD: customer_service_e2e
+          POSTGRES_USER: customer_service
+          POSTGRES_DB: customer_service_e2e
+          APP_OWNER_PASSWORD: app_owner_e2e
+          APP_RUNTIME_PASSWORD: app_runtime_e2e
+          ROLES_REQUIRED: "1"
+        run: |
+          bash infra/postgres/init/01-extensions.sh
+          bash infra/postgres/init/02-roles.sh
       - name: Apply and verify database migrations
         working-directory: backend
         env:
