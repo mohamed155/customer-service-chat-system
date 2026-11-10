@@ -105,6 +105,7 @@ async fn claim_takes_the_oldest_unclaimed_event_of_the_given_types_and_ack_remov
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let (type_a, type_b, other) = (unique_type(), unique_type(), unique_type());
     let oldest = seed_event(
@@ -128,7 +129,6 @@ async fn claim_takes_the_oldest_unclaimed_event_of_the_given_types_and_ack_remov
         "now() - interval '9 minutes'",
     )
     .await;
-    db::testing::enforce_rls(&mut tx, &["outbox_events", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     assert_eq!(
@@ -212,8 +212,8 @@ async fn an_idle_poll_writes_no_audit_row() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let ty = unique_type();
-    db::testing::enforce_rls(&mut tx, &["outbox_events", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     for _ in 0..3 {
@@ -234,11 +234,11 @@ async fn claims_are_audited_at_most_once_a_minute_per_event_type() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let ty = unique_type();
     for _ in 0..4 {
         seed_event(&mut tx, &ty, None, "now()").await;
     }
-    db::testing::enforce_rls(&mut tx, &["outbox_events", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     for _ in 0..4 {
@@ -264,6 +264,7 @@ async fn claim_retryable_honours_backoff_counts_attempts_and_reschedule_needs_th
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let ty = unique_type();
     let ready = seed_event(&mut tx, &ty, None, "now() - interval '2 minutes'").await;
     let backed_off = seed_event(&mut tx, &ty, None, "now() - interval '1 minute'").await;
@@ -278,7 +279,6 @@ async fn claim_retryable_honours_backoff_counts_attempts_and_reschedule_needs_th
         .execute(&mut *tx)
         .await
         .unwrap();
-    db::testing::enforce_rls(&mut tx, &["outbox_events", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let token = Uuid::new_v4();
@@ -339,6 +339,7 @@ async fn coalesce_removes_only_older_unclaimed_customer_messages_of_that_convers
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let conversation = Uuid::new_v4();
     let other_conversation = Uuid::new_v4();
     let mut ids = Vec::new();
@@ -362,7 +363,6 @@ async fn coalesce_removes_only_older_unclaimed_customer_messages_of_that_convers
         .unwrap();
         ids.push(id);
     }
-    db::testing::enforce_rls(&mut tx, &["outbox_events", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     // Keep the newest of the conversation: the two older ones go.
@@ -392,6 +392,7 @@ async fn the_whatsapp_sender_takes_the_oldest_outbound_event_and_removes_it() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let (conversation, message) = (Uuid::new_v4(), Uuid::new_v4());
     let id = Uuid::new_v4();
@@ -408,7 +409,6 @@ async fn the_whatsapp_sender_takes_the_oldest_outbound_event_and_removes_it() {
     .execute(&mut *tx)
     .await
     .unwrap();
-    db::testing::enforce_rls(&mut tx, &["outbox_events", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let taken: Option<(Uuid, Uuid, Uuid, Uuid)> = sqlx::query_as(
@@ -430,6 +430,7 @@ async fn invitation_delivery_runs_claim_retry_finalize_and_expiry_through_the_fu
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let inviter: Uuid = sqlx::query_scalar(
         "INSERT INTO users (email, display_name) VALUES ($1, 'Inviter') RETURNING id",
@@ -479,11 +480,6 @@ async fn invitation_delivery_runs_claim_retry_finalize_and_expiry_through_the_fu
         .unwrap();
         events.push(id);
     }
-    db::testing::enforce_rls(
-        &mut tx,
-        &["outbox_events", "tenant_invitations", "audit_logs"],
-    )
-    .await;
     db::testing::become_runtime(&mut tx).await;
 
     // 1. The first event used all its attempts: it is dead-lettered and its invitation fails.
@@ -628,6 +624,7 @@ async fn pending_attachment_next_returns_the_oldest_pending_attachment() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     // Rows for tables under forced Row-Level Security are seeded as the bypass role.
     db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
@@ -672,8 +669,6 @@ async fn pending_attachment_next_returns_the_oldest_pending_attachment() {
     .execute(&mut *tx)
     .await
     .unwrap();
-    db::testing::become_owner(&mut tx).await;
-    db::testing::enforce_rls(&mut tx, &["message_attachments", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let direct: i64 = sqlx::query_scalar("SELECT count(*) FROM message_attachments")

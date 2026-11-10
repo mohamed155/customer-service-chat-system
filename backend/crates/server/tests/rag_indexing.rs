@@ -82,7 +82,7 @@ async fn assert_index_requested_outbox(pool: &PgPool, tenant_id: Uuid, item_id: 
     )
     .bind(tenant_id.to_string())
     .bind(item_id.to_string())
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("expected exactly one knowledge.index_requested outbox event");
     row.0
@@ -549,7 +549,7 @@ async fn seed_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid, role: &s
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }

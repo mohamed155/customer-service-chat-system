@@ -151,7 +151,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -185,7 +185,7 @@ async fn seed_connection(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
     .bind(token_hash.to_vec())
     .bind(token_ciphertext)
     .bind(token_nonce.to_vec())
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -213,7 +213,7 @@ async fn seed_events(
         .bind(tenant_id)
         .bind(connection_id)
         .bind(ts)
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         ids.push(id);

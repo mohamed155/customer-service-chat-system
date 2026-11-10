@@ -3,14 +3,19 @@
 How backend code reaches tenant data, and which queries deliberately do not. This is the application
 half of the two-layer tenant isolation in [ADR-004](../adr/0004-multi-tenancy-rls-cells.md) (gap T1).
 It was introduced by MOH-44; the Row-Level Security policies that depend on it come in steps of MOH-31.
-Two groups are live. MOH-47: `customers`, `customer_channel_identifiers`, `conversations`, `messages`,
+Every table with a `tenant_id` column is live: a query on one without a tenant returns no rows and
+writes nothing. MOH-47: `customers`, `customer_channel_identifiers`, `conversations`, `messages`,
 `message_attachments`, `message_citations`, `conversation_feedback`, `escalations` and
 `whatsapp_message_meta`. MOH-48: the knowledge tables (`knowledge_categories`, `knowledge_items`,
 `knowledge_documents`, `knowledge_item_tags`, `knowledge_chunks` with its pgvector embeddings,
 `knowledge_index_state`), the AI tables (`ai_configurations`, `ai_credentials`, `ai_usage_records`,
 `ai_generations`, `agent_configurations`, `agent_prompts`, `agent_prompt_versions`,
 `agent_avatar_uploads`) and the tools tables (`tenant_tools`, `tenant_tool_policies`,
-`tool_requests`). A query on one of them without a tenant returns no rows and writes nothing.
+`tool_requests`). MOH-49: `skills`, `agent_skills`, `agent_availability`, `tenant_memberships`,
+`tenant_invitations`, `audit_logs`, `outbox_events`, `widget_instances`, `widget_sessions`,
+`notifications`, `integration_connections`, `integration_secrets`,
+`integration_webhook_deliveries`, `integration_events`, `tenant_subscriptions` and
+`tenant_rate_limit_overrides`.
 
 ## What it is
 
@@ -90,23 +95,29 @@ path](#the-audited-cross-tenant-path)).
 | `billing`: `list_subscriptions`, `routes::put_subscription` | A platform principal manages any tenant's subscription. **Served by:** `xtenant.platform_subscriptions_list`, `xtenant.platform_subscription_set` (applies the retired-plan rule and writes the `billing_subscription.changed` audit row for the tenant) |
 | `audit::queries::list_entries` without a tenant scope | The platform-wide audit listing. **Served by:** `xtenant.platform_audit_entries` (records who asked) |
 
-### Writes for a known tenant that still use a bare pool transaction
+### Writes for a known tenant that need the tenant on a bare transaction
 
-These are not cross-tenant: the tenant is known (from the event, the URL or the claimed row). They run
-in a plain `pool.begin()` transaction, so `app.tenant_id` is not set, and a tenant policy blocks them.
+These are not cross-tenant: the tenant is known (from the event, the URL or the claimed row). Where they
+ran in a plain `pool.begin()` transaction, `app.tenant_id` was not set, and the tenant policy blocks them.
 MOH-47 moved the ones that write its tables onto `db::UnitOfWork::begin_for_tenant` (the AI responder,
-the AI engine, the escalation consumer and the `update_contact` tool); MOH-48 needed no source change
-for its tables beyond the AI resolution below. What is left is for **MOH-49** (the audit tables):
+the AI engine, the escalation consumer and the `update_contact` tool). MOH-49 handled the last two, which
+write the audit row of the tenant they create or change:
 
-| Where | Main tenant tables touched |
+| Where | What it does |
 | --- | --- |
-| `tenancy::routes::create_tenant`, `update_tenant` | `tenants` (global) and the audit row for that tenant (`audit_logs`) |
-| `billing::routes::create_plan`, `update_plan` | `billing_plans` (global) and an audit row with no tenant (`audit_logs`) |
+| `tenancy::routes::create_tenant`, `update_tenant` | Platform routes on `tenants` (global). The transaction is bound to the tenant (`db::set_tenant_in_tx`) once its id is known, so the audit rows, including the `tenant.slug_changed` row written by a trigger, belong to that tenant |
+| `billing::routes::create_plan`, `update_plan` | `billing_plans` is global; the audit row has no tenant, so it goes through `xtenant.record_platform_event` |
 
-Audit rows with no tenant are written straight into `audit_logs` by the platform plan routes and
-similar platform routes (`tenancy::audit::record_in_tx` with `tenant_id = None`). The `audit_logs`
-policy (MOH-49) must either accept inserts with `tenant_id IS NULL` or route them through a function.
-Authentication events already use `xtenant.record_auth_event`.
+Audit rows with no tenant (`tenancy::audit::record` and `record_in_tx` with `tenant_id = None`) cannot be
+inserted directly: the `audit_logs` policy refuses an insert without a tenant. They go through
+`xtenant.record_platform_event`, which accepts exactly three (action, resource type) pairs:
+`tenant.access_denied`, `billing_plan.created` and `billing_plan.status_changed`. Authentication
+events keep using `xtenant.record_auth_event`, which accepts `auth.*` only.
+
+Three trigger functions touch tenant tables on behalf of an `UPDATE` on `tenants` or `users`:
+`cascade_soft_delete_tenant_memberships`, `cascade_soft_delete_user_memberships` (a user's memberships
+span tenants) and `audit_tenant_slug_change`. They are `SECURITY DEFINER` and owned by `app_platform`
+(migration 0074); with the caller's rights the policy would skip the rows without an error.
 
 ## The audited cross-tenant path
 
@@ -137,23 +148,25 @@ tenants, goes through one narrow `SECURITY DEFINER` function per job, in the `xt
 - **Adding one.** Follow `backend/migrations/0068_cross_tenant_lookups.sql`. The catalog test in
   `backend/crates/shared/db/tests/xtenant.rs` checks owner, `search_path` and privileges for every
   function in the schema, and each function needs a behaviour test there. The test helpers in
-  `db::testing` (`owner_tx`, `enforce_rls`, `become_runtime`) put forced Row-Level Security on the
-  tables in a transaction that is rolled back, drop to `app_runtime`, and check that the function
-  still works while a direct read returns nothing.
+  `db::testing` (`owner_tx`, `become_platform`, `become_runtime`) open a transaction that is rolled
+  back, seed rows as `app_platform`, drop to `app_runtime`, and check that the function still works
+  while a direct read returns nothing.
 
 ## The tenant-isolation harness
 
 ADR-004 section 7 requires every tenant table to be proven against the wrong tenant. The harness is
 the shared way to do it; **a table is not under Row-Level Security until it is in the harness**.
 
-- **Database level, per table** (`backend/crates/shared/db/tests/tenant_isolation.rs`, 26 tables, built on
+- **Database level, per table** (`backend/crates/shared/db/tests/tenant_isolation.rs`, 42 tables, built on
   `db::testing::isolation::assert_isolated`). For each table it creates a row in each of two tenants
   and, as `app_runtime`, checks: the owning tenant sees its row; the wrong tenant cannot read it by
   a guessed id, list it, update it or delete it, and cannot move its own row to the other tenant
   (the `WITH CHECK`); with no tenant at all nothing is visible, nothing is updated or deleted and an
   insert is refused with the row-level-policy error (SQLSTATE 42501, so a typo in a fixture cannot
   pass for a denial); and the rows are untouched afterwards. Tables keyed on the knowledge item
-  (`knowledge_documents`, `knowledge_item_tags`, `knowledge_index_state`) are looked up by `item_id`.
+  (`knowledge_documents`, `knowledge_item_tags`, `knowledge_index_state`) are looked up by `item_id`, and
+  `agent_skills` and `agent_availability` (composite keys) by `skill_id` and `membership_id`.
+  `outbox_events.tenant_id` is text, so the harness compares and assigns the tenant as text for it.
 - **Self-enforcing.** The last test in that file compares its table list with the tables that have
   forced Row-Level Security (`relforcerowsecurity`) and fails if they differ in either direction. A
   migration that forces RLS on a new table fails the build until the table has an entry (a seed for
@@ -193,10 +206,14 @@ Adding a table group:
   `xtenant.platform_ai_config`, `platform_ai_credential_secret` and `platform_ai_credential_hint`; the
   platform routes write them through the `platform_ai_*_set` and `_delete` functions. A test
   (`platform_ai_rows_are_invisible_to_tenant_queries`) keeps it that way.
-- `audit_logs` has platform rows (`tenant_id IS NULL`) as well. MOH-49 decides: accept inserts with
-  `tenant_id IS NULL` or route them through a function; the platform-wide listing already goes through
-  `xtenant.platform_audit_entries`.
-- `outbox_events` is claimed across tenants by the functions in `xtenant`; completing or deleting an
-  event for a known tenant can use a Unit of Work.
+- `audit_logs` has platform rows (`tenant_id IS NULL`) as well. The policy is the strict one (MOH-49):
+  tenant queries cannot see them and cannot insert one. They are written through
+  `xtenant.record_auth_event` and `xtenant.record_platform_event`, and the platform-wide listing goes
+  through `xtenant.platform_audit_entries`.
+- `outbox_events.tenant_id` is text (events without a tenant exist), so its policy compares text with
+  text. The workers claim across tenants with the functions in `xtenant`; an event for a known tenant is
+  written inside that tenant's Unit of Work.
 - `tenant_memberships` and `tenant_invitations` are read before a tenant is known (sign-in,
   invitation accept); those reads belong to the pre-tenant table above.
+- After MOH-49 every table with a `tenant_id` column has forced Row-Level Security. MOH-50 adds the CI
+  check that keeps it so.

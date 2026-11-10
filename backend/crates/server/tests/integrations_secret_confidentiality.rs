@@ -175,7 +175,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -410,7 +410,7 @@ async fn secret_never_appears_in_audit_logs_details() {
          WHERE tenant_id = $1 AND action LIKE 'integration.%'",
     )
     .bind(tenant)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(!rows.is_empty(), "expected audit rows to be written");
@@ -467,7 +467,7 @@ async fn secret_ciphertext_does_not_contain_plaintext_bytes() {
          WHERE tenant_id = $1 AND field_key = 'signing_secret'",
     )
     .bind(tenant)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let plaintext_bytes = SECRET_PLAINTEXT.as_bytes();
@@ -485,7 +485,7 @@ async fn secret_ciphertext_does_not_contain_plaintext_bytes() {
          WHERE tenant_id = $1 AND field_key = 'signing_secret'",
     )
     .bind(tenant)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(stored_hint, SECRET_HINT);

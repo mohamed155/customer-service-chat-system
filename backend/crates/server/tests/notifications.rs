@@ -170,7 +170,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
     .bind(tenant_id)
     .bind(user_id)
     .bind(role)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -189,7 +189,7 @@ async fn seed_membership_with_status(
     .bind(user_id)
     .bind(role)
     .bind(status)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -222,7 +222,7 @@ async fn seed_notification(
     .bind(format!("test-{}-{}", kind, Uuid::new_v4()))
     .bind(actor_membership_id)
     .bind(created_at)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -979,7 +979,7 @@ async fn tool_approval_notifies_conversations_manage_holders() {
     )
     .bind(tenant_id)
     .bind(tool_request_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1020,12 +1020,16 @@ async fn tool_decision_resolves_other_holders_notifications() {
         .bind(mem_id)
         .bind(tool_request_id)
         .bind(format!("test-resolve-{}", mem_id))
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
 
-    let mut tx = pool.begin().await.unwrap();
+    // The production caller (the tool decision) runs in the tenant's Unit of Work, which is what
+    // the outbox policy requires.
+    let mut tx = db::UnitOfWork::begin_for_tenant(&pool, tenant_id)
+        .await
+        .unwrap();
     emit::emit_resolved_in_tx(
         &mut tx,
         tenant_id,
@@ -1053,7 +1057,7 @@ async fn tool_decision_resolves_other_holders_notifications() {
     .bind(tenant_id)
     .bind(owner_mem)
     .bind(tool_request_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1068,7 +1072,7 @@ async fn tool_decision_resolves_other_holders_notifications() {
     .bind(tenant_id)
     .bind(admin_mem)
     .bind(tool_request_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1126,7 +1130,7 @@ async fn multiple_ai_failures_within_15_min_produce_one_notification() {
     )
     .bind(tenant_id)
     .bind(&dedupe)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(count, 1, "expected exactly 1 notification despite 3 emits");
@@ -1157,7 +1161,7 @@ async fn multiple_ai_failures_within_15_min_produce_one_notification() {
     )
     .bind(tenant_id)
     .bind(&dedupe)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1238,7 +1242,7 @@ async fn ai_failure_in_later_bucket_produces_second_notification() {
          WHERE n.tenant_id = $1 AND tm.role = 'owner'",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(count, 2, "expected 2 notifications across buckets");
@@ -1280,7 +1284,7 @@ async fn assignment_notifies_only_new_assignee() {
     )
     .bind(tenant_id)
     .bind(conv_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1326,7 +1330,7 @@ async fn self_assignment_notifies_nobody() {
          WHERE tenant_id = $1::text AND event_type = 'notification.requested'",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1350,7 +1354,7 @@ async fn escalation_routing_produces_one_notification() {
         "INSERT INTO skills (tenant_id, name) VALUES ($1, 'billing') RETURNING id",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1360,7 +1364,7 @@ async fn escalation_routing_produces_one_notification() {
     .bind(tenant_id)
     .bind(agent.membership_id)
     .bind(skill_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1373,7 +1377,7 @@ async fn escalation_routing_produces_one_notification() {
     )
     .bind(tenant_id)
     .bind(agent.membership_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1404,7 +1408,7 @@ async fn escalation_routing_produces_one_notification() {
          WHERE n.tenant_id = $1 AND n.subject_type = 'escalation' AND n.kind = 'escalation.new'",
     )
     .bind(tenant_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1438,7 +1442,7 @@ async fn queued_escalation_fans_out_to_manage_holders() {
         "INSERT INTO skills (tenant_id, name) VALUES ($1, 'unmatched') RETURNING id",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1461,7 +1465,7 @@ async fn queued_escalation_fans_out_to_manage_holders() {
          WHERE n.tenant_id = $1 AND n.subject_type = 'escalation' AND n.kind = 'escalation.new'",
     )
     .bind(tenant_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1497,7 +1501,7 @@ async fn claiming_resolves_others_rows() {
         "INSERT INTO skills (tenant_id, name) VALUES ($1, 'unmatched-claim') RETURNING id",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let state = setup_state(pool.clone());
@@ -1534,7 +1538,7 @@ async fn claiming_resolves_others_rows() {
     .bind(agent_a.membership_id)
     .bind(esc_id)
     .bind(format!("test-claim-resolve-{esc_id}"))
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1565,7 +1569,7 @@ async fn claiming_resolves_others_rows() {
     .bind(tenant_id)
     .bind(agent_a.membership_id)
     .bind(esc_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1608,7 +1612,7 @@ async fn auto_drain_resolves_others_rows() {
     .bind(agent_a.membership_id)
     .bind(esc_id)
     .bind(format!("test-drain-resolve-{esc_id}"))
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1623,7 +1627,7 @@ async fn auto_drain_resolves_others_rows() {
     .bind(agent_a.membership_id)
     .bind(esc_id)
     .bind(format!("test-drain-read-{esc_id}"))
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1658,7 +1662,7 @@ async fn auto_drain_resolves_others_rows() {
     .bind(agent_a.membership_id)
     .bind(esc_id)
     .bind(format!("test-drain-resolve-{esc_id}"))
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1675,7 +1679,7 @@ async fn auto_drain_resolves_others_rows() {
     .bind(agent_a.membership_id)
     .bind(esc_id)
     .bind(format!("test-drain-read-{esc_id}"))
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1714,7 +1718,7 @@ async fn replay_dedup_produces_one_row_per_recipient() {
         .bind(Uuid::new_v4())
         .bind(tenant_id)
         .bind(payload)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -1727,7 +1731,7 @@ async fn replay_dedup_produces_one_row_per_recipient() {
     )
     .bind(tenant_id)
     .bind(&dedupe_key)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1743,7 +1747,7 @@ async fn replay_dedup_produces_one_row_per_recipient() {
     )
     .bind(tenant_id)
     .bind(&dedupe_key)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1781,7 +1785,7 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     // Deactivate membership
     sqlx::query("UPDATE tenant_memberships SET status = 'disabled' WHERE id = $1")
         .bind(old_mem_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -1805,7 +1809,7 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     let old_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM notifications WHERE recipient_membership_id = $1")
             .bind(old_mem_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -1818,7 +1822,7 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     // a new active row for the same (tenant_id, user_id).
     sqlx::query("UPDATE tenant_memberships SET deleted_at = now() WHERE id = $1")
         .bind(old_mem_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     let new_mem_id = seed_membership(&pool, tenant_id, user_id, "agent").await;
@@ -1848,7 +1852,7 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     let new_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM notifications WHERE recipient_membership_id = $1")
             .bind(new_mem_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(new_count, 0, "new membership must have zero notifications");
@@ -1893,7 +1897,7 @@ async fn assignment_by_actor_without_membership_notifies_assignee() {
     )
     .bind(tenant_id)
     .bind(conv_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1916,7 +1920,7 @@ async fn assignment_by_actor_without_membership_notifies_assignee() {
          WHERE tenant_id = $1::text AND event_type = 'notification.requested'",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

@@ -262,7 +262,7 @@ async fn raising_plan_allowance_above_usage_flips_decision() {
     sqlx::query("UPDATE tenant_subscriptions SET plan_id = $1 WHERE tenant_id = $2")
         .bind(plan_b)
         .bind(tenant_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 

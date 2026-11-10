@@ -200,7 +200,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -252,7 +252,7 @@ async fn connect_through_api(
     let connection_id: Uuid =
         sqlx::query_scalar("SELECT id FROM integration_connections WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -289,7 +289,7 @@ async fn count_events(
         .bind(connection_id)
         .bind(event_type)
         .bind(r)
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap(),
         None => sqlx::query_as(
@@ -298,7 +298,7 @@ async fn count_events(
         )
         .bind(connection_id)
         .bind(event_type)
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap(),
     };
@@ -310,7 +310,7 @@ async fn count_deliveries(pool: &sqlx::PgPool, connection_id: Uuid) -> i64 {
         "SELECT COUNT(*) FROM integration_webhook_deliveries WHERE connection_id = $1",
     )
     .bind(connection_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     row.0
@@ -318,7 +318,7 @@ async fn count_deliveries(pool: &sqlx::PgPool, connection_id: Uuid) -> i64 {
 
 async fn count_all_events(pool: &sqlx::PgPool) -> i64 {
     let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM integration_events")
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     row.0
@@ -544,7 +544,7 @@ async fn sixty_one_deliveries_produce_at_most_one_rate_limited_event() {
          VALUES ($1, 'webhook', 60, 60)",
     )
     .bind(tenant)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     let conn = connect_through_api(pool.clone(), tenant, admin).await;

@@ -173,7 +173,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -184,7 +184,7 @@ async fn count_connection_rows(pool: &sqlx::PgPool, tenant_id: Uuid, catalog_id:
     )
     .bind(tenant_id)
     .bind(catalog_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     row.0
@@ -200,7 +200,7 @@ async fn count_events_for_connection(
     )
     .bind(connection_id)
     .bind(event_type)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     row.0
@@ -218,7 +218,7 @@ async fn count_audit_for_action(
     .bind(tenant_id)
     .bind(action)
     .bind(resource_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     row.0
@@ -637,7 +637,7 @@ async fn sc_004_all_lifecycle_actions_land_in_both_logs() {
         )
         .bind(tenant)
         .bind(catalog_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         row.0

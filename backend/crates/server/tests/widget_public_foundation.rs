@@ -157,7 +157,7 @@ async fn seed_widget_instance(
     .bind("Test Widget Display")
     .bind(enabled)
     .bind(&domains)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -351,12 +351,12 @@ async fn t006_expired_session_returns_401_session_invalid() {
     .bind(
         sqlx::query_scalar::<_, Uuid>("SELECT id FROM widget_instances WHERE public_id = $1")
             .bind(public_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap(),
     )
     .bind(&expired_token_hash)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

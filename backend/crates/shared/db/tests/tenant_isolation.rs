@@ -58,6 +58,21 @@ struct Graph {
     tool: Uuid,
     tool_policy: Uuid,
     tool_request: Uuid,
+    // the remaining tenant-owned tables (MOH-49)
+    user: Uuid,
+    skill: Uuid,
+    invitation: Uuid,
+    audit: Uuid,
+    outbox: Uuid,
+    widget: Uuid,
+    widget_session: Uuid,
+    notification: Uuid,
+    connection: Uuid,
+    secret: Uuid,
+    delivery: Uuid,
+    integration_event: Uuid,
+    subscription: Uuid,
+    rate_limit: Uuid,
 }
 
 async fn scalar_uuid(seed: &PgPool, sql: &str, binds: &[Uuid]) -> Uuid {
@@ -271,6 +286,115 @@ async fn seed_graph(seed: &PgPool) -> Graph {
         &[tenant, conversation, generation],
     )
     .await;
+    let skill = scalar_uuid(
+        seed,
+        "INSERT INTO skills (tenant_id, name) VALUES ($1, 'Billing') RETURNING id",
+        &[tenant],
+    )
+    .await;
+    scalar_uuid(
+        seed,
+        "INSERT INTO agent_skills (tenant_id, membership_id, skill_id) VALUES ($1, $2, $3) RETURNING skill_id",
+        &[tenant, membership, skill],
+    )
+    .await;
+    scalar_uuid(
+        seed,
+        "INSERT INTO agent_availability (tenant_id, membership_id) VALUES ($1, $2) RETURNING membership_id",
+        &[tenant, membership],
+    )
+    .await;
+    let invitation = scalar_uuid(
+        seed,
+        &format!(
+            "INSERT INTO tenant_invitations (tenant_id, email, role, token_hash, invited_by, expires_at) \
+             VALUES ($1, 'inv-{unique}@example.test', 'agent', 'hash-{unique}', $2, now() + interval '1 day') RETURNING id"
+        ),
+        &[tenant, user],
+    )
+    .await;
+    let audit = scalar_uuid(
+        seed,
+        "INSERT INTO audit_logs (tenant_id, action, resource_type, resource_id) \
+         VALUES ($1, 'isolation.test', 'tenant', 'x') RETURNING id",
+        &[tenant],
+    )
+    .await;
+    let outbox = scalar_uuid(
+        seed,
+        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES (gen_random_uuid(), 'tenant', 'x', $1::uuid::text, 'isolation.test', '{}'::jsonb, now()) RETURNING id",
+        &[tenant],
+    )
+    .await;
+    let widget = scalar_uuid(
+        seed,
+        &format!(
+            "INSERT INTO widget_instances (tenant_id, public_id, name) VALUES ($1, 'wgt_{unique}', 'W') RETURNING id"
+        ),
+        &[tenant],
+    )
+    .await;
+    let widget_session = scalar_uuid(
+        seed,
+        "INSERT INTO widget_sessions (tenant_id, widget_instance_id, token_hash, expires_at) \
+         VALUES ($1, $2, decode(md5(random()::text), 'hex'), now() + interval '1 day') RETURNING id",
+        &[tenant, widget],
+    )
+    .await;
+    let notification = scalar_uuid(
+        seed,
+        &format!(
+            "INSERT INTO notifications (tenant_id, recipient_membership_id, kind, title, subject_type, subject_id, dedupe_key) \
+             VALUES ($1, $2, 'escalation.new', 'T', 'escalation', $3, 'k-{unique}') RETURNING id"
+        ),
+        &[tenant, membership, escalation],
+    )
+    .await;
+    let connection = scalar_uuid(
+        seed,
+        "INSERT INTO integration_connections \
+            (tenant_id, catalog_id, webhook_token_hash, webhook_token_ciphertext, webhook_token_nonce) \
+         VALUES ($1, (SELECT id FROM integration_catalog ORDER BY slug LIMIT 1), \
+                 decode(md5(random()::text), 'hex'), decode('01', 'hex'), decode('02', 'hex')) RETURNING id",
+        &[tenant],
+    )
+    .await;
+    let secret = scalar_uuid(
+        seed,
+        "INSERT INTO integration_secrets (tenant_id, connection_id, field_key, ciphertext, nonce, hint) \
+         VALUES ($1, $2, 'api_key', decode('01', 'hex'), decode('02', 'hex'), '...abcd') RETURNING id",
+        &[tenant, connection],
+    )
+    .await;
+    let delivery = scalar_uuid(
+        seed,
+        "INSERT INTO integration_webhook_deliveries (tenant_id, connection_id, payload) \
+         VALUES ($1, $2, '{}'::jsonb) RETURNING id",
+        &[tenant, connection],
+    )
+    .await;
+    let integration_event = scalar_uuid(
+        seed,
+        "INSERT INTO integration_events (tenant_id, connection_id, event_type, outcome) \
+         VALUES ($1, $2, 'connected', 'success') RETURNING id",
+        &[tenant, connection],
+    )
+    .await;
+    let subscription = scalar_uuid(
+        seed,
+        "INSERT INTO tenant_subscriptions (tenant_id, plan_id) \
+         VALUES ($1, (SELECT id FROM billing_plans ORDER BY created_at LIMIT 1)) RETURNING id",
+        &[tenant],
+    )
+    .await;
+    let rate_limit = scalar_uuid(
+        seed,
+        "INSERT INTO tenant_rate_limit_overrides (tenant_id, scope, max_requests, window_seconds) \
+         VALUES ($1, 'login', 10, 60) RETURNING id",
+        &[tenant],
+    )
+    .await;
     Graph {
         tenant,
         customer,
@@ -297,6 +421,20 @@ async fn seed_graph(seed: &PgPool) -> Graph {
         tool,
         tool_policy,
         tool_request,
+        user,
+        skill,
+        invitation,
+        audit,
+        outbox,
+        widget,
+        widget_session,
+        notification,
+        connection,
+        secret,
+        delivery,
+        integration_event,
+        subscription,
+        rate_limit,
     }
 }
 
@@ -497,6 +635,118 @@ fn entries() -> Vec<Entry> {
             row: |g| g.tool_request,
             insert_sql: "INSERT INTO tool_requests (tenant_id, conversation_id, generation_id, tool_name, tool_source, arguments, status, approval_required, chain_index) VALUES ($1, $2, $3, 'lookup', 'builtin', '{}'::jsonb, 'pending', false, 1)",
             args: |g| vec![g.conversation, g.generation],
+        },
+        Entry {
+            table: "skills",
+            id_column: "id",
+            row: |g| g.skill,
+            insert_sql: "INSERT INTO skills (tenant_id, name) VALUES ($1, 'Other')",
+            args: |_| vec![],
+        },
+        Entry {
+            table: "agent_skills",
+            id_column: "skill_id",
+            row: |g| g.skill,
+            insert_sql: "INSERT INTO agent_skills (tenant_id, membership_id, skill_id) VALUES ($1, $2, $3)",
+            args: |g| vec![g.membership, g.skill],
+        },
+        Entry {
+            table: "agent_availability",
+            id_column: "membership_id",
+            row: |g| g.membership,
+            insert_sql: "INSERT INTO agent_availability (tenant_id, membership_id) VALUES ($1, $2)",
+            args: |g| vec![g.membership],
+        },
+        Entry {
+            table: "tenant_memberships",
+            id_column: "id",
+            row: |g| g.membership,
+            insert_sql: "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, 'agent')",
+            args: |g| vec![g.user],
+        },
+        Entry {
+            table: "tenant_invitations",
+            id_column: "id",
+            row: |g| g.invitation,
+            insert_sql: "INSERT INTO tenant_invitations (tenant_id, email, role, token_hash, invited_by, expires_at) VALUES ($1, 'x@example.test', 'agent', 'other-hash', $2, now() + interval '1 day')",
+            args: |g| vec![g.user],
+        },
+        Entry {
+            table: "audit_logs",
+            id_column: "id",
+            row: |g| g.audit,
+            insert_sql: "INSERT INTO audit_logs (tenant_id, action, resource_type, resource_id) VALUES ($1, 'isolation.test', 'tenant', 'y')",
+            args: |_| vec![],
+        },
+        Entry {
+            table: "outbox_events",
+            id_column: "id",
+            row: |g| g.outbox,
+            insert_sql: "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) VALUES (gen_random_uuid(), 'tenant', 'y', $1::uuid::text, 'isolation.test', '{}'::jsonb, now())",
+            args: |_| vec![],
+        },
+        Entry {
+            table: "widget_instances",
+            id_column: "id",
+            row: |g| g.widget,
+            insert_sql: "INSERT INTO widget_instances (tenant_id, public_id, name) VALUES ($1, 'wgt_other', 'W2')",
+            args: |_| vec![],
+        },
+        Entry {
+            table: "widget_sessions",
+            id_column: "id",
+            row: |g| g.widget_session,
+            insert_sql: "INSERT INTO widget_sessions (tenant_id, widget_instance_id, token_hash, expires_at) VALUES ($1, $2, decode('0a', 'hex'), now() + interval '1 day')",
+            args: |g| vec![g.widget],
+        },
+        Entry {
+            table: "notifications",
+            id_column: "id",
+            row: |g| g.notification,
+            insert_sql: "INSERT INTO notifications (tenant_id, recipient_membership_id, kind, title, subject_type, subject_id, dedupe_key) VALUES ($1, $2, 'escalation.new', 'T', 'escalation', $3, 'other')",
+            args: |g| vec![g.membership, g.escalation],
+        },
+        Entry {
+            table: "integration_connections",
+            id_column: "id",
+            row: |g| g.connection,
+            insert_sql: "INSERT INTO integration_connections (tenant_id, catalog_id, webhook_token_hash, webhook_token_ciphertext, webhook_token_nonce) VALUES ($1, (SELECT id FROM integration_catalog ORDER BY slug LIMIT 1), decode('0b', 'hex'), decode('01', 'hex'), decode('02', 'hex'))",
+            args: |_| vec![],
+        },
+        Entry {
+            table: "integration_secrets",
+            id_column: "id",
+            row: |g| g.secret,
+            insert_sql: "INSERT INTO integration_secrets (tenant_id, connection_id, field_key, ciphertext, nonce, hint) VALUES ($1, $2, 'other', decode('01', 'hex'), decode('02', 'hex'), '...wxyz')",
+            args: |g| vec![g.connection],
+        },
+        Entry {
+            table: "integration_webhook_deliveries",
+            id_column: "id",
+            row: |g| g.delivery,
+            insert_sql: "INSERT INTO integration_webhook_deliveries (tenant_id, connection_id, payload) VALUES ($1, $2, '{}'::jsonb)",
+            args: |g| vec![g.connection],
+        },
+        Entry {
+            table: "integration_events",
+            id_column: "id",
+            row: |g| g.integration_event,
+            insert_sql: "INSERT INTO integration_events (tenant_id, connection_id, event_type, outcome) VALUES ($1, $2, 'connected', 'success')",
+            args: |g| vec![g.connection],
+        },
+        Entry {
+            table: "tenant_subscriptions",
+            id_column: "id",
+            row: |g| g.subscription,
+            insert_sql: "INSERT INTO tenant_subscriptions (tenant_id, plan_id) VALUES ($1, (SELECT id FROM billing_plans ORDER BY created_at LIMIT 1))",
+            args: |_| vec![],
+        },
+        Entry {
+            table: "tenant_rate_limit_overrides",
+            id_column: "id",
+            row: |g| g.rate_limit,
+            insert_sql: "INSERT INTO tenant_rate_limit_overrides (tenant_id, scope, max_requests, window_seconds) VALUES ($1, 'webhook', 5, 60)",
+            args: |_| vec![],
         },
     ]
 }

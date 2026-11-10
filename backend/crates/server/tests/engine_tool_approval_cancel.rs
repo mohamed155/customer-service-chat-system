@@ -124,7 +124,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
     .bind(tenant_id)
     .bind(user_id)
     .bind(role)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -234,7 +234,7 @@ async fn engine_tool_approval_cancel() {
     let event_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'ai.tool_decision'",
     )
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -374,7 +374,7 @@ async fn engine_tool_approval_cancel_via_claim_endpoint() {
     let event_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'ai.tool_decision'",
     )
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

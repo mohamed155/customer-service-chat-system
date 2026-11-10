@@ -780,7 +780,7 @@ async fn create_plan_writes_audit_log() {
         "SELECT row_to_json(a.*) FROM audit_logs a WHERE a.action = 'billing_plan.created' AND a.resource_id = $1 ORDER BY a.created_at DESC LIMIT 1",
     )
     .bind(plan_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(row["actor_user_id"], json!(user.to_string()));
@@ -807,7 +807,7 @@ async fn update_plan_writes_audit_log() {
         "SELECT row_to_json(a.*) FROM audit_logs a WHERE a.action = 'billing_plan.status_changed' AND a.resource_id = $1 ORDER BY a.created_at DESC LIMIT 1",
     )
     .bind(plan_id.to_string())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(row["actor_user_id"], json!(user.to_string()));
@@ -835,7 +835,7 @@ async fn put_subscription_writes_audit_log() {
         "SELECT row_to_json(a.*) FROM audit_logs a WHERE a.action = 'billing_subscription.changed' AND a.tenant_id = $1 ORDER BY a.created_at DESC LIMIT 1",
     )
     .bind(tenant)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(row["actor_user_id"], json!(user.to_string()));

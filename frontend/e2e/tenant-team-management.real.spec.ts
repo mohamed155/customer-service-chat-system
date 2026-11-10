@@ -19,12 +19,20 @@ const tenants = {
 };
 
 // Seeds TRUNCATE tables, which the backend's app_runtime role cannot do, so fixtures go through the
-// schema owner (MIGRATION_DATABASE_URL), like the backend tests' setup.
+// schema owner (MIGRATION_DATABASE_URL), like the backend tests' setup. The tenant tables are under
+// forced Row-Level Security, which applies to the owner too, so reads that check them run as
+// app_platform (BYPASSRLS), as the seed file does after its TRUNCATE.
 const database = new pg.Pool({ connectionString: process.env['MIGRATION_DATABASE_URL'] });
 
 async function queryJson(sql: string): Promise<unknown> {
-  const result = await database.query<Record<string, unknown>>(sql);
-  return Object.values(result.rows[0])[0];
+  const client = await database.connect();
+  try {
+    await client.query('SET ROLE app_platform');
+    const result = await client.query<Record<string, unknown>>(sql);
+    return Object.values(result.rows[0])[0];
+  } finally {
+    client.release();
+  }
 }
 
 async function devContext(

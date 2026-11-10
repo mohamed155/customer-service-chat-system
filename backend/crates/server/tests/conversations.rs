@@ -189,7 +189,7 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> Seeded
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     SeededMembership {
@@ -212,7 +212,7 @@ async fn seed_member(
     .bind(tenant_id)
     .bind(user_id)
     .bind(role)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     SeededMembership {
@@ -1169,7 +1169,7 @@ async fn seed_viewer(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> Uuid 
     )
     .bind(tenant_id)
     .bind(user_id)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     user_id
@@ -1189,7 +1189,7 @@ async fn seed_inactive_member(
     .bind(tenant_id)
     .bind(user_id)
     .bind(role)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     SeededMembership {
@@ -1229,7 +1229,7 @@ async fn fetch_audit_count(pool: &sqlx::PgPool, action: &str, resource_id: Uuid)
     )
     .bind(action)
     .bind(resource_id.to_string())
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -3162,7 +3162,7 @@ async fn two_members_update_status_and_assignment_concurrently() {
     let audit_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1")
             .bind(conv_id.to_string())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(
@@ -3193,7 +3193,7 @@ async fn viewer_403_for_create() {
     let audit_count_before: i64 = // Denials are audited as tenant.access_denied by design; only conversation
     // actions must be absent.
     sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE action LIKE 'conversation.%'")
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -3227,7 +3227,7 @@ async fn viewer_403_for_create() {
     let audit_count_after: i64 = // Denials are audited as tenant.access_denied by design; only conversation
     // actions must be absent.
     sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE action LIKE 'conversation.%'")
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
 

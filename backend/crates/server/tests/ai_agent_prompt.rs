@@ -152,7 +152,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -667,7 +667,7 @@ async fn responder_substitutes_prompt_variables() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -850,7 +850,7 @@ async fn second_save_rebinding_reflects_new_prompt() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1512,7 +1512,7 @@ async fn restore_records_audit_event() {
          WHERE tenant_id = $1 AND action = 'agent_prompt.version_restored'",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1526,7 +1526,7 @@ async fn restore_records_audit_event() {
          WHERE tenant_id = $1 AND action = 'agent_prompt.version_restored'",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let details = audit_details.expect("audit details should exist");
@@ -2063,7 +2063,7 @@ async fn save_creates_version_created_audit_event() {
          FROM audit_logs WHERE action = 'agent_prompt.version_created' AND tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2126,7 +2126,7 @@ async fn restore_creates_version_restored_audit_event() {
          WHERE action = 'agent_prompt.version_restored' AND tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

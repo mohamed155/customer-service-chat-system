@@ -380,3 +380,233 @@ async fn rag_retrieval_indexing_and_ai_resolution_return_nothing_for_the_wrong_t
     assert_eq!(other.row.tenant_id, Some(b.tenant));
     assert_ne!(own.row.model, other.row.model);
 }
+
+/// One tenant's rows in the last table group (MOH-49).
+struct Remaining {
+    tenant: Uuid,
+    user: Uuid,
+    membership: Uuid,
+    widget: Uuid,
+    connection: Uuid,
+    notification: Uuid,
+    audit: Uuid,
+}
+
+async fn seed_remaining(seed: &PgPool) -> Remaining {
+    let unique = Uuid::new_v4().simple().to_string();
+    let tenant: Uuid =
+        sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+            .bind(format!("Repo isolation {unique}"))
+            .bind(format!("repo-iso-{unique}"))
+            .fetch_one(seed)
+            .await
+            .unwrap();
+    let user: Uuid = sqlx::query_scalar(
+        "INSERT INTO users (email, display_name) VALUES ($1, 'Member') RETURNING id",
+    )
+    .bind(format!("member-{unique}@example.test"))
+    .fetch_one(seed)
+    .await
+    .unwrap();
+    let membership: Uuid = sqlx::query_scalar(
+        "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, 'admin') RETURNING id",
+    )
+    .bind(tenant)
+    .bind(user)
+    .fetch_one(seed)
+    .await
+    .unwrap();
+    let widget: Uuid = sqlx::query_scalar(
+        "INSERT INTO widget_instances (tenant_id, public_id, name) VALUES ($1, $2, 'Support') RETURNING id",
+    )
+    .bind(tenant)
+    .bind(format!("wgt_{unique}"))
+    .fetch_one(seed)
+    .await
+    .unwrap();
+    let connection: Uuid = sqlx::query_scalar(
+        "INSERT INTO integration_connections \
+            (tenant_id, catalog_id, webhook_token_hash, webhook_token_ciphertext, webhook_token_nonce) \
+         VALUES ($1, (SELECT id FROM integration_catalog ORDER BY slug LIMIT 1), \
+                 decode(md5(random()::text), 'hex'), decode('01', 'hex'), decode('02', 'hex')) \
+         RETURNING id",
+    )
+    .bind(tenant)
+    .fetch_one(seed)
+    .await
+    .unwrap();
+    let notification: Uuid = sqlx::query_scalar(
+        "INSERT INTO notifications (tenant_id, recipient_membership_id, kind, title, subject_type, subject_id, dedupe_key) \
+         VALUES ($1, $2, 'escalation.new', 'Assigned to you', 'escalation', gen_random_uuid(), $3) RETURNING id",
+    )
+    .bind(tenant)
+    .bind(membership)
+    .bind(format!("k-{unique}"))
+    .fetch_one(seed)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO tenant_subscriptions (tenant_id, plan_id) \
+         VALUES ($1, (SELECT id FROM billing_plans ORDER BY created_at LIMIT 1))",
+    )
+    .bind(tenant)
+    .execute(seed)
+    .await
+    .unwrap();
+    let audit: Uuid = sqlx::query_scalar(
+        "INSERT INTO audit_logs (tenant_id, action, resource_type, resource_id) \
+         VALUES ($1, 'isolation.test', 'tenant', 'x') RETURNING id",
+    )
+    .bind(tenant)
+    .fetch_one(seed)
+    .await
+    .unwrap();
+    Remaining {
+        tenant,
+        user,
+        membership,
+        widget,
+        connection,
+        notification,
+        audit,
+    }
+}
+
+/// The widget, integration, notification, billing, membership and audit repositories: each is
+/// given tenant B and tenant A's real ids and must find nothing, while tenant A finds them.
+#[tokio::test]
+async fn widget_integration_notification_billing_and_audit_repositories_return_nothing_for_the_wrong_tenant(
+) {
+    let Some(pool) = runtime_pool().await else {
+        return;
+    };
+    db::testing::migrate().await;
+    let seed_pool = db::testing::seed_pool();
+    let (a, b) = (
+        seed_remaining(&seed_pool).await,
+        seed_remaining(&seed_pool).await,
+    );
+
+    // Widgets.
+    assert!(
+        widgets::queries::find_instance_by_id(&pool, a.tenant, a.widget)
+            .await
+            .unwrap()
+            .is_some(),
+        "control: tenant A finds its widget"
+    );
+    assert!(
+        widgets::queries::find_instance_by_id(&pool, b.tenant, a.widget)
+            .await
+            .unwrap()
+            .is_none(),
+        "tenant B must not find tenant A's widget by id"
+    );
+    let listed_b = widgets::queries::list_instances(&pool, b.tenant)
+        .await
+        .unwrap();
+    assert!(
+        listed_b.iter().all(|w| w.id != a.widget),
+        "tenant B's widget list must not contain tenant A's"
+    );
+
+    // Integrations.
+    assert!(
+        integrations::queries::find_connection_by_id(&pool, a.tenant, a.connection)
+            .await
+            .unwrap()
+            .is_some(),
+        "control: tenant A finds its connection"
+    );
+    assert!(
+        integrations::queries::find_connection_by_id(&pool, b.tenant, a.connection)
+            .await
+            .unwrap()
+            .is_none(),
+        "tenant B must not find tenant A's connection by id"
+    );
+
+    // Notifications.
+    let (own, _) = notifications::queries::list(&pool, a.tenant, a.membership, None, None, 50)
+        .await
+        .unwrap();
+    assert!(
+        own.iter().any(|n| n.id == a.notification),
+        "control: tenant A lists its notification"
+    );
+    // Even with the other tenant's membership id as the recipient, nothing comes back.
+    let (foreign, _) = notifications::queries::list(&pool, b.tenant, a.membership, None, None, 50)
+        .await
+        .unwrap();
+    assert!(
+        foreign.is_empty(),
+        "tenant B must not list tenant A's notifications"
+    );
+    assert_eq!(
+        notifications::queries::unread_count(&pool, b.tenant, a.membership)
+            .await
+            .unwrap(),
+        0,
+        "tenant B must not count tenant A's unread notifications"
+    );
+
+    // Billing subscription.
+    assert!(
+        billing::queries::subscription_for_tenant(&pool, a.tenant)
+            .await
+            .unwrap()
+            .is_some(),
+        "control: tenant A has a subscription"
+    );
+
+    // Memberships (the authorisation lookup behind every request).
+    assert_eq!(
+        tenancy::authorize::fetch_membership_role(&pool, a.tenant, a.user)
+            .await
+            .as_deref(),
+        Some("admin"),
+        "control: tenant A's member is found in tenant A"
+    );
+    assert!(
+        tenancy::authorize::fetch_membership_role(&pool, b.tenant, a.user)
+            .await
+            .is_none(),
+        "tenant A's member must not have a role in tenant B"
+    );
+
+    // Audit log.
+    let audit_a =
+        audit::queries::list_entries(&pool, a.tenant, None, None, None, None, None, None, 50)
+            .await
+            .unwrap();
+    assert!(
+        audit_a.iter().any(|r| r.id == a.audit),
+        "control: tenant A lists its audit entry"
+    );
+    let audit_b =
+        audit::queries::list_entries(&pool, b.tenant, None, None, None, None, None, None, 50)
+            .await
+            .unwrap();
+    assert!(
+        audit_b.iter().all(|r| r.id != a.audit),
+        "tenant B's audit listing must not contain tenant A's entries"
+    );
+    // Asking for tenant A's entries while bound to tenant B is refused by the policy as well.
+    let crossed = audit::queries::list_entries(
+        &pool,
+        b.tenant,
+        Some(a.tenant),
+        None,
+        None,
+        None,
+        None,
+        None,
+        50,
+    )
+    .await
+    .unwrap();
+    assert!(
+        crossed.is_empty(),
+        "a tenant filter naming another tenant must return nothing"
+    );
+}

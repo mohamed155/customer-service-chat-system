@@ -114,6 +114,7 @@ async fn run_migrations_succeeds() {
         (71, "cross tenant sweeps and platform"),
         (72, "rls conversations customers"),
         (73, "rls knowledge ai tools"),
+        (74, "rls remaining tenant tables"),
     ];
     assert_eq!(
         rows.len(),
@@ -462,7 +463,7 @@ async fn memberships_fk_missing_user_rejected() {
     .bind(tenant_id)
     .bind(fake_id)
     .bind("agent")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -485,7 +486,7 @@ async fn memberships_fk_missing_tenant_rejected() {
     .bind(fake_id)
     .bind(user_id)
     .bind("agent")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -508,7 +509,7 @@ async fn memberships_valid_insert_accepted() {
     .bind(tenant_id)
     .bind(user_id)
     .bind("agent")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_ok(),
@@ -532,7 +533,7 @@ async fn memberships_unknown_role_rejected() {
     .bind(tenant_id)
     .bind(user_id)
     .bind("superadmin")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "unknown role should be rejected");
 }
@@ -550,7 +551,7 @@ async fn memberships_duplicate_active_rejected() {
         .bind(tenant_id)
         .bind(user_id)
         .bind("agent")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     let result = sqlx::query(
@@ -559,7 +560,7 @@ async fn memberships_duplicate_active_rejected() {
     .bind(tenant_id)
     .bind(user_id)
     .bind("admin")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -591,7 +592,7 @@ async fn audit_logs_full_insert_accepted() {
     .bind("res-1")
     .bind(tenant_id)
     .bind(&details)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_ok(),
@@ -601,7 +602,7 @@ async fn audit_logs_full_insert_accepted() {
     let rows: Vec<(serde_json::Value,)> =
         sqlx::query_as("SELECT details FROM audit_logs WHERE action = $1")
             .bind(&unique_action)
-            .fetch_all(&pool)
+            .fetch_all(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(rows.len(), 1);
@@ -622,7 +623,7 @@ async fn audit_logs_platform_entry_tenant_null() {
     .bind("config")
     .bind("cfg-1")
     .bind(Option::<uuid::Uuid>::None)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_ok(),
@@ -644,7 +645,7 @@ async fn audit_logs_system_entry_actor_null() {
     .bind("system.action")
     .bind("scheduler")
     .bind("sys-1")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_ok(),
@@ -662,7 +663,7 @@ async fn audit_logs_details_defaults_to_empty_jsonb() {
     let result: (serde_json::Value,) = sqlx::query_as(
         "INSERT INTO audit_logs (action, resource_type, resource_id) VALUES ('test.defaults', 'test', 'res-default') RETURNING details",
     )
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("audit insert with default details");
     assert_eq!(
@@ -747,7 +748,7 @@ async fn convention_memberships_bare_insert_receives_uuid_and_timestamps() {
     .bind(tid)
     .bind(uid)
     .bind("agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("bare membership insert");
     assert_ne!(row.0.as_u128(), 0);
@@ -774,7 +775,7 @@ async fn convention_audit_logs_bare_insert_receives_uuid_and_timestamps() {
     .bind("test.auto_id")
     .bind("test")
     .bind("res-auto")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("bare audit insert");
     assert_ne!(row.0.as_u128(), 0);
@@ -907,12 +908,12 @@ async fn soft_delete_membership_recreate_pair() {
     .bind(tid)
     .bind(uid)
     .bind("agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query("UPDATE tenant_memberships SET deleted_at = now() WHERE id = $1")
         .bind(mid)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     let result = sqlx::query(
@@ -921,7 +922,7 @@ async fn soft_delete_membership_recreate_pair() {
     .bind(tid)
     .bind(uid)
     .bind("admin")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_ok(),
@@ -946,7 +947,7 @@ async fn cascade_soft_delete_tenant_stamps_memberships() {
         .bind(tid)
         .bind(uid)
         .bind("agent")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     let deleted_at = chrono::Utc::now();
@@ -961,7 +962,7 @@ async fn cascade_soft_delete_tenant_stamps_memberships() {
     )
     .bind(tid)
     .bind(uid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("membership should exist");
     assert!(
@@ -983,7 +984,7 @@ async fn cascade_soft_delete_user_stamps_memberships() {
         .bind(tid)
         .bind(uid)
         .bind("agent")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     let deleted_at = chrono::Utc::now();
@@ -998,7 +999,7 @@ async fn cascade_soft_delete_user_stamps_memberships() {
     )
     .bind(tid)
     .bind(uid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("membership should exist");
     assert!(
@@ -1022,14 +1023,14 @@ async fn cascade_already_deleted_membership_unchanged() {
     .bind(tid)
     .bind(uid)
     .bind("viewer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let original_deleted = truncate_to_micros(chrono::Utc::now() - chrono::Duration::hours(1));
     sqlx::query("UPDATE tenant_memberships SET deleted_at = $1 WHERE id = $2")
         .bind(original_deleted)
         .bind(mid)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     // Now delete the tenant — should NOT overwrite already-deleted membership
@@ -1041,7 +1042,7 @@ async fn cascade_already_deleted_membership_unchanged() {
     let mem_deleted: Option<chrono::DateTime<chrono::Utc>> =
         sqlx::query_scalar("SELECT deleted_at FROM tenant_memberships WHERE id = $1")
             .bind(mid)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -1068,7 +1069,7 @@ async fn cascade_audit_entries_survive_soft_delete() {
     .bind("user")
     .bind("audit-cascade-test")
     .bind(tid)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     // Soft-delete the referenced user/tenant
@@ -1084,7 +1085,7 @@ async fn cascade_audit_entries_survive_soft_delete() {
         .unwrap();
     let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM audit_logs WHERE actor_user_id = $1")
         .bind(uid)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(
@@ -1110,12 +1111,12 @@ async fn append_only_audit_update_rejected() {
     .bind("test.immutable")
     .bind("test")
     .bind("res-immut")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let result = sqlx::query("UPDATE audit_logs SET action = 'changed' WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(result.is_err(), "UPDATE on audit_logs should be rejected");
 }
@@ -1133,12 +1134,12 @@ async fn append_only_audit_delete_rejected() {
     .bind("test.immutable_del")
     .bind("test")
     .bind("res-immut-del")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let result = sqlx::query("DELETE FROM audit_logs WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(result.is_err(), "DELETE on audit_logs should be rejected");
 }
@@ -1153,18 +1154,20 @@ async fn append_only_audit_row_count_unchanged_after_failed_update() {
     let marker = format!("test.count.{}", uuid::Uuid::new_v4());
     sqlx::query("INSERT INTO audit_logs (action, resource_type, resource_id) VALUES ($1, 'test', 'res-count')")
         .bind(&marker)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     let before: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM audit_logs WHERE action = $1")
         .bind(&marker)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
-    let _ = sqlx::query("DELETE FROM audit_logs").execute(&pool).await;
+    let _ = sqlx::query("DELETE FROM audit_logs")
+        .execute(&db::testing::seed_pool())
+        .await;
     let after: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM audit_logs WHERE action = $1")
         .bind(&marker)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(
@@ -1233,7 +1236,7 @@ async fn index_coverage_membership_tenant_query_uses_index() {
         .bind(tid)
         .bind(uid)
         .bind("agent")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     // Disable seqscan and check for index scan. We use a transaction so that
@@ -1281,7 +1284,7 @@ async fn explain_routing_candidate_selection_uses_index() {
     )
     .bind(tid)
     .bind(uid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query(
@@ -1289,7 +1292,7 @@ async fn explain_routing_candidate_selection_uses_index() {
     )
     .bind(tid)
     .bind(mid)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1510,19 +1513,19 @@ async fn convention_membership_update_advances_updated_at() {
     .bind(tid)
     .bind(uid)
     .bind("agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     sqlx::query("UPDATE tenant_memberships SET role = 'admin' WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     let (new_created, new_updated): (chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) =
         sqlx::query_as("SELECT created_at, updated_at FROM tenant_memberships WHERE id = $1")
             .bind(id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(
@@ -1568,7 +1571,7 @@ async fn cascade_user_delete_does_not_affect_tenant_scoped_memberships() {
         .bind(shared_uuid) // tenant_id matches the shared uuid
         .bind(uid2)
         .bind("agent")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("insert membership with shared-uuid tenant");
     // Soft-delete the shared-uuid user — should NOT cascade to the membership
@@ -1583,7 +1586,7 @@ async fn cascade_user_delete_does_not_affect_tenant_scoped_memberships() {
     )
     .bind(shared_uuid)
     .bind(uid2)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("membership should exist");
     assert!(
@@ -1616,7 +1619,7 @@ async fn memberships_rejected_when_user_soft_deleted() {
     .bind(tid)
     .bind(uid)
     .bind("agent")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -1644,7 +1647,7 @@ async fn memberships_rejected_when_tenant_soft_deleted() {
     .bind(tid)
     .bind(uid)
     .bind("agent")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -1697,7 +1700,7 @@ async fn slug_change_writes_audit_entry() {
         "SELECT actor_user_id, details FROM audit_logs WHERE action = 'tenant.slug_changed' AND tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(row.is_some(), "slug change should write an audit log entry");
@@ -1730,7 +1733,7 @@ async fn audit_entry_without_resource_rejected() {
     let result = sqlx::query("INSERT INTO audit_logs (action, resource_type) VALUES ($1, $2)")
         .bind("test.anonymous")
         .bind("test")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -1757,10 +1760,12 @@ async fn index_coverage_audit_tenant_time_query_uses_index() {
     .bind("test")
     .bind("res-idx")
     .bind(tid)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
-    let mut tx = pool.begin().await.unwrap();
+    // Planned as the bypass role: the tenant policy adds its own qualifier, which would change the
+    // plan of the query this test is about.
+    let mut tx = db::testing::seed_pool().begin().await.unwrap();
     sqlx::query("SET LOCAL enable_seqscan = off")
         .execute(&mut *tx)
         .await
@@ -2105,7 +2110,7 @@ async fn memberships_reactivation_with_soft_deleted_user_rejected() {
     .bind(tid)
     .bind(uid)
     .bind("agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query("UPDATE users SET deleted_at = now() WHERE id = $1")
@@ -2116,7 +2121,7 @@ async fn memberships_reactivation_with_soft_deleted_user_rejected() {
     // Cascades should have soft-deleted the membership; try to reactivate
     let result = sqlx::query("UPDATE tenant_memberships SET deleted_at = NULL WHERE id = $1")
         .bind(mid)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -2140,7 +2145,7 @@ async fn memberships_reparent_to_soft_deleted_user_rejected() {
     .bind(tid)
     .bind(uid1)
     .bind("agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query("UPDATE users SET deleted_at = now() WHERE id = $1")
@@ -2151,7 +2156,7 @@ async fn memberships_reparent_to_soft_deleted_user_rejected() {
     let result = sqlx::query("UPDATE tenant_memberships SET user_id = $1 WHERE id = $2")
         .bind(uid2)
         .bind(mid)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -2175,7 +2180,7 @@ async fn memberships_reparent_to_soft_deleted_tenant_rejected() {
     .bind(tid1)
     .bind(uid)
     .bind("agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query("UPDATE tenants SET deleted_at = now() WHERE id = $1")
@@ -2186,7 +2191,7 @@ async fn memberships_reparent_to_soft_deleted_tenant_rejected() {
     let result = sqlx::query("UPDATE tenant_memberships SET tenant_id = $1 WHERE id = $2")
         .bind(tid2)
         .bind(mid)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -2274,6 +2279,11 @@ async fn membership_insert_races_parent_soft_delete() {
         .execute(&mut *conn_a)
         .await
         .expect("begin A");
+    // The membership belongs to the tenant, and its policy only accepts the row inside that
+    // tenant's transaction.
+    db::set_tenant_in_tx(&mut conn_a, tid)
+        .await
+        .expect("bind A to the tenant");
     let (mid,): (uuid::Uuid,) = sqlx::query_as(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -2355,7 +2365,7 @@ async fn membership_insert_races_parent_soft_delete() {
     let mem_deleted: Option<chrono::DateTime<chrono::Utc>> =
         sqlx::query_scalar("SELECT deleted_at FROM tenant_memberships WHERE id = $1")
             .bind(mid)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .expect("membership must exist");
     assert!(
@@ -2971,13 +2981,13 @@ async fn invitation_email_delivery_status_constraint_rejects_invalid_value() {
     .bind(format!("invite-{suffix}@example.com"))
     .bind(suffix.simple().to_string().repeat(2))
     .bind(user_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let result =
         sqlx::query("UPDATE tenant_invitations SET email_delivery_status = 'lost' WHERE id = $1")
             .bind(invitation_id)
-            .execute(&pool)
+            .execute(&db::testing::seed_pool())
             .await;
     if let Err(sqlx::Error::Database(error)) = result {
         assert_eq!(error.code().as_deref(), Some("23514"));
@@ -3057,18 +3067,18 @@ async fn migration_0023_allows_expired_and_rejects_unknown_invitation_status() {
     .bind(format!("expiry-invite-{suffix}@example.com"))
     .bind(format!("{suffix}expired"))
     .bind(user_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
     sqlx::query("UPDATE tenant_invitations SET status = 'expired' WHERE id = $1")
         .bind(invitation_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("expired must be an allowed lifecycle status");
     let unknown = sqlx::query("UPDATE tenant_invitations SET status = 'unknown' WHERE id = $1")
         .bind(invitation_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         matches!(unknown, Err(sqlx::Error::Database(ref error)) if error.code().as_deref() == Some("23514"))
@@ -3105,13 +3115,13 @@ async fn invitation_expired_status_rejects_future_expiry() {
     .bind(format!("future-invite-{suffix}@example.com"))
     .bind(format!("{suffix}future"))
     .bind(user_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
     let result = sqlx::query("UPDATE tenant_invitations SET status = 'expired' WHERE id = $1")
         .bind(invitation_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         matches!(result, Err(sqlx::Error::Database(ref error)) if error.code().as_deref() == Some("23514"))
@@ -5062,7 +5072,7 @@ async fn migration_0042_messages_ai_kind_with_sender_membership_rejected() {
     )
     .bind(tid)
     .bind(uid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed membership");
     let cid = seed_customer(&pool, tid, "AI Kind Test").await;

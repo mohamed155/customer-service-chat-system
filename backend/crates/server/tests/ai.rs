@@ -820,7 +820,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -1348,7 +1348,7 @@ async fn masking_on_read_paths() {
          ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let audit_details = audit.expect("audit row exists").0;
@@ -1474,7 +1474,7 @@ async fn rotation_uses_new_key() {
          ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let details1 = audit1.expect("audit row 1").0;
@@ -1501,7 +1501,7 @@ async fn rotation_uses_new_key() {
          ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let details2 = audit2.expect("audit row 2").0;
@@ -2386,7 +2386,7 @@ async fn usage_capture_opt_in() {
          ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

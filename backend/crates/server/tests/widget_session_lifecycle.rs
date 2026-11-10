@@ -148,7 +148,7 @@ async fn seed_widget_instance(pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &
     .bind(public_id)
     .bind("Test Widget")
     .bind("Test Widget")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -186,7 +186,7 @@ async fn seed_session_with_customer(
     .bind(&token_hash)
     .bind(customer_id)
     .bind(expires_at)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     token
@@ -280,7 +280,7 @@ async fn t002_expired_session_returns_401() {
     .bind(tenant_id)
     .bind(instance_id)
     .bind(&expired_token_hash)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -315,7 +315,7 @@ async fn t003_authenticated_call_slides_expiry() {
     let initial_expiry: chrono::DateTime<chrono::Utc> =
         sqlx::query_scalar("SELECT expires_at FROM widget_sessions WHERE token_hash = $1")
             .bind(sha2::Sha256::digest(token.as_bytes()).to_vec())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -336,7 +336,7 @@ async fn t003_authenticated_call_slides_expiry() {
     let updated_expiry: chrono::DateTime<chrono::Utc> =
         sqlx::query_scalar("SELECT expires_at FROM widget_sessions WHERE token_hash = $1")
             .bind(sha2::Sha256::digest(token.as_bytes()).to_vec())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -450,7 +450,7 @@ async fn t006_touch_session_does_not_report_a_missing_or_foreign_session_as_refr
     let session_id: Uuid =
         sqlx::query_scalar("SELECT id FROM widget_sessions WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     let later = chrono::Utc::now() + chrono::Duration::hours(48);

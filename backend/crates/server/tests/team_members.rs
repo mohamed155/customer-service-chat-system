@@ -243,7 +243,7 @@ async fn assert_audit_event(
     )
     .bind(action)
     .bind(resource_id.to_string())
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -286,7 +286,7 @@ async fn seed_membership(
     .bind(user_id)
     .bind(role)
     .bind(status)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -656,7 +656,7 @@ async fn seed_invitation_with_token(
     .bind(&hash)
     .bind(invited_by)
     .bind(expires_at)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     (id, raw)
@@ -761,14 +761,14 @@ async fn assert_configured_delivery_result(succeeds: bool, expected: &str) {
                     "SELECT email_delivery_status FROM tenant_invitations WHERE id = $1",
                 )
                 .bind(invitation_id)
-                .fetch_one(&pool)
+                .fetch_one(&db::testing::seed_pool())
                 .await
                 .unwrap(),
                 "queued"
             );
             sqlx::query("UPDATE outbox_events SET available_at = now() WHERE aggregate_id = $1")
                 .bind(invitation_id.to_string())
-                .execute(&pool)
+                .execute(&db::testing::seed_pool())
                 .await
                 .unwrap();
         }
@@ -781,7 +781,7 @@ async fn assert_configured_delivery_result(succeeds: bool, expected: &str) {
             )
             .bind(tenant_id)
             .bind(invitation_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
             if status == expected {
@@ -799,7 +799,7 @@ async fn assert_configured_delivery_result(succeeds: bool, expected: &str) {
              FROM outbox_events WHERE aggregate_id = $1",
         )
         .bind(invitation_id.to_string())
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         assert_eq!(outbox, (3, true, true));
@@ -862,7 +862,7 @@ async fn blocked_sender_does_not_block_invitation_creation() {
         sqlx::query_scalar::<_, i64>(
             "SELECT count(*) FROM outbox_events WHERE event_type = 'invitation.email_delivery'"
         )
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap(),
         1
@@ -887,21 +887,21 @@ async fn queued_outbox_delivery_is_recovered() {
          VALUES ($1,$2,'recover@example.com','agent',$3,$4,now() + interval '7 days','queued')",
     )
     .bind(invitation_id).bind(tenant_id).bind("a".repeat(64)).bind(owner)
-    .execute(&pool).await.unwrap();
+    .execute(&db::testing::seed_pool()).await.unwrap();
     sqlx::query(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1,'tenant_invitation',$2,$3,'invitation.email_delivery',$4,now())",
     )
     .bind(Uuid::new_v4()).bind(invitation_id.to_string()).bind(tenant_id.to_string())
     .bind(serde_json::json!({"to":"recover@example.com","acceptUrl":"https://app.test/invite/token"}))
-    .execute(&pool).await.unwrap();
+    .execute(&db::testing::seed_pool()).await.unwrap();
     sqlx::query(
         "UPDATE outbox_events SET claimed_at = now() - interval '6 minutes', claim_token = $1 \
          WHERE aggregate_id = $2",
     )
     .bind(Uuid::new_v4())
     .bind(invitation_id.to_string())
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -920,7 +920,7 @@ async fn queued_outbox_delivery_is_recovered() {
     )
     .bind(tenant_id)
     .bind(invitation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(state, ("sent".into(), true));
@@ -998,7 +998,7 @@ async fn poison_delivery_is_terminal_and_does_not_starve_next_event() {
         sqlx::query(
             "INSERT INTO tenant_invitations (id,tenant_id,email,role,token_hash,invited_by,expires_at,email_delivery_status) \
              VALUES ($1,$2,$3,'agent',$4,$5,now()+interval '7 days','queued')",
-        ).bind(id).bind(tenant_id).bind(email).bind(hash).bind(owner).execute(&pool).await.unwrap();
+        ).bind(id).bind(tenant_id).bind(email).bind(hash).bind(owner).execute(&db::testing::seed_pool()).await.unwrap();
     }
     for (id, payload, created_offset) in [
         (poison_id, serde_json::json!({}), 0_i64),
@@ -1012,7 +1012,7 @@ async fn poison_delivery_is_terminal_and_does_not_starve_next_event() {
             "INSERT INTO outbox_events (id,aggregate_type,aggregate_id,tenant_id,event_type,payload,created_at) \
              VALUES ($1,'tenant_invitation',$2,$3,'invitation.email_delivery',$4,now()+($5*interval '1 millisecond'))",
         ).bind(Uuid::new_v4()).bind(id.to_string()).bind(tenant_id.to_string()).bind(payload)
-        .bind(created_offset).execute(&pool).await.unwrap();
+        .bind(created_offset).execute(&db::testing::seed_pool()).await.unwrap();
     }
     let sender: Arc<dyn email::EmailSender> = Arc::new(DeterministicEmailSender { succeeds: true });
 
@@ -1025,7 +1025,7 @@ async fn poison_delivery_is_terminal_and_does_not_starve_next_event() {
     let poison: (String, bool) = sqlx::query_as(
         "SELECT ti.email_delivery_status, oe.dead_lettered_at IS NOT NULL \
          FROM tenant_invitations ti JOIN outbox_events oe ON oe.aggregate_id=ti.id::text WHERE ti.id=$1",
-    ).bind(poison_id).fetch_one(&pool).await.unwrap();
+    ).bind(poison_id).fetch_one(&db::testing::seed_pool()).await.unwrap();
     assert_eq!(poison, ("failed".into(), true));
 
     assert_eq!(
@@ -1039,7 +1039,7 @@ async fn poison_delivery_is_terminal_and_does_not_starve_next_event() {
             "SELECT email_delivery_status FROM tenant_invitations WHERE id=$1"
         )
         .bind(valid_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap(),
         "sent"
@@ -1057,13 +1057,13 @@ async fn smtp_wait_does_not_hold_the_outbox_row_lock() {
     sqlx::query(
         "INSERT INTO tenant_invitations (id,tenant_id,email,role,token_hash,invited_by,expires_at,email_delivery_status) \
          VALUES ($1,$2,'lock@example.com','agent',$3,$4,now()+interval '7 days','queued')",
-    ).bind(invitation_id).bind(tenant_id).bind("d".repeat(64)).bind(owner).execute(&pool).await.unwrap();
+    ).bind(invitation_id).bind(tenant_id).bind("d".repeat(64)).bind(owner).execute(&db::testing::seed_pool()).await.unwrap();
     sqlx::query(
         "INSERT INTO outbox_events (id,aggregate_type,aggregate_id,tenant_id,event_type,payload,created_at) \
          VALUES ($1,'tenant_invitation',$2,$3,'invitation.email_delivery',$4,now())",
     ).bind(Uuid::new_v4()).bind(invitation_id.to_string()).bind(tenant_id.to_string())
     .bind(serde_json::json!({"to":"lock@example.com","acceptUrl":"https://app.test/invite/token"}))
-    .execute(&pool).await.unwrap();
+    .execute(&db::testing::seed_pool()).await.unwrap();
     let started = Arc::new(Notify::new());
     let release = Arc::new(Notify::new());
     let sender: Arc<dyn email::EmailSender> = Arc::new(BlockingEmailSender {
@@ -1080,7 +1080,7 @@ async fn smtp_wait_does_not_hold_the_outbox_row_lock() {
         Duration::from_millis(250),
         sqlx::query("UPDATE outbox_events SET last_error='lock probe' WHERE aggregate_id=$1")
             .bind(invitation_id.to_string())
-            .execute(&pool),
+            .execute(&db::testing::seed_pool()),
     )
     .await
     .expect("SMTP must run after the claim transaction commits")
@@ -1105,7 +1105,7 @@ async fn stale_third_attempt_claim_is_terminally_failed_and_dead_lettered() {
     .bind(tenant_id)
     .bind("e".repeat(64))
     .bind(owner)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query(
@@ -1118,7 +1118,7 @@ async fn stale_third_attempt_claim_is_terminally_failed_and_dead_lettered() {
     .bind(tenant_id.to_string())
     .bind(serde_json::json!({"to":"stale-third@example.com","acceptUrl":"https://app.test/invite/token"}))
     .bind(Uuid::new_v4())
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1136,7 +1136,7 @@ async fn stale_third_attempt_claim_is_terminally_failed_and_dead_lettered() {
          JOIN outbox_events oe ON oe.aggregate_id=ti.id::text WHERE ti.id=$1",
     )
     .bind(invitation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(state, ("failed".into(), 3, true, true));
@@ -1239,7 +1239,7 @@ async fn create_invitation_hierarchy_refusal() {
     )
     .bind(tenant_id)
     .bind("newadmin@example.com")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(audit_count, 0);
@@ -1325,20 +1325,20 @@ async fn list_invitations_filters_status_and_paginates() {
         "UPDATE tenant_invitations SET expires_at = now() - interval '1 hour' WHERE id = $1",
     )
     .bind(expired_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query(
         "UPDATE tenant_invitations SET expires_at = now() - interval '1 hour', status = 'expired' WHERE id = $1",
     )
     .bind(persisted_expired_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query("UPDATE tenant_invitations SET status = 'accepted', accepted_at = now(), accepted_user_id = $1 WHERE id = $2")
         .bind(owner)
         .bind(accepted_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -1517,7 +1517,7 @@ async fn accept_invitation_race_consumes_single_use_token() {
          AND user_id = (SELECT id FROM users WHERE email = 'race-accept@example.com')",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1529,7 +1529,7 @@ async fn accept_invitation_race_consumes_single_use_token() {
         "SELECT COUNT(*) FROM audit_logs WHERE action = 'member.invitation_accepted' AND resource_id = $1",
     )
     .bind(inv_id.to_string())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -1561,7 +1561,7 @@ async fn accept_invitation_still_works_after_inviter_is_disabled() {
     )
     .bind(tenant_id)
     .bind(owner)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1585,7 +1585,7 @@ async fn accept_invitation_still_works_after_inviter_is_disabled() {
 
     let status: String = sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
         .bind(inv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(status, "accepted");
@@ -1647,7 +1647,7 @@ async fn revoke_invitation() {
 
     let status: String = sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
         .bind(inv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(status, "revoked");
@@ -1682,7 +1682,7 @@ async fn revoked_token_unacceptable() {
     )
     .bind(owner)
     .bind(inv_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1727,7 +1727,7 @@ async fn revoke_accepted_invitation_returns_409_not_404() {
     )
     .bind(owner)
     .bind(inv_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1767,7 +1767,7 @@ async fn revoke_already_revoked_invitation_returns_409() {
     )
     .bind(owner)
     .bind(inv_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1806,7 +1806,7 @@ async fn revoke_expired_pending_invitation_succeeds_as_noop_hardening() {
         "UPDATE tenant_invitations SET expires_at = now() - interval '1 hour' WHERE id = $1",
     )
     .bind(inv_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1835,7 +1835,7 @@ async fn revoke_expired_pending_invitation_succeeds_as_noop_hardening() {
         "UPDATE tenant_invitations SET expires_at = now() - interval '1 hour', status = 'expired' WHERE id = $1",
     )
     .bind(persisted_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     let response = send(
@@ -1852,7 +1852,7 @@ async fn revoke_expired_pending_invitation_succeeds_as_noop_hardening() {
     let persisted_status: String =
         sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
             .bind(persisted_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(persisted_status, "revoked");
@@ -1860,7 +1860,7 @@ async fn revoke_expired_pending_invitation_succeeds_as_noop_hardening() {
         "SELECT COUNT(*) FROM audit_logs WHERE action = 'member.invitation_revoked' AND resource_id = $1",
     )
     .bind(persisted_id.to_string())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(audit_count, 1);
@@ -1913,7 +1913,7 @@ async fn create_invitation_reissue_after_expiry_succeeds() {
         "UPDATE tenant_invitations SET expires_at = now() - interval '1 hour' WHERE id = $1",
     )
     .bind(old_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1930,7 +1930,7 @@ async fn create_invitation_reissue_after_expiry_succeeds() {
     let old_status: String =
         sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
             .bind(old_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -1941,7 +1941,7 @@ async fn create_invitation_reissue_after_expiry_succeeds() {
     let new_status: String =
         sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
             .bind(new_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(new_status, "pending");
@@ -1968,7 +1968,7 @@ async fn create_invitation_reissue_after_expiry_succeeds() {
          FROM audit_logs WHERE tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(audit_counts, (2, 0));
@@ -2030,7 +2030,7 @@ async fn create_invitation_reissue_after_expiry_concurrent_race_returns_one_succ
         "UPDATE tenant_invitations SET expires_at = now() - interval '1 hour' WHERE id = $1",
     )
     .bind(old_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2064,7 +2064,7 @@ async fn create_invitation_reissue_after_expiry_concurrent_race_returns_one_succ
     )
     .bind(tenant_id)
     .bind("reissue-race@example.com")
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -2086,7 +2086,7 @@ async fn create_invitation_reissue_after_expiry_concurrent_race_returns_one_succ
          FROM audit_logs WHERE tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -2187,7 +2187,7 @@ async fn revoke_invitation_lower_rank_actor_refused() {
 
     let status: String = sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
         .bind(invitation_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(status, "pending", "refused revoke must not mutate the row");
@@ -2210,7 +2210,7 @@ async fn patch_member_cross_tenant_id_404_no_mutation_no_audit() {
     )
     .bind(tenant_b)
     .bind(target_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2229,7 +2229,7 @@ async fn patch_member_cross_tenant_id_404_no_mutation_no_audit() {
     let stored_status: String =
         sqlx::query_scalar("SELECT status FROM tenant_memberships WHERE id = $1")
             .bind(target_b_membership)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -2242,7 +2242,7 @@ async fn patch_member_cross_tenant_id_404_no_mutation_no_audit() {
          AND action IN ('member.role_changed','member.disabled','member.enabled')",
     )
     .bind(target_b_membership.to_string())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -2283,7 +2283,7 @@ async fn revoke_invitation_cross_tenant_id_404_no_mutation_no_audit() {
 
     let status: String = sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
         .bind(invitation_b)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(
@@ -2295,7 +2295,7 @@ async fn revoke_invitation_cross_tenant_id_404_no_mutation_no_audit() {
         "SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1 AND action = 'member.invitation_revoked'",
     )
     .bind(invitation_b.to_string())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -2395,7 +2395,7 @@ async fn accept_invitation_suspended_tenant_404_no_mutation() {
 
     let status: String = sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
         .bind(inv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(
@@ -2453,7 +2453,7 @@ async fn accept_invitation_suspended_tenant_race_404_no_mutation() {
 
     let status: String = sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
         .bind(inv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(status, "pending");
@@ -2500,7 +2500,7 @@ async fn accept_invitation_soft_deleted_tenant_404_no_mutation() {
 
     let status: String = sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
         .bind(inv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(
@@ -2554,7 +2554,7 @@ async fn accept_invitation_soft_deleted_tenant_race_404_no_mutation() {
 
     let status: String = sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
         .bind(inv_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(status, "pending");
@@ -2598,7 +2598,7 @@ async fn accept_invitation_anonymous() {
     .bind(&token_hash)
     .bind(owner)
     .bind(expires_at)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2656,7 +2656,7 @@ async fn accept_invitation_anonymous() {
     )
     .bind(tenant_id)
     .bind(&email)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(membership_exists, "membership should exist");
@@ -2690,7 +2690,7 @@ async fn accept_invitation_anonymous_existing_account_returns_409_without_mutati
     .bind(&token_hash)
     .bind(owner)
     .bind(expires_at)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2713,7 +2713,7 @@ async fn accept_invitation_anonymous_existing_account_returns_409_without_mutati
     let invitation_status: String =
         sqlx::query_scalar("SELECT status FROM tenant_invitations WHERE id = $1")
             .bind(inv_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(invitation_status, "pending");
@@ -2723,7 +2723,7 @@ async fn accept_invitation_anonymous_existing_account_returns_409_without_mutati
     )
     .bind(tenant_id)
     .bind(&email)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(membership_count, 0);
@@ -2732,7 +2732,7 @@ async fn accept_invitation_anonymous_existing_account_returns_409_without_mutati
         "SELECT COUNT(*) FROM audit_logs WHERE action = 'member.invitation_accepted' AND resource_id = $1",
     )
     .bind(inv_id.to_string())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(audit_count, 0);
@@ -2765,7 +2765,7 @@ async fn accept_invitation_signed_in() {
     .bind(&token_hash)
     .bind(owner)
     .bind(expires_at)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2792,7 +2792,7 @@ async fn accept_invitation_signed_in() {
     )
     .bind(tenant_id)
     .bind(user)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(membership_exists);
@@ -2823,7 +2823,7 @@ async fn accept_expired_token_410() {
     .bind(&token_hash)
     .bind(owner)
     .bind(expires_at)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2866,7 +2866,7 @@ async fn preview_derived_and_persisted_expired_tokens_return_410() {
         )
         .bind(invitation_id)
         .bind(persisted)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -2948,7 +2948,7 @@ async fn accept_email_mismatch_403() {
     .bind(&token_hash)
     .bind(owner)
     .bind(expires_at)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2993,7 +2993,7 @@ async fn accept_consumed_token_410() {
     .bind(&token_hash)
     .bind(owner)
     .bind(expires_at)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3044,7 +3044,7 @@ async fn accept_disabled_member_409() {
     .bind(&token_hash)
     .bind(owner)
     .bind(expires_at)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3083,7 +3083,7 @@ async fn role_change_success() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3107,7 +3107,7 @@ async fn role_change_success() {
     let stored_role: String =
         sqlx::query_scalar("SELECT role FROM tenant_memberships WHERE id = $1")
             .bind(target_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(stored_role, "admin");
@@ -3140,7 +3140,7 @@ async fn role_change_hierarchy_refused() {
     )
     .bind(tenant_id)
     .bind(admin)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3158,7 +3158,7 @@ async fn role_change_hierarchy_refused() {
         "SELECT COUNT(*) FROM audit_logs WHERE action = 'member.role_changed' AND resource_id = $1",
     )
     .bind(target_id.to_string())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(audit_count, 0);
@@ -3180,7 +3180,7 @@ async fn role_change_non_owner_assigning_owner_refused() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3216,7 +3216,7 @@ async fn role_change_last_owner_demotion_refused() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3245,7 +3245,7 @@ async fn role_change_self_refused() {
     )
     .bind(tenant_id)
     .bind(owner)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3294,7 +3294,7 @@ async fn role_change_immediate_effect() {
     )
     .bind(tenant_id)
     .bind(agent)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3343,7 +3343,7 @@ async fn role_change_uses_active_tenant_membership() {
     )
     .bind(tenant_b)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3364,7 +3364,7 @@ async fn role_change_uses_active_tenant_membership() {
     let stored_role: String =
         sqlx::query_scalar("SELECT role FROM tenant_memberships WHERE id = $1")
             .bind(target_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(stored_role, "agent");
@@ -3373,7 +3373,7 @@ async fn role_change_uses_active_tenant_membership() {
         "SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1 AND action = 'member.role_changed'",
     )
     .bind(target_id.to_string())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(audit_count, 0);
@@ -3395,7 +3395,7 @@ async fn role_change_concurrent_demotions() {
     )
     .bind(tenant_id)
     .bind(owner_a)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let membership_b: Uuid = sqlx::query_scalar(
@@ -3403,7 +3403,7 @@ async fn role_change_concurrent_demotions() {
     )
     .bind(tenant_id)
     .bind(owner_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3462,7 +3462,7 @@ async fn last_owner_changes_remain_conflicted_under_concurrency() {
     )
     .bind(tenant_id)
     .bind(owner_a)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let membership_b: Uuid = sqlx::query_scalar(
@@ -3470,7 +3470,7 @@ async fn last_owner_changes_remain_conflicted_under_concurrency() {
     )
     .bind(tenant_id)
     .bind(owner_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3534,7 +3534,7 @@ async fn disable_member() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3554,7 +3554,7 @@ async fn disable_member() {
     let stored_status: String =
         sqlx::query_scalar("SELECT status FROM tenant_memberships WHERE id = $1")
             .bind(target_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(stored_status, "disabled");
@@ -3587,7 +3587,7 @@ async fn disabled_member_immediate_access_loss() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3631,7 +3631,7 @@ async fn re_enable_member() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3676,7 +3676,7 @@ async fn patch_member_same_role_conflict_no_audit() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3694,7 +3694,7 @@ async fn patch_member_same_role_conflict_no_audit() {
         "SELECT COUNT(*) FROM audit_logs WHERE action = 'member.role_changed' AND resource_id = $1",
     )
     .bind(target_id.to_string())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(audit_count, 0);
@@ -3716,7 +3716,7 @@ async fn patch_member_validation_errors_return_422_without_mutation() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3762,7 +3762,7 @@ async fn patch_member_validation_errors_return_422_without_mutation() {
     let stored: (String, String) =
         sqlx::query_as("SELECT role, status FROM tenant_memberships WHERE id = $1")
             .bind(target_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(stored.0, "agent");
@@ -3772,7 +3772,7 @@ async fn patch_member_validation_errors_return_422_without_mutation() {
         "SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1 AND action IN ('member.role_changed','member.disabled','member.enabled')",
     )
     .bind(target_id.to_string())
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(audit_count, 0);
@@ -3799,7 +3799,7 @@ async fn disable_last_owner_refused() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3828,7 +3828,7 @@ async fn self_disable_refused() {
     )
     .bind(tenant_id)
     .bind(owner)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3863,7 +3863,7 @@ async fn disable_in_tenant_a_does_not_affect_tenant_b() {
     )
     .bind(tenant_a)
     .bind(shared)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

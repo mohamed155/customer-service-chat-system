@@ -308,7 +308,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -329,7 +329,7 @@ async fn seed_invitation(
     .bind(email)
     .bind(token_hash)
     .bind(invited_by)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -552,7 +552,7 @@ async fn tenant_team_routes_cover_actual_methods_for_roles_and_anonymous_callers
         )
         .bind(tenant_id)
         .bind(target)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -695,7 +695,7 @@ async fn anonymous_team_routes_are_rejected_before_authorization() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let invitation_id = seed_invitation(&pool, tenant_id, "anon-invite@example.com", target).await;
@@ -751,7 +751,7 @@ async fn production_staff_team_route_matrix_is_method_aware() {
     )
     .bind(tenant_id)
     .bind(target)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let invitation_id = seed_invitation(&pool, tenant_id, "prod-invite@example.com", target).await;
@@ -1184,7 +1184,7 @@ async fn permission_denial_writes_audit_reason_without_exposing_permission() {
         "SELECT details FROM audit_logs WHERE actor_user_id = $1 AND action = 'tenant.access_denied' ORDER BY created_at DESC LIMIT 1",
     )
     .bind(viewer)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(details["reason"], "permission_denied");
@@ -1318,7 +1318,7 @@ async fn tenant_role_change_takes_effect_on_the_next_request() {
     )
     .bind(tenant_id)
     .bind(user_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_status(
@@ -1377,7 +1377,7 @@ async fn database_constraints_reject_unknown_role_values() {
     )
     .bind(tenant_id)
     .bind(tenant_user)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     let platform_result =
         sqlx::query("UPDATE users SET platform_role = 'legacy_role' WHERE id = $1")

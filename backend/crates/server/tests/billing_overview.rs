@@ -152,7 +152,7 @@ async fn seed_member(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str, role: &s
     .bind(tenant_id)
     .bind(user_id)
     .bind(role)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     user_id
@@ -172,7 +172,7 @@ async fn subscribe(pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid) {
     sqlx::query("INSERT INTO tenant_subscriptions (tenant_id, plan_id) VALUES ($1, $2)")
         .bind(tenant_id)
         .bind(plan_id)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }

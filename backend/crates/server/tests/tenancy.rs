@@ -155,7 +155,7 @@ pub async fn seed_membership(
     .bind(tenant_id)
     .bind(user_id)
     .bind(role)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed membership")
 }
@@ -399,7 +399,7 @@ mod tests {
         // Soft-delete (revoke) the membership
         sqlx::query("UPDATE tenant_memberships SET deleted_at = now() WHERE id = $1")
             .bind(membership_id)
-            .execute(&pool)
+            .execute(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -478,7 +478,7 @@ mod tests {
                 "#,
             )
             .bind(user_id)
-            .fetch_optional(&pool)
+            .fetch_optional(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -744,7 +744,7 @@ mod tests {
                 "#,
             )
             .bind(user_id)
-            .fetch_optional(&pool)
+            .fetch_optional(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -918,7 +918,7 @@ mod tests {
         // Soft-delete the second membership
         sqlx::query("UPDATE tenant_memberships SET deleted_at = now() WHERE id = $1")
             .bind(deleted_membership)
-            .execute(&pool)
+            .execute(&db::testing::seed_pool())
             .await
             .unwrap();
 

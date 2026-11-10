@@ -1653,7 +1653,7 @@ mod tests {
         .bind(&email)
         .bind(Uuid::new_v4().to_string())
         .bind(inviter_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -1760,7 +1760,7 @@ mod tests {
         )
         .bind(tenant_id)
         .bind(&email)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap_or(0);
         assert_eq!(count, 1, "only one pending invitation should remain");

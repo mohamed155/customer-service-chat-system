@@ -151,7 +151,7 @@ async fn seed_widget_instance(pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &
     .bind(public_id)
     .bind("Test Widget")
     .bind("Test Widget")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -255,7 +255,7 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> (Uuid,
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     (user_id, membership_id)
@@ -941,7 +941,7 @@ async fn t038a_feedback_summary_with_data() {
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1009,7 +1009,7 @@ async fn t038b_feedback_summary_empty() {
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1076,7 +1076,7 @@ async fn t038c_cross_tenant_isolation() {
         )
         .bind(tid)
         .bind(uid)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }

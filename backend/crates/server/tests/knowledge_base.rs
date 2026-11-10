@@ -130,7 +130,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -801,7 +801,7 @@ async fn audit_created_has_actor_and_no_body() {
          ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1394,7 +1394,7 @@ async fn same_status_noop() {
     let audit_before: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -1415,7 +1415,7 @@ async fn same_status_noop() {
     let audit_after: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -1556,7 +1556,7 @@ async fn each_transition_writes_audit() {
     )
     .bind(tenant_id)
     .bind(&item_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -1580,7 +1580,7 @@ async fn each_transition_writes_audit() {
     )
     .bind(tenant_id)
     .bind(&item_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -1604,7 +1604,7 @@ async fn each_transition_writes_audit() {
     )
     .bind(tenant_id)
     .bind(&item_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(

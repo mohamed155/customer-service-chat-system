@@ -1,5 +1,10 @@
 TRUNCATE audit_logs, tenant_invitations, tenant_memberships, tenants, users RESTART IDENTITY CASCADE;
 
+-- tenant_memberships, tenant_invitations and audit_logs are under forced Row-Level Security, which
+-- applies to the schema owner too, so the rows below are inserted as app_platform (BYPASSRLS). The
+-- TRUNCATE above is only allowed for the owner, hence the order.
+SET ROLE app_platform;
+
 INSERT INTO users (id, email, display_name) VALUES
   ('10000000-0000-0000-0000-000000000001', 'owner@t150.test', 'T150 Owner'),
   ('10000000-0000-0000-0000-000000000002', 'admin@t150.test', 'T150 Admin'),
