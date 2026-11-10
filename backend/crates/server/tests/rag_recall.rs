@@ -268,13 +268,19 @@ async fn recall_target_tenant_chunk_among_noise() {
     );
 
     // ── Run retrieval ───────────────────────────────────────────────────
+    // The retrieval runs as the runtime role in the target tenant's Unit of Work, on the same
+    // connection as the HNSW settings, so recall is measured with the row-level policy in force
+    // (the production path, knowledge::retrieval::search, does the same).
+    let mut uow = db::UnitOfWork::begin_for_tenant(&pool, target_tenant)
+        .await
+        .unwrap();
     // Mirror the settings used by knowledge::retrieval::search.
     sqlx::query("SET hnsw.iterative_scan = 'relaxed_order'")
-        .execute(&pool)
+        .execute(uow.conn())
         .await
         .unwrap();
     sqlx::query("SET hnsw.ef_search = 100")
-        .execute(&pool)
+        .execute(uow.conn())
         .await
         .unwrap();
 
@@ -302,7 +308,7 @@ async fn recall_target_tenant_chunk_among_noise() {
     .bind(target_tenant)
     .bind(THRESHOLD)
     .bind(TOP_K)
-    .fetch_all(&db::testing::seed_pool())
+    .fetch_all(uow.conn())
     .await
     .unwrap();
 
