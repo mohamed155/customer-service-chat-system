@@ -73,8 +73,8 @@ path](#the-audited-cross-tenant-path)).
 
 | Where | Why |
 | --- | --- |
-| Outbox claim and acknowledge (`outbox_events`): `ai::agent_responder::process_agent_responder_once`, `ai::engine::run_generation`, `escalations::events::process_escalation_outbox_once`, `knowledge::indexer::process_one_event`, `notifications::worker::process_notification_outbox_once`, `tenancy::invitations::process_invitation_deliveries_once`, `whatsapp::sender::claim_outbound_event` | A worker claims the oldest event across all tenants, then processes it. The processing itself (reading and writing tenant data) already runs in the event's Unit of Work |
-| `whatsapp::queries::claim_pending_attachment` | Claims the next pending attachment across tenants |
+| Outbox claim, acknowledge and release (`outbox_events`): `ai::agent_responder::process_agent_responder_once`, `ai::engine::run_generation`, `escalations::events::process_escalation_outbox_once`, `knowledge::indexer::process_one_event`, `notifications::worker::process_notification_outbox_once`, `tenancy::invitations::process_invitation_deliveries_once`, `whatsapp::sender::claim_outbound_event` | A worker claims the oldest event across all tenants, then processes it. The processing itself (reading and writing tenant data) already runs in the event's Unit of Work. **Served by:** `xtenant.outbox_claim` (AI responder, escalations, notifications), `xtenant.outbox_claim_retryable` and `xtenant.outbox_reschedule` (knowledge indexer), `xtenant.outbox_ack` and `xtenant.outbox_release` (all of them), `xtenant.outbox_coalesce_customer_messages` (AI responder), `xtenant.outbox_take_whatsapp_outbound` (WhatsApp sender), `xtenant.invitation_delivery_expire_exhausted`, `_claim`, `_retry` and `_finalize` (invitation delivery) |
+| `whatsapp::queries::claim_pending_attachment` | The next pending attachment across tenants. **Served by:** `xtenant.pending_attachment_next` |
 | Sweeps: `integrations::retention::sweep_expired`, `tools::approval::sweep_expired`, `widgets::queries::delete_expired_sessions`, `escalations::presence::startup_sweep`, and the notification retention sweep in `server/src/main.rs` | Delete or revert rows older than a threshold in every tenant |
 | `platform::queries` (six functions) | Platform dashboards aggregate over all tenants |
 | `ai::routes`: `put_platform_config`, `put_platform_credential`, `delete_platform_credential`; the platform branch of `ai::resolution` | Platform-wide rows (`tenant_id IS NULL`) in `ai_configurations` and `ai_credentials` |
@@ -103,7 +103,9 @@ tenants, goes through one narrow `SECURITY DEFINER` function per job, in the `xt
   hashes). A call that finds nothing writes nothing. The lookups sit behind endpoints that a client
   can repeat (a widget's public id is printed on every page that embeds it), and `audit_logs` is
   append-only, so a lookup writes at most one row per function and resource per hour. The number of
-  rows is bounded by the number of real resources, not by the number of requests. The helper is not
+  rows is bounded by the number of real resources, not by the number of requests. The outbox queue
+  functions (`outbox_*`, `invitation_delivery_*`) write at most one row per function and event type
+  per minute, because the outbox already holds one row per event. The helper is not
   executable by `app_runtime`, so the application cannot forge these rows.
 - **Adding one.** Follow `backend/migrations/0068_cross_tenant_lookups.sql`. The catalog test in
   `backend/crates/shared/db/tests/xtenant.rs` checks owner, `search_path` and privileges for every

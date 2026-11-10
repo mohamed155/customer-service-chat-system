@@ -110,6 +110,7 @@ async fn run_migrations_succeeds() {
         (67, "cross tenant schema"),
         (68, "cross tenant lookups"),
         (69, "audit logs cross tenant idx"),
+        (70, "cross tenant outbox"),
     ];
     assert_eq!(
         rows.len(),

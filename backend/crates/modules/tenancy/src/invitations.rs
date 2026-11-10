@@ -566,58 +566,29 @@ pub async fn process_invitation_deliveries_once(
     sender: Arc<dyn email::EmailSender>,
 ) -> Result<u64, sqlx::Error> {
     const MAX_ATTEMPTS: i32 = 3;
-    let mut exhausted_tx = pool.begin().await?;
-    let exhausted = sqlx::query(
-        "UPDATE outbox_events event SET processed_at = now(), dead_lettered_at = now(), \
-         last_error = 'delivery claim expired after maximum attempts', claimed_at = NULL, claim_token = NULL \
-         FROM (SELECT id FROM outbox_events \
-               WHERE event_type = 'invitation.email_delivery' AND processed_at IS NULL \
-                 AND dead_lettered_at IS NULL AND attempts >= $1 \
-                 AND (claimed_at IS NULL OR claimed_at <= now() - interval '5 minutes') \
-               ORDER BY created_at, id FOR UPDATE SKIP LOCKED LIMIT 1) exhausted \
-         WHERE event.id = exhausted.id RETURNING event.aggregate_id, event.tenant_id",
-    )
-    .bind(MAX_ATTEMPTS)
-    .fetch_optional(&mut *exhausted_tx)
-    .await?;
-    if let Some(row) = exhausted {
-        sqlx::query(
-            "UPDATE tenant_invitations SET email_delivery_status = 'failed', email_delivery_error = 'Max retries exceeded' \
-             WHERE id::text = $1 AND tenant_id::text = $2 AND email_delivery_status = 'queued'",
-        )
-        .bind(row.get::<String, _>("aggregate_id"))
-        .bind(row.get::<String, _>("tenant_id"))
-        .execute(&mut *exhausted_tx)
-        .await?;
-        exhausted_tx.commit().await?;
+    // The queue steps span tenants, so each goes through an audited function in the `xtenant`
+    // schema (MOH-54); every one is atomic, including the invitation row it updates.
+    let expired: bool =
+        sqlx::query_scalar("SELECT xtenant.invitation_delivery_expire_exhausted($1)")
+            .bind(MAX_ATTEMPTS)
+            .fetch_one(pool)
+            .await?;
+    if expired {
         return Ok(1);
     }
-    exhausted_tx.commit().await?;
 
     let claim_token = Uuid::new_v4();
-    let mut tx = pool.begin().await?;
     let row = sqlx::query(
-        "UPDATE outbox_events event \
-         SET claimed_at = now(), claim_token = $1, attempts = attempts + 1 \
-         FROM (SELECT id FROM outbox_events \
-               WHERE event_type = 'invitation.email_delivery' \
-                 AND processed_at IS NULL AND dead_lettered_at IS NULL \
-                 AND available_at <= now() AND attempts < $2 \
-                 AND (claimed_at IS NULL OR claimed_at <= now() - interval '5 minutes') \
-               ORDER BY available_at, created_at, id FOR UPDATE SKIP LOCKED LIMIT 1) claimable \
-         WHERE event.id = claimable.id \
-         RETURNING event.id, event.aggregate_id, event.tenant_id, event.payload, event.attempts",
+        "SELECT id, aggregate_id, tenant_id, payload, attempts \
+         FROM xtenant.invitation_delivery_claim($1, $2)",
     )
     .bind(claim_token)
     .bind(MAX_ATTEMPTS)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(pool)
     .await?;
     let Some(row) = row else {
-        tx.commit().await?;
         return Ok(0);
     };
-
-    tx.commit().await?;
 
     let event_id: Uuid = row.get("id");
     let attempts: i32 = row.get("attempts");
@@ -647,18 +618,12 @@ pub async fn process_invitation_deliveries_once(
                             err_msg,
                         )
                     } else {
-                        let mut retry_tx = pool.begin().await?;
-                        sqlx::query(
-                            "UPDATE outbox_events SET claimed_at = NULL, claim_token = NULL, \
-                             available_at = now() + interval '1 second', last_error = $1 \
-                             WHERE id = $2 AND claim_token = $3",
-                        )
-                        .bind(err_msg.as_deref())
-                        .bind(event_id)
-                        .bind(claim_token)
-                        .execute(&mut *retry_tx)
-                        .await?;
-                        retry_tx.commit().await?;
+                        sqlx::query("SELECT xtenant.invitation_delivery_retry($1, $2, $3)")
+                            .bind(event_id)
+                            .bind(claim_token)
+                            .bind(err_msg.as_deref())
+                            .execute(pool)
+                            .await?;
                         return Ok(1);
                     }
                 }
@@ -684,31 +649,28 @@ pub async fn process_invitation_deliveries_once(
         }
     };
 
-    let mut finalize_tx = pool.begin().await?;
-    let updated = sqlx::query(
-        "UPDATE outbox_events SET processed_at = now(), dead_lettered_at = CASE WHEN $1::text IS NULL THEN NULL ELSE now() END, \
-         last_error = $1, claimed_at = NULL, claim_token = NULL WHERE id = $2 AND claim_token = $3",
-    )
-    .bind(error.as_deref())
-    .bind(event_id)
-    .bind(claim_token)
-    .execute(&mut *finalize_tx)
-    .await?;
-    if updated.rows_affected() == 1 {
-        if let Some((invitation_id, tenant_id, status)) = &terminal_status {
-            sqlx::query(
-                "UPDATE tenant_invitations SET email_delivery_status = $1, email_delivery_error = $4 \
-                 WHERE tenant_id = $2 AND id = $3 AND email_delivery_status = 'queued'",
-            )
-            .bind(status.as_str())
-            .bind(tenant_id)
-            .bind(invitation_id)
-            .bind(status.error_message())
-            .execute(&mut *finalize_tx)
-            .await?;
-        }
-    }
-    finalize_tx.commit().await?;
+    sqlx::query("SELECT xtenant.invitation_delivery_finalize($1, $2, $3, $4, $5, $6, $7)")
+        .bind(event_id)
+        .bind(claim_token)
+        .bind(error.as_deref())
+        .bind(
+            terminal_status
+                .as_ref()
+                .map(|(invitation_id, _, _)| *invitation_id),
+        )
+        .bind(terminal_status.as_ref().map(|(_, tenant_id, _)| *tenant_id))
+        .bind(
+            terminal_status
+                .as_ref()
+                .map(|(_, _, status)| status.as_str()),
+        )
+        .bind(
+            terminal_status
+                .as_ref()
+                .and_then(|(_, _, status)| status.error_message()),
+        )
+        .execute(pool)
+        .await?;
     Ok(1)
 }
 

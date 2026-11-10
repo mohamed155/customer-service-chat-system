@@ -970,7 +970,7 @@ pub async fn run_generation(
             ),
         );
 
-        sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+        sqlx::query("SELECT xtenant.outbox_ack($1)")
             .bind(event_id)
             .execute(pool)
             .await?;
@@ -1129,7 +1129,7 @@ pub async fn run_generation(
             };
             let _ = generation_record::insert(pool, &rec).await;
 
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;
@@ -1218,7 +1218,7 @@ pub async fn run_generation(
                 ),
             );
 
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;
@@ -1249,7 +1249,7 @@ pub async fn run_generation(
                     tx.commit().await?;
                 }
             }
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;
@@ -1418,14 +1418,14 @@ pub async fn run_generation(
                 ),
             );
 
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;
         }
         Err(GenerateError::Provider(AiCallError::Internal(e))) => {
             tracing::warn!(%e, "engine: internal generation error");
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;

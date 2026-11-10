@@ -83,22 +83,13 @@ pub async fn process_notification_outbox_once(
     presence: &Arc<presence::Runtime>,
 ) -> Result<bool, sqlx::Error> {
     let claim_token = Uuid::new_v4();
-    let maybe_row = sqlx::query(
-        "UPDATE outbox_events \
-         SET claimed_at = now(), claim_token = $1 \
-         WHERE id = ( \
-             SELECT id FROM outbox_events \
-             WHERE event_type IN ('notification.requested', 'notification.resolved') \
-             AND claimed_at IS NULL \
-             ORDER BY created_at ASC \
-             LIMIT 1 \
-             FOR UPDATE SKIP LOCKED \
-         ) \
-         RETURNING id, tenant_id, event_type, payload",
-    )
-    .bind(claim_token)
-    .fetch_optional(pool)
-    .await?;
+    // Across tenants, so it goes through the audited function `xtenant.outbox_claim`.
+    let maybe_row =
+        sqlx::query("SELECT id, tenant_id, event_type, payload FROM xtenant.outbox_claim($1, $2)")
+            .bind(&["notification.requested", "notification.resolved"][..])
+            .bind(claim_token)
+            .fetch_optional(pool)
+            .await?;
 
     let row = match maybe_row {
         Some(r) => r,
@@ -111,7 +102,7 @@ pub async fn process_notification_outbox_once(
         Ok(id) => id,
         Err(_) => {
             error!(event_id = %event_id, tenant_id_str = %tenant_id_str, "notification outbox: invalid tenant_id in event");
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;
@@ -221,7 +212,7 @@ pub async fn process_notification_outbox_once(
 
     match result {
         Ok(()) => {
-            sqlx::query("DELETE FROM outbox_events WHERE id = $1")
+            sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
                 .await?;
@@ -229,12 +220,10 @@ pub async fn process_notification_outbox_once(
         }
         Err(e) => {
             error!(error = %e, event_type = %event_type, event_id = %event_id, "notification outbox processing error");
-            sqlx::query(
-                "UPDATE outbox_events SET claimed_at = NULL, claim_token = NULL WHERE id = $1",
-            )
-            .bind(event_id)
-            .execute(pool)
-            .await?;
+            sqlx::query("SELECT xtenant.outbox_release($1)")
+                .bind(event_id)
+                .execute(pool)
+                .await?;
             Err(e)
         }
     }
