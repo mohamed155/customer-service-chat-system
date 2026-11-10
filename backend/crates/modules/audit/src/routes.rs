@@ -159,6 +159,7 @@ pub async fn list_tenant_audit_logs(
         query.actor_id,
         resolved.cursor,
         fetch_limit,
+        None,
     )
     .await
     {
@@ -196,6 +197,7 @@ pub async fn list_tenant_audit_logs(
 )]
 pub async fn list_platform_audit_logs(
     State(pool): State<PgPool>,
+    axum::Extension(principal): axum::Extension<identity::Principal>,
     Query(query): Query<model::AuditQuery>,
 ) -> Response {
     let resolved = match parse_audit_query(&query) {
@@ -214,6 +216,7 @@ pub async fn list_platform_audit_logs(
         query.actor_id,
         resolved.cursor,
         fetch_limit,
+        Some(principal.user_id),
     )
     .await
     {

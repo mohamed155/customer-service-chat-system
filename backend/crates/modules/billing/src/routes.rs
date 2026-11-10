@@ -368,88 +368,45 @@ pub async fn put_subscription(
         return ApiError::not_found("Tenant not found").into_response();
     }
 
-    let mut tx = match pool.begin().await {
-        Ok(tx) => tx,
-        Err(e) => {
-            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
-                .into_response();
-        }
-    };
-
-    let target_plan = match queries::plan_by_id_for_update(&mut tx, payload.plan_id).await {
-        Ok(Some(p)) => p,
-        Ok(None) => {
-            let _ = tx.rollback().await;
-            return ApiError::not_found("Plan not found").into_response();
-        }
-        Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
-        }
-    };
-
-    // Read before-state for audit (locked)
-    let before = match queries::subscription_for_tenant_for_update(&mut tx, tenant_id).await {
-        Ok(sub) => sub,
-        Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
-        }
-    };
-
-    // Assigning retired plan → 409 unless tenant is already on it
-    if target_plan.status == "retired" {
-        if let Some((_, current_plan_id, _)) = before {
-            if current_plan_id != payload.plan_id {
-                let _ = tx.rollback().await;
-                return ApiError::conflict("Cannot assign a retired plan to a tenant")
-                    .into_response();
-            }
-        } else {
-            let _ = tx.rollback().await;
-            return ApiError::conflict("Cannot assign a retired plan to a tenant").into_response();
-        }
-    }
-
-    let (subscription_id, after) = match queries::upsert_subscription(
-        &mut tx,
-        tenant_id,
-        payload.plan_id,
-        &payload.status,
-        principal.user_id,
+    // A platform principal assigns a plan to any tenant, so the change goes through the audited
+    // function `xtenant.platform_subscription_set`: it locks the plan, applies the retired-plan
+    // rule, upserts the subscription and writes the `billing_subscription.changed` audit row in
+    // one transaction.
+    let row = match sqlx::query_as::<_, (String, Option<Uuid>, Option<Uuid>, Option<String>)>(
+        "SELECT outcome, subscription_id, plan_id, status \
+         FROM xtenant.platform_subscription_set($1, $2, $3, $4)",
     )
+    .bind(principal.user_id)
+    .bind(tenant_id)
+    .bind(payload.plan_id)
+    .bind(&payload.status)
+    .fetch_one(&pool)
     .await
     {
-        Ok(r) => r,
+        Ok(row) => row,
         Err(e) => {
             return ApiError::internal_error(format!("Database upsert failed: {e}"))
                 .into_response();
         }
     };
 
-    let before_json = serde_json::json!({
-        "plan_id": before.as_ref().map(|(_, pid, _)| pid),
-        "status": before.as_ref().map(|(_, _, s)| s),
-    });
-    let after_json = serde_json::json!({
-        "plan_id": after.plan_id,
-        "status": after.status,
-    });
-
-    if let Err(e) = audit::subscription_changed(
-        &mut tx,
-        principal.user_id,
-        tenant_id,
-        subscription_id,
-        &before_json,
-        &after_json,
-    )
-    .await
-    {
-        return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
-    }
-
-    if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
-    }
+    let after = match row {
+        (outcome, _, Some(plan_id), Some(status)) if outcome == "ok" => model::SubscriptionDto {
+            tenant_id,
+            plan_id,
+            status,
+        },
+        (outcome, ..) if outcome == "plan_not_found" => {
+            return ApiError::not_found("Plan not found").into_response();
+        }
+        (outcome, ..) if outcome == "retired_plan" => {
+            return ApiError::conflict("Cannot assign a retired plan to a tenant").into_response();
+        }
+        (outcome, ..) => {
+            return ApiError::internal_error(format!("Unexpected subscription outcome: {outcome}"))
+                .into_response();
+        }
+    };
 
     (StatusCode::OK, Json(after)).into_response()
 }

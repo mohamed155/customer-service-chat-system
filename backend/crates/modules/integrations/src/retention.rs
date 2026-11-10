@@ -7,24 +7,14 @@ use sqlx::PgPool;
 
 /// Delete integration events and accepted deliveries older than 90 days.
 /// Returns the sum of rows deleted across both tables, or a `sqlx::Error`
-/// if either DELETE fails. Callers (the server's main spawn loop) log the
-/// count and continue.
+/// if the sweep fails. Callers (the server's main spawn loop) log the
+/// count and continue. It spans every tenant, so it runs through the audited
+/// function `xtenant.integration_retention_sweep`.
 pub async fn sweep_expired(pool: &PgPool) -> sqlx::Result<u64> {
-    let events = sqlx::query(
-        "DELETE FROM integration_events \
-         WHERE created_at < now() - interval '90 days'",
-    )
-    .execute(pool)
-    .await?
-    .rows_affected();
-    let deliveries = sqlx::query(
-        "DELETE FROM integration_webhook_deliveries \
-         WHERE received_at < now() - interval '90 days'",
-    )
-    .execute(pool)
-    .await?
-    .rows_affected();
-    Ok(events + deliveries)
+    let deleted: i64 = sqlx::query_scalar("SELECT xtenant.integration_retention_sweep()")
+        .fetch_one(pool)
+        .await?;
+    Ok(deleted as u64)
 }
 
 #[cfg(test)]

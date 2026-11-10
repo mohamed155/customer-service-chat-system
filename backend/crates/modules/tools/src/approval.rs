@@ -128,50 +128,14 @@ async fn emit_tool_resolved_in_tx(
     Ok(())
 }
 
+/// Expire every tool request that waited past its deadline, in every tenant, and queue the
+/// decision event for each. Spans tenants, so it goes through the audited function
+/// `xtenant.tool_request_expiry_sweep`, which does both in one transaction.
 pub async fn sweep_expired(pool: &PgPool) -> sqlx::Result<u64> {
-    let rows: Vec<ToolRequestRow> = sqlx::query_as(
-        "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
-         tool_source, tenant_tool_id, arguments, status, approval_required, \
-         expires_at, chain_index, started_at, finished_at, result, error, \
-         created_at, decided_by_membership_id, decided_at \
-         FROM tool_requests \
-         WHERE status = 'awaiting_approval' AND expires_at < now()",
-    )
-    .fetch_all(pool)
-    .await?;
-
-    if rows.is_empty() {
-        return Ok(0);
-    }
-
-    let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
-
-    let mut tx = pool.begin().await?;
-
-    let updated = sqlx::query(
-        "UPDATE tool_requests \
-         SET status = 'expired', decided_at = now() \
-         WHERE id = ANY($1) AND status = 'awaiting_approval'",
-    )
-    .bind(&ids)
-    .execute(&mut *tx)
-    .await?;
-
-    for row in &rows {
-        let outcome = "expired";
-        conversations::outbox::emit_tool_decision_in_tx(
-            &mut tx,
-            row.tenant_id,
-            row.conversation_id,
-            row.id,
-            outcome,
-        )
+    let expired: i64 = sqlx::query_scalar("SELECT xtenant.tool_request_expiry_sweep()")
+        .fetch_one(pool)
         .await?;
-    }
-
-    tx.commit().await?;
-
-    Ok(updated.rows_affected())
+    Ok(expired as u64)
 }
 
 pub async fn cancel_pending_for_conversation(

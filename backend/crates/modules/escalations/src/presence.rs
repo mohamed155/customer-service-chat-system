@@ -163,11 +163,11 @@ impl Runtime {
     }
 
     pub async fn startup_sweep(&self) -> sqlx::Result<()> {
-        let rows: Vec<(Uuid, Uuid)> = sqlx::query_as(
-            "SELECT tenant_id, membership_id FROM agent_availability WHERE state = 'available'",
-        )
-        .fetch_all(&self.inner.pool)
-        .await?;
+        // Every tenant's available agents, through the audited function `xtenant.available_agents`.
+        let rows: Vec<(Uuid, Uuid)> =
+            sqlx::query_as("SELECT tenant_id, membership_id FROM xtenant.available_agents()")
+                .fetch_all(&self.inner.pool)
+                .await?;
         for (tenant_id, membership_id) in rows {
             schedule_presence_revert(self.inner.clone(), tenant_id, membership_id).await;
         }

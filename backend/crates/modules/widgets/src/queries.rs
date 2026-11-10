@@ -291,9 +291,11 @@ pub async fn soft_delete_instance(
     Ok(result.rows_affected() > 0)
 }
 
+/// Delete every expired widget session, across tenants, through the audited function
+/// `xtenant.widget_session_sweep`.
 pub async fn delete_expired_sessions(pool: &PgPool) -> sqlx::Result<u64> {
-    let result = sqlx::query("DELETE FROM widget_sessions WHERE expires_at <= now()")
-        .execute(pool)
+    let deleted: i64 = sqlx::query_scalar("SELECT xtenant.widget_session_sweep()")
+        .fetch_one(pool)
         .await?;
-    Ok(result.rows_affected())
+    Ok(deleted as u64)
 }

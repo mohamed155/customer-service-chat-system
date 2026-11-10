@@ -45,7 +45,30 @@ pub async fn list_entries(
     actor_id: Option<Uuid>,
     cursor: Option<(DateTime<Utc>, Uuid)>,
     limit: i64,
+    requested_by: Option<Uuid>,
 ) -> Result<Vec<AuditRow>, sqlx::Error> {
+    // The platform-wide listing (no tenant scope) reads every tenant's entries, so it goes through
+    // the audited function `xtenant.platform_audit_entries`, which records who asked.
+    if tenant_scope.is_none() {
+        let rows = sqlx::query_as::<_, AuditRow>(
+            "SELECT id, action, actor_user_id, resource_type, resource_id, tenant_id, details, \
+                    created_at, display_name, email, platform_role, deleted_at \
+             FROM xtenant.platform_audit_entries($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        )
+        .bind(requested_by)
+        .bind(filter_tenant_id)
+        .bind(from_ts)
+        .bind(to_ts)
+        .bind(category_prefixes)
+        .bind(actor_id)
+        .bind(cursor.map(|(ts, _)| ts))
+        .bind(cursor.map(|(_, id)| id))
+        .bind(limit + 1)
+        .fetch_all(pool)
+        .await?;
+        return Ok(rows.into_iter().take(limit as usize).collect());
+    }
+
     let mut builder = sqlx::QueryBuilder::new(
         "SELECT a.id, a.action, a.actor_user_id, a.resource_type, a.resource_id, \
                 a.tenant_id, a.details, a.created_at, \
@@ -97,8 +120,7 @@ pub async fn list_entries(
     builder.push(" ORDER BY a.created_at DESC, a.id DESC LIMIT ");
     builder.push_bind(limit + 1);
 
-    // A tenant-scoped listing runs in that tenant's Unit of Work; the platform-wide listing (no
-    // tenant scope) is a cross-tenant read and stays on the pool (MOH-31 cross-tenant path).
+    // Tenant-scoped (checked above), so it runs in that tenant's Unit of Work.
     let rows = match tenant_scope {
         Some(tenant_id) => {
             let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;

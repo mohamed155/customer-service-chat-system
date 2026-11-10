@@ -516,63 +516,6 @@ pub async fn put_platform_config(
     let fallbacks_vec = payload.fallbacks.clone().unwrap_or_default();
     let fallbacks_json = serde_json::to_value(&fallbacks_vec).unwrap();
 
-    let mut tx = match pool.begin().await {
-        Ok(tx) => tx,
-        Err(e) => {
-            tracing::error!(%e, "put_platform_config: begin tx failed");
-            return ApiError::internal_error("Failed to update platform AI config").into_response();
-        }
-    };
-
-    // SELECT ... FOR UPDATE then UPDATE-or-INSERT
-    let existing: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM ai_configurations \
-         WHERE tenant_id IS NULL AND deleted_at IS NULL \
-         FOR UPDATE",
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .unwrap_or(None);
-
-    let config_id = if let Some(id) = existing {
-        sqlx::query(
-            "UPDATE ai_configurations SET provider = $1, model = $2, \
-             max_output_tokens = $3, temperature = $4, fallbacks = $5, \
-             updated_at = now() WHERE id = $6",
-        )
-        .bind(&payload.provider)
-        .bind(&payload.model)
-        .bind(payload.max_output_tokens)
-        .bind(payload.temperature)
-        .bind(&fallbacks_json)
-        .bind(id)
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| tracing::error!(%e, "put_platform_config: update failed"))
-        .ok();
-        id
-    } else {
-        match sqlx::query_scalar(
-            "INSERT INTO ai_configurations (provider, model, max_output_tokens, temperature, fallbacks) \
-             VALUES ($1, $2, $3, $4, $5) RETURNING id",
-        )
-        .bind(&payload.provider)
-        .bind(&payload.model)
-        .bind(payload.max_output_tokens)
-        .bind(payload.temperature)
-        .bind(&fallbacks_json)
-        .fetch_one(&mut *tx)
-        .await
-        {
-            Ok(id) => id,
-            Err(e) => {
-                tracing::error!(%e, "put_platform_config: insert failed");
-                let _ = tx.rollback().await;
-                return ApiError::internal_error("Failed to save platform AI config").into_response();
-            }
-        }
-    };
-
     let updated_at = chrono::Utc::now();
     let details = json!({
         "provider": payload.provider,
@@ -582,18 +525,28 @@ pub async fn put_platform_config(
         "fallbacks": fallbacks_vec,
     });
 
-    if let Err(e) =
-        audit::config_updated(&mut tx, principal.user_id, None, config_id, &details).await
+    // The platform default is the one row no tenant owns, so it is written through the audited
+    // function `xtenant.platform_ai_config_set`, which also writes the `ai_config.updated`
+    // audit row in the same transaction.
+    let config_id: Uuid = match sqlx::query_scalar(
+        "SELECT xtenant.platform_ai_config_set($1, $2, $3, $4, $5, $6, $7)",
+    )
+    .bind(principal.user_id)
+    .bind(&payload.provider)
+    .bind(&payload.model)
+    .bind(payload.max_output_tokens)
+    .bind(payload.temperature)
+    .bind(&fallbacks_json)
+    .bind(&details)
+    .fetch_one(&pool)
+    .await
     {
-        tracing::error!(%e, "put_platform_config: audit failed");
-        let _ = tx.rollback().await;
-        return ApiError::internal_error("Failed to save platform AI config").into_response();
-    }
-
-    if let Err(e) = tx.commit().await {
-        tracing::error!(%e, "put_platform_config: commit failed");
-        return ApiError::internal_error("Failed to save platform AI config").into_response();
-    }
+        Ok(id) => id,
+        Err(e) => {
+            tracing::error!(%e, "put_platform_config: save failed");
+            return ApiError::internal_error("Failed to save platform AI config").into_response();
+        }
+    };
 
     let view = build_config_view(
         &pool,
@@ -951,88 +904,20 @@ pub async fn put_platform_credential(
         }
     };
 
-    let mut tx = match pool.begin().await {
-        Ok(tx) => tx,
-        Err(e) => {
-            tracing::error!(%e, "put_platform_credential: begin tx failed");
-            return ApiError::internal_error("Failed to save credential").into_response();
-        }
-    };
-
-    let existing: Option<Uuid> = match sqlx::query_scalar(
-        "SELECT id FROM ai_credentials \
-         WHERE tenant_id IS NULL AND provider = $1 AND deleted_at IS NULL \
-         FOR UPDATE",
+    // Written through the audited function `xtenant.platform_ai_credential_set`, which also writes
+    // the `ai_credential.set` audit row in the same transaction.
+    if let Err(e) = sqlx::query_as::<_, (Uuid, bool)>(
+        "SELECT id, rotated FROM xtenant.platform_ai_credential_set($1, $2, $3, $4, $5)",
     )
+    .bind(principal.user_id)
     .bind(&provider)
-    .fetch_optional(&mut *tx)
+    .bind(&ciphertext)
+    .bind(&nonce)
+    .bind(&key_hint)
+    .fetch_one(&pool)
     .await
     {
-        Ok(row) => row,
-        Err(e) => {
-            tracing::error!(%e, "put_platform_credential: select for update failed");
-            return ApiError::internal_error("Failed to save credential").into_response();
-        }
-    };
-
-    let (credential_id, rotated) = match existing {
-        Some(id) => {
-            if let Err(e) = sqlx::query(
-                "UPDATE ai_credentials SET ciphertext = $1, nonce = $2, key_hint = $3, \
-                 deleted_at = NULL WHERE id = $4",
-            )
-            .bind(&ciphertext)
-            .bind(&nonce)
-            .bind(&key_hint)
-            .bind(id)
-            .execute(&mut *tx)
-            .await
-            {
-                tracing::error!(%e, "put_platform_credential: update failed");
-                return ApiError::internal_error("Failed to save credential").into_response();
-            }
-            (id, true)
-        }
-        None => {
-            let id = match sqlx::query_scalar(
-                "INSERT INTO ai_credentials (provider, ciphertext, nonce, key_hint) \
-                 VALUES ($1, $2, $3, $4) RETURNING id",
-            )
-            .bind(&provider)
-            .bind(&ciphertext)
-            .bind(&nonce)
-            .bind(&key_hint)
-            .fetch_one(&mut *tx)
-            .await
-            {
-                Ok(id) => id,
-                Err(e) => {
-                    tracing::error!(%e, "put_platform_credential: insert failed");
-                    return ApiError::internal_error("Failed to save credential").into_response();
-                }
-            };
-            (id, false)
-        }
-    };
-
-    if let Err(e) = audit::credential_set(
-        &mut tx,
-        principal.user_id,
-        None,
-        credential_id,
-        &provider,
-        &key_hint,
-        rotated,
-    )
-    .await
-    {
-        tracing::error!(%e, "put_platform_credential: audit failed");
-        let _ = tx.rollback().await;
-        return ApiError::internal_error("Failed to save credential").into_response();
-    }
-
-    if let Err(e) = tx.commit().await {
-        tracing::error!(%e, "put_platform_credential: commit failed");
+        tracing::error!(%e, "put_platform_credential: save failed");
         return ApiError::internal_error("Failed to save credential").into_response();
     }
 
@@ -1073,57 +958,24 @@ pub async fn delete_platform_credential(
     Extension(principal): Extension<Principal>,
     Path(provider): Path<String>,
 ) -> Response {
-    let mut tx = match pool.begin().await {
-        Ok(tx) => tx,
-        Err(e) => {
-            tracing::error!(%e, "delete_platform_credential: begin tx failed");
-            return ApiError::internal_error("Failed to delete credential").into_response();
-        }
-    };
-
-    let row: Option<Uuid> = match sqlx::query_scalar(
-        "SELECT id FROM ai_credentials \
-         WHERE tenant_id IS NULL AND provider = $1 AND deleted_at IS NULL \
-         FOR UPDATE",
+    // Soft-deleted through the audited function `xtenant.platform_ai_credential_delete`, which
+    // also writes the `ai_credential.deleted` audit row; it returns NULL when there is none.
+    match sqlx::query_scalar::<_, Option<Uuid>>(
+        "SELECT xtenant.platform_ai_credential_delete($1, $2)",
     )
+    .bind(principal.user_id)
     .bind(&provider)
-    .fetch_optional(&mut *tx)
+    .fetch_one(&pool)
     .await
     {
-        Ok(row) => row,
-        Err(e) => {
-            tracing::error!(%e, "delete_platform_credential: find failed");
-            return ApiError::internal_error("Failed to delete credential").into_response();
-        }
-    };
-
-    let credential_id = match row {
-        Some(id) => id,
-        None => {
+        Ok(Some(_)) => {}
+        Ok(None) => {
             return ApiError::not_found("Credential not found").into_response();
         }
-    };
-
-    if let Err(e) = sqlx::query("UPDATE ai_credentials SET deleted_at = now() WHERE id = $1")
-        .bind(credential_id)
-        .execute(&mut *tx)
-        .await
-    {
-        tracing::error!(%e, "delete_platform_credential: soft delete failed");
-        return ApiError::internal_error("Failed to delete credential").into_response();
-    }
-
-    if let Err(e) =
-        audit::credential_deleted(&mut tx, principal.user_id, None, credential_id, &provider).await
-    {
-        tracing::error!(%e, "delete_platform_credential: audit failed");
-        let _ = tx.rollback().await;
-        return ApiError::internal_error("Failed to delete credential").into_response();
-    }
-
-    if let Err(e) = tx.commit().await {
-        tracing::error!(%e, "delete_platform_credential: commit failed");
-        return ApiError::internal_error("Failed to delete credential").into_response();
+        Err(e) => {
+            tracing::error!(%e, "delete_platform_credential: delete failed");
+            return ApiError::internal_error("Failed to delete credential").into_response();
+        }
     }
 
     StatusCode::NO_CONTENT.into_response()
