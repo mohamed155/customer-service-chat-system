@@ -17,6 +17,42 @@ pub struct ResolvedConfig {
     pub capture_content: bool,
 }
 
+// The platform defaults (rows with no tenant) are hidden from tenant queries by the row-level
+// policy on `ai_configurations` and `ai_credentials`, on purpose: a bug in tenant-scoped code must
+// not be able to read the platform's API keys. A tenant resolves its own row in its Unit of Work
+// and falls back to the platform default only through the audited functions below (MOH-48).
+
+/// The platform default configuration, through `xtenant.platform_ai_config`.
+async fn platform_config(pool: &PgPool) -> Result<Option<AiConfigRow>, sqlx::Error> {
+    sqlx::query_as::<_, AiConfigRow>("SELECT * FROM xtenant.platform_ai_config()")
+        .fetch_optional(pool)
+        .await
+}
+
+/// The platform's sealed key for a provider, through `xtenant.platform_ai_credential_secret`.
+async fn platform_secret(
+    pool: &PgPool,
+    provider: &str,
+) -> Result<Option<(Vec<u8>, Vec<u8>)>, sqlx::Error> {
+    sqlx::query_as::<_, (Vec<u8>, Vec<u8>)>(
+        "SELECT ciphertext, nonce FROM xtenant.platform_ai_credential_secret($1)",
+    )
+    .bind(provider)
+    .fetch_optional(pool)
+    .await
+}
+
+/// The platform key's display hint for a provider, through `xtenant.platform_ai_credential_hint`.
+async fn platform_hint(pool: &PgPool, provider: &str) -> Result<Option<String>, sqlx::Error> {
+    Ok(sqlx::query_as::<_, (String,)>(
+        "SELECT key_hint FROM xtenant.platform_ai_credential_hint($1)",
+    )
+    .bind(provider)
+    .fetch_optional(pool)
+    .await?
+    .map(|(hint,)| hint))
+}
+
 pub async fn resolve_config(
     pool: &PgPool,
     scope: Scope,
@@ -24,15 +60,20 @@ pub async fn resolve_config(
     match scope {
         Scope::Tenant(tenant_id) => {
             let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-            let row = sqlx::query_as::<_, AiConfigRow>(
+            let own = sqlx::query_as::<_, AiConfigRow>(
                 "SELECT * FROM ai_configurations \
-                 WHERE (tenant_id = $1 OR tenant_id IS NULL) AND deleted_at IS NULL \
-                 ORDER BY tenant_id NULLS LAST LIMIT 1",
+                 WHERE tenant_id = $1 AND deleted_at IS NULL \
+                 LIMIT 1",
             )
             .bind(tenant_id)
             .fetch_optional(uow.conn())
             .await?;
             drop(uow);
+
+            let row = match own {
+                Some(row) => Some(row),
+                None => platform_config(pool).await?,
+            };
 
             Ok(row.map(|row| {
                 let is_tenant = row.tenant_id.is_some();
@@ -48,11 +89,7 @@ pub async fn resolve_config(
             }))
         }
         Scope::Platform => {
-            // The platform default has no tenant: audited function `xtenant.platform_ai_config`.
-            let row =
-                sqlx::query_as::<_, AiConfigRow>("SELECT * FROM xtenant.platform_ai_config()")
-                    .fetch_optional(pool)
-                    .await?;
+            let row = platform_config(pool).await?;
 
             Ok(row.map(|row| ResolvedConfig {
                 capture_content: false,
@@ -76,8 +113,8 @@ pub async fn resolve_credential(
                 .map_err(|e| format!("credential query: {e}"))?;
             let row = sqlx::query_as::<_, (Vec<u8>, Vec<u8>, Option<Uuid>)>(
                 "SELECT ciphertext, nonce, tenant_id FROM ai_credentials \
-                 WHERE (tenant_id = $1 OR tenant_id IS NULL) AND provider = $2 AND deleted_at IS NULL \
-                 ORDER BY tenant_id NULLS LAST LIMIT 1",
+                 WHERE tenant_id = $1 AND provider = $2 AND deleted_at IS NULL \
+                 LIMIT 1",
             )
             .bind(tenant_id)
             .bind(provider)
@@ -92,17 +129,22 @@ pub async fn resolve_credential(
                 return Ok(Some((key, tid.is_some())));
             }
 
+            // No key of its own: the platform's.
+            if let Some((ciphertext, nonce)) = platform_secret(pool, provider)
+                .await
+                .map_err(|e| format!("credential query: {e}"))?
+            {
+                let aad = crypto::aad(None, provider);
+                let key = crypto::open(master, &aad, &ciphertext, &nonce)?;
+                return Ok(Some((key, false)));
+            }
+
             Ok(None)
         }
         Scope::Platform => {
-            // No tenant: audited function `xtenant.platform_ai_credential_secret`.
-            let row = sqlx::query_as::<_, (Vec<u8>, Vec<u8>)>(
-                "SELECT ciphertext, nonce FROM xtenant.platform_ai_credential_secret($1)",
-            )
-            .bind(provider)
-            .fetch_optional(pool)
-            .await
-            .map_err(|e| format!("credential query: {e}"))?;
+            let row = platform_secret(pool, provider)
+                .await
+                .map_err(|e| format!("credential query: {e}"))?;
 
             if let Some((ciphertext, nonce)) = row {
                 let aad = crypto::aad(None, provider);
@@ -127,8 +169,8 @@ pub async fn resolve_credential_view(
                 .ok()?;
             let row = sqlx::query_as::<_, (String, Option<Uuid>)>(
                 "SELECT key_hint, tenant_id FROM ai_credentials \
-                 WHERE (tenant_id = $1 OR tenant_id IS NULL) AND provider = $2 AND deleted_at IS NULL \
-                 ORDER BY tenant_id NULLS LAST LIMIT 1",
+                 WHERE tenant_id = $1 AND provider = $2 AND deleted_at IS NULL \
+                 LIMIT 1",
             )
             .bind(tenant_id)
             .bind(provider)
@@ -137,27 +179,32 @@ pub async fn resolve_credential_view(
             .ok()?;
             drop(uow);
 
-            row.map(|(hint, tid)| CredentialView {
-                source: if tid.is_some() {
-                    "tenant".into()
-                } else {
-                    "platform".into()
-                },
-                provider: provider.to_string(),
-                key_hint: hint,
-            })
+            if let Some((hint, tid)) = row {
+                return Some(CredentialView {
+                    source: if tid.is_some() {
+                        "tenant".into()
+                    } else {
+                        "platform".into()
+                    },
+                    provider: provider.to_string(),
+                    key_hint: hint,
+                });
+            }
+
+            // No key of its own: show the platform's hint.
+            platform_hint(pool, provider)
+                .await
+                .ok()?
+                .map(|hint| CredentialView {
+                    source: "platform".into(),
+                    provider: provider.to_string(),
+                    key_hint: hint,
+                })
         }
         Scope::Platform => {
-            // No tenant: audited function `xtenant.platform_ai_credential_hint`.
-            let row = sqlx::query_as::<_, (String,)>(
-                "SELECT key_hint FROM xtenant.platform_ai_credential_hint($1)",
-            )
-            .bind(provider)
-            .fetch_optional(pool)
-            .await
-            .ok()?;
+            let hint = platform_hint(pool, provider).await.ok()?;
 
-            row.map(|(hint,)| CredentialView {
+            hint.map(|hint| CredentialView {
                 source: "platform".into(),
                 provider: provider.to_string(),
                 key_hint: hint,

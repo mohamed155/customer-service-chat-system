@@ -21,7 +21,7 @@ async fn insert_tokens(
     .bind(input)
     .bind(output)
     .bind(at)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }

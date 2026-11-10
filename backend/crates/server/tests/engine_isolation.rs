@@ -152,7 +152,7 @@ async fn seed_ai_config(pool: &sqlx::PgPool, provider: &str, model: &str) {
     )
     .bind(provider)
     .bind(model)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -174,7 +174,7 @@ async fn seed_ai_credential(
     .bind(ciphertext)
     .bind(nonce)
     .bind(hint)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -197,7 +197,7 @@ async fn seed_knowledge_article(
     .bind(tenant_id)
     .bind(title)
     .bind(body)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -464,7 +464,7 @@ async fn engine_cross_tenant_isolation() {
     )
     .bind(tenant_a)
     .bind(conv_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -478,7 +478,7 @@ async fn engine_cross_tenant_isolation() {
     )
     .bind(tenant_b)
     .bind(conv_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -491,7 +491,7 @@ async fn engine_cross_tenant_isolation() {
     )
     .bind(tenant_b)
     .bind(conv_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

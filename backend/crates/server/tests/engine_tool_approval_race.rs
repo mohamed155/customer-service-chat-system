@@ -173,7 +173,7 @@ async fn engine_tool_approval_race() {
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(gen_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -230,7 +230,7 @@ async fn engine_tool_approval_race() {
     // The tool request should be in a terminal state (either approved or denied)
     let final_status: String = sqlx::query_scalar("SELECT status FROM tool_requests WHERE id = $1")
         .bind(tool_request_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert!(

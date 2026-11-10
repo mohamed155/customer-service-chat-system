@@ -151,7 +151,7 @@ async fn seed_ai_config(pool: &sqlx::PgPool, tenant_id: Option<Uuid>, provider: 
     .bind(tenant_id)
     .bind(provider)
     .bind(model)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -175,7 +175,7 @@ async fn seed_ai_credential(
     .bind(ciphertext)
     .bind(nonce)
     .bind(hint)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -276,7 +276,7 @@ async fn engine_tool_approval_approve() {
     )
     .bind(tenant_id)
     .bind(membership_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -417,7 +417,7 @@ async fn engine_tool_approval_approve() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -433,7 +433,7 @@ async fn engine_tool_approval_approve() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -481,7 +481,7 @@ async fn engine_tool_approval_approve() {
         Option<chrono::DateTime<chrono::Utc>>,
     ) = sqlx::query_as("SELECT status, started_at, finished_at FROM tool_requests WHERE id = $1")
         .bind(tool_request_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(

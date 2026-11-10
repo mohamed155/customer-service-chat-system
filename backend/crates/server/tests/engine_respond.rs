@@ -159,7 +159,7 @@ async fn seed_ai_config(
     .bind(provider)
     .bind(model)
     .bind(fallbacks)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -183,7 +183,7 @@ async fn seed_ai_credential(
     .bind(ciphertext)
     .bind(nonce)
     .bind(hint)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -377,7 +377,7 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(gen_rows.len(), 1, "expected exactly one ai_generations row");

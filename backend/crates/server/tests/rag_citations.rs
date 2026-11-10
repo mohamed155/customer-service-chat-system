@@ -132,7 +132,7 @@ async fn seed_knowledge_item(pool: &PgPool, tenant_id: Uuid, title: &str) -> Uui
     )
     .bind(tenant_id)
     .bind(title)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -429,7 +429,7 @@ async fn citation_snapshot_survives_knowledge_item_deletion() {
     // Delete the knowledge item (cascade should NOT delete citations — no FK)
     sqlx::query("DELETE FROM knowledge_items WHERE id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -455,7 +455,7 @@ async fn citation_snapshot_survives_knowledge_item_deletion() {
     let item_exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM knowledge_items WHERE id = $1)")
             .bind(item_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(!item_exists, "knowledge item must no longer exist");
@@ -465,7 +465,7 @@ async fn citation_snapshot_survives_knowledge_item_deletion() {
         "SELECT EXISTS(SELECT 1 FROM knowledge_items WHERE id = $1 AND status = 'published')",
     )
     .bind(item_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -516,7 +516,7 @@ async fn citation_snapshot_survives_knowledge_item_archive() {
     // Archive the knowledge item (set status to 'archived')
     sqlx::query("UPDATE knowledge_items SET status = 'archived' WHERE id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -543,7 +543,7 @@ async fn citation_snapshot_survives_knowledge_item_archive() {
         "SELECT EXISTS(SELECT 1 FROM knowledge_items WHERE id = $1 AND status = 'published')",
     )
     .bind(item_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -596,7 +596,7 @@ async fn citation_snapshot_unchanged_when_item_edited_after_reply() {
         "UPDATE knowledge_items SET title = 'Pricing Page v2', body = 'updated body' WHERE id = $1",
     )
     .bind(item_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -623,7 +623,7 @@ async fn citation_snapshot_unchanged_when_item_edited_after_reply() {
         "SELECT EXISTS(SELECT 1 FROM knowledge_items WHERE id = $1 AND status = 'published')",
     )
     .bind(item_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(

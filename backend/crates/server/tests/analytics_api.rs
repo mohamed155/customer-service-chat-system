@@ -507,7 +507,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
          '2026-03-10T09:00:10Z'::timestamptz) RETURNING id",
     )
     .bind(tenant_a)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -518,7 +518,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
          '2026-03-11T10:00:10Z'::timestamptz) RETURNING id",
     )
     .bind(tenant_a)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -529,7 +529,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
          '2026-03-11T11:00:00Z'::timestamptz)",
     )
     .bind(tenant_a)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -544,7 +544,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     .bind(c1)
     .bind(msg_c1_customer)
     .bind(u1)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -558,7 +558,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
     .bind(c4)
     .bind(msg_c4_customer)
     .bind(u2)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -630,7 +630,7 @@ async fn seed_canonical_dataset(pool: &sqlx::PgPool) -> (Uuid, Uuid) {
          '2026-03-10T09:00:00Z'::timestamptz)",
     )
     .bind(tenant_b)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1097,7 +1097,7 @@ async fn past_period_metrics_do_not_drift_when_new_activity_arrives() {
          '2026-04-01T09:00:00Z'::timestamptz)",
     )
     .bind(tenant_a)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

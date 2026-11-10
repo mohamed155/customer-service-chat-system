@@ -77,7 +77,7 @@ async fn seed_item_with_chunk(
     .bind(title)
     .bind(body)
     .bind(status)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -89,7 +89,7 @@ async fn seed_item_with_chunk(
     .bind(item_id)
     .bind(chunk_content)
     .bind(make_vec(vec_val))
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -106,6 +106,11 @@ async fn retrieve_for_tenant(
     limit: i32,
 ) -> Vec<(Uuid, Uuid, Uuid, f64)> {
     let v = make_vec(query_vec_val);
+    // The retrieval under test runs as the runtime role in the tenant's Unit of Work, so both the
+    // query's own tenant filter and the row-level policy apply.
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
+        .await
+        .unwrap();
     sqlx::query_as::<_, (Uuid, Uuid, Uuid, f64)>(sqlx::AssertSqlSafe(format!(
         "SELECT kc.id, kc.item_id, kc.tenant_id, \
              (1 - (kc.embedding <=> '{v}'::vector)) AS similarity \
@@ -123,7 +128,7 @@ async fn retrieve_for_tenant(
     .bind(tenant_id)
     .bind(threshold)
     .bind(limit)
-    .fetch_all(pool)
+    .fetch_all(uow.conn())
     .await
     .unwrap()
 }

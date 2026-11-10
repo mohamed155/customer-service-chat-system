@@ -143,7 +143,7 @@ async fn seed_item(pool: &sqlx::PgPool, tenant_id: Uuid, title: &str, user_id: U
     .bind(tenant_id)
     .bind(title)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -275,7 +275,7 @@ async fn seed_document(pool: &sqlx::PgPool, tenant_id: Uuid, title: &str, user_i
     .bind(tenant_id)
     .bind(title)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -1932,7 +1932,7 @@ async fn upload_invalid_type_rejected() {
     let items: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM knowledge_items WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(items, 0, "no item rows created for invalid upload");
@@ -1976,7 +1976,7 @@ async fn upload_oversize_rejected() {
     let items: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM knowledge_items WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(items, 0, "no item rows created for oversize upload");

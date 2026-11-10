@@ -67,7 +67,7 @@ async fn seed_item(pool: &PgPool, tenant_id: Uuid) -> Uuid {
          VALUES ($1, 'article', 'RAG Indexing Test', 'body content for indexing', 'authored', 'Test User') RETURNING id",
     )
     .bind(tenant_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -100,7 +100,7 @@ async fn seed_chunks(pool: &PgPool, tenant_id: Uuid, item_id: Uuid, count: i32) 
         .bind(ordinal)
         .bind(format!("chunk content {}", ordinal))
         .bind(format!("[{}]", (0..1536).map(|_| "0.1").collect::<Vec<_>>().join(",")))
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -109,7 +109,7 @@ async fn seed_chunks(pool: &PgPool, tenant_id: Uuid, item_id: Uuid, count: i32) 
 async fn count_chunks(pool: &PgPool, item_id: Uuid) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM knowledge_chunks WHERE item_id = $1")
         .bind(item_id)
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap()
 }
@@ -194,7 +194,7 @@ async fn publish_to_indexed_lifecycle() {
     let item_id = seed_item(&pool, tenant_id).await;
     sqlx::query("UPDATE knowledge_items SET status = 'published' WHERE id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -240,7 +240,7 @@ async fn edit_published_item_resets_index_status() {
     let item_id = seed_item(&pool, tenant_id).await;
     sqlx::query("UPDATE knowledge_items SET status = 'published' WHERE id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     seed_chunks(&pool, tenant_id, item_id, 2).await;
@@ -259,7 +259,7 @@ async fn edit_published_item_resets_index_status() {
         "UPDATE knowledge_items SET body = 'edited content', updated_at = now() WHERE id = $1",
     )
     .bind(item_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -294,7 +294,7 @@ async fn archive_published_removes_chunks_and_resets_status() {
     let item_id = seed_item(&pool, tenant_id).await;
     sqlx::query("UPDATE knowledge_items SET status = 'published' WHERE id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     seed_chunks(&pool, tenant_id, item_id, 3).await;
@@ -313,7 +313,7 @@ async fn archive_published_removes_chunks_and_resets_status() {
     // Simulate archiving: the store layer should delete chunks and reset status
     sqlx::query("DELETE FROM knowledge_chunks WHERE item_id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     upsert_status(&pool, tenant_id, item_id, &IndexStatus::NotIndexed)
@@ -321,7 +321,7 @@ async fn archive_published_removes_chunks_and_resets_status() {
         .unwrap();
     sqlx::query("UPDATE knowledge_items SET status = 'archived' WHERE id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -351,7 +351,7 @@ async fn revert_to_draft_removes_chunks_and_resets_status() {
     let item_id = seed_item(&pool, tenant_id).await;
     sqlx::query("UPDATE knowledge_items SET status = 'published' WHERE id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     seed_chunks(&pool, tenant_id, item_id, 2).await;
@@ -372,7 +372,7 @@ async fn revert_to_draft_removes_chunks_and_resets_status() {
     // In the actual store, archiving triggers chunk deletion.
     sqlx::query("DELETE FROM knowledge_chunks WHERE item_id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     upsert_status(&pool, tenant_id, item_id, &IndexStatus::NotIndexed)
@@ -380,7 +380,7 @@ async fn revert_to_draft_removes_chunks_and_resets_status() {
         .unwrap();
     sqlx::query("UPDATE knowledge_items SET status = 'draft' WHERE id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -414,7 +414,7 @@ async fn failed_embed_preserves_prior_chunks() {
     let item_id = seed_item(&pool, tenant_id).await;
     sqlx::query("UPDATE knowledge_items SET status = 'published' WHERE id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     seed_chunks(&pool, tenant_id, item_id, 3).await;

@@ -113,6 +113,7 @@ async fn run_migrations_succeeds() {
         (70, "cross tenant outbox"),
         (71, "cross tenant sweeps and platform"),
         (72, "rls conversations customers"),
+        (73, "rls knowledge ai tools"),
     ];
     assert_eq!(
         rows.len(),
@@ -4109,14 +4110,14 @@ async fn migration_0038_ai_configurations() {
         "INSERT INTO ai_configurations (tenant_id, provider, model) VALUES ($1, 'openai', 'gpt-4')",
     )
     .bind(cfg_tenant)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("insert first tenant config");
     let err = sqlx::query(
         "INSERT INTO ai_configurations (tenant_id, provider, model) VALUES ($1, 'anthropic', 'claude-3')",
     )
     .bind(cfg_tenant)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect_err("second tenant row should fail");
     assert!(
@@ -4125,21 +4126,21 @@ async fn migration_0038_ai_configurations() {
     );
     sqlx::query("UPDATE ai_configurations SET deleted_at = now() WHERE tenant_id = $1")
         .bind(cfg_tenant)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("soft-delete first row");
     sqlx::query(
         "INSERT INTO ai_configurations (tenant_id, provider, model) VALUES ($1, 'anthropic', 'claude-3')",
     )
     .bind(cfg_tenant)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("insert after soft-delete should succeed");
 
     // Cleanup
     sqlx::query("DELETE FROM ai_configurations WHERE tenant_id = $1")
         .bind(cfg_tenant)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("cleanup ai_configurations");
 }
@@ -4202,14 +4203,14 @@ async fn migration_0039_ai_credentials() {
         "INSERT INTO ai_credentials (provider, ciphertext, nonce, key_hint) \
          VALUES ('openai', '\\x01'::bytea, '\\x01'::bytea, 'sk-...')",
     )
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("insert first platform credential");
     let err = sqlx::query(
         "INSERT INTO ai_credentials (provider, ciphertext, nonce, key_hint) \
          VALUES ('openai', '\\x02'::bytea, '\\x02'::bytea, 'sk-...')",
     )
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect_err("second platform row for same provider should fail");
     assert!(
@@ -4233,7 +4234,7 @@ async fn migration_0039_ai_credentials() {
 
     // Cleanup
     sqlx::query("DELETE FROM ai_credentials")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("cleanup ai_credentials");
 }
@@ -4364,7 +4365,7 @@ async fn agent_configurations_empty_name_rejected() {
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(result.is_err(), "empty name should be rejected");
 }
@@ -4381,7 +4382,7 @@ async fn agent_configurations_overlong_name_rejected() {
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind(&name)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(result.is_err(), "name over 80 chars should be rejected");
 }
@@ -4399,7 +4400,7 @@ async fn agent_configurations_invalid_tone_rejected() {
             .bind(tid)
             .bind("Test Agent")
             .bind("aggressive")
-            .execute(&pool)
+            .execute(&db::testing::seed_pool())
             .await;
     assert!(
         result.is_err(),
@@ -4421,7 +4422,7 @@ async fn agent_configurations_provider_without_model_rejected() {
     .bind("Test Agent")
     .bind("openai")
     .bind(Option::<String>::None)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -4444,7 +4445,7 @@ async fn agent_configurations_model_without_provider_rejected() {
     .bind("Test Agent")
     .bind("gpt-4")
     .bind(Option::<String>::None)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -4463,13 +4464,13 @@ async fn agent_configurations_second_live_row_rejected() {
     sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("Agent One")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("insert first agent");
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("Agent Two")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -4492,27 +4493,27 @@ async fn agent_configurations_second_default_rejected() {
     .bind(tid)
     .bind("Agent A")
     .bind(false)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent with is_default=false");
     // Soft-delete it to clear single_live_uq
     sqlx::query("UPDATE agent_configurations SET deleted_at = now() WHERE id = $1")
         .bind(id_a)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("soft-delete agent A");
     // Insert second agent with is_default=true — this enters default_uq
     sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("Agent B")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("insert default agent");
     // Third agent with is_default=true should fail on default_uq
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("Agent C")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -4534,27 +4535,27 @@ async fn agent_configurations_duplicate_name_rejected() {
     )
     .bind(tid)
     .bind("SupportBot")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert first agent");
     // Soft-delete to clear single_live_uq
     sqlx::query("UPDATE agent_configurations SET deleted_at = now() WHERE id = $1")
         .bind(id_a)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("soft-delete agent A");
     // Insert a new live agent — this enters name_uq as 'supportbot'
     sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("supportbot")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("insert second agent with case-different name");
     // Try to insert another with the same lower(name) — should fail on name_uq
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("SUPPORTBOT")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -4575,7 +4576,7 @@ async fn agent_avatar_uploads_invalid_content_type_rejected() {
     )
     .bind(tid)
     .bind("Avatar Agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent");
     let bytes = vec![0u8; 100];
@@ -4586,7 +4587,7 @@ async fn agent_avatar_uploads_invalid_content_type_rejected() {
     .bind(agent_id)
     .bind("application/pdf")
     .bind(&bytes)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -4607,7 +4608,7 @@ async fn agent_avatar_uploads_oversized_bytes_rejected() {
     )
     .bind(tid)
     .bind("Avatar Bytes Agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent");
     let bytes = vec![0u8; 262145]; // 1 over the limit
@@ -4618,7 +4619,7 @@ async fn agent_avatar_uploads_oversized_bytes_rejected() {
     .bind(agent_id)
     .bind("image/png")
     .bind(&bytes)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "bytes over 262144 should be rejected");
 }
@@ -4636,7 +4637,7 @@ async fn agent_avatar_uploads_second_live_row_rejected() {
     )
     .bind(tid)
     .bind("Avatar Dupe Agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent");
     let bytes = vec![0u8; 100];
@@ -4647,7 +4648,7 @@ async fn agent_avatar_uploads_second_live_row_rejected() {
     .bind(agent_id)
     .bind("image/png")
     .bind(&bytes)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("insert first avatar");
     let result = sqlx::query(
@@ -4657,7 +4658,7 @@ async fn agent_avatar_uploads_second_live_row_rejected() {
     .bind(agent_id)
     .bind("image/jpeg")
     .bind(&bytes)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -4819,7 +4820,7 @@ async fn migration_0041_agent_configurations_empty_name_rejected() {
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(result.is_err(), "empty name should be rejected");
 }
@@ -4837,7 +4838,7 @@ async fn migration_0041_agent_configurations_invalid_tone_rejected() {
             .bind(tid)
             .bind("Test Agent")
             .bind("aggressive")
-            .execute(&pool)
+            .execute(&db::testing::seed_pool())
             .await;
     assert!(result.is_err(), "invalid tone should be rejected");
 }
@@ -4858,7 +4859,7 @@ async fn migration_0041_agent_configurations_provider_model_mismatch_rejected() 
     .bind("Test Agent")
     .bind("openai")
     .bind(Option::<String>::None)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -4877,13 +4878,13 @@ async fn migration_0041_agent_configurations_second_live_row_rejected() {
     sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("Agent One")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("first agent insert should succeed");
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("Agent Two")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -4902,7 +4903,7 @@ async fn migration_0041_agent_configurations_second_default_rejected() {
     sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("Default One")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("first agent with is_default should succeed");
     let result = sqlx::query(
@@ -4911,7 +4912,7 @@ async fn migration_0041_agent_configurations_second_default_rejected() {
     .bind(tid)
     .bind("Default Two")
     .bind(true)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -4930,13 +4931,13 @@ async fn migration_0041_agent_configurations_duplicate_name_rejected() {
     sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("Test Agent")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("first agent insert should succeed");
     let result = sqlx::query("INSERT INTO agent_configurations (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("test agent")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -4957,7 +4958,7 @@ async fn migration_0041_agent_avatar_uploads_invalid_content_type_rejected() {
     )
     .bind(tid)
     .bind("Test Agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent config");
     let result = sqlx::query(
@@ -4968,7 +4969,7 @@ async fn migration_0041_agent_avatar_uploads_invalid_content_type_rejected() {
     .bind(agent_id)
     .bind("application/pdf")
     .bind(&[0u8; 100][..])
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "invalid content_type should be rejected");
 }
@@ -4986,7 +4987,7 @@ async fn migration_0041_agent_avatar_uploads_oversized_bytes_rejected() {
     )
     .bind(tid)
     .bind("Test Agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent config");
     let big_bytes = vec![0u8; 300000];
@@ -4998,7 +4999,7 @@ async fn migration_0041_agent_avatar_uploads_oversized_bytes_rejected() {
     .bind(agent_id)
     .bind("image/png")
     .bind(&big_bytes[..])
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "oversized bytes should be rejected");
 }
@@ -5016,7 +5017,7 @@ async fn migration_0041_agent_avatar_uploads_second_live_row_rejected() {
     )
     .bind(tid)
     .bind("Test Agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent config");
     sqlx::query(
@@ -5027,7 +5028,7 @@ async fn migration_0041_agent_avatar_uploads_second_live_row_rejected() {
     .bind(agent_id)
     .bind("image/png")
     .bind(&[0u8; 100][..])
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("first avatar upload should succeed");
     let result = sqlx::query(
@@ -5038,7 +5039,7 @@ async fn migration_0041_agent_avatar_uploads_second_live_row_rejected() {
     .bind(agent_id)
     .bind("image/jpeg")
     .bind(&[0u8; 100][..])
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -5226,7 +5227,7 @@ async fn migration_0045_agent_prompts_invalid_prompt_kind_rejected() {
     .bind(tid)
     .bind("custom")
     .bind(1)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "prompt_kind 'custom' should be rejected");
 }
@@ -5245,7 +5246,7 @@ async fn migration_0045_agent_prompt_versions_empty_content_rejected() {
     .bind(tid)
     .bind("system")
     .bind(1)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent_prompts should succeed");
     let result = sqlx::query(
@@ -5257,7 +5258,7 @@ async fn migration_0045_agent_prompt_versions_empty_content_rejected() {
     .bind(1)
     .bind("")
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "empty content should be rejected");
 }
@@ -5276,7 +5277,7 @@ async fn migration_0045_agent_prompt_versions_content_over_8000_rejected() {
     .bind(tid)
     .bind("system")
     .bind(1)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent_prompts should succeed");
     let long_content = "x".repeat(8001);
@@ -5289,7 +5290,7 @@ async fn migration_0045_agent_prompt_versions_content_over_8000_rejected() {
     .bind(1)
     .bind(&long_content)
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -5311,7 +5312,7 @@ async fn migration_0045_agent_prompt_versions_change_note_over_500_rejected() {
     .bind(tid)
     .bind("system")
     .bind(1)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent_prompts should succeed");
     let long_note = "x".repeat(501);
@@ -5325,7 +5326,7 @@ async fn migration_0045_agent_prompt_versions_change_note_over_500_rejected() {
     .bind("hello")
     .bind(&long_note)
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -5347,7 +5348,7 @@ async fn migration_0045_agent_prompts_second_live_row_rejected() {
     .bind(tid)
     .bind("system")
     .bind(1)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("first agent_prompts insert should succeed");
     let result = sqlx::query(
@@ -5356,7 +5357,7 @@ async fn migration_0045_agent_prompts_second_live_row_rejected() {
     .bind(tid)
     .bind("system")
     .bind(2)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -5378,7 +5379,7 @@ async fn migration_0045_agent_prompt_versions_duplicate_version_rejected() {
     .bind(tid)
     .bind("system")
     .bind(1)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent_prompts should succeed");
     sqlx::query(
@@ -5390,7 +5391,7 @@ async fn migration_0045_agent_prompt_versions_duplicate_version_rejected() {
     .bind(1)
     .bind("first version")
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("first version insert should succeed");
     let result = sqlx::query(
@@ -5402,7 +5403,7 @@ async fn migration_0045_agent_prompt_versions_duplicate_version_rejected() {
     .bind(1)
     .bind("duplicate version")
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -5424,7 +5425,7 @@ async fn migration_0045_agent_prompt_versions_update_rejected() {
     .bind(tid)
     .bind("system")
     .bind(1)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent_prompts should succeed");
     let version_id: uuid::Uuid = sqlx::query_scalar(
@@ -5436,12 +5437,12 @@ async fn migration_0045_agent_prompt_versions_update_rejected() {
     .bind(1)
     .bind("valid content")
     .bind("test")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent_prompt_versions should succeed");
     let result = sqlx::query("UPDATE agent_prompt_versions SET content = 'changed' WHERE id = $1")
         .bind(version_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -5463,7 +5464,7 @@ async fn migration_0045_agent_prompt_versions_delete_rejected() {
     .bind(tid)
     .bind("system")
     .bind(1)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent_prompts should succeed");
     let version_id: uuid::Uuid = sqlx::query_scalar(
@@ -5475,12 +5476,12 @@ async fn migration_0045_agent_prompt_versions_delete_rejected() {
     .bind(1)
     .bind("valid content")
     .bind("test")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent_prompt_versions should succeed");
     let result = sqlx::query("DELETE FROM agent_prompt_versions WHERE id = $1")
         .bind(version_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -5496,7 +5497,7 @@ async fn migration_0045_agent_configurations_no_system_prompt() {
     };
     db::testing::migrate().await;
     let result = sqlx::query("SELECT system_prompt FROM agent_configurations")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -5530,7 +5531,7 @@ async fn migration_0045_agent_prompt_versions_user_delete_rejected() {
         "INSERT INTO agent_prompts (tenant_id, prompt_kind, active_version) VALUES ($1, 'system', 1) RETURNING id",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert agent_prompts should succeed");
 
@@ -5540,7 +5541,7 @@ async fn migration_0045_agent_prompt_versions_user_delete_rejected() {
     .bind(tenant_id)
     .bind(prompt_id)
     .bind(user_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("insert agent_prompt_versions should succeed");
 
@@ -5576,7 +5577,7 @@ async fn migration_0046_knowledge_items_invalid_item_type_rejected() {
     .bind("Test Title")
     .bind("authored")
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -5602,7 +5603,7 @@ async fn migration_0046_knowledge_items_invalid_status_rejected() {
     .bind("deleted")
     .bind("authored")
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "status 'deleted' should be rejected");
 }
@@ -5624,7 +5625,7 @@ async fn migration_0046_knowledge_items_empty_title_rejected() {
     .bind("")
     .bind("authored")
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "empty title should be rejected");
 }
@@ -5647,7 +5648,7 @@ async fn migration_0046_knowledge_items_title_over_200_rejected() {
     .bind(&long_title)
     .bind("authored")
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "title over 200 chars should be rejected");
 }
@@ -5671,7 +5672,7 @@ async fn migration_0046_knowledge_items_body_over_100000_rejected() {
     .bind(&long_body)
     .bind("authored")
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "body over 100000 chars should be rejected");
 }
@@ -5694,7 +5695,7 @@ async fn migration_0046_knowledge_items_document_with_body_rejected() {
     .bind("should not be allowed")
     .bind("uploaded")
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),
@@ -5713,13 +5714,13 @@ async fn migration_0046_knowledge_categories_case_insensitive_unique() {
     sqlx::query("INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("Support")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("first category insert should succeed");
     let result = sqlx::query("INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2)")
         .bind(tid)
         .bind("support")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await;
     assert!(
         result.is_err(),
@@ -5739,13 +5740,13 @@ async fn migration_0046_knowledge_categories_diff_tenant_same_name_succeeds() {
     sqlx::query("INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2)")
         .bind(tid1)
         .bind("Support")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("first tenant category should succeed");
     sqlx::query("INSERT INTO knowledge_categories (tenant_id, name) VALUES ($1, $2)")
         .bind(tid2)
         .bind("Support")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("same name in different tenant should succeed");
 }
@@ -5763,7 +5764,7 @@ async fn migration_0046_knowledge_categories_delete_sets_category_id_null() {
     )
     .bind(tid)
     .bind("Category")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("category insert should succeed");
     sqlx::query(
@@ -5776,18 +5777,18 @@ async fn migration_0046_knowledge_categories_delete_sets_category_id_null() {
     .bind(cat_id)
     .bind("authored")
     .bind("test")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("item insert should succeed");
     sqlx::query("DELETE FROM knowledge_categories WHERE id = $1")
         .bind(cat_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("category delete should succeed");
     let category_id: Option<uuid::Uuid> =
         sqlx::query_scalar("SELECT category_id FROM knowledge_items WHERE tenant_id = $1")
             .bind(tid)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .expect("query should succeed");
     assert!(
@@ -5813,7 +5814,7 @@ async fn migration_0046_knowledge_documents_size_bytes_zero_rejected() {
     .bind("Test Document")
     .bind("uploaded")
     .bind("test")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("item insert should succeed");
     let result = sqlx::query(
@@ -5827,7 +5828,7 @@ async fn migration_0046_knowledge_documents_size_bytes_zero_rejected() {
     .bind("doc.pdf")
     .bind("application/pdf")
     .bind(0_i64)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "size_bytes = 0 should be rejected");
 }
@@ -5849,7 +5850,7 @@ async fn migration_0046_knowledge_documents_size_bytes_over_max_rejected() {
     .bind("Test Document")
     .bind("uploaded")
     .bind("test")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("item insert should succeed");
     let result = sqlx::query(
@@ -5863,7 +5864,7 @@ async fn migration_0046_knowledge_documents_size_bytes_over_max_rejected() {
     .bind("doc.pdf")
     .bind("application/pdf")
     .bind(20_971_521_i64)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "size_bytes = 20971521 should be rejected");
 }
@@ -5887,7 +5888,7 @@ async fn migration_0046_knowledge_documents_storage_key_unique() {
     .bind("Doc One")
     .bind("uploaded")
     .bind("test")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("first item insert should succeed");
     let item2_id: uuid::Uuid = sqlx::query_scalar(
@@ -5899,7 +5900,7 @@ async fn migration_0046_knowledge_documents_storage_key_unique() {
     .bind("Doc Two")
     .bind("uploaded")
     .bind("test")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("second item insert should succeed");
     sqlx::query(
@@ -5913,7 +5914,7 @@ async fn migration_0046_knowledge_documents_storage_key_unique() {
     .bind("doc1.pdf")
     .bind("application/pdf")
     .bind(100_i64)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("first document insert should succeed");
     let result = sqlx::query(
@@ -5927,7 +5928,7 @@ async fn migration_0046_knowledge_documents_storage_key_unique() {
     .bind("doc2.pdf")
     .bind("application/pdf")
     .bind(200_i64)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(result.is_err(), "duplicate storage_key should be rejected");
 }
@@ -5949,7 +5950,7 @@ async fn migration_0046_knowledge_items_delete_cascades_to_documents_and_tags() 
     .bind("Test Document")
     .bind("uploaded")
     .bind("test")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("item insert should succeed");
     sqlx::query(
@@ -5963,25 +5964,25 @@ async fn migration_0046_knowledge_items_delete_cascades_to_documents_and_tags() 
     .bind("doc.pdf")
     .bind("application/pdf")
     .bind(100_i64)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("document insert should succeed");
     sqlx::query("INSERT INTO knowledge_item_tags (item_id, tenant_id, tag) VALUES ($1, $2, $3)")
         .bind(item_id)
         .bind(tid)
         .bind("important")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("tag insert should succeed");
     sqlx::query("DELETE FROM knowledge_items WHERE id = $1")
         .bind(item_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("item delete should succeed");
     let doc_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM knowledge_documents WHERE item_id = $1")
             .bind(item_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .expect("query should succeed");
     assert_eq!(
@@ -5991,7 +5992,7 @@ async fn migration_0046_knowledge_items_delete_cascades_to_documents_and_tags() 
     let tag_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM knowledge_item_tags WHERE item_id = $1")
             .bind(item_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .expect("query should succeed");
     assert_eq!(
@@ -6017,14 +6018,14 @@ async fn migration_0046_knowledge_item_tags_duplicate_pk_rejected() {
     .bind("Test Article")
     .bind("authored")
     .bind("test")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("item insert should succeed");
     sqlx::query("INSERT INTO knowledge_item_tags (item_id, tenant_id, tag) VALUES ($1, $2, $3)")
         .bind(item_id)
         .bind(tid)
         .bind("support")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .expect("first tag insert should succeed");
     let result = sqlx::query(
@@ -6033,7 +6034,7 @@ async fn migration_0046_knowledge_item_tags_duplicate_pk_rejected() {
     .bind(item_id)
     .bind(tid)
     .bind("support")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await;
     assert!(
         result.is_err(),

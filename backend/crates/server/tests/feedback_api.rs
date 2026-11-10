@@ -715,7 +715,7 @@ async fn t035a_ai_only_conversation_attribution() {
     )
     .bind(tenant_id)
     .bind("Test Agent")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -739,7 +739,7 @@ async fn t035a_ai_only_conversation_attribution() {
     .bind(tenant_id)
     .bind(conv_id)
     .bind(msg_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -822,7 +822,7 @@ async fn t035b_human_assigned_conversation_attribution() {
     )
     .bind(tenant_id)
     .bind("Test Agent T035b")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -844,7 +844,7 @@ async fn t035b_human_assigned_conversation_attribution() {
     .bind(tenant_id)
     .bind(conv_id)
     .bind(msg_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

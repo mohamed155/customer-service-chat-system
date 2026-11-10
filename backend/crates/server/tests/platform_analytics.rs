@@ -241,7 +241,7 @@ async fn seed_ai_usage(
     .bind(tokens_in)
     .bind(tokens_out)
     .bind(created_at)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }

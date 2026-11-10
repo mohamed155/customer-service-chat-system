@@ -278,3 +278,105 @@ async fn customer_feedback_and_escalation_repositories_return_nothing_for_the_wr
             .unwrap()
     );
 }
+
+#[tokio::test]
+async fn rag_retrieval_indexing_and_ai_resolution_return_nothing_for_the_wrong_tenant() {
+    let Some(pool) = runtime_pool().await else {
+        return;
+    };
+    db::testing::migrate().await;
+    let seed_pool = db::testing::seed_pool();
+    let (a, b) = (seed(&seed_pool).await, seed(&seed_pool).await);
+
+    // A published knowledge item with one chunk and an index state, and an AI configuration, per tenant.
+    let mut items = Vec::new();
+    for t in [&a, &b] {
+        let item: Uuid = sqlx::query_scalar(
+            "INSERT INTO knowledge_items (tenant_id, item_type, title, body, status, source, created_by_display) \
+             VALUES ($1, 'article', 'Shared title', 'Same body in both tenants', 'published', 'authored', 'Test') RETURNING id",
+        )
+        .bind(t.tenant)
+        .fetch_one(&seed_pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO knowledge_chunks (tenant_id, item_id, ordinal, content, embedding, content_hash) \
+             VALUES ($1, $2, 0, 'Same body in both tenants', array_fill(0.1::real, ARRAY[1536])::vector, 'h')",
+        )
+        .bind(t.tenant)
+        .bind(item)
+        .execute(&seed_pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO knowledge_index_state (tenant_id, item_id, status) VALUES ($1, $2, 'indexed')",
+        )
+        .bind(t.tenant)
+        .bind(item)
+        .execute(&seed_pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO ai_configurations (tenant_id, provider, model) VALUES ($1, 'openai', $2)",
+        )
+        .bind(t.tenant)
+        .bind(format!("model-of-{}", t.tenant))
+        .execute(&seed_pool)
+        .await
+        .unwrap();
+        items.push(item);
+    }
+    let (item_a, item_b) = (items[0], items[1]);
+    let query = vec![0.1_f32; 1536];
+
+    // Retrieval: each tenant finds only its own chunk, even though the content is identical.
+    let found_a = knowledge::retrieval::search(&pool, a.tenant, &query, 10, 0.0)
+        .await
+        .unwrap();
+    let found_b = knowledge::retrieval::search(&pool, b.tenant, &query, 10, 0.0)
+        .await
+        .unwrap();
+    assert!(
+        found_a.iter().any(|c| c.item_id == item_a),
+        "control: tenant A finds its chunk"
+    );
+    assert!(
+        found_a.iter().all(|c| c.item_id != item_b),
+        "tenant A must not retrieve tenant B's chunk"
+    );
+    assert!(
+        found_b.iter().any(|c| c.item_id == item_b),
+        "control: tenant B finds its chunk"
+    );
+    assert!(
+        found_b.iter().all(|c| c.item_id != item_a),
+        "tenant B must not retrieve tenant A's chunk"
+    );
+
+    // Indexing state: tenant B cannot see, or list, tenant A's.
+    assert!(knowledge::index_state::get(&pool, a.tenant, item_a)
+        .await
+        .unwrap()
+        .is_some());
+    assert!(knowledge::index_state::get(&pool, b.tenant, item_a)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(knowledge::index_state::get_many(&pool, b.tenant, &[item_a])
+        .await
+        .unwrap()
+        .is_empty());
+
+    // AI resolution: a tenant gets its own configuration, never another tenant's.
+    let own = ai::resolution::resolve_config(&pool, ai::resolution::Scope::Tenant(a.tenant))
+        .await
+        .unwrap()
+        .expect("tenant A has a configuration");
+    assert_eq!(own.row.tenant_id, Some(a.tenant));
+    let other = ai::resolution::resolve_config(&pool, ai::resolution::Scope::Tenant(b.tenant))
+        .await
+        .unwrap()
+        .expect("tenant B has a configuration");
+    assert_eq!(other.row.tenant_id, Some(b.tenant));
+    assert_ne!(own.row.model, other.row.model);
+}

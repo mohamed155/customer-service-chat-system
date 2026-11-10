@@ -179,7 +179,7 @@ async fn customer_view_contains_no_tool_request_data() {
     .bind(conversation_id)
     .bind(ai_msg_id)
     .bind(ai_msg_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed generation");
 
@@ -193,7 +193,7 @@ async fn customer_view_contains_no_tool_request_data() {
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(generation_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("seed succeeded tool request");
 
@@ -207,7 +207,7 @@ async fn customer_view_contains_no_tool_request_data() {
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(generation_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("seed failed tool request");
 
