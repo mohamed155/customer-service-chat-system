@@ -153,7 +153,7 @@ async fn seed_widget_instance(pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &
     .bind(public_id)
     .bind("Test Widget")
     .bind("Test Widget")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -261,7 +261,7 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> (Uuid,
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     (user_id, membership_id)
@@ -279,7 +279,7 @@ async fn seed_member(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str, role: &s
     .bind(tenant_id)
     .bind(user_id)
     .bind(role)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     user_id

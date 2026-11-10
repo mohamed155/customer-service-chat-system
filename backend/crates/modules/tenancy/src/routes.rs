@@ -993,6 +993,12 @@ pub async fn create_tenant(
     let (id, name, slug, status, plan, contact_name, contact_email, created_at, updated_at) = row;
     let id_str = id.to_string();
 
+    // The audit row belongs to the tenant just created; bind the transaction to it so the
+    // Row-Level Security policy accepts the row.
+    if let Err(e) = db::set_tenant_in_tx(&mut tx, id).await {
+        return ApiError::internal_error(format!("Failed to set the tenant: {e}")).into_response();
+    }
+
     // ---- Audit (inside the same transaction as the INSERT) ----
     if let Err(e) = crate::audit::record_in_tx(
         &mut tx,
@@ -1331,6 +1337,12 @@ pub async fn update_tenant(
         .await
     {
         return ApiError::internal_error(format!("Failed to set audit actor: {e}")).into_response();
+    }
+
+    // The slug-audit trigger and the audit rows below belong to this tenant, and Row-Level
+    // Security only accepts them when the transaction is bound to it.
+    if let Err(e) = db::set_tenant_in_tx(&mut tx, id).await {
+        return ApiError::internal_error(format!("Failed to set the tenant: {e}")).into_response();
     }
 
     // ---- Build dynamic UPDATE ----

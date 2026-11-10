@@ -241,7 +241,7 @@ mod tests {
             "#,
         )
         .bind(admin)
-        .fetch_optional(&pool)
+        .fetch_optional(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -993,7 +993,7 @@ mod tests {
              ORDER BY created_at DESC LIMIT 1",
         )
         .bind(tenant_id)
-        .fetch_optional(&pool)
+        .fetch_optional(&db::testing::seed_pool())
         .await
         .unwrap();
         let (actor, audited_tenant, resource_id, details) =
@@ -1086,7 +1086,7 @@ mod tests {
         )
         .bind(tenant_id)
         .bind(member)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -1209,7 +1209,7 @@ mod tests {
              ORDER BY created_at DESC LIMIT 1",
         )
         .bind(tenant_id)
-        .fetch_optional(&pool)
+        .fetch_optional(&db::testing::seed_pool())
         .await
         .unwrap();
         let (actor, details) = row.expect("expected a platform.tenant_status_changed audit row");
@@ -1259,7 +1259,7 @@ mod tests {
              ORDER BY created_at DESC LIMIT 1",
         )
         .bind(tenant_id)
-        .fetch_optional(&pool)
+        .fetch_optional(&db::testing::seed_pool())
         .await
         .unwrap();
         let (actor, details) = row.expect("expected a platform.tenant_updated audit row");
@@ -1317,7 +1317,7 @@ mod tests {
             "#,
         )
         .bind(Uuid::parse_str(&tenant_id).unwrap())
-        .fetch_optional(&pool)
+        .fetch_optional(&db::testing::seed_pool())
         .await
         .unwrap();
         let (actor, action, details) = row
@@ -1369,7 +1369,7 @@ mod tests {
              WHERE tenant_id = $1 AND action = 'platform.tenant_status_changed'",
         )
         .bind(target_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         let before_updated: i64 = sqlx::query_scalar(
@@ -1377,7 +1377,7 @@ mod tests {
              WHERE tenant_id = $1 AND action = 'platform.tenant_updated'",
         )
         .bind(target_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -1415,7 +1415,7 @@ mod tests {
              WHERE tenant_id = $1 AND action = 'platform.tenant_status_changed'",
         )
         .bind(target_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         let after_updated: i64 = sqlx::query_scalar(
@@ -1423,7 +1423,7 @@ mod tests {
              WHERE tenant_id = $1 AND action = 'platform.tenant_updated'",
         )
         .bind(target_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         assert_eq!(
@@ -1441,7 +1441,7 @@ mod tests {
              WHERE tenant_id = $1 AND action = 'tenant.slug_changed'",
         )
         .bind(target_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         assert_eq!(
@@ -1539,7 +1539,7 @@ mod tests {
              ORDER BY created_at ASC",
         )
         .bind(tenant_id)
-        .fetch_all(&pool)
+        .fetch_all(&db::testing::seed_pool())
         .await
         .unwrap();
         assert_eq!(
@@ -1643,7 +1643,7 @@ mod tests {
         )
         .bind(tenant_id)
         .bind(admin)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         assert_eq!(
@@ -1849,7 +1849,7 @@ mod tests {
             .bind(tenant_id)
             .bind(user_id)
             .bind(role)
-            .execute(&pool)
+            .execute(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -2198,7 +2198,7 @@ mod tests {
              ORDER BY created_at DESC LIMIT 1",
         )
         .bind(tenant_id)
-        .fetch_optional(&pool)
+        .fetch_optional(&db::testing::seed_pool())
         .await
         .unwrap();
         let (status_actor, status_details) =
@@ -2214,7 +2214,7 @@ mod tests {
              ORDER BY created_at DESC LIMIT 1",
         )
         .bind(tenant_id)
-        .fetch_optional(&pool)
+        .fetch_optional(&db::testing::seed_pool())
         .await
         .unwrap();
         let (updated_actor, updated_details) =
@@ -2277,7 +2277,7 @@ mod tests {
             .bind(tenant_id)
             .bind(user_id)
             .bind(role)
-            .execute(&pool)
+            .execute(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -3395,7 +3395,7 @@ mod tests {
         )
         .bind(tenant_id)
         .bind(member)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -3502,7 +3502,7 @@ mod tests {
         )
         .bind(member)
         .bind(tenant_id.to_string())
-        .fetch_optional(&pool)
+        .fetch_optional(&db::testing::seed_pool())
         .await
         .unwrap();
         let (_, action, details) = access_denied_row
@@ -3524,7 +3524,7 @@ mod tests {
             "#,
         )
         .bind(tenant_id)
-        .fetch_all(&pool)
+        .fetch_all(&db::testing::seed_pool())
         .await
         .unwrap();
         assert!(
@@ -3943,7 +3943,7 @@ mod tests {
             "SELECT COUNT(*) FROM audit_logs WHERE action = 'platform.tenant_created' AND details->>'slug' = $1",
         )
             .bind(format!("t101-nullplan-{unique}"))
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
         assert_eq!(

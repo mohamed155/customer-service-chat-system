@@ -117,7 +117,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
     .bind(tenant_id)
     .bind(user_id)
     .bind(role)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -243,7 +243,7 @@ async fn engine_tool_approval_race() {
         "SELECT COUNT(*) FROM outbox_events WHERE event_type = 'ai.tool_decision' AND tenant_id = $1::text",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

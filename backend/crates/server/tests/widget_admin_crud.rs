@@ -200,7 +200,7 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid) -> SeededActor {
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     SeededActor {
@@ -218,7 +218,7 @@ async fn seed_viewer(pool: &sqlx::PgPool, tenant_id: Uuid) -> SeededActor {
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     SeededActor {

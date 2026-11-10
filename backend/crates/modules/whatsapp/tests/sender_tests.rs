@@ -139,7 +139,7 @@ async fn setup_sender_fixture(
     .bind(&token_hash)
     .bind(&token_ct)
     .bind(&token_nonce)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -160,7 +160,7 @@ async fn setup_sender_fixture(
         .bind(ct)
         .bind(nonce)
         .bind(hint(ACCESS_TOKEN_VALUE))
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -241,7 +241,7 @@ async fn setup_sender_fixture(
     )
     .bind(tenant_id)
     .bind(sender_user)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -270,7 +270,7 @@ async fn setup_sender_fixture(
         "conversationId": conversation_id,
         "messageId": message_id,
     }))
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

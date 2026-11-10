@@ -196,7 +196,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
     )
     .bind(tenant_id)
     .bind(user_id)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }

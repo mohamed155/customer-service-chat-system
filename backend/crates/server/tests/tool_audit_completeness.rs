@@ -271,7 +271,7 @@ async fn denied_has_started_at_null_and_decision_fields() {
     )
     .bind(tid)
     .bind(decider_user_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed decider membership");
 

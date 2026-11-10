@@ -78,7 +78,7 @@ async fn seed_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid, role: &s
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -184,7 +184,7 @@ async fn count_pending_outbox_events(pool: &PgPool, item_id: Uuid) -> i64 {
            AND processed_at IS NULL",
     )
     .bind(item_id.to_string())
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }

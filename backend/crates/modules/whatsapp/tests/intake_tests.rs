@@ -246,7 +246,7 @@ async fn setup_connection(
     .bind(&token_hash)
     .bind(&token_ct)
     .bind(&token_nonce)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -261,7 +261,7 @@ async fn setup_connection(
     .bind(&verify_ct)
     .bind(&verify_nonce)
     .bind(hint(VERIFY_TOKEN_VALUE))
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -276,7 +276,7 @@ async fn setup_connection(
     .bind(&app_secret_ct)
     .bind(&app_secret_nonce)
     .bind(hint(APP_SECRET_VALUE))
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -369,7 +369,7 @@ async fn signed_unknown_number_creates_customer_conversation_message_outbox() {
          WHERE tenant_id = $1::text AND event_type = 'conversation.customer_message'",
     )
     .bind(conn.tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -383,7 +383,7 @@ async fn signed_unknown_number_creates_customer_conversation_message_outbox() {
          WHERE tenant_id = $1::text AND event_type = 'conversation.customer_message'",
     )
     .bind(conn.tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(channel.as_deref(), Some("whatsapp"));

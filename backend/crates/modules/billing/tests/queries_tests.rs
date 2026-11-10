@@ -53,7 +53,7 @@ async fn tenant_with_explicit_subscription_resolves_correctly() {
     )
     .bind(tenant_id)
     .bind(plan_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

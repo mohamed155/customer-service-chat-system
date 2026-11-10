@@ -126,7 +126,7 @@ async fn setup_connection(
     .bind(&token_hash)
     .bind(&token_ct)
     .bind(&token_nonce)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -141,7 +141,7 @@ async fn setup_connection(
     .bind(&verify_ct)
     .bind(&verify_nonce)
     .bind(hint(VERIFY_TOKEN_VALUE))
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

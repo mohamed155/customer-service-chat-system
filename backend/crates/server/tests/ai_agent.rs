@@ -167,7 +167,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -312,7 +312,7 @@ async fn seed_skill(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
     sqlx::query_scalar("INSERT INTO skills (tenant_id, name) VALUES ($1, $2) RETURNING id")
         .bind(tenant_id)
         .bind(name)
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap()
 }
@@ -819,7 +819,7 @@ async fn configured_agent_drives_ai_reply() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1343,7 +1343,7 @@ async fn ai_handling_platform_ai_then_ai_reply() {
          WHERE tenant_id = $1 AND action = 'conversation.ai_handling_set'",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(audit_count, 1, "expected one ai_handling_set audit log");
@@ -1882,7 +1882,7 @@ async fn business_rule_appears_in_composed_prompt() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2006,7 +2006,7 @@ async fn keyword_rule_escalates_with_rule_name_reason() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2134,7 +2134,7 @@ async fn baseline_escalation_survives_zero_tenant_rules() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2211,7 +2211,7 @@ async fn broken_skill_ref_surfaced_on_read() {
     // Skills are hard-deleted (see 0035_agent_skills).
     sqlx::query("DELETE FROM skills WHERE id = $1")
         .bind(skill_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -2470,7 +2470,7 @@ async fn disabled_channel_blocks_ai_reply() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2515,7 +2515,7 @@ async fn disabled_channel_blocks_ai_reply() {
         "SELECT COUNT(*) FROM outbox_events WHERE tenant_id = $1::text AND event_type = 'conversation.customer_message'",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(outbox_count, 0, "outbox event should be consumed");
@@ -2615,7 +2615,7 @@ async fn re_enabled_channel_resumes_replies() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2793,7 +2793,7 @@ async fn every_write_is_audited() {
          ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (action, actor, details) = create_audit.expect("agent_config.created audit row");
@@ -2832,7 +2832,7 @@ async fn every_write_is_audited() {
          ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (action2, actor2, details2) = update_audit.expect("agent_config.updated audit row");
@@ -2868,7 +2868,7 @@ async fn every_write_is_audited() {
          ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (action3, actor3, details3) = avatar_audit.expect("agent_config.avatar_updated audit row");
@@ -3054,7 +3054,7 @@ async fn platform_actor_attribution_via_tenant_switch() {
          ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (actor,) = audit.expect("expected audit row for agent_config.created");
@@ -3215,7 +3215,7 @@ async fn provider_override_serves_ai_reply() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -3363,7 +3363,7 @@ async fn stale_override_falls_back() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

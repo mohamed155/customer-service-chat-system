@@ -124,7 +124,7 @@ async fn customer_view_contains_no_tool_request_data() {
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed membership");
 

@@ -112,7 +112,7 @@ async fn setup_whatsapp_connection(pool: &PgPool, mk: &MasterKey, tenant_id: Uui
     .bind(&token_hash)
     .bind(&token_ct)
     .bind(&token_nonce)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -132,7 +132,7 @@ async fn setup_whatsapp_connection(pool: &PgPool, mk: &MasterKey, tenant_id: Uui
         .bind(ct)
         .bind(nonce)
         .bind(hint(ACCESS_TOKEN_VALUE))
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -216,7 +216,9 @@ async fn emit_whatsapp_outbound_for_ai_reply() {
     .unwrap();
 
     // Call the emit function (as the engine does after inserting an AI reply)
-    let mut tx = pool.begin().await.unwrap();
+    let mut tx = db::UnitOfWork::begin_for_tenant(&pool, tenant_id)
+        .await
+        .unwrap();
     conversations::outbox::emit_whatsapp_outbound_in_tx(
         &mut tx,
         tenant_id,
@@ -233,7 +235,7 @@ async fn emit_whatsapp_outbound_for_ai_reply() {
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -247,7 +249,7 @@ async fn emit_whatsapp_outbound_for_ai_reply() {
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -262,7 +264,7 @@ async fn emit_whatsapp_outbound_for_ai_reply() {
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -297,7 +299,9 @@ async fn auto_ack_system_message_with_whatsapp_outbound() {
     .unwrap();
 
     // Call the emit function (as the agent responder does for whatsapp channels)
-    let mut tx = pool.begin().await.unwrap();
+    let mut tx = db::UnitOfWork::begin_for_tenant(&pool, tenant_id)
+        .await
+        .unwrap();
     conversations::outbox::emit_whatsapp_outbound_in_tx(
         &mut tx,
         tenant_id,
@@ -314,7 +318,7 @@ async fn auto_ack_system_message_with_whatsapp_outbound() {
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -328,7 +332,7 @@ async fn auto_ack_system_message_with_whatsapp_outbound() {
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -374,7 +378,7 @@ async fn non_whatsapp_channel_does_not_emit_whatsapp_outbound() {
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

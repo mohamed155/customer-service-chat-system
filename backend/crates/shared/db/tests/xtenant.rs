@@ -85,9 +85,10 @@ async fn every_xtenant_function_is_locked_down() {
     }
     db::testing::migrate().await;
     let pool = db::testing::owner_pool();
-    // proname, owner, security definer, search_path setting, PUBLIC may execute, app_runtime may execute
+    // proname, owner, security definer, search_path setting, PUBLIC may execute, app_runtime may execute,
+    // returns trigger
     #[allow(clippy::type_complexity)]
-    let rows: Vec<(String, String, bool, Option<String>, bool, bool)> = sqlx::query_as(
+    let rows: Vec<(String, String, bool, Option<String>, bool, bool, bool)> = sqlx::query_as(
         "SELECT p.proname::text,
                 pg_get_userbyid(p.proowner)::text,
                 p.prosecdef,
@@ -95,7 +96,8 @@ async fn every_xtenant_function_is_locked_down() {
                 -- a NULL ACL is the default, which includes PUBLIC
                 (p.proacl IS NULL OR EXISTS (SELECT 1 FROM aclexplode(p.proacl) a
                                              WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE')),
-                has_function_privilege('app_runtime', p.oid, 'EXECUTE')
+                has_function_privilege('app_runtime', p.oid, 'EXECUTE'),
+                p.prorettype = 'trigger'::regtype
          FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'xtenant'
          ORDER BY 1",
@@ -109,7 +111,7 @@ async fn every_xtenant_function_is_locked_down() {
         rows.len() >= 8,
         "expected the xtenant functions to exist, found {rows:?}"
     );
-    for (name, owner, definer, search_path, public_exec, runtime_exec) in rows {
+    for (name, owner, definer, search_path, public_exec, runtime_exec, is_trigger) in rows {
         assert_eq!(
             owner, "app_platform",
             "{name}: must be owned by app_platform"
@@ -124,11 +126,12 @@ async fn every_xtenant_function_is_locked_down() {
             !public_exec,
             "{name}: PUBLIC must not be able to execute it"
         );
-        // `_`-prefixed functions are internal helpers called by the others, never by the app.
-        if name.starts_with('_') {
+        // `_`-prefixed functions are internal helpers called by the others, never by the app, and
+        // trigger functions run only through their trigger (0074).
+        if name.starts_with('_') || is_trigger {
             assert!(
                 !runtime_exec,
-                "{name}: an internal helper must not be executable by app_runtime"
+                "{name}: an internal helper or trigger function must not be executable by app_runtime"
             );
         } else {
             assert!(
@@ -203,6 +206,7 @@ async fn user_memberships_returns_a_users_memberships_across_tenants() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let user = seed_user(&mut tx).await;
     let other_user = seed_user(&mut tx).await;
     let (t1, t2) = (seed_tenant(&mut tx).await, seed_tenant(&mut tx).await);
@@ -221,7 +225,6 @@ async fn user_memberships_returns_a_users_memberships_across_tenants() {
         .await
         .unwrap();
     }
-    db::testing::enforce_rls(&mut tx, &["tenant_memberships", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     assert_eq!(
@@ -274,8 +277,8 @@ async fn record_auth_event_writes_only_auth_actions_and_app_runtime_cannot_write
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let user = seed_user(&mut tx).await;
-    db::testing::enforce_rls(&mut tx, &["audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let resource = user.to_string();
@@ -333,6 +336,7 @@ async fn invitation_by_token_resolves_the_tenant_from_the_token() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let inviter = seed_user(&mut tx).await;
     let token_hash = Uuid::new_v4().simple().to_string();
@@ -346,7 +350,6 @@ async fn invitation_by_token_resolves_the_tenant_from_the_token() {
     .fetch_one(&mut *tx)
     .await
     .unwrap();
-    db::testing::enforce_rls(&mut tx, &["tenant_invitations", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     assert_eq!(
@@ -409,6 +412,7 @@ async fn invitation_by_token_treats_a_soft_deleted_tenant_as_a_miss() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let inviter = seed_user(&mut tx).await;
     let token_hash = Uuid::new_v4().simple().to_string();
@@ -427,7 +431,6 @@ async fn invitation_by_token_treats_a_soft_deleted_tenant_as_a_miss() {
         .execute(&mut *tx)
         .await
         .unwrap();
-    db::testing::enforce_rls(&mut tx, &["tenant_invitations", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let miss: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM xtenant.invitation_by_token($1)")
@@ -444,6 +447,7 @@ async fn widget_lookups_resolve_instance_and_session_without_a_tenant() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let public_id = format!("wgt_{}", Uuid::new_v4().simple());
     let instance: Uuid = sqlx::query_scalar(
@@ -472,11 +476,6 @@ async fn widget_lookups_resolve_instance_and_session_without_a_tenant() {
             live_session = id;
         }
     }
-    db::testing::enforce_rls(
-        &mut tx,
-        &["widget_instances", "widget_sessions", "audit_logs"],
-    )
-    .await;
     db::testing::become_runtime(&mut tx).await;
 
     assert_eq!(
@@ -573,6 +572,7 @@ async fn webhook_lookups_resolve_the_connection_and_tenant_from_the_token() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let (catalog, slug): (Uuid, String) =
         sqlx::query_as("SELECT id, slug::text FROM integration_catalog WHERE slug = 'whatsapp'")
@@ -591,7 +591,6 @@ async fn webhook_lookups_resolve_the_connection_and_tenant_from_the_token() {
     .fetch_one(&mut *tx)
     .await
     .unwrap();
-    db::testing::enforce_rls(&mut tx, &["integration_connections", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let direct: i64 = sqlx::query_scalar(
@@ -668,6 +667,7 @@ async fn audit_throttle_is_per_resource_and_lapses_after_the_interval() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let mut instances = Vec::new();
     for _ in 0..2 {
@@ -682,7 +682,6 @@ async fn audit_throttle_is_per_resource_and_lapses_after_the_interval() {
         .unwrap();
         instances.push((id, public_id));
     }
-    db::testing::enforce_rls(&mut tx, &["widget_instances", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     for (_, public_id) in &instances {

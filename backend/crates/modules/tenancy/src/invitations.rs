@@ -1653,7 +1653,7 @@ mod tests {
         .bind(&email)
         .bind(Uuid::new_v4().to_string())
         .bind(inviter_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -1666,6 +1666,7 @@ mod tests {
             tokio::spawn(async move {
                 let result: std::result::Result<(), sqlx::Error> = async {
                     let mut tx = pool1.begin().await?;
+                    db::set_tenant_in_tx(&mut tx, tenant_id).await?;
 
                     let expired: Option<(Uuid,)> = sqlx::query_as(
                         "SELECT id FROM tenant_invitations \
@@ -1707,6 +1708,7 @@ mod tests {
             tokio::spawn(async move {
                 let result: std::result::Result<(), sqlx::Error> = async {
                     let mut tx = pool2.begin().await?;
+                    db::set_tenant_in_tx(&mut tx, tenant_id).await?;
 
                     let expired: Option<(Uuid,)> = sqlx::query_as(
                         "SELECT id FROM tenant_invitations \
@@ -1760,7 +1762,7 @@ mod tests {
         )
         .bind(tenant_id)
         .bind(&email)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap_or(0);
         assert_eq!(count, 1, "only one pending invitation should remain");

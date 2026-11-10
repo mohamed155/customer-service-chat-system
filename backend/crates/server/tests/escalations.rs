@@ -297,7 +297,7 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> Seeded
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     SeededMembership {
@@ -320,7 +320,7 @@ async fn seed_member(
     .bind(tenant_id)
     .bind(user_id)
     .bind(role)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     SeededMembership {
@@ -376,7 +376,7 @@ async fn seed_skill(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
     sqlx::query_scalar("INSERT INTO skills (tenant_id, name) VALUES ($1, $2) RETURNING id")
         .bind(tenant_id)
         .bind(name)
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap()
 }
@@ -394,7 +394,7 @@ async fn seed_agent_skill(
     .bind(tenant_id)
     .bind(membership_id)
     .bind(skill_id)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -409,7 +409,7 @@ async fn seed_availability(pool: &sqlx::PgPool, tenant_id: Uuid, membership_id: 
     .bind(tenant_id)
     .bind(membership_id)
     .bind(state)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -428,7 +428,7 @@ async fn seed_inactive_member(
     .bind(tenant_id)
     .bind(user_id)
     .bind(role)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     SeededMembership {
@@ -547,7 +547,7 @@ async fn fetch_audit_count(pool: &sqlx::PgPool, action: &str, resource_id: Uuid)
     sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE action = $1 AND resource_id = $2")
         .bind(action)
         .bind(resource_id.to_string())
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap()
 }
@@ -1696,7 +1696,7 @@ async fn presence_timeout_reverts_to_away() {
     )
     .bind(tenant)
     .bind(agent.membership_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(db_state.as_deref(), Some("away"));
@@ -1706,7 +1706,7 @@ async fn presence_timeout_reverts_to_away() {
         "SELECT COUNT(*) FROM audit_logs \
          WHERE action = 'availability.changed' AND details->>'cause' = 'presence_timeout'",
     )
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(audit_count, 1, "presence_timeout must be audited");
@@ -1883,7 +1883,7 @@ async fn delete_skill_removes_agent_skills_and_queue_refs() {
     let agent_skill_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM agent_skills WHERE skill_id = $1")
             .bind(skill)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(agent_skill_count, 0);
@@ -1940,7 +1940,7 @@ async fn put_member_skills_idempotent() {
     )
     .bind(tenant)
     .bind(agent.membership_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(count, 2);
@@ -2035,7 +2035,7 @@ async fn each_skill_mutation_writes_audit() {
     let member = seed_member(&pool, tenant, "member@audit-skill.test", "admin").await;
 
     let audit_before: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs")
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -2074,7 +2074,7 @@ async fn each_skill_mutation_writes_audit() {
     .await;
 
     let audit_after: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs")
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert!(

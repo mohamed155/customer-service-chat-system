@@ -72,7 +72,7 @@ async fn seed_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> Uuid 
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }

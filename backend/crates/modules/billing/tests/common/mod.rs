@@ -74,7 +74,7 @@ pub async fn subscribe(pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid, stat
     .bind(tenant_id)
     .bind(plan_id)
     .bind(status)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }

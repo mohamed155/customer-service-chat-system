@@ -154,7 +154,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -190,7 +190,7 @@ async fn seed_connection(
     .bind(token_hash.to_vec())
     .bind(token_ciphertext)
     .bind(token_nonce.to_vec())
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -444,7 +444,7 @@ async fn count_recent_invalid_signature_events(pool: &sqlx::PgPool, connection_i
            AND reason = 'invalid_signature'",
     )
     .bind(connection_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     row.0
@@ -489,7 +489,7 @@ async fn three_rejected_deliveries_yield_error_status() {
     let connection_id: Uuid =
         sqlx::query_scalar("SELECT id FROM integration_connections WHERE tenant_id = $1")
             .bind(tenant)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 

@@ -205,7 +205,7 @@ async fn setup_whatsapp_connection(
     .bind(&token_hash)
     .bind(&token_ct)
     .bind(&token_nonce)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -225,7 +225,7 @@ async fn setup_whatsapp_connection(
         .bind(ct)
         .bind(nonce)
         .bind(hint(ACCESS_TOKEN_VALUE))
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -268,7 +268,7 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> Seeded
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     SeededMembership {
@@ -500,7 +500,7 @@ async fn reply_whatsapp_success_emits_outbound() {
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -515,7 +515,7 @@ async fn reply_whatsapp_success_emits_outbound() {
          WHERE tenant_id = $1::text AND event_type = 'whatsapp.outbound_message'",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(

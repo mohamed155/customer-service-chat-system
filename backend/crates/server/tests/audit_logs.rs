@@ -160,7 +160,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -185,7 +185,7 @@ async fn seed_audit_row(
     .bind(tenant_id)
     .bind(details)
     .bind(created_at)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -692,7 +692,7 @@ async fn immutability_update_and_delete_are_rejected_by_trigger() {
 
     let update_err = sqlx::query("UPDATE audit_logs SET action = 'tampered' WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap_err();
     let msg = update_err.to_string().to_lowercase();
@@ -705,7 +705,7 @@ async fn immutability_update_and_delete_are_rejected_by_trigger() {
 
     let delete_err = sqlx::query("DELETE FROM audit_logs WHERE id = $1")
         .bind(id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap_err();
     let msg = delete_err.to_string().to_lowercase();
@@ -980,7 +980,7 @@ async fn tool_execution_emits_audit_row() {
     )
     .bind(tenant_id)
     .bind("lookup_customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -996,7 +996,7 @@ async fn tool_execution_emits_audit_row() {
     )
     .bind(tenant_id)
     .bind("lookup_customer")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(actor_null, "tool.executed must have actor_user_id IS NULL");
@@ -1062,7 +1062,7 @@ async fn failed_tool_execution_emits_audit_row() {
     )
     .bind(tenant_id)
     .bind("non_existent_tool")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -1076,7 +1076,7 @@ async fn failed_tool_execution_emits_audit_row() {
     )
     .bind(tenant_id)
     .bind("non_existent_tool")
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(actor_null, "tool.executed must have actor_user_id IS NULL");

@@ -231,7 +231,7 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> Uuid {
     )
     .bind(tenant_id)
     .bind(user_id)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     user_id
@@ -1251,7 +1251,7 @@ async fn seed_membership(
     .bind(user_id)
     .bind(role)
     .bind(status)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -1299,7 +1299,7 @@ async fn count_identifiers(pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
 async fn count_audit_logs_for_action(pool: &sqlx::PgPool, action: &str) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE action = $1")
         .bind(action)
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap()
 }
@@ -1312,7 +1312,7 @@ async fn count_audit_logs_for_resource(
     sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE action = $1 AND resource_id = $2")
         .bind(action)
         .bind(resource_id.to_string())
-        .fetch_one(pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap()
 }
@@ -1330,7 +1330,7 @@ async fn fetch_audit_row_for_resource(
     )
     .bind(action)
     .bind(resource_id.to_string())
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("expected matching audit_logs row")
 }
@@ -3880,7 +3880,7 @@ async fn patch_complete_rollback_on_conflict_snapshots_all_state() {
     let pre_audit_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1")
             .bind(customer_id.to_string())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -4016,7 +4016,7 @@ async fn patch_complete_rollback_on_conflict_snapshots_all_state() {
     let post_audit_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1")
             .bind(customer_id.to_string())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4349,7 +4349,7 @@ async fn create_dual_tenant_isolation() {
     )
     .bind(customer_a_id.to_string())
     .bind(tenant_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -4464,7 +4464,7 @@ async fn create_dual_tenant_isolation() {
     )
     .bind(customer_b_id.to_string())
     .bind(tenant_a)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -4678,7 +4678,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let pre_a_audit_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1")
             .bind(customer_a_id.to_string())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -4706,7 +4706,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let pre_b_audit_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1")
             .bind(customer_b_id.to_string())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
 
@@ -4805,7 +4805,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let post_a_audit_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1")
             .bind(customer_a_id.to_string())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4850,7 +4850,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let post_b_audit_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1")
             .bind(customer_b_id.to_string())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -4959,7 +4959,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let roll_a_audit_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1")
             .bind(customer_a_id.to_string())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(
@@ -5004,7 +5004,7 @@ async fn patch_dual_tenant_noop_and_conflict_snapshot() {
     let roll_b_audit_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE resource_id = $1")
             .bind(customer_b_id.to_string())
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(

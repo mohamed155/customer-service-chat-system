@@ -12,7 +12,8 @@ pub async fn record(
     details: &serde_json::Value,
 ) {
     // A row for a tenant is written inside that tenant's Unit of Work (app.tenant_id set). A row
-    // without a tenant is a platform-level event (MOH-31 cross-tenant path), written on the pool.
+    // without a tenant is a platform-level event (MOH-31 cross-tenant path): Row-Level Security
+    // refuses a direct insert without a tenant, so it goes through `xtenant.record_platform_event`.
     let result = match tenant_id {
         Some(tenant) => match db::UnitOfWork::begin_for_tenant(pool, tenant).await {
             Ok(mut uow) => {
@@ -35,11 +36,10 @@ pub async fn record(
         },
         None => match pool.acquire().await {
             Ok(mut conn) => {
-                insert_audit(
+                insert_platform_event(
                     &mut conn,
                     action,
                     actor_user_id,
-                    tenant_id,
                     resource_type,
                     resource_id,
                     details,
@@ -83,6 +83,27 @@ async fn insert_audit(
     .map(|_| ())
 }
 
+/// Writes an audit row that belongs to no tenant, through the audited function that accepts only
+/// the platform-level actions (`xtenant.record_platform_event`).
+async fn insert_platform_event(
+    conn: &mut sqlx::PgConnection,
+    action: &str,
+    actor_user_id: Option<uuid::Uuid>,
+    resource_type: &str,
+    resource_id: Option<&str>,
+    details: &serde_json::Value,
+) -> sqlx::Result<()> {
+    sqlx::query("SELECT xtenant.record_platform_event($1, $2, $3, $4, $5)")
+        .bind(action)
+        .bind(actor_user_id)
+        .bind(resource_type)
+        .bind(resource_id)
+        .bind(details)
+        .execute(conn)
+        .await
+        .map(|_| ())
+}
+
 /// Transactional variant: writes the audit row inside the caller's open
 /// transaction and surfaces the sqlx error to the caller. Used by handlers
 /// that require the audit row and the data mutation to commit atomically
@@ -100,18 +121,27 @@ pub async fn record_in_tx(
     // timeouts). actor_user_id references users(id), so store that as NULL
     // instead of failing the whole transaction on the FK.
     let actor_user_id = actor_user_id.filter(|id| !id.is_nil());
-    sqlx::query(
-        "INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, tenant_id, details) VALUES ($1, $2, $3, $4, $5, $6)",
+    let Some(tenant_id) = tenant_id else {
+        return insert_platform_event(
+            tx,
+            action,
+            actor_user_id,
+            resource_type,
+            resource_id,
+            details,
+        )
+        .await;
+    };
+    insert_audit(
+        tx,
+        action,
+        actor_user_id,
+        Some(tenant_id),
+        resource_type,
+        resource_id,
+        details,
     )
-    .bind(actor_user_id)
-    .bind(action)
-    .bind(resource_type)
-    .bind(resource_id)
-    .bind(tenant_id)
-    .bind(details)
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
+    .await
 }
 
 pub async fn record_member_invited(

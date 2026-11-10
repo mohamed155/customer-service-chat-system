@@ -147,7 +147,7 @@ async fn seed_widget_instance(pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &
     .bind(public_id)
     .bind("Test Widget")
     .bind("Test Widget")
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }

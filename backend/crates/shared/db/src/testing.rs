@@ -64,9 +64,10 @@ pub async fn migrate() {
 
 use sqlx::{PgConnection, Postgres, Transaction};
 
-/// Applies the migrations, then opens a transaction on the owner connection. Seed fixtures on it
-/// first (the owner is not restricted before [`enforce_rls`]), then call [`enforce_rls`] and
-/// [`become_runtime`]. Drop the transaction at the end of the test: it is rolled back.
+/// Applies the migrations, then opens a transaction on the owner connection. Every tenant-owned
+/// table has forced Row-Level Security, which applies to the owner too: call [`become_platform`]
+/// to seed fixtures, then [`become_runtime`] to run as the application. Drop the transaction at the
+/// end of the test: it is rolled back.
 pub async fn owner_tx() -> Transaction<'static, Postgres> {
     migrate().await;
     owner_pool()
@@ -75,41 +76,10 @@ pub async fn owner_tx() -> Transaction<'static, Postgres> {
         .expect("could not open an owner transaction")
 }
 
-/// Enables and forces Row-Level Security on `tables` with a policy that matches no row, which is
-/// what every tenant-owned table does without an `app.tenant_id`. Needs the owner role.
-///
-/// # Panics
-/// When a name is not a plain identifier, or the statement fails.
-pub async fn enforce_rls(conn: &mut PgConnection, tables: &[&str]) {
-    // Locks are taken in a fixed order so two tests that share a table cannot deadlock.
-    let mut tables = tables.to_vec();
-    tables.sort_unstable();
-    for table in tables {
-        assert!(
-            !table.is_empty()
-                && table
-                    .chars()
-                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
-            "not a plain table name: {table}"
-        );
-        for statement in [
-            format!("ALTER TABLE {table} ENABLE ROW LEVEL SECURITY"),
-            format!("ALTER TABLE {table} FORCE ROW LEVEL SECURITY"),
-            format!("CREATE POLICY forced_rls_probe ON {table} USING (false) WITH CHECK (false)"),
-        ] {
-            // The table name was checked above to be a plain identifier.
-            sqlx::query(sqlx::AssertSqlSafe(statement.clone()))
-                .execute(&mut *conn)
-                .await
-                .unwrap_or_else(|e| panic!("`{statement}` failed: {e}"));
-        }
-    }
-}
-
 /// Goes back to the owner role (undoes [`become_runtime`] and [`become_platform`]).
 ///
 /// The owner is **not** exempt from Row-Level Security on a table whose policy is forced, so seed
-/// rows for such tables as [`become_platform`] and come back here only for DDL (`enforce_rls`).
+/// rows for such tables as [`become_platform`] and come back here only for DDL.
 pub async fn become_owner(conn: &mut PgConnection) {
     sqlx::query("RESET ROLE")
         .execute(conn)
@@ -123,7 +93,7 @@ pub async fn become_runtime(conn: &mut PgConnection) {
 }
 
 /// Runs the rest of the transaction as `app_platform`, which bypasses Row-Level Security. For test
-/// assertions that must read rows (an audit row, say) after [`enforce_rls`] has hidden them.
+/// seeding and for assertions that must read rows (an audit row, say) the application role cannot see.
 pub async fn become_platform(conn: &mut PgConnection) {
     set_role(conn, "app_platform").await;
 }
@@ -263,6 +233,18 @@ pub mod isolation {
         assert_plain(p.table);
         assert_plain(p.id_column);
         let (t, id) = (p.table, p.id_column);
+        // `outbox_events.tenant_id` is TEXT, every other tenant column is uuid: bind the tenant as
+        // text and cast it back to the column's own type where it is assigned.
+        let tenant_type: String = sqlx::query_scalar(
+            "SELECT format_type(a.atttypid, a.atttypmod) FROM pg_attribute a \
+             WHERE a.attrelid = format('public.%I', $1::text)::regclass \
+               AND a.attname = 'tenant_id' AND NOT a.attisdropped",
+        )
+        .bind(t)
+        .fetch_one(runtime_pool)
+        .await
+        .expect("tenant_id column type");
+        assert_plain(&tenant_type);
 
         // The right tenant sees its own row.
         let mut uow = UnitOfWork::begin_for_tenant(runtime_pool, p.tenant_a)
@@ -297,7 +279,7 @@ pub mod isolation {
         assert_eq!(
             count(
                 &mut uow,
-                format!("SELECT count(*) FROM {t} WHERE tenant_id = $1"),
+                format!("SELECT count(*) FROM {t} WHERE tenant_id::text = $1::uuid::text"),
                 Some(p.tenant_a)
             )
             .await,
@@ -326,7 +308,7 @@ pub mod isolation {
         );
         // Handing one's own row to the other tenant must be refused (WITH CHECK).
         let moved = sqlx::query(sqlx::AssertSqlSafe(format!(
-            "UPDATE {t} SET tenant_id = $1 WHERE {id} = $2"
+            "UPDATE {t} SET tenant_id = $1::uuid::text::{tenant_type} WHERE {id} = $2"
         )))
         .bind(p.tenant_a)
         .bind(p.row_b)

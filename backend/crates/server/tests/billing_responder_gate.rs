@@ -139,7 +139,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -253,7 +253,7 @@ async fn subscribe_tenant(pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid) {
     )
     .bind(tenant_id)
     .bind(plan_id)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -369,7 +369,7 @@ async fn exhausted_allowance_gate_deletes_outbox_and_blocks_ai() {
     .bind(conversation_id.to_string())
     .bind(tenant_id.to_string())
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -390,7 +390,7 @@ async fn exhausted_allowance_gate_deletes_outbox_and_blocks_ai() {
     // Assert outbox event deleted
     let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM outbox_events WHERE id = $1")
         .bind(outbox_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(remaining, 0, "outbox event should have been deleted");
@@ -473,7 +473,7 @@ async fn conversation_and_customer_message_survive_gate() {
     .bind(conversation_id.to_string())
     .bind(tenant_id.to_string())
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -586,7 +586,7 @@ async fn escalation_rule_still_matches_while_over_limit() {
     .bind(conversation_id.to_string())
     .bind(tenant_id.to_string())
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -606,7 +606,7 @@ async fn escalation_rule_still_matches_while_over_limit() {
     // Outbox should be deleted (escalation path consumed it)
     let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM outbox_events WHERE id = $1")
         .bind(outbox_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     assert_eq!(remaining, 0, "outbox should be consumed by escalation");
@@ -755,7 +755,7 @@ async fn allowance_available_responder_proceeds_normally() {
     .bind(conversation_id.to_string())
     .bind(tenant_id.to_string())
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

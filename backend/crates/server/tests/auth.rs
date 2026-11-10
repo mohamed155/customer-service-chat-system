@@ -312,7 +312,7 @@ mod tests {
         )
         .bind(tenant_id)
         .bind(user_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -468,14 +468,14 @@ mod tests {
             "SELECT COUNT(*) FROM audit_logs WHERE action = 'auth.login_succeeded' AND actor_user_id = $1",
         )
         .bind(user_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         let failure_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM audit_logs WHERE action = 'auth.login_failed' AND actor_user_id IS NULL AND details->>'email' = $1",
         )
         .bind(&email)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -670,7 +670,7 @@ mod tests {
             "SELECT COUNT(*) FROM audit_logs WHERE action = 'auth.logged_out' AND actor_user_id = $1",
         )
         .bind(user_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -781,7 +781,7 @@ mod tests {
             "SELECT COUNT(*) FROM audit_logs WHERE action = 'tenant.signup_completed' AND tenant_id = $1",
         )
         .bind(tenant_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         assert_eq!(audit_count, 1);

@@ -87,6 +87,7 @@ async fn widget_session_sweep_deletes_expired_sessions_and_audits_the_count() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let instance: Uuid = sqlx::query_scalar(
         "INSERT INTO widget_instances (tenant_id, public_id, name) VALUES ($1, $2, 'W') RETURNING id",
@@ -108,7 +109,6 @@ async fn widget_session_sweep_deletes_expired_sessions_and_audits_the_count() {
         .await
         .unwrap();
     }
-    db::testing::enforce_rls(&mut tx, &["widget_sessions", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let before = audit_rows(&mut tx, "widget_session_sweep", "widget_session_expiry").await;
@@ -150,6 +150,7 @@ async fn retention_sweeps_delete_only_rows_older_than_ninety_days() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let user = seed_user(&mut tx).await;
     let membership = seed_membership(&mut tx, tenant, user).await;
@@ -201,16 +202,6 @@ async fn retention_sweeps_delete_only_rows_older_than_ninety_days() {
         .await
         .unwrap();
     }
-    db::testing::enforce_rls(
-        &mut tx,
-        &[
-            "integration_events",
-            "integration_webhook_deliveries",
-            "notifications",
-            "audit_logs",
-        ],
-    )
-    .await;
     db::testing::become_runtime(&mut tx).await;
 
     let integration: i64 = sqlx::query_scalar("SELECT xtenant.integration_retention_sweep()")
@@ -264,6 +255,7 @@ async fn tool_request_expiry_sweep_expires_overdue_requests_and_queues_the_decis
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     // Rows for tables under forced Row-Level Security are seeded as the bypass role.
     db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
@@ -317,8 +309,6 @@ async fn tool_request_expiry_sweep_expires_overdue_requests_and_queues_the_decis
         .unwrap();
         ids.push(id);
     }
-    db::testing::become_owner(&mut tx).await;
-    db::testing::enforce_rls(&mut tx, &["tool_requests", "outbox_events", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let expired: i64 = sqlx::query_scalar("SELECT xtenant.tool_request_expiry_sweep()")
@@ -362,6 +352,7 @@ async fn available_agents_lists_available_agents_across_tenants() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let (u1, u2) = (seed_user(&mut tx).await, seed_user(&mut tx).await);
     let (m1, m2) = (
@@ -379,7 +370,6 @@ async fn available_agents_lists_available_agents_across_tenants() {
         .await
         .unwrap();
     }
-    db::testing::enforce_rls(&mut tx, &["agent_availability", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let direct: i64 = sqlx::query_scalar("SELECT count(*) FROM agent_availability")
@@ -412,6 +402,7 @@ async fn platform_dashboard_functions_aggregate_across_tenants() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     // Rows for tables under forced Row-Level Security are seeded as the bypass role.
     db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
@@ -453,17 +444,6 @@ async fn platform_dashboard_functions_aggregate_across_tenants() {
     .execute(&mut *tx)
     .await
     .unwrap();
-    db::testing::become_owner(&mut tx).await;
-    db::testing::enforce_rls(
-        &mut tx,
-        &[
-            "conversations",
-            "ai_usage_records",
-            "outbox_events",
-            "audit_logs",
-        ],
-    )
-    .await;
     db::testing::become_runtime(&mut tx).await;
 
     let direct: i64 = sqlx::query_scalar("SELECT count(*) FROM conversations")
@@ -556,6 +536,7 @@ async fn platform_audit_entries_lists_every_tenants_entries_and_records_who_aske
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let (t1, t2) = (seed_tenant(&mut tx).await, seed_tenant(&mut tx).await);
     let admin = seed_user(&mut tx).await;
     for (tenant, res) in [(t1, "r1"), (t2, "r2")] {
@@ -570,7 +551,6 @@ async fn platform_audit_entries_lists_every_tenants_entries_and_records_who_aske
         .await
         .unwrap();
     }
-    db::testing::enforce_rls(&mut tx, &["audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let direct: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_logs")
@@ -628,6 +608,7 @@ async fn platform_subscription_set_assigns_plans_and_audits_for_the_tenant() {
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let tenant = seed_tenant(&mut tx).await;
     let admin = seed_user(&mut tx).await;
     let active: Uuid = sqlx::query_scalar(
@@ -644,7 +625,6 @@ async fn platform_subscription_set_assigns_plans_and_audits_for_the_tenant() {
     .fetch_one(&mut *tx)
     .await
     .unwrap();
-    db::testing::enforce_rls(&mut tx, &["tenant_subscriptions", "audit_logs"]).await;
     db::testing::become_runtime(&mut tx).await;
 
     let direct: i64 = sqlx::query_scalar("SELECT count(*) FROM tenant_subscriptions")
@@ -739,6 +719,7 @@ async fn platform_ai_functions_manage_the_platform_rows_and_audit_every_change()
         return;
     }
     let mut tx = db::testing::owner_tx().await;
+    db::testing::become_platform(&mut tx).await;
     let admin = seed_user(&mut tx).await;
     let provider = "anthropic".to_string();
     // Park any existing platform default and credential so this test sees only its own rows
@@ -753,11 +734,6 @@ async fn platform_ai_functions_manage_the_platform_rows_and_audit_every_change()
     .execute(&mut *tx)
     .await
     .unwrap();
-    db::testing::enforce_rls(
-        &mut tx,
-        &["ai_configurations", "ai_credentials", "audit_logs"],
-    )
-    .await;
     db::testing::become_runtime(&mut tx).await;
 
     let direct: i64 = sqlx::query_scalar("SELECT count(*) FROM ai_credentials")

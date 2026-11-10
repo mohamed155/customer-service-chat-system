@@ -165,7 +165,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
     )
     .bind(tenant_id)
     .bind(user_id)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -180,7 +180,7 @@ async fn seed_outbox_event(pool: &sqlx::PgPool, created_at_minutes_ago: i64, att
         .bind(Uuid::new_v4())
         .bind(created)
         .bind(attempts)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }

@@ -136,7 +136,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .bind(tenant_id)
         .bind(user_id)
         .bind(role)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -305,7 +305,7 @@ async fn engine_retry_exhaustion_triggers_fallback() {
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(outbox_payload)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

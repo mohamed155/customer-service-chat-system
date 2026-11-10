@@ -88,7 +88,7 @@ mod tests {
         .bind(token_hash.to_vec())
         .bind(token_ciphertext)
         .bind(token_nonce.to_vec())
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -107,7 +107,7 @@ mod tests {
             )))
             .bind(tenant_id)
             .bind(connection_id)
-            .execute(&pool)
+            .execute(&db::testing::seed_pool())
             .await
             .unwrap();
         }
@@ -127,7 +127,7 @@ mod tests {
             )))
             .bind(tenant_id)
             .bind(connection_id)
-            .execute(&pool)
+            .execute(&db::testing::seed_pool())
             .await
             .unwrap();
         }
@@ -136,7 +136,7 @@ mod tests {
         let events_before: (i64,) =
             sqlx::query_as("SELECT COUNT(*) FROM integration_events WHERE connection_id = $1")
                 .bind(connection_id)
-                .fetch_one(&pool)
+                .fetch_one(&db::testing::seed_pool())
                 .await
                 .unwrap();
         assert_eq!(events_before.0, 4, "expected 4 events before sweep");
@@ -144,7 +144,7 @@ mod tests {
             "SELECT COUNT(*) FROM integration_webhook_deliveries WHERE connection_id = $1",
         )
         .bind(connection_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         assert_eq!(deliveries_before.0, 4, "expected 4 deliveries before sweep");
@@ -160,7 +160,7 @@ mod tests {
         let events_after: (i64,) =
             sqlx::query_as("SELECT COUNT(*) FROM integration_events WHERE connection_id = $1")
                 .bind(connection_id)
-                .fetch_one(&pool)
+                .fetch_one(&db::testing::seed_pool())
                 .await
                 .unwrap();
         assert_eq!(
@@ -172,7 +172,7 @@ mod tests {
             "SELECT COUNT(*) FROM integration_webhook_deliveries WHERE connection_id = $1",
         )
         .bind(connection_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
         assert_eq!(
