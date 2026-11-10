@@ -78,9 +78,9 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | STRIDE | Threat | Controls | Status | Owner |
 | -- | -- | -- | -- | -- |
 | S | Forged `X-Tenant-ID` to enter another tenant | Server-side membership check on every request; 404 for invisible tenants | ✓ | Identity & Access |
-| T | Row written into another tenant | Composite FKs; RLS `WITH CHECK` | Partial: ~36 composite FKs, ~80 single-column (ADR-004 T3); **no RLS** (T1) | Platform Engineering |
+| T | Row written into another tenant | Composite FKs; RLS `WITH CHECK` | Partial: ~36 composite FKs, ~80 single-column (ADR-004 T3); ✓ RLS `WITH CHECK` on every tenant table (ADR-004 T1) | Platform Engineering |
 | R | Untracked role or membership changes | Audit on role/membership changes | ✓ | Identity & Access |
-| I | Cross-tenant read through a missed `WHERE tenant_id` | App-layer `TenantContext` + RLS (two layers) | **Gap (high)**: one layer only; the app DB user is a superuser, which bypasses RLS (ADR-004 T1/T2) | Platform Engineering |
+| I | Cross-tenant read through a missed `WHERE tenant_id` | App-layer `TenantContext` + RLS (two layers) | ✓ two layers: forced RLS on every tenant table, and the app connects as `app_runtime`, which RLS applies to (ADR-004 T1/T2); a CI test fails if a tenant table lacks it | Platform Engineering |
 | D | Noisy tenant starving others | Per-tenant rate limits, quotas, fair scheduling | Partial: rate limits ✓; fair job scheduling missing (ADR-007 Q2) | Platform Engineering |
 | E | Privilege escalation via role names in code | Permission-based checks, declared per endpoint | ✓ (ADR-006) | Identity & Access |
 
@@ -91,7 +91,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | S | Agent acts as another agent | Actor from session, never from request body | ✓ | Conversations |
 | T | Messages altered after the fact | Messages are append-only (no code path runs `UPDATE messages`) | ✓ | Conversations |
 | R | Disputed assignment or resolution | Audit trail of assignment and status changes | ✓ | Conversations |
-| I | IDOR on conversation or customer IDs | Tenant-scoped queries; endpoint isolation tests | ✓ per feature · Gap: shared isolation harness (ADR-004 T5) | Conversations |
+| I | IDOR on conversation or customer IDs | Tenant-scoped queries; endpoint isolation tests | ✓ per feature and the shared isolation harness (ADR-004 T5) | Conversations |
 | I | Stale data of a previous tenant shown after switch | Tenant-scoped stores reset on switch | Gap to confirm: `NotificationsStore` (ADR-003 F2) | Frontend |
 | D | Escalation storms overfill agents | Atomic conditional capacity update in routing (§11.1) | Verify: routing is load-based under per-tenant advisory locks; confirm with a concurrency test | Conversations |
 | E | Agent reads conversations outside their scope | Policy layer (assigned-only unless Manager) | See ADR-006 current-state table | Identity & Access |
@@ -125,7 +125,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | S | Prompt injection makes the model claim to be staff or system | Instruction hierarchy; untrusted content delimited | ✓ | AI Platform |
 | T | Published prompt changed silently | Immutable prompt versions | ✓ | AI Platform |
 | R | Can't explain an AI answer | Turn record: provider, model, prompt version, usage, tool calls, citations | ✓ | AI Platform |
-| I | Model leaks another tenant's data | Tenant-scoped retrieval only; no secrets in context; output filters | ✓ tenant-scoped retrieval · Gap: RLS on vector tables (ADR-004 T1) | AI Platform |
+| I | Model leaks another tenant's data | Tenant-scoped retrieval only; no secrets in context; output filters | ✓ tenant-scoped retrieval and RLS on the vector tables (ADR-004 T1) | AI Platform |
 | D | Runaway token spend or provider outage | Per-tenant plan allowances; circuit breakers; fallback; safe escalation | ✓ billing enforcement and fallback/escalation · Gap: no circuit breakers or per-provider bulkheads (§10.2) | AI Platform |
 | E | Model output treated as trusted commands | Tools are the only actions; server-side validation and authz | ✓ (see 4.7) | AI Platform |
 
@@ -147,7 +147,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | S | — | Uploads tied to authenticated tenant users | ✓ | AI Platform |
 | T | Poisoned document injects instructions | Retrieved text delimited as untrusted; red-team eval set | ✓ delimiting · Gap: red-team set in CI (§10.5) | AI Platform |
 | R | Unknown publisher of a harmful answer | Draft → published lifecycle with audit | ✓ | AI Platform |
-| I | Unpublished or other-tenant chunks retrieved | `status = 'published'` + tenant filter in retrieval | ✓ · Gap: RLS (ADR-004 T1) | AI Platform |
+| I | Unpublished or other-tenant chunks retrieved | `status = 'published'` + tenant filter in retrieval | ✓ tenant filter and RLS (ADR-004 T1) | AI Platform |
 | D | Huge or malicious files exhaust workers | Size limits; per-tenant ingestion caps; AV scan + quarantine | Partial: size limits ✓; AV scan, quarantine and fair scheduling missing (§7.4, ADR-007) | AI Platform |
 | E | Malicious file exploits a parser | Magic-byte detection; parsing in worker, not API | Partial | AI Platform |
 
@@ -167,12 +167,12 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | STRIDE | Threat | Controls | Status | Owner |
 | -- | -- | -- | -- | -- |
 | S | Forged events injected into the queue | Only server code writes outbox/jobs; DB credentials restricted | ✓ | Platform Engineering |
-| T | Job payload tenant ID tampered | Payload from trusted producers; worker re-establishes tenant context + RLS | Partial: RLS missing (ADR-004 T1) | Platform Engineering |
+| T | Job payload tenant ID tampered | Payload from trusted producers; worker re-establishes tenant context + RLS | ✓ the consumer re-establishes the tenant and RLS applies (ADR-004 T1) | Platform Engineering |
 | R | Lost history of processed events | Mark dispatched, keep for retention window | Gap: rows deleted after processing (ADR-007 Q3) | Platform Engineering |
 | I | SSE stream receives another tenant's events | Tenant-scoped channels from server-side context | ✓ | Conversations |
 | I | Stream stays open after logout or revocation | Close stream on revocation | Gap (ADR-009 RT3, ADR-005 A8) | Conversations |
 | D | Duplicate or stuck jobs | Leases, retries with jitter, dead letters, inbox dedupe | Partial (ADR-007 Q2–Q5) | Platform Engineering |
-| E | — | Workers use the same least-privilege DB role as the API | Gap until roles split (ADR-004 T2) | Platform Engineering |
+| E | — | Workers use the same least-privilege DB role as the API | ✓ same least-privilege `app_runtime` role as the API (ADR-004 T2) | Platform Engineering |
 
 ### 4.11 Platform operations and audit (`platform`, `audit`)
 
@@ -216,13 +216,13 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | R | Unknown change to production | Releases from CI only, manifest of deployed SHA | ✓ | Platform Engineering |
 | I | Secrets in repo or logs | gitleaks secret scan; log redaction; `.env*` ignored | ✓ | Platform Engineering |
 | D | Loss of database | PITR, daily snapshots, restore drills | ✓ backup/restore scripts (033) | Platform Engineering |
-| E | App DB user can run DDL / bypass RLS | Separate migration and runtime roles | **Gap (high)** (ADR-004 T2) | Platform Engineering |
+| E | App DB user can run DDL / bypass RLS | Separate migration and runtime roles | ✓ separate migration and runtime roles; confirm staging and production follow the runbook (ADR-004 T2) | Platform Engineering |
 
 ## 5. Top risks (ranked)
 
 | # | Risk | Rows | Tracking |
 | -- | -- | -- | -- |
-| 1 | Cross-tenant data exposure through a single missed filter: no RLS, and the app DB user is a superuser | 4.2 I, 4.14 E | ADR-004 T1, T2 · [MOH-31](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-31) (RLS), [MOH-23](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-23) (DB roles) |
+| 1 | Cross-tenant data exposure through a single missed filter. **Mitigated:** a second layer now exists, forced Row-Level Security on every table with a `tenant_id`, applied to the non-owner, non-bypass `app_runtime` role, so a missed `WHERE tenant_id` returns no rows instead of another tenant's; the audited `xtenant` functions are the only cross-tenant path and a CI test fails on a tenant table without RLS. Residual: staging and production role setup is unverified from the repository, and 80 single-column FKs remain (T3) | 4.2 I, 4.14 E | ADR-004 T1, T2, T5 resolved, T3 open · [MOH-31](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-31) (RLS), [MOH-23](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-23) (DB roles) |
 | 2 | Internal error text (including database errors) returned to clients | all API modules | ADR-012 A1 · [MOH-32](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-32) |
 | 3 | Tenant secrets under one static key per type, with no rotation or crypto-shredding | 4.9 I | ADR-014 E1 · [MOH-33](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-33) |
 | 4 | Platform accounts without MFA | 4.11 E | ADR-005 A6 · [MOH-34](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-34) |

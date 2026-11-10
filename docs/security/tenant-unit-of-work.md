@@ -189,6 +189,24 @@ the shared way to do it; **a table is not under Row-Level Security until it is i
   test): code that runs on it bypasses the policies and hides the bugs they exist to catch. Use
   `db::testing::owner_pool()` for `TRUNCATE`, and `db::testing::migrate()` for migrations.
 
+### The schema rule
+
+`backend/crates/shared/db/tests/rls_schema_rule.rs` (run in the backend `verify` job, which is a required
+check) reads the catalog and fails when:
+
+- a table in `public` has a `tenant_id` column but RLS is not enabled, not forced, or there is no policy
+  for all commands with both `USING` and `WITH CHECK`;
+- a table has no `tenant_id` and is not in the explicit global list
+  (`db::testing::isolation::GLOBAL_TABLES`: `users`, `tenants`, `revoked_sessions`, `integration_catalog`,
+  `billing_plans`, `_sqlx_migrations`), so a new table cannot skip the decision;
+- a table in the global list carries a `tenant_id` column, or no longer exists.
+
+The other tests in that file plant a table that breaks each part of the rule inside a transaction that is
+rolled back, and check that the matching message appears, so the check is shown to fail. A new tenant table
+needs the migration, a harness entry, and nothing else for this check; a new global table needs an entry in
+`GLOBAL_TABLES` with the reason in the PR. The ADR also asks for a check on single-column tenant-to-tenant
+foreign keys; that belongs to ADR-004 gap T3 and is not part of this rule.
+
 Adding a table group:
 
 1. Write the migration (copy `0072_rls_conversations_customers.sql`).
@@ -215,5 +233,5 @@ Adding a table group:
   written inside that tenant's Unit of Work.
 - `tenant_memberships` and `tenant_invitations` are read before a tenant is known (sign-in,
   invitation accept); those reads belong to the pre-tenant table above.
-- After MOH-49 every table with a `tenant_id` column has forced Row-Level Security. MOH-50 adds the CI
-  check that keeps it so.
+- Every table with a `tenant_id` column has forced Row-Level Security, and a CI test keeps it so (see
+  [The schema rule](#the-schema-rule)).

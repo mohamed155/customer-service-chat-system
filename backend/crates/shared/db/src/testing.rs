@@ -371,6 +371,82 @@ pub mod isolation {
         }
     }
 
+    /// Tables in `public` that deliberately have no `tenant_id` and no Row-Level Security: shared
+    /// reference data and platform-wide records. **Adding a table here is a decision to keep it
+    /// out of tenant isolation**; a table with a `tenant_id` column can never be listed (it must be
+    /// protected), and a table with neither is reported until it is classified one way or the other.
+    pub const GLOBAL_TABLES: &[&str] = &[
+        "_sqlx_migrations",
+        "billing_plans",
+        "integration_catalog",
+        "revoked_sessions",
+        "tenants",
+        "users",
+    ];
+
+    /// Checks the tenant-isolation rule against the current schema (ADR-004 sections 2 and 7) and
+    /// returns one message per violation; an empty list means the rule holds:
+    ///
+    /// - every table in `public` with a `tenant_id` column has Row-Level Security enabled **and**
+    ///   forced, and a policy for all commands with both `USING` and `WITH CHECK`;
+    /// - every other table is in [`GLOBAL_TABLES`], so a new table cannot skip the decision;
+    /// - every entry of [`GLOBAL_TABLES`] still exists.
+    pub async fn rls_rule_violations(conn: &mut sqlx::PgConnection) -> Vec<String> {
+        let tables: Vec<(String, bool, bool, bool, bool)> = sqlx::query_as(
+            "SELECT c.relname::text, \
+                    EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid \
+                              AND a.attname = 'tenant_id' AND NOT a.attisdropped), \
+                    c.relrowsecurity, c.relforcerowsecurity, \
+                    EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid \
+                              AND p.polcmd = '*' AND p.polqual IS NOT NULL \
+                              AND p.polwithcheck IS NOT NULL) \
+             FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+             WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND NOT c.relispartition \
+             ORDER BY c.relname::text COLLATE \"C\"",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .expect("could not read the table catalog");
+
+        let mut violations = Vec::new();
+        for (name, has_tenant_id, enabled, forced, has_policy) in &tables {
+            if *has_tenant_id {
+                if GLOBAL_TABLES.contains(&name.as_str()) {
+                    violations.push(format!(
+                        "{name}: has a tenant_id column, so it cannot be a global table; remove it from GLOBAL_TABLES and protect it"
+                    ));
+                }
+                if !enabled {
+                    violations.push(format!(
+                        "{name}: has a tenant_id column but Row-Level Security is not enabled"
+                    ));
+                }
+                if !forced {
+                    violations.push(format!(
+                        "{name}: has a tenant_id column but Row-Level Security is not forced (the owner would bypass it)"
+                    ));
+                }
+                if !has_policy {
+                    violations.push(format!(
+                        "{name}: has a tenant_id column but no policy for all commands with USING and WITH CHECK"
+                    ));
+                }
+            } else if !GLOBAL_TABLES.contains(&name.as_str()) {
+                violations.push(format!(
+                    "{name}: has no tenant_id column and is not in GLOBAL_TABLES; add a tenant_id with Row-Level Security, or list it as global"
+                ));
+            }
+        }
+        for global in GLOBAL_TABLES {
+            if !tables.iter().any(|(name, ..)| name == global) {
+                violations.push(format!(
+                    "{global}: listed in GLOBAL_TABLES but the table does not exist"
+                ));
+            }
+        }
+        violations
+    }
+
     /// The tables that currently have forced Row-Level Security (`relforcerowsecurity`), in byte order
     /// (`COLLATE "C"`, the order of a Rust `sort`), independent of the database collation.
     pub async fn forced_rls_tables(pool: &PgPool) -> Vec<String> {
