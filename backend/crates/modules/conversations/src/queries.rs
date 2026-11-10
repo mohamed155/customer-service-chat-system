@@ -1476,7 +1476,7 @@ pub async fn load_citations_for_messages(
         } else {
             let existing: Vec<(Uuid,)> = sqlx::query_as(
                 "SELECT id FROM knowledge_items \
-             WHERE id = ANY($1) AND deleted_at IS NULL",
+             WHERE id = ANY($1) AND status = 'published'",
             )
             .bind(&item_ids)
             .fetch_all(uow.conn())

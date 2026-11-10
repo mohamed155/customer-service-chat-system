@@ -373,11 +373,13 @@ pub mod isolation {
         }
     }
 
-    /// The tables that currently have forced Row-Level Security (`relforcerowsecurity`).
+    /// The tables that currently have forced Row-Level Security (`relforcerowsecurity`), in byte order
+    /// (`COLLATE "C"`, the order of a Rust `sort`), independent of the database collation.
     pub async fn forced_rls_tables(pool: &PgPool) -> Vec<String> {
         sqlx::query_scalar(
             "SELECT c.relname::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
-             WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relforcerowsecurity ORDER BY 1",
+             WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relforcerowsecurity \
+             ORDER BY c.relname::text COLLATE \"C\"",
         )
         .fetch_all(pool)
         .await

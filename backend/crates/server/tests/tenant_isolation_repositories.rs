@@ -70,6 +70,33 @@ async fn seed(seed: &PgPool) -> Rows {
     .await
     .unwrap();
     sqlx::query(
+        "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
+         VALUES ($1, $2, 'system', 'an automatic acknowledgement')",
+    )
+    .bind(tenant)
+    .bind(conversation)
+    .execute(seed)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO message_citations \
+            (tenant_id, message_id, knowledge_item_id, item_title, passage_text, relevance_score, ordinal) \
+         VALUES ($1, $2, gen_random_uuid(), 'Title', 'Passage', 0.5, 0)",
+    )
+    .bind(tenant)
+    .bind(message)
+    .execute(seed)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO message_attachments (tenant_id, message_id, kind) VALUES ($1, $2, 'image')",
+    )
+    .bind(tenant)
+    .bind(message)
+    .execute(seed)
+    .await
+    .unwrap();
+    sqlx::query(
         "INSERT INTO conversation_feedback (tenant_id, conversation_id, channel, rating) \
          VALUES ($1, $2, 'widget', 5)",
     )
@@ -129,6 +156,31 @@ async fn conversation_and_message_repositories_return_nothing_for_the_wrong_tena
             .await
             .unwrap()
             .is_some()
+    );
+    // Controls for the checks that return "nothing": the owning tenant must find something, or a
+    // denial for the wrong tenant would prove nothing.
+    assert!(
+        conversations::queries::has_system_message(&pool, a.tenant, a.conversation)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !conversations::queries::recent_history(&pool, a.tenant, a.conversation, 50)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        conversations::queries::load_citations_for_messages(&pool, a.tenant, &[a.message])
+            .await
+            .unwrap()
+            .contains_key(&a.message)
+    );
+    assert!(
+        conversations::queries::load_attachments_for_messages(&pool, a.tenant, &[a.message])
+            .await
+            .unwrap()
+            .contains_key(&a.message)
     );
 
     // The wrong tenant, with the other tenant's real ids.

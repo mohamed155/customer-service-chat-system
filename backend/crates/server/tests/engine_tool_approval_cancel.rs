@@ -186,13 +186,22 @@ async fn engine_tool_approval_cancel() {
 
     // Simulate human claiming the conversation (set ai_handling='human')
     // This triggers cancellation of pending tool requests
-    let mut tx = pool.begin().await.unwrap();
-    sqlx::query("UPDATE conversations SET ai_handling = 'human' WHERE id = $1 AND tenant_id = $2")
-        .bind(conversation_id)
-        .bind(tenant_id)
-        .execute(&mut *tx)
+    let mut tx = db::UnitOfWork::begin_for_tenant(&pool, tenant_id)
         .await
         .unwrap();
+    let claimed = sqlx::query(
+        "UPDATE conversations SET ai_handling = 'human' WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(conversation_id)
+    .bind(tenant_id)
+    .execute(tx.conn())
+    .await
+    .unwrap();
+    assert_eq!(
+        claimed.rows_affected(),
+        1,
+        "the claim must update the conversation (it is invisible without the tenant)"
+    );
 
     // Call cancel_pending_for_conversation within the same transaction
     let cancelled =
