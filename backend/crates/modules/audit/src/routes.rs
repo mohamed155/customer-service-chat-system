@@ -151,7 +151,7 @@ pub async fn list_tenant_audit_logs(
     let fetch_limit = resolved.limit + 1;
     let rows = match queries::list_entries(
         &pool,
-        Some(ctx.tenant_id),
+        ctx.tenant_id,
         None,
         resolved.from_ts,
         resolved.to_ts,
@@ -159,7 +159,6 @@ pub async fn list_tenant_audit_logs(
         query.actor_id,
         resolved.cursor,
         fetch_limit,
-        None,
     )
     .await
     {
@@ -206,9 +205,9 @@ pub async fn list_platform_audit_logs(
     };
 
     let fetch_limit = resolved.limit + 1;
-    let rows = match queries::list_entries(
+    let rows = match queries::list_platform_entries(
         &pool,
-        None,
+        principal.user_id,
         query.tenant_id,
         resolved.from_ts,
         resolved.to_ts,
@@ -216,7 +215,6 @@ pub async fn list_platform_audit_logs(
         query.actor_id,
         resolved.cursor,
         fetch_limit,
-        Some(principal.user_id),
     )
     .await
     {
