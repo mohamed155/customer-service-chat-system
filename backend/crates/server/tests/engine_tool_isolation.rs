@@ -148,7 +148,7 @@ async fn seed_ai_config(pool: &sqlx::PgPool, provider: &str, model: &str) {
     )
     .bind(provider)
     .bind(model)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -170,7 +170,7 @@ async fn seed_ai_credential(
     .bind(ciphertext)
     .bind(nonce)
     .bind(hint)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -296,7 +296,7 @@ async fn engine_tool_isolation() {
     )
     .bind(tenant_a)
     .bind(membership_a)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -362,7 +362,7 @@ async fn engine_tool_isolation() {
     )
     .bind(tenant_b)
     .bind(membership_b)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -451,7 +451,7 @@ async fn engine_tool_isolation() {
     )
     .bind(tenant_b)
     .bind(conv_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(
@@ -465,7 +465,7 @@ async fn engine_tool_isolation() {
     )
     .bind(tenant_a)
     .bind(conv_b)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(
@@ -503,7 +503,7 @@ async fn engine_tool_isolation() {
     )
     .bind(tenant_b)
     .bind(conv_b)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert!(

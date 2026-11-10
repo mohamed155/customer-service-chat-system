@@ -211,6 +211,20 @@ pub mod isolation {
         pub insert_args: &'a [Uuid],
     }
 
+    /// The statement must have failed because of the row-level policy (SQLSTATE 42501), not for
+    /// some unrelated reason such as a typo in the fixture.
+    fn assert_rls_violation<T>(result: Result<T, sqlx::Error>, what: &str) {
+        match result {
+            Ok(_) => panic!("{what} was accepted"),
+            Err(sqlx::Error::Database(e)) => assert_eq!(
+                e.code().as_deref(),
+                Some("42501"),
+                "{what} failed, but not on the row-level policy: {e}"
+            ),
+            Err(e) => panic!("{what} failed with a non-database error: {e}"),
+        }
+    }
+
     fn assert_plain(name: &str) {
         assert!(
             name.chars()
@@ -318,10 +332,12 @@ pub mod isolation {
         .bind(p.row_b)
         .execute(uow.conn())
         .await;
-        assert!(
-            moved.is_err(),
-            "{t}: a tenant could move its row to another tenant"
-        );
+        // An append-only table (a trigger refuses every UPDATE, SQLSTATE P0001) never reaches the
+        // policy here; the insert check below still proves its WITH CHECK.
+        if !matches!(&moved, Err(sqlx::Error::Database(e)) if e.code().as_deref() == Some("P0001"))
+        {
+            assert_rls_violation(moved, &format!("{t}: moving a row to another tenant"));
+        }
         drop(uow); // rolled back
 
         // No tenant at all (a plain pool transaction, as the application never does).
@@ -353,9 +369,9 @@ pub mod isolation {
         for arg in p.insert_args {
             insert = insert.bind(*arg);
         }
-        assert!(
-            insert.execute(&mut *tx).await.is_err(),
-            "{t}: an insert without a tenant was accepted"
+        assert_rls_violation(
+            insert.execute(&mut *tx).await,
+            &format!("{t}: an insert without a tenant"),
         );
         drop(tx);
 

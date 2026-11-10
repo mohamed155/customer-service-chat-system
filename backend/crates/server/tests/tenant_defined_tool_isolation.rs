@@ -151,7 +151,7 @@ async fn seed_tenant_tool(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str, memb
     .bind("https://api.example.com/tool")
     .bind("auto")
     .bind(membership_id)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .expect("seed tenant tool");
 }

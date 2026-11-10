@@ -373,7 +373,7 @@ async fn billing_overview_tenant_isolation() {
     )
     .bind(tenant_a)
     .bind(period_start)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -402,7 +402,7 @@ async fn billing_overview_tenant_isolation() {
     )
     .bind(tenant_b)
     .bind(period_start)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

@@ -60,7 +60,7 @@ async fn seed_published_item(pool: &PgPool, tenant_id: Uuid, title: &str) -> Uui
     )
     .bind(tenant_id)
     .bind(title)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -153,7 +153,7 @@ async fn recall_target_tenant_chunk_among_noise() {
         .bind("Initial segment of noise content.")
         .bind(&v)
         .bind("noise-hash")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -169,7 +169,7 @@ async fn recall_target_tenant_chunk_among_noise() {
         .bind("Middle segment of noise content with additional context.")
         .bind(&v)
         .bind("noise-hash")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -185,7 +185,7 @@ async fn recall_target_tenant_chunk_among_noise() {
         .bind("Final segment of noise content concluding the passage.")
         .bind(&v)
         .bind("noise-hash")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -213,7 +213,7 @@ async fn recall_target_tenant_chunk_among_noise() {
     )
     .bind(&target_best)
     .bind("target-distinctive-hash")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -229,7 +229,7 @@ async fn recall_target_tenant_chunk_among_noise() {
     .bind("This is an unrelated passage about accounting standards.")
     .bind(&filler_a)
     .bind("target-filler-hash")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -245,19 +245,19 @@ async fn recall_target_tenant_chunk_among_noise() {
     .bind("This passage discusses corporate tax policy in detail.")
     .bind(&filler_b)
     .bind("target-filler-hash")
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
     // Verify the target tenant is < 5 % of total chunks
     let total: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM knowledge_chunks")
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
     let target_count: (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM knowledge_chunks WHERE tenant_id = $1")
             .bind(target_tenant)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert!(
@@ -268,13 +268,19 @@ async fn recall_target_tenant_chunk_among_noise() {
     );
 
     // ── Run retrieval ───────────────────────────────────────────────────
+    // The retrieval runs as the runtime role in the target tenant's Unit of Work, on the same
+    // connection as the HNSW settings, so recall is measured with the row-level policy in force
+    // (the production path, knowledge::retrieval::search, does the same).
+    let mut uow = db::UnitOfWork::begin_for_tenant(&pool, target_tenant)
+        .await
+        .unwrap();
     // Mirror the settings used by knowledge::retrieval::search.
     sqlx::query("SET hnsw.iterative_scan = 'relaxed_order'")
-        .execute(&pool)
+        .execute(uow.conn())
         .await
         .unwrap();
     sqlx::query("SET hnsw.ef_search = 100")
-        .execute(&pool)
+        .execute(uow.conn())
         .await
         .unwrap();
 
@@ -302,7 +308,7 @@ async fn recall_target_tenant_chunk_among_noise() {
     .bind(target_tenant)
     .bind(THRESHOLD)
     .bind(TOP_K)
-    .fetch_all(&pool)
+    .fetch_all(uow.conn())
     .await
     .unwrap();
 

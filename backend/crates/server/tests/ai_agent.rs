@@ -187,7 +187,7 @@ async fn seed_ai_config(
     .bind(provider)
     .bind(model)
     .bind(fallbacks)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -211,7 +211,7 @@ async fn seed_ai_credential(
     .bind(ciphertext)
     .bind(nonce)
     .bind(hint)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -1700,11 +1700,11 @@ async fn unresolvable_platform_ai_returns_to_awaiting_decision() {
 
     // Remove the tenant's AI-layer credential/config (fixture teardown)
     sqlx::query("DELETE FROM ai_credentials WHERE tenant_id IS NULL AND provider = 'openai'")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     sqlx::query("DELETE FROM ai_configurations WHERE tenant_id IS NULL AND provider = 'openai'")
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -3298,7 +3298,7 @@ async fn stale_override_falls_back() {
         "UPDATE ai_credentials SET deleted_at = now() \
          WHERE tenant_id IS NULL AND provider = 'anthropic' AND deleted_at IS NULL",
     )
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

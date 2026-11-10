@@ -105,7 +105,7 @@ async fn token_usage_sums_input_and_output_with_null_handling() {
         .bind(*input)
         .bind(*output)
         .bind(now)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -169,7 +169,7 @@ async fn token_usage_excludes_records_outside_period() {
         .bind(*input)
         .bind(*output)
         .bind(ts)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }

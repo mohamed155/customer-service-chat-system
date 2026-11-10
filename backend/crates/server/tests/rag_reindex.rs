@@ -90,7 +90,7 @@ async fn seed_item(pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> Uuid {
     )
     .bind(tenant_id)
     .bind(user_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -194,7 +194,7 @@ async fn set_item_status(pool: &PgPool, item_id: Uuid, status: &str) {
     sqlx::query("UPDATE knowledge_items SET status = $1 WHERE id = $2")
         .bind(status)
         .bind(item_id)
-        .execute(pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 }
@@ -219,7 +219,7 @@ async fn seed_document_with_storage(
     .bind(item_id)
     .bind(tenant_id)
     .bind(title)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -234,7 +234,7 @@ async fn seed_document_with_storage(
     .bind(title)
     .bind(content_type)
     .bind(file_content.len() as i64)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -607,7 +607,9 @@ async fn reindex_while_indexing_is_noop() {
     .unwrap();
 
     // Manually enqueue an outbox event to simulate the one from publishing
-    let mut tx = pool.begin().await.unwrap();
+    let mut tx = db::UnitOfWork::begin_for_tenant(&pool, tenant_id)
+        .await
+        .unwrap();
     knowledge::store::enqueue_index_requested_in_tx(&mut tx, tenant_id, item_uuid)
         .await
         .unwrap();
@@ -735,7 +737,7 @@ async fn authored_article_empty_body_resolves_to_not_indexable() {
     )
     .bind(item_id)
     .bind(tenant_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

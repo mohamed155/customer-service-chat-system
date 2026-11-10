@@ -172,7 +172,7 @@ async fn seed_ai_config(
     .bind(provider)
     .bind(model)
     .bind(fallbacks)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -196,7 +196,7 @@ async fn seed_ai_credential(
     .bind(ciphertext)
     .bind(nonce)
     .bind(hint)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -1423,7 +1423,7 @@ async fn restore_invalid_content_returns_422() {
     // Get prompt_id
     let prompt_id: Uuid = sqlx::query_scalar("SELECT id FROM agent_prompts WHERE tenant_id = $1")
         .bind(tenant_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -1435,7 +1435,7 @@ async fn restore_invalid_content_returns_422() {
     )
     .bind(tenant_id)
     .bind(prompt_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

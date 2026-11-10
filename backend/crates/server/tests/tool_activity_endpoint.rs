@@ -193,7 +193,7 @@ async fn tool_activity_endpoint_returns_succeeded_tool() {
     .bind(tenant_a)
     .bind(conversation_id)
     .bind(gen_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 

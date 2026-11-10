@@ -188,7 +188,7 @@ async fn seed_ai_call(
     .bind(category)
     .bind(latency)
     .bind(minutes_ago)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }

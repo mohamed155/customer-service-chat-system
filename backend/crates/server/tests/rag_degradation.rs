@@ -132,7 +132,7 @@ async fn seed_platform_ai_config(
     .bind(provider)
     .bind(model)
     .bind(embedding_model)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -154,7 +154,7 @@ async fn seed_platform_credential(
     .bind(ciphertext)
     .bind(nonce)
     .bind(hint)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -174,7 +174,7 @@ async fn assert_no_usage_records(pool: &sqlx::PgPool, tenant_id: Uuid) {
     let count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM ai_usage_records WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(count, 0, "NotConfigured must not write usage rows");

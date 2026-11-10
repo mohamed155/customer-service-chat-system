@@ -156,7 +156,7 @@ async fn insert_request(
     .bind(finished_at)
     .bind(result)
     .bind(error)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("insert tool_request")
 }
@@ -170,7 +170,7 @@ async fn fetch_json(pool: &PgPool, id: Uuid) -> serde_json::Value {
          FROM tool_requests WHERE id = $1) t",
     )
     .bind(id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("fetch tool_request");
     row
@@ -252,7 +252,7 @@ async fn denied_has_started_at_null_and_decision_fields() {
     .bind(tid)
     .bind(cid)
     .bind(gid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed awaiting_approval row");
 
@@ -314,7 +314,7 @@ async fn expired_has_started_at_null_and_decision_fields() {
     .bind(tid)
     .bind(cid)
     .bind(gid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed awaiting_approval row");
 
@@ -353,12 +353,14 @@ async fn cancelled_has_started_at_null_and_decision_fields() {
     .bind(tid)
     .bind(cid)
     .bind(gid)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed awaiting_approval row");
 
     // Cancel via approval::cancel_pending_for_conversation
-    let mut tx = pool.begin().await.expect("begin tx");
+    let mut tx = db::UnitOfWork::begin_for_tenant(&pool, tid)
+        .await
+        .expect("begin tx");
     let cancelled = tools::approval::cancel_pending_for_conversation(&mut tx, tid, cid)
         .await
         .expect("cancel should succeed");

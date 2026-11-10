@@ -169,7 +169,7 @@ async fn seed_tool_with_credential(
     .bind(format!("{ct_b64}||{nonce_b64}"))
     .bind("auto")
     .bind(membership_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed tool with credential")
 }
@@ -271,7 +271,7 @@ mod tests {
         .bind(tenant_id)
         .bind(conversation_id)
         .bind(trigger_message_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -287,7 +287,7 @@ mod tests {
         .bind(conversation_id)
         .bind(generation_id)
         .bind(_tool_id)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
 
@@ -352,7 +352,7 @@ mod tests {
         .bind(format!("{ct_b64}||{nonce_b64}"))
         .bind("auto")
         .bind(membership_id)
-        .fetch_one(&pool)
+        .fetch_one(&db::testing::seed_pool())
         .await
         .expect("seed broken tool");
 

@@ -159,7 +159,7 @@ async fn seed_ai_config(
     .bind(provider)
     .bind(model)
     .bind(fallbacks)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -183,7 +183,7 @@ async fn seed_ai_credential(
     .bind(ciphertext)
     .bind(nonce)
     .bind(hint)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -1211,7 +1211,7 @@ async fn seed_ai_config_capture(
     .bind(model)
     .bind(fallbacks)
     .bind(capture_content)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -1277,7 +1277,7 @@ async fn put_tenant_credential_returns_key_hint() {
          WHERE tenant_id = $1 AND provider = 'openai' AND deleted_at IS NULL",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (ciphertext, nonce, hint) = row.expect("credential row should exist");
@@ -1637,7 +1637,7 @@ async fn connectivity_test_success() {
     let count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM ai_usage_records WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(count, 0, "connectivity test must not write usage rows");
@@ -1790,7 +1790,7 @@ async fn usage_recording_success() {
              FROM ai_usage_records WHERE tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(rows.len(), 1, "exactly one usage row");
@@ -1852,7 +1852,7 @@ async fn usage_recording_failure() {
          FROM ai_usage_records WHERE tenant_id = $1",
     )
     .bind(tenant_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(rows.len(), 1, "exactly one usage row on failure");
@@ -1898,7 +1898,7 @@ async fn usage_recording_no_config() {
     let count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM ai_usage_records WHERE tenant_id = $1")
             .bind(tenant_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(count, 0, "NotConfigured must not write usage rows");
@@ -1958,7 +1958,7 @@ async fn usage_failover_attribution() {
          WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (provider, model, status, rid) = row.expect("usage row exists");
@@ -2018,7 +2018,7 @@ async fn usage_vendor_omits_tokens() {
          WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (inp, out) = row.expect("usage row exists");
@@ -2068,7 +2068,7 @@ async fn usage_list_pagination() {
         .bind(10 + i)
         .bind(5 + i)
         .bind(i)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -2080,7 +2080,7 @@ async fn usage_list_pagination() {
         )
         .bind(tenant_b)
         .bind(i)
-        .execute(&pool)
+        .execute(&db::testing::seed_pool())
         .await
         .unwrap();
     }
@@ -2158,7 +2158,7 @@ async fn usage_summary_totals() {
          VALUES ($1, 'openai', 'gpt-4', 10, 5, 'success', false, 100)",
     )
     .bind(tenant_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query(
@@ -2167,7 +2167,7 @@ async fn usage_summary_totals() {
          VALUES ($1, 'anthropic', 'claude', 20, 15, 'success', false, 200)",
     )
     .bind(tenant_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     sqlx::query(
@@ -2176,7 +2176,7 @@ async fn usage_summary_totals() {
          VALUES ($1, 'openai', 'gpt-4', NULL, NULL, 'failure', false, 50)",
     )
     .bind(tenant_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2222,7 +2222,7 @@ async fn usage_detail_rbac() {
           '{\"msg\":\"hello\"}'::jsonb, 'Hi there') RETURNING id",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -2309,7 +2309,7 @@ async fn usage_capture_off_by_default() {
          WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (req_c, resp_c) = row.expect("usage row exists");
@@ -2327,7 +2327,7 @@ async fn usage_capture_off_by_default() {
         "SELECT id FROM ai_usage_records WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let detail_resp = send(
@@ -2416,7 +2416,7 @@ async fn usage_capture_opt_in() {
          WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (req_c, resp_c) = row.expect("usage row exists");
@@ -2446,7 +2446,7 @@ async fn usage_capture_opt_in() {
         "SELECT id FROM ai_usage_records WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
     let detail_resp = send(
@@ -2541,7 +2541,7 @@ async fn usage_capture_does_not_retroactively_fill() {
          WHERE tenant_id = $1 ORDER BY created_at ASC",
     )
     .bind(tenant_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(rows.len(), 2);
@@ -2702,7 +2702,7 @@ async fn streaming_success_writes_usage_row() {
          FROM ai_usage_records WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (provider, model, inp, out, status, streamed, rid) = row.expect("usage row exists");
@@ -2773,7 +2773,7 @@ async fn streaming_interrupted_mid_frame() {
          WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (status, resp_c, rid) = row.expect("usage row exists");
@@ -2842,7 +2842,7 @@ async fn streaming_capture_off() {
          WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
     .bind(tenant_id)
-    .fetch_optional(&pool)
+    .fetch_optional(&db::testing::seed_pool())
     .await
     .unwrap();
     let (req_c, resp_c) = row.expect("usage row exists");
@@ -2889,7 +2889,7 @@ async fn live_vendor() {
     .bind(&ciphertext)
     .bind(&nonce)
     .bind(&hint)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 

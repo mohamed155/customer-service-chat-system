@@ -1417,7 +1417,7 @@ async fn staff_tenant_access_is_environment_aware() {
          VALUES ($1, 'openai', 'gpt-4', '[]'::jsonb)",
     )
     .bind(tenant_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
     let resolve = |uri: &str| {

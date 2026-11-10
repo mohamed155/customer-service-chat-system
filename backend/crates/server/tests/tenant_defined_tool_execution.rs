@@ -195,7 +195,7 @@ async fn seed_tenant_tool(
     .bind(credential_ciphertext)
     .bind(classification)
     .bind(membership_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .expect("seed tenant tool")
 }

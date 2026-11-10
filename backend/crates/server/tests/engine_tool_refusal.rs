@@ -149,7 +149,7 @@ async fn seed_ai_config(pool: &sqlx::PgPool, tenant_id: Option<Uuid>, provider: 
     .bind(tenant_id)
     .bind(provider)
     .bind(model)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -173,7 +173,7 @@ async fn seed_ai_credential(
     .bind(ciphertext)
     .bind(nonce)
     .bind(hint)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -377,7 +377,7 @@ async fn engine_tool_refusal_creates_refused_row_and_stores_reply() {
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&pool)
+    .fetch_all(&db::testing::seed_pool())
     .await
     .unwrap();
     assert_eq!(refused_rows.len(), 1, "expected exactly one refused row");

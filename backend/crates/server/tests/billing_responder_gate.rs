@@ -159,7 +159,7 @@ async fn seed_ai_config(
     .bind(provider)
     .bind(model)
     .bind(fallbacks)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -183,7 +183,7 @@ async fn seed_ai_credential(
     .bind(ciphertext)
     .bind(nonce)
     .bind(hint)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -267,7 +267,7 @@ async fn insert_tokens(pool: &sqlx::PgPool, tenant_id: Uuid, input: i32, output:
     .bind(tenant_id)
     .bind(input)
     .bind(output)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }
@@ -290,7 +290,7 @@ async fn insert_agent_config(
     .bind(format!("Gate Agent {}", Uuid::new_v4().simple()))
     .bind(escalation_rules)
     .bind(channels_json)
-    .execute(pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 }

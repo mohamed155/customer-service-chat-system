@@ -180,7 +180,7 @@ async fn engine_tool_approval_cancel() {
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(gen_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -220,7 +220,7 @@ async fn engine_tool_approval_cancel() {
     let (status, started_at): (String, Option<chrono::DateTime<chrono::Utc>>) =
         sqlx::query_as("SELECT status, started_at FROM tool_requests WHERE id = $1")
             .bind(tool_request_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(status, "cancelled", "tool request should be cancelled");
@@ -326,7 +326,7 @@ async fn engine_tool_approval_cancel_via_claim_endpoint() {
     .bind(tenant_id)
     .bind(conversation_id)
     .bind(gen_id)
-    .fetch_one(&pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -361,7 +361,7 @@ async fn engine_tool_approval_cancel_via_claim_endpoint() {
     let (status, started_at): (String, Option<chrono::DateTime<chrono::Utc>>) =
         sqlx::query_as("SELECT status, started_at FROM tool_requests WHERE id = $1")
             .bind(tool_request_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(status, "cancelled", "tool request should be cancelled");

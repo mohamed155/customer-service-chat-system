@@ -60,7 +60,7 @@ async fn seed_item(pool: &PgPool, tenant_id: Uuid) -> Uuid {
          VALUES ($1, 'article', 'Index State Test', 'body', 'authored', 'Test User') RETURNING id",
     )
     .bind(tenant_id)
-    .fetch_one(pool)
+    .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap()
 }
@@ -156,7 +156,7 @@ async fn get_returns_row_after_upsert() {
     )
     .bind(item_id)
     .bind(tenant_id)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -192,7 +192,7 @@ async fn get_tenant_scoped() {
     )
     .bind(item_a)
     .bind(tenant_a)
-    .execute(&pool)
+    .execute(&db::testing::seed_pool())
     .await
     .unwrap();
 
@@ -221,7 +221,7 @@ async fn upsert_status_creates_new_row() {
     let row: (String,) =
         sqlx::query_as("SELECT status FROM knowledge_index_state WHERE item_id = $1")
             .bind(item_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(row.0, "pending");
@@ -248,7 +248,7 @@ async fn upsert_status_updates_existing_row() {
     let row: (String,) =
         sqlx::query_as("SELECT status FROM knowledge_index_state WHERE item_id = $1")
             .bind(item_id)
-            .fetch_one(&pool)
+            .fetch_one(&db::testing::seed_pool())
             .await
             .unwrap();
     assert_eq!(row.0, "indexing");
