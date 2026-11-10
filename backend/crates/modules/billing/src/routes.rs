@@ -385,8 +385,8 @@ pub async fn put_subscription(
     {
         Ok(row) => row,
         Err(e) => {
-            return ApiError::internal_error(format!("Database upsert failed: {e}"))
-                .into_response();
+            tracing::error!(%e, "put_subscription: platform_subscription_set failed");
+            return ApiError::internal_error("Failed to update the subscription").into_response();
         }
     };
 
@@ -403,8 +403,8 @@ pub async fn put_subscription(
             return ApiError::conflict("Cannot assign a retired plan to a tenant").into_response();
         }
         (outcome, ..) => {
-            return ApiError::internal_error(format!("Unexpected subscription outcome: {outcome}"))
-                .into_response();
+            tracing::error!(%outcome, "put_subscription: unexpected outcome");
+            return ApiError::internal_error("Failed to update the subscription").into_response();
         }
     };
 
