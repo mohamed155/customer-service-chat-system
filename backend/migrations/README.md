@@ -52,6 +52,9 @@ After `sqlx migrate add`, rename the generated file to follow this convention.
 
 ## Rules
 
+- **Primary keys are UUIDv7** (ADR-013). The application supplies the id (`kernel::ids::new_id()`),
+  or a column uses `DEFAULT uuidv7()` (defined in 0075). Never `DEFAULT gen_random_uuid()` in a
+  migration after 0075: `server/tests/uuid_hygiene.rs` fails on it.
 - **Never edit an applied migration.** SQLx stores a checksum for each applied
   migration; modifying the file after it has been applied will cause `sqlx
   migrate run` to fail with a version-mismatch error.

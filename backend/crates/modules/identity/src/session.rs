@@ -16,6 +16,7 @@ pub struct SessionClaims {
 pub fn issue_token(secret: &str, ttl: u64, user_id: Uuid) -> Result<(String, Uuid, DateTime<Utc>)> {
     let issued_at = Utc::now();
     let expires_at = issued_at + Duration::seconds(ttl as i64);
+    // uuid-v4-ok: session token ID: random so it reveals no time and can't be guessed from the clock
     let jti = Uuid::new_v4();
     let claims = SessionClaims {
         sub: user_id,

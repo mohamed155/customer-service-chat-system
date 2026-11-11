@@ -115,6 +115,7 @@ async fn run_migrations_succeeds() {
         (72, "rls conversations customers"),
         (73, "rls knowledge ai tools"),
         (74, "rls remaining tenant tables"),
+        (75, "uuidv7 defaults"),
     ];
     assert_eq!(
         rows.len(),

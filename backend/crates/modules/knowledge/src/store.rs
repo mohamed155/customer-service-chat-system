@@ -459,7 +459,7 @@ pub async fn enqueue_index_requested_in_tx(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'knowledge_item', $2, $3, 'knowledge.index_requested', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(item_id)
     .bind(tenant_id)
     .bind(json!({

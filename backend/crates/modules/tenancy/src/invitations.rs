@@ -482,7 +482,7 @@ pub async fn create_invitation(
              (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
              VALUES ($1, 'tenant_invitation', $2, $3, 'invitation.email_delivery', $4, now())",
         )
-        .bind(Uuid::new_v4())
+        .bind(kernel::ids::new_id())
         .bind(invitation_id.to_string())
         .bind(ctx.tenant_id.to_string())
         .bind(payload)
@@ -577,6 +577,7 @@ pub async fn process_invitation_deliveries_once(
         return Ok(1);
     }
 
+    // uuid-v4-ok: claim token, not a key
     let claim_token = Uuid::new_v4();
     let row = sqlx::query(
         "SELECT id, aggregate_id, tenant_id, payload, attempts \

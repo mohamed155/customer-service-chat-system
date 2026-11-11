@@ -35,7 +35,7 @@ pub async fn emit_requested_in_tx(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'notification', $2, $3, 'notification.requested', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(req.subject_id)
     .bind(req.tenant_id)
     .bind(payload)
@@ -68,7 +68,7 @@ pub async fn emit_requested_on_pool(pool: &PgPool, req: &NotificationRequest) {
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'notification', $2, $3, 'notification.requested', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(req.subject_id)
     .bind(req.tenant_id)
     .bind(payload)
@@ -102,7 +102,7 @@ pub async fn emit_resolved_in_tx(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'notification', $2, $3, 'notification.resolved', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(subject_id)
     .bind(tenant_id)
     .bind(payload)
@@ -136,7 +136,7 @@ pub async fn emit_resolved_on_pool(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'notification', $2, $3, 'notification.resolved', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(subject_id)
     .bind(tenant_id)
     .bind(payload)

@@ -15,6 +15,7 @@ pub async fn process_agent_responder_once(
     // Phase A — Claim + Read (no long-held locks)
 
     // 1. Claim one unprocessed outbox_events row
+    // uuid-v4-ok: claim token, not a key
     let claim_token = Uuid::new_v4();
     // Across tenants, so it goes through the audited function `xtenant.outbox_claim`.
     let maybe_row: Option<(Uuid, Uuid, String, String, serde_json::Value)> = sqlx::query_as(
@@ -202,7 +203,7 @@ pub async fn process_agent_responder_once(
         // starts; record that outcome (spec 021, scenario 3).
         if escalations::routing::has_open_escalation(pool, tenant_id, conversation_id).await? {
             let rec = crate::generation_record::GenerationRecord {
-                id: Uuid::new_v4(),
+                id: kernel::ids::new_id(),
                 tenant_id,
                 conversation_id,
                 trigger_message_id: message_id,
