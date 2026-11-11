@@ -501,6 +501,14 @@ fn authenticated_routes() -> OpenApiRouter<sqlx::PgPool> {
         )
         .routes(routes!(identity::mfa_routes::confirm_enrolment))
         .routes(routes!(identity::mfa_routes::status))
+        .routes(
+            routes!(identity::mfa_routes::step_up)
+                .layer(middleware::from_fn(crate::rate_limit::mfa_rate_limit)),
+        )
+        .routes(
+            routes!(identity::mfa_routes::regenerate_recovery_codes)
+                .layer(middleware::from_fn(identity::step_up::require_step_up)),
+        )
 }
 
 fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
@@ -535,7 +543,13 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         )
         .routes(
             routes!(tenancy::routes::switch_tenant)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
                 .layer(require_permission(Permission::PlatformTenantsSwitch)),
+        )
+        .routes(
+            routes!(crate::mfa_admin::reset_user_mfa)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
+                .layer(require_permission(Permission::PlatformAdmin)),
         )
         .routes(
             routes!(
@@ -558,9 +572,11 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             )
             .map(|_| {
                 merge_with_permissions(
-                    routing::put(ai::routes::put_platform_credential),
+                    routing::put(ai::routes::put_platform_credential)
+                        .layer(middleware::from_fn(identity::step_up::require_step_up)),
                     Permission::PlatformAdmin,
-                    routing::delete(ai::routes::delete_platform_credential),
+                    routing::delete(ai::routes::delete_platform_credential)
+                        .layer(middleware::from_fn(identity::step_up::require_step_up)),
                     Permission::PlatformAdmin,
                 )
             }),
@@ -810,7 +826,13 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         )
         .routes(
             routes!(tenancy::members::update_member)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
                 .layer(require_permission(Permission::MembersManage)),
+        )
+        .routes(
+            routes!(crate::mfa_admin::reset_member_mfa)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
+                .layer(require_permission(Permission::OwnerAssign)),
         )
         .routes(
             routes!(
@@ -857,9 +879,11 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             )
             .map(|_| {
                 merge_with_permissions(
-                    routing::put(ai::routes::put_tenant_credential),
+                    routing::put(ai::routes::put_tenant_credential)
+                        .layer(middleware::from_fn(identity::step_up::require_step_up)),
                     Permission::AiAgentManage,
-                    routing::delete(ai::routes::delete_tenant_credential),
+                    routing::delete(ai::routes::delete_tenant_credential)
+                        .layer(middleware::from_fn(identity::step_up::require_step_up)),
                     Permission::AiAgentManage,
                 )
             }),
@@ -895,14 +919,17 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         )
         .routes(
             routes!(tools::routes::create_tenant_tool)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
                 .layer(require_permission(Permission::AiAgentManage)),
         )
         .routes(
             routes!(tools::routes::update_tenant_tool_route)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
                 .layer(require_permission(Permission::AiAgentManage)),
         )
         .routes(
             routes!(tools::routes::delete_tenant_tool_route)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
                 .layer(require_permission(Permission::AiAgentManage)),
         )
         .routes(
@@ -1065,14 +1092,17 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         )
         .routes(
             routes!(integrations::routes::connect_integration)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
                 .layer(require_permission(Permission::IntegrationsManage)),
         )
         .routes(
             routes!(integrations::routes::update_integration_config)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
                 .layer(require_permission(Permission::IntegrationsManage)),
         )
         .routes(
             routes!(integrations::routes::disconnect_integration)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
                 .layer(require_permission(Permission::IntegrationsManage)),
         )
         .routes(
@@ -1327,12 +1357,18 @@ fn api_routes(
                 .merge(authenticated_routes());
         let platform = platform_routes(include_test_routes)
             .layer(middleware::from_fn(platform_permission_middleware))
+            .layer(middleware::from_fn(
+                identity::step_up::enforce_second_factor,
+            ))
             .layer(middleware::from_fn(authentication_middleware));
         protected = protected.merge(platform);
         let tenant = tenant_routes(include_test_routes)
             .layer(from_fn_with_state(
                 tenancy_config,
                 tenancy::tenant_context_middleware,
+            ))
+            .layer(middleware::from_fn(
+                identity::step_up::enforce_second_factor,
             ))
             .layer(middleware::from_fn(authentication_middleware));
         protected = protected.merge(tenant);
@@ -1620,6 +1656,7 @@ mod tests {
             integration_secrets_key: None,
             secrets_root_key: None,
             secrets_root_key_previous: None,
+            auth_mfa_required: false,
             ai_openai_base_url: None,
             ai_anthropic_base_url: None,
             ai_gemini_base_url: None,

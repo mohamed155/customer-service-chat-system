@@ -431,6 +431,84 @@ async fn record_failure(
     Ok(())
 }
 
+/// Replace the user's recovery codes with ten new ones, shown once. The old ones stop working.
+pub async fn regenerate_recovery_codes(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Vec<String>, MfaError> {
+    if !is_enrolled(pool, user_id).await? {
+        return Err(MfaError::NotEnrolling);
+    }
+    let (codes, hashes) = new_recovery_codes().await?;
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM mfa_recovery_codes WHERE user_id = $1")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+    for hash in &hashes {
+        sqlx::query("INSERT INTO mfa_recovery_codes (user_id, code_hash) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(hash)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    let resource = user_id.to_string();
+    audit::record(
+        pool,
+        "auth.mfa_recovery_codes_regenerated",
+        Some(user_id),
+        Some(&resource),
+        &serde_json::json!({ "recovery_codes": codes.len() }),
+    )
+    .await;
+    Ok(codes)
+}
+
+/// Remove a user's second factor and recovery codes, and end every session they have, so they
+/// sign in again with a password and set it up anew. Returns whether there was a factor to remove.
+/// `via` is `tenant` or `platform`: who reset it.
+pub async fn reset(
+    pool: &PgPool,
+    target_user_id: Uuid,
+    actor_user_id: Uuid,
+    via: &str,
+    tenant_id: Option<Uuid>,
+) -> Result<bool, MfaError> {
+    let mut tx = pool.begin().await?;
+    sqlx::query("DELETE FROM mfa_recovery_codes WHERE user_id = $1")
+        .bind(target_user_id)
+        .execute(&mut *tx)
+        .await?;
+    let removed = sqlx::query("DELETE FROM mfa_factors WHERE user_id = $1")
+        .bind(target_user_id)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected()
+        > 0;
+    sqlx::query("UPDATE users SET sessions_valid_after = now() WHERE id = $1")
+        .bind(target_user_id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+
+    // The row names the user whose factor was reset (the resource) and who did it (the actor).
+    let resource = target_user_id.to_string();
+    audit::record(
+        pool,
+        "auth.mfa_reset",
+        Some(actor_user_id),
+        Some(&resource),
+        &serde_json::json!({
+            "by": via,
+            "tenant_id": tenant_id,
+            "had_factor": removed,
+        }),
+    )
+    .await;
+    Ok(removed)
+}
+
 // ---------------------------------------------------------------------------
 // Recovery codes
 // ---------------------------------------------------------------------------

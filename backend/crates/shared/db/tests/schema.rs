@@ -118,6 +118,7 @@ async fn run_migrations_succeeds() {
         (75, "uuidv7 defaults"),
         (76, "envelope encryption"),
         (77, "mfa"),
+        (78, "sessions valid after"),
     ];
     assert_eq!(
         rows.len(),

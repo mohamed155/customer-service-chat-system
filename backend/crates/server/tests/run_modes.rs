@@ -42,6 +42,7 @@ fn state() -> AppState {
         integration_secrets_key: Some(SECRETS_KEY.into()),
         secrets_root_key: None,
         secrets_root_key_previous: None,
+        auth_mfa_required: false,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,

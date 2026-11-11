@@ -59,12 +59,15 @@ const EXPECTED: &[(&str, &str)] = &[
     ("POST", "/auth/mfa/enrol"),
     ("POST", "/auth/mfa/enrol/confirm"),
     ("GET", "/auth/mfa/status"),
+    ("POST", "/auth/mfa/step-up"),
+    ("POST", "/auth/mfa/recovery-codes"),
     // Platform tenants
     ("GET", "/platform/tenants"),
     ("POST", "/platform/tenants"),
     ("GET", "/platform/tenants/{id}"),
     ("PATCH", "/platform/tenants/{id}"),
     ("POST", "/platform/tenants/{id}/switch"),
+    ("POST", "/platform/users/{id}/mfa/reset"),
     // Platform AI
     ("GET", "/platform/ai/config"),
     ("PUT", "/platform/ai/config"),
@@ -101,6 +104,7 @@ const EXPECTED: &[(&str, &str)] = &[
     // Members + invitations (tenant)
     ("GET", "/tenant/members"),
     ("PATCH", "/tenant/members/{id}"),
+    ("POST", "/tenant/members/{id}/mfa/reset"),
     ("PUT", "/tenant/members/{membershipId}/skills"),
     ("GET", "/tenant/members/invitations"),
     ("POST", "/tenant/members/invitations"),

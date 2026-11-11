@@ -9,6 +9,7 @@ pub mod password;
 pub mod routes;
 
 pub mod session;
+pub mod step_up;
 pub mod totp;
 
 use axum::{
@@ -185,10 +186,14 @@ async fn resolve_cookie_principal(
           AND NOT EXISTS (
               SELECT 1 FROM revoked_sessions WHERE jti = $2
           )
+          -- Strictly after: a session issued in the second of a reset is one the reset meant to end.
+          AND (sessions_valid_after IS NULL
+               OR $3 > FLOOR(EXTRACT(EPOCH FROM sessions_valid_after))::bigint)
         "#,
     )
     .bind(claims.sub)
     .bind(claims.jti)
+    .bind(claims.iat)
     .fetch_optional(&cfg.pool)
     .await
     .ok()?;

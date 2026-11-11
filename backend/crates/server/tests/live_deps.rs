@@ -59,6 +59,7 @@ async fn live_readiness_with_real_deps() {
         integration_secrets_key: None,
         secrets_root_key: None,
         secrets_root_key_previous: None,
+        auth_mfa_required: false,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,

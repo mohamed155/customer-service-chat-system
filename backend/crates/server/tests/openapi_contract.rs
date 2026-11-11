@@ -67,6 +67,7 @@ fn make_state() -> AppState {
         integration_secrets_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         secrets_root_key: None,
         secrets_root_key_previous: None,
+        auth_mfa_required: false,
         trusted_proxy: false,
     };
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
