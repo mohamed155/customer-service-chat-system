@@ -78,6 +78,8 @@ app under `/widget/*`. `infra/Caddyfile` sends `/widget/v1/*` to the backend as 
 (the `@widget_api` block, which must stay above the static `@widget` block) and everything else under
 `/widget` to the widget container. A host with its own proxy needs the same split, or the loader's
 `GET /widget/v1/config` reaches the static server and fails.
+`infra/caddy-routing.test.mjs` runs the real Caddy image in front of recording servers and checks these
+routes (`/api`, `/ws`, `/widget/v1`, the static widget and the dashboard); CI runs it as `caddy-routing`.
 
 ## Move an Existing Host to the Two Database Roles (once)
 

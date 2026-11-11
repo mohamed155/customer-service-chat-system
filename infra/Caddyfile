@@ -51,20 +51,27 @@ https://{$APP_DOMAIN} {
         }
     }
 
+    # Each route is its own `handle` block. A bare `reverse_proxy @matcher` next to the catch-all
+    # `handle` below never runs: Caddy orders `handle` before `reverse_proxy`, so the catch-all
+    # would take /api and /ws first and send them to the dashboard.
     @api {
         path /api/*
     }
-    reverse_proxy @api backend:8080 {
-        header_up X-Forwarded-For {remote_host}
+    handle @api {
+        reverse_proxy backend:8080 {
+            header_up X-Forwarded-For {remote_host}
+        }
     }
 
     @ws {
         path /ws/*
     }
-    reverse_proxy @ws backend:8080 {
-        header_up X-Forwarded-For {remote_host}
-        header_up Upgrade {http.request.header.Upgrade}
-        header_up Connection {http.request.header.Connection}
+    handle @ws {
+        reverse_proxy backend:8080 {
+            header_up X-Forwarded-For {remote_host}
+            header_up Upgrade {http.request.header.Upgrade}
+            header_up Connection {http.request.header.Connection}
+        }
     }
 
     @metrics {

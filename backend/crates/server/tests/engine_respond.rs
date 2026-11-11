@@ -254,7 +254,12 @@ async fn engine_respond_answers_widget_conversations_when_web_chat_is_enabled() 
     respond_on_channel("widget").await;
 }
 
+// Both tests reset the same tables (`setup` truncates them), so they must not overlap when
+// `cargo test` runs them on separate threads.
+static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 async fn respond_on_channel(channel: &str) {
+    let _serial = DB_LOCK.lock().await;
     let pool = match get_pool().await {
         Some(p) => p,
         None => return,
