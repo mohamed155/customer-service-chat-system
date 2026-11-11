@@ -107,7 +107,7 @@ this ADR.
 
 | # | Gap | Where | Follow-up |
 | -- | -- | -- | -- |
-| RT1 | **Fan-out is in-process only.** Events go through a per-tenant `tokio::sync::broadcast` channel inside one process. With more than one instance, a client misses events produced on other instances. Presence is also tracked per process. | `backend/crates/modules/escalations/src/presence.rs` (`connect`, `broadcast`) | **Blocker for horizontal scaling.** Publish through Redis pub/sub; move presence to Redis TTL keys (§7.3). |
+| RT1 | **Fan-out is in-process only.** Events go through a per-tenant `tokio::sync::broadcast` channel inside one process. With more than one instance, a client misses events produced on other instances. Presence is also tracked per process. | `backend/crates/modules/escalations/src/presence.rs` (`connect`, `broadcast`) | **Blocker for horizontal scaling, and for running `api`, `gateway` and `worker` as separate processes (ADR-010, MOH-37).** Publish through Redis pub/sub; move presence to Redis TTL keys (§7.3). |
 | RT2 | **No resume.** There's no `Last-Event-ID` handling or replay buffer; a lagged receiver drops events. | `escalations/src/events.rs`, `widgets/src/public_events.rs` | Add event IDs, `Last-Event-ID` replay and the `resync` event; update the dashboard and widget SSE clients. |
 | RT3 | SSE streams aren't closed on session revocation (also ADR-005 A8). | same | Record the session ID on subscribe and close on revocation. |
 | RT4 | Two SSE endpoints exist (`GET /tenant/events`, `GET /widget/v1/conversations/{id}/events`) with keep-alive; there's no WebSocket. This matches the "SSE by default" rule. | — | None. |

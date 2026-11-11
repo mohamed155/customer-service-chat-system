@@ -210,7 +210,21 @@ impl fmt::Display for ConfigError {
 impl Error for ConfigError {}
 
 impl AppConfig {
+    /// Parse and validate the full configuration. Requires the dashboard secrets
+    /// (`AUTH_JWT_SECRET`, and `APP_AI_KEY_ENCRYPTION_KEY` outside tests).
     pub fn from_env() -> Result<Self, ConfigError> {
+        Self::from_env_inner(true)
+    }
+
+    /// Same as [`AppConfig::from_env`] for a process that serves only the public gateway
+    /// (ADR-010): it neither requires nor reads `AUTH_JWT_SECRET` or `APP_AI_KEY_ENCRYPTION_KEY`,
+    /// so a gateway deployment doesn't have to hold them. `auth_jwt_secret` comes back empty and
+    /// `ai_key_encryption_key` as `None`, even if the variables are set.
+    pub fn from_env_for_gateway() -> Result<Self, ConfigError> {
+        Self::from_env_inner(false)
+    }
+
+    fn from_env_inner(dashboard_secrets: bool) -> Result<Self, ConfigError> {
         fn required(name: &str) -> Result<String, ConfigError> {
             env::var(name).map_err(|_| {
                 ConfigError(format!("required environment variable {name} is missing"))
@@ -270,12 +284,17 @@ impl AppConfig {
             .parse()
             .map_err(|_| ConfigError("SHUTDOWN_GRACE_SECONDS must be a valid u64".into()))?;
 
-        let auth_jwt_secret = required("AUTH_JWT_SECRET")?;
-        if auth_jwt_secret.len() < 32 {
-            return Err(ConfigError(
-                "AUTH_JWT_SECRET must be at least 32 bytes".into(),
-            ));
-        }
+        let auth_jwt_secret = if dashboard_secrets {
+            let secret = required("AUTH_JWT_SECRET")?;
+            if secret.len() < 32 {
+                return Err(ConfigError(
+                    "AUTH_JWT_SECRET must be at least 32 bytes".into(),
+                ));
+            }
+            secret
+        } else {
+            String::new()
+        };
 
         let auth_session_ttl_seconds = env::var("AUTH_SESSION_TTL_SECONDS")
             .unwrap_or_else(|_| "28800".into())
@@ -285,26 +304,30 @@ impl AppConfig {
         let smtp_url = env::var("SMTP_URL").ok();
         let smtp_from = env::var("SMTP_FROM").ok();
 
-        let ai_key_encryption_key = match env::var("APP_AI_KEY_ENCRYPTION_KEY") {
-            Ok(v) => {
-                use base64::Engine;
-                let decoded = base64::engine::general_purpose::STANDARD
-                    .decode(&v)
-                    .map_err(|_| {
-                        ConfigError("APP_AI_KEY_ENCRYPTION_KEY must be valid base64".into())
-                    })?;
-                if decoded.len() != 32 {
-                    return Err(ConfigError(
+        let ai_key_encryption_key = if !dashboard_secrets {
+            None
+        } else {
+            match env::var("APP_AI_KEY_ENCRYPTION_KEY") {
+                Ok(v) => {
+                    use base64::Engine;
+                    let decoded = base64::engine::general_purpose::STANDARD
+                        .decode(&v)
+                        .map_err(|_| {
+                            ConfigError("APP_AI_KEY_ENCRYPTION_KEY must be valid base64".into())
+                        })?;
+                    if decoded.len() != 32 {
+                        return Err(ConfigError(
                         "APP_AI_KEY_ENCRYPTION_KEY must be a base64-encoded string of exactly 32 bytes".into(),
                     ));
+                    }
+                    Some(v)
                 }
-                Some(v)
-            }
-            Err(_) if environment == Environment::Test => None,
-            Err(_) => {
-                return Err(ConfigError(
-                    "required environment variable APP_AI_KEY_ENCRYPTION_KEY is missing".into(),
-                ));
+                Err(_) if environment == Environment::Test => None,
+                Err(_) => {
+                    return Err(ConfigError(
+                        "required environment variable APP_AI_KEY_ENCRYPTION_KEY is missing".into(),
+                    ));
+                }
             }
         };
         let integration_secrets_key = match env::var("APP_INTEGRATION_SECRETS_KEY") {
@@ -1024,6 +1047,48 @@ mod tests {
         assert!(
             !debug_str.contains("secret123"),
             "Debug output leaked s3 secret_access_key: {debug_str}"
+        );
+    }
+    #[test]
+    #[serial_test::serial]
+    fn gateway_config_needs_no_dashboard_secrets() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "production"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+        ]);
+        assert!(
+            AppConfig::from_env().is_err(),
+            "the full config still requires the dashboard secrets"
+        );
+        let config = AppConfig::from_env_for_gateway().expect("gateway config");
+        assert!(config.auth_jwt_secret.is_empty());
+        assert!(config.ai_key_encryption_key.is_none());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn gateway_config_ignores_dashboard_secrets_that_are_set() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "production"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+        ]);
+        let config = AppConfig::from_env_for_gateway().expect("gateway config");
+        assert!(
+            config.auth_jwt_secret.is_empty(),
+            "the session secret was kept"
+        );
+        assert!(
+            config.ai_key_encryption_key.is_none(),
+            "the AI key was kept"
         );
     }
 }

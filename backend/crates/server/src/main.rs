@@ -20,10 +20,12 @@
 use config::AppConfig;
 use knowledge::indexer;
 use server::router;
+use server::run_mode::RunMode;
 use server::state::AppState;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
+use tokio::task::JoinSet;
 
 #[tokio::main]
 async fn main() {
@@ -37,7 +39,23 @@ async fn main() {
         std::process::exit(migrate().await);
     }
 
-    let config = match AppConfig::from_env() {
+    let mode = match RunMode::from_env() {
+        Ok(mode) => mode,
+        Err(e) => {
+            eprintln!("Config error: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    // The public gateway serves no cookie sessions and decrypts no AI provider keys, so it doesn't
+    // load the secrets for them at all (ADR-010 section 3). It still needs the integration secrets
+    // key to verify channel-webhook signatures until envelope encryption (ADR-014) replaces it.
+    let loaded = if mode == RunMode::Gateway {
+        AppConfig::from_env_for_gateway()
+    } else {
+        AppConfig::from_env()
+    };
+    let config = match loaded {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Config error: {e}");
@@ -52,6 +70,15 @@ async fn main() {
         config.sentry_dsn.clone(),
         config.release_sha.clone(),
     );
+
+    tracing::info!(run_mode = %mode, "starting");
+    if mode != RunMode::All {
+        tracing::warn!(
+            run_mode = %mode,
+            "split run mode: realtime events and agent presence are in-process (ADR-009 RT1), so \
+             events produced in another process are not delivered to clients connected here"
+        );
+    }
 
     let db = db::lazy_pool(
         &config.database_url,
@@ -77,7 +104,7 @@ async fn main() {
 
     observability::metrics::spawn_dependency_updater(health_checks.clone());
 
-    {
+    if mode != RunMode::Gateway {
         let pool = db.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
@@ -92,8 +119,10 @@ async fn main() {
 
     let escalations_runtime =
         escalations::presence::Runtime::new(db.clone(), Duration::from_secs(45));
-    if let Err(e) = escalations_runtime.startup_sweep().await {
-        tracing::warn!(error = %e, "escalations startup sweep encountered errors (continuing)");
+    if mode.runs_workers() {
+        if let Err(e) = escalations_runtime.startup_sweep().await {
+            tracing::warn!(error = %e, "escalations startup sweep encountered errors (continuing)");
+        }
     }
 
     let ai_service = ai::AiService::from_config(db.clone(), &config).expect("AI service init");
@@ -114,9 +143,47 @@ async fn main() {
 
     let (storage, _storage_backend) = storage::select_storage(state.config.s3.as_ref()).await;
     let email_sender = router::configured_email_sender(&state.config);
-    let app =
-        router::app_with_email_sender(state.clone(), email_sender.clone(), Some(storage.clone()));
+    let app = router::app_for_mode(state.clone(), mode, email_sender.clone(), storage.clone());
 
+    let mut workers = if mode.runs_workers() {
+        spawn_workers(&state, storage.clone(), email_sender.clone())
+    } else {
+        JoinSet::new()
+    };
+
+    let address = format!("{}:{}", state.config.bind_address, state.config.port);
+    let listener = TcpListener::bind(&address)
+        .await
+        .expect("failed to bind HTTP listener");
+    tracing::info!(%address, "server listening");
+
+    tokio::select! {
+        result = axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(shutdown_signal()) => {
+            result.expect("server failed");
+        }
+        // Pending forever when this mode runs no workers (the set is empty).
+        Some(finished) = workers.join_next() => {
+            // A worker that stops leaves a process that looks ready but does no work, so the
+            // process must not keep running. Report it, flush telemetry, and exit non-zero so the
+            // orchestrator restarts it.
+            tracing::error!(worker = ?finished, "background worker stopped unexpectedly; exiting");
+            observability::errors::flush(Duration::from_secs(2));
+            std::process::exit(1);
+        }
+    }
+
+    tracing::info!("observability: flushing remaining events");
+    observability::errors::flush(Duration::from_secs(2));
+    tracing::info!("graceful shutdown complete");
+}
+
+/// Starts every background worker and sweeper and returns the set, so `main` can stop the process
+/// when one of them ends. Only the `worker` and `all` modes call this.
+fn spawn_workers(
+    state: &AppState,
+    storage: Arc<dyn storage::ObjectStorage>,
+    email_sender: Arc<dyn email::EmailSender>,
+) -> JoinSet<&'static str> {
     let delivery_worker = tokio::spawn(tenancy::invitations::run_invitation_delivery_worker(
         state.db.clone(),
         email_sender,
@@ -235,65 +302,70 @@ async fn main() {
         .integration_secrets_key
         .as_ref()
         .and_then(|key| integrations::crypto::MasterKey::from_base64(key).ok());
+    let mut whatsapp_workers = Vec::new();
     if let Some(mk) = whatsapp_master_key {
         let mk = Arc::new(mk);
-        let _media_worker = tokio::spawn(whatsapp::media::run_media_fetch_worker(
+        let media_worker = tokio::spawn(whatsapp::media::run_media_fetch_worker(
             state.db.clone(),
             whatsapp_api.clone(),
             storage.clone(),
             mk.clone(),
         ));
-        let _sender_worker = tokio::spawn(whatsapp::sender::run_whatsapp_sender_worker(
+        let sender_worker = tokio::spawn(whatsapp::sender::run_whatsapp_sender_worker(
             state.db.clone(),
             whatsapp_api.clone(),
             mk,
         ));
+        whatsapp_workers.push(("whatsapp media worker", media_worker));
+        whatsapp_workers.push(("whatsapp sender worker", sender_worker));
     } else {
         tracing::warn!("integration_secrets_key not configured — whatsapp workers disabled");
     }
 
-    let address = format!("{}:{}", state.config.bind_address, state.config.port);
-    let listener = TcpListener::bind(&address)
-        .await
-        .expect("failed to bind HTTP listener");
-    tracing::info!(%address, "server listening");
-
-    tokio::select! {
-        result = axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(shutdown_signal()) => {
-            result.expect("server failed");
-        }
-        result = delivery_worker => {
-            panic!("invitation delivery worker stopped unexpectedly: {result:?}");
-        }
-        result = escalation_worker => {
-            panic!("escalation outbox worker stopped unexpectedly: {result:?}");
-        }
-        result = agent_responder_worker => {
-            panic!("agent responder worker stopped unexpectedly: {result:?}");
-        }
-        result = widget_session_sweeper => {
-            panic!("widget session sweeper stopped unexpectedly: {result:?}");
-        }
-        result = tool_expiry_sweeper => {
-            panic!("tool expiry sweeper stopped unexpectedly: {result:?}");
-        }
-        result = knowledge_indexer_worker => {
-            panic!("knowledge indexer worker stopped unexpectedly: {result:?}");
-        }
-        result = notifications_worker => {
-            panic!("notifications outbox worker stopped unexpectedly: {result:?}");
-        }
-        result = notification_retention_sweeper => {
-            panic!("notification retention sweeper stopped unexpectedly: {result:?}");
-        }
-        result = integration_retention_sweeper => {
-            panic!("integration retention sweeper stopped unexpectedly: {result:?}");
-        }
+    let mut workers = JoinSet::new();
+    workers.spawn(async move {
+        let _ = delivery_worker.await;
+        "delivery worker"
+    });
+    workers.spawn(async move {
+        let _ = escalation_worker.await;
+        "escalation worker"
+    });
+    workers.spawn(async move {
+        let _ = agent_responder_worker.await;
+        "agent responder worker"
+    });
+    workers.spawn(async move {
+        let _ = widget_session_sweeper.await;
+        "widget session sweeper"
+    });
+    workers.spawn(async move {
+        let _ = tool_expiry_sweeper.await;
+        "tool expiry sweeper"
+    });
+    workers.spawn(async move {
+        let _ = knowledge_indexer_worker.await;
+        "knowledge indexer worker"
+    });
+    workers.spawn(async move {
+        let _ = notifications_worker.await;
+        "notifications worker"
+    });
+    workers.spawn(async move {
+        let _ = notification_retention_sweeper.await;
+        "notification retention sweeper"
+    });
+    workers.spawn(async move {
+        let _ = integration_retention_sweeper.await;
+        "integration retention sweeper"
+    });
+    for (name, handle) in whatsapp_workers {
+        workers.spawn(async move {
+            let _ = handle.await;
+            name
+        });
     }
-
-    tracing::info!("observability: flushing remaining events");
-    observability::errors::flush(Duration::from_secs(2));
-    tracing::info!("graceful shutdown complete");
+    workers
 }
 
 async fn shutdown_signal() {

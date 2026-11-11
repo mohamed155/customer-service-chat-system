@@ -104,8 +104,8 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | S | Widget embedded on unauthorised sites | Per-widget allowed origins | ✓ | Channels |
 | T | Host page script tampers with the chat | Conversation in a cross-origin iframe; launcher in Shadow DOM | ✓ iframe · Gap: iframe `sandbox`, launcher Shadow DOM (ADR-011 W1/W3) | Frontend |
 | I | Host page script reads session token or messages | Token stored on the widget origin only | ✓ (ADR-011 W5) | Frontend |
-| D | Spam or floods from public endpoints | Rate limits per widget, visitor and IP; bot challenge escalation | ✓ rate limits · Gap: separate gateway unit (ADR-010 G1), bot challenge | Channels |
-| E | Public request reaches internal endpoint | Separate routers per unit | Gap: one router serves both (ADR-010 G1) | Platform Engineering |
+| D | Spam or floods from public endpoints | Rate limits per widget, visitor and IP; bot challenge escalation | ✓ rate limits · ✓ gateway run mode (ADR-010 G1) · Gap: separate deployment of it, bot challenge | Channels |
+| E | Public request reaches internal endpoint | Separate routers per unit | ✓ `gateway` and `api` run modes mount disjoint route sets, tested (ADR-010 G1) · Gap: deployment still runs `all` until realtime fan-out is shared (ADR-009 RT1) | Platform Engineering |
 
 ### 4.5 Channels (`whatsapp`, `telegram`, `email`)
 
@@ -228,7 +228,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | 4 | Platform accounts without MFA | 4.11 E | ADR-005 A6 · [MOH-34](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-34) |
 | 5 | Account enumeration through login timing. **Resolved:** the dummy hash and real hashes use the same pinned parameters and a login does the same work for a known and an unknown email; tests fail on a mismatch or a timing gap. Residual: the signup and invitation-accept endpoints answer 409 for an email that already has an account, which is a different, token- or signup-gated signal | 4.1 S | ADR-005 A3 resolved · [MOH-35](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-35) |
 | 6 | CSRF gaps (missing `Origin` allowed, login unchecked). **Resolved:** a state-changing request authenticated by the session cookie must name an allowed origin and carry a custom header, and login and signup get the same check with no session needed. Residual: `SameSite=Lax` is still the first line of defence for GET-based state changes, of which there are none by convention | 4.1 E | ADR-005 A4 resolved · [MOH-36](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-36) |
-| 7 | Public and internal traffic share one process and router | 4.4 D/E | ADR-010 G1 · [MOH-37](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-37) |
+| 7 | Public and internal traffic share one process and router. **Mitigated in code:** run modes `api`, `gateway`, `worker` and `all` with disjoint route sets and workers split out. Residual: the default and the deployed topology are still `all`, because realtime fan-out and presence are in-process (ADR-009 RT1), so the isolation is available but not yet in use | 4.4 D/E | ADR-010 G1 resolved in code · [MOH-37](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-37) |
 | 8 | CSP not enforced (`report-only`); GitHub Actions pinned by tag, not SHA; no circuit breakers | 4.1 S, 4.6 D, 4.13 T, 4.14 S | CSP [MOH-38](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-38) · Actions SHA pinning [MOH-39](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-39) · circuit breakers [MOH-40](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-40) |
 
 Each risk should become a Linear issue with an owner and target date; this table links them once

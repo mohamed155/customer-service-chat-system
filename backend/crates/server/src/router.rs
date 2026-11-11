@@ -27,6 +27,7 @@ use utoipa_axum::routes;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::openapi::ApiDoc;
+use crate::run_mode::RunMode;
 use crate::security_headers;
 use crate::state::AppState;
 
@@ -1071,6 +1072,7 @@ fn api_routes(
     include_test_routes: bool,
     email_sender: Option<Arc<dyn EmailSender>>,
     storage: Option<Arc<dyn ObjectStorage>>,
+    mode: RunMode,
 ) -> (
     Router<sqlx::PgPool>,
     utoipa::openapi::OpenApi,
@@ -1150,31 +1152,39 @@ fn api_routes(
         .layer(Extension(rate_store))
         .layer(Extension(tenant_limit));
 
-    // Protected routes (everything except widget and hooks) get Scope B headers.
-    let mut protected: OpenApiRouter<sqlx::PgPool> = OpenApiRouter::with_openapi(ApiDoc::openapi())
-        .merge(public_routes())
-        .merge(authenticated_routes());
-    let platform = platform_routes(include_test_routes)
-        .layer(middleware::from_fn(platform_permission_middleware))
-        .layer(middleware::from_fn(authentication_middleware));
-    protected = protected.merge(platform);
-    let tenant = tenant_routes(include_test_routes)
-        .layer(from_fn_with_state(
-            tenancy_config,
-            tenancy::tenant_context_middleware,
-        ))
-        .layer(middleware::from_fn(authentication_middleware));
-    protected = protected.merge(tenant);
+    // Dashboard, platform and auth routes (everything except widget and hooks) get Scope B
+    // headers. A `gateway` process mounts none of them, so a public request can't reach one by
+    // path (ADR-010 section 2).
+    let mut router: OpenApiRouter<sqlx::PgPool> = OpenApiRouter::with_openapi(ApiDoc::openapi());
+    if mode.serves_api() {
+        let mut protected: OpenApiRouter<sqlx::PgPool> =
+            OpenApiRouter::with_openapi(ApiDoc::openapi())
+                .merge(public_routes())
+                .merge(authenticated_routes());
+        let platform = platform_routes(include_test_routes)
+            .layer(middleware::from_fn(platform_permission_middleware))
+            .layer(middleware::from_fn(authentication_middleware));
+        protected = protected.merge(platform);
+        let tenant = tenant_routes(include_test_routes)
+            .layer(from_fn_with_state(
+                tenancy_config,
+                tenancy::tenant_context_middleware,
+            ))
+            .layer(middleware::from_fn(authentication_middleware));
+        protected = protected.merge(tenant);
 
-    if state.config.security_headers_enabled {
-        for layer in security_headers::scope_b_layers(&state.config) {
-            protected = protected.layer(layer);
+        if state.config.security_headers_enabled {
+            for layer in security_headers::scope_b_layers(&state.config) {
+                protected = protected.layer(layer);
+            }
         }
+        router = router.merge(protected);
+    }
+    if mode.serves_gateway() {
+        router = router.merge(widget_router).merge(hooks_router);
     }
 
-    let router = protected.merge(widget_router).merge(hooks_router);
-
-    let router = router
+    let mut router = router
         .fallback(|request: Request| async move {
             let request_id = request
                 .headers()
@@ -1194,12 +1204,17 @@ fn api_routes(
         .layer(Extension(Arc::new(ai::agent_config::AiAgentStatusAdapter {
             pool: state.db.clone(),
         })
-            as Arc<dyn conversations::AiAgentStatus>))
-        .layer(from_fn_with_state(
-            state.config.clone(),
-            csrf_origin_middleware,
-        ))
-        .layer(from_fn_with_state(identity_config, principal_middleware));
+            as Arc<dyn conversations::AiAgentStatus>));
+    // Cookie sessions and their CSRF check belong to the dashboard side only. The gateway has no
+    // session to resolve and holds no signing key for one.
+    if mode.serves_api() {
+        router = router
+            .layer(from_fn_with_state(
+                state.config.clone(),
+                csrf_origin_middleware,
+            ))
+            .layer(from_fn_with_state(identity_config, principal_middleware));
+    }
 
     let (router, doc) = router.split_for_parts();
     (router, doc, whatsapp_store)
@@ -1219,6 +1234,27 @@ pub fn documented_openapi(include_test_routes: bool) -> utoipa::openapi::OpenApi
     let router = router.merge(widget_routes());
     let router = router.merge(hooks_routes());
     router.into_openapi()
+}
+
+/// The documented paths a run mode mounts under `/api/v1`, built from the same route sets as
+/// [`documented_openapi`]. The `api` and `gateway` sets must never overlap (ADR-010 section 2); a
+/// test asserts it.
+pub fn documented_paths(
+    mode: RunMode,
+    include_test_routes: bool,
+) -> std::collections::BTreeSet<String> {
+    let mut router: OpenApiRouter<sqlx::PgPool> = OpenApiRouter::with_openapi(ApiDoc::openapi());
+    if mode.serves_api() {
+        router = router
+            .merge(public_routes())
+            .merge(authenticated_routes())
+            .merge(platform_routes(include_test_routes))
+            .merge(tenant_routes(include_test_routes));
+    }
+    if mode.serves_gateway() {
+        router = router.merge(widget_routes()).merge(hooks_routes());
+    }
+    router.into_openapi().paths.paths.keys().cloned().collect()
 }
 
 pub fn configured_email_sender(config: &AppConfig) -> Arc<dyn EmailSender> {
@@ -1252,11 +1288,20 @@ fn build_app(
     include_test_routes: bool,
     email_sender: Option<Arc<dyn EmailSender>>,
     storage: Option<Arc<dyn ObjectStorage>>,
+    mode: RunMode,
 ) -> Router {
     let config = state.config.clone();
-    let (api_router, openapi_doc, whatsapp_store) =
-        api_routes(&state, include_test_routes, email_sender, storage);
-    let expose_docs = docs_surface_enabled(&config);
+    // A `worker` process serves no API or gateway routes, so it builds none of them (and needs no
+    // rate-limiter Redis client or object storage selection for them).
+    let serves_http_routes = mode.serves_api() || mode.serves_gateway();
+    let (api_router, openapi_doc, whatsapp_store) = if serves_http_routes {
+        let (router, doc, store) =
+            api_routes(&state, include_test_routes, email_sender, storage, mode);
+        (Some(router), Some(doc), Some(store))
+    } else {
+        (None, None, None)
+    };
+    let expose_docs = mode.serves_api() && docs_surface_enabled(&config);
 
     let mut router: Router<AppState> = Router::new()
         .route("/health", routing::get(liveness))
@@ -1273,37 +1318,38 @@ fn build_app(
             .route("/test-panic", routing::get(test_panic_handler));
     }
 
-    if expose_docs {
+    if let (true, Some(openapi_doc)) = (expose_docs, openapi_doc) {
         router =
             router.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi_doc));
-    } else {
-        // Drop the openapi_doc to satisfy the unused-variable lint; the
-        // entire documentation surface (both UI and JSON) is gated off
-        // when this branch runs, so nothing must be served.
-        drop(openapi_doc);
     }
 
-    // WhatsApp webhook (spec 029) — mounted outside tenant auth, token-based
-    let master_key = state
-        .config
-        .integration_secrets_key
-        .as_ref()
-        .and_then(|key| integrations::crypto::MasterKey::from_base64(key).ok())
-        .map(Arc::new);
-    if let Some(ref mk) = master_key {
-        let whatsapp_webhook = whatsapp::routes::public_router()
-            .layer(Extension(mk.clone()))
-            .layer(Extension(whatsapp_store))
-            .layer(Extension(state.config.clone()))
-            .layer(DefaultBodyLimit::max(256 * 1024))
-            .with_state(state.db.clone());
-        router = router.merge(whatsapp_webhook);
-    } else {
-        tracing::warn!("integration_secrets_key not configured — whatsapp webhook disabled");
+    // WhatsApp webhook (spec 029) — mounted outside tenant auth, token-based. It is a public
+    // channel webhook, so it belongs to the gateway.
+    if let (true, Some(whatsapp_store)) = (mode.serves_gateway(), whatsapp_store) {
+        let master_key = state
+            .config
+            .integration_secrets_key
+            .as_ref()
+            .and_then(|key| integrations::crypto::MasterKey::from_base64(key).ok())
+            .map(Arc::new);
+        if let Some(ref mk) = master_key {
+            let whatsapp_webhook = whatsapp::routes::public_router()
+                .layer(Extension(mk.clone()))
+                .layer(Extension(whatsapp_store))
+                .layer(Extension(state.config.clone()))
+                .layer(DefaultBodyLimit::max(256 * 1024))
+                .with_state(state.db.clone());
+            router = router.merge(whatsapp_webhook);
+        } else {
+            tracing::warn!("integration_secrets_key not configured — whatsapp webhook disabled");
+        }
+    }
+
+    if let Some(api_router) = api_router {
+        router = router.nest("/api/v1", api_router.with_state(state.db.clone()));
     }
 
     let mut app_router = router
-        .nest("/api/v1", api_router.with_state(state.db.clone()))
         .fallback(|request: Request| async move {
             let request_id = request
                 .headers()
@@ -1332,8 +1378,23 @@ fn build_app(
     app_router.with_state(state)
 }
 
+/// The router for one run mode, as `main` serves it. `app_with_email_sender` is the `all` mode.
+pub fn app_for_mode(
+    state: AppState,
+    mode: RunMode,
+    email_sender: Arc<dyn EmailSender>,
+    storage: Arc<dyn ObjectStorage>,
+) -> Router {
+    build_app(state, false, Some(email_sender), Some(storage), mode)
+}
+
+/// Same as [`app_for_mode`] with the test-only routes, for the route-set tests.
+pub fn app_for_mode_with_test_routes(state: AppState, mode: RunMode) -> Router {
+    build_app(state, true, None, None, mode)
+}
+
 pub fn app(state: AppState) -> Router {
-    build_app(state, false, None, None)
+    build_app(state, false, None, None, RunMode::All)
 }
 
 pub fn app_with_email_sender(
@@ -1341,29 +1402,29 @@ pub fn app_with_email_sender(
     email_sender: Arc<dyn EmailSender>,
     storage: Option<Arc<dyn ObjectStorage>>,
 ) -> Router {
-    build_app(state, false, Some(email_sender), storage)
+    build_app(state, false, Some(email_sender), storage, RunMode::All)
 }
 
 pub fn app_with_test_routes(state: AppState) -> Router {
-    build_app(state, true, None, None)
+    build_app(state, true, None, None, RunMode::All)
 }
 
 pub fn app_with_test_routes_and_email_sender(
     state: AppState,
     email_sender: Arc<dyn EmailSender>,
 ) -> Router {
-    build_app(state, true, Some(email_sender), None)
+    build_app(state, true, Some(email_sender), None, RunMode::All)
 }
 
 pub fn app_with_storage(state: AppState, storage: Arc<dyn ObjectStorage>) -> Router {
-    build_app(state, false, None, Some(storage))
+    build_app(state, false, None, Some(storage), RunMode::All)
 }
 
 pub fn app_with_test_routes_and_storage(
     state: AppState,
     storage: Arc<dyn ObjectStorage>,
 ) -> Router {
-    build_app(state, true, None, Some(storage))
+    build_app(state, true, None, Some(storage), RunMode::All)
 }
 
 #[cfg(test)]
