@@ -29,6 +29,16 @@ jobs:
           dir=$(mktemp -d)
           cp package.json pnpm-lock.yaml "$dir"
           cd "$dir" && pnpm install --frozen-lockfile
+      # The TypeScript types are generated from the committed OpenAPI document (MOH-43). After an API
+      # change: `UPDATE_OPENAPI=1 cargo test -p server --test openapi_snapshot`, then `pnpm gen:api`.
+      - name: Generated API types are current
+        run: |
+          pnpm gen:api
+          if [ -n "$(git status --porcelain -- apps/dashboard/src/app/core/api/generated)" ]; then
+            git --no-pager diff --stat -- apps/dashboard/src/app/core/api/generated
+            echo "::error::apps/dashboard/src/app/core/api/generated is out of date. Run 'pnpm gen:api' in frontend/ and commit the result."
+            exit 1
+          fi
       - run: pnpm run lint
       - name: Check formatting
         run: pnpm format:check

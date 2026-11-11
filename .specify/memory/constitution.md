@@ -28,7 +28,8 @@ Follow-up TODOs:
       - Tenant secrets not envelope-encrypted (II): MOH-33 — ADR-014 E1
       - No i18n externalization (XII): MOH-41
       - UUIDv7 not used for new PKs (Technology Standards): MOH-42 — ADR-013 U1
-      - No OpenAPI breaking-change or generated-client check in CI (VIII): MOH-43 — ADR-012 A5
+      - OpenAPI breaking-change and generated-types checks in CI: done (MOH-43). The dashboard still uses
+        hand-written wire types (VIII): ADR-012 A6
     Other threat-model risks: MOH-34 (MFA), MOH-35 (login timing), MOH-36 (CSRF),
     MOH-37 (gateway split), MOH-38 (CSP), MOH-39 (Actions SHA pinning), MOH-40 (circuit breakers).
 -->

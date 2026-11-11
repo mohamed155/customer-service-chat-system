@@ -5,6 +5,7 @@ Where the project's documentation lives. Each folder has its own index.
 | Folder | What it holds |
 | -- | -- |
 | [`architecture/`](architecture/README.md) | How the system is built: the system architecture and the module README template |
+| [`api/`](api/README.md) | The API contract: the committed OpenAPI document, and how it is kept current and checked for breaking changes |
 | [`adr/`](adr/README.md) | Architecture Decision Records: one decision per file, with its context and consequences |
 | [`specs/`](specs/README.md) | Where feature specifications live and how to read them |
 | [`runbooks/`](runbooks/README.md) | Operating the platform: deploy, roll back, back up, restore, everyday tasks |
