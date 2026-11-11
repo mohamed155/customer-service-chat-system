@@ -990,21 +990,23 @@ mod tests {
 
         let mut known = Vec::new();
         let mut unknown = Vec::new();
-        for _ in 0..7 {
+        async fn timed_failed_login(pool: &sqlx::PgPool, email: &str) -> std::time::Duration {
             let started = std::time::Instant::now();
-            let res =
-                send_request(pool.clone(), login_request(&known_email, "wrong-password")).await;
+            let res = send_request(pool.clone(), login_request(email, "wrong-password")).await;
             assert_eq!(res.status(), 401);
-            known.push(started.elapsed());
+            started.elapsed()
+        }
 
-            let started = std::time::Instant::now();
-            let res = send_request(
-                pool.clone(),
-                login_request(&unique_test_email(), "wrong-password"),
-            )
-            .await;
-            assert_eq!(res.status(), 401);
-            unknown.push(started.elapsed());
+        // Alternate which side goes first so cache and clock effects can't favour one of them.
+        for i in 0..7 {
+            let unknown_email = unique_test_email();
+            if i % 2 == 0 {
+                known.push(timed_failed_login(&pool, &known_email).await);
+                unknown.push(timed_failed_login(&pool, &unknown_email).await);
+            } else {
+                unknown.push(timed_failed_login(&pool, &unknown_email).await);
+                known.push(timed_failed_login(&pool, &known_email).await);
+            }
         }
         known.sort();
         unknown.sort();
