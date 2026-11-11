@@ -1,6 +1,6 @@
 # Operations Runbook
 
-Five common operational tasks for the AI Customer Service Platform.
+Six common operational tasks for the AI Customer Service Platform.
 
 ---
 
@@ -315,3 +315,73 @@ credentials.
   downstream dependency that returns success codes for its own health but
   fails on the actual operation (e.g. S3 writes succeed but reads are slow).
   Check each dependency's own metrics endpoint if available.
+
+---
+
+## 6. A Circuit Breaker Is Open
+
+The backend refuses calls at once to an AI provider or to WhatsApp that keeps failing, instead of
+tying up workers on it (MOH-40, architecture §10.2 and §15). The breakers are `ai:openai`,
+`ai:anthropic`, `ai:gemini` (chat), `ai:openai:embed`, `ai:gemini:embed` (knowledge indexing),
+`whatsapp:graph` (sending and media lookup) and `whatsapp:media` (media download).
+
+What a customer sees while one is open:
+
+- **AI chat provider:** the next provider in the tenant's fallback chain answers. With none left, the
+  customer gets the "having trouble responding" message and the conversation is escalated to a
+  human ("AI assistant unavailable").
+- **WhatsApp:** the sender and media workers stop claiming work. Messages stay in the queue and go
+  out once the circuit closes. Nothing is marked failed without a try.
+
+### Steps
+
+1. Find the open circuit. In the dashboard, platform admins see System health, with one card per
+   breaker (`ai:openai circuit`, …). Or read the metrics:
+
+   ```bash
+   curl -sf http://localhost:8080/metrics | grep -E 'circuit_breaker|bulkhead_in_flight'
+   ```
+
+   `circuit_breaker_state` is 0 closed, 1 half-open, 2 open. `circuit_breaker_trips_total` counts
+   openings; `circuit_breaker_rejections_total{reason}` counts refused calls (`circuit_open`, or
+   `bulkhead_full` when every slot to that provider stayed busy for 2 seconds).
+
+2. Find out whether the provider itself is down: its status page, and the logs. The circuit logs
+   `circuit opened` (warn) with the breaker name and `circuit closed` (info) on recovery.
+
+   ```bash
+   docker compose logs app --since 30m | grep -E 'circuit (opened|half-open|closed)'
+   ```
+
+3. Do nothing else if the provider is down. After 30 seconds the circuit lets one call through
+   (half-open). If it succeeds the circuit closes; if it fails the circuit stays open for another
+   30 seconds. The breaker needs no manual reset.
+
+4. If the provider is up but the circuit keeps opening, the failures are real from this side:
+   check outbound network access and DNS from the backend container, and the request timeout
+   (60 seconds for AI providers).
+
+### What counts as a failure
+
+Only `unavailable` and `timeout` AI errors, and transient WhatsApp errors (5xx, connection
+errors). A rejected API key, a rate limit or a bad request means the provider answered, so one
+tenant's expired key never opens the circuit for the others.
+
+### Settings
+
+The limits are constants for now, not environment variables: open after 5 consecutive failures
+within 60 seconds, stay open for 30 seconds, one probe call in half-open, at most 16 concurrent
+calls per AI provider and 8 per WhatsApp host, 2 seconds to wait for a free slot. They live in
+`resilience::Policy::default()` and `whatsapp::guarded::default_policy()`.
+
+### Expected outcome
+
+- The circuit closes by itself after the provider recovers; `circuit_breaker_state` returns to 0.
+- Conversations escalated during the outage are in the human queue; answer them as usual.
+
+### When it fails
+
+- **Circuit stays open and the provider is up:** `circuit_breaker_trips_total` rising every
+  30 seconds means each probe fails. Treat it as an outbound connectivity problem (step 4).
+- **State resets after a restart:** breaker state is in memory per process, so a restart starts
+  closed and re-learns within five failed calls.

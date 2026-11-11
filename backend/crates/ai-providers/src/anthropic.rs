@@ -35,7 +35,15 @@ fn provider_error(status: StatusCode, detail: String) -> ProviderError {
 }
 
 fn normalize_error(e: reqwest::Error) -> ProviderError {
-    if e.is_timeout() {
+    if e.is_builder() {
+        // Nothing was sent (for example a key that is not a valid header value), so this says
+        // nothing about the provider and must never count against its circuit breaker.
+        ProviderError {
+            category: ErrorCategory::InvalidRequest,
+            retriable: false,
+            detail: "request could not be built".into(),
+        }
+    } else if e.is_timeout() {
         ProviderError {
             category: ErrorCategory::Timeout,
             retriable: true,

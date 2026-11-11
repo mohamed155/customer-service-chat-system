@@ -14,6 +14,9 @@ pub enum SendError {
     WindowExpired,
     Unauthorized,
     Transient(String),
+    /// Refused before anything was sent, by the circuit breaker or bulkhead in front of WhatsApp
+    /// (MOH-40). Unlike `Transient` this is not a failed attempt: the work goes back in the queue.
+    Refused(String),
     Other(String),
 }
 
@@ -23,6 +26,7 @@ impl std::fmt::Display for SendError {
             Self::WindowExpired => write!(f, "messaging window expired"),
             Self::Unauthorized => write!(f, "unauthorized"),
             Self::Transient(msg) => write!(f, "transient error: {msg}"),
+            Self::Refused(msg) => write!(f, "refused: {msg}"),
             Self::Other(msg) => write!(f, "error: {msg}"),
         }
     }
@@ -43,6 +47,31 @@ pub trait WhatsAppApi: Send + Sync {
     async fn media_url(&self, access_token: &str, media_id: &str) -> Result<MediaInfo, SendError>;
 
     async fn download(&self, access_token: &str, url: &str) -> Result<Bytes, SendError>;
+
+    /// False while calls to WhatsApp would be refused at once (the circuit is open). The workers
+    /// then leave their queue alone instead of claiming work they can't do, so nothing is marked
+    /// failed without a try and the queue drains once WhatsApp answers again.
+    fn available(&self) -> bool {
+        true
+    }
+
+    /// Like [`available`](Self::available), for the media worker: it also needs the download
+    /// endpoint, which has its own circuit.
+    fn media_available(&self) -> bool {
+        self.available()
+    }
+}
+
+/// Turn a failed HTTP call into a [`SendError`]. A request that could not even be built (an access
+/// token with a control character is not a valid header value, a phone number ID that does not fit
+/// in the URL) never left this process, so it says nothing about WhatsApp: it is `Other`, not
+/// `Transient`, and never counts against the circuit breaker.
+fn transport_error(e: reqwest::Error, what: &str) -> SendError {
+    if e.is_builder() {
+        SendError::Other(format!("{what}: request could not be built"))
+    } else {
+        SendError::Transient(format!("{what}: {e}"))
+    }
 }
 
 pub struct GraphWhatsAppApi {
@@ -116,7 +145,7 @@ impl WhatsAppApi for GraphWhatsAppApi {
             .json(&payload)
             .send()
             .await
-            .map_err(|e| SendError::Transient(format!("request failed: {e}")))?;
+            .map_err(|e| transport_error(e, "request failed"))?;
 
         let status = response.status();
 
@@ -160,12 +189,18 @@ impl WhatsAppApi for GraphWhatsAppApi {
             .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
             .send()
             .await
-            .map_err(|e| SendError::Transient(format!("request failed: {e}")))?;
+            .map_err(|e| transport_error(e, "request failed"))?;
 
         let status = response.status();
 
         if status == 401 || status == 403 {
             return Err(SendError::Unauthorized);
+        }
+
+        if status.is_server_error() {
+            return Err(SendError::Transient(format!(
+                "media lookup returned {status}"
+            )));
         }
 
         if !status.is_success() {
@@ -191,12 +226,16 @@ impl WhatsAppApi for GraphWhatsAppApi {
             .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
             .send()
             .await
-            .map_err(|e| SendError::Transient(format!("download failed: {e}")))?;
+            .map_err(|e| transport_error(e, "download failed"))?;
 
         let status = response.status();
 
         if status == 401 || status == 403 {
             return Err(SendError::Unauthorized);
+        }
+
+        if status.is_server_error() {
+            return Err(SendError::Transient(format!("download returned {status}")));
         }
 
         if !status.is_success() {

@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 db = { path = "../../shared/db" }
 ai-providers = { path = "../../ai-providers" }
+resilience = { path = "../../shared/resilience" }
 aes-gcm.workspace = true
 async-trait.workspace = true
 authz = { path = "../authz" }

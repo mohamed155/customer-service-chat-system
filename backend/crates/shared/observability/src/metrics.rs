@@ -78,6 +78,7 @@ pub fn init() {
         "dependency_up",
         "Whether a dependency is reachable (1 = up, 0 = down)"
     );
+    resilience::describe_metrics();
     metrics::describe_gauge!(
         "backup_last_success_timestamp_seconds",
         "Unix timestamp of last successful backup"

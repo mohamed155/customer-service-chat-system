@@ -9,6 +9,7 @@ chrono = { workspace = true, features = ["serde"] }
 futures.workspace = true
 kernel = { path = "../../shared/kernel" }
 observability = { path = "../../shared/observability" }
+resilience = { path = "../../shared/resilience" }
 serde.workspace = true
 sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
 storage = { path = "../../shared/storage" }

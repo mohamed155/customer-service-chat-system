@@ -1,4 +1,5 @@
 use crate::model::{HealthVerdict, ProviderVerdict};
+use resilience::{Snapshot, State};
 use storage::{StorageBackend, StorageKind};
 
 pub fn queue_verdict(
@@ -34,6 +35,47 @@ pub fn storage_verdict(
     (HealthVerdict::Healthy, None)
 }
 
+/// Health of one circuit breaker (MOH-40). Open is unhealthy: every call to that dependency is
+/// being refused, so AI turns are handed to a human and WhatsApp messages wait in the queue.
+/// Half-open (one probe running) is degraded. A closed circuit is healthy, with a note when it
+/// has opened since start so a flapping dependency does not go unnoticed.
+pub fn circuit_verdict(snapshot: &Snapshot) -> (HealthVerdict, Option<String>) {
+    let trips = snapshot.trips_total;
+    match snapshot.state {
+        State::Open => (
+            HealthVerdict::Unhealthy,
+            Some(format!(
+                "circuit open for {}s (opened {trips} time(s) since start); calls are refused until the next probe",
+                snapshot.open_for.map_or(0, |d| d.as_secs())
+            )),
+        ),
+        State::HalfOpen => (
+            HealthVerdict::Degraded,
+            Some(format!(
+                "circuit half-open: testing the dependency with one call (opened {trips} time(s) since start)"
+            )),
+        ),
+        // A full bulkhead is checked before past trips, so it is never hidden by an old one.
+        State::Closed if snapshot.in_flight >= snapshot.max_concurrent => (
+            HealthVerdict::Degraded,
+            Some(format!(
+                "all {} slots busy; further calls wait or are refused{}",
+                snapshot.max_concurrent,
+                if trips > 0 {
+                    format!(" (circuit opened {trips} time(s) since start)")
+                } else {
+                    String::new()
+                }
+            )),
+        ),
+        State::Closed if trips > 0 => (
+            HealthVerdict::Healthy,
+            Some(format!("circuit closed; it opened {trips} time(s) since start")),
+        ),
+        State::Closed => (HealthVerdict::Healthy, None),
+    }
+}
+
 pub fn overall(verdicts: &[HealthVerdict]) -> HealthVerdict {
     verdicts
         .iter()
@@ -63,6 +105,65 @@ pub fn provider_verdict(total_calls: i64, failures: i64) -> ProviderVerdict {
 mod tests {
     use super::*;
     use crate::model::HealthVerdict;
+
+    fn snapshot(state: State, trips: u64, in_flight: usize) -> Snapshot {
+        Snapshot {
+            name: "ai:openai".into(),
+            state,
+            consecutive_failures: 0,
+            trips_total: trips,
+            rejected_open_total: 0,
+            rejected_bulkhead_total: 0,
+            in_flight,
+            max_concurrent: 4,
+            open_for: Some(std::time::Duration::from_secs(12)),
+        }
+    }
+
+    #[test]
+    fn circuit_open_is_unhealthy_with_a_reason() {
+        let (verdict, reason) = circuit_verdict(&snapshot(State::Open, 2, 0));
+        assert_eq!(verdict, HealthVerdict::Unhealthy);
+        let reason = reason.unwrap();
+        assert!(
+            reason.contains("open for 12s") && reason.contains("2 time(s)"),
+            "{reason}"
+        );
+    }
+
+    #[test]
+    fn circuit_half_open_is_degraded() {
+        assert_eq!(
+            circuit_verdict(&snapshot(State::HalfOpen, 1, 1)).0,
+            HealthVerdict::Degraded
+        );
+    }
+
+    #[test]
+    fn circuit_closed_is_healthy_and_notes_past_trips_or_a_full_bulkhead() {
+        assert_eq!(
+            circuit_verdict(&snapshot(State::Closed, 0, 1)),
+            (HealthVerdict::Healthy, None)
+        );
+        let (verdict, reason) = circuit_verdict(&snapshot(State::Closed, 3, 0));
+        assert_eq!(verdict, HealthVerdict::Healthy);
+        assert!(reason.unwrap().contains("3 time(s)"));
+        assert_eq!(
+            circuit_verdict(&snapshot(State::Closed, 0, 4)).0,
+            HealthVerdict::Degraded
+        );
+    }
+
+    #[test]
+    fn a_full_bulkhead_is_not_hidden_by_past_trips() {
+        let (verdict, reason) = circuit_verdict(&snapshot(State::Closed, 3, 4));
+        assert_eq!(verdict, HealthVerdict::Degraded);
+        let reason = reason.unwrap();
+        assert!(
+            reason.contains("all 4 slots busy") && reason.contains("opened 3 time(s)"),
+            "{reason}"
+        );
+    }
 
     #[test]
     fn queue_healthy_below_thresholds() {

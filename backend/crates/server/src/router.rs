@@ -1200,6 +1200,7 @@ fn api_routes(
         .layer(Extension(state.escalations.clone()))
         .layer(Extension(state.ai.clone()))
         .layer(Extension(state.health_checks.clone()))
+        .layer(Extension(state.ai.resilience()))
         .layer(Extension(storage_backend))
         .layer(Extension(Arc::new(ai::agent_config::AiAgentStatusAdapter {
             pool: state.db.clone(),

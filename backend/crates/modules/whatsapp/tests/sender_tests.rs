@@ -14,6 +14,7 @@ use serde_json::json;
 use sha2::Sha256;
 use tower::ServiceExt;
 use uuid::Uuid;
+use whatsapp::api::WhatsAppApi;
 
 const TEST_MASTER_KEY_B64: &str = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 const WHATSAPP_SLUG: &str = "whatsapp";
@@ -479,6 +480,216 @@ async fn sender_unauthorized() {
         meta.1.contains("credential"),
         "failure_reason should mention credential, got: {}",
         meta.1
+    );
+}
+
+#[tokio::test]
+async fn sender_puts_a_refused_message_back_in_the_queue_instead_of_failing_it() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let mk = master_key();
+    let fixture = setup_sender_fixture(&pool, &mk, true, 3600).await;
+
+    // The circuit breaker refuses the call: nothing is sent.
+    let mock = Arc::new(whatsapp::api::MockWhatsAppApi::new());
+    mock.push_send_text(Err(whatsapp::api::SendError::Refused(
+        "circuit open for whatsapp:graph".into(),
+    )));
+    whatsapp::sender::process_one(&pool, &*mock, &mk)
+        .await
+        .expect("process_one should succeed");
+
+    let status: String = sqlx::query_scalar(
+        "SELECT delivery_status FROM whatsapp_message_meta WHERE tenant_id = $1 AND message_id = $2",
+    )
+    .bind(fixture.tenant_id)
+    .bind(fixture.message_id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .expect("meta row should exist");
+    assert_ne!(
+        status, "failed",
+        "a refused message must not be marked failed"
+    );
+    assert_ne!(status, "sent");
+
+    let queued: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM outbox_events \
+         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message' \
+           AND payload->>'messageId' = $2",
+    )
+    .bind(fixture.tenant_id.to_string())
+    .bind(fixture.message_id.to_string())
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(queued, 1, "the event is back in the queue");
+
+    // The circuit closes: the next pass sends the same message.
+    mock.push_send_text(Ok("wamid.after.recovery".into()));
+    whatsapp::sender::process_one(&pool, &*mock, &mk)
+        .await
+        .expect("process_one should succeed");
+    let wamid: String = sqlx::query_scalar(
+        "SELECT wamid FROM whatsapp_message_meta WHERE tenant_id = $1 AND message_id = $2",
+    )
+    .bind(fixture.tenant_id)
+    .bind(fixture.message_id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(wamid, "wamid.after.recovery");
+}
+
+fn quick_policy() -> resilience::Policy {
+    resilience::Policy {
+        failure_threshold: 1,
+        open_duration: Duration::from_millis(80),
+        ..resilience::Policy::default()
+    }
+}
+
+// The race behind a refused call: the worker checked `available()`, took the event, did its
+// database work, and by the time it sends, another call has opened the circuit. The real guarded
+// API refuses; the message must not be marked failed, and it must go out after recovery.
+#[tokio::test]
+async fn sender_keeps_a_message_when_the_circuit_opens_after_the_availability_check() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let mk = master_key();
+    let fixture = setup_sender_fixture(&pool, &mk, true, 3600).await;
+
+    let hub = resilience::Hub::new();
+    let mock = Arc::new(whatsapp::api::MockWhatsAppApi::new());
+    let api = whatsapp::guarded::GuardedWhatsAppApi::new(mock.clone(), &hub, quick_policy());
+    assert!(api.available(), "the worker's check passes");
+
+    // Another call fails and opens the circuit.
+    mock.push_send_text(Err(whatsapp::api::SendError::Transient("503".into())));
+    api.send_text("tok", "1", "+15550000000", "other")
+        .await
+        .unwrap_err();
+    assert!(!api.available());
+
+    // The worker, which already took the event, now reaches the send.
+    whatsapp::sender::process_one(&pool, &api, &mk)
+        .await
+        .expect("process_one should succeed");
+
+    let status: String = sqlx::query_scalar(
+        "SELECT delivery_status FROM whatsapp_message_meta WHERE tenant_id = $1 AND message_id = $2",
+    )
+    .bind(fixture.tenant_id)
+    .bind(fixture.message_id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(status, "pending", "not failed, not sent");
+    let queued: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM outbox_events \
+         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'",
+    )
+    .bind(fixture.tenant_id.to_string())
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(queued, 1, "the event is back in the queue");
+
+    // WhatsApp answers again: the circuit's probe goes through and the message is sent.
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    mock.push_send_text(Ok("wamid.after.race".into()));
+    whatsapp::sender::process_one(&pool, &api, &mk)
+        .await
+        .expect("process_one should succeed");
+    let wamid: String = sqlx::query_scalar(
+        "SELECT wamid FROM whatsapp_message_meta WHERE tenant_id = $1 AND message_id = $2",
+    )
+    .bind(fixture.tenant_id)
+    .bind(fixture.message_id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(wamid, "wamid.after.race");
+}
+
+async fn attachment_attempts(attachment_id: Uuid) -> (String, i32) {
+    sqlx::query_as("SELECT status, fetch_attempts FROM message_attachments WHERE id = $1")
+        .bind(attachment_id)
+        .fetch_one(&db::testing::seed_pool())
+        .await
+        .unwrap()
+}
+
+// The media worker must not claim an attachment it can't download: with the download circuit open
+// it leaves the attachment alone (no attempt charged), while text sending stays available. With
+// the circuits closed the same worker does try, so the first half is not passing by accident.
+#[tokio::test]
+async fn media_worker_leaves_attachments_alone_while_the_download_circuit_is_open() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let mk = master_key();
+    let fixture = setup_sender_fixture(&pool, &mk, true, 3600).await;
+    let attachment_id: Uuid = sqlx::query_scalar(
+        "INSERT INTO message_attachments (tenant_id, message_id, kind, provider_media_id) \
+         VALUES ($1, $2, 'image', 'media-1') RETURNING id",
+    )
+    .bind(fixture.tenant_id)
+    .bind(fixture.message_id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    let storage: Arc<dyn storage::ObjectStorage> = Arc::new(storage::InMemoryStorage::default());
+
+    // Download circuit open.
+    let hub = resilience::Hub::new();
+    let mock = Arc::new(whatsapp::api::MockWhatsAppApi::new());
+    let api = Arc::new(whatsapp::guarded::GuardedWhatsAppApi::new(
+        mock.clone(),
+        &hub,
+        resilience::Policy {
+            open_duration: Duration::from_secs(60),
+            ..quick_policy()
+        },
+    ));
+    mock.push_download(Err(whatsapp::api::SendError::Transient("cdn 502".into())));
+    api.download("tok", "https://cdn.example/x")
+        .await
+        .unwrap_err();
+    assert!(!api.media_available());
+    assert!(api.available(), "text messages are unaffected");
+
+    let worker = tokio::spawn(whatsapp::media::run_media_fetch_worker(
+        pool.clone(),
+        api,
+        storage.clone(),
+        mk.clone(),
+    ));
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    worker.abort();
+    assert_eq!(
+        attachment_attempts(attachment_id).await,
+        ("pending".to_string(), 0),
+        "no attempt was charged and nothing was claimed"
+    );
+
+    // Circuits closed: the worker does pick the attachment up (and the unscripted mock fails it).
+    let api = Arc::new(whatsapp::guarded::GuardedWhatsAppApi::new(
+        Arc::new(whatsapp::api::MockWhatsAppApi::new()),
+        &resilience::Hub::new(),
+        quick_policy(),
+    ));
+    let worker = tokio::spawn(whatsapp::media::run_media_fetch_worker(
+        pool.clone(),
+        api,
+        storage,
+        mk,
+    ));
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    worker.abort();
+    assert_eq!(
+        attachment_attempts(attachment_id).await.1,
+        1,
+        "the worker tried it once"
     );
 }
 

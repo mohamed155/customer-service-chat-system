@@ -1,0 +1,12 @@
+[package]
+name = "resilience"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+metrics.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "test-util"] }
