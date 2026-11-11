@@ -174,12 +174,18 @@ describe('Dashboard shell acceptance', () => {
       expect(html).toContain("html[data-theme='dark'] .skeleton-shell");
     });
 
-    it('includes inline theme script before first paint', () => {
+    it('loads the theme script from a file before first paint, with no inline script', () => {
       const html = readFileSync(resolve(__dirname, '../index.html'), 'utf-8');
-      const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
-      expect(scriptMatch).not.toBeNull();
-      expect(scriptMatch![1]).toContain("localStorage.getItem('app.themeMode')");
-      expect(scriptMatch![1]).toContain('data-theme');
+      // The dashboard runs under `script-src 'self'`, so the theme initialiser is an external file
+      // (an inline script would be blocked). It must still come before the skeleton styles.
+      expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
+      const scriptAt = html.indexOf('<script src="theme-init.js"></script>');
+      expect(scriptAt).toBeGreaterThan(-1);
+      expect(scriptAt).toBeLessThan(html.indexOf('<style>'));
+
+      const script = readFileSync(resolve(__dirname, '../theme-init.js'), 'utf-8');
+      expect(script).toContain("localStorage.getItem('app.themeMode')");
+      expect(script).toContain('data-theme');
     });
   });
 
