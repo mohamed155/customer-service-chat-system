@@ -73,6 +73,12 @@ no cookie sessions, no platform or tenant routes and no API docs, and it doesn't
 the AI key (`AUTH_JWT_SECRET` and `APP_AI_KEY_ENCRYPTION_KEY` can be left out of its environment). It still needs `APP_INTEGRATION_SECRETS_KEY` to verify channel
 webhook signatures, until envelope encryption (ADR-014) replaces it.
 
+The widget's public API lives at `/widget/v1/*` on the public host, next to the static widget
+app under `/widget/*`. `infra/Caddyfile` sends `/widget/v1/*` to the backend as `/api/v1/widget/v1/*`
+(the `@widget_api` block, which must stay above the static `@widget` block) and everything else under
+`/widget` to the widget container. A host with its own proxy needs the same split, or the loader's
+`GET /widget/v1/config` reaches the static server and fails.
+
 ## Move an Existing Host to the Two Database Roles (once)
 
 Hosts created before MOH-45 have tables owned by the bootstrap superuser, and the backend

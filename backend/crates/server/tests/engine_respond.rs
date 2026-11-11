@@ -243,6 +243,18 @@ fn json_put(uri: &str, user_id: Uuid, tenant_id: Uuid, body: serde_json::Value) 
 
 #[tokio::test]
 async fn engine_respond_generates_ai_reply_and_generation_record() {
+    respond_on_channel("web_chat").await;
+}
+
+// MOH-51: the website widget starts conversations on the `widget` channel, while the
+// agent configuration only offers `web_chat`. An agent with `web_chat` enabled must
+// answer widget conversations too (before the fix the channel gate dropped them).
+#[tokio::test]
+async fn engine_respond_answers_widget_conversations_when_web_chat_is_enabled() {
+    respond_on_channel("widget").await;
+}
+
+async fn respond_on_channel(channel: &str) {
     let pool = match get_pool().await {
         Some(p) => p,
         None => return,
@@ -300,10 +312,11 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
     // Create a conversation
     let conversation_id = sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO conversations (tenant_id, customer_id, channel, status) \
-         VALUES ($1, $2, 'web_chat', 'open') RETURNING id",
+         VALUES ($1, $2, $3, 'open') RETURNING id",
     )
     .bind(tenant_id)
     .bind(customer_id)
+    .bind(channel)
     .fetch_one(&db::testing::seed_pool())
     .await
     .unwrap();
@@ -323,7 +336,7 @@ async fn engine_respond_generates_ai_reply_and_generation_record() {
     let outbox_payload = serde_json::json!({
         "conversation_id": conversation_id,
         "message_id": message_id,
-        "channel": "web_chat",
+        "channel": channel,
     });
     sqlx::query(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
