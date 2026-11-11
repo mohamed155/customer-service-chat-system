@@ -295,6 +295,7 @@ pub async fn process_escalation_outbox_once(
     pool: &sqlx::PgPool,
     runtime: &Arc<presence::Runtime>,
 ) -> sqlx::Result<bool> {
+    // uuid-v4-ok: claim token, not a key
     let claim_token = Uuid::new_v4();
     // outbox_events.id is UUID and tenant_id is TEXT (0002_outbox.sql).
     // Across tenants, so it goes through the audited function `xtenant.outbox_claim`.

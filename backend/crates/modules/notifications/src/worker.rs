@@ -82,6 +82,7 @@ pub async fn process_notification_outbox_once(
     pool: &PgPool,
     presence: &Arc<presence::Runtime>,
 ) -> Result<bool, sqlx::Error> {
+    // uuid-v4-ok: claim token, not a key
     let claim_token = Uuid::new_v4();
     // Across tenants, so it goes through the audited function `xtenant.outbox_claim`.
     let maybe_row =

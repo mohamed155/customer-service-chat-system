@@ -757,6 +757,45 @@ mod tests {
         );
     }
 
+    // New ids are UUIDv7 and old ones are v4 (ADR-013). The tenant list pages by `id` alone, which is
+    // a total order whatever the versions are: a mixed set must still be visited once, in id order.
+    #[tokio::test]
+    async fn list_tenants_pagination_handles_a_mix_of_v4_and_v7_ids() {
+        let Some(pool) = get_pool().await else { return };
+        db::testing::migrate().await;
+
+        let admin = seed_user(&pool, Some("super_admin")).await;
+        let unique = Uuid::new_v4().simple().to_string();
+
+        let mut seeded: Vec<Uuid> = Vec::new();
+        for i in 0..24 {
+            let id = if i % 2 == 0 {
+                Uuid::new_v4()
+            } else {
+                Uuid::now_v7()
+            };
+            sqlx::query(
+                "INSERT INTO tenants (id, name, slug, status) VALUES ($1, $2, $3, 'active')",
+            )
+            .bind(id)
+            .bind(format!("MixTenant {unique} {i}"))
+            .bind(format!("mix-{unique}-{i:02}"))
+            .execute(&pool)
+            .await
+            .unwrap();
+            seeded.push(id);
+        }
+
+        let observed = collect_tenant_ids(pool, admin, &format!("q=MixTenant+{unique}")).await;
+
+        let mut expected = seeded.clone();
+        expected.sort();
+        assert_eq!(
+            observed, expected,
+            "every tenant exactly once, in id order, whatever the id versions"
+        );
+    }
+
     // -----------------------------------------------------------------------
     // US2 (T024) — detail: 200 for live, 404 for unknown/soft-deleted
     // -----------------------------------------------------------------------

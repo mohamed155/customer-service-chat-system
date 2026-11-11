@@ -68,10 +68,37 @@ The decision has to balance these forces:
 
 ## Current state and migration
 
-These gaps between the current code and this decision are follow-up work. No code changes in
-this ADR.
+U1 was resolved by MOH-42; U2 is still follow-up work.
 
-| # | Gap | Where | Follow-up |
+| # | Gap | Where | Status |
 | -- | -- | -- | -- |
-| U1 | **New IDs are mostly UUIDv4.** There are about 360 `Uuid::new_v4()` calls in Rust and about 40 `gen_random_uuid()` defaults in migrations, against one `Uuid::now_v7()`. The `uuid` crate already has the `v7` feature enabled. | `backend/crates/**`, `backend/migrations/*` | Add `kernel::ids::new_id()` returning v7, switch call sites (mechanical), and drop `gen_random_uuid()` defaults in new migrations. Start with the highest-volume tables: messages, outbox, audit, AI turns. |
-| U2 | Newtype IDs exist only for some entities; many signatures take raw `Uuid`. | `backend/crates/shared/kernel` | Add newtypes as modules are refactored (ADR-001 M1). |
+| U1 | **New IDs were mostly UUIDv4.** There were about 50 `Uuid::new_v4()` calls in production Rust code (about 360 counting tests) and 40 `gen_random_uuid()` defaults in migrations, against one `Uuid::now_v7()`. | `backend/crates/**`, `backend/migrations/*` | **Resolved (MOH-42).** See below. |
+| U2 | Newtype IDs exist only for some entities; many signatures take raw `Uuid`. | `backend/crates/shared/kernel` | Open: add newtypes as modules are refactored (ADR-001 M1). |
+
+### How U1 was resolved
+
+- **`kernel::ids::new_id()`** returns a UUIDv7 (`Uuid::now_v7()`). Tests can replace the generator
+  with `ids::install_generator(...)`; `SequentialIdGenerator` gives a fixed, ordered sequence.
+- **Application-generated keys** now use it: the outbox events of conversations, notifications,
+  escalations, knowledge, tools and invitations; customers; knowledge items; AI generations.
+- **Database defaults.** Migration `0075_uuidv7_defaults.sql` adds a `uuidv7()` function and makes it
+  the default of the `id` column of all 40 tables that had `DEFAULT gen_random_uuid()`. That covers
+  every insert that does not name an id: `messages`, `audit_logs`, the rows written by SQL functions
+  and the low-volume tables. The function is a stand-in for PostgreSQL 18's built-in; after an
+  upgrade the built-in is found first and ours can be dropped. Existing rows keep their v4 ids.
+- **What stays v4, on purpose:** session token IDs (`jti`) and the claim tokens of the outbox
+  workers. They are tokens, not keys, and should not reveal a time. Each carries a
+  `// uuid-v4-ok: <why>` comment.
+- **Ordering and pagination** were reviewed. Every list ordered by time uses `(created_at, id)`, so
+  `id` is only a tie-breaker. The few lists ordered by `id` alone (the platform tenant list and the
+  row locks on memberships) only need a total order, which UUIDs have whatever their version. A test
+  pages through a mix of v4 and v7 tenants (`list_tenants_pagination_handles_a_mix_of_v4_and_v7_ids`).
+  Do not read a creation time from an id; use `created_at` (decision point 6).
+- **Enforcement.** `server/tests/uuid_hygiene.rs` fails on a `Uuid::new_v4()` without the
+  `uuid-v4-ok` comment, on a migration after 0075 that uses `DEFAULT gen_random_uuid()` (or
+  `uuid_generate_v4()`), and, against a migrated database, on any column that still defaults to a
+  random v4. It also checks that the new default gives version 7 values that sort by creation time,
+  for the runtime role.
+- **Left as it was:** application code that does not set an id and relies on the database default
+  gets a v7 from the function, so nothing else needed to change. New tables should either have the
+  application supply the id or use `DEFAULT uuidv7()`.

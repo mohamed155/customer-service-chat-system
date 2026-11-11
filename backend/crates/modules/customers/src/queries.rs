@@ -46,7 +46,7 @@ pub async fn create_anonymous_customer_in_tx(
     channel: &str,
     identifier: &str,
 ) -> sqlx::Result<Uuid> {
-    let customer_id = Uuid::new_v4();
+    let customer_id = kernel::ids::new_id();
     sqlx::query(
         "INSERT INTO customers (id, tenant_id, display_name, email, phone) \
          VALUES ($1, $2, $3, '', '')",

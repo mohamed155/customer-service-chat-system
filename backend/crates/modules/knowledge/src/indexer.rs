@@ -64,6 +64,7 @@ async fn process_one_event(
     storage: &dyn ObjectStorage,
 ) -> Result<bool, String> {
     // 1. Claim one outbox event with FOR UPDATE SKIP LOCKED
+    // uuid-v4-ok: claim token, not a key
     let claim_token = Uuid::new_v4();
     let claimed = sqlx::query_as::<_, ClaimedEvent>(
         // Across tenants, so it goes through the audited function `xtenant.outbox_claim_retryable`.
