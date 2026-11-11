@@ -2,7 +2,17 @@ import angular from 'angular-eslint';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'build/**', 'coverage/**', '.angular/**', 'node_modules/**', '*.min.js'] },
+  {
+    ignores: [
+      'dist/**',
+      'build/**',
+      'coverage/**',
+      '.angular/**',
+      'node_modules/**',
+      '*.min.js',
+      '**/generated/**',
+    ],
+  },
   {
     files: ['apps/**/*.ts', 'libs/**/*.ts'],
     extends: [...tseslint.configs.recommended, ...angular.configs.tsRecommended],

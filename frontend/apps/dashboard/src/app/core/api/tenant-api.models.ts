@@ -1137,17 +1137,20 @@ export function analyticsTimeseriesFromWire(wire: AnalyticsTimeseriesWire): Anal
 
 // ── Notifications (spec 027) ──────────────────────────────────────────
 
+// The notification DTOs are camelCase on the wire (`NotificationDto`, `rename_all = "camelCase"`),
+// unlike the snake_case conversation DTOs. The pagination block is snake_case. The generated
+// OpenAPI types in `generated/api.ts` are the reference (see `contract.spec.ts`).
 export interface NotificationWire {
   readonly id: string;
   readonly kind: string;
   readonly state: string;
   readonly title: string;
-  readonly body: string | null;
-  readonly subject_type: string;
-  readonly subject_id: string;
-  readonly actor: { readonly membership_id: string; readonly display_name: string } | null;
-  readonly created_at: string;
-  readonly read_at: string | null;
+  readonly body?: string | null;
+  readonly subjectType: string;
+  readonly subjectId: string;
+  readonly actor?: { readonly membershipId: string; readonly displayName: string } | null;
+  readonly createdAt: string;
+  readonly readAt?: string | null;
 }
 
 export interface NotificationListPaginationWire {
@@ -1184,17 +1187,17 @@ export function notificationFromWire(wire: NotificationWire): NotificationEntry 
     kind: wire.kind,
     state: wire.state,
     title: wire.title,
-    body: wire.body,
-    subjectType: wire.subject_type,
-    subjectId: wire.subject_id,
+    body: wire.body ?? null,
+    subjectType: wire.subjectType,
+    subjectId: wire.subjectId,
     actor: wire.actor
       ? {
-          membershipId: wire.actor.membership_id,
-          displayName: wire.actor.display_name,
+          membershipId: wire.actor.membershipId,
+          displayName: wire.actor.displayName,
         }
       : null,
-    createdAt: wire.created_at,
-    readAt: wire.read_at,
+    createdAt: wire.createdAt,
+    readAt: wire.readAt ?? null,
   };
 }
 
