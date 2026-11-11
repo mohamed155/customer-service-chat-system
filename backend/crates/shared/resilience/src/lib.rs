@@ -116,6 +116,10 @@ struct Inner {
     last_failure_at: Option<Instant>,
     opened_at: Option<Instant>,
     probe_in_flight: bool,
+    /// Counts every change of state. A call remembers the epoch it was admitted in, and its outcome
+    /// only counts if the epoch is unchanged: a call that started before the circuit opened (or
+    /// before it closed again) says nothing about the dependency now.
+    epoch: u64,
 }
 
 /// A circuit breaker and bulkhead for one dependency. Cheap to share: always used as `Arc<Guard>`.
@@ -156,6 +160,7 @@ impl Guard {
                 last_failure_at: None,
                 opened_at: None,
                 probe_in_flight: false,
+                epoch: 0,
             }),
             slots: Arc::new(Semaphore::new(policy.max_concurrent.max(1))),
             trips: AtomicU64::new(0),
@@ -205,8 +210,11 @@ impl Guard {
 
     /// Ask to make a call. Returns a [`Permit`] to report the outcome with, or the reason the call
     /// was refused. Waits up to `acquire_timeout` for a bulkhead slot.
+    ///
+    /// Cancel-safe: if the returned future is dropped while it waits for a slot, a half-open probe
+    /// reservation it holds is released with it.
     pub async fn acquire(self: &Arc<Self>) -> Result<Permit, Rejection> {
-        let probe = self.admit()?;
+        let mut permit = self.admit()?;
 
         let slot = match tokio::time::timeout(
             self.policy.acquire_timeout,
@@ -216,54 +224,69 @@ impl Guard {
         {
             Ok(Ok(slot)) => slot,
             // The semaphore is never closed, so `Ok(Err(_))` cannot happen; treat it as full.
+            // Dropping `permit` releases the probe reservation, if it had one.
             Ok(Err(_)) | Err(_) => {
-                if probe {
-                    self.release_probe();
-                }
                 self.reject(Rejection::BulkheadFull);
                 return Err(Rejection::BulkheadFull);
             }
         };
 
-        self.publish_in_flight();
-        Ok(Permit {
-            guard: Arc::clone(self),
-            slot: Some(slot),
-            probe,
-            done: false,
-        })
-    }
-
-    /// Circuit check. `Ok(true)` means this call is the half-open probe.
-    fn admit(&self) -> Result<bool, Rejection> {
-        let mut inner = self.lock();
-        match inner.state {
-            State::Closed => Ok(false),
-            State::Open => {
-                if self.open_elapsed(&inner) {
-                    inner.state = State::HalfOpen;
-                    inner.probe_in_flight = true;
-                    drop(inner);
-                    self.publish_state(State::HalfOpen);
-                    tracing::info!(breaker = %self.name, "circuit half-open: letting one probe call through");
-                    Ok(true)
-                } else {
-                    drop(inner);
-                    self.reject(Rejection::CircuitOpen);
-                    Err(Rejection::CircuitOpen)
-                }
-            }
-            State::HalfOpen => {
-                if inner.probe_in_flight {
-                    drop(inner);
-                    self.reject(Rejection::CircuitOpen);
-                    Err(Rejection::CircuitOpen)
-                } else {
-                    inner.probe_in_flight = true;
-                    Ok(true)
-                }
+        // The circuit may have opened while this call waited for its slot. A call admitted while
+        // closed must not start during the open interval; a probe keeps its reservation.
+        {
+            let inner = self.lock();
+            if permit.probe {
+                // Nothing else changes a half-open circuit but its probe.
+            } else if inner.state == State::Closed {
+                permit.epoch = inner.epoch;
+            } else {
+                drop(inner);
+                self.reject(Rejection::CircuitOpen);
+                return Err(Rejection::CircuitOpen);
             }
         }
+
+        permit.slot = Some(slot);
+        self.publish_in_flight();
+        Ok(permit)
+    }
+
+    /// Circuit check. The returned permit has no bulkhead slot yet; it already holds the probe
+    /// reservation when this call is the half-open probe.
+    fn admit(self: &Arc<Self>) -> Result<Permit, Rejection> {
+        let mut inner = self.lock();
+        let probe = match inner.state {
+            State::Closed => false,
+            State::Open if self.open_elapsed(&inner) => {
+                inner.state = State::HalfOpen;
+                inner.epoch += 1;
+                inner.probe_in_flight = true;
+                true
+            }
+            State::HalfOpen if !inner.probe_in_flight => {
+                inner.probe_in_flight = true;
+                true
+            }
+            State::Open | State::HalfOpen => {
+                drop(inner);
+                self.reject(Rejection::CircuitOpen);
+                return Err(Rejection::CircuitOpen);
+            }
+        };
+        let epoch = inner.epoch;
+        let entered_half_open = probe && inner.state == State::HalfOpen;
+        drop(inner);
+        if entered_half_open {
+            self.publish_state(State::HalfOpen);
+            tracing::info!(breaker = %self.name, "circuit half-open: letting one probe call through");
+        }
+        Ok(Permit {
+            guard: Arc::clone(self),
+            slot: None,
+            probe,
+            epoch,
+            done: false,
+        })
     }
 
     fn reject(&self, why: Rejection) {
@@ -279,8 +302,22 @@ impl Guard {
         .increment(1);
     }
 
-    fn release_probe(&self) {
-        self.lock().probe_in_flight = false;
+    /// Like [`would_reject`](Self::would_reject), and when the answer is yes the skipped call is
+    /// counted as a refusal. For callers that check first and skip the call, so their skips show up
+    /// in `circuit_breaker_rejections_total` like any other refused call.
+    pub fn rejects_now(&self) -> bool {
+        let reject = self.would_reject();
+        if reject {
+            self.reject(Rejection::CircuitOpen);
+        }
+        reject
+    }
+
+    fn release_probe(&self, epoch: u64) {
+        let mut inner = self.lock();
+        if inner.epoch == epoch && inner.state == State::HalfOpen {
+            inner.probe_in_flight = false;
+        }
     }
 
     fn publish_in_flight(&self) {
@@ -288,41 +325,49 @@ impl Guard {
         metrics::gauge!("bulkhead_in_flight", "breaker" => self.name.clone()).set(in_flight as f64);
     }
 
-    /// Record a successful call. Only the half-open probe may close an open circuit: a call that was
-    /// already running when the circuit opened says nothing about the dependency now.
-    fn record_success(&self, probe: bool) {
+    /// Record a successful call. Only an outcome from the current epoch counts: the half-open probe
+    /// closes the circuit, and a call that started before the circuit changed state is ignored.
+    fn record_success(&self, epoch: u64) {
         let mut inner = self.lock();
+        if inner.epoch != epoch {
+            return;
+        }
         match inner.state {
             State::Closed => {
                 inner.consecutive_failures = 0;
                 inner.last_failure_at = None;
             }
-            State::HalfOpen if probe => {
+            State::HalfOpen => {
                 inner.consecutive_failures = 0;
                 inner.last_failure_at = None;
                 inner.probe_in_flight = false;
                 inner.state = State::Closed;
                 inner.opened_at = None;
+                inner.epoch += 1;
                 drop(inner);
                 self.publish_state(State::Closed);
                 tracing::info!(breaker = %self.name, "circuit closed: the dependency answered again");
             }
-            State::HalfOpen | State::Open => {}
+            State::Open => {}
         }
     }
 
-    /// Record an unhealthy call. A failed probe opens the circuit again for a full period; a failure
-    /// from a call that started before the circuit opened changes nothing.
-    fn record_failure(&self, probe: bool) {
+    /// Record an unhealthy call. A failed probe opens the circuit again for a full period. A failure
+    /// from an earlier epoch (a call that started before the circuit opened, or before it closed
+    /// again) changes nothing.
+    fn record_failure(&self, epoch: u64) {
         let mut inner = self.lock();
+        if inner.epoch != epoch {
+            return;
+        }
         let now = Instant::now();
 
         let trip = match inner.state {
-            State::HalfOpen if probe => {
+            State::HalfOpen => {
                 inner.probe_in_flight = false;
                 true
             }
-            State::HalfOpen | State::Open => false,
+            State::Open => false,
             State::Closed => {
                 let stale = inner
                     .last_failure_at
@@ -340,6 +385,7 @@ impl Guard {
         if trip {
             inner.state = State::Open;
             inner.opened_at = Some(now);
+            inner.epoch += 1;
             let failures = inner.consecutive_failures;
             drop(inner);
             self.trips.fetch_add(1, Ordering::Relaxed);
@@ -378,6 +424,7 @@ pub struct Permit {
     guard: Arc<Guard>,
     slot: Option<OwnedSemaphorePermit>,
     probe: bool,
+    epoch: u64,
     done: bool,
 }
 
@@ -387,7 +434,7 @@ impl Permit {
     pub fn success(&mut self) {
         if !self.done {
             self.done = true;
-            self.guard.record_success(self.probe);
+            self.guard.record_success(self.epoch);
         }
     }
 
@@ -395,7 +442,7 @@ impl Permit {
     pub fn failure(&mut self) {
         if !self.done {
             self.done = true;
-            self.guard.record_failure(self.probe);
+            self.guard.record_failure(self.epoch);
         }
     }
 }
@@ -403,10 +450,11 @@ impl Permit {
 impl Drop for Permit {
     fn drop(&mut self) {
         if !self.done && self.probe {
-            self.guard.release_probe();
+            self.guard.release_probe(self.epoch);
         }
-        self.slot.take();
-        self.guard.publish_in_flight();
+        if self.slot.take().is_some() {
+            self.guard.publish_in_flight();
+        }
     }
 }
 

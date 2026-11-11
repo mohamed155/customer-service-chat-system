@@ -362,7 +362,16 @@ impl EmbeddingProvider for OpenAiAdapter {
 }
 
 fn normalize_error(e: reqwest::Error, context: &str) -> ProviderError {
-    if e.is_timeout() {
+    if e.is_builder() {
+        // The request could not be built (for example a key with a control character that is not a
+        // valid header value). Nothing was sent, so this says nothing about the provider and must
+        // never count against its circuit breaker.
+        ProviderError {
+            category: ErrorCategory::InvalidRequest,
+            retriable: false,
+            detail: format!("{context}: request could not be built"),
+        }
+    } else if e.is_timeout() {
         ProviderError {
             category: ErrorCategory::Timeout,
             retriable: true,

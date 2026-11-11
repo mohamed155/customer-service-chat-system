@@ -7,7 +7,7 @@ use uuid::Uuid;
 use integrations::crypto::MasterKey;
 use storage::ObjectStorage;
 
-use crate::api::WhatsAppApi;
+use crate::api::{SendError, WhatsAppApi};
 
 pub async fn run_media_fetch_worker(
     pool: PgPool,
@@ -19,7 +19,7 @@ pub async fn run_media_fetch_worker(
     loop {
         interval.tick().await;
 
-        if !api.available() {
+        if !api.media_available() {
             continue;
         }
 
@@ -69,6 +69,12 @@ async fn process_one(
 
     let media_info = match api.media_url(&access_token, &provider_media_id).await {
         Ok(info) => info,
+        // Refused by the circuit breaker: nothing was tried, so it is not a failed attempt. The
+        // attachment stays pending and is picked up again once the circuit closes.
+        Err(SendError::Refused(reason)) => {
+            tracing::info!(%reason, provider_media_id, "media worker: media_url not attempted");
+            return Ok(());
+        }
         Err(e) => {
             tracing::warn!(%e, provider_media_id, "media worker: media_url failed");
             crate::queries::mark_attachment_failed_attempt(
@@ -83,6 +89,10 @@ async fn process_one(
 
     let bytes = match api.download(&access_token, &media_info.url).await {
         Ok(b) => b,
+        Err(SendError::Refused(reason)) => {
+            tracing::info!(%reason, provider_media_id, "media worker: download not attempted");
+            return Ok(());
+        }
         Err(e) => {
             tracing::warn!(%e, provider_media_id, "media worker: download failed");
             crate::queries::mark_attachment_failed_attempt(

@@ -123,6 +123,29 @@ impl fmt::Display for ProviderError {
 
 impl std::error::Error for ProviderError {}
 
+/// Start of the detail of an error returned when a circuit breaker or bulkhead refused a call
+/// before anything was sent (MOH-40). See [`ProviderError::guard_refusal`].
+const GUARD_REFUSAL_PREFIX: &str = "refused before sending: ";
+
+impl ProviderError {
+    /// A call refused by the provider's circuit breaker or bulkhead. It is `Unavailable` for every
+    /// reader that only looks at the category, and not retriable: the provider was never tried, so
+    /// retrying it is pointless. A caller with another provider to try checks
+    /// [`is_guard_refusal`](Self::is_guard_refusal) and moves on to it.
+    pub fn guard_refusal(detail: impl std::fmt::Display) -> Self {
+        Self {
+            category: ErrorCategory::Unavailable,
+            retriable: false,
+            detail: format!("{GUARD_REFUSAL_PREFIX}{detail}"),
+        }
+    }
+
+    /// True for an error made by [`guard_refusal`](Self::guard_refusal).
+    pub fn is_guard_refusal(&self) -> bool {
+        self.detail.starts_with(GUARD_REFUSAL_PREFIX)
+    }
+}
+
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct SecretKey(String);
 

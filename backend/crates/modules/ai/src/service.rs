@@ -120,7 +120,7 @@ pub async fn run_attempts_traced(
         for retry in 0..=2 {
             // A provider whose circuit is open refuses the call at once. Go to the next provider
             // in the chain instead of retrying it, and report it as unavailable if none is left.
-            if registry.circuit_open(&attempt.provider) {
+            if registry.skip_open_circuit(&attempt.provider) {
                 tracing::warn!(
                     provider = %attempt.provider,
                     model = %attempt.model,
@@ -156,6 +156,25 @@ pub async fn run_attempts_traced(
                         finish: completion.finish,
                         tool_calls: completion.tool_calls,
                     });
+                }
+                // The provider's own circuit breaker or bulkhead refused the call, nothing was
+                // sent: another caller opened the circuit after the check above, or every slot to
+                // this provider is busy. Try the next provider in the chain.
+                Err(err) if err.is_guard_refusal() => {
+                    tracing::warn!(
+                        provider = %attempt.provider,
+                        model = %attempt.model,
+                        outcome = "guard_refused",
+                        detail = %err.detail,
+                        request_id = request_id.unwrap_or(""),
+                        "AI provider skipped: call refused before sending"
+                    );
+                    last_error = Some(AiCallError::Provider {
+                        category: err.category,
+                        provider: attempt.provider.clone(),
+                        model: attempt.model.clone(),
+                    });
+                    break;
                 }
                 Err(err) if !err.retriable => {
                     let latency = attempt_start.elapsed();
@@ -1921,5 +1940,108 @@ mod tests {
         }
         assert_eq!(calls.load(Ordering::SeqCst), 20);
         assert!(!registry.circuit_open("openai"));
+    }
+    #[tokio::test(start_paused = true)]
+    async fn a_full_bulkhead_on_one_provider_moves_on_to_the_next() {
+        let (openai, openai_calls) = unavailable_provider(vec![Ok(ok_result("from openai"))]);
+        let (anthropic, anthropic_calls) =
+            unavailable_provider(vec![Ok(ok_result("from anthropic"))]);
+        let config = RegistryConfig {
+            resilience_policy: resilience::Policy {
+                max_concurrent: 1,
+                acquire_timeout: std::time::Duration::from_millis(50),
+                ..resilience::Policy::default()
+            },
+            ..RegistryConfig::new()
+        };
+        let registry = Registry::new(config)
+            .with_override("openai", openai)
+            .with_override("anthropic", anthropic);
+
+        // Every slot to openai is busy (a slow call from another tenant, say).
+        let busy = registry
+            .resilience()
+            .get("ai:openai")
+            .unwrap()
+            .acquire()
+            .await
+            .unwrap();
+
+        let result = run_attempts(
+            &registry,
+            &[
+                make_attempt("openai", "gpt-4"),
+                make_attempt("anthropic", "claude"),
+            ],
+            None,
+            vec![],
+            vec![],
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.content, "from anthropic");
+        assert_eq!(
+            openai_calls.load(Ordering::SeqCst),
+            0,
+            "openai was never called"
+        );
+        assert_eq!(anthropic_calls.load(Ordering::SeqCst), 1);
+
+        // With nothing left to try, the caller sees an unavailable provider, as for an outage.
+        let err = run_attempts(
+            &registry,
+            &[make_attempt("openai", "gpt-4")],
+            None,
+            vec![],
+            vec![],
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                AiCallError::Provider {
+                    category: ErrorCategory::Unavailable,
+                    ..
+                }
+            ),
+            "{err:?}"
+        );
+        drop(busy);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn skipping_an_open_circuit_counts_as_a_rejected_call() {
+        let (openai, _) = unavailable_provider(vec![]);
+        let (anthropic, _) = unavailable_provider(vec![Ok(ok_result("ok"))]);
+        let registry = make_registry(openai, anthropic);
+        trip_openai(&registry).await;
+        let before = registry
+            .resilience()
+            .get("ai:openai")
+            .unwrap()
+            .snapshot()
+            .rejected_open_total;
+
+        run_attempts(
+            &registry,
+            &[
+                make_attempt("openai", "gpt-4"),
+                make_attempt("anthropic", "claude"),
+            ],
+            None,
+            vec![],
+            vec![],
+        )
+        .await
+        .unwrap();
+
+        let after = registry
+            .resilience()
+            .get("ai:openai")
+            .unwrap()
+            .snapshot()
+            .rejected_open_total;
+        assert_eq!(after, before + 1);
     }
 }

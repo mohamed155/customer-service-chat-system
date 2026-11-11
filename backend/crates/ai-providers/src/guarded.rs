@@ -9,10 +9,11 @@
 //! one tenant's key or request, and the provider did answer, so they never open the circuit: one
 //! tenant's expired API key must not stop every other tenant's AI turns.
 //!
-//! A refused call returns [`ProviderError`] with category `Unavailable` and `retriable: false`, so
-//! the retry loop does not sleep and retry against an open circuit, and the caller takes its
-//! existing path for an unavailable provider (next provider in the fallback chain, otherwise the
-//! honest customer message and escalation to a human).
+//! A refused call returns [`ProviderError::guard_refusal`]: category `Unavailable`, not retriable,
+//! and recognisable with [`ProviderError::is_guard_refusal`]. The retry loop does not sleep and
+//! retry against an open circuit, it moves on to the next provider in the fallback chain, and with
+//! none left the caller takes its existing path for an unavailable provider (the honest customer
+//! message and escalation to a human).
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -32,19 +33,14 @@ pub fn counts_as_failure(error: &ProviderError) -> bool {
 }
 
 fn refused(guard: &Guard, why: Rejection) -> ProviderError {
-    let detail = match why {
-        Rejection::CircuitOpen => format!("circuit open for {}; call not sent", guard.name()),
+    ProviderError::guard_refusal(match why {
+        Rejection::CircuitOpen => format!("circuit open for {}", guard.name()),
         Rejection::BulkheadFull => format!(
-            "too many calls in flight to {} (limit {}); call not sent",
+            "too many calls in flight to {} (limit {})",
             guard.name(),
             guard.policy().max_concurrent
         ),
-    };
-    ProviderError {
-        category: ErrorCategory::Unavailable,
-        retriable: false,
-        detail,
-    }
+    })
 }
 
 fn record<T>(permit: &mut Permit, result: &Result<T, ProviderError>) {
@@ -65,17 +61,26 @@ impl GuardedChat {
     }
 }
 
-/// A response stream that keeps its bulkhead slot until it is finished or dropped.
+/// A response stream that keeps its bulkhead slot until it is finished or dropped, and reports how
+/// it went to the circuit: an unhealthy error while streaming is a failure, reaching the end (or
+/// the `Done` event) is a success. A stream dropped half-way reports nothing.
 struct HeldStream {
     inner: ChatStream,
-    _permit: Permit,
+    permit: Permit,
 }
 
 impl Stream for HeldStream {
     type Item = Result<StreamEvent, ProviderError>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.inner.as_mut().poll_next(cx)
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+        let item = futures::ready!(this.inner.as_mut().poll_next(cx));
+        match &item {
+            Some(Err(error)) if counts_as_failure(error) => this.permit.failure(),
+            Some(Err(_)) | Some(Ok(StreamEvent::Done { .. })) | None => this.permit.success(),
+            Some(Ok(_)) => {}
+        }
+        Poll::Ready(item)
     }
 }
 
@@ -96,8 +101,9 @@ impl ChatProvider for GuardedChat {
         result
     }
 
-    /// The circuit judges the connection (the call that returns the stream). The bulkhead slot is
-    /// held until the stream ends or is dropped.
+    /// The bulkhead slot is held until the stream ends or is dropped. The circuit hears about the
+    /// connection when it fails, and otherwise about how the stream itself goes (see
+    /// [`HeldStream`]), so a half-open probe closes the circuit only once its stream has worked.
     async fn stream(
         &self,
         key: &SecretKey,
@@ -108,14 +114,13 @@ impl ChatProvider for GuardedChat {
             .acquire()
             .await
             .map_err(|why| refused(&self.guard, why))?;
-        let result = self.inner.stream(key, req).await;
-        record(&mut permit, &result);
-        result.map(|inner| {
-            Box::pin(HeldStream {
-                inner,
-                _permit: permit,
-            }) as ChatStream
-        })
+        match self.inner.stream(key, req).await {
+            Ok(inner) => Ok(Box::pin(HeldStream { inner, permit }) as ChatStream),
+            Err(error) => {
+                record(&mut permit, &Err::<(), _>(error.clone()));
+                Err(error)
+            }
+        }
     }
 }
 
@@ -280,6 +285,7 @@ mod tests {
         let refused = provider.complete(&key(), &request()).await.unwrap_err();
         assert_eq!(refused.category, ErrorCategory::Unavailable);
         assert!(!refused.retriable, "no retry loop against an open circuit");
+        assert!(refused.is_guard_refusal());
         assert!(refused.detail.contains("circuit open"));
         assert_eq!(
             inner.calls(),
@@ -384,7 +390,172 @@ mod tests {
             provider.embed(&key(), &req).await.unwrap_err();
         }
         let refused = provider.embed(&key(), &req).await.unwrap_err();
+        assert!(refused.is_guard_refusal());
         assert!(refused.detail.contains("circuit open"));
         assert_eq!(inner.calls(), 3);
+    }
+    // A tenant supplies its own API key. A key that is not a valid header value makes the HTTP
+    // client refuse to build the request, so nothing is sent. That must be reported as a request
+    // problem and never count against the provider's shared circuit, or one tenant could open it
+    // for everyone with five bad turns.
+    #[tokio::test]
+    async fn a_tenants_unusable_api_key_cannot_open_the_shared_circuit() {
+        use wiremock::MockServer;
+
+        use crate::{anthropic::AnthropicAdapter, gemini::GeminiAdapter, openai::OpenAiAdapter};
+
+        let mock = MockServer::start().await; // answers 404 to anything that does reach it
+        let client = reqwest::Client::new();
+        let adapters: Vec<(&str, Arc<dyn ChatProvider>)> = vec![
+            (
+                "openai",
+                Arc::new(OpenAiAdapter::new(client.clone(), mock.uri())),
+            ),
+            (
+                "anthropic",
+                Arc::new(AnthropicAdapter::new(client.clone(), mock.uri())),
+            ),
+            (
+                "gemini",
+                Arc::new(GeminiAdapter::new(client.clone(), mock.uri())),
+            ),
+        ];
+
+        for (name, adapter) in adapters {
+            let guard = Guard::new(format!("ai:{name}"), policy());
+            let provider = GuardedChat::new(adapter, guard.clone());
+            let bad_key = SecretKey::new("sk-bad\nkey".into());
+
+            for _ in 0..10 {
+                let err = provider.complete(&bad_key, &request()).await.unwrap_err();
+                assert!(
+                    !counts_as_failure(&err),
+                    "{name}: {err:?} must not count as a failure"
+                );
+            }
+            let snap = guard.snapshot();
+            assert_eq!(
+                snap.state,
+                State::Closed,
+                "{name}: ten bad-key turns opened the circuit"
+            );
+            assert_eq!(snap.consecutive_failures, 0, "{name}");
+        }
+    }
+    /// A provider whose streams are scripted event by event.
+    struct StreamScript {
+        items: std::sync::Mutex<Vec<Result<StreamEvent, ProviderError>>>,
+    }
+
+    impl StreamScript {
+        fn new(items: Vec<Result<StreamEvent, ProviderError>>) -> Arc<Self> {
+            Arc::new(Self {
+                items: std::sync::Mutex::new(items),
+            })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl ChatProvider for StreamScript {
+        async fn complete(
+            &self,
+            _key: &SecretKey,
+            _req: &ChatRequest,
+        ) -> Result<ChatCompletion, ProviderError> {
+            unreachable!("only streams are used here")
+        }
+
+        async fn stream(
+            &self,
+            _key: &SecretKey,
+            _req: &ChatRequest,
+        ) -> Result<ChatStream, ProviderError> {
+            let items = self.items.lock().unwrap().clone();
+            Ok(Box::pin(futures::stream::iter(items)))
+        }
+    }
+
+    fn done() -> Result<StreamEvent, ProviderError> {
+        Ok(StreamEvent::Done {
+            usage: TokenUsage::default(),
+            model: "m".into(),
+            finish: FinishReason::Stop,
+        })
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn failures_while_streaming_open_the_circuit() {
+        use futures::StreamExt;
+
+        let inner = StreamScript::new(vec![
+            Ok(StreamEvent::Delta("he".into())),
+            Err(error(ErrorCategory::Unavailable)),
+        ]);
+        let guard = Guard::new("ai:test", policy());
+        let provider = GuardedChat::new(inner, guard.clone());
+
+        for _ in 0..3 {
+            let mut stream = provider.stream(&key(), &request()).await.expect("connects");
+            while stream.next().await.is_some() {}
+        }
+        assert_eq!(
+            guard.snapshot().state,
+            State::Open,
+            "connecting fine is not enough"
+        );
+        assert!(provider.stream(&key(), &request()).await.is_err());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_probe_stream_closes_the_circuit_only_once_it_has_worked() {
+        use futures::StreamExt;
+
+        let guard = Guard::new("ai:test", policy());
+        for _ in 0..3 {
+            guard.acquire().await.unwrap().failure();
+        }
+        tokio::time::advance(Duration::from_secs(30)).await;
+
+        // The probe connects, but its stream breaks: the circuit opens again.
+        let broken = StreamScript::new(vec![Err(error(ErrorCategory::Timeout))]);
+        let provider = GuardedChat::new(broken, guard.clone());
+        let mut stream = provider.stream(&key(), &request()).await.unwrap();
+        assert_eq!(
+            guard.snapshot().state,
+            State::HalfOpen,
+            "not decided at connect"
+        );
+        stream.next().await;
+        assert_eq!(guard.snapshot().state, State::Open);
+        assert_eq!(guard.snapshot().trips_total, 2);
+        drop(stream);
+
+        // The next probe streams to the end: now it closes.
+        tokio::time::advance(Duration::from_secs(30)).await;
+        let working = StreamScript::new(vec![Ok(StreamEvent::Delta("hi".into())), done()]);
+        let provider = GuardedChat::new(working, guard.clone());
+        let mut stream = provider.stream(&key(), &request()).await.unwrap();
+        stream.next().await;
+        assert_eq!(
+            guard.snapshot().state,
+            State::HalfOpen,
+            "one delta is not the end"
+        );
+        stream.next().await;
+        assert_eq!(guard.snapshot().state, State::Closed);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_stream_dropped_halfway_decides_nothing() {
+        use futures::StreamExt;
+
+        let guard = Guard::new("ai:test", policy());
+        let inner = StreamScript::new(vec![Ok(StreamEvent::Delta("a".into())), done()]);
+        let provider = GuardedChat::new(inner, guard.clone());
+        let mut stream = provider.stream(&key(), &request()).await.unwrap();
+        stream.next().await;
+        drop(stream);
+        let snap = guard.snapshot();
+        assert_eq!((snap.state, snap.in_flight), (State::Closed, 0));
     }
 }

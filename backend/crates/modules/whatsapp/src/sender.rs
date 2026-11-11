@@ -253,6 +253,23 @@ pub async fn process_one(
             .await?;
             tx.commit().await?;
         }
+        // Refused by the circuit breaker before anything was sent (it opened after this worker
+        // took the event). The message is still waiting to be sent: put its event back, so it goes
+        // out once the circuit closes, instead of marking it failed. It goes to the back of the
+        // queue; this only happens when the circuit opens in the moments between the worker's
+        // availability check and the send.
+        Err(SendError::Refused(reason)) => {
+            tracing::info!(%reason, "sender worker: send not attempted, message put back in the queue");
+            let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
+            conversations::outbox::emit_whatsapp_outbound_in_tx(
+                &mut tx,
+                event.tenant_id,
+                event.conversation_id,
+                event.message_id,
+            )
+            .await?;
+            tx.commit().await?;
+        }
         Err(SendError::Transient(msg)) => {
             tracing::warn!(%msg, "sender worker: transient error, will retry on next poll");
             let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;

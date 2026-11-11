@@ -9,8 +9,10 @@
 //! a 4xx about one message. WhatsApp answered all of them, so one tenant's expired credentials never
 //! stop everyone else's messages.
 //!
-//! A refused call returns `Transient`, and [`available`](WhatsAppApi::available) is false while the
-//! Graph circuit is open, so the sender and media workers stop claiming work (see `sender.rs`).
+//! A refused call returns [`SendError::Refused`], which the workers treat as "not sent, try again
+//! later", not as a failed attempt. [`available`](WhatsAppApi::available) and
+//! [`media_available`](WhatsAppApi::media_available) are false while the circuits they need are
+//! open, so the sender and media workers stop claiming work (see `sender.rs` and `media.rs`).
 
 use std::sync::Arc;
 
@@ -51,7 +53,7 @@ impl GuardedWhatsAppApi {
 }
 
 fn refused(guard: &Guard, why: Rejection) -> SendError {
-    SendError::Transient(match why {
+    SendError::Refused(match why {
         Rejection::CircuitOpen => format!("circuit open for {}; call not sent", guard.name()),
         Rejection::BulkheadFull => format!(
             "too many calls in flight to {} (limit {}); call not sent",
@@ -115,6 +117,10 @@ impl WhatsAppApi for GuardedWhatsAppApi {
     fn available(&self) -> bool {
         !self.graph.would_reject() && self.inner.available()
     }
+
+    fn media_available(&self) -> bool {
+        !self.graph.would_reject() && !self.media.would_reject() && self.inner.media_available()
+    }
 }
 
 #[cfg(test)]
@@ -166,7 +172,7 @@ mod tests {
 
         // The mock has no scripted result left: reaching it again would be a different error.
         match send(&api).await {
-            Err(SendError::Transient(m)) => assert!(m.contains("circuit open"), "{m}"),
+            Err(SendError::Refused(m)) => assert!(m.contains("circuit open"), "{m}"),
             other => panic!("expected a refusal, got {other:?}"),
         }
     }
@@ -221,5 +227,77 @@ mod tests {
         assert_eq!(hub.get(MEDIA_GUARD).unwrap().snapshot().state, State::Open);
         assert_eq!(graph_state(&hub), State::Closed, "sending is unaffected");
         assert!(api.available());
+    }
+    // Access token and phone number ID are tenant data. A token that is not a valid header value
+    // never leaves this process, so it must not count against the shared circuit.
+    #[tokio::test(start_paused = true)]
+    async fn a_tenants_unusable_token_cannot_open_the_shared_circuit() {
+        let hub = Hub::new();
+        let real = Arc::new(crate::api::GraphWhatsAppApi::with_base_url(
+            "http://127.0.0.1:9", // never reached: the request can't be built
+        ));
+        let api = GuardedWhatsAppApi::new(real, &hub, policy());
+
+        for _ in 0..10 {
+            let err = api
+                .send_text("bad\ntoken", "123", "+15550000000", "hi")
+                .await
+                .unwrap_err();
+            assert!(matches!(err, SendError::Other(_)), "{err:?}");
+        }
+        assert_eq!(graph_state(&hub), State::Closed);
+        assert!(api.available());
+    }
+    // Server errors from the media endpoints must count: the adapter reports them as Transient.
+    // Real time: paused time would jump forward while the test waits on the network, and age the
+    // failure streak out.
+    #[tokio::test]
+    async fn media_server_errors_open_the_circuits_through_the_real_adapter() {
+        use wiremock::{matchers::method, Mock, MockServer, ResponseTemplate};
+
+        let mock = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&mock)
+            .await;
+        let hub = Hub::new();
+        let real = Arc::new(crate::api::GraphWhatsAppApi::with_base_url(mock.uri()));
+        let api = GuardedWhatsAppApi::new(real, &hub, policy());
+
+        for _ in 0..3 {
+            let err = api.media_url("tok", "media-1").await.unwrap_err();
+            assert!(matches!(err, SendError::Transient(_)), "{err:?}");
+        }
+        assert_eq!(
+            graph_state(&hub),
+            State::Open,
+            "media lookup 503s opened the Graph circuit"
+        );
+
+        for _ in 0..3 {
+            let err = api
+                .download("tok", &format!("{}/file", mock.uri()))
+                .await
+                .unwrap_err();
+            assert!(matches!(err, SendError::Transient(_)), "{err:?}");
+        }
+        assert_eq!(hub.get(MEDIA_GUARD).unwrap().snapshot().state, State::Open);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_open_download_circuit_stops_media_work_but_not_sending() {
+        let mock = Arc::new(MockWhatsAppApi::new());
+        for _ in 0..3 {
+            mock.push_download(Err(SendError::Transient("cdn 502".into())));
+        }
+        let (api, _hub) = guarded(&mock);
+        assert!(api.available() && api.media_available());
+        for _ in 0..3 {
+            api.download("tok", "https://cdn.example/x")
+                .await
+                .unwrap_err();
+        }
+        assert!(api.available(), "text messages still go out");
+        assert!(!api.media_available(), "attachments are left unclaimed");
     }
 }

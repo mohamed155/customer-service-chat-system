@@ -268,3 +268,108 @@ async fn a_call_that_started_before_the_circuit_opened_cannot_close_or_reopen_it
     probe.success();
     assert_eq!(guard.snapshot().state, State::Closed);
 }
+
+#[tokio::test(start_paused = true)]
+async fn cancelling_a_waiting_probe_releases_the_probe_reservation() {
+    let guard = Guard::new(
+        "t",
+        Policy {
+            max_concurrent: 1,
+            ..policy()
+        },
+    );
+    for _ in 0..3 {
+        fail(&guard).await;
+    }
+    tokio::time::advance(Duration::from_secs(30)).await;
+
+    // The only slot is busy, so the probe waits for it; its caller gives up after 10 ms.
+    let busy = guard.slots.clone().acquire_owned().await.unwrap();
+    let cancelled = tokio::time::timeout(Duration::from_millis(10), guard.acquire()).await;
+    assert!(
+        cancelled.is_err(),
+        "the waiting call was cancelled, not refused"
+    );
+    drop(busy);
+
+    // The reservation went with it: the next caller becomes the probe instead of being refused
+    // for good.
+    let mut probe = guard.acquire().await.expect("a new probe is admitted");
+    probe.success();
+    assert_eq!(guard.snapshot().state, State::Closed);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_waiting_call_is_refused_if_the_circuit_opened_while_it_waited() {
+    let guard = Guard::new(
+        "t",
+        Policy {
+            failure_threshold: 1,
+            max_concurrent: 1,
+            acquire_timeout: Duration::from_secs(5),
+            ..policy()
+        },
+    );
+    let mut holder = guard.acquire().await.unwrap();
+    let waiter = {
+        let guard = Arc::clone(&guard);
+        tokio::spawn(async move { guard.acquire().await.map(|_| ()) })
+    };
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    holder.failure(); // opens the circuit
+    drop(holder); // frees the slot the waiter was queued for
+    assert_eq!(waiter.await.unwrap(), Err(Rejection::CircuitOpen));
+    assert_eq!(guard.snapshot().rejected_open_total, 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn outcomes_from_before_a_recovery_cannot_reopen_the_circuit_or_clear_a_new_streak() {
+    let guard = Guard::new(
+        "t",
+        Policy {
+            max_concurrent: 16,
+            ..policy()
+        },
+    );
+    // Calls already running when the circuit trips.
+    let mut old: Vec<Permit> = Vec::new();
+    for _ in 0..5 {
+        old.push(guard.acquire().await.unwrap());
+    }
+    for _ in 0..3 {
+        fail(&guard).await;
+    }
+    tokio::time::advance(Duration::from_secs(30)).await;
+    succeed(&guard).await; // the probe: the circuit is closed again
+    assert_eq!(guard.snapshot().state, State::Closed);
+
+    // The old calls finish after the recovery. Five timeouts must not reopen the circuit.
+    for permit in &mut old[..4] {
+        permit.failure();
+    }
+    let snap = guard.snapshot();
+    assert_eq!(snap.state, State::Closed);
+    assert_eq!(snap.consecutive_failures, 0);
+    assert_eq!(snap.trips_total, 1);
+
+    // And an old success doesn't wipe a streak that has started since.
+    fail(&guard).await;
+    fail(&guard).await;
+    old[4].success();
+    assert_eq!(guard.snapshot().consecutive_failures, 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn rejects_now_counts_the_skipped_call() {
+    let guard = Guard::new("t", policy());
+    assert!(!guard.rejects_now());
+    assert_eq!(guard.snapshot().rejected_open_total, 0);
+    for _ in 0..3 {
+        fail(&guard).await;
+    }
+    assert!(guard.rejects_now());
+    assert!(guard.rejects_now());
+    assert!(guard.would_reject(), "the plain check does not count");
+    assert_eq!(guard.snapshot().rejected_open_total, 2);
+}

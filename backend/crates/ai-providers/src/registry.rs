@@ -218,8 +218,17 @@ impl Registry {
         &self.hub
     }
 
-    /// True when a chat call to `name` would be refused right now because its circuit is open.
-    /// Callers with another provider to try use it to skip ahead instead of waiting for the refusal.
+    /// True when a chat call to `name` would be refused right now because its circuit is open. The
+    /// skipped call is counted as a refusal (`circuit_breaker_rejections_total`). Callers with
+    /// another provider to try use it to move on instead of waiting for the refusal.
+    pub fn skip_open_circuit(&self, name: &str) -> bool {
+        self.hub
+            .get(&chat_guard_name(name))
+            .is_some_and(|guard: Arc<Guard>| guard.rejects_now())
+    }
+
+    /// Like [`skip_open_circuit`](Self::skip_open_circuit), for callers that only want to know:
+    /// nothing is counted.
     pub fn circuit_open(&self, name: &str) -> bool {
         self.hub
             .get(&chat_guard_name(name))

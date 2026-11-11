@@ -33,6 +33,7 @@ tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+wiremock.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 http-body-util.workspace = true
 tower.workspace = true

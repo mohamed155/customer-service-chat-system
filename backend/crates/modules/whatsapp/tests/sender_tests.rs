@@ -482,6 +482,64 @@ async fn sender_unauthorized() {
     );
 }
 
+#[tokio::test]
+async fn sender_puts_a_refused_message_back_in_the_queue_instead_of_failing_it() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let mk = master_key();
+    let fixture = setup_sender_fixture(&pool, &mk, true, 3600).await;
+
+    // The circuit breaker refuses the call: nothing is sent.
+    let mock = Arc::new(whatsapp::api::MockWhatsAppApi::new());
+    mock.push_send_text(Err(whatsapp::api::SendError::Refused(
+        "circuit open for whatsapp:graph".into(),
+    )));
+    whatsapp::sender::process_one(&pool, &*mock, &mk)
+        .await
+        .expect("process_one should succeed");
+
+    let status: String = sqlx::query_scalar(
+        "SELECT delivery_status FROM whatsapp_message_meta WHERE tenant_id = $1 AND message_id = $2",
+    )
+    .bind(fixture.tenant_id)
+    .bind(fixture.message_id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .expect("meta row should exist");
+    assert_ne!(
+        status, "failed",
+        "a refused message must not be marked failed"
+    );
+    assert_ne!(status, "sent");
+
+    let queued: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM outbox_events \
+         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message' \
+           AND payload->>'messageId' = $2",
+    )
+    .bind(fixture.tenant_id.to_string())
+    .bind(fixture.message_id.to_string())
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(queued, 1, "the event is back in the queue");
+
+    // The circuit closes: the next pass sends the same message.
+    mock.push_send_text(Ok("wamid.after.recovery".into()));
+    whatsapp::sender::process_one(&pool, &*mock, &mk)
+        .await
+        .expect("process_one should succeed");
+    let wamid: String = sqlx::query_scalar(
+        "SELECT wamid FROM whatsapp_message_meta WHERE tenant_id = $1 AND message_id = $2",
+    )
+    .bind(fixture.tenant_id)
+    .bind(fixture.message_id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(wamid, "wamid.after.recovery");
+}
+
 // ---------------------------------------------------------------------------
 // Status webhook monotonicity test
 // ---------------------------------------------------------------------------

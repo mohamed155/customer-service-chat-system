@@ -55,16 +55,22 @@ pub fn circuit_verdict(snapshot: &Snapshot) -> (HealthVerdict, Option<String>) {
                 "circuit half-open: testing the dependency with one call (opened {trips} time(s) since start)"
             )),
         ),
-        State::Closed if trips > 0 => (
-            HealthVerdict::Healthy,
-            Some(format!("circuit closed; it opened {trips} time(s) since start")),
-        ),
+        // A full bulkhead is checked before past trips, so it is never hidden by an old one.
         State::Closed if snapshot.in_flight >= snapshot.max_concurrent => (
             HealthVerdict::Degraded,
             Some(format!(
-                "all {} slots busy; further calls wait or are refused",
-                snapshot.max_concurrent
+                "all {} slots busy; further calls wait or are refused{}",
+                snapshot.max_concurrent,
+                if trips > 0 {
+                    format!(" (circuit opened {trips} time(s) since start)")
+                } else {
+                    String::new()
+                }
             )),
+        ),
+        State::Closed if trips > 0 => (
+            HealthVerdict::Healthy,
+            Some(format!("circuit closed; it opened {trips} time(s) since start")),
         ),
         State::Closed => (HealthVerdict::Healthy, None),
     }
@@ -145,6 +151,17 @@ mod tests {
         assert_eq!(
             circuit_verdict(&snapshot(State::Closed, 0, 4)).0,
             HealthVerdict::Degraded
+        );
+    }
+
+    #[test]
+    fn a_full_bulkhead_is_not_hidden_by_past_trips() {
+        let (verdict, reason) = circuit_verdict(&snapshot(State::Closed, 3, 4));
+        assert_eq!(verdict, HealthVerdict::Degraded);
+        let reason = reason.unwrap();
+        assert!(
+            reason.contains("all 4 slots busy") && reason.contains("opened 3 time(s)"),
+            "{reason}"
         );
     }
 

@@ -314,27 +314,7 @@ impl ChatProvider for GeminiAdapter {
             req_builder = req_builder.header("X-Request-ID", rid);
         }
 
-        let response = req_builder.send().await.map_err(|e| {
-            if e.is_timeout() {
-                ProviderError {
-                    category: ErrorCategory::Timeout,
-                    retriable: true,
-                    detail: "request timed out".into(),
-                }
-            } else if e.is_connect() {
-                ProviderError {
-                    category: ErrorCategory::Unavailable,
-                    retriable: true,
-                    detail: "connection error".into(),
-                }
-            } else {
-                ProviderError {
-                    category: ErrorCategory::Unavailable,
-                    retriable: true,
-                    detail: "request failed".into(),
-                }
-            }
-        })?;
+        let response = req_builder.send().await.map_err(transport_error)?;
 
         let status = response.status();
         tracing::info!(
@@ -526,27 +506,7 @@ impl ChatProvider for GeminiAdapter {
             req_builder = req_builder.header("X-Request-ID", rid);
         }
 
-        let response = req_builder.send().await.map_err(|e| {
-            if e.is_timeout() {
-                ProviderError {
-                    category: ErrorCategory::Timeout,
-                    retriable: true,
-                    detail: "request timed out".into(),
-                }
-            } else if e.is_connect() {
-                ProviderError {
-                    category: ErrorCategory::Unavailable,
-                    retriable: true,
-                    detail: "connection error".into(),
-                }
-            } else {
-                ProviderError {
-                    category: ErrorCategory::Unavailable,
-                    retriable: true,
-                    detail: "request failed".into(),
-                }
-            }
-        })?;
+        let response = req_builder.send().await.map_err(transport_error)?;
 
         let status = response.status();
         tracing::info!(
@@ -619,27 +579,7 @@ impl EmbeddingProvider for GeminiAdapter {
             req_builder = req_builder.header("X-Request-ID", rid);
         }
 
-        let response = req_builder.send().await.map_err(|e| {
-            if e.is_timeout() {
-                ProviderError {
-                    category: ErrorCategory::Timeout,
-                    retriable: true,
-                    detail: "request timed out".into(),
-                }
-            } else if e.is_connect() {
-                ProviderError {
-                    category: ErrorCategory::Unavailable,
-                    retriable: true,
-                    detail: "connection error".into(),
-                }
-            } else {
-                ProviderError {
-                    category: ErrorCategory::Unavailable,
-                    retriable: true,
-                    detail: "request failed".into(),
-                }
-            }
-        })?;
+        let response = req_builder.send().await.map_err(transport_error)?;
 
         let status = response.status();
         tracing::info!(
@@ -786,6 +726,37 @@ fn gemini_sse_to_events(
 
         futures::stream::iter(events)
     })
+}
+
+fn transport_error(e: reqwest::Error) -> ProviderError {
+    if e.is_builder() {
+        // Nothing was sent (for example a key that is not a valid header value, or a model name
+        // that does not fit in the URL), so this says nothing about the provider and must never
+        // count against its circuit breaker.
+        ProviderError {
+            category: ErrorCategory::InvalidRequest,
+            retriable: false,
+            detail: "request could not be built".into(),
+        }
+    } else if e.is_timeout() {
+        ProviderError {
+            category: ErrorCategory::Timeout,
+            retriable: true,
+            detail: "request timed out".into(),
+        }
+    } else if e.is_connect() {
+        ProviderError {
+            category: ErrorCategory::Unavailable,
+            retriable: true,
+            detail: "connection error".into(),
+        }
+    } else {
+        ProviderError {
+            category: ErrorCategory::Unavailable,
+            retriable: true,
+            detail: "request failed".into(),
+        }
+    }
 }
 
 #[cfg(test)]
