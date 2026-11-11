@@ -9,6 +9,7 @@
     "lint": "eslint \"apps/**/*.{ts,html}\" \"libs/**/*.{ts,html}\"",
     "test": "ng test dashboard",
     "test:e2e": "playwright test",
+    "test:widget-proxy": "node --test apps/widget/proxy.conf.test.mjs",
     "test:e2e:real": "playwright test --config playwright.real.config.ts",
     "quality": "pnpm ng build dashboard && pnpm ng test dashboard && pnpm test:e2e && pnpm lint && pnpm format:check",
     "format": "prettier --write .",

@@ -6,8 +6,12 @@
 // `/api/v1`, so this forwards `/widget/v1/...` to `/api/v1/widget/v1/...`. It also relays the
 // server-sent events stream (`/widget/v1/conversations/{id}/events`) as it arrives.
 //
-// `changeOrigin` is off on purpose: the backend checks the widget's domain allowlist against the
-// browser's `Origin` header (`http://localhost:4201`), and the proxy must pass it through unchanged.
+// `changeOrigin` rewrites only the `Host` header, to the target's, which a target that serves
+// several sites by host name needs. The browser's `Origin` header (`http://localhost:4201`) is not
+// touched, and it is what the backend checks the widget's domain allowlist against.
+//
+// There is no `secure: false`: an HTTPS target keeps its certificate checked, because the proxy
+// forwards widget session tokens and messages.
 //
 // The backend is expected on port 8080 (the `PORT` default). Set `WIDGET_PROXY_TARGET` to use another
 // address, for example `WIDGET_PROXY_TARGET=http://localhost:9090 pnpm exec ng serve widget --port 4201`.
@@ -16,8 +20,7 @@ const target = process.env.WIDGET_PROXY_TARGET || 'http://localhost:8080';
 module.exports = {
   '/widget/v1': {
     target,
-    secure: false,
-    changeOrigin: false,
+    changeOrigin: true,
     pathRewrite: { '^/widget/v1': '/api/v1/widget/v1' },
     // Node holds a response's headers back until the first byte of the body is written. An event
     // stream can be quiet for a long time (the backend sends a keep-alive every 20 seconds), so
