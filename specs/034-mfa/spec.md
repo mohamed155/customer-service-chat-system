@@ -50,6 +50,11 @@ sign in. Until then the second step applies to users who have enrolled.
   also under concurrent requests (one conditional `UPDATE`). A recovery code is burned the same way.
 - **FR-007** Attempts are limited per client address, and wrong codes lock the account's second
   factor after five in a row, for fifteen minutes. A right code resets the count.
+- **FR-009** Starting enrolment needs the current password and is rate limited per client, so a
+  stolen session alone cannot add an attacker's authenticator.
+- **FR-010** Once a user has a confirmed factor, a session that skipped the second factor stops
+  working (checked on every request), so a session stolen before enrolment does not survive it. The
+  session that confirmed is replaced by one that records the factor.
 - **FR-008** Challenge issued, enrolment, success, failure, recovery-code use and lockout are
   audited (`auth.mfa_*`), with no secret, code or hash in the row.
 
@@ -67,4 +72,10 @@ reveals whether the code, the recovery code or the account was the problem.
 ## Acceptance
 
 See `tasks.md`. Tests: `crates/modules/identity` (TOTP and session unit tests, including the RFC
-4226 and RFC 6238 vectors) and `crates/server/tests/mfa.rs` (15 tests against PostgreSQL).
+4226 and RFC 6238 vectors) and `crates/server/tests/mfa.rs` (18 tests against PostgreSQL).
+
+## Known gaps (recorded, not done in part 1)
+
+- No email to the user when a factor is added or reset. A confirmed enrolment already needs the
+  password and a code; a notification is a follow-up with the reset flow (MOH-34).
+- The per-client limit is per minute window like login; there is no daily cap on repeated lockouts.

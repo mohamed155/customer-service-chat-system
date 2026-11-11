@@ -2066,6 +2066,22 @@
         ],
         "type": "object"
       },
+      "EnrolRequest": {
+        "additionalProperties": false,
+        "description": "Starting enrolment proves the account owner is present: it needs the current password, so a\nstolen session alone cannot add an attacker's authenticator.",
+        "properties": {
+          "password": {
+            "description": "The signed-in user's current password. Never echoed back.",
+            "example": "********",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "type": "object"
+      },
       "EnrolmentResponse": {
         "properties": {
           "otpauthUri": {
@@ -6271,8 +6287,18 @@
     },
     "/auth/mfa/enrol": {
       "post": {
-        "description": "Creates a new authenticator secret for the signed-in user and returns it once, as base32 and as an `otpauth://` URI. The factor stays inactive until `POST /auth/mfa/enrol/confirm` proves a code. Starting again replaces an unconfirmed secret. Returns 409 when the user already has an active factor.",
+        "description": "Creates a new authenticator secret for the signed-in user and returns it once, as base32 and as an `otpauth://` URI. Needs the current password, so a stolen session alone cannot add an authenticator. The factor stays inactive until `POST /auth/mfa/enrol/confirm` proves a code. Starting again replaces an unconfirmed secret. Returns 409 when the user already has an active factor.",
         "operationId": "auth_mfa_enrol",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrolRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "201": {
             "content": {
@@ -6303,6 +6329,26 @@
               }
             },
             "description": "Two-factor authentication is already set up."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The password is not correct."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too many attempts."
           }
         },
         "security": [

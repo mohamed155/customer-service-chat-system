@@ -31,6 +31,16 @@ pub struct EnrolmentResponse {
     pub otpauth_uri: String,
 }
 
+/// Starting enrolment proves the account owner is present: it needs the current password, so a
+/// stolen session alone cannot add an attacker's authenticator.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct EnrolRequest {
+    /// The signed-in user's current password. Never echoed back.
+    #[schema(value_type = String, write_only, example = "********")]
+    pub password: String,
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ConfirmRequest {
@@ -94,10 +104,12 @@ pub fn error_response(error: MfaError) -> Response {
     }
 }
 
-fn keys(pool: &PgPool, config: &AppConfig) -> Result<MfaKeys, Response> {
+fn keys(pool: &PgPool, config: &AppConfig) -> Result<MfaKeys, Box<Response>> {
     MfaKeys::from_config(pool, config).map_err(|e| {
-        ApiError::internal_error_from("Two-factor authentication is not configured", e)
-            .into_response()
+        Box::new(
+            ApiError::internal_error_from("Two-factor authentication is not configured", e)
+                .into_response(),
+        )
     })
 }
 
@@ -109,13 +121,17 @@ fn keys(pool: &PgPool, config: &AppConfig) -> Result<MfaKeys, Response> {
     operation_id = "auth_mfa_enrol",
     summary = "Start setting up two-factor authentication",
     description = "Creates a new authenticator secret for the signed-in user and returns it once, \
-                  as base32 and as an `otpauth://` URI. The factor stays inactive until \
+                  as base32 and as an `otpauth://` URI. Needs the current password, so a stolen \
+                  session alone cannot add an authenticator. The factor stays inactive until \
                   `POST /auth/mfa/enrol/confirm` proves a code. Starting again replaces an \
                   unconfirmed secret. Returns 409 when the user already has an active factor.",
+    request_body = EnrolRequest,
     responses(
         (status = 201, description = "A secret to add to an authenticator app.", body = EnrolmentResponse),
         (status = 401, description = "Unauthenticated.", body = kernel::ErrorEnvelope),
         (status = 409, description = "Two-factor authentication is already set up.", body = kernel::ErrorEnvelope),
+        (status = 422, description = "The password is not correct.", body = kernel::ErrorEnvelope),
+        (status = 429, description = "Too many attempts.", body = kernel::ErrorEnvelope),
     ),
     security(("session_cookie" = [])),
 )]
@@ -123,10 +139,18 @@ pub async fn begin_enrolment(
     State(pool): State<PgPool>,
     Extension(config): Extension<Arc<AppConfig>>,
     principal: Principal,
+    ApiJson(payload): ApiJson<EnrolRequest>,
 ) -> Response {
+    match password_is_correct(&pool, principal.user_id, payload.password).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return ApiError::unprocessable_entity("The password is not correct").into_response()
+        }
+        Err(e) => return ApiError::internal_error_from("Password check failed", e).into_response(),
+    }
     let keys = match keys(&pool, &config) {
         Ok(k) => k,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     match mfa::begin_enrolment(&pool, &keys, principal.user_id, &principal.email).await {
         Ok(enrolment) => (
@@ -172,7 +196,7 @@ pub async fn confirm_enrolment(
 ) -> Response {
     let keys = match keys(&pool, &config) {
         Ok(k) => k,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let now = chrono::Utc::now().timestamp().max(0) as u64;
     let codes =
@@ -209,6 +233,28 @@ pub async fn confirm_enrolment(
         }),
     )
         .into_response()
+}
+
+/// Check the user's password against its stored hash. A user without a password never passes.
+async fn password_is_correct(
+    pool: &PgPool,
+    user_id: uuid::Uuid,
+    password: String,
+) -> Result<bool, String> {
+    let hash: Option<Option<String>> =
+        sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1 AND deleted_at IS NULL")
+            .bind(user_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+    let hash = hash.flatten();
+    let verified = tokio::task::spawn_blocking(move || match hash {
+        Some(hash) => crate::password::verify_password(&password, &hash),
+        None => crate::password::verify_dummy(),
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(matches!(verified, Ok(true)))
 }
 
 /// Whether two-factor authentication is set up.

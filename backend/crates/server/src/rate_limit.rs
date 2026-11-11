@@ -124,23 +124,26 @@ pub async fn mfa_rate_limit(
     if !config.rate_limit_enabled {
         return next.run(request).await;
     }
-    let client_ip = if config.trusted_proxy {
-        match request
+    // Behind the trusted proxy the client is the address it forwards. With no such header the
+    // peer address is used, so a request is never exempt from the limit.
+    let forwarded = if config.trusted_proxy {
+        request
             .headers()
             .get("x-forwarded-for")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.split(',').next())
-        {
-            Some(first) => first.trim().to_string(),
-            None => return next.run(request).await,
-        }
+            .map(|first| first.trim().to_string())
+            .filter(|ip| !ip.is_empty())
     } else {
+        None
+    };
+    let client_ip = forwarded.unwrap_or_else(|| {
         request
             .extensions()
             .get::<ConnectInfo<SocketAddr>>()
             .map(|ConnectInfo(addr)| addr.ip().to_string())
             .unwrap_or_else(|| "unknown".to_string())
-    };
+    });
     if let Decision::Refused { retry_after } = store
         .check(
             Scope::Mfa,

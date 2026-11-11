@@ -394,14 +394,14 @@ async fn mfa_verify(
         Err(error) => return identity::mfa_routes::error_response(error),
     };
 
-    let row: Result<Option<(uuid::Uuid, String, String, Option<String>)>, sqlx::Error> =
-        sqlx::query_as(
-            "SELECT id, email, display_name, platform_role FROM users \
+    type UserRow = (uuid::Uuid, String, String, Option<String>);
+    let row: Result<Option<UserRow>, sqlx::Error> = sqlx::query_as(
+        "SELECT id, email, display_name, platform_role FROM users \
              WHERE id = $1 AND deleted_at IS NULL",
-        )
-        .bind(challenge.sub)
-        .fetch_optional(&pool)
-        .await;
+    )
+    .bind(challenge.sub)
+    .fetch_optional(&pool)
+    .await;
     let principal = match row {
         Ok(Some((id, email, display_name, role))) => {
             match identity::principal_from_row(id, email, display_name, role) {
@@ -495,7 +495,10 @@ fn public_routes() -> OpenApiRouter<sqlx::PgPool> {
 fn authenticated_routes() -> OpenApiRouter<sqlx::PgPool> {
     OpenApiRouter::new()
         .routes(routes!(tenancy::routes::me))
-        .routes(routes!(identity::mfa_routes::begin_enrolment))
+        .routes(
+            routes!(identity::mfa_routes::begin_enrolment)
+                .layer(middleware::from_fn(crate::rate_limit::mfa_rate_limit)),
+        )
         .routes(routes!(identity::mfa_routes::confirm_enrolment))
         .routes(routes!(identity::mfa_routes::status))
 }

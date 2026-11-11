@@ -218,7 +218,11 @@ async fn enrolled_user(app: &axum::Router) -> (Uuid, String, Vec<u8>, Vec<String
     let begin = send(
         app,
         as_user(
-            json_request(Method::POST, "/api/v1/auth/mfa/enrol", json!({})),
+            json_request(
+                Method::POST,
+                "/api/v1/auth/mfa/enrol",
+                json!({ "password": PASSWORD }),
+            ),
             user,
         ),
     )
@@ -302,7 +306,11 @@ async fn enrolment_shows_the_secret_once_and_confirming_activates_the_factor() {
     let begin = send(
         &app,
         as_user(
-            json_request(Method::POST, "/api/v1/auth/mfa/enrol", json!({})),
+            json_request(
+                Method::POST,
+                "/api/v1/auth/mfa/enrol",
+                json!({ "password": PASSWORD }),
+            ),
             user,
         ),
     )
@@ -427,7 +435,11 @@ async fn enrolment_shows_the_secret_once_and_confirming_activates_the_factor() {
     let again = send(
         &app,
         as_user(
-            json_request(Method::POST, "/api/v1/auth/mfa/enrol", json!({})),
+            json_request(
+                Method::POST,
+                "/api/v1/auth/mfa/enrol",
+                json!({ "password": PASSWORD }),
+            ),
             user,
         ),
     )
@@ -439,6 +451,129 @@ async fn enrolment_shows_the_secret_once_and_confirming_activates_the_factor() {
         "the wrong code and the enrolment are audited"
     );
     let _ = email;
+}
+
+#[tokio::test]
+async fn starting_enrolment_needs_the_current_password() {
+    let (_pool, app, _lock) = setup!();
+    let (user, _email) = seed_user().await;
+    let enrol = |body: Value| {
+        as_user(
+            json_request(Method::POST, "/api/v1/auth/mfa/enrol", body),
+            user,
+        )
+    };
+
+    let wrong = send(&app, enrol(json!({ "password": "not-the-password" }))).await;
+    assert_eq!(wrong.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    for body in [json!({}), json!({ "password": PASSWORD, "extra": 1 })] {
+        let r = send(&app, enrol(body)).await;
+        assert!(
+            r.status() == StatusCode::BAD_REQUEST || r.status() == StatusCode::UNPROCESSABLE_ENTITY,
+            "got {}",
+            r.status()
+        );
+    }
+    let factors: i64 = sqlx::query_scalar("SELECT count(*) FROM mfa_factors WHERE user_id = $1")
+        .bind(user)
+        .fetch_one(&db::testing::seed_pool())
+        .await
+        .unwrap();
+    assert_eq!(factors, 0, "nothing was created without the password");
+
+    assert_eq!(
+        send(&app, enrol(json!({ "password": PASSWORD })))
+            .await
+            .status(),
+        StatusCode::CREATED
+    );
+}
+
+#[tokio::test]
+async fn a_user_with_no_password_cannot_start_enrolment() {
+    let (_pool, app, _lock) = setup!();
+    let user: Uuid = sqlx::query_scalar(
+        "INSERT INTO users (email, display_name) VALUES ($1, 'No Password') RETURNING id",
+    )
+    .bind(format!("nopw-{}@example.test", Uuid::new_v4().simple()))
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    let r = send(
+        &app,
+        as_user(
+            json_request(
+                Method::POST,
+                "/api/v1/auth/mfa/enrol",
+                json!({ "password": "" }),
+            ),
+            user,
+        ),
+    )
+    .await;
+    assert_eq!(r.status(), StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn a_session_that_skipped_the_second_factor_stops_working_once_the_user_enrols() {
+    let (_pool, app, _lock) = setup!();
+    let (user, _email) = seed_user().await;
+    // A password-only session, such as one stolen before the user enrolled.
+    let (old, _, _) = session::issue_token(JWT_SECRET, 600, user).unwrap();
+    let me = |jwt: &str| {
+        with_cookie(
+            Request::get("/api/v1/me").body(Body::empty()).unwrap(),
+            &format!("app_session={jwt}"),
+        )
+    };
+    assert_eq!(
+        send(&app, me(&old)).await.status(),
+        StatusCode::OK,
+        "fine while not enrolled"
+    );
+
+    // The user enrols with that session.
+    let begin = send(
+        &app,
+        with_cookie(
+            json_request(
+                Method::POST,
+                "/api/v1/auth/mfa/enrol",
+                json!({ "password": PASSWORD }),
+            ),
+            &format!("app_session={old}"),
+        ),
+    )
+    .await;
+    assert_eq!(begin.status(), StatusCode::CREATED);
+    let code = totp::code_at(&secret_of(user).await, now(), 6);
+    let confirm = send(
+        &app,
+        with_cookie(
+            json_request(
+                Method::POST,
+                "/api/v1/auth/mfa/enrol/confirm",
+                json!({ "code": code }),
+            ),
+            &format!("app_session={old}"),
+        ),
+    )
+    .await;
+    assert_eq!(confirm.status(), StatusCode::OK);
+    let fresh = cookie_value(&confirm, "app_session").unwrap();
+
+    // The session that confirmed is replaced by one that records the factor; the old one is gone,
+    // and so would be any other password-only session of this user.
+    assert_eq!(send(&app, me(&fresh)).await.status(), StatusCode::OK);
+    assert_eq!(
+        send(&app, me(&old)).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let (other, _, _) = session::issue_token(JWT_SECRET, 600, user).unwrap();
+    assert_eq!(
+        send(&app, me(&other)).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
 }
 
 #[tokio::test]
@@ -881,7 +1016,11 @@ async fn a_user_without_a_factor_still_signs_in_with_a_password() {
     send(
         &app,
         as_user(
-            json_request(Method::POST, "/api/v1/auth/mfa/enrol", json!({})),
+            json_request(
+                Method::POST,
+                "/api/v1/auth/mfa/enrol",
+                json!({ "password": PASSWORD }),
+            ),
             user,
         ),
     )

@@ -55,7 +55,7 @@ export interface paths {
     put?: never;
     /**
      * Start setting up two-factor authentication
-     * @description Creates a new authenticator secret for the signed-in user and returns it once, as base32 and as an `otpauth://` URI. The factor stays inactive until `POST /auth/mfa/enrol/confirm` proves a code. Starting again replaces an unconfirmed secret. Returns 409 when the user already has an active factor.
+     * @description Creates a new authenticator secret for the signed-in user and returns it once, as base32 and as an `otpauth://` URI. Needs the current password, so a stolen session alone cannot add an authenticator. The factor stays inactive until `POST /auth/mfa/enrol/confirm` proves a code. Starting again replaces an unconfirmed secret. Returns 409 when the user already has an active factor.
      */
     post: operations['auth_mfa_enrol'];
     delete?: never;
@@ -2618,6 +2618,17 @@ export interface components {
       /** Format: int64 */
       sizeBytes: number;
     };
+    /**
+     * @description Starting enrolment proves the account owner is present: it needs the current password, so a
+     *     stolen session alone cannot add an attacker's authenticator.
+     */
+    EnrolRequest: {
+      /**
+       * @description The signed-in user's current password. Never echoed back.
+       * @example ********
+       */
+      password: string;
+    };
     EnrolmentResponse: {
       /** @description The `otpauth://` URI a QR code carries. Shown once, here. */
       otpauthUri: string;
@@ -3937,7 +3948,11 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EnrolRequest'];
+      };
+    };
     responses: {
       /** @description A secret to add to an authenticator app. */
       201: {
@@ -3959,6 +3974,24 @@ export interface operations {
       };
       /** @description Two-factor authentication is already set up. */
       409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description The password is not correct. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Too many attempts. */
+      429: {
         headers: {
           [name: string]: unknown;
         };
