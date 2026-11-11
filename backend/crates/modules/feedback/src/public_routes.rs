@@ -7,6 +7,7 @@ use kernel::{ApiError, ApiJson, Decision, RateLimiter, Scope, TenantRateLimit};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tracing::info_span;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::model::{
@@ -45,40 +46,56 @@ pub async fn submit_feedback(
     ApiJson(payload): ApiJson<SubmitFeedbackPayload>,
 ) -> Response {
     let span = info_span!("feedback_submit", conversation_id = %conversation_id);
-    let _guard = span.enter();
-
-    // Validate rating range
-    if !(1..=5).contains(&payload.rating) {
-        return ApiError::unprocessable_entity("Rating must be between 1 and 5").into_response();
-    }
-
-    // Validate and normalize comment
-    let comment = payload.comment.as_deref().map(|c| c.trim().to_owned());
-    let comment = comment
-        .as_deref()
-        .filter(|c| !c.is_empty())
-        .map(|c| c.to_owned());
-    if let Some(ref c) = comment {
-        if c.chars().count() > 2000 {
-            return ApiError::unprocessable_entity("Comment must be 2000 characters or fewer")
+    async move {
+        // Validate rating range
+        if !(1..=5).contains(&payload.rating) {
+            return ApiError::unprocessable_entity("Rating must be between 1 and 5")
                 .into_response();
         }
-    }
 
-    let auth = headers.get("authorization").and_then(|v| v.to_str().ok());
-    let session = match widgets::session::authenticate_session(&pool, auth).await {
-        Ok(s) => s,
-        Err(e) => return e.into_response(),
-    };
+        // Validate and normalize comment
+        let comment = payload.comment.as_deref().map(|c| c.trim().to_owned());
+        let comment = comment
+            .as_deref()
+            .filter(|c| !c.is_empty())
+            .map(|c| c.to_owned());
+        if let Some(ref c) = comment {
+            if c.chars().count() > 2000 {
+                return ApiError::unprocessable_entity("Comment must be 2000 characters or fewer")
+                    .into_response();
+            }
+        }
 
-    // Rate limit: per-session via resolved budget
-    if config.rate_limit_enabled {
+        let auth = headers.get("authorization").and_then(|v| v.to_str().ok());
+        let session = match widgets::session::authenticate_session(&pool, auth).await {
+            Ok(s) => s,
+            Err(e) => return e.into_response(),
+        };
+
+        // Rate limit: per-session via resolved budget
+        if config.rate_limit_enabled {
+            let tid = session.tenant_id.to_string();
+            if let Some(budget) = tenant_limit.budget(&tid, Scope::WidgetMessage).await {
+                if let Decision::Refused { retry_after } = store
+                    .check(Scope::WidgetMessage, &session.id.to_string(), budget)
+                    .await
+                {
+                    return ApiError::rate_limited(
+                        "Too many submissions, try again later",
+                        retry_after,
+                    )
+                    .into_response();
+                }
+            }
+        }
+
+        // Rate limit: per-tenant 600/60s
         let tid = session.tenant_id.to_string();
-        if let Some(budget) = tenant_limit.budget(&tid, Scope::WidgetMessage).await {
-            if let Decision::Refused { retry_after } = store
-                .check(Scope::WidgetMessage, &session.id.to_string(), budget)
-                .await
+        if let Some(budget) = tenant_limit.budget(&tid, Scope::TenantGlobal).await {
+            if let Decision::Refused { retry_after } =
+                store.check(Scope::TenantGlobal, &tid, budget).await
             {
+                tenant_limit.record_refusal(&tid).await;
                 return ApiError::rate_limited(
                     "Too many submissions, try again later",
                     retry_after,
@@ -86,53 +103,43 @@ pub async fn submit_feedback(
                 .into_response();
             }
         }
-    }
 
-    // Rate limit: per-tenant 600/60s
-    let tid = session.tenant_id.to_string();
-    if let Some(budget) = tenant_limit.budget(&tid, Scope::TenantGlobal).await {
-        if let Decision::Refused { retry_after } =
-            store.check(Scope::TenantGlobal, &tid, budget).await
+        let customer_id = match session.customer_id {
+            Some(id) => id,
+            None => return ApiError::not_found("Conversation not found").into_response(),
+        };
+
+        // Ownership + status check
+        let conv = match queries::find_conversation_for_session(
+            &pool,
+            session.tenant_id,
+            customer_id,
+            conversation_id,
+        )
+        .await
         {
-            tenant_limit.record_refusal(&tid).await;
-            return ApiError::rate_limited("Too many submissions, try again later", retry_after)
-                .into_response();
+            Ok(Some(c)) => c,
+            Ok(None) => return ApiError::not_found("Conversation not found").into_response(),
+            Err(e) => {
+                tracing::error!(%e, "submit_feedback: db error");
+                return ApiError::internal_error("Failed to look up conversation").into_response();
+            }
+        };
+
+        let (status, channel, assigned_membership_id) = conv;
+
+        // Must be ended
+        if status != "resolved" && status != "closed" {
+            return ApiError::unprocessable_entity("conversation_not_ended").into_response();
         }
-    }
 
-    let customer_id = match session.customer_id {
-        Some(id) => id,
-        None => return ApiError::not_found("Conversation not found").into_response(),
-    };
-
-    // Ownership + status check
-    let conv = match queries::find_conversation_for_session(
-        &pool,
-        session.tenant_id,
-        customer_id,
-        conversation_id,
-    )
-    .await
-    {
-        Ok(Some(c)) => c,
-        Ok(None) => return ApiError::not_found("Conversation not found").into_response(),
-        Err(e) => {
-            tracing::error!(%e, "submit_feedback: db error");
-            return ApiError::internal_error("Failed to look up conversation").into_response();
-        }
-    };
-
-    let (status, channel, assigned_membership_id) = conv;
-
-    // Must be ended
-    if status != "resolved" && status != "closed" {
-        return ApiError::unprocessable_entity("conversation_not_ended").into_response();
-    }
-
-    // Resolve AI agent configuration (US4)
-    let agent_configuration_id =
-        match queries::resolve_ai_agent_configuration(&pool, session.tenant_id, conversation_id)
-            .await
+        // Resolve AI agent configuration (US4)
+        let agent_configuration_id = match queries::resolve_ai_agent_configuration(
+            &pool,
+            session.tenant_id,
+            conversation_id,
+        )
+        .await
         {
             Ok(id) => id,
             Err(e) => {
@@ -141,76 +148,79 @@ pub async fn submit_feedback(
             }
         };
 
-    // Insert (idempotent)
-    let result = match queries::insert_feedback(
-        &pool,
-        session.tenant_id,
-        conversation_id,
-        Some(session.id),
-        &channel,
-        agent_configuration_id,
-        assigned_membership_id,
-        payload.rating,
-        comment.as_deref(),
-    )
-    .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::error!(%e, "submit_feedback: insert failed");
-            return ApiError::internal_error("Failed to store feedback").into_response();
-        }
-    };
+        // Insert (idempotent)
+        let result = match queries::insert_feedback(
+            &pool,
+            session.tenant_id,
+            conversation_id,
+            Some(session.id),
+            &channel,
+            agent_configuration_id,
+            assigned_membership_id,
+            payload.rating,
+            comment.as_deref(),
+        )
+        .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!(%e, "submit_feedback: insert failed");
+                return ApiError::internal_error("Failed to store feedback").into_response();
+            }
+        };
 
-    match result {
-        Some(row) => {
-            let dto = WidgetFeedbackDto {
-                rating: row.rating,
-                comment: row.comment,
-                submitted_at: row.submitted_at,
-            };
-            (
-                StatusCode::CREATED,
-                Json(WidgetFeedbackResponse {
-                    data: WidgetFeedbackResponseData { feedback: dto },
-                }),
-            )
-                .into_response()
-        }
-        None => {
-            // Duplicate — read back existing record
-            let existing = match queries::find_feedback_by_conversation(
-                &pool,
-                session.tenant_id,
-                conversation_id,
-            )
-            .await
-            {
-                Ok(Some(r)) => r,
-                Ok(None) => {
-                    return ApiError::internal_error("Feedback not found after insert")
-                        .into_response();
-                }
-                Err(e) => {
-                    tracing::error!(%e, "submit_feedback: read-back failed");
-                    return ApiError::internal_error("Failed to read back feedback")
-                        .into_response();
-                }
-            };
-            let dto = WidgetFeedbackDto {
-                rating: existing.rating,
-                comment: existing.comment,
-                submitted_at: existing.submitted_at,
-            };
-            (
-                StatusCode::OK,
-                Json(WidgetFeedbackResponse {
-                    data: WidgetFeedbackResponseData { feedback: dto },
-                }),
-            )
-                .into_response()
+        match result {
+            Some(row) => {
+                let dto = WidgetFeedbackDto {
+                    rating: row.rating,
+                    comment: row.comment,
+                    submitted_at: row.submitted_at,
+                };
+                (
+                    StatusCode::CREATED,
+                    Json(WidgetFeedbackResponse {
+                        data: WidgetFeedbackResponseData { feedback: dto },
+                    }),
+                )
+                    .into_response()
+            }
+            None => {
+                // Duplicate — read back existing record
+                let existing = match queries::find_feedback_by_conversation(
+                    &pool,
+                    session.tenant_id,
+                    conversation_id,
+                )
+                .await
+                {
+                    Ok(Some(r)) => r,
+                    Ok(None) => {
+                        return ApiError::internal_error("Feedback not found after insert")
+                            .into_response();
+                    }
+                    Err(e) => {
+                        tracing::error!(%e, "submit_feedback: read-back failed");
+                        return ApiError::internal_error("Failed to read back feedback")
+                            .into_response();
+                    }
+                };
+                let dto = WidgetFeedbackDto {
+                    rating: existing.rating,
+                    comment: existing.comment,
+                    submitted_at: existing.submitted_at,
+                };
+                (
+                    StatusCode::OK,
+                    Json(WidgetFeedbackResponse {
+                        data: WidgetFeedbackResponseData { feedback: dto },
+                    }),
+                )
+                    .into_response()
+            }
         }
     }
+    .instrument(span)
+    .await
 }
 
 #[utoipa::path(

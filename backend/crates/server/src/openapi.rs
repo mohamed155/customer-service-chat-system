@@ -192,7 +192,9 @@ use utoipa::{openapi, Modify, OpenApi};
         integrations::model::PaginationInfo,
         // Widgets
         widgets::model::PublicWidgetConfigDto,
+        widgets::model::PublicWidgetConfigResponse,
         widgets::model::CreateSessionPayload,
+        widgets::model::SessionResponse,
         widgets::model::SessionResponseDto,
         widgets::model::SendMessagePayload,
         widgets::model::WidgetMessageDto,

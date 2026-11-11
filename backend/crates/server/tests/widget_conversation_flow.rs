@@ -167,7 +167,7 @@ async fn mint_session(pool: &sqlx::PgPool, public_id: &str) -> String {
     .await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let json = body_json(response).await;
-    json["sessionToken"].as_str().unwrap().to_owned()
+    json["data"]["sessionToken"].as_str().unwrap().to_owned()
 }
 
 fn authed_request(method: Method, path: &str, token: &str) -> Request<Body> {

@@ -9,19 +9,23 @@ use kernel::{
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::sync::Arc;
+use tracing::Instrument;
 use tracing::{error, info_span};
 use uuid::Uuid;
 
 use crate::model::{
-    CreateSessionPayload, PublicWidgetConfigDto, SendMessagePayload, SessionResponseDto,
-    WidgetConversationDto, WidgetConversationResponse, WidgetMessageDto, WidgetMessageResponse,
-    WidgetMessageResponseData,
+    CreateSessionPayload, PublicWidgetConfigDto, PublicWidgetConfigResponse, SendMessagePayload,
+    SessionResponse, SessionResponseDto, WidgetConversationDto, WidgetConversationResponse,
+    WidgetMessageDto, WidgetMessageResponse, WidgetMessageResponseData,
 };
 use crate::origin::origin_allowed;
 use crate::queries;
 
+/// Query of `GET /widget/v1/config`. The documented and sent name is `widgetId`; `widget_id` is
+/// still accepted so callers written against the earlier spelling keep working.
 #[derive(Debug, Deserialize)]
 pub struct ConfigQuery {
+    #[serde(rename = "widgetId", alias = "widget_id")]
     pub widget_id: String,
 }
 
@@ -35,7 +39,7 @@ pub struct ConfigQuery {
         ("widgetId" = String, Query, description = "Widget public ID"),
     ),
     responses(
-        (status = 200, description = "Widget config.", body = PublicWidgetConfigDto),
+        (status = 200, description = "Widget config, in a `data` envelope.", body = PublicWidgetConfigResponse),
         (status = 404, description = "Widget not found.", body = ErrorEnvelope),
         (status = 403, description = "Origin not allowed.", body = ErrorEnvelope),
     ),
@@ -47,39 +51,45 @@ pub async fn get_config(
     headers: axum::http::HeaderMap,
 ) -> Response {
     let span = info_span!("widget_config_lookup", widget_id = %query.widget_id);
-    let _guard = span.enter();
+    async move {
+        let instance = match queries::find_instance_by_public_id(&pool, &query.widget_id).await {
+            Ok(Some(i)) => i,
+            Ok(None) => return ApiError::not_found("Widget not found").into_response(),
+            Err(e) => {
+                error!(%e, "get_config: db error");
+                return ApiError::internal_error("Failed to look up widget").into_response();
+            }
+        };
 
-    let instance = match queries::find_instance_by_public_id(&pool, &query.widget_id).await {
-        Ok(Some(i)) => i,
-        Ok(None) => return ApiError::not_found("Widget not found").into_response(),
-        Err(e) => {
-            error!(%e, "get_config: db error");
-            return ApiError::internal_error("Failed to look up widget").into_response();
+        let origin = headers.get("origin").and_then(|v| v.to_str().ok());
+        let referer = headers.get("referer").and_then(|v| v.to_str().ok());
+        if !origin_allowed(&instance.allowed_domains, origin, referer) {
+            return ApiError::new_with_code(
+                StatusCode::FORBIDDEN,
+                "origin_not_allowed",
+                "Origin not allowed",
+            )
+            .into_response();
         }
-    };
 
-    let origin = headers.get("origin").and_then(|v| v.to_str().ok());
-    let referer = headers.get("referer").and_then(|v| v.to_str().ok());
-    if !origin_allowed(&instance.allowed_domains, origin, referer) {
-        return ApiError::new_with_code(
-            StatusCode::FORBIDDEN,
-            "origin_not_allowed",
-            "Origin not allowed",
+        let dto = PublicWidgetConfigDto {
+            widget_id: instance.public_id,
+            display_name: instance.display_name,
+            primary_color: instance.primary_color,
+            welcome_message: instance.welcome_message,
+            position: instance.position,
+            theme: instance.theme,
+            enabled: instance.enabled,
+        };
+
+        (
+            StatusCode::OK,
+            Json(PublicWidgetConfigResponse { data: dto }),
         )
-        .into_response();
+            .into_response()
     }
-
-    let dto = PublicWidgetConfigDto {
-        widget_id: instance.public_id,
-        display_name: instance.display_name,
-        primary_color: instance.primary_color,
-        welcome_message: instance.welcome_message,
-        position: instance.position,
-        theme: instance.theme,
-        enabled: instance.enabled,
-    };
-
-    (StatusCode::OK, Json(dto)).into_response()
+    .instrument(span)
+    .await
 }
 
 #[utoipa::path(
@@ -90,7 +100,7 @@ pub async fn get_config(
     summary = "Create an anonymous widget session",
     request_body = CreateSessionPayload,
     responses(
-        (status = 201, description = "Session created.", body = SessionResponseDto),
+        (status = 201, description = "Session created, in a `data` envelope.", body = SessionResponse),
         (status = 404, description = "Widget not found.", body = ErrorEnvelope),
         (status = 403, description = "Origin not allowed.", body = ErrorEnvelope),
     ),
@@ -102,55 +112,57 @@ pub async fn create_session(
     ApiJson(payload): ApiJson<CreateSessionPayload>,
 ) -> Response {
     let span = info_span!("widget_session_mint", widget_id = %payload.widget_id);
-    let _guard = span.enter();
+    async move {
+        let instance = match queries::find_instance_by_public_id(&pool, &payload.widget_id).await {
+            Ok(Some(i)) => i,
+            Ok(None) => return ApiError::not_found("Widget not found").into_response(),
+            Err(e) => {
+                error!(%e, "create_session: db error");
+                return ApiError::internal_error("Failed to look up widget").into_response();
+            }
+        };
 
-    let instance = match queries::find_instance_by_public_id(&pool, &payload.widget_id).await {
-        Ok(Some(i)) => i,
-        Ok(None) => return ApiError::not_found("Widget not found").into_response(),
-        Err(e) => {
-            error!(%e, "create_session: db error");
-            return ApiError::internal_error("Failed to look up widget").into_response();
+        let origin = headers.get("origin").and_then(|v| v.to_str().ok());
+        let referer = headers.get("referer").and_then(|v| v.to_str().ok());
+        if !origin_allowed(&instance.allowed_domains, origin, referer) {
+            return ApiError::new_with_code(
+                StatusCode::FORBIDDEN,
+                "origin_not_allowed",
+                "Origin not allowed",
+            )
+            .into_response();
         }
-    };
 
-    let origin = headers.get("origin").and_then(|v| v.to_str().ok());
-    let referer = headers.get("referer").and_then(|v| v.to_str().ok());
-    if !origin_allowed(&instance.allowed_domains, origin, referer) {
-        return ApiError::new_with_code(
-            StatusCode::FORBIDDEN,
-            "origin_not_allowed",
-            "Origin not allowed",
+        let token = crate::session::generate_token();
+        let token_hash = crate::session::hash_token(&token);
+        let expires_at =
+            chrono::Utc::now() + chrono::Duration::hours(crate::session::SESSION_TTL_HOURS);
+
+        let session = match queries::insert_session(
+            &pool,
+            instance.tenant_id,
+            instance.id,
+            &token_hash,
+            expires_at,
         )
-        .into_response();
+        .await
+        {
+            Ok(s) => s,
+            Err(e) => {
+                error!(%e, "create_session: insert failed");
+                return ApiError::internal_error("Failed to create session").into_response();
+            }
+        };
+
+        let dto = SessionResponseDto {
+            session_token: token,
+            expires_at: session.expires_at,
+        };
+
+        (StatusCode::CREATED, Json(SessionResponse { data: dto })).into_response()
     }
-
-    let token = crate::session::generate_token();
-    let token_hash = crate::session::hash_token(&token);
-    let expires_at =
-        chrono::Utc::now() + chrono::Duration::hours(crate::session::SESSION_TTL_HOURS);
-
-    let session = match queries::insert_session(
-        &pool,
-        instance.tenant_id,
-        instance.id,
-        &token_hash,
-        expires_at,
-    )
+    .instrument(span)
     .await
-    {
-        Ok(s) => s,
-        Err(e) => {
-            error!(%e, "create_session: insert failed");
-            return ApiError::internal_error("Failed to create session").into_response();
-        }
-    };
-
-    let dto = SessionResponseDto {
-        session_token: token,
-        expires_at: session.expires_at,
-    };
-
-    (StatusCode::CREATED, Json(dto)).into_response()
 }
 
 // ---------------------------------------------------------------------------
@@ -495,155 +507,158 @@ pub async fn send_message(
     ApiJson(payload): ApiJson<SendMessagePayload>,
 ) -> Response {
     let span = info_span!("widget_message_send", conversation_id = %conversation_id);
-    let _guard = span.enter();
+    async move {
+        let auth = headers.get("authorization").and_then(|v| v.to_str().ok());
+        let session = match crate::session::authenticate_session(&pool, auth).await {
+            Ok(s) => s,
+            Err(e) => return e.into_response(),
+        };
 
-    let auth = headers.get("authorization").and_then(|v| v.to_str().ok());
-    let session = match crate::session::authenticate_session(&pool, auth).await {
-        Ok(s) => s,
-        Err(e) => return e.into_response(),
-    };
-
-    // Per-session message rate limit (10/min, matches MESSAGES_PER_SESSION_LIMIT)
-    if config.rate_limit_enabled {
-        if let Decision::Refused { retry_after } = store
-            .check(
-                Scope::WidgetMessage,
-                &session.id.to_string(),
-                Budget {
-                    max_requests: 10,
-                    window: std::time::Duration::from_secs(60),
-                },
-            )
-            .await
-        {
-            return ApiError::rate_limited("Too many messages", retry_after).into_response();
-        }
-    }
-    if config.rate_limit_enabled {
-        let tid = session.tenant_id.to_string();
-        if let Some(budget) = tenant_limit.budget(&tid, Scope::TenantGlobal).await {
-            if let Decision::Refused { retry_after } =
-                store.check(Scope::TenantGlobal, &tid, budget).await
+        // Per-session message rate limit (10/min, matches MESSAGES_PER_SESSION_LIMIT)
+        if config.rate_limit_enabled {
+            if let Decision::Refused { retry_after } = store
+                .check(
+                    Scope::WidgetMessage,
+                    &session.id.to_string(),
+                    Budget {
+                        max_requests: 10,
+                        window: std::time::Duration::from_secs(60),
+                    },
+                )
+                .await
             {
-                tenant_limit.record_refusal(&tid).await;
-                return ApiError::rate_limited("Too many requests", retry_after).into_response();
+                return ApiError::rate_limited("Too many messages", retry_after).into_response();
             }
         }
-    }
-
-    let body = payload.body.trim().to_string();
-    if body.is_empty() || body.len() > 4000 {
-        return ApiError::unprocessable_entity("Body must be between 1 and 4000 characters")
-            .into_response();
-    }
-
-    let mut tx = match db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id).await {
-        Ok(t) => t,
-        Err(e) => {
-            error!(%e, "send_message: begin tx failed");
-            return ApiError::internal_error("Failed to start transaction").into_response();
+        if config.rate_limit_enabled {
+            let tid = session.tenant_id.to_string();
+            if let Some(budget) = tenant_limit.budget(&tid, Scope::TenantGlobal).await {
+                if let Decision::Refused { retry_after } =
+                    store.check(Scope::TenantGlobal, &tid, budget).await
+                {
+                    tenant_limit.record_refusal(&tid).await;
+                    return ApiError::rate_limited("Too many requests", retry_after)
+                        .into_response();
+                }
+            }
         }
-    };
 
-    // Scope to the session's own customer: a visitor may only post into their
-    // own conversation. Matching on tenant alone let any session in the
-    // tenant target another visitor's conversation (spec 023: 404 instead).
-    let Some(session_customer_id) = session.customer_id else {
-        let _ = tx.rollback().await;
-        return ApiError::not_found("Conversation not found").into_response();
-    };
-    let conv_status: Option<String> = sqlx::query_scalar(
-        "SELECT status FROM conversations \
-         WHERE tenant_id = $1 AND id = $2 AND customer_id = $3 AND deleted_at IS NULL \
-         FOR UPDATE",
-    )
-    .bind(session.tenant_id)
-    .bind(conversation_id)
-    .bind(session_customer_id)
-    .fetch_optional(tx.conn())
-    .await
-    .map_err(|e| {
-        error!(%e, "send_message: select for update failed");
-    })
-    .ok()
-    .flatten();
+        let body = payload.body.trim().to_string();
+        if body.is_empty() || body.len() > 4000 {
+            return ApiError::unprocessable_entity("Body must be between 1 and 4000 characters")
+                .into_response();
+        }
 
-    let status = match conv_status {
-        Some(s) => s,
-        None => {
+        let mut tx = match db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id).await {
+            Ok(t) => t,
+            Err(e) => {
+                error!(%e, "send_message: begin tx failed");
+                return ApiError::internal_error("Failed to start transaction").into_response();
+            }
+        };
+
+        // Scope to the session's own customer: a visitor may only post into their
+        // own conversation. Matching on tenant alone let any session in the
+        // tenant target another visitor's conversation (spec 023: 404 instead).
+        let Some(session_customer_id) = session.customer_id else {
             let _ = tx.rollback().await;
             return ApiError::not_found("Conversation not found").into_response();
-        }
-    };
-
-    if status == "resolved" || status == "closed" {
-        let _ = tx.rollback().await;
-        return ApiError::new_with_code(
-            StatusCode::CONFLICT,
-            "conversation_closed",
-            "Conversation is closed",
+        };
+        let conv_status: Option<String> = sqlx::query_scalar(
+            "SELECT status FROM conversations \
+         WHERE tenant_id = $1 AND id = $2 AND customer_id = $3 AND deleted_at IS NULL \
+         FOR UPDATE",
         )
-        .into_response();
-    }
+        .bind(session.tenant_id)
+        .bind(conversation_id)
+        .bind(session_customer_id)
+        .fetch_optional(tx.conn())
+        .await
+        .map_err(|e| {
+            error!(%e, "send_message: select for update failed");
+        })
+        .ok()
+        .flatten();
 
-    let customer_id = match session.customer_id {
-        Some(id) => id,
-        None => {
+        let status = match conv_status {
+            Some(s) => s,
+            None => {
+                let _ = tx.rollback().await;
+                return ApiError::not_found("Conversation not found").into_response();
+            }
+        };
+
+        if status == "resolved" || status == "closed" {
             let _ = tx.rollback().await;
-            return ApiError::internal_error("Session has no customer").into_response();
+            return ApiError::new_with_code(
+                StatusCode::CONFLICT,
+                "conversation_closed",
+                "Conversation is closed",
+            )
+            .into_response();
         }
-    };
 
-    let (message, _status_ref) = match conversations::queries::add_message_in_tx(
-        &mut tx,
-        session.tenant_id,
-        conversation_id,
-        "customer",
-        &body,
-        None,
-        None,
-        conversations::queries::ConversationActor::Visitor { customer_id },
-    )
-    .await
-    {
-        Ok(result) => result,
-        Err(e) => {
-            error!(%e, "send_message: add_message failed");
+        let customer_id = match session.customer_id {
+            Some(id) => id,
+            None => {
+                let _ = tx.rollback().await;
+                return ApiError::internal_error("Session has no customer").into_response();
+            }
+        };
+
+        let (message, _status_ref) = match conversations::queries::add_message_in_tx(
+            &mut tx,
+            session.tenant_id,
+            conversation_id,
+            "customer",
+            &body,
+            None,
+            None,
+            conversations::queries::ConversationActor::Visitor { customer_id },
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(e) => {
+                error!(%e, "send_message: add_message failed");
+                let _ = tx.rollback().await;
+                return ApiError::internal_error("Failed to save message").into_response();
+            }
+        };
+
+        if let Err(e) = conversations::outbox::emit_customer_message_in_tx(
+            &mut tx,
+            session.tenant_id,
+            conversation_id,
+            message.id,
+            "widget",
+        )
+        .await
+        {
+            error!(%e, "send_message: emit outbox failed");
             let _ = tx.rollback().await;
-            return ApiError::internal_error("Failed to save message").into_response();
+            return ApiError::internal_error("Failed to emit message event").into_response();
         }
-    };
 
-    if let Err(e) = conversations::outbox::emit_customer_message_in_tx(
-        &mut tx,
-        session.tenant_id,
-        conversation_id,
-        message.id,
-        "widget",
-    )
+        if let Err(e) = tx.commit().await {
+            error!(%e, "send_message: commit failed");
+            return ApiError::internal_error("Failed to commit").into_response();
+        }
+
+        let msg_dto = WidgetMessageDto {
+            id: message.id,
+            sender: "visitor".into(),
+            sender_display_name: None,
+            body: message.body,
+            created_at: message.created_at,
+        };
+
+        let response = WidgetMessageResponse {
+            data: WidgetMessageResponseData { message: msg_dto },
+        };
+
+        (StatusCode::CREATED, Json(response)).into_response()
+    }
+    .instrument(span)
     .await
-    {
-        error!(%e, "send_message: emit outbox failed");
-        let _ = tx.rollback().await;
-        return ApiError::internal_error("Failed to emit message event").into_response();
-    }
-
-    if let Err(e) = tx.commit().await {
-        error!(%e, "send_message: commit failed");
-        return ApiError::internal_error("Failed to commit").into_response();
-    }
-
-    let msg_dto = WidgetMessageDto {
-        id: message.id,
-        sender: "visitor".into(),
-        sender_display_name: None,
-        body: message.body,
-        created_at: message.created_at,
-    };
-
-    let response = WidgetMessageResponse {
-        data: WidgetMessageResponseData { message: msg_dto },
-    };
-
-    (StatusCode::CREATED, Json(response)).into_response()
 }
