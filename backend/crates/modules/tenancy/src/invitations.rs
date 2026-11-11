@@ -1232,6 +1232,7 @@ pub async fn accept_invitation(
         Ok(tx) => tx,
         Err(e) => {
             return ApiError::internal_error_from("Database transaction begin failed", &e)
+                .for_tenant(tenant_id)
                 .into_response();
         }
     };
@@ -1249,7 +1250,9 @@ pub async fn accept_invitation(
     {
         Ok(v) => v,
         Err(e) => {
-            return ApiError::internal_error_from("Invitation lock failed", &e).into_response();
+            return ApiError::internal_error_from("Invitation lock failed", &e)
+                .for_tenant(tenant_id)
+                .into_response();
         }
     };
     if still_valid != Some(true) {
@@ -1308,7 +1311,9 @@ pub async fn accept_invitation(
         {
             Ok(result) => result.rows_affected(),
             Err(e) => {
-                return ApiError::internal_error_from("Database update failed", &e).into_response();
+                return ApiError::internal_error_from("Database update failed", &e)
+                    .for_tenant(tenant_id)
+                    .into_response();
             }
         };
 
@@ -1326,7 +1331,9 @@ pub async fn accept_invitation(
         .execute(tx.conn())
         .await
         {
-            return ApiError::internal_error_from("Membership insert failed", &e).into_response();
+            return ApiError::internal_error_from("Membership insert failed", &e)
+                .for_tenant(tenant_id)
+                .into_response();
         }
 
         if let Err(e) = audit::record_member_invitation_accepted(
@@ -1340,11 +1347,15 @@ pub async fn accept_invitation(
         )
         .await
         {
-            return ApiError::internal_error_from("Audit insert failed", &e).into_response();
+            return ApiError::internal_error_from("Audit insert failed", &e)
+                .for_tenant(tenant_id)
+                .into_response();
         }
 
         if let Err(e) = tx.commit().await {
-            return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
+            return ApiError::internal_error_from("Transaction commit failed", &e)
+                .for_tenant(tenant_id)
+                .into_response();
         }
 
         match routes::build_me_response(
@@ -1390,7 +1401,9 @@ pub async fn accept_invitation(
         match tokio::task::spawn_blocking(move || password::hash_password(&password)).await {
             Ok(Ok(hash)) => hash,
             _ => {
-                return ApiError::internal_error("Failed to hash password").into_response();
+                return ApiError::internal_error("Failed to hash password")
+                    .for_tenant(tenant_id)
+                    .into_response();
             }
         };
 
@@ -1410,7 +1423,9 @@ pub async fn accept_invitation(
             return ApiError::conflict("An account with this email already exists").into_response();
         }
         Err(e) => {
-            return ApiError::internal_error_from("User insert failed", &e).into_response();
+            return ApiError::internal_error_from("User insert failed", &e)
+                .for_tenant(tenant_id)
+                .into_response();
         }
     };
 
@@ -1427,7 +1442,9 @@ pub async fn accept_invitation(
     {
         Ok(result) => result.rows_affected(),
         Err(e) => {
-            return ApiError::internal_error_from("Invitation update failed", &e).into_response();
+            return ApiError::internal_error_from("Invitation update failed", &e)
+                .for_tenant(tenant_id)
+                .into_response();
         }
     };
 
@@ -1445,7 +1462,9 @@ pub async fn accept_invitation(
     .execute(tx.conn())
     .await
     {
-        return ApiError::internal_error_from("Membership insert failed", &e).into_response();
+        return ApiError::internal_error_from("Membership insert failed", &e)
+            .for_tenant(tenant_id)
+            .into_response();
     }
 
     if let Err(e) = audit::record_member_invitation_accepted(
@@ -1459,11 +1478,15 @@ pub async fn accept_invitation(
     )
     .await
     {
-        return ApiError::internal_error_from("Audit insert failed", &e).into_response();
+        return ApiError::internal_error_from("Audit insert failed", &e)
+            .for_tenant(tenant_id)
+            .into_response();
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
+        return ApiError::internal_error_from("Transaction commit failed", &e)
+            .for_tenant(tenant_id)
+            .into_response();
     }
 
     // ---- Issue session cookie ----
@@ -1475,6 +1498,7 @@ pub async fn accept_invitation(
         Ok(t) => t,
         Err(e) => {
             return ApiError::internal_error_from("Session token issuance failed", &e)
+                .for_tenant(tenant_id)
                 .into_response();
         }
     };

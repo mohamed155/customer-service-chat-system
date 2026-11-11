@@ -80,6 +80,9 @@ pub struct InternalErrorDetail {
     pub context: &'static str,
     /// Text of the underlying error, when there is one.
     pub source: Option<String>,
+    /// Tenant the failed request was working for, when the handler knows it but the tenant
+    /// middleware didn't run (public routes that find the tenant from a token).
+    pub tenant_id: Option<uuid::Uuid>,
 }
 
 /// Set by the tenant middleware on a response so the error log can name the tenant.
@@ -198,13 +201,27 @@ impl ApiError {
         Self::internal(context, Some(source.to_string()))
     }
 
+    /// Name the tenant in the server log for this error. Only affects 5xx built by
+    /// `internal_error*`; use it on public routes that learn the tenant from a token, where no
+    /// tenant middleware tags the response.
+    pub fn for_tenant(mut self, tenant_id: uuid::Uuid) -> Self {
+        if let Some(detail) = self.internal.as_mut() {
+            detail.tenant_id = Some(tenant_id);
+        }
+        self
+    }
+
     fn internal(context: &'static str, source: Option<String>) -> Self {
         let mut error = Self::new_with_code(
             StatusCode::INTERNAL_SERVER_ERROR,
             "internal_error",
             INTERNAL_ERROR_MESSAGE,
         );
-        error.internal = Some(Box::new(InternalErrorDetail { context, source }));
+        error.internal = Some(Box::new(InternalErrorDetail {
+            context,
+            source,
+            tenant_id: None,
+        }));
         error
     }
 
@@ -239,7 +256,7 @@ impl IntoResponse for ApiError {
         if let Some(retry_after) = self.retry_after {
             res.headers_mut().insert(
                 axum::http::header::RETRY_AFTER,
-                retry_after.to_string().parse().unwrap(),
+                axum::http::HeaderValue::from(retry_after),
             );
         }
         res
