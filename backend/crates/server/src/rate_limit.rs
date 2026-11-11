@@ -112,6 +112,51 @@ pub async fn login_rate_limit(
     next.run(request).await
 }
 
+/// Middleware that rate-limits the second sign-in step per client address, before any code is
+/// checked. The per-account lockout (five wrong codes, fifteen minutes) is separate and applies
+/// whoever the client is; this limit slows a client that tries many accounts.
+pub async fn mfa_rate_limit(
+    Extension(store): Extension<Arc<dyn RateLimiter>>,
+    Extension(config): Extension<Arc<AppConfig>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if !config.rate_limit_enabled {
+        return next.run(request).await;
+    }
+    let client_ip = if config.trusted_proxy {
+        match request
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.split(',').next())
+        {
+            Some(first) => first.trim().to_string(),
+            None => return next.run(request).await,
+        }
+    } else {
+        request
+            .extensions()
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|ConnectInfo(addr)| addr.ip().to_string())
+            .unwrap_or_else(|| "unknown".to_string())
+    };
+    if let Decision::Refused { retry_after } = store
+        .check(
+            Scope::Mfa,
+            &client_ip,
+            Budget {
+                max_requests: config.rate_limit_login_max,
+                window: Duration::from_secs(config.rate_limit_login_window_secs),
+            },
+        )
+        .await
+    {
+        return ApiError::rate_limited("Too many attempts", retry_after).into_response();
+    }
+    next.run(request).await
+}
+
 pub async fn per_ip_creation_limit(
     Extension(store): Extension<Arc<dyn RateLimiter>>,
     Extension(config): Extension<Arc<AppConfig>>,

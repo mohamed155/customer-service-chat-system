@@ -379,6 +379,8 @@ pub mod isolation {
         "_sqlx_migrations",
         "billing_plans",
         "integration_catalog",
+        "mfa_factors",
+        "mfa_recovery_codes",
         "revoked_sessions",
         "secret_keks",
         "tenants",

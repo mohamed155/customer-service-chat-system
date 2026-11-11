@@ -117,6 +117,7 @@ async fn run_migrations_succeeds() {
         (74, "rls remaining tenant tables"),
         (75, "uuidv7 defaults"),
         (76, "envelope encryption"),
+        (77, "mfa"),
     ];
     assert_eq!(
         rows.len(),

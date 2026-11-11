@@ -48,6 +48,7 @@ utoipa-axum.workspace = true
 utoipa-swagger-ui.workspace = true
 
 [dev-dependencies]
+jsonwebtoken.workspace = true
 ai-providers = { path = "../ai-providers" }
 argon2.workspace = true
 base64.workspace = true

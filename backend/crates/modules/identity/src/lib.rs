@@ -2,11 +2,14 @@
 
 pub mod audit;
 
+pub mod mfa;
+pub mod mfa_routes;
 pub mod password;
 
 pub mod routes;
 
 pub mod session;
+pub mod totp;
 
 use axum::{
     extract::{FromRequestParts, Request, State},
@@ -217,7 +220,7 @@ async fn resolve_dev_header_principal(
     principal_from_row(id, email, display_name, role_str)
 }
 
-fn principal_from_row(
+pub fn principal_from_row(
     user_id: Uuid,
     email: String,
     display_name: String,

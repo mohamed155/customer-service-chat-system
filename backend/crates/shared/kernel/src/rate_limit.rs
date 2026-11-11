@@ -24,6 +24,7 @@ impl Default for InMemoryRateLimitStore {
 #[strum(serialize_all = "snake_case")]
 pub enum Scope {
     Login,
+    Mfa,
     WidgetSession,
     WidgetMessage,
     Webhook,
@@ -34,6 +35,7 @@ impl Scope {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Login => "login",
+            Self::Mfa => "mfa",
             Self::WidgetSession => "widget_session",
             Self::WidgetMessage => "widget_message",
             Self::Webhook => "webhook",

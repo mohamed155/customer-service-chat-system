@@ -86,6 +86,18 @@ pub struct LoginSuccess {
     pub session_cookie: String,
 }
 
+/// The result of the password step.
+pub enum LoginOutcome {
+    /// No second factor is set up: the session starts now.
+    Session(LoginSuccess),
+    /// The user has a second factor. No session yet: this cookie carries a short-lived challenge
+    /// that `POST /auth/mfa/verify` completes.
+    MfaRequired {
+        user_id: Uuid,
+        pending_cookie: String,
+    },
+}
+
 pub enum LoginError {
     Validation,
     InvalidCredentials,
@@ -96,7 +108,7 @@ pub async fn authenticate_login(
     pool: &PgPool,
     config: &AppConfig,
     payload: LoginRequest,
-) -> Result<LoginSuccess, LoginError> {
+) -> Result<LoginOutcome, LoginError> {
     let email = payload.email.trim().to_owned();
     let password = payload.password;
     let password_for_rehash = password.clone();
@@ -127,6 +139,26 @@ pub async fn authenticate_login(
 
     rehash_if_outdated(pool, &user, &password_for_rehash).await;
 
+    // A user with a second factor gets a challenge, not a session.
+    match crate::mfa::is_enrolled(pool, user.id).await {
+        Ok(true) => {
+            let (jwt, _) =
+                session::issue_pending(&config.auth_jwt_secret, user.id).map_err(|e| {
+                    LoginError::Internal(format!("Challenge token issuance failed: {e}"))
+                })?;
+            return Ok(LoginOutcome::MfaRequired {
+                user_id: user.id,
+                pending_cookie: session::build_pending_cookie(&jwt),
+            });
+        }
+        Ok(false) => {}
+        Err(error) => {
+            return Err(LoginError::Internal(format!(
+                "Second-factor lookup failed: {error}"
+            )))
+        }
+    }
+
     let principal =
         crate::principal_from_row(user.id, user.email, user.display_name, user.platform_role)
             .expect("database user row always produces an authenticated principal");
@@ -138,10 +170,10 @@ pub async fn authenticate_login(
     )
     .map_err(|error| LoginError::Internal(format!("Session token issuance failed: {error}")))?;
 
-    Ok(LoginSuccess {
+    Ok(LoginOutcome::Session(LoginSuccess {
         principal,
         session_cookie: session::build_session_cookie(&jwt, config.auth_session_ttl_seconds),
-    })
+    }))
 }
 
 /// Logout the current session.

@@ -1080,6 +1080,19 @@
         ],
         "type": "object"
       },
+      "ConfirmRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "A six-digit code from the authenticator app.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
       "ConnectPayload": {
         "properties": {
           "config": {
@@ -2050,6 +2063,23 @@
           "contentType",
           "sizeBytes",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "EnrolmentResponse": {
+        "properties": {
+          "otpauthUri": {
+            "description": "The `otpauth://` URI a QR code carries. Shown once, here.",
+            "type": "string"
+          },
+          "secret": {
+            "description": "The secret as base32, to type into an authenticator app. Shown once, here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "otpauthUri"
         ],
         "type": "object"
       },
@@ -3393,6 +3423,34 @@
         ],
         "type": "object"
       },
+      "MfaRequiredResponse": {
+        "description": "The body of the response to a password step that needs a second factor.",
+        "properties": {
+          "mfaRequired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mfaRequired"
+        ],
+        "type": "object"
+      },
+      "MfaStatusResponse": {
+        "properties": {
+          "enrolled": {
+            "type": "boolean"
+          },
+          "recoveryCodesRemaining": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enrolled",
+          "recoveryCodesRemaining"
+        ],
+        "type": "object"
+      },
       "NotificationActorDto": {
         "properties": {
           "displayName": {
@@ -4647,6 +4705,21 @@
         ],
         "type": "object"
       },
+      "RecoveryCodesResponse": {
+        "properties": {
+          "recoveryCodes": {
+            "description": "Ten single-use codes. Shown once, here; only their hashes are kept.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "recoveryCodes"
+        ],
+        "type": "object"
+      },
       "ReindexResponse": {
         "properties": {
           "id": {
@@ -5779,6 +5852,27 @@
         ],
         "type": "object"
       },
+      "VerifyRequest": {
+        "additionalProperties": false,
+        "description": "The second sign-in step: exactly one of `code` and `recoveryCode`.",
+        "properties": {
+          "code": {
+            "description": "A six-digit code from the authenticator app.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recoveryCode": {
+            "description": "One of the single-use recovery codes.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "WidgetConversationData": {
         "description": "`{ \"conversation\": … }` wrapper required by the public widget contract\n(specs/023-website-chat-widget/contracts/public-widget-api.md).",
         "properties": {
@@ -6095,6 +6189,16 @@
             },
             "description": "Login successful. Returns the user profile and sets the `app_session` cookie."
           },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaRequiredResponse"
+                }
+              }
+            },
+            "description": "The password was right and the user has two-factor authentication: no session yet. Sets a short-lived `app_mfa_pending` cookie; complete the sign-in with `POST /auth/mfa/verify`."
+          },
           "400": {
             "content": {
               "application/json": {
@@ -6160,6 +6264,240 @@
           }
         ],
         "summary": "Logout and clear session cookie",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/enrol": {
+      "post": {
+        "description": "Creates a new authenticator secret for the signed-in user and returns it once, as base32 and as an `otpauth://` URI. The factor stays inactive until `POST /auth/mfa/enrol/confirm` proves a code. Starting again replaces an unconfirmed secret. Returns 409 when the user already has an active factor.",
+        "operationId": "auth_mfa_enrol",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrolmentResponse"
+                }
+              }
+            },
+            "description": "A secret to add to an authenticator app."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthenticated."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Two-factor authentication is already set up."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Start setting up two-factor authentication",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/enrol/confirm": {
+      "post": {
+        "description": "Checks a code from the authenticator app. On success the factor becomes active, ten recovery codes are returned once (stored only as hashes), and the `app_session` cookie is replaced by a session that records the second factor. Wrong codes count toward the lockout.",
+        "operationId": "auth_mfa_enrol_confirm",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodesResponse"
+                }
+              }
+            },
+            "description": "Active. The recovery codes, shown once; the session cookie is replaced."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthenticated."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No setup in progress."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The code is not valid."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too many wrong codes; the factor is locked."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Confirm two-factor authentication with a code",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/status": {
+      "get": {
+        "description": "Whether the signed-in user has an active factor, and how many recovery codes are left. Never returns a secret or a code.",
+        "operationId": "auth_mfa_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaStatusResponse"
+                }
+              }
+            },
+            "description": "The status."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthenticated."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Read the two-factor authentication status",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/verify": {
+      "post": {
+        "description": "Takes an authenticator code or a recovery code, together with the `app_mfa_pending` cookie that `POST /auth/login` set. On success it starts the session (the `app_session` cookie records the second factor), clears the challenge and returns the same profile body as login. A code is accepted once; five wrong codes lock the account's second factor for fifteen minutes. The challenge lasts five minutes. Public: no `app_session` cookie is needed.",
+        "operationId": "auth_mfa_verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Signed in. Returns the user profile and sets the `app_session` cookie."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Neither or both of `code` and `recoveryCode`."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No valid challenge (missing, expired or already used): sign in again."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The code is not valid."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too many attempts, or the second factor is locked."
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "Complete sign-in with a second factor",
         "tags": [
           "auth"
         ]
