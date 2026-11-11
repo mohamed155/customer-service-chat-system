@@ -581,6 +581,19 @@ async fn sensitive_actions_need_a_fresh_code_and_a_step_up_unlocks_them() {
     let held = send(&app, put_secret(&cookie)).await;
     assert_eq!(held.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(error_code(held).await, "mfa_step_up_required");
+    // An invitation names a role, so it is held the same way.
+    let invite = |cookie: &str| {
+        tenant_json(
+            Method::POST,
+            "/api/v1/tenant/members/invitations",
+            tenant,
+            cookie,
+            json!({ "email": "new-colleague@example.test", "role": "admin" }),
+        )
+    };
+    let held_invite = send(&app, invite(&cookie)).await;
+    assert_eq!(held_invite.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(error_code(held_invite).await, "mfa_step_up_required");
     let role = send(
         &app,
         tenant_json(

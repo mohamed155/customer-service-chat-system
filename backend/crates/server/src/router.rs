@@ -843,7 +843,9 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
                 merge_with_permissions(
                     routing::get(tenancy::invitations::list_invitations),
                     Permission::MembersView,
-                    routing::post(tenancy::invitations::create_invitation),
+                    // An invitation names a role, so it grants privilege like a role change does.
+                    routing::post(tenancy::invitations::create_invitation)
+                        .layer(middleware::from_fn(identity::step_up::require_step_up)),
                     Permission::MembersManage,
                 )
             }),
