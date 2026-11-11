@@ -295,8 +295,14 @@ fn spawn_workers(
     ));
 
     // WhatsApp channel workers (spec 029)
+    // Behind a circuit breaker and bulkhead (MOH-40); its state is shown with the AI providers'
+    // in the platform health view.
     let whatsapp_api: Arc<dyn whatsapp::api::WhatsAppApi> =
-        Arc::new(whatsapp::api::GraphWhatsAppApi::new());
+        Arc::new(whatsapp::guarded::GuardedWhatsAppApi::new(
+            Arc::new(whatsapp::api::GraphWhatsAppApi::new()),
+            &state.ai.resilience(),
+            whatsapp::guarded::default_policy(),
+        ));
     let whatsapp_master_key = state
         .config
         .integration_secrets_key

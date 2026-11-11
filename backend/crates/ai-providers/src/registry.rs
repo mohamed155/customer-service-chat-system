@@ -4,7 +4,9 @@ use std::sync::Arc;
 use crate::anthropic::AnthropicAdapter;
 use crate::contract::*;
 use crate::gemini::GeminiAdapter;
+use crate::guarded::{GuardedChat, GuardedEmbedding};
 use crate::openai::OpenAiAdapter;
+use resilience::{Guard, Hub, Policy};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProviderKind {
@@ -51,6 +53,9 @@ pub struct RegistryConfig {
     pub openai_base_url: Option<String>,
     pub anthropic_base_url: Option<String>,
     pub gemini_base_url: Option<String>,
+    /// Circuit breaker and bulkhead settings applied to every provider (MOH-40). Each provider
+    /// gets its own guard, so one provider's outage or slowness never affects another.
+    pub resilience_policy: Policy,
 }
 
 impl RegistryConfig {
@@ -59,6 +64,7 @@ impl RegistryConfig {
             openai_base_url: None,
             anthropic_base_url: None,
             gemini_base_url: None,
+            resilience_policy: Policy::default(),
         }
     }
 }
@@ -82,6 +88,20 @@ pub struct Registry {
     providers: Vec<Registered>,
     overrides: HashMap<String, Arc<dyn ChatProvider>>,
     embedding_providers: HashMap<String, Arc<dyn EmbeddingProvider>>,
+    hub: Arc<Hub>,
+    #[cfg_attr(not(feature = "test-providers"), allow(dead_code))]
+    policy: Policy,
+}
+
+/// Name of the guard for a provider's chat calls (`ai:openai`).
+fn chat_guard_name(provider: &str) -> String {
+    format!("ai:{provider}")
+}
+
+/// Name of the guard for a provider's embedding calls (`ai:openai:embed`). Separate from the chat
+/// guard, so a bulk re-index can't use up the slots that customer replies need.
+fn embed_guard_name(provider: &str) -> String {
+    format!("ai:{provider}:embed")
 }
 
 impl Registry {
@@ -105,35 +125,59 @@ impl Registry {
             .clone()
             .unwrap_or_else(|| "https://generativelanguage.googleapis.com".to_string());
 
+        let hub = Hub::new();
+        let policy = cfg.resilience_policy;
+        let chat = |kind: ProviderKind, adapter: Arc<dyn ChatProvider>| -> Registered {
+            let guard = hub.guard(&chat_guard_name(kind.as_str()), policy);
+            Registered {
+                kind,
+                provider: Arc::new(GuardedChat::new(adapter, guard)),
+            }
+        };
+        let embed =
+            |name: &str, adapter: Arc<dyn EmbeddingProvider>| -> Arc<dyn EmbeddingProvider> {
+                let guard = hub.guard(&embed_guard_name(name), policy);
+                Arc::new(GuardedEmbedding::new(adapter, guard))
+            };
+
+        let providers = vec![
+            chat(
+                ProviderKind::OpenAi,
+                Arc::new(OpenAiAdapter::new(client.clone(), openai_base_url.clone())),
+            ),
+            chat(
+                ProviderKind::Anthropic,
+                Arc::new(AnthropicAdapter::new(client.clone(), anthropic_base_url)),
+            ),
+            chat(
+                ProviderKind::Gemini,
+                Arc::new(GeminiAdapter::new(client.clone(), gemini_base_url.clone())),
+            ),
+        ];
+        let embedding_providers = HashMap::from([
+            (
+                "openai".to_string(),
+                embed(
+                    "openai",
+                    Arc::new(OpenAiAdapter::new(client.clone(), openai_base_url)),
+                ),
+            ),
+            (
+                "gemini".to_string(),
+                embed(
+                    "gemini",
+                    Arc::new(GeminiAdapter::new(client.clone(), gemini_base_url)),
+                ),
+            ),
+        ]);
+
         Self {
-            client: client.clone(),
-            providers: vec![
-                Registered {
-                    kind: ProviderKind::OpenAi,
-                    provider: Arc::new(OpenAiAdapter::new(client.clone(), openai_base_url.clone())),
-                },
-                Registered {
-                    kind: ProviderKind::Anthropic,
-                    provider: Arc::new(AnthropicAdapter::new(client.clone(), anthropic_base_url)),
-                },
-                Registered {
-                    kind: ProviderKind::Gemini,
-                    provider: Arc::new(GeminiAdapter::new(client.clone(), gemini_base_url.clone())),
-                },
-            ],
+            client,
+            providers,
             overrides: HashMap::new(),
-            embedding_providers: HashMap::from([
-                (
-                    "openai".to_string(),
-                    Arc::new(OpenAiAdapter::new(client.clone(), openai_base_url))
-                        as Arc<dyn EmbeddingProvider>,
-                ),
-                (
-                    "gemini".to_string(),
-                    Arc::new(GeminiAdapter::new(client.clone(), gemini_base_url))
-                        as Arc<dyn EmbeddingProvider>,
-                ),
-            ]),
+            embedding_providers,
+            hub: hub.clone(),
+            policy,
         }
     }
 
@@ -157,10 +201,29 @@ impl Registry {
         ProviderKind::from_str(name).map(|kind| self.provider(kind))
     }
 
+    /// Replace a provider with a test double. The double gets the same circuit breaker and
+    /// bulkhead as a real adapter, so tests exercise the guarded path.
     #[cfg(feature = "test-providers")]
     pub fn with_override(mut self, name: &str, provider: Arc<dyn ChatProvider>) -> Self {
-        self.overrides.insert(name.to_string(), provider);
+        let guard = self.hub.guard(&chat_guard_name(name), self.policy);
+        self.overrides.insert(
+            name.to_string(),
+            Arc::new(GuardedChat::new(provider, guard)),
+        );
         self
+    }
+
+    /// The circuit breakers and bulkheads of this registry, for the platform health view.
+    pub fn resilience(&self) -> &Arc<Hub> {
+        &self.hub
+    }
+
+    /// True when a chat call to `name` would be refused right now because its circuit is open.
+    /// Callers with another provider to try use it to skip ahead instead of waiting for the refusal.
+    pub fn circuit_open(&self, name: &str) -> bool {
+        self.hub
+            .get(&chat_guard_name(name))
+            .is_some_and(|guard: Arc<Guard>| guard.would_reject())
     }
 
     pub fn provider_by_name(&self, name: &str) -> Option<&dyn ChatProvider> {

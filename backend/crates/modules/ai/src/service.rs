@@ -118,6 +118,23 @@ pub async fn run_attempts_traced(
         };
 
         for retry in 0..=2 {
+            // A provider whose circuit is open refuses the call at once. Go to the next provider
+            // in the chain instead of retrying it, and report it as unavailable if none is left.
+            if registry.circuit_open(&attempt.provider) {
+                tracing::warn!(
+                    provider = %attempt.provider,
+                    model = %attempt.model,
+                    outcome = "circuit_open",
+                    request_id = request_id.unwrap_or(""),
+                    "AI provider skipped: its circuit is open"
+                );
+                last_error = Some(AiCallError::Provider {
+                    category: ai_providers::ErrorCategory::Unavailable,
+                    provider: attempt.provider.clone(),
+                    model: attempt.model.clone(),
+                });
+                break;
+            }
             let attempt_start = Instant::now();
             match provider.complete(&attempt.key, &req).await {
                 Ok(completion) => {
@@ -203,6 +220,7 @@ impl AiService {
             openai_base_url: config.ai_openai_base_url.clone(),
             anthropic_base_url: config.ai_anthropic_base_url.clone(),
             gemini_base_url: config.ai_gemini_base_url.clone(),
+            ..ai_providers::RegistryConfig::new()
         };
         Ok(Self(Arc::new(AiServiceInner {
             pool,
@@ -1327,6 +1345,11 @@ impl AiService {
         &self.0.registry
     }
 
+    /// Circuit breakers and bulkheads of the AI providers, for the platform health view.
+    pub fn resilience(&self) -> Arc<resilience::Hub> {
+        Arc::clone(self.0.registry.resilience())
+    }
+
     pub fn master_key(&self) -> Option<&crypto::MasterKey> {
         self.0.master_key.as_ref()
     }
@@ -1731,5 +1754,172 @@ mod tests {
                 ..
             })
         ));
+    }
+    // --- Circuit breaker behaviour through the retry/failover loop (MOH-40) ---
+
+    fn unavailable_provider(
+        results: Vec<Result<ChatCompletion, ProviderError>>,
+    ) -> (Arc<TestProvider>, Arc<AtomicU32>) {
+        let count = Arc::new(AtomicU32::new(0));
+        (
+            Arc::new(TestProvider {
+                results,
+                call_count: count.clone(),
+            }),
+            count,
+        )
+    }
+
+    /// Two runs of three tries each reach the default threshold of five consecutive failures.
+    async fn trip_openai(registry: &Registry) {
+        for _ in 0..2 {
+            let _ = run_attempts(
+                registry,
+                &[make_attempt("openai", "gpt-4")],
+                None,
+                vec![],
+                vec![],
+            )
+            .await;
+        }
+        assert!(
+            registry.circuit_open("openai"),
+            "five failures open the circuit"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn open_circuit_stops_calling_the_provider_and_reports_it_unavailable() {
+        let (openai, calls) = unavailable_provider(vec![]); // every call: Unavailable
+        let (anthropic, _) = unavailable_provider(vec![]);
+        let registry = make_registry(openai, anthropic);
+        trip_openai(&registry).await;
+        let calls_when_opened = calls.load(Ordering::SeqCst);
+        assert_eq!(
+            calls_when_opened, 5,
+            "it opened on the fifth failure and not later"
+        );
+
+        let err = run_attempts(
+            &registry,
+            &[make_attempt("openai", "gpt-4")],
+            None,
+            vec![],
+            vec![],
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            matches!(
+                &err,
+                AiCallError::Provider { category: ErrorCategory::Unavailable, provider, .. }
+                    if provider == "openai"
+            ),
+            "the caller sees an unavailable provider, which is what triggers its fallback message \
+             and escalation to a human: {err:?}"
+        );
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            calls_when_opened,
+            "no call reached the provider"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn open_circuit_moves_straight_to_the_next_provider_in_the_chain() {
+        let (openai, openai_calls) = unavailable_provider(vec![]);
+        let (anthropic, anthropic_calls) =
+            unavailable_provider(vec![Ok(ok_result("from anthropic"))]);
+        let registry = make_registry(openai, anthropic);
+        trip_openai(&registry).await;
+        let opened_at = openai_calls.load(Ordering::SeqCst);
+
+        let started = tokio::time::Instant::now();
+        let result = run_attempts(
+            &registry,
+            &[
+                make_attempt("openai", "gpt-4"),
+                make_attempt("anthropic", "claude"),
+            ],
+            None,
+            vec![],
+            vec![],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.content, "from anthropic");
+        assert_eq!(result.provider, "anthropic");
+        assert_eq!(
+            openai_calls.load(Ordering::SeqCst),
+            opened_at,
+            "openai was skipped"
+        );
+        assert_eq!(anthropic_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            started.elapsed(),
+            std::time::Duration::ZERO,
+            "no retry backoff was spent on it"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn circuit_recovers_through_half_open_once_the_provider_answers_again() {
+        let mut script: Vec<Result<ChatCompletion, ProviderError>> = (0..5)
+            .map(|_| Err(err_result(ErrorCategory::Unavailable)))
+            .collect();
+        script.push(Ok(ok_result("back")));
+        let (openai, calls) = unavailable_provider(script);
+        let (anthropic, _) = unavailable_provider(vec![]);
+        let registry = make_registry(openai, anthropic);
+        trip_openai(&registry).await;
+
+        tokio::time::advance(std::time::Duration::from_secs(30)).await;
+        assert!(!registry.circuit_open("openai"), "a probe is due");
+
+        let result = run_attempts(
+            &registry,
+            &[make_attempt("openai", "gpt-4")],
+            None,
+            vec![],
+            vec![],
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.content, "back");
+        assert_eq!(calls.load(Ordering::SeqCst), 6);
+        assert!(!registry.circuit_open("openai"));
+        let snap = registry
+            .resilience()
+            .snapshots()
+            .into_iter()
+            .find(|s| s.name == "ai:openai")
+            .unwrap();
+        assert_eq!(snap.state, resilience::State::Closed);
+        assert_eq!(snap.trips_total, 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_tenants_bad_key_does_not_open_the_circuit_for_everyone() {
+        let (openai, calls) = unavailable_provider(
+            (0..20)
+                .map(|_| Err(err_result(ErrorCategory::Authentication)))
+                .collect(),
+        );
+        let (anthropic, _) = unavailable_provider(vec![]);
+        let registry = make_registry(openai, anthropic);
+        for _ in 0..20 {
+            let _ = run_attempts(
+                &registry,
+                &[make_attempt("openai", "gpt-4")],
+                None,
+                vec![],
+                vec![],
+            )
+            .await;
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 20);
+        assert!(!registry.circuit_open("openai"));
     }
 }

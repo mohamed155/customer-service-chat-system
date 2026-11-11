@@ -43,6 +43,13 @@ pub trait WhatsAppApi: Send + Sync {
     async fn media_url(&self, access_token: &str, media_id: &str) -> Result<MediaInfo, SendError>;
 
     async fn download(&self, access_token: &str, url: &str) -> Result<Bytes, SendError>;
+
+    /// False while calls to WhatsApp would be refused at once (the circuit is open). The workers
+    /// then leave their queue alone instead of claiming work they can't do, so nothing is marked
+    /// failed without a try and the queue drains once WhatsApp answers again.
+    fn available(&self) -> bool {
+        true
+    }
 }
 
 pub struct GraphWhatsAppApi {

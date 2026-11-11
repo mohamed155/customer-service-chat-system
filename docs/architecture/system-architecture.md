@@ -392,7 +392,12 @@ Implemented as a **pipeline of stages** (Chain of Responsibility), each stage a 
 - Adapters: OpenAI, Anthropic, Gemini; later local (vLLM/Ollama).
 - **Resilience per provider:** timeout, retry on transient errors only, **circuit breaker**,
   bulkhead (separate concurrency semaphore per provider), **fallback chain** configured per tenant
-  (e.g. primary model → secondary model on another provider).
+  (e.g. primary model → secondary model on another provider). *Implemented (MOH-40):* every
+  provider adapter sits behind a circuit breaker and a bulkhead (`crates/shared/resilience`,
+  `ai-providers/src/guarded.rs`), with separate guards for chat and embeddings. Only `unavailable`
+  and `timeout` errors count; a bad key or a rate limit never opens the circuit. An open circuit
+  sends the turn to the next provider in the chain, and with none left to the existing fallback
+  message and human escalation.
 - **Model router** (Strategy): choose model by task — cheap fast model for classification/routing/
   summaries, stronger model for answers.
 - Prompt caching used where the provider supports it (static system prompt + rules first in the
@@ -575,7 +580,12 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
 - **Timeouts** on every I/O; request-level deadline propagated to downstream calls.
 - **Retries** only for idempotent operations, exponential backoff with full jitter, capped.
 - **Circuit breakers** for AI providers, channels, integrations; **bulkheads** (separate semaphores
-  and pools) so AI slowness can't exhaust DB connections or HTTP workers.
+  and pools) so AI slowness can't exhaust DB connections or HTTP workers. *Implemented for the AI
+  providers (chat and embeddings) and the WhatsApp Cloud API (MOH-40):* state and trips are in the
+  metrics (`circuit_breaker_state`, `circuit_breaker_trips_total`, `circuit_breaker_rejections_total`,
+  `bulkhead_in_flight`) and in the platform health view, never in `/ready`. Not covered: tenant HTTP
+  tools (the URL is the tenant's and the target set is unbounded; each turn is already capped by
+  iterations and total time) and the SMTP invitation mail.
 - **Graceful degradation:** AI down → route to human queue with an honest customer message;
   Redis down → bypass cache, use DB-backed rate limits with relaxed limits.
 - **Graceful shutdown:** stop accepting, drain in-flight requests and jobs, release leases.

@@ -19,6 +19,10 @@ pub async fn run_media_fetch_worker(
     loop {
         interval.tick().await;
 
+        if !api.available() {
+            continue;
+        }
+
         if let Err(e) = process_one(&pool, &*api, &*storage, &master_key).await {
             tracing::error!(%e, "media worker: process_one failed");
         }

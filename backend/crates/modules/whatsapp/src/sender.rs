@@ -17,6 +17,10 @@ pub async fn run_whatsapp_sender_worker(
     loop {
         interval.tick().await;
 
+        if !api.available() {
+            continue;
+        }
+
         if let Err(e) = process_one(&pool, &*api, &master_key).await {
             tracing::error!(%e, "sender worker: process_one failed");
         }

@@ -43,6 +43,7 @@
 //! - Outbound template messages (v2+) add a new sender type alongside `send_text`
 
 pub mod api;
+pub mod guarded;
 pub mod identity;
 pub mod inbound;
 pub mod media;

@@ -11,6 +11,8 @@
 //! - Request / response serialisation (JSON body, header injection)
 //! - SSE stream decoding (server-sent event → [`StreamEvent`])
 //! - Error normalisation (vendor errors → [`ProviderError`] taxonomy)
+//! - Resilience (MOH-40): [`Registry`] hands out every adapter behind a circuit breaker and a
+//!   bulkhead ([`guarded`]); [`Registry::circuit_open`] lets a caller skip to the next provider
 //!
 //! # Public Interfaces
 //! - [`ChatProvider`] trait — the core abstraction
@@ -53,6 +55,7 @@ pub mod anthropic;
 pub mod contract;
 pub mod crypto;
 pub mod gemini;
+pub mod guarded;
 pub mod openai;
 pub mod registry;
 pub(crate) mod sse;

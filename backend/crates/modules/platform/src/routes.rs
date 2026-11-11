@@ -108,6 +108,7 @@ pub async fn get_platform_health(
     Extension(checks): Extension<Vec<Arc<dyn HealthCheck>>>,
     Extension(storage): Extension<Arc<dyn ObjectStorage>>,
     Extension(backend): Extension<StorageBackend>,
+    Extension(circuits): Extension<Arc<resilience::Hub>>,
 ) -> Response {
     let read_at = Utc::now();
 
@@ -222,6 +223,20 @@ pub async fn get_platform_health(
             s3_configured: backend.s3_configured,
         }),
     });
+
+    // Circuit breakers of the AI providers and WhatsApp (MOH-40). These only appear here and in
+    // the metrics: an open circuit on a third party must not fail `/ready`, which would take the
+    // API out of rotation for a problem it can't fix.
+    for snapshot in circuits.snapshots() {
+        let (verdict, reason) = health::circuit_verdict(&snapshot);
+        deps.push(model::DependencyHealthDto {
+            name: format!("{} circuit", snapshot.name),
+            verdict,
+            reason,
+            probe_ms: 0,
+            detail: None,
+        });
+    }
 
     let verdicts: Vec<_> = deps.iter().map(|d| d.verdict).collect();
     (
