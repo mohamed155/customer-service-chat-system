@@ -71,7 +71,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | R | User denies a login or sensitive action | Audit records for login, logout, role changes | ✓ | Identity & Access |
 | I | Long-lived token replay after theft | Short access token + rotating refresh with reuse detection | Gap: single 8 h token (ADR-005 A2) | Identity & Access |
 | D | Login floods exhausting memory (Argon2id) | Rate limits, login concurrency cap | ✓ rate limit · Gap: concurrency semaphore (ADR-005 consequences) | Identity & Access |
-| E | CSRF on cookie-authenticated requests | `SameSite=Lax`, strict `Origin` check, custom header | Gap: missing-`Origin` requests pass, `/auth/login` unchecked (ADR-005 A4) | Identity & Access |
+| E | CSRF on cookie-authenticated requests | `SameSite=Lax`, strict `Origin` check, custom header | ✓ cookie requests need an allowed `Origin`/`Referer` and the custom header; login and signup are checked too (ADR-005 A4 resolved) | Identity & Access |
 
 ### 4.2 Tenancy and authorization (`tenancy`, `authz`, `rbac`)
 
@@ -227,7 +227,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | 3 | Tenant secrets under one static key per type, with no rotation or crypto-shredding | 4.9 I | ADR-014 E1 · [MOH-33](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-33) |
 | 4 | Platform accounts without MFA | 4.11 E | ADR-005 A6 · [MOH-34](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-34) |
 | 5 | Account enumeration through login timing. **Resolved:** the dummy hash and real hashes use the same pinned parameters and a login does the same work for a known and an unknown email; tests fail on a mismatch or a timing gap. Residual: the signup and invitation-accept endpoints answer 409 for an email that already has an account, which is a different, token- or signup-gated signal | 4.1 S | ADR-005 A3 resolved · [MOH-35](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-35) |
-| 6 | CSRF gaps (missing `Origin` allowed, login unchecked) | 4.1 E | ADR-005 A4 · [MOH-36](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-36) |
+| 6 | CSRF gaps (missing `Origin` allowed, login unchecked). **Resolved:** a state-changing request authenticated by the session cookie must name an allowed origin and carry a custom header, and login and signup get the same check with no session needed. Residual: `SameSite=Lax` is still the first line of defence for GET-based state changes, of which there are none by convention | 4.1 E | ADR-005 A4 resolved · [MOH-36](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-36) |
 | 7 | Public and internal traffic share one process and router | 4.4 D/E | ADR-010 G1 · [MOH-37](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-37) |
 | 8 | CSP not enforced (`report-only`); GitHub Actions pinned by tag, not SHA; no circuit breakers | 4.1 S, 4.6 D, 4.13 T, 4.14 S | CSP [MOH-38](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-38) · Actions SHA pinning [MOH-39](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-39) · circuit breakers [MOH-40](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-40) |
 

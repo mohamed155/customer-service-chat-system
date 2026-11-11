@@ -138,7 +138,7 @@ fn test_config(environment: Environment) -> config::AppConfig {
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment,
-        cors_allowed_origins: vec![],
+        cors_allowed_origins: vec!["http://localhost:4200".into()],
         log_format: config::LogFormat::Pretty,
         smtp_url: None,
         smtp_from: None,
@@ -242,7 +242,10 @@ fn authenticated_request(
 ) -> Request<Body> {
     let mut builder = Request::builder().uri(uri).method(method);
     if environment == Environment::Production {
-        builder = builder.header("cookie", session_cookie(user_id, environment));
+        builder = builder
+            .header("cookie", session_cookie(user_id, environment))
+            .header("origin", "http://localhost:4200")
+            .header("x-requested-with", "XMLHttpRequest");
     } else {
         builder = builder.header("X-Dev-User-Id", user_id.to_string());
     }
@@ -265,7 +268,10 @@ fn authenticated_json_request(
         .method(method)
         .header("content-type", "application/json");
     if environment == Environment::Production {
-        builder = builder.header("cookie", session_cookie(user_id, environment));
+        builder = builder
+            .header("cookie", session_cookie(user_id, environment))
+            .header("origin", "http://localhost:4200")
+            .header("x-requested-with", "XMLHttpRequest");
     } else {
         builder = builder.header("X-Dev-User-Id", user_id.to_string());
     }

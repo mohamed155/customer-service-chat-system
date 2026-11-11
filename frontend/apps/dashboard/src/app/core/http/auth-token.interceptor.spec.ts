@@ -39,6 +39,17 @@ describe('authTokenInterceptor', () => {
     await promise;
   });
 
+  it('marks credentialed requests with the X-Requested-With header the backend requires', async () => {
+    configure();
+
+    const promise = firstValueFrom(TestBed.inject(HttpClient).post('/api/v1/auth/login', {}));
+    const req = TestBed.inject(HttpTestingController).expectOne('/api/v1/auth/login');
+
+    expect(req.request.headers.get('X-Requested-With')).toBe('XMLHttpRequest');
+    req.flush({});
+    await promise;
+  });
+
   it('sets credentials when an absolute request targets an absolute API base URL', async () => {
     configure('https://api.example.test/api/v1/');
 
@@ -61,6 +72,7 @@ describe('authTokenInterceptor', () => {
     const req = TestBed.inject(HttpTestingController).expectOne('/assets/i18n/en.json');
 
     expect(req.request.withCredentials).toBe(false);
+    expect(req.request.headers.has('X-Requested-With')).toBe(false);
     req.flush({});
     await promise;
   });

@@ -28,6 +28,10 @@ pub async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
+/// The dashboard origin the test config allows. Requests that start a session or carry the session
+/// cookie must come from an allowed origin and carry a custom header (MOH-36).
+pub const TEST_ORIGIN: &str = "http://localhost:4200";
+
 /// Build an `AppConfig` with test-friendly defaults.
 pub fn test_config() -> config::AppConfig {
     config::AppConfig {
@@ -38,7 +42,7 @@ pub fn test_config() -> config::AppConfig {
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
-        cors_allowed_origins: vec![],
+        cors_allowed_origins: vec![TEST_ORIGIN.into()],
         log_format: config::LogFormat::Pretty,
         smtp_url: None,
         smtp_from: None,
@@ -182,6 +186,8 @@ fn login_request(email: &str, password: &str) -> Request<Body> {
     Request::builder()
         .uri("/api/v1/auth/login")
         .method("POST")
+        .header("origin", TEST_ORIGIN)
+        .header("x-requested-with", "XMLHttpRequest")
         .header("content-type", "application/json")
         .body(Body::from(
             json!({ "email": email, "password": password }).to_string(),
@@ -198,6 +204,8 @@ fn signup_request(
     Request::builder()
         .uri("/api/v1/auth/signup")
         .method("POST")
+        .header("origin", TEST_ORIGIN)
+        .header("x-requested-with", "XMLHttpRequest")
         .header("content-type", "application/json")
         .body(Body::from(
             json!({
@@ -385,6 +393,8 @@ mod tests {
             Request::builder()
                 .uri("/api/v1/auth/login")
                 .method("POST")
+                .header("origin", TEST_ORIGIN)
+                .header("x-requested-with", "XMLHttpRequest")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({ "email": "", "password": "x" }).to_string(),
@@ -393,6 +403,8 @@ mod tests {
             Request::builder()
                 .uri("/api/v1/auth/login")
                 .method("POST")
+                .header("origin", TEST_ORIGIN)
+                .header("x-requested-with", "XMLHttpRequest")
                 .header("content-type", "application/json")
                 .body(Body::from(
                     json!({ "email": "a@test.com", "password": "" }).to_string(),
@@ -401,6 +413,8 @@ mod tests {
             Request::builder()
                 .uri("/api/v1/auth/login")
                 .method("POST")
+                .header("origin", TEST_ORIGIN)
+                .header("x-requested-with", "XMLHttpRequest")
                 .header("content-type", "application/json")
                 .body(Body::from("not-json"))
                 .unwrap(),
@@ -435,6 +449,8 @@ mod tests {
             Request::builder()
                 .uri("/api/v1/auth/login")
                 .method("POST")
+                .header("origin", TEST_ORIGIN)
+                .header("x-requested-with", "XMLHttpRequest")
                 .header("content-type", "application/json")
                 .header("cookie", first_cookie)
                 .header("X-Tenant-ID", uuid::Uuid::new_v4().to_string())
@@ -562,58 +578,200 @@ mod tests {
         assert_eq!(cookie_res.status(), 200);
     }
 
+    const DASHBOARD: &str = "https://dashboard.example";
+
+    fn csrf_config() -> config::AppConfig {
+        let mut config = test_config();
+        config.cors_allowed_origins = vec![DASHBOARD.into()];
+        config
+    }
+
+    /// A state-changing request authenticated by the session cookie, with the given extra headers.
+    fn cookie_post(cookie: &str, headers: &[(&str, &str)]) -> Request<Body> {
+        let mut builder = Request::builder()
+            .uri("/api/v1/auth/logout")
+            .method(Method::POST)
+            .header("cookie", cookie);
+        for (name, value) in headers {
+            builder = builder.header(*name, *value);
+        }
+        builder.body(Body::empty()).unwrap()
+    }
+
+    async fn csrf_status(
+        pool: &sqlx::PgPool,
+        config: &config::AppConfig,
+        request: Request<Body>,
+    ) -> u16 {
+        send_request_with_config(pool.clone(), config.clone(), request)
+            .await
+            .status()
+            .as_u16()
+    }
+
+    async fn csrf_session(pool: &sqlx::PgPool, config: &config::AppConfig) -> String {
+        let email = unique_test_email();
+        let user_id = seed_user_with_password(pool, &email, None, "Passw0rd!").await;
+        session_cookie_for(config, user_id, 28_800)
+    }
+
     #[tokio::test]
-    async fn csrf_origin_policy_blocks_foreign_state_changing_requests_only() {
+    async fn cookie_request_from_a_foreign_origin_is_rejected() {
         let Some(pool) = get_pool().await else { return };
         db::testing::migrate().await;
+        let config = csrf_config();
+        let cookie = csrf_session(&pool, &config).await;
 
-        let mut config = test_config();
-        config.cors_allowed_origins = vec!["https://dashboard.example".into()];
-
-        let email = unique_test_email();
-        let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
-        let cookie = session_cookie_for(&config, user_id, 28_800);
-
-        let mut blocked = send_request_with_config(
+        let mut res = send_request_with_config(
             pool.clone(),
             config.clone(),
-            Request::builder()
-                .uri("/api/v1/auth/login")
-                .method(Method::POST)
-                .header("origin", "https://evil.example")
-                .header("cookie", &cookie)
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    json!({ "email": email, "password": "Passw0rd!" }).to_string(),
-                ))
-                .unwrap(),
+            cookie_post(
+                &cookie,
+                &[
+                    ("origin", "https://evil.example"),
+                    ("x-requested-with", "XMLHttpRequest"),
+                ],
+            ),
         )
         .await;
+        assert_eq!(res.status(), 403);
+        assert_eq!(body_json(&mut res).await["error"]["code"], "unauthorized");
+    }
 
-        assert_eq!(blocked.status(), 403);
-        let body = body_json(&mut blocked).await;
-        assert_eq!(body["error"]["code"], "unauthorized");
+    #[tokio::test]
+    async fn cookie_request_with_no_origin_and_no_referer_is_rejected() {
+        let Some(pool) = get_pool().await else { return };
+        db::testing::migrate().await;
+        let config = csrf_config();
+        let cookie = csrf_session(&pool, &config).await;
 
-        let allowed = send_request_with_config(
+        let status = csrf_status(
+            &pool,
+            &config,
+            cookie_post(&cookie, &[("x-requested-with", "XMLHttpRequest")]),
+        )
+        .await;
+        assert_eq!(status, 403);
+    }
+
+    #[tokio::test]
+    async fn cookie_request_without_the_custom_header_is_rejected() {
+        let Some(pool) = get_pool().await else { return };
+        db::testing::migrate().await;
+        let config = csrf_config();
+        let cookie = csrf_session(&pool, &config).await;
+
+        let status = csrf_status(
+            &pool,
+            &config,
+            cookie_post(&cookie, &[("origin", DASHBOARD)]),
+        )
+        .await;
+        assert_eq!(status, 403);
+    }
+
+    #[tokio::test]
+    async fn cookie_request_from_the_allowed_origin_with_the_header_is_accepted() {
+        let Some(pool) = get_pool().await else { return };
+        db::testing::migrate().await;
+        let config = csrf_config();
+        let cookie = csrf_session(&pool, &config).await;
+
+        let with_requested_with = csrf_status(
+            &pool,
+            &config,
+            cookie_post(
+                &cookie,
+                &[
+                    ("origin", DASHBOARD),
+                    ("x-requested-with", "XMLHttpRequest"),
+                ],
+            ),
+        )
+        .await;
+        assert_eq!(with_requested_with, 204);
+
+        // X-Tenant-ID is the other accepted custom header.
+        let cookie = csrf_session(&pool, &config).await;
+        let with_tenant_header = csrf_status(
+            &pool,
+            &config,
+            cookie_post(
+                &cookie,
+                &[
+                    ("origin", DASHBOARD),
+                    ("x-tenant-id", &uuid::Uuid::new_v4().to_string()),
+                ],
+            ),
+        )
+        .await;
+        assert_eq!(with_tenant_header, 204);
+    }
+
+    #[tokio::test]
+    async fn referer_stands_in_for_a_missing_origin() {
+        let Some(pool) = get_pool().await else { return };
+        db::testing::migrate().await;
+        let config = csrf_config();
+
+        let cookie = csrf_session(&pool, &config).await;
+        let allowed = csrf_status(
+            &pool,
+            &config,
+            cookie_post(
+                &cookie,
+                &[
+                    ("referer", "https://dashboard.example/settings/team?tab=1"),
+                    ("x-requested-with", "XMLHttpRequest"),
+                ],
+            ),
+        )
+        .await;
+        assert_eq!(allowed, 204);
+
+        let cookie = csrf_session(&pool, &config).await;
+        let foreign = csrf_status(
+            &pool,
+            &config,
+            cookie_post(
+                &cookie,
+                &[
+                    ("referer", "https://evil.example/page"),
+                    ("x-requested-with", "XMLHttpRequest"),
+                ],
+            ),
+        )
+        .await;
+        assert_eq!(foreign, 403);
+
+        // An allowed host as a prefix of a foreign one is not the allowed origin.
+        let cookie = csrf_session(&pool, &config).await;
+        let lookalike = csrf_status(
+            &pool,
+            &config,
+            cookie_post(
+                &cookie,
+                &[
+                    ("referer", "https://dashboard.example.evil.test/page"),
+                    ("x-requested-with", "XMLHttpRequest"),
+                ],
+            ),
+        )
+        .await;
+        assert_eq!(lookalike, 403);
+    }
+
+    #[tokio::test]
+    async fn safe_methods_and_the_dev_header_principal_are_not_subject_to_the_cookie_rule() {
+        let Some(pool) = get_pool().await else { return };
+        db::testing::migrate().await;
+        let config = csrf_config();
+        let cookie = csrf_session(&pool, &config).await;
+
+        // A GET with a foreign origin is not state-changing.
+        let get = send_request_with_config(
             pool.clone(),
             config.clone(),
-            Request::builder()
-                .uri("/api/v1/auth/login")
-                .method(Method::POST)
-                .header("origin", "https://dashboard.example")
-                .header("cookie", &cookie)
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    json!({ "email": email, "password": "Passw0rd!" }).to_string(),
-                ))
-                .unwrap(),
-        )
-        .await;
-        assert_ne!(allowed.status(), 403);
-
-        let get_res = send_request_with_config(
-            pool.clone(),
-            config,
             Request::builder()
                 .uri("/api/v1/me")
                 .method(Method::GET)
@@ -623,8 +781,164 @@ mod tests {
                 .unwrap(),
         )
         .await;
-        assert_eq!(get_res.status(), 200);
+        assert_eq!(get.status(), 200);
+
+        // The development header carries no cookie to ride on: no Origin is fine, a foreign one is
+        // still refused.
+        let email = unique_test_email();
+        let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
+        let dev_post = |origin: Option<&str>| {
+            let mut builder = Request::builder()
+                .uri("/api/v1/auth/logout")
+                .method(Method::POST)
+                .header("x-dev-user-id", user_id.to_string());
+            if let Some(origin) = origin {
+                builder = builder.header("origin", origin);
+            }
+            builder.body(Body::empty()).unwrap()
+        };
+        assert_eq!(csrf_status(&pool, &config, dev_post(None)).await, 204);
+        assert_eq!(
+            csrf_status(&pool, &config, dev_post(Some("https://evil.example"))).await,
+            403
+        );
     }
+
+    /// Login CSRF: a foreign page signs the victim in as the attacker. There is no session yet, so
+    /// the check has to apply without a principal.
+    #[tokio::test]
+    async fn login_and_signup_require_an_allowed_origin_and_the_custom_header() {
+        let Some(pool) = get_pool().await else { return };
+        db::testing::migrate().await;
+        let config = csrf_config();
+        let email = unique_test_email();
+        seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
+
+        let login = |headers: &[(&str, &str)]| {
+            let mut builder = Request::builder()
+                .uri("/api/v1/auth/login")
+                .method(Method::POST)
+                .header("content-type", "application/json");
+            for (name, value) in headers {
+                builder = builder.header(*name, *value);
+            }
+            builder
+                .body(Body::from(
+                    json!({ "email": email, "password": "Passw0rd!" }).to_string(),
+                ))
+                .unwrap()
+        };
+
+        for (case, headers, expected) in [
+            (
+                "foreign origin",
+                vec![
+                    ("origin", "https://evil.example"),
+                    ("x-requested-with", "XMLHttpRequest"),
+                ],
+                403,
+            ),
+            (
+                "no origin or referer",
+                vec![("x-requested-with", "XMLHttpRequest")],
+                403,
+            ),
+            ("no custom header", vec![("origin", DASHBOARD)], 403),
+            (
+                "allowed origin and header",
+                vec![
+                    ("origin", DASHBOARD),
+                    ("x-requested-with", "XMLHttpRequest"),
+                ],
+                200,
+            ),
+            (
+                "allowed referer and header",
+                vec![
+                    ("referer", "https://dashboard.example/login"),
+                    ("x-requested-with", "XMLHttpRequest"),
+                ],
+                200,
+            ),
+        ] {
+            let status = csrf_status(&pool, &config, login(&headers)).await;
+            assert_eq!(status, expected, "login: {case}");
+        }
+
+        let signup = |headers: &[(&str, &str)]| {
+            let mut builder = Request::builder()
+                .uri("/api/v1/auth/signup")
+                .method(Method::POST)
+                .header("content-type", "application/json");
+            for (name, value) in headers {
+                builder = builder.header(*name, *value);
+            }
+            builder
+                .body(Body::from(
+                    json!({
+                        "workspaceName": "Csrf Co",
+                        "displayName": "Csrf",
+                        "email": unique_test_email(),
+                        "password": "Passw0rd!x",
+                    })
+                    .to_string(),
+                ))
+                .unwrap()
+        };
+        assert_eq!(
+            csrf_status(
+                &pool,
+                &config,
+                signup(&[
+                    ("origin", "https://evil.example"),
+                    ("x-requested-with", "XMLHttpRequest")
+                ])
+            )
+            .await,
+            403,
+            "signup from a foreign origin"
+        );
+        assert_eq!(
+            csrf_status(&pool, &config, signup(&[])).await,
+            403,
+            "signup without proof"
+        );
+    }
+
+    #[tokio::test]
+    async fn preflight_for_the_custom_header_is_allowed_from_the_allowed_origin() {
+        let Some(pool) = get_pool().await else { return };
+        let config = csrf_config();
+        let res = send_request_with_config(
+            pool,
+            config,
+            Request::builder()
+                .uri("/api/v1/auth/login")
+                .method(Method::OPTIONS)
+                .header("origin", DASHBOARD)
+                .header("access-control-request-method", "POST")
+                .header(
+                    "access-control-request-headers",
+                    "content-type,x-requested-with",
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert!(
+            res.status().is_success(),
+            "preflight status {}",
+            res.status()
+        );
+        let allowed = res
+            .headers()
+            .get("access-control-allow-headers")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        assert!(allowed.contains("x-requested-with"), "{allowed}");
+    }
+
     #[tokio::test]
     async fn logout_revokes_cookie_session_and_clears_cookie() {
         let Some(pool) = get_pool().await else { return };
@@ -645,6 +959,8 @@ mod tests {
             Request::builder()
                 .uri("/api/v1/auth/logout")
                 .method(Method::POST)
+                .header("origin", TEST_ORIGIN)
+                .header("x-requested-with", "XMLHttpRequest")
                 .header("cookie", &cookie)
                 .body(Body::empty())
                 .unwrap(),
@@ -691,6 +1007,8 @@ mod tests {
             Request::builder()
                 .uri("/api/v1/auth/logout")
                 .method(Method::POST)
+                .header("origin", TEST_ORIGIN)
+                .header("x-requested-with", "XMLHttpRequest")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -714,6 +1032,8 @@ mod tests {
             Request::builder()
                 .uri("/api/v1/auth/logout")
                 .method(Method::POST)
+                .header("origin", TEST_ORIGIN)
+                .header("x-requested-with", "XMLHttpRequest")
                 .header("X-Dev-User-Id", user_id.to_string())
                 .body(Body::empty())
                 .unwrap(),
@@ -888,6 +1208,8 @@ mod tests {
             Request::builder()
                 .uri("/api/v1/auth/signup")
                 .method("POST")
+                .header("origin", TEST_ORIGIN)
+                .header("x-requested-with", "XMLHttpRequest")
                 .header("content-type", "application/json")
                 .body(Body::from("not-json"))
                 .unwrap(),

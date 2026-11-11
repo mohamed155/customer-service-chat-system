@@ -69,7 +69,7 @@ fn test_config(redis_url: &str) -> config::AppConfig {
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
-        cors_allowed_origins: vec![],
+        cors_allowed_origins: vec!["http://localhost:4200".into()],
         log_format: config::LogFormat::Pretty,
         smtp_url: None,
         smtp_from: None,
@@ -119,6 +119,8 @@ fn login_request(email: &str, password: &str) -> Request<Body> {
     Request::builder()
         .uri("/api/v1/auth/login")
         .method("POST")
+        .header("origin", "http://localhost:4200")
+        .header("x-requested-with", "XMLHttpRequest")
         .header("content-type", "application/json")
         .body(Body::from(
             json!({ "email": email, "password": password }).to_string(),

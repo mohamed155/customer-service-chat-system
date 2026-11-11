@@ -242,6 +242,8 @@ fn login_request() -> Request<Body> {
     Request::builder()
         .method("POST")
         .uri("/api/v1/auth/login")
+        .header("origin", "http://localhost:4200")
+        .header("x-requested-with", "XMLHttpRequest")
         .header("content-type", "application/json")
         .body(Body::from(
             r#"{"email":"someone@example.com","password":"correct horse battery"}"#,
@@ -354,6 +356,8 @@ async fn client_errors_keep_their_message() {
             Request::builder()
                 .method("POST")
                 .uri("/api/v1/auth/login")
+                .header("origin", "http://localhost:4200")
+                .header("x-requested-with", "XMLHttpRequest")
                 .header("content-type", "application/json")
                 .body(Body::from(r#"{"email":"","password":""}"#))
                 .unwrap(),

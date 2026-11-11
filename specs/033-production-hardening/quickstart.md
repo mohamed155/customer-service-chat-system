@@ -34,9 +34,13 @@ concluding a limiter test failed for a logic reason.
 for i in $(seq 1 15); do
   curl -s -o /dev/null -w "%{http_code} " -X POST localhost:8080/api/v1/auth/login \
     -H 'Content-Type: application/json' \
+    -H 'Origin: http://localhost:4200' -H 'X-Requested-With: XMLHttpRequest' \
     -d '{"email":"owner@acme.test","password":"wrong"}'
 done; echo
 ```
+
+Login needs an allowed `Origin` (see `CORS_ALLOWED_ORIGINS`) and a custom header since MOH-36; without them
+it answers `403` before the throttle runs.
 
 **Expected**: ten `401`, then `429` for the rest. The `429` carries `Retry-After`.
 
@@ -46,6 +50,7 @@ done; echo
 for i in $(seq 1 15); do
   curl -s -o /dev/null -w "%{http_code} " -X POST localhost:8080/api/v1/auth/login \
     -H 'Content-Type: application/json' \
+    -H 'Origin: http://localhost:4200' -H 'X-Requested-With: XMLHttpRequest' \
     -d '{"email":"nobody@nowhere.test","password":"wrong"}'
 done; echo
 ```
