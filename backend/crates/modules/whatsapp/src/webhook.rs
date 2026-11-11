@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use tracing::Instrument;
 
 use axum::body::Bytes;
 use axum::extract::{Extension, Path, Query, State};
@@ -51,55 +52,58 @@ pub async fn verify_subscription(
             .map(|b| format!("{b:02x}"))
             .collect::<String>()
     );
-    let _guard = span.enter();
+    async move {
+        let token_hash = integrations::webhook::hash_token(&token);
+        let conn = match queries::connection_by_token_and_slug(&pool, &token_hash, "whatsapp").await
+        {
+            Ok(Some(c)) => c,
+            Ok(None) => return not_found_response(),
+            Err(e) => {
+                tracing::error!(%e, "verify_subscription: db error");
+                return ApiError::internal_error("Internal error").into_response();
+            }
+        };
 
-    let token_hash = integrations::webhook::hash_token(&token);
-    let conn = match queries::connection_by_token_and_slug(&pool, &token_hash, "whatsapp").await {
-        Ok(Some(c)) => c,
-        Ok(None) => return not_found_response(),
-        Err(e) => {
-            tracing::error!(%e, "verify_subscription: db error");
-            return ApiError::internal_error("Internal error").into_response();
+        if !conn.is_active {
+            return not_found_response();
         }
-    };
 
-    if !conn.is_active {
-        return not_found_response();
+        let q = query.0;
+        let mode = q.mode.as_deref().unwrap_or("");
+        let challenge = q.challenge.as_deref().unwrap_or("");
+        let verify_token_input = q.verify_token.as_deref().unwrap_or("");
+
+        let stored_verify_token = match queries::decrypted_secret(
+            &pool,
+            conn.tenant_id,
+            &master_key,
+            conn.id,
+            "verify_token",
+        )
+        .await
+        {
+            Ok(Some(t)) => t,
+            Ok(None) => {
+                tracing::error!(
+                    "verify_subscription: verify_token secret not found for connection {}",
+                    conn.id
+                );
+                return not_found_response();
+            }
+            Err(e) => {
+                tracing::error!(%e, "verify_subscription: decryption failed");
+                return not_found_response();
+            }
+        };
+
+        if mode == "subscribe" && verify_token_input == stored_verify_token {
+            (StatusCode::OK, challenge.to_string()).into_response()
+        } else {
+            not_found_response()
+        }
     }
-
-    let q = query.0;
-    let mode = q.mode.as_deref().unwrap_or("");
-    let challenge = q.challenge.as_deref().unwrap_or("");
-    let verify_token_input = q.verify_token.as_deref().unwrap_or("");
-
-    let stored_verify_token = match queries::decrypted_secret(
-        &pool,
-        conn.tenant_id,
-        &master_key,
-        conn.id,
-        "verify_token",
-    )
+    .instrument(span)
     .await
-    {
-        Ok(Some(t)) => t,
-        Ok(None) => {
-            tracing::error!(
-                "verify_subscription: verify_token secret not found for connection {}",
-                conn.id
-            );
-            return not_found_response();
-        }
-        Err(e) => {
-            tracing::error!(%e, "verify_subscription: decryption failed");
-            return not_found_response();
-        }
-    };
-
-    if mode == "subscribe" && verify_token_input == stored_verify_token {
-        (StatusCode::OK, challenge.to_string()).into_response()
-    } else {
-        not_found_response()
-    }
 }
 
 fn verify_meta_signature(secret: &str, raw_body: &[u8], header: &str) -> bool {

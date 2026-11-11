@@ -3244,6 +3244,13 @@ export interface components {
       welcomeMessage?: string | null;
       widgetId: string;
     };
+    /**
+     * @description `{ "data": PublicWidgetConfigDto }`, the envelope the public widget contract specifies
+     *     (specs/023-website-chat-widget/contracts/public-widget-api.md).
+     */
+    PublicWidgetConfigResponse: {
+      data: components['schemas']['PublicWidgetConfigDto'];
+    };
     PutSubscriptionRequest: {
       /** Format: uuid */
       plan_id: string;
@@ -3306,6 +3313,10 @@ export interface components {
       'skill_match' | 'load_fallback' | 'manual_claim' | 'queue_auto' | 'manual_reassignment';
     SendMessagePayload: {
       body: string;
+    };
+    /** @description `{ "data": SessionResponseDto }`, the envelope the public widget contract specifies. */
+    SessionResponse: {
+      data: components['schemas']['SessionResponseDto'];
     };
     SessionResponseDto: {
       /** Format: date-time */
@@ -10572,13 +10583,13 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Widget config. */
+      /** @description Widget config, in a `data` envelope. */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['PublicWidgetConfigDto'];
+          'application/json': components['schemas']['PublicWidgetConfigResponse'];
         };
       };
       /** @description Origin not allowed. */
@@ -10895,13 +10906,13 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Session created. */
+      /** @description Session created, in a `data` envelope. */
       201: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['SessionResponseDto'];
+          'application/json': components['schemas']['SessionResponse'];
         };
       };
       /** @description Origin not allowed. */

@@ -119,7 +119,7 @@ async fn emit_tool_resolved_in_tx(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'notification', $2, $3, 'notification.resolved', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(tool_request_id)
     .bind(tenant_id)
     .bind(payload)

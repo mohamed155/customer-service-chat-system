@@ -4560,6 +4560,18 @@
         ],
         "type": "object"
       },
+      "PublicWidgetConfigResponse": {
+        "description": "`{ \"data\": PublicWidgetConfigDto }`, the envelope the public widget contract specifies\n(specs/023-website-chat-widget/contracts/public-widget-api.md).",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PublicWidgetConfigDto"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "PutSubscriptionRequest": {
         "properties": {
           "plan_id": {
@@ -4759,6 +4771,18 @@
         },
         "required": [
           "body"
+        ],
+        "type": "object"
+      },
+      "SessionResponse": {
+        "description": "`{ \"data\": SessionResponseDto }`, the envelope the public widget contract specifies.",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SessionResponseDto"
+          }
+        },
+        "required": [
+          "data"
         ],
         "type": "object"
       },
@@ -14845,11 +14869,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicWidgetConfigDto"
+                  "$ref": "#/components/schemas/PublicWidgetConfigResponse"
                 }
               }
             },
-            "description": "Widget config."
+            "description": "Widget config, in a `data` envelope."
           },
           "403": {
             "content": {
@@ -15255,11 +15279,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionResponseDto"
+                  "$ref": "#/components/schemas/SessionResponse"
                 }
               }
             },
-            "description": "Session created."
+            "description": "Session created, in a `data` envelope."
           },
           "403": {
             "content": {

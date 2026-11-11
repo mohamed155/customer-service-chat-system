@@ -15,7 +15,7 @@ pub async fn emit_status_changed_in_tx(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'conversation', $2, $3, 'conversation.status_changed', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(json!({
@@ -44,7 +44,7 @@ pub async fn emit_assignment_changed_in_tx(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'conversation', $2, $3, 'conversation.assignment_changed', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(json!({
@@ -71,7 +71,7 @@ pub async fn emit_customer_message_in_tx(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(json!({
@@ -95,7 +95,7 @@ pub async fn emit_tool_decision_in_tx(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'conversation', $2, $3, 'ai.tool_decision', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(json!({
@@ -119,7 +119,7 @@ pub async fn emit_whatsapp_outbound_in_tx(
         "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
          VALUES ($1, 'conversation', $2, $3, 'whatsapp.outbound_message', $4, now())",
     )
-    .bind(Uuid::new_v4())
+    .bind(kernel::ids::new_id())
     .bind(conversation_id)
     .bind(tenant_id)
     .bind(json!({

@@ -1479,7 +1479,7 @@ pub async fn upload_document(
     let dto_filename = filename.clone();
     let dto_content_type = content_type.clone();
     let file_size = bytes.len() as i64;
-    let item_id = Uuid::new_v4();
+    let item_id = kernel::ids::new_id();
     let storage_key = format!("{}/knowledge/{}", ctx.tenant_id, item_id);
 
     let persist_pool = pool.clone();

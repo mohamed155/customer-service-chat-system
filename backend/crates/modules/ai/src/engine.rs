@@ -507,7 +507,7 @@ pub async fn run_generation(
     is_platform_persona: bool,
     channel: &str,
 ) -> sqlx::Result<()> {
-    let generation_id = Uuid::new_v4();
+    let generation_id = kernel::ids::new_id();
     let _span = tracing::info_span!(
         "engine.generate",
         tenant_id = %tenant_id,
@@ -1451,7 +1451,7 @@ pub async fn run_followup_generation(
     outcome: &str,
 ) -> sqlx::Result<()> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let generation_id = Uuid::new_v4();
+    let generation_id = kernel::ids::new_id();
     let start = Instant::now();
 
     // Load the tool_requests row

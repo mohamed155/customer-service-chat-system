@@ -216,19 +216,74 @@ async fn t001_config_returns_public_fields_and_no_tenant_id() {
 
     let response = send(
         pool.clone(),
-        get(&format!("/api/v1/widget/v1/config?widget_id={public_id}")),
+        get(&format!("/api/v1/widget/v1/config?widgetId={public_id}")),
     )
     .await;
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
-    assert_eq!(body["widgetId"], public_id);
-    assert_eq!(body["displayName"], "Test Widget Display");
-    assert!(body["enabled"].as_bool().unwrap());
+    // The contract (specs/023-website-chat-widget/contracts/public-widget-api.md) wraps it in `data`.
+    assert_eq!(
+        body.as_object().unwrap().keys().collect::<Vec<_>>(),
+        ["data"],
+        "the config is the only thing under `data`: {body}"
+    );
+    assert_eq!(body["data"]["widgetId"], public_id);
+    assert_eq!(body["data"]["displayName"], "Test Widget Display");
+    assert!(body["data"]["enabled"].as_bool().unwrap());
     // Must not expose tenant_id, id, allowed_domains, or timestamps
-    assert!(body.get("tenant_id").is_none());
-    assert!(body.get("id").is_none());
-    assert!(body.get("allowed_domains").is_none());
+    for hidden in [
+        "tenant_id",
+        "tenantId",
+        "id",
+        "allowed_domains",
+        "allowedDomains",
+    ] {
+        assert!(
+            body["data"].get(hidden).is_none(),
+            "{hidden} leaked: {body}"
+        );
+    }
+}
+
+// The widget and the loader send `?widgetId=` (the contract and the OpenAPI document spell it so).
+// The handler used to read only `widget_id`, so every real client got a 400. The earlier spelling
+// still works for callers written against it.
+#[tokio::test]
+async fn t001b_config_accepts_widget_id_in_the_documented_spelling_and_the_earlier_one() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    setup(&pool).await;
+
+    let tenant_id = seed_tenant(&pool, "ConfigSpelling").await;
+    let public_id = "wgt_config_spelling_001";
+    seed_widget_instance(&pool, tenant_id, public_id, true, &[]).await;
+
+    for query in [
+        format!("widgetId={public_id}"),
+        format!("widget_id={public_id}"),
+    ] {
+        let response = send(
+            pool.clone(),
+            get(&format!("/api/v1/widget/v1/config?{query}")),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK, "?{query}");
+        assert_eq!(
+            body_json(response).await["data"]["widgetId"],
+            public_id,
+            "?{query}"
+        );
+    }
+
+    let missing = send(pool, get("/api/v1/widget/v1/config")).await;
+    assert_eq!(
+        missing.status(),
+        StatusCode::BAD_REQUEST,
+        "no widget id at all is still a bad request"
+    );
 }
 
 #[tokio::test]
@@ -270,7 +325,7 @@ async fn t003_disabled_instance_returns_200_with_enabled_false() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
-    assert!(!body["enabled"].as_bool().unwrap());
+    assert!(!body["data"]["enabled"].as_bool().unwrap());
 }
 
 #[tokio::test]
@@ -319,8 +374,11 @@ async fn t005_session_mint_returns_token_that_authenticates() {
 
     assert_eq!(response.status(), StatusCode::CREATED);
     let session_body = body_json(response).await;
-    let token = session_body["sessionToken"].as_str().unwrap().to_owned();
-    let expires_at = session_body["expiresAt"].as_str().unwrap();
+    let token = session_body["data"]["sessionToken"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let expires_at = session_body["data"]["expiresAt"].as_str().unwrap();
     assert!(!token.is_empty());
     assert!(!expires_at.is_empty());
 

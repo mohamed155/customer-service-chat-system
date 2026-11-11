@@ -46,6 +46,9 @@ jobs:
       - run: pnpm exec ng build widget
       - name: Build widget loader
         run: pnpm build:widget-loader
+      # Starts `ng serve widget` against a local upstream (MOH-51); no browser needed.
+      - name: Widget dev-server proxy test
+        run: pnpm test:widget-proxy
       - run: pnpm exec ng test dashboard --watch=false
       - run: pnpm exec ng test widget --watch=false
       - name: Install Playwright browsers

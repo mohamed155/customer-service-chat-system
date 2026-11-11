@@ -9,6 +9,7 @@
 //! # Public Interfaces
 //! - `ApiError` constructors (rate_limited accepts a Duration for Retry-After)
 //! - `ApiJson<T>` extractor
+//! - `ids::new_id()`: UUIDv7 for new primary keys (ADR-013), with a test generator
 //! - `PageParams`, `Page<T>`
 //! - Idempotency middleware
 //! - `RateLimiter` trait, `Scope`, `Budget`, `Decision`, `InMemoryRateLimitStore`
@@ -21,6 +22,7 @@
 //! - Add new `Scope` variants for new rate-limit domains.
 
 mod idempotency;
+pub mod ids;
 pub mod rate_limit;
 pub use rate_limit::{
     Budget, Decision, InMemoryRateLimitStore, RateLimiter, Scope, TenantRateLimit,

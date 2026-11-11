@@ -2617,6 +2617,7 @@ dependencies = [
  "http-body-util",
  "serde",
  "serde_json",
+ "serial_test",
  "strum",
  "tokio",
  "tower",

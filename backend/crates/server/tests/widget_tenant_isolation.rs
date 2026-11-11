@@ -178,7 +178,7 @@ async fn t001_two_tenants_instances_dont_cross() {
     .await;
     assert_eq!(response_a.status(), StatusCode::OK);
     let body_a = body_json(response_a).await;
-    assert_eq!(body_a["widgetId"], pub_a);
+    assert_eq!(body_a["data"]["widgetId"], pub_a);
 
     let response_b = send(
         pool.clone(),
@@ -191,7 +191,7 @@ async fn t001_two_tenants_instances_dont_cross() {
     .await;
     assert_eq!(response_b.status(), StatusCode::OK);
     let body_b = body_json(response_b).await;
-    assert_eq!(body_b["widgetId"], pub_b);
+    assert_eq!(body_b["data"]["widgetId"], pub_b);
 
     let response_a_to_b = send(
         pool.clone(),
@@ -204,7 +204,7 @@ async fn t001_two_tenants_instances_dont_cross() {
     .await;
     assert_eq!(response_a_to_b.status(), StatusCode::OK);
     let body_a_to_b = body_json(response_a_to_b).await;
-    assert_eq!(body_a_to_b["widgetId"], pub_b);
+    assert_eq!(body_a_to_b["data"]["widgetId"], pub_b);
 }
 
 #[tokio::test]
@@ -266,7 +266,7 @@ async fn t003_session_from_tenant_a_cannot_access_tenant_b_conversations() {
             .unwrap(),
     )
     .await;
-    let token_a = body_json(resp_a).await["sessionToken"]
+    let token_a = body_json(resp_a).await["data"]["sessionToken"]
         .as_str()
         .unwrap()
         .to_owned();
@@ -282,7 +282,7 @@ async fn t003_session_from_tenant_a_cannot_access_tenant_b_conversations() {
             .unwrap(),
     )
     .await;
-    let token_b = body_json(resp_b).await["sessionToken"]
+    let token_b = body_json(resp_b).await["data"]["sessionToken"]
         .as_str()
         .unwrap()
         .to_owned();

@@ -13,6 +13,7 @@ use futures::Stream;
 use sqlx::PgPool;
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tokio_stream::wrappers::BroadcastStream;
+use tracing::Instrument;
 use tracing::{error, info, info_span};
 use uuid::Uuid;
 
@@ -167,19 +168,21 @@ pub async fn stream_events(
     Path(conversation_id): Path<Uuid>,
 ) -> Response {
     let span = info_span!("widget_sse_subscribe", conversation_id = %conversation_id);
-    let _guard = span.enter();
+    async move {
+        let auth = headers.get("authorization").and_then(|v| v.to_str().ok());
+        let session = match crate::session::authenticate_session(&pool, auth).await {
+            Ok(s) => s,
+            Err(e) => return e.into_response(),
+        };
 
-    let auth = headers.get("authorization").and_then(|v| v.to_str().ok());
-    let session = match crate::session::authenticate_session(&pool, auth).await {
-        Ok(s) => s,
-        Err(e) => return e.into_response(),
-    };
-
-    let origin = headers.get("origin").and_then(|v| v.to_str().ok());
-    let referer = headers.get("referer").and_then(|v| v.to_str().ok());
-    let instance =
-        match queries::find_instance_by_id(&pool, session.tenant_id, session.widget_instance_id)
-            .await
+        let origin = headers.get("origin").and_then(|v| v.to_str().ok());
+        let referer = headers.get("referer").and_then(|v| v.to_str().ok());
+        let instance = match queries::find_instance_by_id(
+            &pool,
+            session.tenant_id,
+            session.widget_instance_id,
+        )
+        .await
         {
             Ok(Some(i)) => i,
             Ok(None) => {
@@ -191,63 +194,66 @@ pub async fn stream_events(
                     .into_response();
             }
         };
-    if !origin_allowed(&instance.allowed_domains, origin, referer) {
-        return ApiError::new_with_code(
-            axum::http::StatusCode::FORBIDDEN,
-            "origin_not_allowed",
-            "Origin not allowed",
-        )
-        .into_response();
-    }
+        if !origin_allowed(&instance.allowed_domains, origin, referer) {
+            return ApiError::new_with_code(
+                axum::http::StatusCode::FORBIDDEN,
+                "origin_not_allowed",
+                "Origin not allowed",
+            )
+            .into_response();
+        }
 
-    let mut uow = match db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id).await {
-        Ok(u) => u,
-        Err(e) => {
-            error!(%e, "stream_events: begin unit of work failed");
+        let mut uow = match db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id).await {
+            Ok(u) => u,
+            Err(e) => {
+                error!(%e, "stream_events: begin unit of work failed");
+                return ApiError::not_found("Conversation not found").into_response();
+            }
+        };
+        let conv_owner: Option<(Uuid, Uuid)> = sqlx::query_as(
+            "SELECT customer_id, tenant_id FROM conversations \
+         WHERE id = $1 AND deleted_at IS NULL",
+        )
+        .bind(conversation_id)
+        .fetch_optional(uow.conn())
+        .await
+        .map_err(|e| {
+            error!(%e, "stream_events: lookup failed");
+        })
+        .ok()
+        .flatten();
+        drop(uow);
+
+        let (customer_id, conv_tenant_id) = match conv_owner {
+            Some(c) => c,
+            None => return ApiError::not_found("Conversation not found").into_response(),
+        };
+
+        if conv_tenant_id != session.tenant_id || session.customer_id != Some(customer_id) {
             return ApiError::not_found("Conversation not found").into_response();
         }
-    };
-    let conv_owner: Option<(Uuid, Uuid)> = sqlx::query_as(
-        "SELECT customer_id, tenant_id FROM conversations \
-         WHERE id = $1 AND deleted_at IS NULL",
-    )
-    .bind(conversation_id)
-    .fetch_optional(uow.conn())
-    .await
-    .map_err(|e| {
-        error!(%e, "stream_events: lookup failed");
-    })
-    .ok()
-    .flatten();
-    drop(uow);
 
-    let (customer_id, conv_tenant_id) = match conv_owner {
-        Some(c) => c,
-        None => return ApiError::not_found("Conversation not found").into_response(),
-    };
+        let (_guard, rx) = runtime.connect(session.tenant_id, Uuid::nil());
 
-    if conv_tenant_id != session.tenant_id || session.customer_id != Some(customer_id) {
-        return ApiError::not_found("Conversation not found").into_response();
+        let team_online = !runtime
+            .present_membership_ids_async(session.tenant_id)
+            .await
+            .is_empty();
+        let count = SSE_SUBSCRIBED.fetch_add(1, Ordering::Relaxed) + 1;
+        info!(count, "widget SSE subscribed");
+
+        let stream = WidgetEventStream {
+            inner: BroadcastStream::new(rx),
+            conversation_id,
+            team_online,
+            seq: 0,
+        };
+
+        let sse = Sse::new(stream)
+            .keep_alive(KeepAlive::new().interval(Duration::from_secs(20)).text(""));
+
+        sse.into_response()
     }
-
-    let (_guard, rx) = runtime.connect(session.tenant_id, Uuid::nil());
-
-    let team_online = !runtime
-        .present_membership_ids_async(session.tenant_id)
-        .await
-        .is_empty();
-    let count = SSE_SUBSCRIBED.fetch_add(1, Ordering::Relaxed) + 1;
-    info!(count, "widget SSE subscribed");
-
-    let stream = WidgetEventStream {
-        inner: BroadcastStream::new(rx),
-        conversation_id,
-        team_online,
-        seq: 0,
-    };
-
-    let sse =
-        Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(20)).text(""));
-
-    sse.into_response()
+    .instrument(span)
+    .await
 }

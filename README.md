@@ -212,10 +212,20 @@ cd frontend && pnpm exec ng serve widget --port 4201
 The widget dev server is at `http://localhost:4201`. Without `--port` it also tries 4200, which
 the dashboard already uses.
 
-This server is for working on the widget's UI. The widget calls the public `/widget/v1` API on
-the origin it is served from, and the dev server doesn't forward those calls to the backend, so
-on its own it can't load a widget's configuration or start a conversation. To try the widget end
-to end, create a widget in the dashboard and embed its snippet, as described in the
+The widget calls the public `/widget/v1` API on the origin it is served from. The dev server
+forwards those calls, including the live event stream, to the backend on `http://localhost:8080`
+(it maps `/widget/v1/...` to the backend's `/api/v1/widget/v1/...`), so the widget can load its
+configuration and start a conversation. If your backend is elsewhere, start the dev server with
+`WIDGET_PROXY_TARGET=http://localhost:9090 pnpm exec ng serve widget --port 4201`.
+
+To open the widget for a given widget:
+
+1. In the dashboard (<http://localhost:4200>), open Widgets and create a widget. Leave "Allowed
+   domains" empty, or add `localhost` (the port doesn't matter) so the dev server is allowed.
+2. Copy its widget ID: the `data-widget-id` value in the embed snippet, which starts with `wgt_`.
+3. Open `http://localhost:4201/?id=wgt_...` with that ID.
+
+For the embedded launcher on a host page, use the snippet as described in the
 [widget quickstart](specs/023-website-chat-widget/quickstart.md).
 
 ### Local development notes

@@ -43,6 +43,14 @@ pub struct PublicWidgetConfigDto {
     pub enabled: bool,
 }
 
+/// `{ "data": PublicWidgetConfigDto }`, the envelope the public widget contract specifies
+/// (specs/023-website-chat-widget/contracts/public-widget-api.md).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicWidgetConfigResponse {
+    pub data: PublicWidgetConfigDto,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionPayload {
@@ -54,6 +62,13 @@ pub struct CreateSessionPayload {
 pub struct SessionResponseDto {
     pub session_token: String,
     pub expires_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// `{ "data": SessionResponseDto }`, the envelope the public widget contract specifies.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionResponse {
+    pub data: SessionResponseDto,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

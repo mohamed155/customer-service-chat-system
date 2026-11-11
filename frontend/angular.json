@@ -118,7 +118,10 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": { "buildTarget": "widget:build" }
+          "options": {
+            "buildTarget": "widget:build",
+            "proxyConfig": "apps/widget/proxy.conf.cjs"
+          }
         },
         "test": {
           "builder": "@angular/build:unit-test",
