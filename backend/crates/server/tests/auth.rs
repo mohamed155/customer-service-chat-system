@@ -898,4 +898,123 @@ mod tests {
         let body = body_json(&mut res).await;
         assert_eq!(body["error"]["code"], "validation_failed");
     }
+
+    /// Hash `password` with Argon2id at explicit (weaker) parameters, like an older deployment did.
+    fn hash_with_params(m: u32, t: u32, p: u32, password: &str) -> String {
+        let params = argon2::Params::new(m, t, p, None).unwrap();
+        Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params)
+            .hash_password(password.as_bytes())
+            .unwrap()
+            .to_string()
+    }
+
+    async fn stored_hash(pool: &sqlx::PgPool, user_id: uuid::Uuid) -> String {
+        sqlx::query_scalar("SELECT password_hash FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn login_rehashes_a_password_hashed_with_older_parameters() {
+        let Some(pool) = get_pool().await else { return };
+        db::testing::migrate().await;
+
+        let email = unique_test_email();
+        let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
+        let old_hash = hash_with_params(8_192, 1, 1, "Passw0rd!");
+        sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+            .bind(&old_hash)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(identity::password::needs_rehash(&old_hash));
+
+        let res = send_request(pool.clone(), login_request(&email, "Passw0rd!")).await;
+        assert_eq!(res.status(), 200);
+
+        let new_hash = stored_hash(&pool, user_id).await;
+        assert_ne!(new_hash, old_hash, "the old hash was kept");
+        assert!(
+            !identity::password::needs_rehash(&new_hash),
+            "the stored hash is not at the current parameters: {new_hash}"
+        );
+        assert!(identity::password::verify_password("Passw0rd!", &new_hash).unwrap());
+
+        // The next login still works, and a current hash is left alone.
+        let res = send_request(pool.clone(), login_request(&email, "Passw0rd!")).await;
+        assert_eq!(res.status(), 200);
+        assert_eq!(stored_hash(&pool, user_id).await, new_hash);
+    }
+
+    #[tokio::test]
+    async fn failed_login_does_not_rehash_or_change_the_stored_hash() {
+        let Some(pool) = get_pool().await else { return };
+        db::testing::migrate().await;
+
+        let email = unique_test_email();
+        let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
+        let old_hash = hash_with_params(8_192, 1, 1, "Passw0rd!");
+        sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2")
+            .bind(&old_hash)
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let res = send_request(pool.clone(), login_request(&email, "wrong-password")).await;
+        assert_eq!(res.status(), 401);
+        assert_eq!(stored_hash(&pool, user_id).await, old_hash);
+    }
+
+    /// Before the fix an unknown email took about three times as long as a known one (the dummy
+    /// hash used `m=65536` against `m=19456`). Medians of several attempts keep this stable; the
+    /// bounds are far inside the old ratio of about 3.4.
+    #[tokio::test]
+    async fn known_and_unknown_email_logins_take_comparable_time() {
+        let Some(pool) = get_pool().await else { return };
+        db::testing::migrate().await;
+
+        let known_email = unique_test_email();
+        seed_user_with_password(&pool, &known_email, None, "Passw0rd!").await;
+
+        // Warm the connection pool and the code paths so the first request isn't an outlier.
+        send_request(pool.clone(), login_request(&known_email, "wrong-password")).await;
+        send_request(
+            pool.clone(),
+            login_request(&unique_test_email(), "wrong-password"),
+        )
+        .await;
+
+        let mut known = Vec::new();
+        let mut unknown = Vec::new();
+        async fn timed_failed_login(pool: &sqlx::PgPool, email: &str) -> std::time::Duration {
+            let started = std::time::Instant::now();
+            let res = send_request(pool.clone(), login_request(email, "wrong-password")).await;
+            assert_eq!(res.status(), 401);
+            started.elapsed()
+        }
+
+        // Alternate which side goes first so cache and clock effects can't favour one of them.
+        for i in 0..7 {
+            let unknown_email = unique_test_email();
+            if i % 2 == 0 {
+                known.push(timed_failed_login(&pool, &known_email).await);
+                unknown.push(timed_failed_login(&pool, &unknown_email).await);
+            } else {
+                unknown.push(timed_failed_login(&pool, &unknown_email).await);
+                known.push(timed_failed_login(&pool, &known_email).await);
+            }
+        }
+        known.sort();
+        unknown.sort();
+        let (known, unknown) = (known[3].as_secs_f64(), unknown[3].as_secs_f64());
+        let ratio = unknown / known;
+        assert!(
+            (0.6..=1.6).contains(&ratio),
+            "unknown/known login time ratio {ratio:.2} (known {known:.3}s, unknown {unknown:.3}s)"
+        );
+    }
 }

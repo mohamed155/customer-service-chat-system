@@ -65,7 +65,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | STRIDE | Threat | Controls | Status | Owner |
 | -- | -- | -- | -- | -- |
 | S | Credential stuffing, password guessing | Argon2id; `(email, ip)` login throttle; uniform error messages | ✓ throttle · Gap: per-account lockout (ADR-005 A7), MFA (A6) | Identity & Access |
-| S | Account enumeration via login timing | Dummy hash on unknown email | **Gap**: dummy and real hash parameters differ, about 3× timing difference (ADR-005 A3, high) | Identity & Access |
+| S | Account enumeration via login timing | Dummy hash on unknown email | ✓ dummy and real hashes share one set of pinned parameters, with a test for it and a timing test (ADR-005 A3 resolved) | Identity & Access |
 | S | Session theft via XSS | HttpOnly cookie, CSP, no tokens in JS storage | ✓ HttpOnly, no JS storage · Gap: CSP is `report-only`, not enforced | Identity & Access |
 | T | Forged session token | Signed JWT | ✓ HS256 · Gap: EdDSA + `kid`, verify-only keys in other units (ADR-005 A1) | Identity & Access |
 | R | User denies a login or sensitive action | Audit records for login, logout, role changes | ✓ | Identity & Access |
@@ -226,7 +226,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | 2 | Internal error text (including database errors) returned to clients. **Resolved:** every 5xx from `ApiError::internal_error` returns a fixed message, the `internal_error` code and the `request_id`; the failed step is logged once with the request ID and tenant ID (with the error text when the handler passes it to `internal_error_from`, otherwise in the handler's own log line within the same request span), and a compile-time signature plus a source-scan test stop new leaks. Residual: the log holds the underlying error text, so log access stays restricted | all API modules | ADR-012 A1 resolved · [MOH-32](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-32) |
 | 3 | Tenant secrets under one static key per type, with no rotation or crypto-shredding | 4.9 I | ADR-014 E1 · [MOH-33](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-33) |
 | 4 | Platform accounts without MFA | 4.11 E | ADR-005 A6 · [MOH-34](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-34) |
-| 5 | Account enumeration through login timing | 4.1 S | ADR-005 A3 · [MOH-35](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-35) |
+| 5 | Account enumeration through login timing. **Resolved:** the dummy hash and real hashes use the same pinned parameters and a login does the same work for a known and an unknown email; tests fail on a mismatch or a timing gap. Residual: the signup and invitation-accept endpoints answer 409 for an email that already has an account, which is a different, token- or signup-gated signal | 4.1 S | ADR-005 A3 resolved · [MOH-35](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-35) |
 | 6 | CSRF gaps (missing `Origin` allowed, login unchecked) | 4.1 E | ADR-005 A4 · [MOH-36](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-36) |
 | 7 | Public and internal traffic share one process and router | 4.4 D/E | ADR-010 G1 · [MOH-37](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-37) |
 | 8 | CSP not enforced (`report-only`); GitHub Actions pinned by tag, not SHA; no circuit breakers | 4.1 S, 4.6 D, 4.13 T, 4.14 S | CSP [MOH-38](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-38) · Actions SHA pinning [MOH-39](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-39) · circuit breakers [MOH-40](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-40) |

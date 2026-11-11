@@ -99,6 +99,7 @@ pub async fn authenticate_login(
 ) -> Result<LoginSuccess, LoginError> {
     let email = payload.email.trim().to_owned();
     let password = payload.password;
+    let password_for_rehash = password.clone();
 
     if email.is_empty() || password.trim().is_empty() {
         return Err(LoginError::Validation);
@@ -123,6 +124,8 @@ pub async fn authenticate_login(
         audit::login_failed(pool, &email, "invalid_credentials").await;
         return Err(LoginError::InvalidCredentials);
     };
+
+    rehash_if_outdated(pool, &user, &password_for_rehash).await;
 
     let principal =
         crate::principal_from_row(user.id, user.email, user.display_name, user.platform_role)
@@ -224,6 +227,44 @@ async fn fetch_login_user(pool: &PgPool, email: &str) -> sqlx::Result<Option<Log
             password_hash,
         },
     ))
+}
+
+/// Replace a hash made with older parameters by one made with the current ones, now that the
+/// plain password is at hand. A failure is logged and ignored: the login already succeeded, and the
+/// next login tries again. The update only applies if the stored hash is still the one that was
+/// verified, so a password change that happens in between is never overwritten.
+async fn rehash_if_outdated(pool: &PgPool, user: &LoginUser, password: &str) {
+    let Some(old_hash) = user.password_hash.as_deref() else {
+        return;
+    };
+    if !password::needs_rehash(old_hash) {
+        return;
+    }
+
+    let password = password.to_owned();
+    let new_hash =
+        match tokio::task::spawn_blocking(move || password::hash_password(&password)).await {
+            Ok(Ok(hash)) => hash,
+            Ok(Err(error)) => {
+                tracing::warn!(user.id = %user.id, %error, "password rehash failed");
+                return;
+            }
+            Err(error) => {
+                tracing::warn!(user.id = %user.id, %error, "password rehash task failed");
+                return;
+            }
+        };
+
+    let updated =
+        sqlx::query("UPDATE users SET password_hash = $1 WHERE id = $2 AND password_hash = $3")
+            .bind(&new_hash)
+            .bind(user.id)
+            .bind(old_hash)
+            .execute(pool)
+            .await;
+    if let Err(error) = updated {
+        tracing::warn!(user.id = %user.id, %error, "storing the rehashed password failed");
+    }
 }
 
 async fn verify_login_password(user: Option<&LoginUser>, password: String) -> bool {
