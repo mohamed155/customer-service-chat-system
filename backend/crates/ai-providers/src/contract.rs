@@ -140,9 +140,13 @@ impl ProviderError {
         }
     }
 
-    /// True for an error made by [`guard_refusal`](Self::guard_refusal).
+    /// True for an error made by [`guard_refusal`](Self::guard_refusal). It checks everything that
+    /// constructor sets, so a vendor error message that happens to start with the same words (a
+    /// vendor controls its own error text) is not taken for a refusal.
     pub fn is_guard_refusal(&self) -> bool {
-        self.detail.starts_with(GUARD_REFUSAL_PREFIX)
+        self.category == ErrorCategory::Unavailable
+            && !self.retriable
+            && self.detail.starts_with(GUARD_REFUSAL_PREFIX)
     }
 }
 
@@ -246,6 +250,33 @@ mod tests {
     fn secret_key_debug_redacted() {
         let key = SecretKey::new("sk-test-12345".into());
         assert_eq!(format!("{:?}", key), "SecretKey(****)");
+    }
+
+    #[test]
+    fn only_a_real_guard_refusal_is_a_guard_refusal() {
+        let refusal = ProviderError::guard_refusal("circuit open for ai:openai");
+        assert!(refusal.is_guard_refusal());
+        assert_eq!(refusal.category, ErrorCategory::Unavailable);
+        assert!(!refusal.retriable);
+
+        // A vendor error whose message starts with the same words.
+        let text = format!("{GUARD_REFUSAL_PREFIX}API key not valid");
+        for (category, retriable) in [
+            (ErrorCategory::Authentication, false),
+            (ErrorCategory::InvalidRequest, false),
+            (ErrorCategory::RateLimited, true),
+            (ErrorCategory::Unavailable, true),
+        ] {
+            let vendor = ProviderError {
+                category,
+                retriable,
+                detail: text.clone(),
+            };
+            assert!(
+                !vendor.is_guard_refusal(),
+                "{category:?} retriable={retriable}"
+            );
+        }
     }
 
     #[test]

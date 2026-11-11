@@ -62,8 +62,9 @@ impl GuardedChat {
 }
 
 /// A response stream that keeps its bulkhead slot until it is finished or dropped, and reports how
-/// it went to the circuit: an unhealthy error while streaming is a failure, reaching the end (or
-/// the `Done` event) is a success. A stream dropped half-way reports nothing.
+/// it went to the circuit: an unhealthy error while streaming is a failure, the `Done` event is a
+/// success, and a stream that ends without either (cut off mid-answer) is a failure. The consumer
+/// still sees the stream as it came. A stream dropped half-way reports nothing.
 struct HeldStream {
     inner: ChatStream,
     permit: Permit,
@@ -77,7 +78,9 @@ impl Stream for HeldStream {
         let item = futures::ready!(this.inner.as_mut().poll_next(cx));
         match &item {
             Some(Err(error)) if counts_as_failure(error) => this.permit.failure(),
-            Some(Err(_)) | Some(Ok(StreamEvent::Done { .. })) | None => this.permit.success(),
+            Some(Err(_)) | Some(Ok(StreamEvent::Done { .. })) => this.permit.success(),
+            // The first outcome wins, so this only counts when no `Done` or error came before.
+            None => this.permit.failure(),
             Some(Ok(_)) => {}
         }
         Poll::Ready(item)
@@ -557,5 +560,35 @@ mod tests {
         drop(stream);
         let snap = guard.snapshot();
         assert_eq!((snap.state, snap.in_flight), (State::Closed, 0));
+    }
+    #[tokio::test(start_paused = true)]
+    async fn a_stream_cut_off_before_its_end_counts_as_a_failure() {
+        use futures::StreamExt;
+
+        // Text arrives, then the stream ends with neither `Done` nor an error.
+        let inner = StreamScript::new(vec![Ok(StreamEvent::Delta("half an ans".into()))]);
+        let guard = Guard::new("ai:test", policy());
+        let provider = GuardedChat::new(inner, guard.clone());
+
+        for _ in 0..3 {
+            let mut stream = provider.stream(&key(), &request()).await.expect("connects");
+            while stream.next().await.is_some() {}
+        }
+        assert_eq!(guard.snapshot().state, State::Open);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_stream_that_finished_is_not_counted_twice() {
+        use futures::StreamExt;
+
+        let inner = StreamScript::new(vec![Ok(StreamEvent::Delta("hi".into())), done()]);
+        let guard = Guard::new("ai:test", policy());
+        let provider = GuardedChat::new(inner, guard.clone());
+        for _ in 0..5 {
+            let mut stream = provider.stream(&key(), &request()).await.unwrap();
+            while stream.next().await.is_some() {}
+        }
+        let snap = guard.snapshot();
+        assert_eq!((snap.state, snap.consecutive_failures), (State::Closed, 0));
     }
 }
