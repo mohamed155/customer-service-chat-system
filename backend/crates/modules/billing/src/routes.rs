@@ -177,7 +177,7 @@ pub async fn create_plan(
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => {
-            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
+            return ApiError::internal_error_from("Database transaction begin failed", &e)
                 .into_response();
         }
     };
@@ -188,17 +188,16 @@ pub async fn create_plan(
             return ApiError::conflict("A plan with this name already exists").into_response();
         }
         Err(e) => {
-            return ApiError::internal_error(format!("Database insert failed: {e}"))
-                .into_response();
+            return ApiError::internal_error_from("Database insert failed", &e).into_response();
         }
     };
 
     if let Err(e) = audit::plan_created(&mut tx, principal.user_id, &plan).await {
-        return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
+        return ApiError::internal_error_from("Audit insert failed", &e).into_response();
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
+        return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
     }
 
     (StatusCode::CREATED, Json(plan)).into_response()
@@ -241,7 +240,7 @@ pub async fn update_plan(
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => {
-            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
+            return ApiError::internal_error_from("Database transaction begin failed", &e)
                 .into_response();
         }
     };
@@ -253,7 +252,7 @@ pub async fn update_plan(
             return ApiError::not_found("Plan not found").into_response();
         }
         Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
+            return ApiError::internal_error_from("Database query failed", &e).into_response();
         }
     };
 
@@ -265,8 +264,7 @@ pub async fn update_plan(
     let after = match queries::set_plan_status(&mut tx, plan_id, &payload.status).await {
         Ok(p) => p,
         Err(e) => {
-            return ApiError::internal_error(format!("Database update failed: {e}"))
-                .into_response();
+            return ApiError::internal_error_from("Database update failed", &e).into_response();
         }
     };
 
@@ -279,11 +277,11 @@ pub async fn update_plan(
     )
     .await
     {
-        return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
+        return ApiError::internal_error_from("Audit insert failed", &e).into_response();
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
+        return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
     }
 
     (StatusCode::OK, Json(after)).into_response()
@@ -361,7 +359,7 @@ pub async fn put_subscription(
     {
         Ok(exists) => exists,
         Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
+            return ApiError::internal_error_from("Database query failed", &e).into_response();
         }
     };
     if !tenant_exists {

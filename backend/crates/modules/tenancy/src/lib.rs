@@ -40,8 +40,7 @@ impl TenantContext {
     /// response a handler should return when the database cannot start a transaction.
     pub async fn unit_of_work(&self, pool: &sqlx::PgPool) -> Result<db::UnitOfWork, Response> {
         db::UnitOfWork::begin(pool, self).await.map_err(|error| {
-            tracing::error!(%error, "failed to begin tenant unit of work");
-            ApiError::internal_error("Database error")
+            ApiError::internal_error_from("Failed to begin tenant unit of work", error)
                 .with_request_id(&self.request_id)
                 .into_response()
         })
@@ -54,8 +53,7 @@ impl TenantContext {
     /// something must end here (or in `UnitOfWork::commit`).
     pub async fn commit(&self, uow: db::UnitOfWork) -> Result<(), Response> {
         uow.commit().await.map_err(|error| {
-            tracing::error!(%error, "failed to commit tenant unit of work");
-            ApiError::internal_error("Database error")
+            ApiError::internal_error_from("Failed to commit tenant unit of work", error)
                 .with_request_id(&self.request_id)
                 .into_response()
         })
@@ -212,7 +210,11 @@ pub async fn tenant_context_middleware(
 
     request.extensions_mut().insert(ctx);
     request.extensions_mut().insert(permissions);
-    let response = next.run(request).await;
+    let mut response = next.run(request).await;
+    // Lets the server-error log name the tenant (see the server's `internal_error` middleware).
+    response
+        .extensions_mut()
+        .insert(kernel::ResponseTenant(tenant_id));
     if response.status() == axum::http::StatusCode::FORBIDDEN {
         audit::access_denied(
             &config.pool,

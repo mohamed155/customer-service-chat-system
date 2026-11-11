@@ -190,7 +190,7 @@ pub async fn logout(
         .await;
 
         if let Err(e) = insert {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
+            return ApiError::internal_error_from("Database query failed", &e).into_response();
         }
 
         audit::logged_out(&pool, principal.user_id, claims.jti).await;
