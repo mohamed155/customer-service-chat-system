@@ -1,0 +1,85 @@
+name: OpenAPI
+# API contract check (MOH-43, ADR-012 gap A5). `docs/api/openapi.json` is the committed OpenAPI
+# document; the backend test `openapi_snapshot` (in the Backend workflow's `verify`) fails when it is
+# stale. This workflow compares it with the base branch and fails on a breaking change for API
+# clients: a removed endpoint, a new required request field, a narrowed response, and so on
+# (oasdiff's ERR level).
+#
+# A deliberate breaking change is allowed by the pull request label `breaking-api-change`; the
+# changes are still listed. The workflow runs again when the label is added or removed, so the
+# result follows the label. It is a workflow of its own because those two events must not cancel or
+# repeat the other checks in ci.yml (they share a concurrency group per pull request).
+#
+# oasdiff runs as a pinned release binary with a checksum, like `just` in infra.yml, and only on
+# local files: nothing is uploaded and no third-party action runs. The self-test first proves the
+# gate is armed, so a broken install can't turn the check into a silent pass.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+concurrency:
+  group: openapi-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+# Least privilege for every job. A job that needs more declares it itself.
+permissions:
+  contents: read
+jobs:
+  openapi-breaking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OASDIFF_VERSION: "1.35.0"
+      # From checksums.txt of the release (oasdiff_1.35.0_linux_amd64.tar.gz).
+      OASDIFF_SHA256: a8023002fcb2eaa7f5758148a9303cb63d33b939886df312268bc0fc7b939140
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Install oasdiff (pinned, checksum verified)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/oasdiff.tar.gz" \
+            "https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
+          echo "${OASDIFF_SHA256}  $RUNNER_TEMP/oasdiff.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/oasdiff.tar.gz" -C "$RUNNER_TEMP/bin" oasdiff
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Self-test, a removed endpoint is flagged and an unchanged document is not
+        run: |
+          cat > "$RUNNER_TEMP/with-b.json" <<'JSON'
+          {"openapi":"3.1.0","info":{"title":"t","version":"1"},"paths":{"/a":{"get":{"operationId":"a","responses":{"200":{"description":"ok"}}}},"/b":{"get":{"operationId":"b","responses":{"200":{"description":"ok"}}}}}}
+          JSON
+          cat > "$RUNNER_TEMP/without-b.json" <<'JSON'
+          {"openapi":"3.1.0","info":{"title":"t","version":"1"},"paths":{"/a":{"get":{"operationId":"a","responses":{"200":{"description":"ok"}}}}}}
+          JSON
+          oasdiff breaking --fail-on ERR "$RUNNER_TEMP/with-b.json" "$RUNNER_TEMP/with-b.json"
+          status=0
+          oasdiff breaking --fail-on ERR "$RUNNER_TEMP/with-b.json" "$RUNNER_TEMP/without-b.json" || status=$?
+          if [ "$status" -ne 1 ]; then
+            echo "::error::oasdiff did not flag a removed endpoint (exit $status, expected 1), so this check cannot be trusted"
+            exit 1
+          fi
+      - name: Compare docs/api/openapi.json with the base branch
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          if ! git cat-file -e "$BASE_SHA:docs/api/openapi.json" 2>/dev/null; then
+            echo "::notice::The base branch has no docs/api/openapi.json yet, so there is nothing to compare."
+            exit 0
+          fi
+          git show "$BASE_SHA:docs/api/openapi.json" > "$RUNNER_TEMP/base.json"
+          status=0
+          oasdiff breaking --fail-on ERR "$RUNNER_TEMP/base.json" docs/api/openapi.json || status=$?
+          # oasdiff exits 1 for breaking changes and 101, 102 or 103 for bad flags, a spec it can't
+          # load, or a glob with no match. Only the first can be allowed by the label.
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          if [ "$status" -ne 1 ]; then
+            echo "::error::oasdiff could not compare the OpenAPI documents (exit $status)."
+            exit "$status"
+          fi
+          if printf '%s' "$PR_LABELS" | grep -q '"breaking-api-change"'; then
+            echo "::warning::Breaking API changes (listed above), allowed by the breaking-api-change label."
+            exit 0
+          fi
+          echo "::error::Breaking API changes (listed above). If they are intended, add the pull request label 'breaking-api-change' and describe the migration in the pull request."
+          exit 1

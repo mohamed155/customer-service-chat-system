@@ -49,39 +49,60 @@ import type {
 type Schema = components['schemas'];
 
 /**
- * The comparison ignores `readonly`, `null` and optionality, and looks at field names and value
- * types. The generated types mark every Rust `Option` field optional and nullable
- * (`x?: T | null`), but the backend either omits the key or sends it as `null` depending on a
- * serde attribute the schema does not record, so the two spellings cannot be told apart. What
- * the comparison does catch is what actually breaks the client: a renamed or differently cased
- * field, a missing field, a changed value type.
+ * The generated types mark every Rust `Option` field optional and nullable (`x?: T | null`), but
+ * the backend either omits the key or sends `null` depending on a serde attribute the schema does
+ * not record, so for those fields the comparison cannot tell the two apart and accepts either. A
+ * field the contract lists as required keeps its `null`: a client type that cannot hold it is
+ * wrong. The comparison also catches a renamed or differently cased field, a missing field and a
+ * changed value type.
  */
+type Scalar = string | number | boolean | null | undefined;
 type NonNull<T> = Exclude<T, null | undefined>;
+type RequiredKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? never : K }[keyof T];
+type OptionalKeys<T> = Exclude<keyof T, RequiredKeys<T>>;
 
-/** The contract side: every field required, so a field the server may send must be known. */
-type FromContract<T> = [T] extends [string | number | boolean | null | undefined]
-  ? NonNull<T>
+/** The contract side: every field must be known to the client. */
+type FromContract<T> = [T] extends [Scalar]
+  ? T
   : T extends readonly (infer U)[]
     ? FromContract<U>[]
     : T extends object
-      ? { -readonly [K in keyof T]-?: FromContract<NonNull<T[K]>> }
+      ? { -readonly [K in RequiredKeys<T>]: FromContract<T[K]> } & {
+          -readonly [K in OptionalKeys<T>]-?: FromContract<NonNull<T[K]>>;
+        }
       : T;
 
-/** The client side: optional fields stay optional, so a looser client type is fine. */
-type FromClient<T> = [T] extends [string | number | boolean | null | undefined]
-  ? NonNull<T>
+/** The client side, as written (only `readonly` is dropped). A looser client type is fine. */
+type FromClient<T> = [T] extends [Scalar]
+  ? T
   : T extends readonly (infer U)[]
     ? FromClient<U>[]
     : T extends object
-      ? { -readonly [K in keyof T]: FromClient<NonNull<T[K]>> }
+      ? { -readonly [K in keyof T]: FromClient<T[K]> }
       : T;
 
 /**
  * True when everything the server may send for `Schema` fits the client's `Wire` type: it names
- * every field the same way and does not narrow a value type. A `Wire` that is looser than the
- * contract (extra optional fields, `string` for an enum) is fine.
+ * every field the same way, keeps the `null` of a required nullable field, and does not narrow a
+ * value type. A `Wire` that is looser than the contract (extra optional fields, `string` for an
+ * enum) is fine.
  */
 type Accepts<Wire, Schema> = [FromContract<Schema>] extends [FromClient<Wire>] ? true : false;
+
+// The check itself must be able to fail. Each line is a compile error if the assertion is wrong.
+type Yes<T extends true> = T;
+type No<T extends false> = T;
+export type CheckerBehaviour = [
+  No<Accepts<{ value: string }, { value: string | null }>>, // required nullable: the client must allow null
+  Yes<Accepts<{ value: string | null }, { value: string | null }>>,
+  Yes<Accepts<{ value?: string }, { value?: string | null }>>, // Option field: omitted or null, either way
+  Yes<Accepts<{ value: string | null }, { value?: string | null }>>,
+  No<Accepts<{ subject_type: string }, { subjectType: string }>>, // renamed or recased field
+  No<Accepts<{ kind: 'a' | 'b' }, { kind: string }>>, // client narrower than the contract
+  Yes<Accepts<{ kind: string }, { kind: 'a' | 'b' }>>, // client looser than the contract
+  No<Accepts<{ items: { id: string }[] }, { items: { id: number }[] }>>, // nested value type
+  Yes<Accepts<{ a: string }, { a: string; b: string }>>, // a field the server sends and the client ignores is fine
+];
 
 /** Compiles only when every pair is `true`; the error names the pair that is not. */
 type AssertAll<T extends Record<keyof T, true>> = T;

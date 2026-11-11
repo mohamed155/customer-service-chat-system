@@ -9,7 +9,7 @@ reviewed, compared and used to generate clients. Never edit it by hand.
 | Check | Where | Fails when |
 | -- | -- | -- |
 | Document is current | backend test `openapi_snapshot` (job `verify`) | the committed file differs from what the router generates |
-| No breaking change | job `openapi-breaking` in `.github/workflows/ci.yml` | the pull request makes a breaking change for API clients compared with its base branch |
+| No breaking change | job `openapi-breaking` in `.github/workflows/openapi.yml` | the pull request makes a breaking change for API clients compared with its base branch |
 | Types are current | frontend job `verify`, step "Generated API types are current" | `apps/dashboard/src/app/core/api/generated/api.ts` differs from what `pnpm gen:api` generates |
 | Wire types match | dashboard unit test `core/api/contract.spec.ts` | a hand-written wire type no longer matches the generated schema it describes |
 
