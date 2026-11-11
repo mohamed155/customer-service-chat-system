@@ -9,6 +9,58 @@ const { dashboardCsp } = require('./support/csp.cjs') as { dashboardCsp: () => s
 const csp: string = dashboardCsp();
 
 const permissions = ['overview.view', 'conversations.view', 'customers.view', 'settings.view'];
+// Every permission the tenant routes ask for (core/authz/permissions.ts), so the guards let each
+// page render instead of redirecting.
+const allTenantPermissions = [
+  ...permissions,
+  'ai_agent.view',
+  'knowledge_base.view',
+  'integrations.view',
+  'analytics.view',
+  'tools.view',
+  'members.view',
+  'widgets.view',
+  'audit.view',
+  'billing.view',
+];
+const tenantRoutes = [
+  '/tenant/overview',
+  '/tenant/conversations',
+  '/tenant/customers',
+  '/tenant/ai-agent',
+  '/tenant/ai-agent/prompt',
+  '/tenant/knowledge-base',
+  '/tenant/knowledge-base/new',
+  '/tenant/integrations',
+  '/tenant/analytics',
+  '/tenant/audit-logs',
+  '/tenant/billing',
+  '/tenant/settings',
+  '/tenant/settings/tools',
+  '/tenant/team',
+  '/tenant/escalations',
+  '/tenant/widgets',
+  '/tenant/notifications',
+];
+const platformPermissions = [
+  'platform.admin',
+  'platform.tenants.list',
+  'platform.tenants.switch',
+  'platform.tenants.manage',
+  'platform.analytics.view',
+  'platform.diagnostics.view',
+  'platform.billing.view',
+  'platform.audit.view',
+];
+const platformRoutes = [
+  '/platform/overview-placeholder',
+  '/platform/tenants',
+  '/platform/tenants/new',
+  '/platform/audit',
+  '/platform/manage-billing',
+  '/platform/system-health',
+  '/platform/ai-providers',
+];
 const tenant = { id: 'tenant-1', name: 'Acme Support', slug: 'acme-support', status: 'active' };
 const identity = {
   id: 'tenant-user',
@@ -23,19 +75,28 @@ const identity = {
       tenantName: tenant.name,
       tenantSlug: tenant.slug,
       role: 'owner',
-      permissions,
+      permissions: allTenantPermissions,
     },
   ],
+};
+const platformIdentity = {
+  ...identity,
+  id: 'platform-user',
+  email: 'ops@platform.test',
+  displayName: 'Pat Platform',
+  platformRole: 'super_admin',
+  platformPermissions,
+  memberships: [],
 };
 
 async function json(route: Route, data: unknown, status = 200) {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
 }
 
-async function mockSignedIn(page: Page) {
+async function mockSignedIn(page: Page, me: unknown = identity) {
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
-    if (path === '/me') return json(route, identity);
+    if (path === '/me') return json(route, me);
     return json(route, { items: [], nextCursor: null });
   });
 }
@@ -133,12 +194,38 @@ test.describe('Content-Security-Policy enforcement', () => {
     expect(await violations(page)).toEqual([]);
   });
 
-  for (const route of ['/tenant/overview', '/tenant/conversations', '/tenant/settings']) {
+  // MOH-38 asked for the report-only violation reports to be reviewed before enforcing. There is no
+  // report endpoint, so this is the review: every dashboard route, run under the enforced policy,
+  // fails on any violation. Add a route here when you add one to the router.
+  for (const route of tenantRoutes) {
     test(`${route} renders with no violations`, async ({ page }) => {
       await recordViolations(page);
       await mockSignedIn(page);
       await page.goto(route);
       await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(new URL(page.url()).pathname).toBe(route);
+      expect(await violations(page)).toEqual([]);
+    });
+  }
+
+  for (const route of platformRoutes) {
+    test(`${route} renders with no violations`, async ({ page }) => {
+      await recordViolations(page);
+      await mockSignedIn(page, platformIdentity);
+      await page.goto(route);
+      await expect(page.getByRole('banner')).toBeVisible();
+      await page.waitForLoadState('networkidle');
+      expect(new URL(page.url()).pathname).toBe(route);
+      expect(await violations(page)).toEqual([]);
+    });
+  }
+
+  for (const route of ['/auth/login', '/auth/signup', '/auth/forgot-password', '/no/such/page']) {
+    test(`${route} renders with no violations`, async ({ page }) => {
+      await recordViolations(page);
+      await mockSignedOut(page);
+      await page.goto(route);
       await page.waitForLoadState('networkidle');
       expect(await violations(page)).toEqual([]);
     });
