@@ -14,13 +14,18 @@ use axum::{
     Extension, Json,
 };
 use config::AppConfig;
-use kernel::{ApiError, ApiJson};
+use kernel::rate_limit::{Budget, Decision, Scope};
+use kernel::{ApiError, ApiJson, RateLimiter};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use utoipa::ToSchema;
 
 use crate::mfa::{self, MfaError, MfaKeys};
 use crate::{session, Principal};
+
+/// Attempts to start enrolment per account, per window.
+const ENROL_PASSWORD_ATTEMPTS: u32 = 5;
+const ENROL_PASSWORD_WINDOW: std::time::Duration = std::time::Duration::from_secs(15 * 60);
 
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -138,9 +143,27 @@ fn keys(pool: &PgPool, config: &AppConfig) -> Result<MfaKeys, Box<Response>> {
 pub async fn begin_enrolment(
     State(pool): State<PgPool>,
     Extension(config): Extension<Arc<AppConfig>>,
+    Extension(limiter): Extension<Arc<dyn RateLimiter>>,
     principal: Principal,
     ApiJson(payload): ApiJson<EnrolRequest>,
 ) -> Response {
+    // The password check is a guessing oracle for whoever holds a session, so it has a budget of
+    // its own per account, on top of the per-client limit on the route.
+    if config.rate_limit_enabled {
+        if let Decision::Refused { retry_after } = limiter
+            .check(
+                Scope::Mfa,
+                &format!("enrol-password:{}", principal.user_id),
+                Budget {
+                    max_requests: ENROL_PASSWORD_ATTEMPTS,
+                    window: ENROL_PASSWORD_WINDOW,
+                },
+            )
+            .await
+        {
+            return ApiError::rate_limited("Too many attempts", retry_after).into_response();
+        }
+    }
     match password_is_correct(&pool, principal.user_id, payload.password).await {
         Ok(true) => {}
         Ok(false) => {

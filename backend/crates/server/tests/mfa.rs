@@ -1074,6 +1074,54 @@ async fn attempts_at_the_second_step_are_rate_limited_per_client() {
 }
 
 #[tokio::test]
+async fn password_guesses_at_enrolment_are_limited_per_account() {
+    let Some(pool) = get_pool().await else { return };
+    let _serial = DB_LOCK.lock().await;
+    reset().await;
+    let mut limited = test_config();
+    limited.rate_limit_enabled = true;
+    // Far above the per-client limit, so only the per-account budget can refuse here.
+    limited.rate_limit_login_max = 1000;
+    let app = router::app(state(pool, limited));
+    let (victim, _) = seed_user().await;
+    let (other, _) = seed_user().await;
+    let enrol = |user: Uuid, password: &str| {
+        as_user(
+            json_request(
+                Method::POST,
+                "/api/v1/auth/mfa/enrol",
+                json!({ "password": password }),
+            ),
+            user,
+        )
+    };
+
+    for guess in 1..=5 {
+        let r = send(&app, enrol(victim, "wrong-guess")).await;
+        assert_eq!(
+            r.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "guess {guess}"
+        );
+    }
+    // Out of attempts: even the right password is refused for this account, from any address.
+    let blocked = send(&app, enrol(victim, PASSWORD)).await;
+    assert_eq!(blocked.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(blocked.headers().contains_key("retry-after"));
+    let factors: i64 = sqlx::query_scalar("SELECT count(*) FROM mfa_factors WHERE user_id = $1")
+        .bind(victim)
+        .fetch_one(&db::testing::seed_pool())
+        .await
+        .unwrap();
+    assert_eq!(factors, 0);
+    // Another account is unaffected.
+    assert_eq!(
+        send(&app, enrol(other, PASSWORD)).await.status(),
+        StatusCode::CREATED
+    );
+}
+
+#[tokio::test]
 async fn deleting_a_user_destroys_the_key_that_protects_their_secret() {
     let (_pool, app, _lock) = setup!();
     let (user, _email, _secret, _) = enrolled_user(&app).await;
