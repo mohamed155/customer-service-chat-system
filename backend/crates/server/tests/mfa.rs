@@ -1122,6 +1122,46 @@ async fn password_guesses_at_enrolment_are_limited_per_account() {
 }
 
 #[tokio::test]
+async fn a_forwarded_header_cannot_name_another_limiter_key() {
+    let Some(pool) = get_pool().await else { return };
+    let _serial = DB_LOCK.lock().await;
+    reset().await;
+    let mut limited = test_config();
+    limited.rate_limit_enabled = true;
+    // Far above the per-client limit, so only a per-account budget could refuse the enrolment.
+    limited.rate_limit_login_max = 1000;
+    limited.trusted_proxy = true;
+    let app = router::app(state(pool, limited));
+    let (victim, _) = seed_user().await;
+
+    // An attacker puts the victim's per-account key in the forwarded header, again and again
+    // (more times than the account's budget of five).
+    for _ in 0..10 {
+        let mut r = json_request(
+            Method::POST,
+            "/api/v1/auth/mfa/verify",
+            json!({ "code": "123456" }),
+        );
+        r.headers_mut().insert(
+            "x-forwarded-for",
+            format!("enrol-password:{victim}").parse().unwrap(),
+        );
+        // Not an address, so it is ignored and the peer address is used; there is no challenge.
+        assert_eq!(send(&app, r).await.status(), StatusCode::UNAUTHORIZED);
+    }
+    // The victim's enrolment budget is untouched.
+    let enrol = as_user(
+        json_request(
+            Method::POST,
+            "/api/v1/auth/mfa/enrol",
+            json!({ "password": PASSWORD }),
+        ),
+        victim,
+    );
+    assert_eq!(send(&app, enrol).await.status(), StatusCode::CREATED);
+}
+
+#[tokio::test]
 async fn deleting_a_user_destroys_the_key_that_protects_their_secret() {
     let (_pool, app, _lock) = setup!();
     let (user, _email, _secret, _) = enrolled_user(&app).await;

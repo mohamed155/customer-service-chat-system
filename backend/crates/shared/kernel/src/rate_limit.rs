@@ -25,6 +25,7 @@ impl Default for InMemoryRateLimitStore {
 pub enum Scope {
     Login,
     Mfa,
+    MfaEnrol,
     WidgetSession,
     WidgetMessage,
     Webhook,
@@ -36,6 +37,7 @@ impl Scope {
         match self {
             Self::Login => "login",
             Self::Mfa => "mfa",
+            Self::MfaEnrol => "mfa_enrol",
             Self::WidgetSession => "widget_session",
             Self::WidgetMessage => "widget_message",
             Self::Webhook => "webhook",

@@ -152,8 +152,8 @@ pub async fn begin_enrolment(
     if config.rate_limit_enabled {
         if let Decision::Refused { retry_after } = limiter
             .check(
-                Scope::Mfa,
-                &format!("enrol-password:{}", principal.user_id),
+                Scope::MfaEnrol,
+                &principal.user_id.to_string(),
                 Budget {
                     max_requests: ENROL_PASSWORD_ATTEMPTS,
                     window: ENROL_PASSWORD_WINDOW,

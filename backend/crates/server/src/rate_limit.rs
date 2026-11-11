@@ -132,8 +132,10 @@ pub async fn mfa_rate_limit(
             .get("x-forwarded-for")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.split(',').next())
-            .map(|first| first.trim().to_string())
-            .filter(|ip| !ip.is_empty())
+            // Only an address is a client; anything else in the header is ignored, so the
+            // header cannot be used to name some other limiter key.
+            .and_then(|first| first.trim().parse::<std::net::IpAddr>().ok())
+            .map(|ip| ip.to_string())
     } else {
         None
     };
