@@ -1,4 +1,5 @@
 use ai_providers::SecretKey;
+use secrets::{StoredSecret, Vault};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -29,17 +30,57 @@ async fn platform_config(pool: &PgPool) -> Result<Option<AiConfigRow>, sqlx::Err
         .await
 }
 
+type SecretColumns = (
+    Vec<u8>,
+    Vec<u8>,
+    Option<Vec<u8>>,
+    Option<String>,
+    Option<i32>,
+    Option<String>,
+);
+
+/// The same columns plus the row's `tenant_id` (a flat tuple: sqlx cannot decode a nested one).
+type TenantSecretColumns = (
+    Vec<u8>,
+    Vec<u8>,
+    Option<Vec<u8>>,
+    Option<String>,
+    Option<i32>,
+    Option<String>,
+    Option<Uuid>,
+);
+
+fn stored(columns: SecretColumns) -> Result<StoredSecret, String> {
+    let (ciphertext, nonce, wrapped_dek, kek_id, kek_version, algorithm) = columns;
+    StoredSecret::from_columns(
+        ciphertext,
+        nonce,
+        wrapped_dek,
+        kek_id,
+        kek_version,
+        algorithm,
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// Open a stored credential into a provider key.
+async fn open_key(vault: &Vault, aad: &str, secret: &StoredSecret) -> Result<SecretKey, String> {
+    let plaintext = vault.open(aad, secret).await.map_err(|e| e.to_string())?;
+    crypto::secret_key(&plaintext)
+}
+
 /// The platform's sealed key for a provider, through `xtenant.platform_ai_credential_secret`.
-async fn platform_secret(
-    pool: &PgPool,
-    provider: &str,
-) -> Result<Option<(Vec<u8>, Vec<u8>)>, sqlx::Error> {
-    sqlx::query_as::<_, (Vec<u8>, Vec<u8>)>(
-        "SELECT ciphertext, nonce FROM xtenant.platform_ai_credential_secret($1)",
+async fn platform_secret(pool: &PgPool, provider: &str) -> Result<Option<StoredSecret>, String> {
+    sqlx::query_as::<_, SecretColumns>(
+        "SELECT ciphertext, nonce, wrapped_dek, kek_id, kek_version, algorithm \
+         FROM xtenant.platform_ai_credential_secret($1)",
     )
     .bind(provider)
     .fetch_optional(pool)
     .await
+    .map_err(|e| format!("credential query: {e}"))?
+    .map(stored)
+    .transpose()
 }
 
 /// The platform key's display hint for a provider, through `xtenant.platform_ai_credential_hint`.
@@ -102,7 +143,7 @@ pub async fn resolve_config(
 
 pub async fn resolve_credential(
     pool: &PgPool,
-    master: &crypto::MasterKey,
+    vault: &Vault,
     scope: Scope,
     provider: &str,
 ) -> Result<Option<(SecretKey, bool)>, String> {
@@ -111,8 +152,9 @@ pub async fn resolve_credential(
             let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id)
                 .await
                 .map_err(|e| format!("credential query: {e}"))?;
-            let row = sqlx::query_as::<_, (Vec<u8>, Vec<u8>, Option<Uuid>)>(
-                "SELECT ciphertext, nonce, tenant_id FROM ai_credentials \
+            let row = sqlx::query_as::<_, TenantSecretColumns>(
+                "SELECT ciphertext, nonce, wrapped_dek, kek_id, kek_version, algorithm, tenant_id \
+                 FROM ai_credentials \
                  WHERE tenant_id = $1 AND provider = $2 AND deleted_at IS NULL \
                  LIMIT 1",
             )
@@ -123,32 +165,26 @@ pub async fn resolve_credential(
             .map_err(|e| format!("credential query: {e}"))?;
             drop(uow);
 
-            if let Some((ciphertext, nonce, tid)) = row {
+            if let Some((ciphertext, nonce, dek, kek_id, kek_version, algorithm, tid)) = row {
+                let secret = stored((ciphertext, nonce, dek, kek_id, kek_version, algorithm))?;
                 let aad = crypto::aad(tid, provider);
-                let key = crypto::open(master, &aad, &ciphertext, &nonce)?;
+                let key = open_key(vault, &aad, &secret).await?;
                 return Ok(Some((key, tid.is_some())));
             }
 
             // No key of its own: the platform's.
-            if let Some((ciphertext, nonce)) = platform_secret(pool, provider)
-                .await
-                .map_err(|e| format!("credential query: {e}"))?
-            {
+            if let Some(secret) = platform_secret(pool, provider).await? {
                 let aad = crypto::aad(None, provider);
-                let key = crypto::open(master, &aad, &ciphertext, &nonce)?;
+                let key = open_key(vault, &aad, &secret).await?;
                 return Ok(Some((key, false)));
             }
 
             Ok(None)
         }
         Scope::Platform => {
-            let row = platform_secret(pool, provider)
-                .await
-                .map_err(|e| format!("credential query: {e}"))?;
-
-            if let Some((ciphertext, nonce)) = row {
+            if let Some(secret) = platform_secret(pool, provider).await? {
                 let aad = crypto::aad(None, provider);
-                let key = crypto::open(master, &aad, &ciphertext, &nonce)?;
+                let key = open_key(vault, &aad, &secret).await?;
                 return Ok(Some((key, false)));
             }
 

@@ -64,7 +64,7 @@ openssl rand -base64 32
 
 | Variable | Purpose | Required | Default | Secret |
 |----------|---------|----------|---------|--------|
-| `APP_AI_KEY_ENCRYPTION_KEY` | Base64-encoded 32-byte AES-256-GCM key for encrypting AI provider API keys at rest. | `production`, `staging`, `development`; optional in `test` | — | yes |
+| `APP_AI_KEY_ENCRYPTION_KEY` | Base64-encoded 32-byte AES-256-GCM key. It opens AI provider keys and tool credentials sealed before envelope encryption (ADR-014), and is the root key of envelope encryption when `APP_SECRETS_ROOT_KEY` is not set. | `production`, `staging`, `development`; optional in `test` | — | yes |
 
 **Generate APP_AI_KEY_ENCRYPTION_KEY:**
 
@@ -112,7 +112,9 @@ openssl rand -base64 32
 | `APP_AI_OPENAI_BASE_URL` | Override base URL for OpenAI API calls. Useful for proxies or mocks. | no |
 | `APP_AI_ANTHROPIC_BASE_URL` | Override base URL for Anthropic API calls. | no |
 | `APP_AI_GEMINI_BASE_URL` | Override base URL for Google Gemini API calls. | no |
-| `APP_INTEGRATION_SECRETS_KEY` | Base64-encoded 32-byte AES-256-GCM key for encrypting integration connection secrets at rest. If set must decode to exactly 32 bytes. | yes |
+| `APP_INTEGRATION_SECRETS_KEY` | Base64-encoded 32-byte AES-256-GCM key. It opens integration secrets and webhook tokens sealed before envelope encryption (ADR-014). If set must decode to exactly 32 bytes. | yes |
+| `APP_SECRETS_ROOT_KEY` | Base64-encoded 32-byte root key of envelope encryption (ADR-014): it wraps the per-tenant keys that wrap every new secret's data key. When unset, `APP_AI_KEY_ENCRYPTION_KEY`, then `APP_INTEGRATION_SECRETS_KEY`, is used. **Every process of a split deployment must have the same root key**; the `gateway` loads only the integration key, so set this explicitly there. | yes |
+| `APP_SECRETS_ROOT_KEY_PREVIOUS` | The root key before a rotation, kept only to unwrap keys it still wraps until `server secrets rewrap-keks` has moved them. Unset outside a rotation. See the [runbook](runbooks/operations.md#7-rotate-secret-keys-and-move-secrets-to-envelope-encryption). | yes |
 | `APP_OTLP_ENDPOINT` | OTLP/gRPC endpoint for exporting traces (e.g. `http://otel-collector:4317`). Unset disables trace export. | no |
 | `APP_SENTRY_DSN` | Sentry DSN for error reporting. Unset disables Sentry capture. | yes |
 | `APP_RELEASE_SHA` | Git SHA of the deployed release. Attached to Sentry events and trace metadata. | no |

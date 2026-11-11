@@ -35,6 +35,8 @@ fn test_config(environment: Environment) -> config::AppConfig {
         docs_enabled: false,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         integration_secrets_key: None,
+        secrets_root_key: None,
+        secrets_root_key_previous: None,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
@@ -951,7 +953,7 @@ async fn tool_execution_emits_audit_row() {
         tenant_id,
         conversation_id,
         pool: pool.clone(),
-        master_key: None,
+        vault: None,
     };
 
     let resolved = tools::policy::ResolvedTool {
@@ -1033,7 +1035,7 @@ async fn failed_tool_execution_emits_audit_row() {
         tenant_id,
         conversation_id,
         pool: pool.clone(),
-        master_key: None,
+        vault: None,
     };
 
     let resolved = tools::policy::ResolvedTool {

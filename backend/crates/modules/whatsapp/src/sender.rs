@@ -11,7 +11,7 @@ use crate::window;
 pub async fn run_whatsapp_sender_worker(
     pool: PgPool,
     api: Arc<dyn WhatsAppApi>,
-    master_key: Arc<integrations::crypto::MasterKey>,
+    vault: Arc<secrets::Vault>,
 ) -> ! {
     let mut interval = tokio::time::interval(Duration::from_secs(2));
     loop {
@@ -21,7 +21,7 @@ pub async fn run_whatsapp_sender_worker(
             continue;
         }
 
-        if let Err(e) = process_one(&pool, &*api, &master_key).await {
+        if let Err(e) = process_one(&pool, &*api, &vault).await {
             tracing::error!(%e, "sender worker: process_one failed");
         }
     }
@@ -58,7 +58,7 @@ async fn claim_outbound_event(pool: &PgPool) -> sqlx::Result<Option<OutboundEven
 pub async fn process_one(
     pool: &PgPool,
     api: &dyn WhatsAppApi,
-    master_key: &integrations::crypto::MasterKey,
+    vault: &secrets::Vault,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let event = match claim_outbound_event(pool).await? {
         Some(e) => e,
@@ -199,7 +199,7 @@ pub async fn process_one(
     let access_token = match integrations::queries::decrypted_secret(
         pool,
         event.tenant_id,
-        master_key,
+        vault,
         connection_id,
         "access_token",
     )

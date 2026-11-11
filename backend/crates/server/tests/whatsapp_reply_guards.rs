@@ -7,6 +7,7 @@ use chrono::Utc;
 use http_body_util::BodyExt;
 use integrations::crypto::{aad, hint, seal, MasterKey};
 use integrations::webhook::hash_token;
+use secrets::Vault;
 use serde_json::json;
 use server::router;
 use server::state::AppState;
@@ -49,6 +50,8 @@ fn test_config() -> config::AppConfig {
         docs_enabled: false,
         ai_key_encryption_key: None,
         integration_secrets_key: None,
+        secrets_root_key: None,
+        secrets_root_key_previous: None,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
@@ -156,8 +159,12 @@ fn json_post(uri: &str, user_id: Uuid, tenant_id: Uuid, body: serde_json::Value)
         .unwrap()
 }
 
-fn master_key() -> Arc<MasterKey> {
-    Arc::new(MasterKey::from_base64(TEST_MASTER_KEY_B64).unwrap())
+fn master_key() -> Arc<Vault> {
+    // Test rows are sealed the earlier way (one static key); the vault opens them.
+    Arc::new(Vault::new(
+        Some(MasterKey::from_base64(TEST_MASTER_KEY_B64).unwrap()),
+        None,
+    ))
 }
 
 async fn whatsapp_catalog_id(pool: &sqlx::PgPool) -> Uuid {
@@ -171,24 +178,32 @@ async fn whatsapp_catalog_id(pool: &sqlx::PgPool) -> Uuid {
 /// Set up an active WhatsApp connection with encrypted secrets.
 async fn setup_whatsapp_connection(
     pool: &sqlx::PgPool,
-    mk: &MasterKey,
+    mk: &Vault,
     tenant_id: Uuid,
 ) -> (Uuid, String) {
     let catalog_id = whatsapp_catalog_id(pool).await;
 
     let access_token_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_ACCESS_TOKEN);
-    let (access_ct, access_nonce) = seal(mk, &access_token_aad, ACCESS_TOKEN_VALUE).unwrap();
+    let (access_ct, access_nonce) = seal(
+        mk.legacy_key().unwrap(),
+        &access_token_aad,
+        ACCESS_TOKEN_VALUE,
+    )
+    .unwrap();
 
     let verify_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_VERIFY_TOKEN);
-    let (verify_ct, verify_nonce) = seal(mk, &verify_aad, VERIFY_TOKEN_VALUE).unwrap();
+    let (verify_ct, verify_nonce) =
+        seal(mk.legacy_key().unwrap(), &verify_aad, VERIFY_TOKEN_VALUE).unwrap();
 
     let app_secret_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_APP_SECRET);
-    let (app_secret_ct, app_secret_nonce) = seal(mk, &app_secret_aad, APP_SECRET_VALUE).unwrap();
+    let (app_secret_ct, app_secret_nonce) =
+        seal(mk.legacy_key().unwrap(), &app_secret_aad, APP_SECRET_VALUE).unwrap();
 
     let webhook_token = Uuid::new_v4().to_string();
     let token_hash = hash_token(&webhook_token);
     let token_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_WEBHOOK_TOKEN);
-    let (token_ct, token_nonce) = seal(mk, &token_aad, &webhook_token).unwrap();
+    let (token_ct, token_nonce) =
+        seal(mk.legacy_key().unwrap(), &token_aad, &webhook_token).unwrap();
 
     let connection_id: Uuid = sqlx::query_scalar(
         "INSERT INTO integration_connections \

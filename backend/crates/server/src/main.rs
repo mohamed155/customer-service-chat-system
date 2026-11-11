@@ -38,6 +38,10 @@ async fn main() {
     if std::env::args().nth(1).as_deref() == Some("migrate") {
         std::process::exit(migrate().await);
     }
+    if std::env::args().nth(1).as_deref() == Some("secrets") {
+        let args: Vec<String> = std::env::args().skip(2).collect();
+        std::process::exit(secrets_command(&args).await);
+    }
 
     let mode = match RunMode::from_env() {
         Ok(mode) => mode,
@@ -303,13 +307,9 @@ fn spawn_workers(
             &state.ai.resilience(),
             whatsapp::guarded::default_policy(),
         ));
-    let whatsapp_master_key = state
-        .config
-        .integration_secrets_key
-        .as_ref()
-        .and_then(|key| integrations::crypto::MasterKey::from_base64(key).ok());
+    let whatsapp_vault = integrations::crypto::vault_from_config(&state.db, &state.config).ok();
     let mut whatsapp_workers = Vec::new();
-    if let Some(mk) = whatsapp_master_key {
+    if let Some(mk) = whatsapp_vault {
         let mk = Arc::new(mk);
         let media_worker = tokio::spawn(whatsapp::media::run_media_fetch_worker(
             state.db.clone(),
@@ -423,6 +423,104 @@ async fn migrate() -> i32 {
         }
         Err(e) => {
             eprintln!("migration failed: {e}");
+            1
+        }
+    }
+}
+
+const SECRETS_USAGE: &str = "usage: server secrets <action>\n\
+  reencrypt                  seal secrets still under the earlier single key with envelope encryption\n\
+  rewrap                     wrap data keys again under each tenant's active key\n\
+  rotate-kek <tenant-id|platform>  start a new key version for a tenant or the platform\n\
+  rewrap-keks                wrap every key under the current root key\n\
+Runs as the application role (DATABASE_URL) with the same keys as the server. See the runbook.";
+
+/// `server secrets <action>`: maintenance of sealed tenant secrets (ADR-014, MOH-33). Returns the
+/// process exit code: 0 when the action finished with nothing left undone, 1 otherwise.
+async fn secrets_command(args: &[String]) -> i32 {
+    let config = match AppConfig::from_env() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Config error: {e}");
+            return 1;
+        }
+    };
+    let pool = db::lazy_pool(
+        &config.database_url,
+        2,
+        Duration::from_millis(config.db_acquire_timeout_ms),
+    );
+    let action = args.first().map(String::as_str);
+    match action {
+        Some(name @ ("reencrypt" | "rewrap")) => {
+            let op = if name == "reencrypt" {
+                server::secret_maintenance::Op::Reencrypt
+            } else {
+                server::secret_maintenance::Op::Rewrap
+            };
+            match server::secret_maintenance::run(&pool, &config, op).await {
+                Ok(report) => {
+                    println!(
+                        "{name}: scanned {}, changed {}, changed while running {}, failed {}",
+                        report.scanned, report.changed, report.raced, report.failed
+                    );
+                    if report.failed > 0 {
+                        eprintln!(
+                            "{} secret(s) could not be moved; see the log",
+                            report.failed
+                        );
+                        1
+                    } else {
+                        0
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{name} failed: {e}");
+                    1
+                }
+            }
+        }
+        Some("rotate-kek") => {
+            let target = args.get(1).map(String::as_str);
+            let tenant = match target {
+                Some("platform") => None,
+                Some(id) => match uuid::Uuid::parse_str(id) {
+                    Ok(id) => Some(id),
+                    Err(_) => {
+                        eprintln!("{SECRETS_USAGE}");
+                        return 1;
+                    }
+                },
+                None => {
+                    eprintln!("{SECRETS_USAGE}");
+                    return 1;
+                }
+            };
+            match server::secret_maintenance::rotate_kek(&pool, &config, tenant).await {
+                Ok(version) => {
+                    println!("new key version {version}; run `server secrets rewrap` next");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("rotate-kek failed: {e}");
+                    1
+                }
+            }
+        }
+        Some("rewrap-keks") => {
+            match server::secret_maintenance::rewrap_keks(&pool, &config).await {
+                Ok(moved) => {
+                    println!("rewrap-keks: {moved} key(s) moved to the current root key");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("rewrap-keks failed: {e}");
+                    1
+                }
+            }
+        }
+        _ => {
+            eprintln!("{SECRETS_USAGE}");
             1
         }
     }

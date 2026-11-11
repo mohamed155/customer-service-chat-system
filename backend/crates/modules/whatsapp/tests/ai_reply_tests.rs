@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use integrations::crypto::{aad, hint, seal, MasterKey};
 use integrations::webhook::hash_token;
+use secrets::Vault;
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -18,8 +19,12 @@ const VERIFY_TOKEN_VALUE: &str = "test_verify_token_ai_reply";
 const APP_SECRET_VALUE: &str = "test_app_secret_ai_reply";
 const PHONE_NUMBER_ID: &str = "5551234567";
 
-fn master_key() -> Arc<MasterKey> {
-    Arc::new(MasterKey::from_base64(TEST_MASTER_KEY_B64).unwrap())
+fn master_key() -> Arc<Vault> {
+    // Test rows are sealed the earlier way (one static key); the vault opens them.
+    Arc::new(Vault::new(
+        Some(MasterKey::from_base64(TEST_MASTER_KEY_B64).unwrap()),
+        None,
+    ))
 }
 
 fn require_db_tests() -> bool {
@@ -80,22 +85,30 @@ async fn whatsapp_catalog_id(pool: &PgPool) -> Uuid {
         .expect("whatsapp catalog entry must exist \u{2014} run migration 0057")
 }
 
-async fn setup_whatsapp_connection(pool: &PgPool, mk: &MasterKey, tenant_id: Uuid) -> Uuid {
+async fn setup_whatsapp_connection(pool: &PgPool, mk: &Vault, tenant_id: Uuid) -> Uuid {
     let catalog_id = whatsapp_catalog_id(pool).await;
 
     let access_token_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_ACCESS_TOKEN);
-    let (access_ct, access_nonce) = seal(mk, &access_token_aad, ACCESS_TOKEN_VALUE).unwrap();
+    let (access_ct, access_nonce) = seal(
+        mk.legacy_key().unwrap(),
+        &access_token_aad,
+        ACCESS_TOKEN_VALUE,
+    )
+    .unwrap();
 
     let verify_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_VERIFY_TOKEN);
-    let (verify_ct, verify_nonce) = seal(mk, &verify_aad, VERIFY_TOKEN_VALUE).unwrap();
+    let (verify_ct, verify_nonce) =
+        seal(mk.legacy_key().unwrap(), &verify_aad, VERIFY_TOKEN_VALUE).unwrap();
 
     let app_secret_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_APP_SECRET);
-    let (app_secret_ct, app_secret_nonce) = seal(mk, &app_secret_aad, APP_SECRET_VALUE).unwrap();
+    let (app_secret_ct, app_secret_nonce) =
+        seal(mk.legacy_key().unwrap(), &app_secret_aad, APP_SECRET_VALUE).unwrap();
 
     let webhook_token = Uuid::new_v4().to_string();
     let token_hash = hash_token(&webhook_token);
     let token_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_WEBHOOK_TOKEN);
-    let (token_ct, token_nonce) = seal(mk, &token_aad, &webhook_token).unwrap();
+    let (token_ct, token_nonce) =
+        seal(mk.legacy_key().unwrap(), &token_aad, &webhook_token).unwrap();
 
     let connection_id: Uuid = sqlx::query_scalar(
         "INSERT INTO integration_connections \

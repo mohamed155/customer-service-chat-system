@@ -172,7 +172,7 @@ async fn execute_tenant_endpoint(
     arguments: serde_json::Value,
     tool_request_id: Uuid,
 ) -> Result<serde_json::Value, String> {
-    let (tool, credential_ciphertext) = match crate::queries::fetch_tenant_tool_with_credential(
+    let (tool, credential) = match crate::queries::fetch_tenant_tool_with_credential(
         &ctx.pool,
         ctx.tenant_id,
         tenant_tool_id,
@@ -205,24 +205,17 @@ async fn execute_tenant_endpoint(
     let mut req = client.post(url).json(&body);
 
     // 4. Unseal credential into Authorization header
-    if let Some(ciphertext_b64) = &credential_ciphertext {
-        let master_key = ctx
-            .master_key
-            .as_ref()
+    if let Some(stored) = &credential {
+        let vault = ctx
+            .vault
+            .as_deref()
             .ok_or_else(|| "no encryption key configured".to_string())?;
-
-        // The credential is stored as base64(ciphertext)||base64(nonce)
-        let parts: Vec<&str> = ciphertext_b64.split("||").collect();
-        if parts.len() != 2 {
-            return Err("invalid credential storage format".into());
-        }
-        let ct = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, parts[0])
-            .map_err(|_| "failed to decode credential ciphertext".to_string())?;
-        let nonce = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, parts[1])
-            .map_err(|_| "failed to decode credential nonce".to_string())?;
-
         let scope = ai_providers::crypto::aad(Some(ctx.tenant_id), tool_name);
-        let secret = ai_providers::crypto::open(master_key, &scope, &ct, &nonce)
+        let plaintext = vault
+            .open(&scope, stored)
+            .await
+            .map_err(|_| "failed to decrypt credential".to_string())?;
+        let secret = ai_providers::crypto::secret_key(&plaintext)
             .map_err(|_| "failed to decrypt credential".to_string())?;
 
         req = req.header("Authorization", format!("Bearer {}", secret.expose()));
@@ -448,7 +441,7 @@ mod tests {
             tenant_id: uuid::Uuid::nil(),
             conversation_id: uuid::Uuid::nil(),
             pool,
-            master_key: None,
+            vault: None,
         };
         // Pool is lazy and won't connect — tool isn't in the catalog anyway
         let result = execute(&ctx, &tool, json!({}), Uuid::nil()).await;

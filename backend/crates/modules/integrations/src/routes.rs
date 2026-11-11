@@ -11,7 +11,7 @@ use sqlx::PgPool;
 use tenancy::TenantContext;
 use uuid::Uuid;
 
-use crate::crypto::{self, MasterKey};
+use crate::crypto;
 use crate::model::{
     self, ConfigFieldDto, IntegrationConnectionDto, IntegrationDetailDto, IntegrationEventDto,
     IntegrationEventListResponse, IntegrationListItemDto, IntegrationListResponse,
@@ -20,8 +20,9 @@ use crate::model::{
 use crate::queries;
 use crate::status;
 use crate::webhook;
+use secrets::Vault;
 
-const FIELD_WEBHOOK_TOKEN: &str = "__webhook_token";
+pub const FIELD_WEBHOOK_TOKEN: &str = "__webhook_token";
 
 fn build_event_response(rows: &[queries::EventRow], limit: i64) -> IntegrationEventListResponse {
     let has_more = rows.len() > limit as usize;
@@ -96,14 +97,17 @@ async fn active_membership_id(
 }
 
 #[allow(clippy::result_large_err)]
-fn load_master_key(config: &config::AppConfig) -> Result<MasterKey, Response> {
-    let raw = config.integration_secrets_key.as_deref().ok_or_else(|| {
+fn load_vault(pool: &PgPool, config: &config::AppConfig) -> Result<Vault, Response> {
+    crypto::vault_from_config(pool, config).map_err(|e| {
+        tracing::error!(error = %e, "integration secrets keys are not usable");
         ApiError::internal_error("Integration secrets key is not configured").into_response()
-    })?;
-    MasterKey::from_base64(raw).map_err(|e| {
-        tracing::error!(error = %e, "invalid integration_secrets_key");
-        ApiError::internal_error("Integration secrets key is invalid").into_response()
     })
+}
+
+/// Open a sealed integration secret as text; `None` if it does not open.
+async fn open_text(vault: &Vault, aad: &str, stored: &secrets::StoredSecret) -> Option<String> {
+    let plaintext = vault.open(aad, stored).await.ok()?;
+    crypto::text(&plaintext).ok()
 }
 
 fn build_webhook_url(config: &config::AppConfig, token: &str) -> String {
@@ -203,7 +207,7 @@ pub async fn get_integration(
 
     // The key is only needed to reveal this tenant's own webhook URL; a tenant
     // with no connection still gets the catalog detail without it.
-    let master = match load_master_key(&config) {
+    let master = match load_vault(&pool, &config) {
         Ok(m) => Some(m),
         Err(_) if connection.is_none() => None,
         Err(resp) => return resp,
@@ -226,7 +230,7 @@ async fn build_detail_dto(
     catalog: &queries::CatalogRow,
     connection: Option<queries::ConnectionRow>,
     schema: Vec<ConfigFieldDto>,
-    master: Option<&MasterKey>,
+    vault: Option<&Vault>,
     config: &config::AppConfig,
 ) -> IntegrationDetailDto {
     match connection {
@@ -261,19 +265,22 @@ async fn build_detail_dto(
                 Vec::new()
             };
 
+            let webhook_token = c.webhook_token();
             let config_map: Map<String, serde_json::Value> = match c.config {
                 serde_json::Value::Object(m) => m,
                 _ => Map::new(),
             };
 
             let webhook_url = if c.is_active {
-                master.and_then(|m| {
-                    let aad = crypto::aad(c.tenant_id, &catalog.slug, FIELD_WEBHOOK_TOKEN);
-                    let token =
-                        crypto::open(m, &aad, &c.webhook_token_ciphertext, &c.webhook_token_nonce)
-                            .ok()?;
-                    Some(build_webhook_url(config, &token))
-                })
+                match (vault, webhook_token) {
+                    (Some(v), Ok(stored)) => {
+                        let aad = crypto::aad(c.tenant_id, &catalog.slug, FIELD_WEBHOOK_TOKEN);
+                        open_text(v, &aad, &stored)
+                            .await
+                            .map(|token| build_webhook_url(config, &token))
+                    }
+                    _ => None,
+                }
             } else {
                 None
             };
@@ -301,7 +308,7 @@ async fn build_detail_dto(
 async fn build_detail_dto_for_connection(
     pool: &PgPool,
     config: &config::AppConfig,
-    master: &MasterKey,
+    vault: &Vault,
     tenant_id: Uuid,
     catalog: &queries::CatalogRow,
     connection_id: Uuid,
@@ -350,6 +357,7 @@ async fn build_detail_dto_for_connection(
         Vec::new()
     };
 
+    let webhook_token = connection.webhook_token();
     let config_map: Map<String, serde_json::Value> = match connection.config {
         serde_json::Value::Object(m) => m,
         _ => Map::new(),
@@ -360,14 +368,12 @@ async fn build_detail_dto_for_connection(
             Some(build_webhook_url(config, token))
         } else {
             let aad = crypto::aad(connection.tenant_id, &catalog.slug, FIELD_WEBHOOK_TOKEN);
-            crypto::open(
-                master,
-                &aad,
-                &connection.webhook_token_ciphertext,
-                &connection.webhook_token_nonce,
-            )
-            .ok()
-            .map(|t| build_webhook_url(config, &t))
+            match webhook_token {
+                Ok(stored) => open_text(vault, &aad, &stored)
+                    .await
+                    .map(|t| build_webhook_url(config, &t)),
+                Err(_) => None,
+            }
         }
     } else {
         None
@@ -420,7 +426,7 @@ pub async fn connect_integration(
     Path(slug): Path<String>,
     ApiJson(payload): ApiJson<model::ConnectPayload>,
 ) -> Response {
-    let master = match load_master_key(&config) {
+    let master = match load_vault(&pool, &config) {
         Ok(m) => m,
         Err(resp) => return resp,
     };
@@ -497,7 +503,10 @@ pub async fn connect_integration(
     let token = webhook::generate_token();
     let token_hash = webhook::hash_token(&token);
     let token_aad = crypto::aad(ctx.tenant_id, &catalog.slug, FIELD_WEBHOOK_TOKEN);
-    let (token_ct, token_nonce) = match crypto::seal(&master, &token_aad, &token) {
+    let token_sealed = match master
+        .seal(Some(ctx.tenant_id), &token_aad, token.as_bytes())
+        .await
+    {
         Ok(v) => v,
         Err(e) => {
             tracing::error!(error = %e, "connect_integration: seal token failed");
@@ -513,8 +522,7 @@ pub async fn connect_integration(
         ctx.tenant_id,
         catalog.id,
         &token_hash,
-        &token_ct,
-        &token_nonce,
+        &token_sealed,
         membership_id,
     )
     .await
@@ -539,7 +547,10 @@ pub async fn connect_integration(
 
     for (field_key, plaintext) in &payload.secrets {
         let aad = crypto::aad(ctx.tenant_id, &catalog.slug, field_key);
-        let (ct, nonce) = match crypto::seal(&master, &aad, plaintext) {
+        let sealed = match master
+            .seal(Some(ctx.tenant_id), &aad, plaintext.as_bytes())
+            .await
+        {
             Ok(v) => v,
             Err(e) => {
                 tracing::error!(error = %e, "connect_integration: seal secret failed");
@@ -555,8 +566,7 @@ pub async fn connect_integration(
             ctx.tenant_id,
             connection_id,
             field_key,
-            &ct,
-            &nonce,
+            &sealed,
             &hint,
         )
         .await
@@ -754,7 +764,7 @@ pub async fn update_integration_config(
     Path(slug): Path<String>,
     ApiJson(payload): ApiJson<model::UpdateConfigPayload>,
 ) -> Response {
-    let master = match load_master_key(&config) {
+    let master = match load_vault(&pool, &config) {
         Ok(m) => m,
         Err(resp) => return resp,
     };
@@ -857,7 +867,10 @@ pub async fn update_integration_config(
 
     for (field_key, plaintext) in &secrets_ref {
         let aad = crypto::aad(ctx.tenant_id, &catalog.slug, field_key);
-        let (ct, nonce) = match crypto::seal(&master, &aad, plaintext) {
+        let sealed = match master
+            .seal(Some(ctx.tenant_id), &aad, plaintext.as_bytes())
+            .await
+        {
             Ok(v) => v,
             Err(e) => {
                 tracing::error!(error = %e, "update_integration_config: seal failed");
@@ -873,8 +886,7 @@ pub async fn update_integration_config(
             ctx.tenant_id,
             connection.id,
             field_key,
-            &ct,
-            &nonce,
+            &sealed,
             &hint,
         )
         .await
@@ -1003,7 +1015,7 @@ pub async fn disconnect_integration(
     Extension(config): Extension<Arc<config::AppConfig>>,
     Path(slug): Path<String>,
 ) -> Response {
-    let master = match load_master_key(&config) {
+    let master = match load_vault(&pool, &config) {
         Ok(m) => m,
         Err(resp) => return resp,
     };

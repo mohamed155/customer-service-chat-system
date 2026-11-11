@@ -215,10 +215,11 @@ credentials.
    ```
 
 4. **For `APP_AI_KEY_ENCRYPTION_KEY` and `APP_INTEGRATION_SECRETS_KEY`**:
-   Existing encrypted values become **unreadable** after rotation. The system
-   uses a single active key with no previous-key fallback or transparent
-   re-encryption. Plan rotation during a maintenance window and accept that
-   existing ciphertext will be re-encrypted on next write.
+   these are the keys of secrets sealed before envelope encryption. Do not
+   replace them until `server secrets reencrypt` has reported nothing left
+   (section 7); replacing one earlier makes the secrets still sealed under it
+   unreadable. To rotate the key that protects tenant secrets going forward,
+   rotate the root key (section 7), not these.
 5. **For `AUTH_JWT_SECRET`**: All existing sessions signed with the old secret
    become invalid on restart. Coordinate rotation with a maintenance window.
    Users will need to re-authenticate.
@@ -227,8 +228,8 @@ credentials.
 
 - The application starts successfully with the new credential.
 - For JWT: existing sessions are invalidated; users sign in again.
-- For encryption keys: existing encrypted data becomes unreadable after
-  rotation. Re-encrypt secrets under the new key on next write.
+- For `APP_AI_KEY_ENCRYPTION_KEY` and `APP_INTEGRATION_SECRETS_KEY`: only safe
+  after section 7 has moved every secret off them.
 
 ### When it fails
 
@@ -385,3 +386,73 @@ calls per AI provider and 8 per WhatsApp host, 2 seconds to wait for a free slot
   30 seconds means each probe fails. Treat it as an outbound connectivity problem (step 4).
 - **State resets after a restart:** breaker state is in memory per process, so a restart starts
   closed and re-learns within five failed calls.
+
+---
+
+## 7. Rotate Secret Keys and Move Secrets to Envelope Encryption
+
+Tenant secrets (AI provider keys, tool credentials, integration tokens) are sealed
+under their own data key, wrapped by a per-tenant key (KEK), wrapped by the root key
+(ADR-014). Rotating a key re-wraps keys; it never re-encrypts the secrets. All commands
+run as the application role with the same environment as the server:
+`server secrets <action>` (`cargo run -p server -- secrets <action>`, or the same
+binary in the container). Each prints what it did and exits non-zero if anything
+was left undone.
+
+### Move earlier secrets to envelope encryption (once per environment)
+
+After migration `0076` is applied and the new release runs, secrets written before it
+are still sealed under `APP_AI_KEY_ENCRYPTION_KEY` or `APP_INTEGRATION_SECRETS_KEY`.
+The server reads both kinds, so nothing is down.
+
+1. Make sure the process has the old keys **and** a root key: set `APP_SECRETS_ROOT_KEY`
+   (`openssl rand -base64 32`), or leave it unset to use `APP_AI_KEY_ENCRYPTION_KEY`.
+   Every process, the `gateway` included, needs the same root key.
+2. Back up first (`ops/backup.sh`).
+3. Run `server secrets reencrypt`. For each secret it opens it, seals it under a new data
+   key, checks the new seal opens to the same plaintext, and stores it only if the row
+   is unchanged since it was read. A secret changed meanwhile is counted as "changed while
+   running" and keeps the user's new value.
+4. Run it again. The migration is finished when `failed` is 0 and a second run
+   changes nothing. A secret that is counted as failed did not open with its scope (it was
+   already unusable); the log names the row, never the value.
+
+### Rotate a tenant's (or the platform's) key
+
+1. `server secrets rotate-kek <tenant-id|platform>` starts a new key version. New secrets use
+   it at once; old ones keep opening under the old version.
+2. `server secrets rewrap` wraps every data key under the active version. Secret
+   ciphertexts are not touched.
+
+### Rotate the root key
+
+1. Set `APP_SECRETS_ROOT_KEY` to the new key and `APP_SECRETS_ROOT_KEY_PREVIOUS` to the old
+   one, then restart every process (rolling restart).
+2. `server secrets rewrap-keks` wraps every tenant key under the new root key.
+3. Remove `APP_SECRETS_ROOT_KEY_PREVIOUS` and restart. Keep the old key somewhere safe until
+   a backup older than the rotation is no longer needed: a restore of such a backup needs it.
+
+### Delete a tenant (crypto-shredding)
+
+Deleting a tenant, soft or hard, destroys its key versions in the same transaction. Every
+secret under them is unrecoverable from then on, backups included. Processes drop the key from
+memory within five minutes. Restoring the tenant's row does not bring the key back; a
+restored tenant must have its secrets entered again.
+
+### Expected outcome
+
+- `reencrypt`: `failed 0`, then a second run with `changed 0`.
+- `rotate-kek` then `rewrap`: secrets still open; their ciphertext is unchanged.
+- `rewrap-keks`: a second run moves 0.
+
+### When it fails
+
+- **`no root key is configured`**: set `APP_SECRETS_ROOT_KEY`, or the AI or integration key.
+- **`failed` greater than 0**: read the log for the row and kind. The usual cause is a secret
+  sealed under a key that is no longer set (put the old key back), or a row whose scope
+  changed (a tool renamed after its credential was sealed): enter the secret again.
+- **Opening fails with "the root key for this key is not available"** after a root rotation:
+  `APP_SECRETS_ROOT_KEY_PREVIOUS` is missing on that process. Set it, restart, and run
+  `rewrap-keks`.
+- **Opening fails with "the key for this secret was destroyed"**: the tenant was deleted. That is
+  the intended result.

@@ -50,6 +50,8 @@ fn make_state_with(hsts_max_age: u64, adjust: impl FnOnce(&mut config::AppConfig
         release_sha: None,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         integration_secrets_key: None,
+        secrets_root_key: None,
+        secrets_root_key_previous: None,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,

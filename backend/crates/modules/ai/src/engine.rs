@@ -811,7 +811,7 @@ pub async fn run_generation(
                                 tenant_id,
                                 conversation_id,
                                 pool: pool.clone(),
-                                master_key: None,
+                                vault: ai.shared_vault(),
                             };
                             let outcome = tools::executor::execute(
                                 &exec_ctx,
@@ -1505,7 +1505,7 @@ pub async fn run_followup_generation(
             tenant_id,
             conversation_id,
             pool: pool.clone(),
-            master_key: None,
+            vault: ai.shared_vault(),
         };
         let outcome_result = tools::executor::execute(
             &exec_ctx,

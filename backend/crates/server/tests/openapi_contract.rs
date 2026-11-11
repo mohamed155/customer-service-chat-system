@@ -65,6 +65,8 @@ fn make_state() -> AppState {
         ai_gemini_base_url: None,
         s3: None,
         integration_secrets_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
+        secrets_root_key: None,
+        secrets_root_key_previous: None,
         trusted_proxy: false,
     };
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();

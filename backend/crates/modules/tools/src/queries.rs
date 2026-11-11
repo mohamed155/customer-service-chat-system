@@ -12,7 +12,7 @@ pub struct NewTenantTool {
     pub description: String,
     pub input_schema: serde_json::Value,
     pub endpoint_url: String,
-    pub credential_ciphertext: Option<String>,
+    pub credential: Option<secrets::StoredSecret>,
     pub classification: String,
     pub created_by_membership_id: Uuid,
 }
@@ -40,8 +40,10 @@ pub async fn insert_tenant_tool(pool: &sqlx::PgPool, new: NewTenantTool) -> sqlx
         let id: Uuid = sqlx::query_scalar(
             "INSERT INTO tenant_tools \
          (tenant_id, name, description, input_schema, endpoint_url, \
-          credential_ciphertext, classification, created_by_membership_id) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+          credential_ciphertext, classification, created_by_membership_id, \
+          credential_wrapped_dek, credential_kek_id, credential_kek_version, \
+          credential_algorithm) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
          RETURNING id",
         )
         .bind(new.tenant_id)
@@ -49,9 +51,13 @@ pub async fn insert_tenant_tool(pool: &sqlx::PgPool, new: NewTenantTool) -> sqlx
         .bind(&new.description)
         .bind(&new.input_schema)
         .bind(&new.endpoint_url)
-        .bind(new.credential_ciphertext)
+        .bind(new.credential.as_ref().map(crate::credential::encode))
         .bind(&new.classification)
         .bind(new.created_by_membership_id)
+        .bind(new.credential.as_ref().and_then(|c| c.wrapped_dek()))
+        .bind(new.credential.as_ref().and_then(|c| c.kek_id()))
+        .bind(new.credential.as_ref().and_then(|c| c.kek_version()))
+        .bind(new.credential.as_ref().and_then(|c| c.algorithm()))
         .fetch_one(uow.conn())
         .await?;
         Ok(id)
@@ -68,7 +74,7 @@ pub struct TenantToolPatch {
     pub description: Option<String>,
     pub input_schema: Option<serde_json::Value>,
     pub endpoint_url: Option<String>,
-    pub credential_ciphertext: Option<String>,
+    pub credential: Option<secrets::StoredSecret>,
     pub classification: Option<String>,
     pub enabled: Option<bool>,
 }
@@ -88,6 +94,10 @@ pub async fn update_tenant_tool(
          input_schema = COALESCE($5, input_schema), \
          endpoint_url = COALESCE($6, endpoint_url), \
          credential_ciphertext = COALESCE($7, credential_ciphertext), \
+         credential_wrapped_dek = CASE WHEN $7::text IS NULL THEN credential_wrapped_dek ELSE $10 END, \
+         credential_kek_id = CASE WHEN $7::text IS NULL THEN credential_kek_id ELSE $11 END, \
+         credential_kek_version = CASE WHEN $7::text IS NULL THEN credential_kek_version ELSE $12 END, \
+         credential_algorithm = CASE WHEN $7::text IS NULL THEN credential_algorithm ELSE $13 END, \
          classification = COALESCE($8, classification), \
          enabled = COALESCE($9, enabled), \
          updated_at = now() \
@@ -99,9 +109,13 @@ pub async fn update_tenant_tool(
         .bind(patch.description)
         .bind(patch.input_schema)
         .bind(patch.endpoint_url)
-        .bind(patch.credential_ciphertext)
+        .bind(patch.credential.as_ref().map(crate::credential::encode))
         .bind(patch.classification)
         .bind(patch.enabled)
+        .bind(patch.credential.as_ref().and_then(|c| c.wrapped_dek()))
+        .bind(patch.credential.as_ref().and_then(|c| c.kek_id()))
+        .bind(patch.credential.as_ref().and_then(|c| c.kek_version()))
+        .bind(patch.credential.as_ref().and_then(|c| c.algorithm()))
         .execute(uow.conn())
         .await?;
         Ok(rows.rows_affected() > 0)
@@ -186,9 +200,9 @@ pub async fn fetch_tenant_tool_with_credential(
     pool: &sqlx::PgPool,
     tenant_id: Uuid,
     id: Uuid,
-) -> sqlx::Result<Option<(TenantToolRow, Option<String>)>> {
+) -> sqlx::Result<Option<(TenantToolRow, Option<secrets::StoredSecret>)>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let result: sqlx::Result<Option<(TenantToolRow, Option<String>)>> = async {
+    let result: sqlx::Result<Option<(TenantToolRow, Option<secrets::StoredSecret>)>> = async {
         #[derive(sqlx::FromRow)]
         struct TenantToolWithCredential {
             id: Uuid,
@@ -202,11 +216,16 @@ pub async fn fetch_tenant_tool_with_credential(
             created_at: DateTime<Utc>,
             updated_at: DateTime<Utc>,
             credential_ciphertext: Option<String>,
+            credential_wrapped_dek: Option<Vec<u8>>,
+            credential_kek_id: Option<String>,
+            credential_kek_version: Option<i32>,
+            credential_algorithm: Option<String>,
         }
 
         let row: Option<TenantToolWithCredential> = sqlx::query_as(
             "SELECT id, tenant_id, name, description, input_schema, endpoint_url, \
-         classification, enabled, created_at, updated_at, credential_ciphertext \
+         classification, enabled, created_at, updated_at, credential_ciphertext, \
+         credential_wrapped_dek, credential_kek_id, credential_kek_version, credential_algorithm \
          FROM tenant_tools \
          WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
         )
@@ -215,7 +234,23 @@ pub async fn fetch_tenant_tool_with_credential(
         .fetch_optional(uow.conn())
         .await?;
 
-        Ok(row.map(|r| {
+        let Some(r) = row else {
+            return Ok(None);
+        };
+        let credential = match r.credential_ciphertext.as_deref() {
+            Some(text) => Some(
+                crate::credential::decode(
+                    text,
+                    r.credential_wrapped_dek,
+                    r.credential_kek_id,
+                    r.credential_kek_version,
+                    r.credential_algorithm,
+                )
+                .map_err(sqlx::Error::Protocol)?,
+            ),
+            None => None,
+        };
+        Ok(Some({
             let safe = TenantToolRow {
                 id: r.id,
                 tenant_id: r.tenant_id,
@@ -228,7 +263,7 @@ pub async fn fetch_tenant_tool_with_credential(
                 created_at: r.created_at,
                 updated_at: r.updated_at,
             };
-            (safe, r.credential_ciphertext)
+            (safe, credential)
         }))
     }
     .await;

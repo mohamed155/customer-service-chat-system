@@ -53,10 +53,28 @@ pub struct ConnectionRow {
     pub webhook_token_hash: Vec<u8>,
     pub webhook_token_ciphertext: Vec<u8>,
     pub webhook_token_nonce: Vec<u8>,
+    pub webhook_token_wrapped_dek: Option<Vec<u8>>,
+    pub webhook_token_kek_id: Option<String>,
+    pub webhook_token_kek_version: Option<i32>,
+    pub webhook_token_algorithm: Option<String>,
     pub connected_at: DateTime<Utc>,
     pub connected_by_membership_id: Option<Uuid>,
     pub disconnected_at: Option<DateTime<Utc>>,
     pub disconnected_by_membership_id: Option<Uuid>,
+}
+
+impl ConnectionRow {
+    /// The sealed webhook token, whichever way it was sealed.
+    pub fn webhook_token(&self) -> Result<secrets::StoredSecret, secrets::SecretError> {
+        secrets::StoredSecret::from_columns(
+            self.webhook_token_ciphertext.clone(),
+            self.webhook_token_nonce.clone(),
+            self.webhook_token_wrapped_dek.clone(),
+            self.webhook_token_kek_id.clone(),
+            self.webhook_token_kek_version,
+            self.webhook_token_algorithm.clone(),
+        )
+    }
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -98,6 +116,8 @@ pub async fn find_connection(
         sqlx::query_as::<_, ConnectionRow>(
             "SELECT id, tenant_id, catalog_id, is_active, config, \
                 webhook_token_hash, webhook_token_ciphertext, webhook_token_nonce, \
+                webhook_token_wrapped_dek, webhook_token_kek_id, webhook_token_kek_version, \
+                webhook_token_algorithm, \
                 connected_at, connected_by_membership_id, \
                 disconnected_at, disconnected_by_membership_id \
          FROM integration_connections \
@@ -125,6 +145,8 @@ pub async fn find_connection_by_id(
         sqlx::query_as::<_, ConnectionRow>(
             "SELECT id, tenant_id, catalog_id, is_active, config, \
                 webhook_token_hash, webhook_token_ciphertext, webhook_token_nonce, \
+                webhook_token_wrapped_dek, webhook_token_kek_id, webhook_token_kek_version, \
+                webhook_token_algorithm, \
                 connected_at, connected_by_membership_id, \
                 disconnected_at, disconnected_by_membership_id \
          FROM integration_connections \
@@ -274,22 +296,27 @@ pub async fn upsert_connection(
     tenant_id: Uuid,
     catalog_id: Uuid,
     webhook_token_hash: &[u8],
-    webhook_token_ciphertext: &[u8],
-    webhook_token_nonce: &[u8],
+    webhook_token: &secrets::StoredSecret,
     connected_by_membership_id: Option<Uuid>,
 ) -> Result<Uuid, sqlx::Error> {
     let row: (Uuid,) = sqlx::query_as(
         "INSERT INTO integration_connections ( \
             tenant_id, catalog_id, is_active, config, \
             webhook_token_hash, webhook_token_ciphertext, webhook_token_nonce, \
-            connected_at, connected_by_membership_id \
-         ) VALUES ($1, $2, true, '{}'::jsonb, $3, $4, $5, now(), $6) \
+            connected_at, connected_by_membership_id, \
+            webhook_token_wrapped_dek, webhook_token_kek_id, webhook_token_kek_version, \
+            webhook_token_algorithm \
+         ) VALUES ($1, $2, true, '{}'::jsonb, $3, $4, $5, now(), $6, $7, $8, $9, $10) \
          ON CONFLICT (tenant_id, catalog_id) DO UPDATE SET \
             is_active = true, \
             config = EXCLUDED.config, \
             webhook_token_hash = EXCLUDED.webhook_token_hash, \
             webhook_token_ciphertext = EXCLUDED.webhook_token_ciphertext, \
             webhook_token_nonce = EXCLUDED.webhook_token_nonce, \
+            webhook_token_wrapped_dek = EXCLUDED.webhook_token_wrapped_dek, \
+            webhook_token_kek_id = EXCLUDED.webhook_token_kek_id, \
+            webhook_token_kek_version = EXCLUDED.webhook_token_kek_version, \
+            webhook_token_algorithm = EXCLUDED.webhook_token_algorithm, \
             connected_at = now(), \
             connected_by_membership_id = EXCLUDED.connected_by_membership_id, \
             disconnected_at = NULL, \
@@ -300,9 +327,13 @@ pub async fn upsert_connection(
     .bind(tenant_id)
     .bind(catalog_id)
     .bind(webhook_token_hash)
-    .bind(webhook_token_ciphertext)
-    .bind(webhook_token_nonce)
+    .bind(&webhook_token.ciphertext)
+    .bind(&webhook_token.nonce)
     .bind(connected_by_membership_id)
+    .bind(webhook_token.wrapped_dek())
+    .bind(webhook_token.kek_id())
+    .bind(webhook_token.kek_version())
+    .bind(webhook_token.algorithm())
     .fetch_one(&mut **tx)
     .await?;
     Ok(row.0)
@@ -330,26 +361,34 @@ pub async fn upsert_secret(
     tenant_id: Uuid,
     connection_id: Uuid,
     field_key: &str,
-    ciphertext: &[u8],
-    nonce: &[u8],
+    secret: &secrets::StoredSecret,
     hint: &str,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO integration_secrets ( \
-            tenant_id, connection_id, field_key, ciphertext, nonce, hint \
-         ) VALUES ($1, $2, $3, $4, $5, $6) \
+            tenant_id, connection_id, field_key, ciphertext, nonce, hint, \
+            wrapped_dek, kek_id, kek_version, algorithm \
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
          ON CONFLICT (connection_id, field_key) DO UPDATE SET \
             ciphertext = EXCLUDED.ciphertext, \
             nonce = EXCLUDED.nonce, \
+            wrapped_dek = EXCLUDED.wrapped_dek, \
+            kek_id = EXCLUDED.kek_id, \
+            kek_version = EXCLUDED.kek_version, \
+            algorithm = EXCLUDED.algorithm, \
             hint = EXCLUDED.hint, \
             updated_at = now()",
     )
     .bind(tenant_id)
     .bind(connection_id)
     .bind(field_key)
-    .bind(ciphertext)
-    .bind(nonce)
+    .bind(&secret.ciphertext)
+    .bind(&secret.nonce)
     .bind(hint)
+    .bind(secret.wrapped_dek())
+    .bind(secret.kek_id())
+    .bind(secret.kek_version())
+    .bind(secret.algorithm())
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -469,28 +508,50 @@ pub async fn insert_delivery(
     Ok(row.0)
 }
 
-/// Fetch the encrypted bytes (ciphertext, nonce) for a single secret on a
-/// connection. The caller decrypts with `crypto::open` using the right AAD.
-/// Returns `None` if no row exists for the given `field_key` — the webhook
-/// handler treats that as an `invalid_signature` rejection.
+type SecretColumns = (
+    Vec<u8>,
+    Vec<u8>,
+    Option<Vec<u8>>,
+    Option<String>,
+    Option<i32>,
+    Option<String>,
+);
+
+fn stored_secret(columns: SecretColumns) -> Result<secrets::StoredSecret, sqlx::Error> {
+    let (ciphertext, nonce, wrapped_dek, kek_id, kek_version, algorithm) = columns;
+    secrets::StoredSecret::from_columns(
+        ciphertext,
+        nonce,
+        wrapped_dek,
+        kek_id,
+        kek_version,
+        algorithm,
+    )
+    .map_err(|e| sqlx::Error::Protocol(e.to_string()))
+}
+
+/// Fetch the sealed secret for a single field on a connection. The caller opens it with
+/// `Vault::open` using the right AAD. Returns `None` if no row exists for the given `field_key`:
+/// the webhook handler treats that as an `invalid_signature` rejection.
 pub async fn find_secret_ciphertext(
     pool: &sqlx::PgPool,
     tenant_id: uuid::Uuid,
     connection_id: Uuid,
     field_key: &str,
-) -> Result<Option<(Vec<u8>, Vec<u8>)>, sqlx::Error> {
+) -> Result<Option<secrets::StoredSecret>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let result: Result<Option<CiphertextAndNonce>, sqlx::Error> = async {
-        let row: Option<(Vec<u8>, Vec<u8>)> = sqlx::query_as(
-            "SELECT ciphertext, nonce FROM integration_secrets \
-         WHERE connection_id = $1 AND field_key = $2 AND tenant_id = $3",
+    let result: Result<Option<secrets::StoredSecret>, sqlx::Error> = async {
+        let row: Option<SecretColumns> = sqlx::query_as(
+            "SELECT ciphertext, nonce, wrapped_dek, kek_id, kek_version, algorithm \
+             FROM integration_secrets \
+             WHERE connection_id = $1 AND field_key = $2 AND tenant_id = $3",
         )
         .bind(connection_id)
         .bind(field_key)
         .bind(tenant_id)
         .fetch_optional(uow.conn())
         .await?;
-        Ok(row)
+        row.map(stored_secret).transpose()
     }
     .await;
     if result.is_ok() {
@@ -528,7 +589,7 @@ pub async fn connection_by_token_and_slug(
 pub async fn decrypted_secret(
     pool: &sqlx::PgPool,
     tenant_id: Uuid,
-    master_key: &crate::crypto::MasterKey,
+    vault: &secrets::Vault,
     connection_id: Uuid,
     field_key: &str,
 ) -> Result<Option<String>, sqlx::Error> {
@@ -549,8 +610,9 @@ pub async fn decrypted_secret(
         None => return Ok(None),
     };
 
-    let row = sqlx::query_as::<_, (Vec<u8>, Vec<u8>)>(
-        "SELECT ciphertext, nonce FROM integration_secrets \
+    let row = sqlx::query_as::<_, SecretColumns>(
+        "SELECT ciphertext, nonce, wrapped_dek, kek_id, kek_version, algorithm \
+         FROM integration_secrets \
          WHERE connection_id = $1 AND field_key = $2",
     )
     .bind(connection_id)
@@ -560,11 +622,16 @@ pub async fn decrypted_secret(
     drop(uow);
 
     match row {
-        Some((ciphertext, nonce)) => {
+        Some(columns) => {
             let scope = crate::crypto::aad(tenant_id, &slug, field_key);
-            let plaintext = crate::crypto::open(master_key, &scope, &ciphertext, &nonce)
+            let stored = stored_secret(columns)?;
+            let plaintext = vault
+                .open(&scope, &stored)
+                .await
                 .map_err(|e| sqlx::Error::Protocol(format!("decryption failed: {e}")))?;
-            Ok(Some(plaintext))
+            crate::crypto::text(&plaintext)
+                .map(Some)
+                .map_err(sqlx::Error::Protocol)
         }
         None => Ok(None),
     }
@@ -593,6 +660,3 @@ pub async fn active_connection_for_slug(
     }
     result
 }
-
-/// A stored secret: (ciphertext, nonce).
-type CiphertextAndNonce = (Vec<u8>, Vec<u8>);

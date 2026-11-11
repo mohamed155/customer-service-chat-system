@@ -32,6 +32,8 @@ fn test_config() -> config::AppConfig {
         docs_enabled: false,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         integration_secrets_key: None,
+        secrets_root_key: None,
+        secrets_root_key_previous: None,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
@@ -361,12 +363,15 @@ mod tests {
             tenant_id,
             conversation_id: Uuid::new_v4(),
             pool: pool.clone(),
-            master_key: Some(
-                ai_providers::crypto::MasterKey::from_base64(
-                    "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-                )
-                .unwrap(),
-            ),
+            vault: Some(std::sync::Arc::new(secrets::Vault::new(
+                Some(
+                    ai_providers::crypto::MasterKey::from_base64(
+                        "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+                    )
+                    .unwrap(),
+                ),
+                None,
+            ))),
         };
         let resolved = tools::policy::ResolvedTool {
             spec: ai_providers::ToolSpec {
