@@ -47,21 +47,21 @@ async fn main() {
         }
     };
 
-    let mut config = match AppConfig::from_env() {
+    // The public gateway serves no cookie sessions and decrypts no AI provider keys, so it doesn't
+    // load the secrets for them at all (ADR-010 section 3). It still needs the integration secrets
+    // key to verify channel-webhook signatures until envelope encryption (ADR-014) replaces it.
+    let loaded = if mode == RunMode::Gateway {
+        AppConfig::from_env_for_gateway()
+    } else {
+        AppConfig::from_env()
+    };
+    let config = match loaded {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Config error: {e}");
             std::process::exit(1);
         }
     };
-    if mode == RunMode::Gateway {
-        // The public side serves no cookie sessions and decrypts no AI provider keys, so it
-        // doesn't keep the secrets for them in memory (ADR-010 section 3). It still needs the
-        // integration secrets key to verify channel-webhook signatures until envelope encryption
-        // (ADR-014) replaces it.
-        config.auth_jwt_secret = String::new();
-        config.ai_key_encryption_key = None;
-    }
 
     observability::init_observability(
         config.log_format.clone(),
@@ -163,7 +163,12 @@ async fn main() {
         }
         // Pending forever when this mode runs no workers (the set is empty).
         Some(finished) = workers.join_next() => {
-            panic!("background worker stopped unexpectedly: {finished:?}");
+            // A worker that stops leaves a process that looks ready but does no work, so the
+            // process must not keep running. Report it, flush telemetry, and exit non-zero so the
+            // orchestrator restarts it.
+            tracing::error!(worker = ?finished, "background worker stopped unexpectedly; exiting");
+            observability::errors::flush(Duration::from_secs(2));
+            std::process::exit(1);
         }
     }
 
@@ -297,19 +302,22 @@ fn spawn_workers(
         .integration_secrets_key
         .as_ref()
         .and_then(|key| integrations::crypto::MasterKey::from_base64(key).ok());
+    let mut whatsapp_workers = Vec::new();
     if let Some(mk) = whatsapp_master_key {
         let mk = Arc::new(mk);
-        let _media_worker = tokio::spawn(whatsapp::media::run_media_fetch_worker(
+        let media_worker = tokio::spawn(whatsapp::media::run_media_fetch_worker(
             state.db.clone(),
             whatsapp_api.clone(),
             storage.clone(),
             mk.clone(),
         ));
-        let _sender_worker = tokio::spawn(whatsapp::sender::run_whatsapp_sender_worker(
+        let sender_worker = tokio::spawn(whatsapp::sender::run_whatsapp_sender_worker(
             state.db.clone(),
             whatsapp_api.clone(),
             mk,
         ));
+        whatsapp_workers.push(("whatsapp media worker", media_worker));
+        whatsapp_workers.push(("whatsapp sender worker", sender_worker));
     } else {
         tracing::warn!("integration_secrets_key not configured — whatsapp workers disabled");
     }
@@ -351,6 +359,12 @@ fn spawn_workers(
         let _ = integration_retention_sweeper.await;
         "integration retention sweeper"
     });
+    for (name, handle) in whatsapp_workers {
+        workers.spawn(async move {
+            let _ = handle.await;
+            name
+        });
+    }
     workers
 }
 

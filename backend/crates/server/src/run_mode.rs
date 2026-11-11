@@ -52,12 +52,20 @@ impl RunMode {
         }
     }
 
-    /// Read [`RUN_MODE_ENV`]. A value that isn't a mode is an error, never a silent fallback to
-    /// `all`: a typo in a production manifest must not start a process that serves everything.
+    /// Read [`RUN_MODE_ENV`]. Unset means [`RunMode::All`]. Anything else must be a mode: a blank
+    /// value, a typo or a non-Unicode value is an error, never a silent fallback to `all`, so a
+    /// bad production manifest can't start a process that serves everything.
     pub fn from_env() -> Result<Self, String> {
-        match std::env::var(RUN_MODE_ENV) {
-            Ok(value) if !value.trim().is_empty() => value.parse(),
-            _ => Ok(Self::default()),
+        Self::from_env_value(std::env::var(RUN_MODE_ENV))
+    }
+
+    fn from_env_value(value: Result<String, std::env::VarError>) -> Result<Self, String> {
+        match value {
+            Ok(value) => value.parse(),
+            Err(std::env::VarError::NotPresent) => Ok(Self::default()),
+            Err(std::env::VarError::NotUnicode(_)) => {
+                Err(format!("invalid {RUN_MODE_ENV} value: expected Unicode"))
+            }
         }
     }
 }
@@ -111,6 +119,26 @@ mod tests {
     #[test]
     fn default_is_all() {
         assert_eq!(RunMode::default(), RunMode::All);
+    }
+
+    #[test]
+    fn unset_is_all_but_blank_and_non_unicode_are_errors() {
+        use std::env::VarError;
+        use std::ffi::OsString;
+
+        assert_eq!(
+            RunMode::from_env_value(Err(VarError::NotPresent)).unwrap(),
+            RunMode::All
+        );
+        assert!(RunMode::from_env_value(Ok(String::new())).is_err());
+        assert!(RunMode::from_env_value(Ok("  ".into())).is_err());
+        let error =
+            RunMode::from_env_value(Err(VarError::NotUnicode(OsString::from("x")))).unwrap_err();
+        assert!(error.contains("Unicode"), "{error}");
+        assert_eq!(
+            RunMode::from_env_value(Ok("worker".into())).unwrap(),
+            RunMode::Worker
+        );
     }
 
     #[test]
