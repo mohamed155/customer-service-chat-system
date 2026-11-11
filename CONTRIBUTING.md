@@ -98,6 +98,13 @@ Refs MOH-20
   GitHub Actions, the frontend (npm/pnpm) and the backend (Cargo). Minor and patch updates are grouped
   into one pull request per ecosystem; major updates come one by one. Titles use `ci(deps)` or
   `build(deps)` so they pass commitlint.
+- **Workflow supply chain:** every `uses:` in `.github/workflows/` is pinned to a full commit SHA with
+  the tag in a trailing comment (`uses: actions/checkout@<sha> # v7.0.1`), and every workflow declares
+  top-level `permissions:` (default `contents: read`; a job that needs more declares it itself). The
+  `workflow-pinning` job fails on a tag-pinned action. Dependabot bumps the SHA and the comment together.
+  To add an action, look up the commit of the release tag
+  (`gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`), and check locally with
+  `node .github/scripts/check-workflows.mjs`.
 - **Secret scanning:** the `secret-scan` job runs gitleaks over the full git history and fails the build
   on any finding. Rules and the list of known fake values are in [`.gitleaks.toml`](.gitleaks.toml). If a
   test fixture trips it, add that exact value to the allowlist there, in the same pull request.

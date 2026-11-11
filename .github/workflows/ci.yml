@@ -127,3 +127,21 @@ jobs:
           touch .env.staging
           APP_RELEASE_SHA=ci APP_DOMAIN=example.test \
             docker compose --env-file .env.example -f infra/docker-compose.yml -f infra/docker-compose.staging.yml config -q
+
+  # Supply chain (MOH-39, ADR-015 section 3, threat model 4.14 S): every `uses:` must be pinned to a
+  # full commit SHA with the tag in a trailing comment, and every workflow must declare top-level
+  # `permissions:`. Dependabot keeps the SHAs current (.github/dependabot.yml). The script is plain
+  # Node with no dependencies; its tests run first. Run both locally from the repository root:
+  #   node --test .github/scripts/check-workflows.test.mjs && node .github/scripts/check-workflows.mjs
+  # Needs no secrets and no checkout credentials, so it is safe on pull requests from forks.
+  workflow-pinning:
+    if: github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: Checker tests
+        run: node --test .github/scripts/check-workflows.test.mjs
+      - name: Workflows are pinned and least-privilege
+        run: node .github/scripts/check-workflows.mjs
