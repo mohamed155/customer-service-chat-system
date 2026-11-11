@@ -3,7 +3,9 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * 0'
-
+# Least privilege for every job (MOH-39). A job that needs more declares it itself.
+permissions:
+  contents: read
 jobs:
   verify-gate-rejects-broken-code:
     runs-on: ubuntu-latest

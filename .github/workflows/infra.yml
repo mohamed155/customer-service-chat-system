@@ -12,6 +12,9 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+# Least privilege for every job (MOH-39). A job that needs more declares it itself.
+permissions:
+  contents: read
 jobs:
   compose-stack:
     runs-on: ubuntu-latest
