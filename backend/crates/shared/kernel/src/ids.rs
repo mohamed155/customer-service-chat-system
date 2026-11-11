@@ -74,31 +74,43 @@ impl IdGenerator for SequentialIdGenerator {
     }
 }
 
-static OVERRIDE: RwLock<Option<Arc<dyn IdGenerator>>> = RwLock::new(None);
+/// The installed generator and the number of the installation that put it there.
+static OVERRIDE: RwLock<Option<(u64, Arc<dyn IdGenerator>)>> = RwLock::new(None);
+static INSTALLATIONS: AtomicU64 = AtomicU64::new(0);
 
 /// A new identifier for a primary key: UUIDv7, from the installed generator if there is one.
 pub fn new_id() -> Uuid {
     let installed = OVERRIDE.read().unwrap_or_else(|e| e.into_inner()).clone();
     match installed {
-        Some(generator) => generator.next_id(),
+        Some((_, generator)) => generator.next_id(),
         None => Uuid::now_v7(),
     }
 }
 
 /// Use `generator` for [`new_id`] until the guard is dropped. See the module notes on scope.
+///
+/// Installing a second generator while a first is active replaces it; each guard only removes the
+/// generator it installed, so dropping the older guard later leaves the newer one in place.
 #[must_use = "the generator is removed when the guard is dropped"]
 pub fn install_generator(generator: Arc<dyn IdGenerator>) -> GeneratorGuard {
-    *OVERRIDE.write().unwrap_or_else(|e| e.into_inner()) = Some(generator);
-    GeneratorGuard(())
+    let installation = INSTALLATIONS.fetch_add(1, Ordering::Relaxed);
+    *OVERRIDE.write().unwrap_or_else(|e| e.into_inner()) = Some((installation, generator));
+    GeneratorGuard(installation)
 }
 
-/// Restores the system generator when dropped.
+/// Restores the system generator when dropped, unless a newer installation replaced its generator.
 #[derive(Debug)]
-pub struct GeneratorGuard(());
+pub struct GeneratorGuard(u64);
 
 impl Drop for GeneratorGuard {
     fn drop(&mut self) {
-        *OVERRIDE.write().unwrap_or_else(|e| e.into_inner()) = None;
+        let mut installed = OVERRIDE.write().unwrap_or_else(|e| e.into_inner());
+        if installed
+            .as_ref()
+            .is_some_and(|(owner, _)| *owner == self.0)
+        {
+            *installed = None;
+        }
     }
 }
 
@@ -138,6 +150,35 @@ mod tests {
         assert!(real
             .get_timestamp()
             .is_some_and(|t| t.to_unix().0 > 1_767_225_600));
+    }
+
+    #[test]
+    #[serial(ids)]
+    fn an_older_guard_does_not_remove_a_newer_generator() {
+        let first = Arc::new(SequentialIdGenerator::with_timestamp_ms(1_000_000_000_000));
+        let second = Arc::new(SequentialIdGenerator::with_timestamp_ms(2_000_000_000_000));
+
+        let older = install_generator(first);
+        let newer = install_generator(second);
+        drop(older);
+        let id = new_id();
+        assert_eq!(
+            id.get_timestamp().unwrap().to_unix().0,
+            2_000_000_000,
+            "the newer generator is still installed"
+        );
+
+        drop(newer);
+        let real = new_id();
+        assert!(
+            real.get_timestamp().unwrap().to_unix().0 < 1_900_000_000,
+            "{real}"
+        );
+        assert_ne!(
+            real.get_timestamp().unwrap().to_unix().0,
+            2_000_000_000,
+            "the system generator is back"
+        );
     }
 
     #[test]

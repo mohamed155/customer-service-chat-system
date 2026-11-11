@@ -84,8 +84,14 @@ U1 was resolved by MOH-42; U2 is still follow-up work.
 - **Database defaults.** Migration `0075_uuidv7_defaults.sql` adds a `uuidv7()` function and makes it
   the default of the `id` column of all 40 tables that had `DEFAULT gen_random_uuid()`. That covers
   every insert that does not name an id: `messages`, `audit_logs`, the rows written by SQL functions
-  and the low-volume tables. The function is a stand-in for PostgreSQL 18's built-in; after an
-  upgrade the built-in is found first and ours can be dropped. Existing rows keep their v4 ids.
+  and the low-volume tables. Existing rows keep their v4 ids.
+- **Moving to PostgreSQL 18's built-in `uuidv7()`.** The function is a stand-in. A database *created*
+  on 18 from these migrations resolves the unqualified `uuidv7()` in the defaults to the built-in in
+  `pg_catalog`. A database *upgraded* from an earlier version does not: a stored default keeps the
+  function it was created with, so it still calls `public.uuidv7()`, and `DROP FUNCTION` would fail
+  (or, with `CASCADE`, remove the defaults). To retire ours, write a migration that runs
+  `ALTER TABLE <t> ALTER COLUMN id SET DEFAULT pg_catalog.uuidv7()` for each of the 40 tables (the
+  list is in `0075_uuidv7_defaults.sql`) and only then `DROP FUNCTION public.uuidv7()`.
 - **What stays v4, on purpose:** session token IDs (`jti`) and the claim tokens of the outbox
   workers. They are tokens, not keys, and should not reveal a time. Each carries a
   `// uuid-v4-ok: <why>` comment.

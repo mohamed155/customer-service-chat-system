@@ -8,10 +8,14 @@
 --
 -- `ALTER COLUMN ... SET DEFAULT` changes the catalog only. It does not rewrite the table.
 --
--- The function is a stand-in for the built-in `uuidv7()` of PostgreSQL 18. It lives in `public`, so
--- after an upgrade the built-in in `pg_catalog` is the one an unqualified `uuidv7()` finds first and
--- this one can be dropped once nothing references it. Its randomness comes from `gen_random_uuid()`;
--- only the first 48 bits (the Unix millisecond timestamp) and the version bits are replaced.
+-- The function is a stand-in for the built-in `uuidv7()` of PostgreSQL 18. It lives in `public`, and
+-- the comment below names the schema, because on 18 an unqualified `uuidv7()` finds the built-in in
+-- `pg_catalog` first. A database created on 18 from these migrations therefore ends up with the
+-- built-in as the default. A database upgraded from an earlier version keeps the defaults bound to
+-- `public.uuidv7()` (a default stores the function it was created with), so before dropping ours a
+-- later migration must run `ALTER TABLE ... ALTER COLUMN id SET DEFAULT pg_catalog.uuidv7()` for the
+-- tables below; see ADR-013. Its randomness comes from `gen_random_uuid()`; only the first 48 bits (the
+-- Unix millisecond timestamp) and the version bits are replaced.
 --
 -- From here on a migration must not use `gen_random_uuid()` as a column default:
 -- `server/tests/uuid_hygiene.rs` fails on it. A table whose ids the application always supplies needs
@@ -38,7 +42,7 @@ AS $$
   )::uuid
 $$;
 
-COMMENT ON FUNCTION uuidv7() IS
+COMMENT ON FUNCTION public.uuidv7() IS
   'UUIDv7 (RFC 9562): 48-bit Unix ms timestamp, version 7, random rest. Stand-in for PostgreSQL 18''s built-in (MOH-42).';
 
 ALTER TABLE agent_avatar_uploads ALTER COLUMN id SET DEFAULT uuidv7();
