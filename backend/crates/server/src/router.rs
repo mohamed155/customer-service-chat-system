@@ -62,20 +62,72 @@ async fn test_panic_handler() -> Response {
     panic!("intentional panic for testing");
 }
 
+/// The origin a browser says a request comes from: the `Origin` header, or the origin part of
+/// `Referer` when `Origin` is absent. `None` when neither says anything usable.
+fn request_origin(headers: &axum::http::HeaderMap) -> Option<String> {
+    if let Some(origin) = headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+    {
+        return Some(origin.to_owned());
+    }
+    let referer = headers.get(header::REFERER)?.to_str().ok()?;
+    let uri: axum::http::Uri = referer.parse().ok()?;
+    Some(format!("{}://{}", uri.scheme_str()?, uri.authority()?))
+}
+
+/// A custom header a cross-site form or image can't set without a CORS preflight.
+fn has_csrf_header(headers: &axum::http::HeaderMap) -> bool {
+    ["x-requested-with", "x-tenant-id"].iter().any(|name| {
+        headers
+            .get(*name)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| !value.trim().is_empty())
+    })
+}
+
+fn is_unsafe_method(method: &Method) -> bool {
+    !matches!(method, &Method::GET | &Method::HEAD | &Method::OPTIONS)
+}
+
+/// The CSRF proof a state-changing request has to carry when its credential is the session cookie:
+/// an allowed origin (from `Origin`, else `Referer`) and a custom header. Rejects with 403.
+fn require_csrf_proof(config: &AppConfig, headers: &axum::http::HeaderMap) -> Result<(), ApiError> {
+    let allowed =
+        request_origin(headers).is_some_and(|origin| config.cors_allowed_origins.contains(&origin));
+    if !allowed {
+        return Err(ApiError::unauthorized("Origin not allowed"));
+    }
+    if !has_csrf_header(headers) {
+        return Err(ApiError::unauthorized("Missing X-Requested-With header"));
+    }
+    Ok(())
+}
+
+/// Runs after the principal is known. A state-changing request authenticated by the session cookie
+/// must prove where it came from ([`require_csrf_proof`]): a missing `Origin` and `Referer`, a
+/// foreign origin and a missing custom header are all rejected. Other principals (the
+/// development-only `X-Dev-User-Id` header carries no cookie to ride on) keep the old rule: an
+/// `Origin`, when present, must be allowed.
 async fn csrf_origin_middleware(
     axum::extract::State(config): axum::extract::State<Arc<AppConfig>>,
     request: Request,
     next: middleware::Next,
 ) -> Response {
-    let method = request.method();
-    let is_safe_method = matches!(method, &Method::GET | &Method::HEAD | &Method::OPTIONS);
-
-    if !is_safe_method && request.extensions().get::<Principal>().is_some() {
-        let origin = request
+    if is_unsafe_method(request.method()) && request.extensions().get::<Principal>().is_some() {
+        let cookie_session = request
+            .extensions()
+            .get::<identity::session::SessionClaims>()
+            .is_some();
+        if cookie_session {
+            if let Err(error) = require_csrf_proof(&config, request.headers()) {
+                return error.into_response();
+            }
+        } else if let Some(origin) = request
             .headers()
             .get(header::ORIGIN)
-            .and_then(|value| value.to_str().ok());
-        if let Some(origin) = origin {
+            .and_then(|value| value.to_str().ok())
+        {
             let allowed = config
                 .cors_allowed_origins
                 .iter()
@@ -86,6 +138,22 @@ async fn csrf_origin_middleware(
         }
     }
 
+    next.run(request).await
+}
+
+/// Login and signup start a session, so they run before any principal exists and the check above
+/// never sees them (login CSRF: a foreign page signs the victim in as the attacker). They get the
+/// same proof unconditionally.
+async fn csrf_session_start_middleware(
+    Extension(config): Extension<Arc<AppConfig>>,
+    request: Request,
+    next: middleware::Next,
+) -> Response {
+    if is_unsafe_method(request.method()) {
+        if let Err(error) = require_csrf_proof(&config, request.headers()) {
+            return error.into_response();
+        }
+    }
     next.run(request).await
 }
 
@@ -136,6 +204,7 @@ fn cors_layer(config: &AppConfig) -> CorsLayer {
         REQUEST_ID_HEADER.clone(),
         HeaderName::from_static("idempotency-key"),
         HeaderName::from_static("x-tenant-id"),
+        HeaderName::from_static("x-requested-with"),
     ];
     if matches!(
         config.environment,
@@ -248,10 +317,18 @@ where
 
 fn public_routes() -> OpenApiRouter<sqlx::PgPool> {
     OpenApiRouter::new()
-        .routes(routes!(login).layer(middleware::from_fn(crate::rate_limit::login_rate_limit)))
-        .routes(routes!(tenancy::signup::signup).layer(middleware::from_fn(
-            crate::rate_limit::per_ip_creation_limit,
-        )))
+        .routes(
+            routes!(login)
+                .layer(middleware::from_fn(crate::rate_limit::login_rate_limit))
+                .layer(middleware::from_fn(csrf_session_start_middleware)),
+        )
+        .routes(
+            routes!(tenancy::signup::signup)
+                .layer(middleware::from_fn(
+                    crate::rate_limit::per_ip_creation_limit,
+                ))
+                .layer(middleware::from_fn(csrf_session_start_middleware)),
+        )
         .routes(routes!(identity::routes::logout))
         .routes(routes!(tenancy::invitations::preview_invitation))
         .routes(routes!(tenancy::invitations::accept_invitation))

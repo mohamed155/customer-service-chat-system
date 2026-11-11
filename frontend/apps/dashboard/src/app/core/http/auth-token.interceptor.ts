@@ -9,7 +9,11 @@ export const authTokenInterceptor: HttpInterceptorFn = (request, next) => {
     return next(request);
   }
 
-  return next(request.clone({ withCredentials: true }));
+  // The session cookie rides on these requests, so each one also carries a header a cross-site
+  // form can't set. The backend rejects state-changing cookie requests without it (MOH-36).
+  return next(
+    request.clone({ withCredentials: true, setHeaders: { 'X-Requested-With': 'XMLHttpRequest' } }),
+  );
 };
 
 function targetsApiBaseUrl(requestUrl: string, apiBaseUrl: string): boolean {
