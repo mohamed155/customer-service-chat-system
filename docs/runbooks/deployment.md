@@ -53,6 +53,26 @@ the cross-tenant functions) exist with the right attributes and grants. It fails
 container has no `APP_OWNER_PASSWORD` / `APP_RUNTIME_PASSWORD`. Migration 0067 needs `app_platform`,
 so a host must run this step before it deploys that release (the script does it every time).
 
+## Run Modes
+
+One image, one binary, four run modes selected with `APP_RUN_MODE` (see
+[configuration](../configuration.md)): `api`, `gateway`, `worker`, `all` (the default). The deploy
+script and the Compose stack run `all`. Splitting a deployment into separate `api`, `gateway` and
+`worker` processes is supported by the code, with two conditions:
+
+- **Don't split yet in production.** Realtime fan-out and agent presence are in-process (ADR-009
+  RT1). With a split, an escalation, notification or AI reply produced by a `worker` process
+  never reaches an SSE client connected to an `api` or `gateway` process, and each process starts
+  with a warning that says so. Move fan-out to Redis first, then split.
+- **Run exactly one `worker` per release** until the outbox workers are proven safe to run in
+  parallel, and keep the `gateway` and `api` on separate hostnames so dashboard cookies are never
+  sent to public endpoints (ADR-010 section 4).
+
+A `gateway` process serves only the widget, integration-hook and WhatsApp-webhook routes. It has
+no cookie sessions, no platform or tenant routes and no API docs, and it clears the session-signing
+secret and the AI key from memory. It still needs `APP_INTEGRATION_SECRETS_KEY` to verify channel
+webhook signatures, until envelope encryption (ADR-014) replaces it.
+
 ## Move an Existing Host to the Two Database Roles (once)
 
 Hosts created before MOH-45 have tables owned by the bootstrap superuser, and the backend
