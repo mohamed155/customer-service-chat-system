@@ -774,6 +774,8 @@ impl AiService {
             let started = Instant::now();
             let mut first_delta_sent = false;
             let mut last_error: Option<AiCallError> = None;
+            // Provider and model of the stream that delivered text, for the usage row if it is cut off.
+            let mut streamed_from: Option<(String, String)> = None;
 
             for attempt in &attempts {
                 if first_delta_sent {
@@ -816,6 +818,8 @@ impl AiService {
                                     }
                                     Ok(ai_providers::StreamEvent::Delta(text)) => {
                                         first_delta_sent = true;
+                                        streamed_from =
+                                            Some((attempt.provider.clone(), attempt.model.clone()));
                                         content_accumulated.push_str(&text);
                                         if tx.send(AiStreamEvent::Delta(text)).await.is_err() {
                                             let w = usage::UsageWrite {
@@ -973,6 +977,46 @@ impl AiService {
                         }
                     }
                 }
+            }
+
+            // Text was sent and the vendor stream then ended without `Done` or an error: it was cut
+            // off. Every other way out of the loop returned above, so tell the consumer instead of
+            // closing the stream as if the answer were complete.
+            if first_delta_sent {
+                if let Some((provider, model)) = streamed_from.take() {
+                    let w = usage::UsageWrite {
+                        tenant_id: ctx_tenant_id,
+                        provider,
+                        model,
+                        input_tokens: None,
+                        output_tokens: None,
+                        status: "failure",
+                        error_category: Some("unavailable"),
+                        streamed: true,
+                        latency_ms: started.elapsed().as_millis() as i32,
+                        request_id: ctx_request_id_clone.clone(),
+                        request_content: if capture {
+                            Some(
+                                serde_json::json!({"system": &input_system, "messages": &input_messages}),
+                            )
+                        } else {
+                            None
+                        },
+                        response_content: if capture {
+                            Some(content_accumulated.clone())
+                        } else {
+                            None
+                        },
+                    };
+                    if let Err(e) = usage::insert(&pool, w).await {
+                        tracing::error!(%e, "failed to record cut-off streaming AI usage");
+                    }
+                }
+                let _ = tx
+                    .send(AiStreamEvent::Error {
+                        category: ai_providers::ErrorCategory::Unavailable,
+                    })
+                    .await;
             }
 
             if !first_delta_sent {

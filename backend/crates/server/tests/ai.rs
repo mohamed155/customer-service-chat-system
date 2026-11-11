@@ -2582,10 +2582,88 @@ fn build_sse_success() -> Vec<u8> {
         .into_bytes()
 }
 
+/// One delta, then the connection ends: no finish reason, no `[DONE]`, no error.
+fn build_sse_truncated() -> Vec<u8> {
+    let good =
+        r#"{"choices":[{"delta":{"content":"Hello"},"finish_reason":null}],"model":"gpt-4"}"#;
+    format!("data: {}\n\n", good).into_bytes()
+}
+
 fn build_sse_interrupted() -> Vec<u8> {
     let good =
         r#"{"choices":[{"delta":{"content":"Hello"},"finish_reason":null}],"model":"gpt-4"}"#;
     format!("data: {}\n\ndata: NOT_JSON\n\n", good).into_bytes()
+}
+
+#[tokio::test]
+async fn streaming_cut_off_after_a_delta_reports_an_error_not_a_finished_answer() {
+    let pool = match get_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+    setup(&pool).await;
+
+    let openai_mock = MockServer::start().await;
+    let state = wiremock_state(pool.clone(), &openai_mock.uri(), "", "");
+
+    let tenant_id = seed_tenant(&pool).await;
+    let master = master_key();
+    seed_ai_config(
+        &pool,
+        Some(tenant_id),
+        "openai",
+        "gpt-4",
+        serde_json::json!([]),
+    )
+    .await;
+    seed_ai_credential(&pool, Some(tenant_id), "openai", "sk-stream-cut", &master).await;
+    mock_openai_stream(&openai_mock, "sk-stream-cut", build_sse_truncated()).await;
+
+    let mut stream = state
+        .ai
+        .stream(
+            ai::AiCallContext {
+                tenant_id,
+                request_id: Some("sse-truncated".into()),
+            },
+            ai_input(),
+        )
+        .await
+        .unwrap();
+
+    let mut events = Vec::new();
+    while let Some(event) = stream.next().await {
+        events.push(event);
+    }
+
+    assert!(
+        matches!(events.first(), Some(ai::AiStreamEvent::Delta(t)) if t == "Hello"),
+        "the text that arrived is delivered first"
+    );
+    assert!(
+        matches!(
+            events.last(),
+            Some(ai::AiStreamEvent::Error {
+                category: ai::ErrorCategory::Unavailable
+            })
+        ),
+        "a cut-off stream ends in an error, not silently"
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, ai::AiStreamEvent::Done(_))),
+        "it never reports a finished answer"
+    );
+
+    let status: String = sqlx::query_scalar(
+        "SELECT status FROM ai_usage_records WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(tenant_id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(status, "failure");
 }
 
 #[tokio::test]
