@@ -5,10 +5,15 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
+import csp_ from './csp.cjs';
 
 const root = resolve(process.argv[2] ?? 'dist/dashboard/browser');
 const port = Number(process.argv[3] ?? 4201);
 const indexFile = join(root, 'index.html');
+// Serve the dashboard under the same enforced policy the production edge sends, so every mocked
+// E2E spec also runs against it. The widget build is served without it (its own policy is just
+// `frame-ancestors *`).
+const csp = root.includes('widget') ? null : csp_.dashboardCsp();
 
 if (!existsSync(indexFile)) {
   console.error(`No build at ${root}. Run \`pnpm exec ng build dashboard\` first.`);
@@ -38,6 +43,7 @@ createServer((req, res) => {
   res.writeHead(200, {
     'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
     'cache-control': 'no-store',
+    ...(csp ? { 'content-security-policy': csp } : {}),
   });
   createReadStream(file).pipe(res);
 }).listen(port, '127.0.0.1', () => {

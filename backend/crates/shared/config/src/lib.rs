@@ -21,6 +21,12 @@
 use std::{env, error::Error, fmt, str::FromStr};
 use url::Url;
 
+/// The dashboard and API Content-Security-Policy. `infra/Caddyfile` serves the dashboard document
+/// with the same string, and a test in the `server` crate fails if the two differ.
+/// `'unsafe-inline'` is on `style-src` only (Angular injects component styles at runtime), never on
+/// `script-src`.
+pub const DEFAULT_CSP_POLICY: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Environment {
     Production,
@@ -411,9 +417,10 @@ impl AppConfig {
         let rate_limit_fail_mode =
             env::var("APP_RATE_LIMIT_FAIL_MODE").unwrap_or_else(|_| "auth_closed".into());
         let security_headers_enabled = parse_bool_env("APP_SECURITY_HEADERS_ENABLED", true)?;
-        let csp_policy = env::var("APP_CSP_POLICY")
-            .unwrap_or_else(|_| "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'".into());
-        let csp_report_only = parse_bool_env("APP_CSP_REPORT_ONLY", true)?;
+        let csp_policy = env::var("APP_CSP_POLICY").unwrap_or_else(|_| DEFAULT_CSP_POLICY.into());
+        // Enforced by default (MOH-38). `APP_CSP_REPORT_ONLY=true` is for trialling a stricter
+        // candidate policy: the same value is then sent as `Content-Security-Policy-Report-Only`.
+        let csp_report_only = parse_bool_env("APP_CSP_REPORT_ONLY", false)?;
         let hsts_max_age = env::var("APP_HSTS_MAX_AGE")
             .unwrap_or_else(|_| "31536000".into())
             .parse()
@@ -697,11 +704,11 @@ mod tests {
         assert_eq!(config.rate_limit_max_override, 10000);
         assert_eq!(config.rate_limit_fail_mode, "auth_closed");
         assert!(config.security_headers_enabled);
-        assert_eq!(
-            config.csp_policy,
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        assert_eq!(config.csp_policy, DEFAULT_CSP_POLICY);
+        assert!(
+            !config.csp_report_only,
+            "the CSP is enforced unless APP_CSP_REPORT_ONLY says otherwise"
         );
-        assert!(config.csp_report_only);
         assert_eq!(config.hsts_max_age, 31536000);
         assert_eq!(config.otlp_endpoint, None);
         assert!((config.trace_sample_ratio - 1.0).abs() < f64::EPSILON);

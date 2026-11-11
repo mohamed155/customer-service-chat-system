@@ -66,7 +66,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | -- | -- | -- | -- | -- |
 | S | Credential stuffing, password guessing | Argon2id; `(email, ip)` login throttle; uniform error messages | ✓ throttle · Gap: per-account lockout (ADR-005 A7), MFA (A6) | Identity & Access |
 | S | Account enumeration via login timing | Dummy hash on unknown email | ✓ dummy and real hashes share one set of pinned parameters, with a test for it and a timing test (ADR-005 A3 resolved) | Identity & Access |
-| S | Session theft via XSS | HttpOnly cookie, CSP, no tokens in JS storage | ✓ HttpOnly, no JS storage · Gap: CSP is `report-only`, not enforced | Identity & Access |
+| S | Session theft via XSS | HttpOnly cookie, CSP, no tokens in JS storage | ✓ HttpOnly, no JS storage · ✓ CSP enforced (`script-src 'self'`, no inline script), checked in a browser against the built dashboard (MOH-38) | Identity & Access |
 | T | Forged session token | Signed JWT | ✓ HS256 · Gap: EdDSA + `kid`, verify-only keys in other units (ADR-005 A1) | Identity & Access |
 | R | User denies a login or sensitive action | Audit records for login, logout, role changes | ✓ | Identity & Access |
 | I | Long-lived token replay after theft | Short access token + rotating refresh with reuse detection | Gap: single 8 h token (ADR-005 A2) | Identity & Access |
@@ -201,7 +201,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | STRIDE | Threat | Controls | Status | Owner |
 | -- | -- | -- | -- | -- |
 | S | Clickjacking or framing of the dashboard | HSTS, `X-Frame-Options` / `frame-ancestors` | ✓ `X-Frame-Options` (033) | Frontend |
-| T | XSS via message or knowledge content | Angular escaping; no `bypassSecurityTrust*` without review; CSP | ✓ escaping · Gap: CSP is `report-only` | Frontend |
+| T | XSS via message or knowledge content | Angular escaping; no `bypassSecurityTrust*` without review; CSP | ✓ escaping · ✓ CSP enforced at the edge and by default in the API (MOH-38); Trusted Types not yet | Frontend |
 | R | — | — | — | — |
 | I | Tokens or tenant data in `localStorage` | Cookies only for tokens; only theme and last tenant summary persisted | ✓ dashboard | Frontend |
 | D | — | — | — | — |
@@ -229,7 +229,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | 5 | Account enumeration through login timing. **Resolved:** the dummy hash and real hashes use the same pinned parameters and a login does the same work for a known and an unknown email; tests fail on a mismatch or a timing gap. Residual: the signup and invitation-accept endpoints answer 409 for an email that already has an account, which is a different, token- or signup-gated signal | 4.1 S | ADR-005 A3 resolved · [MOH-35](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-35) |
 | 6 | CSRF gaps (missing `Origin` allowed, login unchecked). **Resolved:** a state-changing request authenticated by the session cookie must name an allowed origin and carry a custom header, and login and signup get the same check with no session needed. Residual: `SameSite=Lax` is still the first line of defence for GET-based state changes, of which there are none by convention | 4.1 E | ADR-005 A4 resolved · [MOH-36](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-36) |
 | 7 | Public and internal traffic share one process and router. **Mitigated in code:** run modes `api`, `gateway`, `worker` and `all` with disjoint route sets and workers split out. Residual: the default and the deployed topology are still `all`, because realtime fan-out and presence are in-process (ADR-009 RT1), so the isolation is available but not yet in use | 4.4 D/E | ADR-010 G1 resolved in code · [MOH-37](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-37) |
-| 8 | CSP not enforced (`report-only`); GitHub Actions pinned by tag, not SHA; no circuit breakers | 4.1 S, 4.6 D, 4.13 T, 4.14 S | CSP [MOH-38](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-38) · Actions SHA pinning [MOH-39](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-39) · circuit breakers [MOH-40](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-40) |
+| 8 | CSP enforced since MOH-38 (it was `report-only` by default in the API, and the dashboard's two inline scripts would have been blocked at the edge: fixed, with a browser test); GitHub Actions pinned by tag, not SHA; no circuit breakers | 4.1 S, 4.6 D, 4.13 T, 4.14 S | CSP [MOH-38](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-38) · Actions SHA pinning [MOH-39](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-39) · circuit breakers [MOH-40](https://linear.app/mohamed-ahmed-ramadan/issue/MOH-40) |
 
 Each risk should become a Linear issue with an owner and target date; this table links them once
 created. All eight risks are filed.

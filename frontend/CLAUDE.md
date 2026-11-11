@@ -13,6 +13,7 @@
   - 97 KB initial budget (configured in angular.json)
   - Loader build script: `pnpm build:widget-loader`
   - Loader-vs-app split: loader owns launcher + iframe lifecycle, Angular app owns chat UI
+- **CSP**: the dashboard document is served with `script-src 'self'` (`infra/Caddyfile`, enforced). No inline `<script>`, no inline event handlers (`onclick=`, `onload=`), no `eval`; scripts that must run before bootstrap go in a file (see `theme-init.js`). Production builds keep `optimization.styles.inlineCritical` off, because Angular's critical-CSS swap is an inline script. `'unsafe-inline'` is allowed on `style-src` only. `e2e/csp-enforcement.spec.ts` fails on any violation, and the mocked E2E suite runs under the policy.
 - Quality gates (run in `frontend/`): `pnpm ng build dashboard`, `pnpm ng test dashboard`, `pnpm ng build widget`, `pnpm build:widget-loader`, `pnpm lint`, `pnpm format:check` — all must pass.
 
 ## Frontend rules (from spec 003)

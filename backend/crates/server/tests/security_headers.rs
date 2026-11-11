@@ -7,12 +7,16 @@ use std::time::Duration;
 use tower::ServiceExt;
 
 fn make_state(hsts_max_age: u64) -> AppState {
+    make_state_with(hsts_max_age, |_| {})
+}
+
+fn make_state_with(hsts_max_age: u64, adjust: impl FnOnce(&mut config::AppConfig)) -> AppState {
     let pool = db::lazy_pool(
         "postgres://unreachable:5432/test",
         1,
         Duration::from_secs(1),
     );
-    let cfg = config::AppConfig {
+    let mut cfg = config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://localhost:6379".into(),
         auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
@@ -52,6 +56,7 @@ fn make_state(hsts_max_age: u64) -> AppState {
         s3: None,
         trusted_proxy: false,
     };
+    adjust(&mut cfg);
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     AppState {
         config: Arc::new(cfg),
@@ -172,4 +177,113 @@ async fn hsts_absent_when_max_age_zero() {
             .is_none(),
         "HSTS must be absent when hsts_max_age is 0"
     );
+}
+
+fn header(response: &axum::response::Response, name: &str) -> Option<String> {
+    response
+        .headers()
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned)
+}
+
+async fn get(state: AppState, uri: &str) -> axum::response::Response {
+    router::app(state)
+        .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
+/// MOH-38: the policy is enforced, not report-only, on dashboard and API responses.
+#[tokio::test]
+async fn csp_is_enforced_with_the_default_policy_on_dashboard_routes() {
+    let state = make_state_with(0, |cfg| {
+        cfg.csp_policy = config::DEFAULT_CSP_POLICY.into();
+        cfg.csp_report_only = false;
+    });
+    let response = get(state, "/api/v1/me").await;
+
+    assert_eq!(
+        header(&response, "content-security-policy").as_deref(),
+        Some(config::DEFAULT_CSP_POLICY)
+    );
+    assert!(
+        header(&response, "content-security-policy-report-only").is_none(),
+        "an enforced policy must not also be sent as report-only"
+    );
+}
+
+#[tokio::test]
+async fn report_only_flag_sends_the_candidate_policy_as_report_only_instead() {
+    let candidate = "default-src 'none'; frame-ancestors 'none'";
+    let state = make_state_with(0, |cfg| {
+        cfg.csp_policy = candidate.into();
+        cfg.csp_report_only = true;
+    });
+    let response = get(state, "/api/v1/me").await;
+
+    assert_eq!(
+        header(&response, "content-security-policy-report-only").as_deref(),
+        Some(candidate)
+    );
+    assert!(header(&response, "content-security-policy").is_none());
+}
+
+/// The widget keeps its own policy: it is framed on other sites, so the dashboard's
+/// `frame-ancestors 'none'` and `X-Frame-Options: DENY` must never reach its responses.
+#[tokio::test]
+async fn widget_responses_carry_no_dashboard_csp_or_frame_options() {
+    let state = make_state_with(0, |cfg| {
+        cfg.csp_policy = config::DEFAULT_CSP_POLICY.into();
+        cfg.csp_report_only = false;
+    });
+    let response = get(state, "/api/v1/widget/v1/config?widget_id=test").await;
+
+    assert!(header(&response, "content-security-policy").is_none());
+    assert!(header(&response, "content-security-policy-report-only").is_none());
+    assert!(header(&response, "x-frame-options").is_none());
+}
+
+fn caddyfile() -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../infra/Caddyfile");
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))
+}
+
+/// The dashboard document is served by Caddy, so that is where the policy has to be right. The
+/// edge and the application default are two copies of one string; this keeps them the same.
+#[test]
+fn caddy_serves_the_dashboard_document_with_the_enforced_default_policy() {
+    let caddyfile = caddyfile();
+    let quoted = format!("Content-Security-Policy \"{}\"", config::DEFAULT_CSP_POLICY);
+    assert!(
+        caddyfile.contains(&quoted),
+        "the dashboard block of infra/Caddyfile must send exactly config::DEFAULT_CSP_POLICY"
+    );
+    assert!(
+        !caddyfile
+            .to_ascii_lowercase()
+            .contains("content-security-policy-report-only"),
+        "the edge must not send the dashboard policy as report-only"
+    );
+    assert!(caddyfile.contains("X-Frame-Options \"DENY\""));
+}
+
+/// The widget document keeps its own, documented policy: it may be framed anywhere (embedding is
+/// authorised server-side by the widget's domain allowlist, spec 023) and carries no
+/// `X-Frame-Options`.
+#[test]
+fn caddy_serves_the_widget_document_with_its_own_framing_policy() {
+    let caddyfile = caddyfile();
+    let widget_policy = "Content-Security-Policy \"frame-ancestors *\"";
+    assert_eq!(
+        caddyfile.matches(widget_policy).count(),
+        2,
+        "both the local-dev and the staging/production widget blocks set frame-ancestors *"
+    );
+    assert_eq!(
+        caddyfile.matches("-X-Frame-Options").count(),
+        2,
+        "both widget blocks must remove X-Frame-Options"
+    );
+    assert!(!widget_policy.contains("'none'"));
 }

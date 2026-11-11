@@ -36,11 +36,21 @@
                 "glob": "**/*",
                 "input": "node_modules/@taiga-ui/icons/src",
                 "output": "assets/taiga-ui/icons"
+              },
+              {
+                "glob": "theme-init.js",
+                "input": "apps/dashboard/src",
+                "output": "/"
               }
             ]
           },
           "configurations": {
             "production": {
+              "optimization": {
+                "scripts": true,
+                "styles": { "minify": true, "inlineCritical": false },
+                "fonts": true
+              },
               "budgets": [
                 { "type": "initial", "maximumWarning": "600kb", "maximumError": "1mb" },
                 { "type": "anyComponentStyle", "maximumWarning": "4kb", "maximumError": "8kb" }
