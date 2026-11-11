@@ -16,6 +16,12 @@ async fn collect_bytes(response: axum::response::Response) -> Vec<u8> {
 }
 
 fn test_state() -> AppState {
+    test_state_with_rate_limit(true)
+}
+
+/// The login route's rate limiter fails closed when Redis is unreachable, which these tests
+/// need to get past to reach the database call.
+fn test_state_with_rate_limit(rate_limit_enabled: bool) -> AppState {
     let pool = db::lazy_pool(
         "postgres://unreachable:5432/test",
         1,
@@ -46,7 +52,7 @@ fn test_state() -> AppState {
         ai_gemini_base_url: None,
         s3: None,
         trusted_proxy: false,
-        rate_limit_enabled: true,
+        rate_limit_enabled,
         rate_limit_login_max: 10,
         rate_limit_login_window_secs: 60,
         rate_limit_max_override: 10000,
@@ -207,4 +213,155 @@ async fn server_continues_after_panic() {
         .await
         .unwrap();
     assert_eq!(health_resp.status(), StatusCode::OK);
+}
+
+// --- MOH-32: 5xx responses carry no internal text ---------------------------------------------
+
+/// A `tracing` writer that keeps what was logged, so a test can read the server-side record.
+#[derive(Clone, Default)]
+struct LogCapture(Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for LogCapture {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogCapture {
+    type Writer = LogCapture;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+fn login_request() -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/login")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            r#"{"email":"someone@example.com","password":"correct horse battery"}"#,
+        ))
+        .unwrap()
+}
+
+/// The login handler queries the database. The test state points at a server that does not exist,
+/// so the query fails with a real driver error whose text names the host and the connection.
+#[tokio::test]
+async fn database_failure_returns_generic_500_with_request_id_and_logs_the_cause() {
+    let capture = LogCapture::default();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(capture.clone())
+        .with_ansi(false)
+        .finish();
+    let _guard = tracing::subscriber::set_default(subscriber);
+
+    let app = app_with_test_routes(test_state_with_rate_limit(false));
+    let response = app.oneshot(login_request()).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let header_id = response
+        .headers()
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .expect("x-request-id header")
+        .to_owned();
+    let text = String::from_utf8(collect_bytes(response).await).unwrap();
+    let body: serde_json::Value = serde_json::from_str(&text).unwrap();
+
+    assert_eq!(body["error"]["code"], "internal_error");
+    assert_eq!(body["error"]["message"], "Internal server error");
+    assert_eq!(body["error"]["request_id"], header_id.as_str());
+    for internal in [
+        "unreachable",
+        "Database",
+        "query failed",
+        "postgres",
+        "sqlx",
+        "pool",
+    ] {
+        assert!(
+            !text.contains(internal),
+            "response body leaked {internal:?}: {text}"
+        );
+    }
+
+    let logged = String::from_utf8(capture.0.lock().unwrap().clone()).unwrap();
+    assert!(
+        logged.contains(&header_id),
+        "log has no line with request id {header_id}: {logged}"
+    );
+    assert!(
+        logged.contains("Database query failed"),
+        "log is missing the failed step: {logged}"
+    );
+    assert!(
+        !logged.contains("correct horse battery"),
+        "log contains the submitted password"
+    );
+}
+
+#[tokio::test]
+async fn panic_response_gets_the_request_id_and_the_cause_goes_to_the_log() {
+    let capture = LogCapture::default();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(capture.clone())
+        .with_ansi(false)
+        .finish();
+    let _guard = tracing::subscriber::set_default(subscriber);
+
+    let app = app_with_test_routes(test_state_with_rate_limit(false));
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/test-panic")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let header_id = response
+        .headers()
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap()
+        .to_owned();
+    let body: serde_json::Value = serde_json::from_slice(&collect_bytes(response).await).unwrap();
+    assert_eq!(body["error"]["request_id"], header_id.as_str());
+    assert_eq!(body["error"]["message"], "Internal server error");
+
+    let logged = String::from_utf8(capture.0.lock().unwrap().clone()).unwrap();
+    assert!(
+        logged.contains("intentional panic"),
+        "panic cause not logged: {logged}"
+    );
+    assert!(
+        logged.contains(&header_id),
+        "log lacks the request id: {logged}"
+    );
+}
+
+/// 4xx messages are for the client and must pass through untouched.
+#[tokio::test]
+async fn client_errors_keep_their_message() {
+    let app = app_with_test_routes(test_state_with_rate_limit(false));
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/auth/login")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"email":"","password":""}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_slice(&collect_bytes(response).await).unwrap();
+    assert_eq!(body["error"]["code"], "validation_failed");
+    assert_eq!(body["error"]["message"], "Email and password are required");
 }

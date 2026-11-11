@@ -68,11 +68,33 @@ pub struct ErrorEnvelope {
     pub error: ErrorBody,
 }
 
+/// The text every 5xx built by [`ApiError::internal_error`] shows to the client.
+pub const INTERNAL_ERROR_MESSAGE: &str = "Internal server error";
+
+/// What went wrong behind a 5xx response. It never reaches the client: `ApiError::into_response`
+/// leaves it in the response extensions, and the server's `internal_error_middleware` logs it
+/// with the request ID and the tenant ID and then drops it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InternalErrorDetail {
+    /// Fixed description of the failed step, for example `"Transaction commit failed"`.
+    pub context: &'static str,
+    /// Text of the underlying error, when there is one.
+    pub source: Option<String>,
+}
+
+/// Set by the tenant middleware on a response so the error log can name the tenant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResponseTenant(pub uuid::Uuid);
+
 #[derive(Debug, Clone)]
 pub struct ApiError {
     status: StatusCode,
     envelope: ErrorEnvelope,
-    retry_after: Option<Duration>,
+    // Whole seconds for the `Retry-After` header. A `u32` (not `Duration`) keeps `ApiError` under
+    // the size clippy::result_large_err allows.
+    retry_after: Option<u32>,
+    // Boxed so `Result<_, ApiError>` stays small (clippy::result_large_err).
+    internal: Option<Box<InternalErrorDetail>>,
 }
 
 impl ApiError {
@@ -92,6 +114,7 @@ impl ApiError {
                 },
             },
             retry_after: None,
+            internal: None,
         }
     }
 
@@ -155,12 +178,34 @@ impl ApiError {
                     request_id: String::new(),
                 },
             },
-            retry_after: Some(retry_after),
+            retry_after: Some(u32::try_from(retry_after.as_secs()).unwrap_or(u32::MAX)),
+            internal: None,
         }
     }
 
-    pub fn internal_error(message: impl Into<String>) -> Self {
-        Self::new_with_code(StatusCode::INTERNAL_SERVER_ERROR, "internal_error", message)
+    /// HTTP 500 with code `internal_error`. The client always gets
+    /// [`INTERNAL_ERROR_MESSAGE`]; `context` goes to the server log only.
+    ///
+    /// The parameter is `&'static str` on purpose: a `format!` that interpolates an error does
+    /// not compile, so error text can't be put into a response by accident. Pass the underlying
+    /// error to [`ApiError::internal_error_from`] instead.
+    pub fn internal_error(context: &'static str) -> Self {
+        Self::internal(context, None)
+    }
+
+    /// Like [`ApiError::internal_error`], and keeps the text of `source` for the server log.
+    pub fn internal_error_from(context: &'static str, source: impl std::fmt::Display) -> Self {
+        Self::internal(context, Some(source.to_string()))
+    }
+
+    fn internal(context: &'static str, source: Option<String>) -> Self {
+        let mut error = Self::new_with_code(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal_error",
+            INTERNAL_ERROR_MESSAGE,
+        );
+        error.internal = Some(Box::new(InternalErrorDetail { context, source }));
+        error
     }
 
     /// Attach structured details. Accepts any iterable whose items can be
@@ -188,10 +233,13 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let mut res = (self.status, Json(self.envelope)).into_response();
+        if let Some(detail) = self.internal {
+            res.extensions_mut().insert(*detail);
+        }
         if let Some(retry_after) = self.retry_after {
             res.headers_mut().insert(
                 axum::http::header::RETRY_AFTER,
-                retry_after.as_secs().to_string().parse().unwrap(),
+                retry_after.to_string().parse().unwrap(),
             );
         }
         res
@@ -483,7 +531,7 @@ mod tests {
         let err = ApiError::rate_limited("too fast", Duration::from_secs(30));
         assert_eq!(err.status, StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(err.envelope.error.code, "rate_limited");
-        assert_eq!(err.retry_after, Some(Duration::from_secs(30)));
+        assert_eq!(err.retry_after, Some(30));
     }
 
     #[test]
@@ -491,6 +539,45 @@ mod tests {
         let err = ApiError::internal_error("server error");
         assert_eq!(err.status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(err.envelope.error.code, "internal_error");
+    }
+
+    #[test]
+    fn internal_error_shows_a_generic_message_not_the_context() {
+        let err = ApiError::internal_error("Failed to update integration");
+        assert_eq!(err.envelope.error.message, INTERNAL_ERROR_MESSAGE);
+    }
+
+    #[tokio::test]
+    async fn internal_error_from_keeps_source_out_of_the_body_and_in_the_extensions() {
+        let err = ApiError::internal_error_from(
+            "Database query failed",
+            "relation \"customers\" does not exist",
+        );
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let detail = response
+            .extensions()
+            .get::<InternalErrorDetail>()
+            .expect("detail is attached for the server log")
+            .clone();
+        assert_eq!(detail.context, "Database query failed");
+        assert_eq!(
+            detail.source.as_deref(),
+            Some("relation \"customers\" does not exist")
+        );
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(
+            !text.contains("customers"),
+            "body leaked the source: {text}"
+        );
+        assert!(
+            !text.contains("Database query failed"),
+            "body leaked the context: {text}"
+        );
+        assert!(text.contains(INTERNAL_ERROR_MESSAGE));
     }
 
     #[test]

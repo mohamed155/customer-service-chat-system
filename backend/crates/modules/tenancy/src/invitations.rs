@@ -403,7 +403,7 @@ pub async fn create_invitation(
     let accept_url = match build_accept_url(&config.public_dashboard_url, &raw_token) {
         Ok(url) => url,
         Err(e) => {
-            return ApiError::internal_error(format!("Failed to build invitation URL: {e}"))
+            return ApiError::internal_error_from("Failed to build invitation URL", e)
                 .into_response();
         }
     };
@@ -413,7 +413,7 @@ pub async fn create_invitation(
     let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
-            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
+            return ApiError::internal_error_from("Database transaction begin failed", &e)
                 .into_response();
         }
     };
@@ -432,7 +432,7 @@ pub async fn create_invitation(
     .execute(tx.conn())
     .await
     {
-        return ApiError::internal_error(format!("Failed to expire stale invitation: {e}"))
+        return ApiError::internal_error_from("Failed to expire stale invitation", &e)
             .into_response();
     }
 
@@ -467,7 +467,7 @@ pub async fn create_invitation(
                 .into_response();
         }
         Err(e) => {
-            return ApiError::internal_error(format!("Database insert failed: {e}"))
+            return ApiError::internal_error_from("Database insert failed", &e)
                 .into_response();
         }
     };
@@ -489,7 +489,7 @@ pub async fn create_invitation(
         .execute(tx.conn())
         .await
         {
-            return ApiError::internal_error(format!("Outbox insert failed: {e}")).into_response();
+            return ApiError::internal_error_from("Outbox insert failed", &e).into_response();
         }
     }
 
@@ -503,11 +503,11 @@ pub async fn create_invitation(
     )
     .await
     {
-        return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
+        return ApiError::internal_error_from("Audit insert failed", &e).into_response();
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
+        return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
     }
 
     let email_delivery_status = initial_delivery_status;
@@ -963,7 +963,7 @@ pub async fn revoke_invitation(
         Ok(Some(r)) => r,
         Ok(None) => return ApiError::not_found("Invitation not found").into_response(),
         Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response()
+            return ApiError::internal_error_from("Database query failed", &e).into_response()
         }
     };
     if let Err(r) = ctx.commit(uow).await {
@@ -1004,7 +1004,7 @@ pub async fn revoke_invitation(
     let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(e) => {
-            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
+            return ApiError::internal_error_from("Database transaction begin failed", &e)
                 .into_response();
         }
     };
@@ -1022,8 +1022,7 @@ pub async fn revoke_invitation(
     {
         Ok(result) => result.rows_affected(),
         Err(e) => {
-            return ApiError::internal_error(format!("Database update failed: {e}"))
-                .into_response();
+            return ApiError::internal_error_from("Database update failed", &e).into_response();
         }
     };
 
@@ -1041,11 +1040,11 @@ pub async fn revoke_invitation(
     )
     .await
     {
-        return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
+        return ApiError::internal_error_from("Audit insert failed", &e).into_response();
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
+        return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
     }
 
     StatusCode::NO_CONTENT.into_response()
@@ -1098,7 +1097,7 @@ pub async fn preview_invitation(
         Ok(Some(r)) => r,
         Ok(None) => return ApiError::not_found("Invitation not found").into_response(),
         Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response()
+            return ApiError::internal_error_from("Database query failed", &e).into_response()
         }
     };
 
@@ -1198,7 +1197,7 @@ pub async fn accept_invitation(
         Ok(Some(r)) => r,
         Ok(None) => return ApiError::not_found("Invitation not found").into_response(),
         Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response()
+            return ApiError::internal_error_from("Database query failed", &e).into_response()
         }
     };
 
@@ -1232,7 +1231,7 @@ pub async fn accept_invitation(
     let mut tx = match db::UnitOfWork::begin_for_tenant(&pool, tenant_id).await {
         Ok(tx) => tx,
         Err(e) => {
-            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
+            return ApiError::internal_error_from("Database transaction begin failed", &e)
                 .into_response();
         }
     };
@@ -1250,8 +1249,7 @@ pub async fn accept_invitation(
     {
         Ok(v) => v,
         Err(e) => {
-            return ApiError::internal_error(format!("Invitation lock failed: {e}"))
-                .into_response();
+            return ApiError::internal_error_from("Invitation lock failed", &e).into_response();
         }
     };
     if still_valid != Some(true) {
@@ -1310,8 +1308,7 @@ pub async fn accept_invitation(
         {
             Ok(result) => result.rows_affected(),
             Err(e) => {
-                return ApiError::internal_error(format!("Database update failed: {e}"))
-                    .into_response();
+                return ApiError::internal_error_from("Database update failed", &e).into_response();
             }
         };
 
@@ -1329,8 +1326,7 @@ pub async fn accept_invitation(
         .execute(tx.conn())
         .await
         {
-            return ApiError::internal_error(format!("Membership insert failed: {e}"))
-                .into_response();
+            return ApiError::internal_error_from("Membership insert failed", &e).into_response();
         }
 
         if let Err(e) = audit::record_member_invitation_accepted(
@@ -1344,12 +1340,11 @@ pub async fn accept_invitation(
         )
         .await
         {
-            return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
+            return ApiError::internal_error_from("Audit insert failed", &e).into_response();
         }
 
         if let Err(e) = tx.commit().await {
-            return ApiError::internal_error(format!("Transaction commit failed: {e}"))
-                .into_response();
+            return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
         }
 
         match routes::build_me_response(
@@ -1415,7 +1410,7 @@ pub async fn accept_invitation(
             return ApiError::conflict("An account with this email already exists").into_response();
         }
         Err(e) => {
-            return ApiError::internal_error(format!("User insert failed: {e}")).into_response();
+            return ApiError::internal_error_from("User insert failed", &e).into_response();
         }
     };
 
@@ -1432,8 +1427,7 @@ pub async fn accept_invitation(
     {
         Ok(result) => result.rows_affected(),
         Err(e) => {
-            return ApiError::internal_error(format!("Invitation update failed: {e}"))
-                .into_response();
+            return ApiError::internal_error_from("Invitation update failed", &e).into_response();
         }
     };
 
@@ -1451,7 +1445,7 @@ pub async fn accept_invitation(
     .execute(tx.conn())
     .await
     {
-        return ApiError::internal_error(format!("Membership insert failed: {e}")).into_response();
+        return ApiError::internal_error_from("Membership insert failed", &e).into_response();
     }
 
     if let Err(e) = audit::record_member_invitation_accepted(
@@ -1465,11 +1459,11 @@ pub async fn accept_invitation(
     )
     .await
     {
-        return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
+        return ApiError::internal_error_from("Audit insert failed", &e).into_response();
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
+        return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
     }
 
     // ---- Issue session cookie ----
@@ -1480,7 +1474,7 @@ pub async fn accept_invitation(
     ) {
         Ok(t) => t,
         Err(e) => {
-            return ApiError::internal_error(format!("Session token issuance failed: {e}"))
+            return ApiError::internal_error_from("Session token issuance failed", &e)
                 .into_response();
         }
     };

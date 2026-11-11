@@ -241,7 +241,7 @@ pub async fn signup(
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => {
-            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
+            return ApiError::internal_error_from("Database transaction begin failed", &e)
                 .into_response();
         }
     };
@@ -267,8 +267,7 @@ pub async fn signup(
         let mut attempt_tx = match sqlx::Acquire::begin(&mut *tx).await {
             Ok(sp) => sp,
             Err(e) => {
-                return ApiError::internal_error(format!("Tenant insert failed: {e}"))
-                    .into_response();
+                return ApiError::internal_error_from("Tenant insert failed", &e).into_response();
             }
         };
         let result: Result<Uuid, sqlx::Error> = sqlx::query_scalar(
@@ -282,7 +281,7 @@ pub async fn signup(
         match result {
             Ok(id) => {
                 if let Err(e) = attempt_tx.commit().await {
-                    return ApiError::internal_error(format!("Tenant insert failed: {e}"))
+                    return ApiError::internal_error_from("Tenant insert failed", &e)
                         .into_response();
                 }
                 tenant_id = Some(id);
@@ -294,8 +293,7 @@ pub async fn signup(
                 continue;
             }
             Err(e) => {
-                return ApiError::internal_error(format!("Tenant insert failed: {e}"))
-                    .into_response();
+                return ApiError::internal_error_from("Tenant insert failed", &e).into_response();
             }
         }
     }
@@ -308,7 +306,7 @@ pub async fn signup(
     // The tenant exists now; everything from here writes its own rows, so carry it in the
     // transaction (the Unit of Work does this up front for every other flow).
     if let Err(e) = db::set_tenant_in_tx(&mut tx, tenant_id).await {
-        return ApiError::internal_error(format!("Tenant context failed: {e}")).into_response();
+        return ApiError::internal_error_from("Tenant context failed", &e).into_response();
     }
 
     let new_user_id: Uuid = match sqlx::query_scalar(
@@ -326,7 +324,7 @@ pub async fn signup(
             return ApiError::conflict("An account with this email already exists").into_response();
         }
         Err(e) => {
-            return ApiError::internal_error(format!("User insert failed: {e}")).into_response();
+            return ApiError::internal_error_from("User insert failed", &e).into_response();
         }
     };
 
@@ -339,7 +337,7 @@ pub async fn signup(
     .execute(&mut *tx)
     .await
     {
-        return ApiError::internal_error(format!("Membership insert failed: {e}")).into_response();
+        return ApiError::internal_error_from("Membership insert failed", &e).into_response();
     }
 
     if let Err(e) = audit::record_tenant_signup_completed(
@@ -352,11 +350,11 @@ pub async fn signup(
     )
     .await
     {
-        return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
+        return ApiError::internal_error_from("Audit insert failed", &e).into_response();
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
+        return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
     }
 
     let (jwt, _, _) = match session::issue_token(
@@ -366,7 +364,7 @@ pub async fn signup(
     ) {
         Ok(t) => t,
         Err(e) => {
-            return ApiError::internal_error(format!("Session token issuance failed: {e}"))
+            return ApiError::internal_error_from("Session token issuance failed", &e)
                 .into_response();
         }
     };

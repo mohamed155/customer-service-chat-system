@@ -55,8 +55,7 @@ fn panic_handler(panic_info: Box<dyn std::any::Any + Send + 'static>) -> axum::r
         .copied()
         .or_else(|| panic_info.downcast_ref::<String>().map(|s| s.as_str()))
         .unwrap_or("unknown");
-    tracing::error!(panic_payload = %payload, "handler panicked");
-    ApiError::internal_error("Internal server error").into_response()
+    ApiError::internal_error_from("Handler panicked", payload).into_response()
 }
 
 async fn test_panic_handler() -> Response {
@@ -211,7 +210,7 @@ async fn login(
             return ApiError::unauthenticated("Invalid email or password").into_response();
         }
         Err(identity::routes::LoginError::Internal(message)) => {
-            return ApiError::internal_error(message).into_response();
+            return ApiError::internal_error_from("Login failed", message).into_response();
         }
     };
     let user_id = success.principal.user_id;
@@ -1237,6 +1236,9 @@ fn build_app(
             ApiError::not_found("Route not found").with_request_id(request_id)
         })
         .layer(CatchPanicLayer::custom(panic_handler))
+        .layer(middleware::from_fn(
+            crate::internal_error::internal_error_middleware,
+        ))
         .layer(middleware::from_fn(trace_middleware))
         .layer(middleware::from_fn(request_id_middleware))
         .layer(cors_layer(&config))

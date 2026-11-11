@@ -212,7 +212,11 @@ pub async fn tenant_context_middleware(
 
     request.extensions_mut().insert(ctx);
     request.extensions_mut().insert(permissions);
-    let response = next.run(request).await;
+    let mut response = next.run(request).await;
+    // Lets the server-error log name the tenant (see the server's `internal_error` middleware).
+    response
+        .extensions_mut()
+        .insert(kernel::ResponseTenant(tenant_id));
     if response.status() == axum::http::StatusCode::FORBIDDEN {
         audit::access_denied(
             &config.pool,

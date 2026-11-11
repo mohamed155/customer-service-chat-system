@@ -418,7 +418,7 @@ pub async fn list_tenants(
     let rows = match result {
         Ok(r) => r,
         Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response();
+            return ApiError::internal_error_from("Database query failed", &e).into_response();
         }
     };
 
@@ -520,7 +520,7 @@ pub async fn build_me_response(
         .bind(principal.user_id)
         .fetch_all(pool)
         .await
-        .map_err(|error| ApiError::internal_error(format!("Database query failed: {error}")))?;
+        .map_err(|error| ApiError::internal_error_from("Database query failed", &error))?;
 
     let memberships = rows
         .iter()
@@ -598,7 +598,7 @@ pub async fn get_tenant(State(pool): State<sqlx::PgPool>, ctx: TenantContext) ->
                 .into_response()
         }
         Err(e) => {
-            return ApiError::internal_error(format!("Database query failed: {e}")).into_response()
+            return ApiError::internal_error_from("Database query failed", &e).into_response()
         }
     };
     if let Err(r) = ctx.commit(uow).await {
@@ -688,7 +688,7 @@ pub async fn get_tenant_detail(
         })
         .into_response(),
         Ok(None) => ApiError::not_found("Tenant not found").into_response(),
-        Err(e) => ApiError::internal_error(format!("Database query failed: {e}")).into_response(),
+        Err(e) => ApiError::internal_error_from("Database query failed", &e).into_response(),
     }
 }
 
@@ -942,7 +942,7 @@ pub async fn create_tenant(
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => {
-            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
+            return ApiError::internal_error_from("Database transaction begin failed", &e)
                 .into_response();
         }
     };
@@ -985,8 +985,7 @@ pub async fn create_tenant(
                 .into_response();
         }
         Err(e) => {
-            return ApiError::internal_error(format!("Database insert failed: {e}"))
-                .into_response();
+            return ApiError::internal_error_from("Database insert failed", &e).into_response();
         }
     };
 
@@ -996,7 +995,7 @@ pub async fn create_tenant(
     // The audit row belongs to the tenant just created; bind the transaction to it so the
     // Row-Level Security policy accepts the row.
     if let Err(e) = db::set_tenant_in_tx(&mut tx, id).await {
-        return ApiError::internal_error(format!("Failed to set the tenant: {e}")).into_response();
+        return ApiError::internal_error_from("Failed to set the tenant", &e).into_response();
     }
 
     // ---- Audit (inside the same transaction as the INSERT) ----
@@ -1015,11 +1014,11 @@ pub async fn create_tenant(
     )
     .await
     {
-        return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
+        return ApiError::internal_error_from("Audit insert failed", &e).into_response();
     }
 
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
+        return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
     }
 
     (
@@ -1322,7 +1321,7 @@ pub async fn update_tenant(
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
         Err(e) => {
-            return ApiError::internal_error(format!("Database transaction begin failed: {e}"))
+            return ApiError::internal_error_from("Database transaction begin failed", &e)
                 .into_response();
         }
     };
@@ -1336,13 +1335,13 @@ pub async fn update_tenant(
         .execute(&mut *tx)
         .await
     {
-        return ApiError::internal_error(format!("Failed to set audit actor: {e}")).into_response();
+        return ApiError::internal_error_from("Failed to set audit actor", &e).into_response();
     }
 
     // The slug-audit trigger and the audit rows below belong to this tenant, and Row-Level
     // Security only accepts them when the transaction is bound to it.
     if let Err(e) = db::set_tenant_in_tx(&mut tx, id).await {
-        return ApiError::internal_error(format!("Failed to set the tenant: {e}")).into_response();
+        return ApiError::internal_error_from("Failed to set the tenant", &e).into_response();
     }
 
     // ---- Build dynamic UPDATE ----
@@ -1391,8 +1390,7 @@ pub async fn update_tenant(
             Ok(Some(r)) => Some((r.clone(), r)),
             Ok(None) => None,
             Err(e) => {
-                return ApiError::internal_error(format!("Database read failed: {e}"))
-                    .into_response();
+                return ApiError::internal_error_from("Database read failed", &e).into_response();
             }
         }
     } else {
@@ -1410,7 +1408,7 @@ pub async fn update_tenant(
             Ok(Some(r)) => r,
             Ok(None) => return ApiError::not_found("Tenant not found").into_response(),
             Err(e) => {
-                return ApiError::internal_error(format!("Database read failed: {e}"))
+                return ApiError::internal_error_from("Database read failed", &e)
                     .into_response();
             }
         };
@@ -1455,8 +1453,7 @@ pub async fn update_tenant(
                     .into_response();
             }
             Err(e) => {
-                return ApiError::internal_error(format!("Database update failed: {e}"))
-                    .into_response();
+                return ApiError::internal_error_from("Database update failed", &e).into_response();
             }
         }
     };
@@ -1508,8 +1505,7 @@ pub async fn update_tenant(
             )
             .await
             {
-                return ApiError::internal_error(format!("Audit insert failed: {e}"))
-                    .into_response();
+                return ApiError::internal_error_from("Audit insert failed", &e).into_response();
             }
         }
     }
@@ -1561,7 +1557,7 @@ pub async fn update_tenant(
         )
         .await
         {
-            return ApiError::internal_error(format!("Audit insert failed: {e}")).into_response();
+            return ApiError::internal_error_from("Audit insert failed", &e).into_response();
         }
     }
 
@@ -1571,7 +1567,7 @@ pub async fn update_tenant(
     // runs in this same transaction and rolls back together with us if
     // the commit fails.
     if let Err(e) = tx.commit().await {
-        return ApiError::internal_error(format!("Transaction commit failed: {e}")).into_response();
+        return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
     }
 
     Json(PlatformTenantDetail {
