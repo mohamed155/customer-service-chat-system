@@ -688,7 +688,9 @@ async fn an_accepted_code_cannot_be_used_again() {
     let (_pool, app, _lock) = setup!();
     let (user, email, secret, _) = enrolled_user(&app).await;
     // Enrolment already used the current step; the next step's code is the only one that works.
-    let next = totp::code_at(&secret, now() + 30, 6);
+    // One reading of the clock: two readings can straddle a 30-second step boundary.
+    let at = now() + 30;
+    let next = totp::code_at(&secret, at, 6);
 
     let first = send(
         &app,
@@ -719,7 +721,7 @@ async fn an_accepted_code_cannot_be_used_again() {
         .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
-    assert_eq!(last as u64, totp::step_at(now() + 30));
+    assert_eq!(last as u64, totp::step_at(at));
 }
 
 #[tokio::test]
