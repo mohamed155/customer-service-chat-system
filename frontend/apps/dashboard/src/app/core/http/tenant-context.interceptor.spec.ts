@@ -146,4 +146,67 @@ describe('tenantContextInterceptor', () => {
       await promise;
     });
   });
+  describe('a workspace change cancels the old workspace requests (MOH-61)', () => {
+    const tenantState = (id: string) => ({
+      tenantContext: {
+        activeTenant: { id, name: id, slug: id, status: 'active' as const },
+        status: 'idle' as const,
+      },
+    });
+
+    it('drops the response of a /tenant/ request that was in flight', () => {
+      store.setState(tenantState('tenant-a'));
+      const received: unknown[] = [];
+      let completed = false;
+      TestBed.inject(HttpClient)
+        .get('/api/v1/tenant/conversations')
+        .subscribe({ next: (v) => received.push(v), complete: () => (completed = true) });
+      const req = TestBed.inject(HttpTestingController).expectOne('/api/v1/tenant/conversations');
+      expect(req.request.headers.get('X-Tenant-ID')).toBe('tenant-a');
+
+      store.setState(tenantState('tenant-b'));
+
+      expect(req.cancelled).toBe(true);
+      expect(completed).toBe(true);
+      expect(received).toEqual([]);
+    });
+
+    it('also cancels when the workspace is cleared', () => {
+      store.setState(tenantState('tenant-a'));
+      TestBed.inject(HttpClient).get('/api/v1/tenant/conversations').subscribe();
+      const req = TestBed.inject(HttpTestingController).expectOne('/api/v1/tenant/conversations');
+
+      store.setState({ tenantContext: { activeTenant: null, status: 'idle' as const } });
+
+      expect(req.cancelled).toBe(true);
+    });
+
+    it('leaves a request for the new workspace alone', () => {
+      store.setState(tenantState('tenant-a'));
+      store.setState(tenantState('tenant-b'));
+      const received: unknown[] = [];
+      TestBed.inject(HttpClient)
+        .get('/api/v1/tenant/conversations')
+        .subscribe((v) => received.push(v));
+      const req = TestBed.inject(HttpTestingController).expectOne('/api/v1/tenant/conversations');
+      expect(req.request.headers.get('X-Tenant-ID')).toBe('tenant-b');
+
+      req.flush({ ok: true });
+
+      expect(received).toEqual([{ ok: true }]);
+    });
+
+    it('does not cancel calls outside /tenant/ (sign-in, identity, platform)', () => {
+      store.setState(tenantState('tenant-a'));
+      const urls = ['/api/v1/auth/logout', '/api/v1/me', '/api/v1/platform/tenants'];
+      const reqs = urls.map((url) => {
+        TestBed.inject(HttpClient).get(url).subscribe();
+        return TestBed.inject(HttpTestingController).expectOne(url);
+      });
+
+      store.setState(tenantState('tenant-b'));
+
+      expect(reqs.map((r) => r.cancelled)).toEqual([false, false, false]);
+    });
+  });
 });

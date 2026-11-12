@@ -1,18 +1,12 @@
-import { computed, effect, inject } from '@angular/core';
+import { computed, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
-import {
-  patchState,
-  signalStore,
-  withComputed,
-  withHooks,
-  withMethods,
-  withState,
-} from '@ngrx/signals';
+import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
 import { Conversation, ConversationListQuery } from '../../../core/api/tenant-api.models';
 import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 import { ConversationsApiService } from './conversations-api.service';
 
 export interface InboxFilters {
@@ -34,18 +28,20 @@ interface ConversationsState {
   readonly feedbackCount: number;
 }
 
+const initialState: ConversationsState = {
+  filters: { status: 'open' },
+  cursor: null,
+  hasMore: false,
+  items: [],
+  loading: false,
+  error: null,
+  selectedId: null,
+  averageRating: null,
+  feedbackCount: 0,
+};
+
 export const ConversationsStore = signalStore(
-  withState<ConversationsState>({
-    filters: { status: 'open' },
-    cursor: null,
-    hasMore: false,
-    items: [],
-    loading: false,
-    error: null,
-    selectedId: null,
-    averageRating: null,
-    feedbackCount: 0,
-  }),
+  withState<ConversationsState>(initialState),
   withComputed(({ items, selectedId, filters }) => ({
     filteredConversations: computed(() => items()),
     selectedConversation: computed(() => items().find((c) => c.id === selectedId()) ?? null),
@@ -150,17 +146,12 @@ export const ConversationsStore = signalStore(
       };
     },
   ),
-  withHooks((store, globalStore = inject(Store, { optional: true })) => {
-    const activeTenant = globalStore?.selectSignal(selectActiveTenant) ?? (() => null);
-    return {
-      onInit(): void {
-        effect(() => {
-          if (activeTenant()?.id) {
-            store.loadInbox();
-            store.loadFeedbackSummary();
-          }
-        });
-      },
-    };
+  withTenantScope({
+    initialState,
+    loadOnInit: true,
+    reload: (store) => {
+      store.loadInbox();
+      store.loadFeedbackSummary();
+    },
   }),
 );

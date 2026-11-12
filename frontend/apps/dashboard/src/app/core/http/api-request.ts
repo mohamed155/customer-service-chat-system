@@ -24,6 +24,11 @@ export function isPlatformEndpoint(relativePath: string | null): boolean {
   return relativePath === '/platform' || (relativePath?.startsWith('/platform/') ?? false);
 }
 
+/** Workspace data: everything under `/tenant/`. */
+export function isTenantEndpoint(relativePath: string | null): boolean {
+  return relativePath?.startsWith('/tenant/') ?? false;
+}
+
 /** The sign-in call: a 401 here is a wrong password, not an expired session. */
 export function isLoginEndpoint(relativePath: string | null): boolean {
   return relativePath === '/auth/login';

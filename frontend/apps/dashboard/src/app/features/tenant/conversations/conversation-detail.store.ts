@@ -24,6 +24,7 @@ import {
 } from '../../../core/api/tenant-api.models';
 import { RealtimeService, SseEvent } from '../../../core/realtime/realtime.service';
 import { ConversationsApiService } from './conversations-api.service';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 
 export type GenerationPhase = 'idle' | 'thinking' | 'streaming';
 
@@ -52,19 +53,21 @@ interface ConversationDetailState {
   readonly toolActivity: Record<string, ToolRequest>;
 }
 
+const initialState: ConversationDetailState = {
+  conversation: null,
+  timelinePages: [],
+  loading: false,
+  loadingTimeline: false,
+  submitting: false,
+  error: null,
+  timelineError: null,
+  activeGeneration: null,
+  openConversationId: null,
+  toolActivity: {},
+};
+
 export const ConversationDetailStore = signalStore(
-  withState<ConversationDetailState>({
-    conversation: null,
-    timelinePages: [],
-    loading: false,
-    loadingTimeline: false,
-    submitting: false,
-    error: null,
-    timelineError: null,
-    activeGeneration: null,
-    openConversationId: null,
-    toolActivity: {},
-  }),
+  withState<ConversationDetailState>(initialState),
   withComputed(({ timelinePages }) => ({
     timeline: computed(() =>
       [...timelinePages()]
@@ -506,6 +509,7 @@ export const ConversationDetailStore = signalStore(
       ).msgStatusSub?.unsubscribe();
     },
   }),
+  withTenantScope({ initialState }),
 );
 
 function tryParseJson(text: string): Record<string, unknown> | null {

@@ -16,6 +16,7 @@ import {
   UpdateWidgetInstancePayload,
 } from '../../../core/api/widget.models';
 import { WidgetApiService } from './widget-api.service';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 
 interface WidgetsState {
   instances: WidgetInstance[];
@@ -155,5 +156,9 @@ export const WidgetsStore = signalStore(
     onInit(store) {
       store.loadList();
     },
+  }),
+  withTenantScope({
+    initialState,
+    reload: (store) => store.loadList(),
   }),
 );

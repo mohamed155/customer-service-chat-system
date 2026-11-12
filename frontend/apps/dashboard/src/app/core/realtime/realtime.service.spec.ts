@@ -1,36 +1,29 @@
 import { TestBed } from '@angular/core/testing';
-import { Store } from '@ngrx/store';
-import { signal } from '@angular/core';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { APP_CONFIG } from '../config/app-config';
+import { provideTenantStore, tenantStore, testTenant } from '../state/testing/tenant-store.testing';
 import { RealtimeService, SseEvent } from './realtime.service';
 
 describe('RealtimeService', () => {
   let service: RealtimeService;
-  const activeTenant = signal<{ id: string } | null>(null);
 
   function createService() {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         RealtimeService,
-        { provide: Store, useValue: { selectSignal: () => activeTenant } },
+        provideTenantStore(),
         { provide: APP_CONFIG, useValue: { apiBaseUrl: 'http://localhost:8080/api/v1' } },
       ],
     });
     return TestBed.inject(RealtimeService);
   }
 
-  beforeEach(() => {
-    activeTenant.set(null);
-  });
-
   afterEach(() => {
     service.disconnect();
   });
 
   it('includes credentials and X-Tenant-ID header on the fetch', async () => {
-    activeTenant.set({ id: 'tenant-42' });
     let fetchUrl = '';
     let fetchOpts: RequestInit = {};
     vi.spyOn(globalThis, 'fetch').mockImplementation((url, opts) => {
@@ -42,6 +35,7 @@ describe('RealtimeService', () => {
     });
 
     service = createService();
+    tenantStore().activate(testTenant('tenant-42'));
     service.connect();
 
     await vi.waitFor(() => {
@@ -170,5 +164,54 @@ describe('RealtimeService', () => {
     service.connect();
     await vi.waitFor(() => expect(events.length).toBe(1));
     expect(events[0].event).toBe('escalation.queued');
+  });
+  describe('a workspace change (MOH-61)', () => {
+    const openStreams: { tenant: string | undefined; signal: AbortSignal }[] = [];
+
+    beforeEach(() => {
+      openStreams.length = 0;
+      vi.spyOn(globalThis, 'fetch').mockImplementation((_url, opts) => {
+        const headers = (opts?.headers ?? {}) as Record<string, string>;
+        openStreams.push({ tenant: headers['X-Tenant-ID'], signal: opts?.signal as AbortSignal });
+        // A stream that stays open until it is aborted.
+        return new Promise(() => undefined);
+      });
+    });
+
+    it('reopens the stream for the new workspace and aborts the old one', () => {
+      service = createService();
+      const tenants = tenantStore();
+      tenants.activate(testTenant('tenant-a'));
+      service.connect();
+      expect(openStreams.map((s) => s.tenant)).toEqual(['tenant-a']);
+
+      tenants.switchTo(testTenant('tenant-b'));
+
+      expect(openStreams.map((s) => s.tenant)).toEqual(['tenant-a', 'tenant-b']);
+      expect(openStreams[0].signal.aborted).toBe(true);
+      expect(openStreams[1].signal.aborted).toBe(false);
+    });
+
+    it('closes the stream when the workspace is cleared', () => {
+      service = createService();
+      const tenants = tenantStore();
+      tenants.activate(testTenant('tenant-a'));
+      service.connect();
+
+      tenants.clear();
+
+      expect(openStreams).toHaveLength(1);
+      expect(openStreams[0].signal.aborted).toBe(true);
+    });
+
+    it('does not open a stream by itself when none was connected', () => {
+      service = createService();
+      const tenants = tenantStore();
+      tenants.activate(testTenant('tenant-a'));
+
+      tenants.switchTo(testTenant('tenant-b'));
+
+      expect(openStreams).toHaveLength(0);
+    });
   });
 });

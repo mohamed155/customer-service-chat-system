@@ -20,6 +20,7 @@ import {
   UpdateItemPayload,
 } from '../../../core/api/knowledge.models';
 import { KnowledgeApiService } from './knowledge-api.service';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 
 interface KnowledgeState {
   items: KnowledgeItemSummary[];
@@ -301,6 +302,13 @@ export const KnowledgeStore = signalStore(
   })),
   withHooks({
     onInit(store) {
+      store.loadList();
+      store.loadCategories();
+    },
+  }),
+  withTenantScope({
+    initialState,
+    reload: (store) => {
       store.loadList();
       store.loadCategories();
     },

@@ -12,6 +12,7 @@ import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
 import { NotificationEntry } from '../api/tenant-api.models';
 import { NotificationsApiService } from './notifications.api';
+import { withTenantScope } from '../state/tenant-scope';
 
 interface NotificationsState {
   readonly items: NotificationEntry[];
@@ -147,4 +148,8 @@ export const NotificationsStore = signalStore(
       store.refreshUnreadCount();
     },
   })),
+  withTenantScope({
+    initialState: initial,
+    reload: (store) => store.refreshUnreadCount(),
+  }),
 );

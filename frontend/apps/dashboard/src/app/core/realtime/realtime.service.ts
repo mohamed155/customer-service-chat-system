@@ -3,6 +3,7 @@ import { Store } from '@ngrx/store';
 import { Observable, Subject } from 'rxjs';
 import { APP_CONFIG } from '../config/app-config';
 import { selectActiveTenant } from '../state/tenant-context.feature';
+import { TenantScope } from '../state/tenant-scope';
 
 export interface SseEvent {
   event: string;
@@ -18,6 +19,19 @@ export class RealtimeService {
   private readonly events$ = new Subject<SseEvent>();
   private abortController?: AbortController;
   private retryDelay = 1000;
+
+  constructor() {
+    // The stream carries the workspace it was opened for. After a switch it must be opened again
+    // for the new one, or the old workspace's events would reach the new one's stores (MOH-61).
+    inject(TenantScope).changes$.subscribe(({ to }) => {
+      if (!this.abortController) return;
+      if (to === null) {
+        this.disconnect();
+      } else {
+        this.connect();
+      }
+    });
+  }
 
   events(): Observable<SseEvent> {
     return this.events$;

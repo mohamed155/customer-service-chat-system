@@ -44,6 +44,10 @@ jobs:
         run: pnpm lint:i18n
       - name: The hard-coded text check works
         run: pnpm test:i18n-check
+      - name: Every workspace store resets on a workspace change (MOH-61)
+        run: pnpm lint:tenant-scope
+      - name: The tenant-scope check works
+        run: pnpm test:tenant-scope-check
       - name: Check formatting
         run: pnpm format:check
       - run: pnpm exec ng build dashboard

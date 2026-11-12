@@ -1,12 +1,11 @@
-import { effect, inject, untracked } from '@angular/core';
-import { Store } from '@ngrx/store';
-import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
+import { inject } from '@angular/core';
+import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
 import { AnalyticsSummary, AnalyticsTimeseries } from '../../../core/api/tenant-api.models';
-import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
 import { AnalyticsApiService } from './analytics-api.service';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 
 export interface AnalyticsState {
   readonly from: string;
@@ -36,17 +35,19 @@ function initialTo(): string {
   return formatDate(new Date());
 }
 
+const initialState = (): AnalyticsState => ({
+  from: initialFrom(),
+  to: initialTo(),
+  preset: '30',
+  channel: null,
+  summary: null,
+  timeseries: null,
+  loading: false,
+  error: null,
+});
+
 export const AnalyticsStore = signalStore(
-  withState<AnalyticsState>({
-    from: initialFrom(),
-    to: initialTo(),
-    preset: '30',
-    channel: null,
-    summary: null,
-    timeseries: null,
-    loading: false,
-    error: null,
-  }),
+  withState<AnalyticsState>(initialState()),
   withMethods((store, api = inject(AnalyticsApiService)) => {
     const loadSummary = rxMethod<{ from: string; to: string; channel: string | null }>(
       pipe(
@@ -147,16 +148,9 @@ export const AnalyticsStore = signalStore(
       },
     };
   }),
-  withHooks((store, globalStore = inject(Store, { optional: true })) => {
-    const activeTenant = globalStore?.selectSignal(selectActiveTenant) ?? (() => null);
-    return {
-      onInit(): void {
-        effect(() => {
-          if (activeTenant()?.id) {
-            untracked(() => store.load());
-          }
-        });
-      },
-    };
+  withTenantScope({
+    initialState,
+    loadOnInit: true,
+    reload: (store) => store.load(),
   }),
 );

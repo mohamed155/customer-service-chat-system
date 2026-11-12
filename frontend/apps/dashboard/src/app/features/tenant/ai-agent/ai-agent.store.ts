@@ -16,6 +16,7 @@ import {
   AgentOptionsResponse,
 } from '../../../core/api/ai-agent.models';
 import { AiAgentApiService } from './ai-agent-api.service';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 
 interface AiAgentState {
   config: AgentConfigResponse | null;
@@ -109,5 +110,9 @@ export const AiAgentStore = signalStore(
     onInit(store) {
       store.load();
     },
+  }),
+  withTenantScope({
+    initialState,
+    reload: (store) => store.load(),
   }),
 );

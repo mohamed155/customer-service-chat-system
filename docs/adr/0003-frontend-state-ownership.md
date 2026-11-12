@@ -58,14 +58,30 @@ Rules that apply to all of them:
 
 ### 2. Tenant-scoped state resets on tenant switch
 
-- A tenant switch dispatches `switchTenantSucceeded` and **resets every tenant-scoped store**.
-- Prefer providing tenant-scoped SignalStores **at route level**, so they are destroyed with the
-  feature and can't outlive it.
-- Any tenant-scoped store that lives in root **watches the active tenant** (`selectActiveTenant`)
-  and clears its state, then reloads, when it changes. `CustomersStore` is the reference
-  implementation. A unit test asserts the store holds no previous-tenant data after a switch.
-- Global Store slices holding tenant data are cleared by a **meta-reducer** on tenant switch and
-  sign-out.
+The switch happens in place: the shell and the open page stay mounted, so a store provided at the
+route or the component survives it as much as a root store does. One mechanism therefore covers
+all of them (MOH-61):
+
+- `TenantScope` (`core/state/tenant-scope.ts`) announces every change of the active workspace id
+  (`switchTenantSucceeded`, `setActiveTenant`, `clearActiveTenant`) from the reducer's own call
+  stack, before anything renders. It is not an `effect()`, which could run one render late.
+- **Every store that holds workspace data ends with `withTenantScope({ initialState, reload })`.**
+  On a change it puts the store back to `initialState` in that same call, then calls `reload` if a
+  workspace is now active. `cancel` stops a poll or timer the state does not hold. The scope covers
+  every store under `features/tenant/` and every root-provided store. `pnpm lint:tenant-scope`
+  (CI) fails a store that lacks it unless it is listed in `tools/check-tenant-scope.mjs` with a
+  reason (a UI-only store, the platform operator's tenant directory).
+- **State a component holds itself** (an open dialog, a picked row, a result message) uses
+  `onTenantChange()` from the same file.
+- **In-flight requests.** `tenantContextInterceptor` cancels every `/tenant/` request of the old
+  workspace when the workspace changes (`takeUntil(TenantScope.changes$)`), so a late response
+  cannot land in a store that now belongs to the new one. The caller's stream completes with no
+  value; a one-shot `firstValueFrom` on such a call rejects with `EmptyError`.
+- **Realtime.** `RealtimeService` reopens the stream for the new workspace, or closes it after
+  `clearActiveTenant`. The stream carries the workspace it was opened for.
+- Global Store slices: `appUi` (UI preferences) and `tenantContext` are the only slices, and neither
+  holds workspace data, so no meta-reducer is needed. Add one before any workspace data goes into
+  the global Store (gap F3).
 
 ### 3. Choosing between Store and SignalStore
 
@@ -106,6 +122,6 @@ this ADR.
 | # | Gap | Where | Follow-up |
 | -- | -- | -- | -- |
 | F1 | The mechanisms already match: NgRx Store holds `appUi` and `tenantContext`; 25 SignalStores hold feature state; `@ngrx/store` / `signals` / `effects` 22.0.1 are installed. | `frontend/apps/dashboard/src/app/core/state/`, `features/**/**.store.ts` | None. |
-| F2 | **`NotificationsStore` has no tenant-switch handling.** It's `providedIn: 'root'` and holds tenant-scoped items and the unread count. Neither the store, `TenantContextService`, nor the realtime `NotificationsService` resets it on switch. The previous tenant's items look like they stay cached until the panel is reopened, and the badge count until the next refresh. This needs a reproduction to confirm. (The root-provided `CustomersStore` and `CustomerProfileStore` already follow the rule: they watch the active tenant and clear and reload on change.) | `core/notifications/notifications.store.ts` | Reproduce first (switch tenants with the panel open). If it's confirmed, add a `reset()` triggered by the active-tenant change (same pattern as `CustomersStore`), reload the unread count, and add a test asserting the store is empty after a switch. |
+| F2 | **`NotificationsStore` had no tenant-switch handling.** | `core/notifications/notifications.store.ts` | **Resolved (MOH-61):** the store uses `withTenantScope()`: it is emptied on a switch and reloads the unread count; the realtime stream reconnects for the new workspace. Covered by `tenant-scope.spec.ts`. |
 | F3 | No meta-reducer clears tenant data from the global Store on tenant switch or sign-out. Today `tenantContext` is the only tenant-related slice, so the risk is low. | `core/state/` | Add the meta-reducer before any tenant-scoped data goes into the global Store. |
 | F4 | No lint rule enforces "components don't call `HttpClient`" or "`ui/` doesn't inject stores". | `frontend/eslint.config.mjs` | Add boundary rules (`eslint-plugin-boundaries` or `no-restricted-imports`). |

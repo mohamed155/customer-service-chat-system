@@ -14,7 +14,7 @@ import { catchError, distinctUntilChanged, EMPTY, filter, map, tap } from 'rxjs'
 import { ApiError } from '../../../core/api/api.models';
 import { ConversationSummary, UpdateCustomerPayload } from '../../../core/api/tenant-api.models';
 import { PermissionsService } from '../../../core/authz/permissions.service';
-import { TenantContextService } from '../../../core/tenant/tenant-context.service';
+import { onTenantChange } from '../../../core/state/tenant-scope';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
@@ -258,20 +258,12 @@ export class CustomerProfileComponent {
   protected readonly dialogError = signal<ApiError | null>(null);
 
   private readonly destroyRef = inject(DestroyRef);
-  private readonly tenantContext = inject(TenantContextService);
 
   constructor() {
-    let tenantInitialized = false;
-
-    effect(() => {
-      this.tenantContext.activeTenant();
-      if (!tenantInitialized) {
-        tenantInitialized = true;
-        return;
-      }
+    onTenantChange(({ to }) => {
       this.closeEditDialog();
       const id = this.route.snapshot.paramMap.get('id');
-      if (id) {
+      if (id && to) {
         this.store.loadProfile(id);
       }
     });

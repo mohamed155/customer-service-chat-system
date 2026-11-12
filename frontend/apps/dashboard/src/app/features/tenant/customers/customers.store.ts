@@ -1,5 +1,4 @@
-import { computed, effect, inject } from '@angular/core';
-import { Store } from '@ngrx/store';
+import { computed, inject } from '@angular/core';
 import {
   patchState,
   signalStore,
@@ -12,7 +11,7 @@ import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { catchError, debounceTime, distinctUntilChanged, EMPTY, pipe, switchMap, tap } from 'rxjs';
 import { ApiError } from '../../../core/api/api.models';
 import { Customer } from '../../../core/api/tenant-api.models';
-import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 import { CustomersApiService } from './customers-api.service';
 
 type CustomersStatus = 'pending' | 'loading' | 'success' | 'empty' | 'error';
@@ -99,6 +98,10 @@ export const CustomersStore = signalStore(
       ),
     );
 
+    // Counts every load for the life of the store. It is not part of the state that a workspace
+    // change resets: after a reset the same query must still count as a new search.
+    let generationCounter = 0;
+
     const searchInput = rxMethod<SearchArgs>(
       pipe(
         debounceTime(SEARCH_DEBOUNCE_MS),
@@ -118,7 +121,7 @@ export const CustomersStore = signalStore(
       load(): void {
         patchState(store, {
           query: '',
-          searchGeneration: store.searchGeneration() + 1,
+          searchGeneration: ++generationCounter,
           items: [],
           nextCursor: null,
           hasMore: false,
@@ -145,29 +148,13 @@ export const CustomersStore = signalStore(
       },
     };
   }),
-  withHooks((store) => {
-    const globalStore = inject(Store, { optional: true });
-    const activeTenant = globalStore?.selectSignal(selectActiveTenant) ?? (() => null);
-    let initialized = false;
-    let previousTenantId: string | null = null;
-
-    effect(() => {
-      const tenantId = activeTenant()?.id ?? null;
-      if (!initialized) {
-        initialized = true;
-        previousTenantId = tenantId;
-        return;
-      }
-      if (tenantId === previousTenantId) return;
-
-      previousTenantId = tenantId;
+  withHooks((store) => ({
+    onInit(): void {
       store.load();
-    });
-
-    return {
-      onInit(): void {
-        store.load();
-      },
-    };
+    },
+  })),
+  withTenantScope({
+    initialState,
+    reload: (store) => store.load(),
   }),
 );

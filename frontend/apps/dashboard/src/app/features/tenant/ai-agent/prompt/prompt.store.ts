@@ -10,6 +10,7 @@ import {
   PromptVersionListItem,
 } from '../../../../core/api/ai-agent.models';
 import { PromptApiService } from './prompt-api.service';
+import { withTenantScope } from '../../../../core/state/tenant-scope';
 
 interface PromptState {
   bootstrap: PromptBootstrapResponse | null;
@@ -233,5 +234,9 @@ export const PromptStore = signalStore(
     onInit(store) {
       store.load();
     },
+  }),
+  withTenantScope({
+    initialState,
+    reload: (store) => store.load(),
   }),
 );

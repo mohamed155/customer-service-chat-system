@@ -1,12 +1,11 @@
-import { effect, inject, untracked } from '@angular/core';
-import { Store } from '@ngrx/store';
-import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
+import { inject } from '@angular/core';
+import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
 import { BillingOverview } from '../../../core/api/tenant-api.models';
-import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
 import { BillingApiService } from './billing-api.service';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 
 export interface BillingState {
   readonly overview: BillingOverview | null;
@@ -14,12 +13,14 @@ export interface BillingState {
   readonly error: string | null;
 }
 
+const initialState: BillingState = {
+  overview: null,
+  loading: false,
+  error: null,
+};
+
 export const BillingStore = signalStore(
-  withState<BillingState>({
-    overview: null,
-    loading: false,
-    error: null,
-  }),
+  withState<BillingState>(initialState),
   withMethods((store, api = inject(BillingApiService)) => {
     const load = rxMethod<void>(
       pipe(
@@ -50,16 +51,9 @@ export const BillingStore = signalStore(
       },
     };
   }),
-  withHooks((store, globalStore = inject(Store, { optional: true })) => {
-    const activeTenant = globalStore?.selectSignal(selectActiveTenant) ?? (() => null);
-    return {
-      onInit(): void {
-        effect(() => {
-          if (activeTenant()?.id) {
-            untracked(() => store.load());
-          }
-        });
-      },
-    };
+  withTenantScope({
+    initialState,
+    loadOnInit: true,
+    reload: (store) => store.load(),
   }),
 );

@@ -1,11 +1,10 @@
-import { effect, inject } from '@angular/core';
-import { Store } from '@ngrx/store';
-import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
+import { inject } from '@angular/core';
+import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { catchError, combineLatest, EMPTY, of, pipe, switchMap, tap } from 'rxjs';
 import { ApiError } from '../../../core/api/api.models';
 import { ConversationSummary, CustomerDetail } from '../../../core/api/tenant-api.models';
-import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 import { CustomersApiService } from './customers-api.service';
 
 export type CustomerProfileStatus = 'idle' | 'loading' | 'success' | 'not_found' | 'error';
@@ -117,28 +116,5 @@ export const CustomerProfileStore = signalStore(
       },
     };
   }),
-  withHooks((store) => {
-    const globalStore = inject(Store, { optional: true });
-    const activeTenant = globalStore?.selectSignal(selectActiveTenant) ?? (() => null);
-    let initialized = false;
-    let previousTenantId: string | null = null;
-
-    effect(() => {
-      const tenantId = activeTenant()?.id ?? null;
-      if (!initialized) {
-        initialized = true;
-        previousTenantId = tenantId;
-        return;
-      }
-      if (tenantId === previousTenantId) return;
-      previousTenantId = tenantId;
-      store.reset();
-    });
-
-    return {
-      onInit(): void {
-        /* component drives loading via route param */
-      },
-    };
-  }),
+  withTenantScope({ initialState }),
 );

@@ -1,10 +1,12 @@
 import { inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { QueueEntry } from '../../../core/api/tenant-api.models';
 import { EscalationsApiService } from './escalations-api.service';
 import { RealtimeService } from '../../../core/realtime/realtime.service';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 
 interface EscalationQueueState {
   items: QueueEntry[];
@@ -87,19 +89,26 @@ export const EscalationQueueStore = signalStore(
     onInit(store, realtime = inject(RealtimeService)) {
       store.loadQueue();
 
-      realtime.events().subscribe((event) => {
-        if (event.event === 'escalation.queued') {
-          store.loadQueue();
-        }
-        if (event.event === 'escalation.assigned' || event.event === 'escalation.removed') {
-          const data = JSON.parse(event.data) as { escalationId?: string };
-          if (data.escalationId) {
-            patchState(store, {
-              items: store.items().filter((item) => item.escalation.id !== data.escalationId),
-            });
+      realtime
+        .events()
+        .pipe(takeUntilDestroyed())
+        .subscribe((event) => {
+          if (event.event === 'escalation.queued') {
+            store.loadQueue();
           }
-        }
-      });
+          if (event.event === 'escalation.assigned' || event.event === 'escalation.removed') {
+            const data = JSON.parse(event.data) as { escalationId?: string };
+            if (data.escalationId) {
+              patchState(store, {
+                items: store.items().filter((item) => item.escalation.id !== data.escalationId),
+              });
+            }
+          }
+        });
     },
+  }),
+  withTenantScope({
+    initialState,
+    reload: (store) => store.loadQueue(),
   }),
 );
