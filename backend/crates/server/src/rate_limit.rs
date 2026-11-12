@@ -112,6 +112,56 @@ pub async fn login_rate_limit(
     next.run(request).await
 }
 
+/// Middleware that rate-limits the second sign-in step per client address, before any code is
+/// checked. The per-account lockout (five wrong codes, fifteen minutes) is separate and applies
+/// whoever the client is; this limit slows a client that tries many accounts.
+pub async fn mfa_rate_limit(
+    Extension(store): Extension<Arc<dyn RateLimiter>>,
+    Extension(config): Extension<Arc<AppConfig>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if !config.rate_limit_enabled {
+        return next.run(request).await;
+    }
+    // Behind the trusted proxy the client is the address it forwards. With no such header the
+    // peer address is used, so a request is never exempt from the limit.
+    let forwarded = if config.trusted_proxy {
+        request
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.split(',').next())
+            // Only an address is a client; anything else in the header is ignored, so the
+            // header cannot be used to name some other limiter key.
+            .and_then(|first| first.trim().parse::<std::net::IpAddr>().ok())
+            .map(|ip| ip.to_string())
+    } else {
+        None
+    };
+    let client_ip = forwarded.unwrap_or_else(|| {
+        request
+            .extensions()
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|ConnectInfo(addr)| addr.ip().to_string())
+            .unwrap_or_else(|| "unknown".to_string())
+    });
+    if let Decision::Refused { retry_after } = store
+        .check(
+            Scope::Mfa,
+            &client_ip,
+            Budget {
+                max_requests: config.rate_limit_login_max,
+                window: Duration::from_secs(config.rate_limit_login_window_secs),
+            },
+        )
+        .await
+    {
+        return ApiError::rate_limited("Too many attempts", retry_after).into_response();
+    }
+    next.run(request).await
+}
+
 pub async fn per_ip_creation_limit(
     Extension(store): Extension<Arc<dyn RateLimiter>>,
     Extension(config): Extension<Arc<AppConfig>>,

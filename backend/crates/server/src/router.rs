@@ -260,6 +260,7 @@ async fn authentication_middleware(request: Request, next: middleware::Next) -> 
     request_body = identity::routes::LoginRequest,
     responses(
         (status = 200, description = "Login successful. Returns the user profile and sets the `app_session` cookie.", body = serde_json::Value),
+        (status = 202, description = "The password was right and the user has two-factor authentication: no session yet. Sets a short-lived `app_mfa_pending` cookie; complete the sign-in with `POST /auth/mfa/verify`.", body = identity::mfa_routes::MfaRequiredResponse),
         (status = 400, description = "Validation failed (missing email or password).", body = kernel::ErrorEnvelope),
         (status = 401, description = "Invalid email or password.", body = kernel::ErrorEnvelope),
         (status = 500, description = "Internal server error.", body = kernel::ErrorEnvelope),
@@ -272,7 +273,28 @@ async fn login(
     kernel::ApiJson(payload): kernel::ApiJson<identity::routes::LoginRequest>,
 ) -> Response {
     let success = match identity::routes::authenticate_login(&pool, &config, payload).await {
-        Ok(success) => success,
+        Ok(identity::routes::LoginOutcome::Session(success)) => success,
+        Ok(identity::routes::LoginOutcome::MfaRequired {
+            pending_cookie,
+            user_id,
+        }) => {
+            // The password was right but there is no session yet: the second factor comes next.
+            let resource = user_id.to_string();
+            identity::audit::record(
+                &pool,
+                "auth.mfa_challenged",
+                Some(user_id),
+                Some(&resource),
+                &serde_json::json!({}),
+            )
+            .await;
+            return (
+                StatusCode::ACCEPTED,
+                [(SET_COOKIE, pending_cookie)],
+                axum::Json(identity::mfa_routes::MfaRequiredResponse { mfa_required: true }),
+            )
+                .into_response();
+        }
         Err(identity::routes::LoginError::Validation) => {
             return ApiError::validation_failed("Email and password are required").into_response();
         }
@@ -297,6 +319,136 @@ async fn login(
     identity::audit::login_succeeded(&pool, user_id).await;
 
     ([(SET_COOKIE, success.session_cookie)], axum::Json(response)).into_response()
+}
+
+/// The second sign-in step.
+#[utoipa::path(
+    post,
+    path = "/auth/mfa/verify",
+    tag = "auth",
+    operation_id = "auth_mfa_verify",
+    summary = "Complete sign-in with a second factor",
+    description = "Takes an authenticator code or a recovery code, together with the \
+                  `app_mfa_pending` cookie that `POST /auth/login` set. On success it starts the \
+                  session (the `app_session` cookie records the second factor), clears the \
+                  challenge and returns the same profile body as login. A code is accepted once; \
+                  five wrong codes lock the account's second factor for fifteen minutes. The \
+                  challenge lasts five minutes. Public: no `app_session` cookie is needed.",
+    request_body = identity::mfa_routes::VerifyRequest,
+    responses(
+        (status = 200, description = "Signed in. Returns the user profile and sets the `app_session` cookie.", body = serde_json::Value),
+        (status = 400, description = "Neither or both of `code` and `recoveryCode`.", body = kernel::ErrorEnvelope),
+        (status = 401, description = "No valid challenge (missing, expired or already used): sign in again.", body = kernel::ErrorEnvelope),
+        (status = 422, description = "The code is not valid.", body = kernel::ErrorEnvelope),
+        (status = 429, description = "Too many attempts, or the second factor is locked.", body = kernel::ErrorEnvelope),
+    ),
+    security(()),
+)]
+async fn mfa_verify(
+    axum::extract::State(pool): axum::extract::State<sqlx::PgPool>,
+    Extension(config): Extension<Arc<AppConfig>>,
+    headers: axum::http::HeaderMap,
+    kernel::ApiJson(payload): kernel::ApiJson<identity::mfa_routes::VerifyRequest>,
+) -> Response {
+    let again = || ApiError::unauthenticated("Sign in again").into_response();
+    let Some(token) = headers
+        .get(header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(identity::session::pending_token_from_cookie_header)
+    else {
+        return again();
+    };
+    let Ok(challenge) = identity::session::validate_pending(&config.auth_jwt_secret, token) else {
+        return again();
+    };
+    // A challenge that already completed a sign-in cannot start another.
+    let used: Result<bool, sqlx::Error> =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM revoked_sessions WHERE jti = $1)")
+            .bind(challenge.jti)
+            .fetch_one(&pool)
+            .await;
+    match used {
+        Ok(false) => {}
+        Ok(true) => return again(),
+        Err(e) => return ApiError::internal_error_from("Sign-in failed", e).into_response(),
+    }
+
+    let credential = match (payload.code, payload.recovery_code) {
+        (Some(code), None) => identity::mfa::Credential::Code(code),
+        (None, Some(code)) => identity::mfa::Credential::RecoveryCode(code),
+        _ => {
+            return ApiError::validation_failed("Send either a code or a recovery code")
+                .into_response()
+        }
+    };
+    let keys = match identity::mfa::MfaKeys::from_config(&pool, &config) {
+        Ok(k) => k,
+        Err(e) => {
+            return ApiError::internal_error_from("Two-factor authentication is not configured", e)
+                .into_response()
+        }
+    };
+    let now = chrono::Utc::now().timestamp().max(0) as u64;
+    let method = match identity::mfa::verify(&pool, &keys, challenge.sub, &credential, now).await {
+        Ok(method) => method,
+        Err(error) => return identity::mfa_routes::error_response(error),
+    };
+
+    type UserRow = (uuid::Uuid, String, String, Option<String>);
+    let row: Result<Option<UserRow>, sqlx::Error> = sqlx::query_as(
+        "SELECT id, email, display_name, platform_role FROM users \
+             WHERE id = $1 AND deleted_at IS NULL",
+    )
+    .bind(challenge.sub)
+    .fetch_optional(&pool)
+    .await;
+    let principal = match row {
+        Ok(Some((id, email, display_name, role))) => {
+            match identity::principal_from_row(id, email, display_name, role) {
+                Some(p) => p,
+                None => return again(),
+            }
+        }
+        Ok(None) => return again(),
+        Err(e) => return ApiError::internal_error_from("Sign-in failed", e).into_response(),
+    };
+    let (jwt, _, _) = match identity::session::issue_session(
+        &config.auth_jwt_secret,
+        config.auth_session_ttl_seconds,
+        principal.user_id,
+        identity::session::SessionAuth::second_factor(method.amr()),
+    ) {
+        Ok(issued) => issued,
+        Err(e) => {
+            return ApiError::internal_error_from("Session token issuance failed", e)
+                .into_response()
+        }
+    };
+    identity::mfa_routes::revoke(&pool, principal.user_id, challenge.jti, challenge.exp).await;
+    let user_id = principal.user_id;
+    let response = match tenancy::routes::build_me_response(
+        &pool,
+        principal,
+        config.environment == Environment::Production,
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(error) => return error.into_response(),
+    };
+    identity::audit::login_succeeded(&pool, user_id).await;
+
+    let mut reply = axum::Json(response).into_response();
+    let cookies = reply.headers_mut();
+    if let Ok(value) =
+        identity::session::build_session_cookie(&jwt, config.auth_session_ttl_seconds).parse()
+    {
+        cookies.append(SET_COOKIE, value);
+    }
+    if let Ok(value) = identity::session::clear_pending_cookie().parse() {
+        cookies.append(SET_COOKIE, value);
+    }
+    reply
 }
 
 /// Combine two `MethodRouter`s, each with its own per-method permission
@@ -330,13 +482,25 @@ fn public_routes() -> OpenApiRouter<sqlx::PgPool> {
                 ))
                 .layer(middleware::from_fn(csrf_session_start_middleware)),
         )
+        .routes(
+            routes!(mfa_verify)
+                .layer(middleware::from_fn(crate::rate_limit::mfa_rate_limit))
+                .layer(middleware::from_fn(csrf_session_start_middleware)),
+        )
         .routes(routes!(identity::routes::logout))
         .routes(routes!(tenancy::invitations::preview_invitation))
         .routes(routes!(tenancy::invitations::accept_invitation))
 }
 
 fn authenticated_routes() -> OpenApiRouter<sqlx::PgPool> {
-    OpenApiRouter::new().routes(routes!(tenancy::routes::me))
+    OpenApiRouter::new()
+        .routes(routes!(tenancy::routes::me))
+        .routes(
+            routes!(identity::mfa_routes::begin_enrolment)
+                .layer(middleware::from_fn(crate::rate_limit::mfa_rate_limit)),
+        )
+        .routes(routes!(identity::mfa_routes::confirm_enrolment))
+        .routes(routes!(identity::mfa_routes::status))
 }
 
 fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {

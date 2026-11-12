@@ -2,11 +2,14 @@
 
 pub mod audit;
 
+pub mod mfa;
+pub mod mfa_routes;
 pub mod password;
 
 pub mod routes;
 
 pub mod session;
+pub mod totp;
 
 use axum::{
     extract::{FromRequestParts, Request, State},
@@ -171,9 +174,11 @@ async fn resolve_cookie_principal(
     let jwt = jwt?;
     let claims = session::validate_token(&cfg.auth_jwt_secret, jwt).ok()?;
 
-    let result = sqlx::query_as::<_, (Uuid, String, String, Option<String>)>(
+    let result = sqlx::query_as::<_, (Uuid, String, String, Option<String>, bool)>(
         r#"
-        SELECT id, email, display_name, platform_role
+        SELECT id, email, display_name, platform_role,
+               EXISTS (SELECT 1 FROM mfa_factors f
+                        WHERE f.user_id = users.id AND f.confirmed_at IS NOT NULL)
         FROM users
         WHERE id = $1
           AND deleted_at IS NULL
@@ -188,7 +193,12 @@ async fn resolve_cookie_principal(
     .await
     .ok()?;
 
-    let (id, email, display_name, role_str) = result?;
+    let (id, email, display_name, role_str, has_second_factor) = result?;
+    // A user who has set up a second factor does not keep a session that skipped it, such as one
+    // stolen before they enrolled. They sign in again, with both steps.
+    if has_second_factor && !claims.has_second_factor() {
+        return None;
+    }
     principal_from_row(id, email, display_name, role_str).map(|principal| (principal, claims))
 }
 
@@ -217,7 +227,7 @@ async fn resolve_dev_header_principal(
     principal_from_row(id, email, display_name, role_str)
 }
 
-fn principal_from_row(
+pub fn principal_from_row(
     user_id: Uuid,
     email: String,
     display_name: String,

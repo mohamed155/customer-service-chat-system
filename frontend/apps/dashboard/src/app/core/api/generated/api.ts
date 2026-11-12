@@ -44,6 +44,86 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/mfa/enrol': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start setting up two-factor authentication
+     * @description Creates a new authenticator secret for the signed-in user and returns it once, as base32 and as an `otpauth://` URI. Needs the current password, so a stolen session alone cannot add an authenticator. The factor stays inactive until `POST /auth/mfa/enrol/confirm` proves a code. Starting again replaces an unconfirmed secret. Returns 409 when the user already has an active factor.
+     */
+    post: operations['auth_mfa_enrol'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/mfa/enrol/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm two-factor authentication with a code
+     * @description Checks a code from the authenticator app. On success the factor becomes active, ten recovery codes are returned once (stored only as hashes), and the `app_session` cookie is replaced by a session that records the second factor. Wrong codes count toward the lockout.
+     */
+    post: operations['auth_mfa_enrol_confirm'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/mfa/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read the two-factor authentication status
+     * @description Whether the signed-in user has an active factor, and how many recovery codes are left. Never returns a secret or a code.
+     */
+    get: operations['auth_mfa_status'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/mfa/verify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Complete sign-in with a second factor
+     * @description Takes an authenticator code or a recovery code, together with the `app_mfa_pending` cookie that `POST /auth/login` set. On success it starts the session (the `app_session` cookie records the second factor), clears the challenge and returns the same profile body as login. A code is accepted once; five wrong codes lock the account's second factor for fifteen minutes. The challenge lasts five minutes. Public: no `app_session` cookie is needed.
+     */
+    post: operations['auth_mfa_verify'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/signup': {
     parameters: {
       query?: never;
@@ -2230,6 +2310,10 @@ export interface components {
       /** Format: float */
       temperature?: number | null;
     };
+    ConfirmRequest: {
+      /** @description A six-digit code from the authenticator app. */
+      code: string;
+    };
     ConnectPayload: {
       config: {
         [key: string]: unknown;
@@ -2533,6 +2617,23 @@ export interface components {
       originalFilename: string;
       /** Format: int64 */
       sizeBytes: number;
+    };
+    /**
+     * @description Starting enrolment proves the account owner is present: it needs the current password, so a
+     *     stolen session alone cannot add an attacker's authenticator.
+     */
+    EnrolRequest: {
+      /**
+       * @description The signed-in user's current password. Never echoed back.
+       * @example ********
+       */
+      password: string;
+    };
+    EnrolmentResponse: {
+      /** @description The `otpauth://` URI a QR code carries. Shown once, here. */
+      otpauthUri: string;
+      /** @description The secret as base32, to type into an authenticator app. Shown once, here. */
+      secret: string;
     };
     ErrorBody: {
       code: string;
@@ -2915,6 +3016,15 @@ export interface components {
       /** Format: int64 */
       used: number;
     };
+    /** @description The body of the response to a password step that needs a second factor. */
+    MfaRequiredResponse: {
+      mfaRequired: boolean;
+    };
+    MfaStatusResponse: {
+      enrolled: boolean;
+      /** Format: int64 */
+      recoveryCodesRemaining: number;
+    };
     NotificationActorDto: {
       displayName: string;
       /** Format: uuid */
@@ -3272,6 +3382,10 @@ export interface components {
     QueueListResponse: {
       data: components['schemas']['QueueEntry'][];
       pagination: components['schemas']['Pagination'];
+    };
+    RecoveryCodesResponse: {
+      /** @description Ten single-use codes. Shown once, here; only their hashes are kept. */
+      recoveryCodes: string[];
     };
     ReindexResponse: {
       /** Format: uuid */
@@ -3645,6 +3759,13 @@ export interface components {
       name: string;
       sample: string;
     };
+    /** @description The second sign-in step: exactly one of `code` and `recoveryCode`. */
+    VerifyRequest: {
+      /** @description A six-digit code from the authenticator app. */
+      code?: string | null;
+      /** @description One of the single-use recovery codes. */
+      recoveryCode?: string | null;
+    };
     /**
      * @description `{ "conversation": … }` wrapper required by the public widget contract
      *     (specs/023-website-chat-widget/contracts/public-widget-api.md).
@@ -3755,6 +3876,15 @@ export interface operations {
           'application/json': unknown;
         };
       };
+      /** @description The password was right and the user has two-factor authentication: no session yet. Sets a short-lived `app_mfa_pending` cookie; complete the sign-in with `POST /auth/mfa/verify`. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MfaRequiredResponse'];
+        };
+      };
       /** @description Validation failed (missing email or password). */
       400: {
         headers: {
@@ -3802,6 +3932,215 @@ export interface operations {
       };
       /** @description Unauthenticated. */
       401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+    };
+  };
+  auth_mfa_enrol: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EnrolRequest'];
+      };
+    };
+    responses: {
+      /** @description A secret to add to an authenticator app. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['EnrolmentResponse'];
+        };
+      };
+      /** @description Unauthenticated. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Two-factor authentication is already set up. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description The password is not correct. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Too many attempts. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+    };
+  };
+  auth_mfa_enrol_confirm: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ConfirmRequest'];
+      };
+    };
+    responses: {
+      /** @description Active. The recovery codes, shown once; the session cookie is replaced. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RecoveryCodesResponse'];
+        };
+      };
+      /** @description Unauthenticated. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description No setup in progress. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description The code is not valid. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Too many wrong codes; the factor is locked. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+    };
+  };
+  auth_mfa_status: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The status. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MfaStatusResponse'];
+        };
+      };
+      /** @description Unauthenticated. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+    };
+  };
+  auth_mfa_verify: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VerifyRequest'];
+      };
+    };
+    responses: {
+      /** @description Signed in. Returns the user profile and sets the `app_session` cookie. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Neither or both of `code` and `recoveryCode`. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description No valid challenge (missing, expired or already used): sign in again. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description The code is not valid. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Too many attempts, or the second factor is locked. */
+      429: {
         headers: {
           [name: string]: unknown;
         };
