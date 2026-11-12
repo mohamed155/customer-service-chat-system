@@ -6,7 +6,10 @@ export const APP_PATHS = {
     signup: 'signup',
     forgotPassword: 'forgot-password',
     verifyEmail: 'verify-email',
+    mfa: 'mfa',
   },
+  mfaSetup: 'mfa-setup',
+  security: 'security',
   platform: {
     base: 'platform',
     overviewPlaceholder: 'overview-placeholder',

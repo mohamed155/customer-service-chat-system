@@ -156,5 +156,13 @@
         />
       </app-sidebar-nav-group>
     }
+    <app-sidebar-nav-group label="Account" [collapsed]="collapsed()">
+      <app-sidebar-nav-item
+        icon="@tui.shield"
+        label="Account security"
+        [link]="links.security"
+        [collapsed]="collapsed()"
+      />
+    </app-sidebar-nav-group>
   </nav>
 </aside>

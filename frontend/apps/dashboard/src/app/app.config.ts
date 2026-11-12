@@ -23,6 +23,7 @@ import { TenantContextEffects } from './core/state/tenant-context.effects';
 import { tenantContextFeature } from './core/state/tenant-context.feature';
 import { tenantContextInterceptor } from './core/http/tenant-context.interceptor';
 import { devIdentityInterceptor } from './core/http/dev-identity.interceptor';
+import { stepUpInterceptor } from './core/http/step-up.interceptor';
 import { CurrentUserService } from './core/tenant/current-user.service';
 
 export const appConfig: ApplicationConfig = {
@@ -35,6 +36,8 @@ export const appConfig: ApplicationConfig = {
         authTokenInterceptor,
         tenantContextInterceptor,
         devIdentityInterceptor,
+        // Outside apiErrorInterceptor on purpose: it sees the mapped error, and it retries once.
+        stepUpInterceptor,
         apiErrorInterceptor,
       ]),
     ),

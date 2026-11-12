@@ -54,3 +54,9 @@
 - New user-facing text goes in a message catalog, not in a template. The widget uses `I18n` (`apps/widget/src/i18n`: `i18n.t('chat.close')`, English in `messages.ts`, other locales are `public/i18n/<locale>.json` loaded with `?lang=`). The dashboard moves to Transloco, area by area (ADR-016 section 2).
 - `pnpm lint:i18n` fails a template that gains hard-coded text (text nodes and literal `placeholder`, `title`, `aria-label`, `alt` values). The number allowed per file is in `tools/i18n-baseline.json` and may only go down: after moving text out of a file, run `pnpm lint:i18n --update`.
 - Show an API error by its `code` (a catalog key), never the backend's `message`.
+
+## Two-step verification (MOH-34, spec 034)
+
+- The password step can end in `mfa-required` (a `202` and a challenge cookie, no session): `AuthService.login` returns it and `/auth/mfa` completes the sign-in. A session that lacks a second factor on a deployment that requires one gets `403 mfa_enrolment_required`; `apiErrorInterceptor` sends the user to `/mfa-setup`.
+- A sensitive action answers `401 mfa_step_up_required`. `stepUpInterceptor` (outside `apiErrorInterceptor`, so it sees the mapped error) opens the code prompt (`StepUpService` and the dialog in the app root) and sends the original request once more. Code that can trigger it needs no special handling.
+- Codes and recovery codes are never stored in the app; recovery codes are shown once and cleared from memory afterwards. New API code uses the generated types.

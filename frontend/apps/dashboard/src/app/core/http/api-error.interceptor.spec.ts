@@ -20,7 +20,7 @@ const config: AppConfig = {
 };
 
 const configure = (initialState = {}) => {
-  const router = { navigate: vi.fn().mockResolvedValue(true) };
+  const router = { navigate: vi.fn().mockResolvedValue(true), url: '/tenant/overview' };
   const currentUser = { clear: vi.fn(), load: vi.fn().mockResolvedValue(undefined) };
 
   TestBed.configureTestingModule({
@@ -179,5 +179,25 @@ describe('HTTP interceptors', () => {
 
     await requestPromise;
     expect(currentUser.load).not.toHaveBeenCalled();
+  });
+
+  it('sends the user to set up two-step verification on mfa_enrolment_required', async () => {
+    const { router } = configure();
+    const requestPromise = firstValueFrom(TestBed.inject(HttpClient).get('/api/v1/tenant')).catch(
+      (error: ApiError) => error,
+    );
+
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/tenant')
+      .flush(
+        { error: { code: 'mfa_enrolment_required', message: 'Set up two-factor authentication' } },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    const error = (await requestPromise) as ApiError;
+    expect(error.code).toBe('mfa_enrolment_required');
+    expect(router.navigate).toHaveBeenCalledWith(['/mfa-setup'], {
+      queryParams: { returnUrl: expect.any(String) },
+    });
   });
 });

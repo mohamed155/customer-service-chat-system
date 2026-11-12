@@ -5,10 +5,11 @@ import { Store } from '@ngrx/store';
 import { TuiRoot } from '@taiga-ui/core';
 import { selectThemeMode } from './core/state/app-ui.feature';
 import { selectResolvedTheme } from './core/state/system-theme';
+import { StepUpDialogComponent } from './shared/components/step-up-dialog/step-up-dialog.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, TuiRoot],
+  imports: [RouterOutlet, StepUpDialogComponent, TuiRoot],
   templateUrl: './app.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

@@ -38,8 +38,8 @@ describe('SidebarComponent', () => {
     fixture.detectChanges();
     const element: HTMLElement = fixture.nativeElement;
 
-    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(6);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(11);
+    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(7);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(12);
     expect(element.textContent).toContain('Workspace');
     expect(element.textContent).toContain('AI');
     expect(element.textContent).toContain('Insights');
@@ -79,8 +79,8 @@ describe('SidebarComponent', () => {
     fixture.detectChanges();
     const element: HTMLElement = fixture.nativeElement;
 
-    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(2);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(5);
+    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(3);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(6);
     expect(element.textContent).toContain('Workspace');
     expect(element.textContent).toContain('Conversations');
     expect(element.textContent).not.toContain('AI Agent');
@@ -103,8 +103,8 @@ describe('SidebarComponent', () => {
     fixture.detectChanges();
     const element: HTMLElement = fixture.nativeElement;
 
-    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(3);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(8);
+    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(4);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(9);
     expect(element.textContent).toContain('AI');
     expect(element.textContent).toContain('AI Agent');
     expect(element.textContent).toContain('Integrations');
@@ -126,8 +126,8 @@ describe('SidebarComponent', () => {
     fixture.detectChanges();
     const element: HTMLElement = fixture.nativeElement;
 
-    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(2);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(5);
+    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(3);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(6);
     expect(element.textContent).toContain('Workspace');
     expect(element.textContent).toContain('Overview');
     expect(element.textContent).toContain('Conversations');
@@ -157,8 +157,8 @@ describe('SidebarComponent', () => {
     fixture.detectChanges();
     const element: HTMLElement = fixture.nativeElement;
 
-    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(6);
-    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(11);
+    expect(element.querySelectorAll('app-sidebar-nav-group').length).toBe(7);
+    expect(element.querySelectorAll('app-sidebar-nav-item').length).toBe(12);
     expect(element.textContent).toContain('Settings');
     expect(element.textContent).toContain('Security');
     expect(element.textContent).toContain('Audit Logs');

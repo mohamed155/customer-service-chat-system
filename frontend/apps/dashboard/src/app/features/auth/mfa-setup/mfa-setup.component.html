@@ -1,0 +1,78 @@
+<app-auth-card
+  title="Set up two-step verification"
+  subtitle="Your workspace requires a second step at sign-in"
+>
+  @switch (step()) {
+    @case ('password') {
+      <form (submit)="$event.preventDefault(); start()">
+        <p>Confirm your password to begin.</p>
+        <label>
+          Password
+          <input type="password" autocomplete="current-password" [formControl]="password" />
+        </label>
+        @if (errorMessage()) {
+          <p role="alert">{{ errorMessage() }}</p>
+        }
+        <button type="submit" [disabled]="pending() || password.invalid">
+          {{ pending() ? 'Checking...' : 'Continue' }}
+        </button>
+      </form>
+    }
+    @case ('code') {
+      <form (submit)="$event.preventDefault(); confirm()">
+        <p>
+          Add this account to an authenticator app (such as Google Authenticator, 1Password or
+          Authy): open the link on this device, or type the setup key.
+        </p>
+        <p>
+          Setup key:
+          <code data-testid="setup-key">{{ setupKey() }}</code>
+        </p>
+        @if (setupLink()) {
+          <p><a [href]="setupLink()" data-testid="setup-link">Open in your authenticator app</a></p>
+        }
+        <label>
+          Then enter the 6-digit code it shows
+          <input
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            [formControl]="code"
+          />
+        </label>
+        @if (errorMessage()) {
+          <p role="alert">{{ errorMessage() }}</p>
+        }
+        <button type="submit" [disabled]="pending() || code.invalid">
+          {{ pending() ? 'Checking...' : 'Turn on' }}
+        </button>
+      </form>
+    }
+    @case ('recovery') {
+      <div>
+        <p>
+          Save these recovery codes somewhere safe. Each works once if you lose your authenticator.
+          They are shown only now.
+        </p>
+        <ul data-testid="recovery-codes">
+          @for (recoveryCode of recoveryCodes(); track recoveryCode) {
+            <li>
+              <code>{{ recoveryCode }}</code>
+            </li>
+          }
+        </ul>
+        <button type="button" (click)="copyCodes()">
+          {{ copied() ? 'Copied' : 'Copy codes' }}
+        </button>
+        @if (errorMessage()) {
+          <p role="alert">{{ errorMessage() }}</p>
+        }
+        <label>
+          <input type="checkbox" [checked]="saved()" (change)="saved.set(!saved())" />
+          I saved my recovery codes
+        </label>
+        <button type="button" [disabled]="!saved()" (click)="finish()">Continue</button>
+      </div>
+    }
+  }
+</app-auth-card>

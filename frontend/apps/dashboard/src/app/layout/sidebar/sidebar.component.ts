@@ -104,5 +104,6 @@ export class SidebarComponent {
     settings: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.settings}`,
     team: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.team}`,
     widgets: `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.widgets}`,
+    security: `/${APP_PATHS.security}`,
   } as const;
 }

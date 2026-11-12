@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { TeamMember } from '../../../core/api/tenant-api.models';
 import { APP_CONFIG } from '../../../core/config/app-config';
 import { PermissionsService } from '../../../core/authz/permissions.service';
+import { MfaService } from '../../../core/auth/mfa.service';
 import { CurrentUserService } from '../../../core/tenant/current-user.service';
 import { TeamApiService } from './team-api.service';
 import { TeamListComponent } from './team-list.component';
@@ -740,5 +741,124 @@ describe('TeamListComponent', () => {
     // covered by role-select.component.spec.ts and must not be re-tested here).
     fixture.componentInstance['changeRole'](members[0], 'manager');
     expect(mockApi.patchMember).toHaveBeenCalledWith('m-1', { role: 'manager' });
+  });
+
+  describe("resetting a member's two-step verification", () => {
+    const mfa = { resetMember: vi.fn(), resetUser: vi.fn() };
+
+    async function renderMembers() {
+      mockApi.getMembers.mockReturnValue(
+        of({ data: { items: members, nextCursor: null, hasMore: false } }),
+      );
+      mockApi.getInvitations.mockReturnValue(
+        of({ data: { items: [], nextCursor: null, hasMore: false } }),
+      );
+      configureModule([{ provide: MfaService, useValue: mfa }]);
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(TeamListComponent);
+      fixture.detectChanges();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(fixture.nativeElement.textContent).toContain('Alice');
+      });
+      return fixture;
+    }
+
+    const resetButton = (el: HTMLElement, name: string): HTMLButtonElement | undefined =>
+      Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.getAttribute('aria-label') === `Reset two-step verification for ${name}`,
+      );
+    const dialogButton = (el: HTMLElement, text: string): HTMLButtonElement =>
+      Array.from(el.querySelectorAll<HTMLButtonElement>('app-dialog-shell button')).find((b) =>
+        b.textContent?.includes(text),
+      )!;
+
+    beforeEach(() => {
+      mfa.resetMember.mockReset().mockResolvedValue(undefined);
+      mfa.resetUser.mockReset().mockResolvedValue(undefined);
+    });
+
+    it('offers a reset for each other member to an owner, behind a confirmation', async () => {
+      const fixture = await renderMembers();
+      const el: HTMLElement = fixture.nativeElement;
+      expect(resetButton(el, 'Alice')).toBeTruthy();
+      expect(resetButton(el, 'Bob')).toBeTruthy();
+
+      resetButton(el, 'Alice')!.click();
+      fixture.detectChanges();
+      expect(el.querySelector('app-dialog-shell')!.textContent).toContain(
+        "removes Alice's authenticator",
+      );
+      expect(mfa.resetMember).not.toHaveBeenCalled();
+    });
+
+    it('resets by membership id when an owner confirms, and says what happened', async () => {
+      const fixture = await renderMembers();
+      const el: HTMLElement = fixture.nativeElement;
+      resetButton(el, 'Bob')!.click();
+      fixture.detectChanges();
+      dialogButton(el, 'Reset').click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(mfa.resetMember).toHaveBeenCalledWith('m-2');
+      expect(mfa.resetUser).not.toHaveBeenCalled();
+      expect(el.textContent).toContain('Bob was signed out everywhere');
+      expect(el.querySelector('app-dialog-shell')).toBeNull();
+    });
+
+    it('does nothing when the confirmation is cancelled', async () => {
+      const fixture = await renderMembers();
+      const el: HTMLElement = fixture.nativeElement;
+      resetButton(el, 'Bob')!.click();
+      fixture.detectChanges();
+      dialogButton(el, 'Cancel').click();
+      fixture.detectChanges();
+      expect(mfa.resetMember).not.toHaveBeenCalled();
+      expect(el.querySelector('app-dialog-shell')).toBeNull();
+    });
+
+    it('uses the platform reset, by user id, for a platform administrator who is not an owner', async () => {
+      mockPermissions.has.mockImplementation((permission: string) => permission !== 'owner.assign');
+      const fixture = await renderMembers();
+      const el: HTMLElement = fixture.nativeElement;
+      resetButton(el, 'Bob')!.click();
+      fixture.detectChanges();
+      dialogButton(el, 'Reset').click();
+      await fixture.whenStable();
+
+      expect(mfa.resetUser).toHaveBeenCalledWith('u-2');
+      expect(mfa.resetMember).not.toHaveBeenCalled();
+    });
+
+    it('offers no reset to someone who is neither an owner nor a platform administrator', async () => {
+      mockPermissions.has.mockImplementation(
+        (permission: string) => permission !== 'owner.assign' && permission !== 'platform.admin',
+      );
+      const fixture = await renderMembers();
+      expect(resetButton(fixture.nativeElement, 'Bob')).toBeUndefined();
+    });
+
+    it('explains a refusal for a member who belongs to other workspaces', async () => {
+      mfa.resetMember.mockRejectedValue({ code: 'unauthorized', message: 'x', status: 403 });
+      const fixture = await renderMembers();
+      const el: HTMLElement = fixture.nativeElement;
+      resetButton(el, 'Bob')!.click();
+      fixture.detectChanges();
+      dialogButton(el, 'Reset').click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(el.textContent).toContain('Ask a platform administrator');
+    });
+
+    it("does not offer a reset on the signed-in user's own row", async () => {
+      mockCurrentUserService.currentUser.mockReturnValue({
+        id: 'u-1',
+        memberships: [{ role: 'owner' }],
+      });
+      const fixture = await renderMembers();
+      expect(resetButton(fixture.nativeElement, 'Alice')).toBeUndefined();
+      expect(resetButton(fixture.nativeElement, 'Bob')).toBeTruthy();
+    });
   });
 });

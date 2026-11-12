@@ -242,7 +242,7 @@ describe('Dashboard shell acceptance', () => {
       fixture.detectChanges();
       const sidebar = fixture.nativeElement.querySelector('app-sidebar') as HTMLElement;
       expect(sidebar).toBeTruthy();
-      expect(sidebar.querySelectorAll('app-sidebar-nav-group').length).toBe(5);
+      expect(sidebar.querySelectorAll('app-sidebar-nav-group').length).toBe(6);
     });
 
     it('shows limited navigation for Support Agent (view-only subset)', async () => {
@@ -257,7 +257,7 @@ describe('Dashboard shell acceptance', () => {
       const fixture = TestBed.createComponent(AppShellComponent);
       fixture.detectChanges();
       const sidebar = fixture.nativeElement.querySelector('app-sidebar') as HTMLElement;
-      expect(sidebar.querySelectorAll('app-sidebar-nav-group').length).toBe(2);
+      expect(sidebar.querySelectorAll('app-sidebar-nav-group').length).toBe(3);
       expect(sidebar.textContent).toContain('Overview');
       expect(sidebar.textContent).toContain('Conversations');
       expect(sidebar.textContent).not.toContain('AI Agent');
@@ -280,7 +280,7 @@ describe('Dashboard shell acceptance', () => {
       const fixture = TestBed.createComponent(AppShellComponent);
       fixture.detectChanges();
       const sidebar = fixture.nativeElement.querySelector('app-sidebar') as HTMLElement;
-      expect(sidebar.querySelectorAll('app-sidebar-nav-group').length).toBe(3);
+      expect(sidebar.querySelectorAll('app-sidebar-nav-group').length).toBe(4);
       expect(sidebar.textContent).toContain('Analytics');
       expect(sidebar.textContent).not.toContain('Settings');
     });

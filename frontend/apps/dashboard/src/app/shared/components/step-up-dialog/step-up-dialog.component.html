@@ -1,0 +1,54 @@
+<app-dialog-shell
+  [open]="stepUp.open()"
+  ariaLabelledby="step-up-title"
+  ariaDescribedby="step-up-desc"
+  [dismissDisabled]="stepUp.pending()"
+  (dismiss)="cancel()"
+>
+  <form (submit)="$event.preventDefault(); submit()">
+    <h3 id="step-up-title">Confirm it is you</h3>
+    <p id="step-up-desc">
+      {{
+        usingRecovery()
+          ? 'Enter one of your recovery codes to continue.'
+          : 'Enter the 6-digit code from your authenticator app to continue.'
+      }}
+    </p>
+    <label for="step-up-credential">
+      {{ usingRecovery() ? 'Recovery code' : 'Authentication code' }}
+      @if (usingRecovery()) {
+        <input
+          id="step-up-credential"
+          type="text"
+          autocomplete="off"
+          autocapitalize="characters"
+          [formControl]="credential"
+        />
+      } @else {
+        <input
+          id="step-up-credential"
+          type="text"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          [formControl]="credential"
+        />
+      }
+    </label>
+    @if (stepUp.errorMessage(); as message) {
+      <app-inline-alert tone="error">{{ message }}</app-inline-alert>
+    }
+    <div class="actions">
+      <button type="button" class="link" (click)="toggleRecovery()">
+        {{ usingRecovery() ? 'Use an authenticator code' : 'Use a recovery code' }}
+      </button>
+      <app-button variant="secondary" (pressed)="cancel()">Cancel</app-button>
+      <app-button
+        variant="primary"
+        type="submit"
+        [disabled]="stepUp.pending() || credential.invalid"
+      >
+        {{ stepUp.pending() ? 'Checking…' : 'Continue' }}
+      </app-button>
+    </div>
+  </form>
+</app-dialog-shell>

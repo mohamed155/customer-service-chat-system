@@ -7,15 +7,25 @@ import {
   AuthService,
   INVALID_CREDENTIALS_MESSAGE,
 } from '../../../core/auth/auth.service';
+import { MfaService } from '../../../core/auth/mfa.service';
 import { LoginComponent } from './login.component';
 
 describe('LoginComponent', () => {
   let auth: { login: ReturnType<typeof vi.fn>; pending: WritableSignal<boolean> };
   let fixture: ComponentFixture<LoginComponent>;
   let router: Router;
+  let mfa: { status: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     auth = { login: vi.fn(), pending: signal(false) };
+    mfa = {
+      status: vi.fn().mockResolvedValue({
+        enrolled: false,
+        recoveryCodesRemaining: 0,
+        required: false,
+        sessionSecondFactor: true,
+      }),
+    };
 
     await TestBed.configureTestingModule({
       imports: [LoginComponent],
@@ -24,6 +34,7 @@ describe('LoginComponent', () => {
         provideTaiga(),
         provideZonelessChangeDetection(),
         { provide: AuthService, useValue: auth },
+        { provide: MfaService, useValue: mfa },
       ],
     }).compileComponents();
 
@@ -53,7 +64,7 @@ describe('LoginComponent', () => {
 
   it('submits credentials and navigates to the safe returnUrl', async () => {
     setReturnUrl(fixture, '/tenant/conversations');
-    auth.login.mockResolvedValue(undefined);
+    auth.login.mockResolvedValue('signed-in');
 
     setInput(fixture, 'input[type="email"]', 'agent@example.com');
     setInput(fixture, 'input[type="password"]', 'Passw0rd!');
@@ -67,12 +78,60 @@ describe('LoginComponent', () => {
 
   it('falls back to the tenant overview when returnUrl is external', async () => {
     setReturnUrl(fixture, '//evil.example');
-    auth.login.mockResolvedValue(undefined);
+    auth.login.mockResolvedValue('signed-in');
 
     setInput(fixture, 'input[type="email"]', 'agent@example.com');
     setInput(fixture, 'input[type="password"]', 'Passw0rd!');
     form(fixture).dispatchEvent(new Event('submit'));
 
+    await fixture.whenStable();
+
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/tenant/overview');
+  });
+
+  it('goes to the code screen, keeping the return URL, when the account has two-step verification', async () => {
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    setReturnUrl(fixture, '/tenant/conversations');
+    auth.login.mockResolvedValue('mfa-required');
+
+    setInput(fixture, 'input[type="email"]', 'agent@example.com');
+    setInput(fixture, 'input[type="password"]', 'Passw0rd!');
+    form(fixture).dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+
+    expect(navigate).toHaveBeenCalledWith(['/auth/mfa'], {
+      queryParams: { returnUrl: '/tenant/conversations' },
+    });
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(mfa.status).not.toHaveBeenCalled();
+  });
+
+  it('goes to set-up first when the deployment requires a second factor and the session has none', async () => {
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    mfa.status.mockResolvedValue({
+      enrolled: false,
+      recoveryCodesRemaining: 0,
+      required: true,
+      sessionSecondFactor: false,
+    });
+    auth.login.mockResolvedValue('signed-in');
+
+    setInput(fixture, 'input[type="email"]', 'agent@example.com');
+    setInput(fixture, 'input[type="password"]', 'Passw0rd!');
+    form(fixture).dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+
+    expect(navigate).toHaveBeenCalledWith(['/mfa-setup'], { queryParams: {} });
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('still signs in when the status cannot be read', async () => {
+    mfa.status.mockRejectedValue(new Error('offline'));
+    auth.login.mockResolvedValue('signed-in');
+
+    setInput(fixture, 'input[type="email"]', 'agent@example.com');
+    setInput(fixture, 'input[type="password"]', 'Passw0rd!');
+    form(fixture).dispatchEvent(new Event('submit'));
     await fixture.whenStable();
 
     expect(router.navigateByUrl).toHaveBeenCalledWith('/tenant/overview');
