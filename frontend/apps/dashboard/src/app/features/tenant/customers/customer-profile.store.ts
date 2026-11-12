@@ -5,7 +5,7 @@ import { catchError, combineLatest, EMPTY, of, pipe, switchMap, tap } from 'rxjs
 import { ApiError } from '../../../core/api/api.models';
 import { ConversationSummary, CustomerDetail } from '../../../core/api/tenant-api.models';
 import { withTenantScope } from '../../../core/state/tenant-scope';
-import { CustomersApiService } from './customers-api.service';
+import { CustomersApiService } from '../../../core/api/customers-api.service';
 
 export type CustomerProfileStatus = 'idle' | 'loading' | 'success' | 'not_found' | 'error';
 

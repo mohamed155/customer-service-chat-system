@@ -1,9 +1,9 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Escalation, RoutingReason } from '../../../core/api/tenant-api.models';
-import { EscalationBannerComponent } from './escalation-banner.component';
+import { EscalationRoutingBannerComponent } from './escalation-routing-banner.component';
 
-describe('EscalationBannerComponent', () => {
+describe('EscalationRoutingBannerComponent', () => {
   const baseEscalation: Escalation = {
     id: 'e-1',
     conversationId: 'c-1',
@@ -17,10 +17,10 @@ describe('EscalationBannerComponent', () => {
 
   function createFixture() {
     TestBed.configureTestingModule({
-      imports: [EscalationBannerComponent],
+      imports: [EscalationRoutingBannerComponent],
       providers: [provideZonelessChangeDetection()],
     });
-    const fixture = TestBed.createComponent(EscalationBannerComponent);
+    const fixture = TestBed.createComponent(EscalationRoutingBannerComponent);
     return fixture;
   }
 

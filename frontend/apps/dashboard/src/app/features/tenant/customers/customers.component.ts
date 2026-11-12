@@ -26,7 +26,7 @@ import { InlineAlertComponent } from '../../../shared/components/inline-alert/in
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import { SearchInputComponent } from '../../../shared/components/search-input/search-input.component';
 import { ToolbarComponent } from '../../../shared/components/toolbar/toolbar.component';
-import { CustomersApiService } from './customers-api.service';
+import { CustomersApiService } from '../../../core/api/customers-api.service';
 import { CustomerDialogComponent } from './customer-dialog.component';
 import { CustomersStore } from './customers.store';
 

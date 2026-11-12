@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { Customer } from '../../../core/api/tenant-api.models';
 import { ApiService } from '../../../core/api/api.service';
-import { CustomersApiService } from '../customers/customers-api.service';
+import { CustomersApiService } from '../../../core/api/customers-api.service';
 import { ConversationsApiService } from './conversations-api.service';
 import { NewConversationDialogComponent } from './new-conversation-dialog.component';
 

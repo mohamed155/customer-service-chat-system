@@ -353,7 +353,7 @@ describe('ConversationDetailComponent', () => {
       const fixture = TestBed.createComponent(ConversationDetailComponent);
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.querySelector('app-escalation-banner')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('app-escalation-routing-banner')).toBeTruthy();
       expect(fixture.nativeElement.textContent).toContain('Escalated');
     });
 
@@ -367,7 +367,7 @@ describe('ConversationDetailComponent', () => {
       const fixture = TestBed.createComponent(ConversationDetailComponent);
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.querySelector('app-escalation-banner')).toBeFalsy();
+      expect(fixture.nativeElement.querySelector('app-escalation-routing-banner')).toBeFalsy();
     });
 
     it('shows manual-reassignment controls under conversations.manage on escalated conversations', async () => {

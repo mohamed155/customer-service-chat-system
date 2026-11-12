@@ -8,7 +8,7 @@ import {
   tenantStore,
   testTenant,
 } from '../../../core/state/testing/tenant-store.testing';
-import { CustomersApiService } from './customers-api.service';
+import { CustomersApiService } from '../../../core/api/customers-api.service';
 
 const apiError = (overrides: Partial<ApiError> = {}): ApiError => ({
   code: 'internal_error',

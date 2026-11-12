@@ -48,6 +48,8 @@ jobs:
         run: pnpm lint:tenant-scope
       - name: The tenant-scope check works
         run: pnpm test:tenant-scope-check
+      - name: The module-boundary lint rule works (MOH-62)
+        run: pnpm test:lint-rules
       - name: Check formatting
         run: pnpm format:check
       - run: pnpm exec ng build dashboard

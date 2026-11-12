@@ -163,8 +163,15 @@ frontend/src/app/
   platform/      # platform-only features (tenants, providers, flags, health)
 ```
 
-- Lint rules (`eslint-plugin-boundaries` or Nx module boundaries) prevent `features/a` importing
-  `features/b`, and `ui` importing `data-access`.
+- Lint rules prevent `features/a` importing `features/b`, and presentational code importing a
+  store or an API service. They are enforced by the local ESLint rule
+  `frontend/tools/eslint-rules/feature-boundaries.mjs` (MOH-62), which resolves relative imports.
+  The dashboard's real layout differs from the sketch above: features are
+  `features/tenant/<area>`, `features/platform/<area>`, `features/auth` and `features/account`,
+  each holding its own components, store and API service, with no `ui/` subfolder. Presentational
+  code lives in `shared/components` and `core/ui`, and those folders are where the second rule
+  applies. A feature's area route file (`tenant.routes.ts`) may import its own area's features;
+  nothing else may cross a feature boundary.
 - The widget is a **separate, tiny bundle** (target < 50 KB gzipped), built as a Web Component with
   Shadow DOM so host-page CSS can't break it and it can't leak into the host. Recommended tech:
   framework-light TypeScript or Lit rather than full Angular. **ADR-011.**

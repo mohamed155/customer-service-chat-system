@@ -10,7 +10,10 @@ import {
 import { CONVERSATION_FIXTURES } from '../../../shared/fixtures/conversation.fixtures';
 import { CUSTOMER_FIXTURES } from '../../../shared/fixtures/customer.fixtures';
 import { OVERVIEW_ALERT } from '../../../shared/fixtures/settings.fixtures';
-import { PagePayload, RoutedPageDataService } from '../routed-page-data.service';
+import {
+  PagePayload,
+  RoutedPageDataService,
+} from '../../../core/routed-page/routed-page-data.service';
 import { OverviewComponent } from './overview.component';
 
 const MOCK_OVERVIEW: PagePayload = {

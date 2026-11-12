@@ -1,10 +1,11 @@
 // Checks that every store holding workspace data resets when the workspace changes (MOH-61,
 // architecture section 17).
 //
-// A store under `features/tenant/` or provided in root (so it outlives a page) must use
-// `withTenantScope()` from `core/state/tenant-scope`. That one feature resets the store when the
-// active workspace changes and reloads it for the new one, so a store added later cannot forget
-// its own reset. A store that holds no workspace data is listed in EXEMPT with the reason.
+// Every `*.store.ts` in the dashboard must use `withTenantScope()` from `core/state/tenant-scope`.
+// That one feature resets the store when the active workspace changes and reloads it for the new
+// one, so a store added later cannot forget its own reset. A store that holds no workspace data is
+// listed in EXEMPT with the reason: the list is short on purpose, and moving a store to another
+// folder does not take it out of the check.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -12,23 +13,29 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const appDir = 'apps/dashboard/src/app';
 
+const platform = `${appDir}/features/platform`;
+
 /** Stores that hold no workspace data, with the reason. */
 export const EXEMPT = {
   [`${appDir}/features/tenant/settings/settings.store.ts`]:
     'holds only which settings tab is open (UI state), no workspace data',
-  [`${appDir}/features/platform/tenants/tenants.store.ts`]:
+  [`${appDir}/layout/app-shell/layout.store.ts`]:
+    'sidebar and drawer state (UI), no workspace data',
+  [`${platform}/tenants/tenants.store.ts`]:
     'the platform operator tenant directory: it lists all workspaces, not the active one',
+  [`${platform}/ai-providers/ai-providers.store.ts`]: 'platform-wide AI provider settings',
+  [`${platform}/audit-logs/platform-audit-logs.store.ts`]:
+    'the platform audit log across all workspaces',
+  [`${platform}/billing/platform-billing.store.ts`]: 'platform billing across all workspaces',
+  [`${platform}/overview/platform-overview.store.ts`]: 'platform overview across all workspaces',
+  [`${platform}/system-health/system-health.store.ts`]: 'platform system health',
 };
-
-const isTenantArea = (file) => file.includes(`${appDir}/features/tenant/`);
-const isRootProvided = (source) => /providedIn:\s*['"]root['"]/.test(source);
 
 /** Problems in `files` (`[{ path, source }]`, paths relative to the frontend root). */
 export function check(files) {
   const problems = [];
   const stores = files.filter((f) => f.path.endsWith('.store.ts') && !f.path.endsWith('.spec.ts'));
   for (const { path, source } of stores) {
-    const needsScope = isTenantArea(path) || isRootProvided(source);
     const hasScope = source.includes('withTenantScope(');
     if (path in EXEMPT) {
       if (hasScope)
@@ -37,7 +44,7 @@ export function check(files) {
         );
       continue;
     }
-    if (needsScope && !hasScope) {
+    if (!hasScope) {
       problems.push(
         `${path}: holds workspace data but does not use withTenantScope() ` +
           `(core/state/tenant-scope). Add it as the last feature, or list the store in ` +

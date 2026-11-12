@@ -13,7 +13,7 @@ import { PAGE_PERMISSIONS } from '../../../core/authz/permissions';
 import { AuthCardComponent } from '../auth-card/auth-card.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
-import { TeamApiService } from '../../tenant/team/team-api.service';
+import { InvitationApiService } from './invitation-api.service';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
@@ -78,7 +78,7 @@ const TENANT_LANDING_ORDER = [
 export class AcceptInvitationComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly api = inject(TeamApiService);
+  private readonly api = inject(InvitationApiService);
   private readonly currentUserService = inject(CurrentUserService);
   private readonly auth = inject(AuthService);
   private readonly permissions = inject(PermissionsService);

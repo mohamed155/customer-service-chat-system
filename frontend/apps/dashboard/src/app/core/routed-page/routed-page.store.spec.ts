@@ -1,10 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Subject, of, throwError } from 'rxjs';
-import {
-  provideTenantStore,
-  tenantStore,
-  testTenant,
-} from '../../core/state/testing/tenant-store.testing';
+import { provideTenantStore, tenantStore, testTenant } from '../state/testing/tenant-store.testing';
 import { PagePayload, PAGE_ROUTE, RoutedPageDataService } from './routed-page-data.service';
 import { RoutedPageStore } from './routed-page.store';
 

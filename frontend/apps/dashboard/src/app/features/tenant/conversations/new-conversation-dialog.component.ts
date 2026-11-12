@@ -4,7 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
 import { ApiResponse, PaginatedResponse } from '../../../core/api/api.models';
 import { CreateConversationPayload, Customer } from '../../../core/api/tenant-api.models';
-import { CustomersApiService } from '../customers/customers-api.service';
+import { CustomersApiService } from '../../../core/api/customers-api.service';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { DialogShellComponent } from '../../../shared/components/dialog-shell/dialog-shell.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';

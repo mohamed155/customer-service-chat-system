@@ -6,7 +6,7 @@ import { of, throwError } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { CurrentUserService } from '../../../core/tenant/current-user.service';
-import { TeamApiService } from '../../tenant/team/team-api.service';
+import { InvitationApiService } from './invitation-api.service';
 import { AcceptInvitationComponent } from './accept-invitation.component';
 
 describe('AcceptInvitationComponent', () => {
@@ -33,7 +33,7 @@ describe('AcceptInvitationComponent', () => {
           { path: 'tenant/team', component: AcceptInvitationComponent },
         ]),
         provideZonelessChangeDetection(),
-        { provide: TeamApiService, useValue: mockApi },
+        { provide: InvitationApiService, useValue: mockApi },
         { provide: CurrentUserService, useValue: mockCurrentUser },
         { provide: AuthService, useValue: mockAuth },
         { provide: PermissionsService, useValue: mockPermissions },
