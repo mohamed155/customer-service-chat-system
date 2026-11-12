@@ -54,8 +54,11 @@ export class WidgetSseClient {
                   const data = line.slice(6);
                   if (currentEvent) {
                     try {
-                      const parsed = JSON.parse(data) as WidgetEvent & { event?: string };
-                      subscriber.next(parsed);
+                      // The server names the event on the `event:` line and sends only the
+                      // payload as data (contracts/public-widget-api.md); the store switches
+                      // on `type`, so the event name becomes the type.
+                      const payload = JSON.parse(data) as Record<string, unknown>;
+                      subscriber.next({ ...payload, type: currentEvent } as unknown as WidgetEvent);
                     } catch {}
                     currentEvent = '';
                   }

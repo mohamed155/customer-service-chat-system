@@ -73,6 +73,14 @@ no cookie sessions, no platform or tenant routes and no API docs, and it doesn't
 the AI key (`AUTH_JWT_SECRET` and `APP_AI_KEY_ENCRYPTION_KEY` can be left out of its environment). It still needs `APP_INTEGRATION_SECRETS_KEY` to verify channel
 webhook signatures, until the secrets still sealed under it have been moved to envelope encryption (`server secrets reencrypt`, ADR-014). Every process, the gateway included, must have the same `APP_SECRETS_ROOT_KEY`: the gateway holds only the integration key, so without it the root key it derives differs and it cannot unwrap the keys the other processes wrote.
 
+The widget's public API lives at `/widget/v1/*` on the public host, next to the static widget
+app under `/widget/*`. `infra/Caddyfile` sends `/widget/v1/*` to the backend as `/api/v1/widget/v1/*`
+(the `@widget_api` block, which must stay above the static `@widget` block) and everything else under
+`/widget` to the widget container. A host with its own proxy needs the same split, or the loader's
+`GET /widget/v1/config` reaches the static server and fails.
+`infra/caddy-routing.test.mjs` runs the real Caddy image in front of recording servers and checks these
+routes (`/api`, `/ws`, `/widget/v1`, the static widget and the dashboard); CI runs it as `caddy-routing`.
+
 ## Move an Existing Host to the Two Database Roles (once)
 
 Hosts created before MOH-45 have tables owned by the bootstrap superuser, and the backend
