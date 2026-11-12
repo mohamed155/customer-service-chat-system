@@ -10,6 +10,9 @@
       description="We couldn't load the customer directory. Please try again."
     >
       <app-button (pressed)="store.retry()">Try again</app-button>
+      @if (store.error()?.requestId; as id) {
+        <app-error-reference [requestId]="id" />
+      }
     </app-empty-state>
   }
 
@@ -91,7 +94,7 @@
             </app-button>
           </div>
           @if (store.loadMoreError(); as loadMoreError) {
-            <app-inline-alert tone="error">
+            <app-inline-alert tone="error" [requestId]="loadMoreError.requestId">
               {{ loadMoreError.message }}
             </app-inline-alert>
           }

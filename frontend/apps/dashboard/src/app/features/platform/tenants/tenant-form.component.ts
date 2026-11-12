@@ -26,6 +26,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import { PlatformTenantsService } from './platform-tenants.service';
 import { TenantsStore } from './tenants.store';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 
 const SLUG_PATTERN = /^[a-z0-9](-?[a-z0-9])*$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -33,6 +34,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 @Component({
   selector: 'app-tenant-form',
   imports: [
+    ErrorReferenceComponent,
     ReactiveFormsModule,
     RouterLink,
     PageContainerComponent,

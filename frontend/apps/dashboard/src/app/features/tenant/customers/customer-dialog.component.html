@@ -167,6 +167,9 @@
         {{ err.message }}</app-inline-alert
       >
     }
+    @if (error()?.requestId; as id) {
+      <app-error-reference [requestId]="id" />
+    }
 
     <div class="actions">
       <app-button variant="secondary" (pressed)="closeDialog.emit()">Cancel</app-button>

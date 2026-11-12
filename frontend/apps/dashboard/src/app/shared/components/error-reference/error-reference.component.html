@@ -1,0 +1,16 @@
+<span
+  >Ref <code data-testid="reference">{{ reference() }}</code></span
+>
+<button type="button" (click)="copy()" aria-label="Copy the full request ID to send to support">
+  @switch (copied()) {
+    @case ('copied') {
+      Copied
+    }
+    @case ('failed') {
+      Copy failed
+    }
+    @default {
+      Copy
+    }
+  }
+</button>

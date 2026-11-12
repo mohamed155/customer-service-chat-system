@@ -22,6 +22,9 @@
       <section class="tenant-error-banner" role="alert" aria-live="polite">
         <tui-icon icon="@tui.triangle-alert" />
         <span>{{ message }}</span>
+        @if (errorRequestId(); as id) {
+          <app-error-reference [requestId]="id" />
+        }
         <button type="button" (click)="dismissError()" aria-label="Dismiss tenant access alert">
           Dismiss
         </button>

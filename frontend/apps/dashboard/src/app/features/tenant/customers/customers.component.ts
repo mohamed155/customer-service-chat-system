@@ -29,10 +29,12 @@ import { ToolbarComponent } from '../../../shared/components/toolbar/toolbar.com
 import { CustomersApiService } from '../../../core/api/customers-api.service';
 import { CustomerDialogComponent } from './customer-dialog.component';
 import { CustomersStore } from './customers.store';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 
 @Component({
   selector: 'app-customers',
   imports: [
+    ErrorReferenceComponent,
     RouterLink,
     AvatarComponent,
     ButtonComponent,

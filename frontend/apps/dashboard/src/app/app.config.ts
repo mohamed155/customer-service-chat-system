@@ -18,6 +18,7 @@ import { AppUiEffects } from './core/state/app-ui.effects';
 import { appUiFeature } from './core/state/app-ui.feature';
 import { authTokenInterceptor } from './core/http/auth-token.interceptor';
 import { apiErrorInterceptor } from './core/http/api-error.interceptor';
+import { requestIdInterceptor } from './core/http/request-id.interceptor';
 import { GlobalErrorHandler } from './core/errors/global-error-handler';
 import { TenantContextEffects } from './core/state/tenant-context.effects';
 import { tenantContextFeature } from './core/state/tenant-context.feature';
@@ -33,6 +34,8 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withFetch(),
       withInterceptors([
+        // First, so the ID is on the request every later interceptor and the error handler see.
+        requestIdInterceptor,
         authTokenInterceptor,
         tenantContextInterceptor,
         devIdentityInterceptor,

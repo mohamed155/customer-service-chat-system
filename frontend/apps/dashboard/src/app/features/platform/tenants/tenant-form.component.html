@@ -106,7 +106,12 @@
       </label>
 
       @if (serverError(); as err) {
-        <div class="form-error" role="alert">{{ err.message }}</div>
+        <div class="form-error" role="alert">
+          {{ err.message }}
+          @if (err.requestId; as id) {
+            <app-error-reference [requestId]="id" />
+          }
+        </div>
       }
 
       <div class="actions">
