@@ -10,7 +10,7 @@
 //
 // The rule resolves relative imports to real paths, so `../customers/x` is seen for what it is.
 // (`core/` and `shared/` importing `features/` stays in `no-restricted-imports`.)
-import { dirname, relative, resolve, sep } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 
 const APP = ['apps', 'dashboard', 'src', 'app'].join('/');
 
