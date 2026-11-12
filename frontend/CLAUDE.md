@@ -48,3 +48,9 @@
 - Shared utilities: `shared/utils/clipboard.ts` (`copyToClipboard`, used by the webhook-URL copy button) and `shared/utils/relative-time.ts` (`relativeTime`, used by the event log).
 - Routes: `APP_PATHS.tenant.integrations` (list) and `APP_PATHS.tenant.integrationDetail` (`'integrations/:slug'`, detail) — both guarded by `integrations.view` via `PAGE_PERMISSIONS`.
 - Permissions: `integrations.view` (list, detail, events) and `integrations.manage` (connect, update, disconnect) — Owner/Admin/Manager manage, Viewer read-only, Agent denied.
+
+## User-facing text (MOH-41, ADR-016)
+
+- New user-facing text goes in a message catalog, not in a template. The widget uses `I18n` (`apps/widget/src/i18n`: `i18n.t('chat.close')`, English in `messages.ts`, other locales are `public/i18n/<locale>.json` loaded with `?lang=`). The dashboard moves to Transloco, area by area (ADR-016 section 2).
+- `pnpm lint:i18n` fails a template that gains hard-coded text (text nodes and literal `placeholder`, `title`, `aria-label`, `alt` values). The number allowed per file is in `tools/i18n-baseline.json` and may only go down: after moving text out of a file, run `pnpm lint:i18n --update`.
+- Show an API error by its `code` (a catalog key), never the backend's `message`.

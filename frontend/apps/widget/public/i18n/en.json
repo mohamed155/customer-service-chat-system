@@ -1,0 +1,25 @@
+{
+  "chat.title": "Chat",
+  "chat.windowLabel": "Chat window",
+  "chat.close": "Close chat",
+  "chat.error": "Something went wrong.",
+  "chat.retry": "Try again",
+  "chat.rateLimited": "You're sending messages too fast. Please slow down.",
+  "composer.placeholder": "Type your message…",
+  "composer.label": "Message input",
+  "composer.send": "Send message",
+  "handoff.connecting": "Connecting you to a support agent…",
+  "handoff.away": "Our team is away — we'll reply as soon as someone is back.",
+  "typing.label": "Assistant is typing",
+  "feedback.heading": "How did we do?",
+  "feedback.commentPlaceholder": "Tell us more (optional)",
+  "feedback.send": "Send feedback",
+  "feedback.dismiss": "Not now",
+  "feedback.rate": "Rate this conversation",
+  "feedback.thanks": "Thank you for your feedback!",
+  "rating.group": "Rating: {value} out of 5",
+  "rating.star": {
+    "one": "{count} star",
+    "other": "{count} stars"
+  }
+}

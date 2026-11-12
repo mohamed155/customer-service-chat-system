@@ -7,6 +7,19 @@ use crate::agent_config::{self, AgentConfigurationRow, EscalationRule};
 use crate::agent_rules::{self, RuleMatch, BASELINE_ESCALATION_REASON};
 use tools::approval::cancel_pending_for_conversation;
 
+/// The agent-configuration channel that governs a conversation channel.
+///
+/// Conversations started from the website chat widget carry the channel
+/// `widget`, but the agent configuration catalog (`CATALOG_CHANNELS`) has no
+/// such entry: the widget is the product's web chat, so it follows `web_chat`.
+/// Every other channel maps to itself.
+pub fn agent_channel(conversation_channel: &str) -> &str {
+    match conversation_channel {
+        "widget" => "web_chat",
+        other => other,
+    }
+}
+
 pub async fn process_agent_responder_once(
     pool: &PgPool,
     ai: &crate::AiService,
@@ -178,7 +191,7 @@ pub async fn process_agent_responder_once(
         // Gate on channel
         let channels: Vec<String> =
             serde_json::from_value(row.enabled_channels.clone()).unwrap_or_default();
-        if channels.is_empty() || !channels.contains(&channel) {
+        if channels.is_empty() || !channels.iter().any(|c| c == agent_channel(&channel)) {
             sqlx::query("SELECT xtenant.outbox_ack($1)")
                 .bind(event_id)
                 .execute(pool)
@@ -408,6 +421,37 @@ pub async fn run_agent_responder_worker(
                 tracing::error!(%e, "agent responder consumer error");
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::agent_channel;
+
+    #[test]
+    fn widget_conversations_follow_the_web_chat_agent_channel() {
+        assert_eq!(agent_channel("widget"), "web_chat");
+    }
+
+    #[test]
+    fn other_channels_map_to_themselves() {
+        for channel in ["email", "phone", "web_chat", "whatsapp", "telegram", ""] {
+            assert_eq!(agent_channel(channel), channel);
+        }
+    }
+
+    #[test]
+    fn every_conversation_channel_has_a_catalog_entry() {
+        // Conversation channels come from the CHECK constraint (plus 'widget');
+        // each must resolve to a channel an agent can enable.
+        for channel in [
+            "email", "phone", "web_chat", "whatsapp", "telegram", "widget",
+        ] {
+            assert!(
+                crate::agent_config::CATALOG_CHANNELS.contains(&agent_channel(channel)),
+                "{channel} has no agent channel"
+            );
         }
     }
 }

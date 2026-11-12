@@ -25,6 +25,20 @@ https://{$APP_DOMAIN} {
         issuer acme
     }
 
+    # The widget's public API. It shares the /widget prefix with the static widget app, but it is
+    # served by the backend under /api/v1 (the dev server proxy in apps/widget/proxy.conf.cjs
+    # does the same rewrite). This block must stay above the static `@widget` one.
+    @widget_api {
+        path /widget/v1 /widget/v1/*
+    }
+    handle @widget_api {
+        rewrite * /api/v1{uri}
+        reverse_proxy backend:8080 {
+            header_up X-Forwarded-For {remote_host}
+            flush_interval -1
+        }
+    }
+
     @widget {
         path /widget /widget/*
     }
@@ -37,20 +51,27 @@ https://{$APP_DOMAIN} {
         }
     }
 
+    # Each route is its own `handle` block. A bare `reverse_proxy @matcher` next to the catch-all
+    # `handle` below never runs: Caddy orders `handle` before `reverse_proxy`, so the catch-all
+    # would take /api and /ws first and send them to the dashboard.
     @api {
         path /api/*
     }
-    reverse_proxy @api backend:8080 {
-        header_up X-Forwarded-For {remote_host}
+    handle @api {
+        reverse_proxy backend:8080 {
+            header_up X-Forwarded-For {remote_host}
+        }
     }
 
     @ws {
         path /ws/*
     }
-    reverse_proxy @ws backend:8080 {
-        header_up X-Forwarded-For {remote_host}
-        header_up Upgrade {http.request.header.Upgrade}
-        header_up Connection {http.request.header.Connection}
+    handle @ws {
+        reverse_proxy backend:8080 {
+            header_up X-Forwarded-For {remote_host}
+            header_up Upgrade {http.request.header.Upgrade}
+            header_up Connection {http.request.header.Connection}
+        }
     }
 
     @metrics {
