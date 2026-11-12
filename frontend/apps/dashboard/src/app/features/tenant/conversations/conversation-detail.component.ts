@@ -22,6 +22,7 @@ import { ConversationDetailStore } from './conversation-detail.store';
 import { ConversationSummaryComponent } from './conversation-summary.component';
 import { ConversationThreadComponent } from './conversation-thread.component';
 import { ComposerComponent } from './composer.component';
+import { onTenantChange } from '../../../core/state/tenant-scope';
 
 const STATUS_OPTIONS: SelectFilterOption[] = [
   { value: 'open', label: 'Open' },
@@ -243,6 +244,11 @@ export class ConversationDetailComponent implements OnInit {
 
   protected readonly hasManagePerm = () =>
     this.permissions.has('conversations.manage' as Permission);
+
+  constructor() {
+    // The conversation belongs to the workspace that was active; the new one has no such id.
+    onTenantChange(() => this.goBack());
+  }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');

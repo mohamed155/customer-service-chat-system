@@ -1,12 +1,11 @@
-import { effect, inject, untracked } from '@angular/core';
-import { Store } from '@ngrx/store';
+import { inject } from '@angular/core';
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
 import { AuditEntry } from '../../../core/api/tenant-api.models';
-import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
 import { AuditLogsApiService } from './audit-logs-api.service';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 
 function formatDate(d: Date): string {
   const y = d.getFullYear();
@@ -40,21 +39,23 @@ export interface AuditLogsState {
   readonly drawerOpen: boolean;
 }
 
+const initialState = (): AuditLogsState => ({
+  entries: [],
+  nextCursor: null,
+  hasMore: false,
+  from: initialFrom(),
+  to: initialTo(),
+  category: null,
+  actorId: null,
+  loading: false,
+  loadingMore: false,
+  error: null,
+  selectedEntry: null,
+  drawerOpen: false,
+});
+
 export const AuditLogsStore = signalStore(
-  withState<AuditLogsState>({
-    entries: [],
-    nextCursor: null,
-    hasMore: false,
-    from: initialFrom(),
-    to: initialTo(),
-    category: null,
-    actorId: null,
-    loading: false,
-    loadingMore: false,
-    error: null,
-    selectedEntry: null,
-    drawerOpen: false,
-  }),
+  withState<AuditLogsState>(initialState()),
   withMethods((store, api = inject(AuditLogsApiService)) => {
     const load = rxMethod<{
       from: string;
@@ -177,17 +178,13 @@ export const AuditLogsStore = signalStore(
       },
     };
   }),
-  withHooks((store, globalStore = inject(Store, { optional: true })) => {
-    const activeTenant = globalStore?.selectSignal(selectActiveTenant) ?? (() => null);
-    return {
-      onInit(): void {
-        store.load();
-        effect(() => {
-          if (activeTenant()?.id) {
-            untracked(() => store.load());
-          }
-        });
-      },
-    };
+  withHooks((store) => ({
+    onInit(): void {
+      store.load();
+    },
+  })),
+  withTenantScope({
+    initialState,
+    reload: (store) => store.load(),
   }),
 );

@@ -1,5 +1,4 @@
-import { effect, inject } from '@angular/core';
-import { Store } from '@ngrx/store';
+import { inject } from '@angular/core';
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import {
@@ -29,7 +28,7 @@ import {
   TeamMemberQuery,
   TenantInvitation,
 } from '../../../core/api/tenant-api.models';
-import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 import { TeamApiService } from './team-api.service';
 
 export type TeamListStatus = 'pending' | 'loading' | 'success' | 'error' | 'empty';
@@ -411,52 +410,18 @@ export const TeamStore = signalStore(
       },
     };
   }),
-  withHooks((store) => {
-    const globalStore = inject(Store, { optional: true });
-    const activeTenant = globalStore?.selectSignal(selectActiveTenant) ?? (() => null);
-    let initialized = false;
-    let previousTenantId: string | null = null;
-
-    effect(() => {
-      const tenantId = activeTenant()?.id ?? null;
-      if (!initialized) {
-        initialized = true;
-        previousTenantId = tenantId;
-        return;
-      }
-
-      if (tenantId === previousTenantId) return;
-      previousTenantId = tenantId;
-      store.pollInvitationDelivery(null);
-
-      patchState(store, {
-        members: [],
-        status: 'pending' as const,
-        query: { limit: 25 },
-        nextCursor: null,
-        hasMore: false,
-        error: null,
-        invitations: [],
-        invitationQuery: { limit: 25 },
-        invitationNextCursor: null,
-        invitationHasMore: false,
-        invitationsStatus: 'pending' as const,
-        invitationsError: null,
-        lastCreatedInvitation: null,
-        createInvitationStatus: 'idle' as const,
-        createInvitationError: null,
-        invitationDeliveryPollingError: null,
-      });
-
+  withHooks((store) => ({
+    onInit(): void {
       store.loadMembers({ query: store.query() });
       store.loadInvitations({ query: store.invitationQuery() });
-    });
-
-    return {
-      onInit(): void {
-        store.loadMembers({ query: store.query() });
-        store.loadInvitations({ query: store.invitationQuery() });
-      },
-    };
+    },
+  })),
+  withTenantScope({
+    initialState,
+    cancel: (store) => store.pollInvitationDelivery(null),
+    reload: (store) => {
+      store.loadMembers({ query: store.query() });
+      store.loadInvitations({ query: store.invitationQuery() });
+    },
   }),
 );

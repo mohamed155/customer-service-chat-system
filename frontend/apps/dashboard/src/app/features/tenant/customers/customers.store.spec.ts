@@ -1,8 +1,7 @@
-import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { Store } from '@ngrx/store';
 import { Subject, of, throwError } from 'rxjs';
 import { Customer, TenantSummary } from '../../../core/api/tenant-api.models';
+import { provideTenantStore, tenantStore } from '../../../core/state/testing/tenant-store.testing';
 import { CustomersApiService } from './customers-api.service';
 import { CustomersStore } from './customers.store';
 
@@ -23,16 +22,17 @@ const page = (items: Customer[], nextCursor: string | null = null, hasMore = fal
 describe('CustomersStore', () => {
   let api: { list: ReturnType<typeof vi.fn> };
 
-  function configureStore(activeTenant = signal<TenantSummary | null>(null)) {
+  function configureStore(activeTenant: TenantSummary | null = null) {
     TestBed.configureTestingModule({
       providers: [
         CustomersStore,
         { provide: CustomersApiService, useValue: api },
-        { provide: Store, useValue: { selectSignal: () => activeTenant } },
+        provideTenantStore(),
       ],
     });
 
-    return { store: TestBed.inject(CustomersStore), activeTenant };
+    tenantStore().activate(activeTenant);
+    return { store: TestBed.inject(CustomersStore) };
   }
 
   beforeEach(() => {
@@ -111,18 +111,16 @@ describe('CustomersStore', () => {
       plan: 'trial',
     };
     const tenant2: TenantSummary = { ...tenant1, id: 'tenant-2', name: 'Tenant Two' };
-    const activeTenant = signal<TenantSummary | null>(tenant1);
     api.list
       .mockReturnValueOnce(
         of(page([customer('customer-1', 'Tenant One Customer')], 'cursor-1', true)),
       )
       .mockReturnValueOnce(of(page([customer('customer-2', 'Tenant Two Customer')])));
 
-    const { store } = configureStore(activeTenant);
+    const { store } = configureStore(tenant1);
     TestBed.flushEffects();
     store.search('one');
-    activeTenant.set(tenant2);
-    TestBed.flushEffects();
+    tenantStore().switchTo(tenant2);
 
     expect(api.list).toHaveBeenCalledTimes(2);
     expect(api.list).toHaveBeenLastCalledWith({ limit: 25 }, undefined);
@@ -143,15 +141,13 @@ describe('CustomersStore', () => {
         plan: 'trial',
       };
       const tenant2: TenantSummary = { ...tenant1, id: 'tenant-2', name: 'Tenant Two' };
-      const activeTenant = signal<TenantSummary | null>(tenant1);
       api.list.mockReturnValue(of(page([])));
 
-      const { store } = configureStore(activeTenant);
+      const { store } = configureStore(tenant1);
       TestBed.flushEffects();
       store.search('sara');
       vi.advanceTimersByTime(300);
-      activeTenant.set(tenant2);
-      TestBed.flushEffects();
+      tenantStore().switchTo(tenant2);
       store.search('sara');
       vi.advanceTimersByTime(300);
 

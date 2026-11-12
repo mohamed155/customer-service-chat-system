@@ -1,6 +1,4 @@
 import { TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
-import { Store } from '@ngrx/store';
 import { defer, of, Subject, throwError } from 'rxjs';
 import {
   CreateInvitationResponse,
@@ -8,6 +6,7 @@ import {
   TenantInvitation,
   TenantSummary,
 } from '../../../core/api/tenant-api.models';
+import { provideTenantStore, tenantStore } from '../../../core/state/testing/tenant-store.testing';
 import { TeamApiService } from './team-api.service';
 import { TeamStore } from './team.store';
 
@@ -58,15 +57,12 @@ describe('TeamStore', () => {
     return TestBed.inject(TeamStore);
   }
 
-  function configureStoreWithTenant(activeTenant = signal<TenantSummary | null>(null)) {
+  function configureStoreWithTenant(activeTenant: TenantSummary | null = null) {
     TestBed.configureTestingModule({
-      providers: [
-        TeamStore,
-        { provide: TeamApiService, useValue: mockApi },
-        { provide: Store, useValue: { selectSignal: () => activeTenant } },
-      ],
+      providers: [TeamStore, { provide: TeamApiService, useValue: mockApi }, provideTenantStore()],
     });
-    return { store: TestBed.inject(TeamStore), activeTenant };
+    tenantStore().activate(activeTenant);
+    return { store: TestBed.inject(TeamStore) };
   }
 
   it('initializes state', () => {
@@ -447,7 +443,6 @@ describe('TeamStore', () => {
       status: 'active',
       plan: 'trial',
     };
-    const activeTenant = signal<TenantSummary | null>(tenant1);
 
     mockApi.getMembers.mockReturnValueOnce(
       of({
@@ -511,14 +506,13 @@ describe('TeamStore', () => {
       }),
     );
 
-    const { store } = configureStoreWithTenant(activeTenant);
+    const { store } = configureStoreWithTenant(tenant1);
     TestBed.flushEffects();
 
     store.setQuery({ q: 'alice', cursor: 'cursor-1' });
     expect(store.query()).toEqual({ limit: 25, q: 'alice', cursor: 'cursor-1' });
 
-    activeTenant.set(tenant2);
-    TestBed.flushEffects();
+    tenantStore().switchTo(tenant2);
 
     expect(store.members()[0]?.displayName).toBe('Bob');
     expect(store.invitations()[0]?.email).toBe('new@tenant-two.test');

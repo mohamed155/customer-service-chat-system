@@ -1,6 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { Store } from '@ngrx/store';
 import { provideTaiga } from '@taiga-ui/core';
 import { of, throwError } from 'rxjs';
 import { TeamMember } from '../../../core/api/tenant-api.models';
@@ -8,6 +7,11 @@ import { APP_CONFIG } from '../../../core/config/app-config';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { MfaService } from '../../../core/auth/mfa.service';
 import { CurrentUserService } from '../../../core/tenant/current-user.service';
+import {
+  provideTenantStore,
+  tenantStore,
+  testTenant,
+} from '../../../core/state/testing/tenant-store.testing';
 import { TeamApiService } from './team-api.service';
 import { TeamListComponent } from './team-list.component';
 
@@ -452,14 +456,8 @@ describe('TeamListComponent', () => {
       ],
     });
     mockPermissions.has.mockImplementation((perm: string) => perm !== 'owner.assign');
-    const activeTenant = vi.fn(() => ({
-      id: 'tenant-1',
-      name: 'Acme',
-      slug: 'acme',
-      status: 'active',
-      plan: 'trial',
-    }));
-    configureModule([{ provide: Store, useValue: { selectSignal: vi.fn(() => activeTenant) } }]);
+    configureModule([provideTenantStore()]);
+    tenantStore().activate(testTenant('tenant-1', 'Acme'));
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(TeamListComponent);
     fixture.detectChanges();
@@ -487,14 +485,8 @@ describe('TeamListComponent', () => {
     mockPermissions.has.mockImplementation(
       (perm: string) => perm === 'members.manage' || perm === 'owner.assign',
     );
-    const activeTenant = vi.fn(() => ({
-      id: 'tenant-2',
-      name: 'Two',
-      slug: 'two',
-      status: 'active',
-      plan: 'trial',
-    }));
-    configureModule([{ provide: Store, useValue: { selectSignal: vi.fn(() => activeTenant) } }]);
+    configureModule([provideTenantStore()]);
+    tenantStore().activate(testTenant('tenant-2', 'Two'));
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(TeamListComponent);
     fixture.detectChanges();
@@ -607,14 +599,8 @@ describe('TeamListComponent', () => {
       ],
     });
     mockPermissions.has.mockReturnValue(true);
-    const activeTenant = vi.fn(() => ({
-      id: 'tenant-1',
-      name: 'Acme',
-      slug: 'acme',
-      status: 'active',
-      plan: 'trial',
-    }));
-    configureModule([{ provide: Store, useValue: { selectSignal: vi.fn(() => activeTenant) } }]);
+    configureModule([provideTenantStore()]);
+    tenantStore().activate(testTenant('tenant-1', 'Acme'));
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(TeamListComponent);
     fixture.detectChanges();

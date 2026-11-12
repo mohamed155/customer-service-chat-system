@@ -3,6 +3,7 @@ import {
   isIdentityEndpoint,
   isLoginEndpoint,
   isPlatformEndpoint,
+  isTenantEndpoint,
 } from './api-request';
 
 describe('apiRelativePath', () => {
@@ -45,6 +46,15 @@ describe('endpoint helpers', () => {
     expect(isPlatformEndpoint('/tenant/platform-notes')).toBe(false);
     expect(isPlatformEndpoint('/tenant/x/platform/y')).toBe(false);
     expect(isPlatformEndpoint(null)).toBe(false);
+  });
+
+  it('treats everything under /tenant/ as workspace data', () => {
+    expect(isTenantEndpoint('/tenant/members')).toBe(true);
+    expect(isTenantEndpoint('/tenant/availability/me')).toBe(true);
+    expect(isTenantEndpoint('/auth/login')).toBe(false);
+    expect(isTenantEndpoint('/invitations/accept')).toBe(false);
+    expect(isTenantEndpoint('/tenantless')).toBe(false);
+    expect(isTenantEndpoint(null)).toBe(false);
   });
 
   it('matches the login endpoint exactly', () => {

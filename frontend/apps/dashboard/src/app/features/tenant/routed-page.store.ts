@@ -1,4 +1,4 @@
-import { computed, effect, inject } from '@angular/core';
+import { computed, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
 import {
   patchState,
@@ -12,6 +12,7 @@ import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
 import { selectActiveTenant } from '../../core/state/tenant-context.feature';
+import { withTenantScope } from '../../core/state/tenant-scope';
 import { PAGE_ROUTE, PagePayload, RoutedPageDataService } from './routed-page-data.service';
 
 export { PAGE_ROUTE };
@@ -22,10 +23,12 @@ export type PageLifecycle<T> =
   | { status: 'empty' }
   | { status: 'error'; error: unknown };
 
+const initialState = {
+  lifecycle: { status: 'pending' } as PageLifecycle<PagePayload>,
+};
+
 export const RoutedPageStore = signalStore(
-  withState({
-    lifecycle: { status: 'pending' } as PageLifecycle<PagePayload>,
-  }),
+  withState(initialState),
   withComputed((store) => ({
     loading: computed(() => {
       const lc = store.lifecycle();
@@ -80,12 +83,13 @@ export const RoutedPageStore = signalStore(
       };
     },
   ),
-  withHooks((store, globalStore = inject(Store, { optional: true })) => {
-    const activeTenant = globalStore?.selectSignal(selectActiveTenant) ?? (() => null);
-    return {
-      onInit(): void {
-        effect(() => store.load(activeTenant()?.id ?? null));
-      },
-    };
+  withHooks((store, globalStore = inject(Store, { optional: true })) => ({
+    onInit(): void {
+      store.load(globalStore?.selectSignal(selectActiveTenant)()?.id ?? null);
+    },
+  })),
+  withTenantScope({
+    initialState,
+    reload: (store, { to }) => store.load(to),
   }),
 );

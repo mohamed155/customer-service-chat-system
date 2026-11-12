@@ -1,10 +1,13 @@
-import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { Store } from '@ngrx/store';
 import { of, Subject, throwError } from 'rxjs';
 import { ApiError, ApiResponse, PaginatedResponse } from '../../../core/api/api.models';
 import { ConversationSummary, CustomerDetail } from '../../../core/api/tenant-api.models';
 import { CustomerProfileStore } from './customer-profile.store';
+import {
+  provideTenantStore,
+  tenantStore,
+  testTenant,
+} from '../../../core/state/testing/tenant-store.testing';
 import { CustomersApiService } from './customers-api.service';
 
 const apiError = (overrides: Partial<ApiError> = {}): ApiError => ({
@@ -46,15 +49,16 @@ describe('CustomerProfileStore', () => {
     getConversationHistory: ReturnType<typeof vi.fn>;
   };
 
-  function configureStore(activeTenant = signal<{ id: string } | null>(null)) {
+  function configureStore(activeTenantId: string | null = null) {
     TestBed.configureTestingModule({
       providers: [
         CustomerProfileStore,
         { provide: CustomersApiService, useValue: api },
-        { provide: Store, useValue: { selectSignal: () => activeTenant } },
+        provideTenantStore(),
       ],
     });
-    return { store: TestBed.inject(CustomerProfileStore), activeTenant };
+    tenantStore().activate(activeTenantId ? testTenant(activeTenantId) : null);
+    return { store: TestBed.inject(CustomerProfileStore) };
   }
 
   beforeEach(() => {
@@ -137,19 +141,16 @@ describe('CustomerProfileStore', () => {
   });
 
   it('clears cached profile data and cancels stale requests when the active tenant changes', () => {
-    const tenant1 = signal<{ id: string }>({ id: 'tenant-1' });
     api.getCustomer.mockReturnValue(of({ data: customer('customer-1'), requestId: 'req-c' }));
     api.getConversationHistory.mockReturnValue(
       of({ data: { items: [], nextCursor: null, hasMore: false }, requestId: 'req-h' }),
     );
 
-    const { store, activeTenant } = configureStore(tenant1);
-    TestBed.flushEffects();
+    const { store } = configureStore('tenant-1');
     store.loadProfile('customer-1');
     expect(store.customer()).not.toBeNull();
 
-    activeTenant.set({ id: 'tenant-2' });
-    TestBed.flushEffects();
+    tenantStore().switchTo(testTenant('tenant-2'));
 
     expect(store.customerId()).toBeNull();
     expect(store.customer()).toBeNull();

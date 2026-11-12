@@ -13,7 +13,7 @@ import { Subscription, catchError, EMPTY, tap } from 'rxjs';
 import { ApiError } from '../../../core/api/api.models';
 import { CreateCustomerPayload } from '../../../core/api/tenant-api.models';
 import { PermissionsService } from '../../../core/authz/permissions.service';
-import { TenantContextService } from '../../../core/tenant/tenant-context.service';
+import { onTenantChange } from '../../../core/state/tenant-scope';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
@@ -101,7 +101,6 @@ export class CustomersComponent {
   protected readonly store = inject(CustomersStore);
   private readonly api = inject(CustomersApiService);
   private readonly permissions = inject(PermissionsService);
-  private readonly tenantContext = inject(TenantContextService);
   private readonly destroyRef = inject(DestroyRef);
   private createSubscription: Subscription | null = null;
 
@@ -123,14 +122,7 @@ export class CustomersComponent {
   protected readonly canManage = computed(() => this.permissions.has('customers.manage'));
 
   constructor() {
-    let tenantInitialized = false;
-
-    effect(() => {
-      this.tenantContext.activeTenant();
-      if (!tenantInitialized) {
-        tenantInitialized = true;
-        return;
-      }
+    onTenantChange(() => {
       this.createSubscription?.unsubscribe();
       this.createSubscription = null;
       this.closeCreateDialog();

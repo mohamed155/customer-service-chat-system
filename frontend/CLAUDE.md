@@ -23,6 +23,12 @@
 - Page data comes from typed fixtures in `shared/fixtures/` (no mock HTTP services, no network calls). Charts are hand-built inline SVG — no chart library.
 - Taiga UI components are wrapped inside project components in `shared/components/` and `layout/` — no raw Taiga styling in feature pages.
 
+## Switching workspace (MOH-61, ADR-003 section 2)
+
+- The workspace switch happens in place, so nothing on screen may keep the old workspace's data. **Every store that holds workspace data ends with `withTenantScope({ initialState, reload })`** (`core/state/tenant-scope.ts`): it resets the store in the same call as the switch and reloads for the new workspace. `pnpm lint:tenant-scope` fails a store under `features/tenant/` or in root without it.
+- State a component holds itself (an open dialog, a picked row) uses `onTenantChange()` from the same file. Do not watch `selectActiveTenant` in an `effect()` for this: it runs a render late.
+- `/tenant/` requests of the old workspace are cancelled on a switch, and the realtime stream reconnects. Specs that need the active workspace to change use `provideTenantStore()` and `tenantStore()` (`core/state/testing/tenant-store.testing.ts`), not a fake `Store`.
+
 ## Notifications
 
 - Shared components: `shared/components/notification-bell/` (bell icon with badge, `count` input, `toggle` output), `shared/components/notification-list/` (scrollable list with relative timestamps, mark-read, load-more, empty/loading states; `items`/`loading`/`hasMore` inputs, `itemClick`/`markRead`/`loadMore` outputs).

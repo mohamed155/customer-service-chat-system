@@ -1,10 +1,14 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { RouterModule } from '@angular/router';
-import { Store } from '@ngrx/store';
 import { provideTaiga } from '@taiga-ui/core';
 import { of, Subject } from 'rxjs';
 import { APP_CONFIG } from '../../../core/config/app-config';
+import {
+  provideTenantStore,
+  tenantStore,
+  testTenant,
+} from '../../../core/state/testing/tenant-store.testing';
 import { Conversation } from '../../../core/api/tenant-api.models';
 import { ConversationsApiService } from './conversations-api.service';
 import { ConversationsComponent } from './conversations.component';
@@ -43,12 +47,10 @@ const MOCK_CONVERSATIONS: Conversation[] = [
 ];
 
 describe('ConversationsComponent', () => {
-  const activeTenant = signal<{ id: string } | null>({ id: 'tenant-1' });
   const apiList = vi.fn();
   const apiMembers = vi.fn();
 
   beforeEach(() => {
-    activeTenant.set({ id: 'tenant-1' });
     apiList.mockReset();
     apiMembers.mockReset();
     apiMembers.mockReturnValue(of({ data: [] }));
@@ -67,13 +69,14 @@ describe('ConversationsComponent', () => {
             ),
           },
         },
-        { provide: Store, useValue: { selectSignal: () => activeTenant } },
+        provideTenantStore(),
         {
           provide: APP_CONFIG,
           useValue: { apiBaseUrl: '/api/v1', production: false },
         },
       ],
     });
+    tenantStore().activate(testTenant('tenant-1'));
   });
 
   it('moves from pending to content', async () => {
@@ -164,8 +167,7 @@ describe('ConversationsComponent', () => {
         },
       }),
     );
-    activeTenant.set({ id: 'tenant-2' });
-    TestBed.flushEffects();
+    tenantStore().switchTo(testTenant('tenant-2'));
 
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -199,8 +201,7 @@ describe('ConversationsComponent', () => {
       subjects.push(s);
       return s.asObservable();
     });
-    activeTenant.set({ id: 'tenant-2' });
-    TestBed.flushEffects();
+    tenantStore().switchTo(testTenant('tenant-2'));
 
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -250,8 +251,7 @@ describe('ConversationsComponent', () => {
         },
       }),
     );
-    activeTenant.set({ id: 'tenant-2' });
-    TestBed.flushEffects();
+    tenantStore().switchTo(testTenant('tenant-2'));
 
     await vi.waitFor(() => {
       fixture.detectChanges();

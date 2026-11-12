@@ -1,12 +1,11 @@
-import { effect, inject, untracked } from '@angular/core';
-import { Store } from '@ngrx/store';
+import { inject } from '@angular/core';
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
 import { IntegrationListItem } from '../../../core/api/tenant-api.models';
-import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
 import { IntegrationsApiService } from './integrations-api.service';
+import { withTenantScope } from '../../../core/state/tenant-scope';
 
 export interface IntegrationsState {
   readonly items: IntegrationListItem[];
@@ -14,12 +13,14 @@ export interface IntegrationsState {
   readonly error: string | null;
 }
 
+const initialState: IntegrationsState = {
+  items: [],
+  loading: false,
+  error: null,
+};
+
 export const IntegrationsStore = signalStore(
-  withState<IntegrationsState>({
-    items: [],
-    loading: false,
-    error: null,
-  }),
+  withState<IntegrationsState>(initialState),
   withMethods((store, api = inject(IntegrationsApiService)) => {
     const load = rxMethod<void>(
       pipe(
@@ -53,17 +54,13 @@ export const IntegrationsStore = signalStore(
       },
     };
   }),
-  withHooks((store, globalStore = inject(Store, { optional: true })) => {
-    const activeTenant = globalStore?.selectSignal(selectActiveTenant) ?? (() => null);
-    return {
-      onInit(): void {
-        store.load();
-        effect(() => {
-          if (activeTenant()?.id) {
-            untracked(() => store.load());
-          }
-        });
-      },
-    };
+  withHooks((store) => ({
+    onInit(): void {
+      store.load();
+    },
+  })),
+  withTenantScope({
+    initialState,
+    reload: (store) => store.load(),
   }),
 );

@@ -620,8 +620,10 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
   for idempotent GETs.
 - Generated, typed API client from OpenAPI; no hand-written DTOs.
 - Realtime service wraps SSE/WebSocket with reconnect (exponential backoff + jitter) and resync.
-- Tenant switch = full state reset of tenant-scoped stores (meta-reducer), preventing stale data
-  from another tenant appearing on screen.
+- Tenant switch = full state reset of tenant-scoped state, preventing stale data from another
+  tenant appearing on screen: every store that holds workspace data uses `withTenantScope()`, the
+  HTTP layer cancels the old workspace's requests and the realtime stream reconnects (ADR-003,
+  section 2).
 - Performance: lazy routes, `@defer` blocks, virtual scrolling for inbox and message lists,
   image optimization.
 - i18n with RTL support (Arabic is a likely early market); dates/numbers localized.

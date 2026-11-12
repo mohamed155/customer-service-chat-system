@@ -34,6 +34,7 @@ import { SectionHeaderComponent } from '../../../shared/components/section-heade
 import { copyToClipboard } from '../../../shared/utils/clipboard';
 import { relativeTime } from '../../../shared/utils/relative-time';
 import { IntegrationDetailStore } from './integration-detail.store';
+import { onTenantChange } from '../../../core/state/tenant-scope';
 
 interface FormValues {
   readonly config: Record<string, string>;
@@ -244,6 +245,15 @@ export class IntegrationDetailComponent {
   );
 
   constructor() {
+    // The store is back to empty by now (it listens first); load the same integration for the
+    // new workspace.
+    onTenantChange(({ to }) => {
+      if (to === null) return;
+      const s = this.slug();
+      this.store.load(s);
+      this.store.loadFirstPageEvents(s);
+    });
+
     effect(() => {
       const s = this.slug();
       untracked(() => {

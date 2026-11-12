@@ -21,6 +21,7 @@ import { CurrentUserService } from '../../../core/tenant/current-user.service';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { Store } from '@ngrx/store';
 import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
+import { onTenantChange } from '../../../core/state/tenant-scope';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { AvailabilityDotComponent } from '../../../shared/components/availability-dot/availability-dot.component';
@@ -404,19 +405,13 @@ export class TeamListComponent {
   }
 
   constructor() {
-    let initialized = false;
-    let previousTenantId: string | null = null;
-    effect(() => {
-      const tenantId = this.activeTenant()?.id ?? null;
-      if (!initialized) {
-        initialized = true;
-        previousTenantId = tenantId;
-        return;
-      }
-
-      if (tenantId === previousTenantId) return;
-      previousTenantId = tenantId;
+    // What this page holds itself belongs to the old workspace too: an open dialog, a picked
+    // member, a result message.
+    onTenantChange(() => {
       this.closeInviteDialog();
+      this.resetTarget.set(null);
+      this.resetResult.set(null);
+      this.invitationResult.set(null);
     });
 
     effect(() => {
