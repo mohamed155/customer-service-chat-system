@@ -17,6 +17,7 @@
   - Loader-vs-app split: loader owns launcher + iframe lifecycle, Angular app owns chat UI
 - **CSP**: the dashboard document is served with `script-src 'self'` (`infra/Caddyfile`, enforced). No inline `<script>`, no inline event handlers (`onclick=`, `onload=`), no `eval`; scripts that must run before bootstrap go in a file (see `theme-init.js`). Production builds keep `optimization.styles.inlineCritical` off, because Angular's critical-CSS swap is an inline script. `'unsafe-inline'` is allowed on `style-src` only. `e2e/csp-enforcement.spec.ts` fails on any violation, and the mocked E2E suite runs under the policy.
 - Quality gates (run in `frontend/`): `pnpm ng build dashboard`, `pnpm ng test dashboard`, `pnpm ng build widget`, `pnpm build:widget-loader`, `pnpm lint`, `pnpm format:check` — all must pass.
+- **Coverage** (MOH-66): `pnpm test:coverage` runs both unit-test suites with coverage and fails when a number falls below `tools/coverage-baseline.json` (all four metrics for each app, plus lines for the dashboard's `core/` and for its stores; the target for those two is 80% of lines). The baseline only goes up: after adding tests, `pnpm test:coverage --update` raises it. CI uploads the HTML and lcov report as the `frontend-coverage` artifact.
 
 ## Frontend rules (from spec 003)
 

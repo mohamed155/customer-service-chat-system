@@ -20,7 +20,9 @@
     "test:i18n-check": "node --test tools/check-i18n.test.mjs",
     "lint:tenant-scope": "node tools/check-tenant-scope.mjs",
     "test:tenant-scope-check": "node --test tools/check-tenant-scope.test.mjs",
-    "test:lint-rules": "node --test tools/eslint-rules/feature-boundaries.test.mjs"
+    "test:lint-rules": "node --test tools/eslint-rules/feature-boundaries.test.mjs",
+    "test:coverage": "ng test dashboard --watch=false --configuration=coverage && ng test widget --watch=false --configuration=coverage && node tools/check-coverage.mjs",
+    "test:coverage-check": "node --test tools/check-coverage.test.mjs"
   },
   "dependencies": {
     "@angular/common": "^22.2.4",
@@ -56,6 +58,7 @@
     "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
+    "@vitest/coverage-v8": "4.1.11",
     "angular-eslint": "^22.6.0",
     "esbuild": "^0.28.2",
     "eslint": "^10.14.0",
