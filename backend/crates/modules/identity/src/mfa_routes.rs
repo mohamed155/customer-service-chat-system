@@ -80,8 +80,14 @@ pub struct RecoveryCodesResponse {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MfaStatusResponse {
+    /// The user has an active second factor.
     pub enrolled: bool,
     pub recovery_codes_remaining: i64,
+    /// A second factor is mandatory on this deployment (`AUTH_MFA_REQUIRED`).
+    pub required: bool,
+    /// The current session proved a second factor. When `required` is true and this is false, the
+    /// dashboard must send the user to set one up before anything else.
+    pub session_second_factor: bool,
 }
 
 /// Map a service error to the response the API returns for it. The wrong-code cases never say
@@ -295,7 +301,12 @@ async fn password_is_correct(
     ),
     security(("session_cookie" = [])),
 )]
-pub async fn status(State(pool): State<PgPool>, principal: Principal) -> Response {
+pub async fn status(
+    State(pool): State<PgPool>,
+    Extension(config): Extension<Arc<AppConfig>>,
+    principal: Principal,
+    claims: Option<Extension<session::SessionClaims>>,
+) -> Response {
     let enrolled = match mfa::is_enrolled(&pool, principal.user_id).await {
         Ok(v) => v,
         Err(e) => return ApiError::internal_error_from("Status read failed", e).into_response(),
@@ -310,8 +321,112 @@ pub async fn status(State(pool): State<PgPool>, principal: Principal) -> Respons
     Json(MfaStatusResponse {
         enrolled,
         recovery_codes_remaining: remaining,
+        required: config.auth_mfa_required,
+        // A request with no session claims came from the development header, which is trusted
+        // as it is.
+        session_second_factor: claims.is_none_or(|Extension(c)| c.has_second_factor()),
     })
     .into_response()
+}
+
+/// Prove a fresh code to approve a sensitive action.
+#[utoipa::path(
+    post,
+    path = "/auth/mfa/step-up",
+    tag = "auth",
+    operation_id = "auth_mfa_step_up",
+    summary = "Prove a second factor again for a sensitive action",
+    description = "Takes an authenticator code or a recovery code from a signed-in user, and on \
+                  success replaces the `app_session` cookie by a session whose second factor is \
+                  fresh for five minutes. Calls that need it answer `401` with the code \
+                  `mfa_step_up_required` until then. A code works once; wrong codes count toward \
+                  the lockout.",
+    request_body = VerifyRequest,
+    responses(
+        (status = 204, description = "Fresh. The session cookie is replaced."),
+        (status = 400, description = "Neither or both of `code` and `recoveryCode`.", body = kernel::ErrorEnvelope),
+        (status = 401, description = "Unauthenticated.", body = kernel::ErrorEnvelope),
+        (status = 422, description = "The code is not valid.", body = kernel::ErrorEnvelope),
+        (status = 429, description = "Too many attempts, or the second factor is locked.", body = kernel::ErrorEnvelope),
+    ),
+    security(("session_cookie" = [])),
+)]
+pub async fn step_up(
+    State(pool): State<PgPool>,
+    Extension(config): Extension<Arc<AppConfig>>,
+    principal: Principal,
+    claims: Option<Extension<session::SessionClaims>>,
+    ApiJson(payload): ApiJson<VerifyRequest>,
+) -> Response {
+    let credential = match (payload.code, payload.recovery_code) {
+        (Some(code), None) => mfa::Credential::Code(code),
+        (None, Some(code)) => mfa::Credential::RecoveryCode(code),
+        _ => {
+            return ApiError::validation_failed("Send either a code or a recovery code")
+                .into_response()
+        }
+    };
+    let keys = match keys(&pool, &config) {
+        Ok(k) => k,
+        Err(response) => return *response,
+    };
+    let now = chrono::Utc::now().timestamp().max(0) as u64;
+    let method = match mfa::verify(&pool, &keys, principal.user_id, &credential, now).await {
+        Ok(method) => method,
+        Err(error) => return error_response(error),
+    };
+    let (jwt, _, _) = match session::issue_session(
+        &config.auth_jwt_secret,
+        config.auth_session_ttl_seconds,
+        principal.user_id,
+        session::SessionAuth::second_factor(method.amr()),
+    ) {
+        Ok(issued) => issued,
+        Err(e) => {
+            return ApiError::internal_error_from("Session token issuance failed", e)
+                .into_response()
+        }
+    };
+    if let Some(Extension(old)) = claims {
+        revoke(&pool, principal.user_id, old.jti, old.exp).await;
+    }
+    (
+        StatusCode::NO_CONTENT,
+        [(
+            SET_COOKIE,
+            session::build_session_cookie(&jwt, config.auth_session_ttl_seconds),
+        )],
+    )
+        .into_response()
+}
+
+/// New recovery codes, replacing the old ones.
+#[utoipa::path(
+    post,
+    path = "/auth/mfa/recovery-codes",
+    tag = "auth",
+    operation_id = "auth_mfa_recovery_codes",
+    summary = "Replace the recovery codes",
+    description = "Issues ten new single-use recovery codes, shown once, and invalidates the old \
+                  ones. Needs a fresh second factor (`mfa_step_up_required`).",
+    responses(
+        (status = 200, description = "The new recovery codes, shown once.", body = RecoveryCodesResponse),
+        (status = 401, description = "Unauthenticated, or a fresh code is needed (`mfa_step_up_required`).", body = kernel::ErrorEnvelope),
+        (status = 409, description = "No active second factor.", body = kernel::ErrorEnvelope),
+    ),
+    security(("session_cookie" = [])),
+)]
+pub async fn regenerate_recovery_codes(
+    State(pool): State<PgPool>,
+    principal: Principal,
+) -> Response {
+    match mfa::regenerate_recovery_codes(&pool, principal.user_id).await {
+        Ok(codes) => Json(RecoveryCodesResponse {
+            recovery_codes: codes,
+        })
+        .into_response(),
+        Err(error) => error_response(error),
+    }
 }
 
 /// Stop a session id from working again (logout does the same).

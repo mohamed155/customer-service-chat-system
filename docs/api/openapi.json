@@ -3454,16 +3454,27 @@
       "MfaStatusResponse": {
         "properties": {
           "enrolled": {
+            "description": "The user has an active second factor.",
             "type": "boolean"
           },
           "recoveryCodesRemaining": {
             "format": "int64",
             "type": "integer"
+          },
+          "required": {
+            "description": "A second factor is mandatory on this deployment (`AUTH_MFA_REQUIRED`).",
+            "type": "boolean"
+          },
+          "sessionSecondFactor": {
+            "description": "The current session proved a second factor. When `required` is true and this is false, the\ndashboard must send the user to set one up before anything else.",
+            "type": "boolean"
           }
         },
         "required": [
           "enrolled",
-          "recoveryCodesRemaining"
+          "recoveryCodesRemaining",
+          "required",
+          "sessionSecondFactor"
         ],
         "type": "object"
       },
@@ -6439,6 +6450,53 @@
         ]
       }
     },
+    "/auth/mfa/recovery-codes": {
+      "post": {
+        "description": "Issues ten new single-use recovery codes, shown once, and invalidates the old ones. Needs a fresh second factor (`mfa_step_up_required`).",
+        "operationId": "auth_mfa_recovery_codes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodesResponse"
+                }
+              }
+            },
+            "description": "The new recovery codes, shown once."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthenticated, or a fresh code is needed (`mfa_step_up_required`)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No active second factor."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Replace the recovery codes",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/mfa/status": {
       "get": {
         "description": "Whether the signed-in user has an active factor, and how many recovery codes are left. Never returns a secret or a code.",
@@ -6471,6 +6529,76 @@
           }
         ],
         "summary": "Read the two-factor authentication status",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/mfa/step-up": {
+      "post": {
+        "description": "Takes an authenticator code or a recovery code from a signed-in user, and on success replaces the `app_session` cookie by a session whose second factor is fresh for five minutes. Calls that need it answer `401` with the code `mfa_step_up_required` until then. A code works once; wrong codes count toward the lockout.",
+        "operationId": "auth_mfa_step_up",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Fresh. The session cookie is replaced."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Neither or both of `code` and `recoveryCode`."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthenticated."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "The code is not valid."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too many attempts, or the second factor is locked."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Prove a second factor again for a sensitive action",
         "tags": [
           "auth"
         ]
@@ -8209,6 +8337,78 @@
           }
         ],
         "summary": "Record a platform tenant switch",
+        "tags": [
+          "platform-tenants"
+        ]
+      }
+    },
+    "/platform/users/{id}/mfa/reset": {
+      "post": {
+        "description": "Removes the user's second factor and recovery codes and ends all of their sessions; they sign in with their password and set up a new factor. You cannot reset your own. Needs a fresh second factor (`mfa_step_up_required`). Requires permission: platform.admin",
+        "operationId": "reset_user_mfa",
+        "parameters": [
+          {
+            "description": "The user's id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reset."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthenticated, or a fresh code is needed (`mfa_step_up_required`)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Insufficient permissions."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No such user."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "You cannot reset your own."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Reset a user's two-factor authentication",
         "tags": [
           "platform-tenants"
         ]
@@ -13865,6 +14065,78 @@
         "summary": "Update a tenant team member",
         "tags": [
           "members"
+        ]
+      }
+    },
+    "/tenant/members/{id}/mfa/reset": {
+      "post": {
+        "description": "Removes the member's second factor and recovery codes and ends all of their sessions; they sign in with their password and set up a new factor. Only for a member who belongs to this workspace alone and is not platform staff: for anyone else a platform administrator does it. You cannot reset your own. Needs a fresh second factor (`mfa_step_up_required`). Requires permission: owner.assign",
+        "operationId": "reset_member_mfa",
+        "parameters": [
+          {
+            "description": "The member's membership id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reset."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthenticated, or a fresh code is needed (`mfa_step_up_required`)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Insufficient permissions, or the user belongs to other workspaces or is platform staff."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No such member."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "You cannot reset your own."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Reset a member's two-factor authentication",
+        "tags": [
+          "tenant-members"
         ]
       }
     },

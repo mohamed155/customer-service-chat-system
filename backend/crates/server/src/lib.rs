@@ -28,6 +28,7 @@
 
 pub mod handlers;
 pub mod internal_error;
+pub mod mfa_admin;
 pub mod openapi;
 pub mod rate_limit;
 pub mod rate_limit_audit;

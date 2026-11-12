@@ -456,3 +456,39 @@ restored tenant must have its secrets entered again.
   `rewrap-keks`.
 - **Opening fails with "the key for this secret was destroyed"**: the tenant was deleted. That is
   the intended result.
+
+---
+
+## 8. A User Lost Their Authenticator (Reset Two-Factor Authentication)
+
+A user who has lost both their authenticator app and their recovery codes cannot sign in. Check
+who they are before you reset anything: a reset lets whoever knows the password sign in and set up
+a new authenticator.
+
+### Steps
+
+1. Confirm the person out of band (a call, a known contact), not from the email they sign in with.
+2. Sign in yourself and, if the dashboard asks, enter a code (a reset needs a code proven in the
+   last five minutes).
+3. Reset the factor:
+   - **Tenant owner**, for a member who belongs to no other workspace: the member's actions menu in
+     Team (with the dashboard screens, MOH-57), or `POST /api/v1/tenant/members/{membershipId}/mfa/reset`.
+   - **Platform administrator**, for anyone (a member of several workspaces, or platform staff):
+     `POST /api/v1/platform/users/{userId}/mfa/reset`.
+4. Tell the user to sign in with their password. They are held until they set up a new
+   authenticator and save the new recovery codes.
+
+### Expected outcome
+
+- The reset returns `204`; every session the user had stops working at once.
+- The audit log has `auth.mfa_reset` with you as the actor and the user as the resource (`by` says
+  `tenant` or `platform`).
+
+### When it fails
+
+- **`403` from a tenant owner**: the user belongs to other workspaces or is platform staff. Ask a
+  platform administrator.
+- **`422`**: you cannot reset your own. Use a recovery code, or ask someone else.
+- **`401 mfa_step_up_required`**: enter a code (`POST /api/v1/auth/mfa/step-up`) and try again.
+- **The user is locked out after wrong codes** (five in a row lock the second step for fifteen
+  minutes): wait, or reset the factor.

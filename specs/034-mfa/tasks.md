@@ -11,10 +11,14 @@
 - [x] T006a Review fixes: enrolment needs the password; sessions that skipped the second factor stop working once the user enrols
 - [x] T007 ADR-005 section 6 and current state, threat model, OpenAPI document and generated types
 
-## Part 2: dashboard (MOH-57)
+## Part 2: enforcement, step-up, regeneration, admin reset (MOH-34)
 
-- [ ] Enrol page with QR code, confirm, recovery codes; second step on sign-in; status
+- [x] T010 `AUTH_MFA_REQUIRED` (on by default in production and staging) and the `enforce_second_factor` layer on platform and tenant routes
+- [x] T011 `require_step_up` on role changes, credential and integration and tool changes, switching tenant; `POST /auth/mfa/step-up`
+- [x] T012 `POST /auth/mfa/recovery-codes` (replace, needs step-up); `required` and `sessionSecondFactor` in the status
+- [x] T013 Reset: tenant owner (single-workspace, non-staff members) and platform administrator; `users.sessions_valid_after`; `auth.mfa_reset`
+- [x] T014 Integration tests (9) and docs
 
-## Part 3: enforcement, step-up, admin reset (MOH-34)
+## Part 3: dashboard (MOH-57)
 
-- [ ] Require a second factor for every account; step-up (5 minutes) for sensitive actions; admin reset with audit
+- [ ] Sign-in second step, enrolment, recovery codes shown once, step-up prompt and retry, regeneration, reset buttons

@@ -84,6 +84,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/mfa/recovery-codes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Replace the recovery codes
+     * @description Issues ten new single-use recovery codes, shown once, and invalidates the old ones. Needs a fresh second factor (`mfa_step_up_required`).
+     */
+    post: operations['auth_mfa_recovery_codes'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/mfa/status': {
     parameters: {
       query?: never;
@@ -98,6 +118,26 @@ export interface paths {
     get: operations['auth_mfa_status'];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/mfa/step-up': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Prove a second factor again for a sensitive action
+     * @description Takes an authenticator code or a recovery code from a signed-in user, and on success replaces the `app_session` cookie by a session whose second factor is fresh for five minutes. Calls that need it answer `401` with the code `mfa_step_up_required` until then. A code works once; wrong codes count toward the lockout.
+     */
+    post: operations['auth_mfa_step_up'];
     delete?: never;
     options?: never;
     head?: never;
@@ -521,6 +561,26 @@ export interface paths {
      * @description Record that the current platform user is switching to a different platform tenant context. Returns the target tenant summary. Requires permission: platform.tenants.switch
      */
     post: operations['switch_platform_tenant'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/platform/users/{id}/mfa/reset': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reset a user's two-factor authentication
+     * @description Removes the user's second factor and recovery codes and ends all of their sessions; they sign in with their password and set up a new factor. You cannot reset your own. Needs a fresh second factor (`mfa_step_up_required`). Requires permission: platform.admin
+     */
+    post: operations['reset_user_mfa'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1557,6 +1617,26 @@ export interface paths {
      * @description Update the role or status of a single team membership. Exactly one of `role` or `status` must be supplied. Role rank rules (actor must outrank target) and the last-active-Owner guard apply. Requires permission: members.manage
      */
     patch: operations['update_team_member'];
+    trace?: never;
+  };
+  '/tenant/members/{id}/mfa/reset': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reset a member's two-factor authentication
+     * @description Removes the member's second factor and recovery codes and ends all of their sessions; they sign in with their password and set up a new factor. Only for a member who belongs to this workspace alone and is not platform staff: for anyone else a platform administrator does it. You cannot reset your own. Needs a fresh second factor (`mfa_step_up_required`). Requires permission: owner.assign
+     */
+    post: operations['reset_member_mfa'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/tenant/members/{membershipId}/skills': {
@@ -3021,9 +3101,17 @@ export interface components {
       mfaRequired: boolean;
     };
     MfaStatusResponse: {
+      /** @description The user has an active second factor. */
       enrolled: boolean;
       /** Format: int64 */
       recoveryCodesRemaining: number;
+      /** @description A second factor is mandatory on this deployment (`AUTH_MFA_REQUIRED`). */
+      required: boolean;
+      /**
+       * @description The current session proved a second factor. When `required` is true and this is false, the
+       *     dashboard must send the user to set one up before anything else.
+       */
+      sessionSecondFactor: boolean;
     };
     NotificationActorDto: {
       displayName: string;
@@ -4061,6 +4149,44 @@ export interface operations {
       };
     };
   };
+  auth_mfa_recovery_codes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The new recovery codes, shown once. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RecoveryCodesResponse'];
+        };
+      };
+      /** @description Unauthenticated, or a fresh code is needed (`mfa_step_up_required`). */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description No active second factor. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+    };
+  };
   auth_mfa_status: {
     parameters: {
       query?: never;
@@ -4081,6 +4207,64 @@ export interface operations {
       };
       /** @description Unauthenticated. */
       401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+    };
+  };
+  auth_mfa_step_up: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VerifyRequest'];
+      };
+    };
+    responses: {
+      /** @description Fresh. The session cookie is replaced. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Neither or both of `code` and `recoveryCode`. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Unauthenticated. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description The code is not valid. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Too many attempts, or the second factor is locked. */
+      429: {
         headers: {
           [name: string]: unknown;
         };
@@ -5512,6 +5696,63 @@ export interface operations {
       };
       /** @description Internal server error. */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+    };
+  };
+  reset_user_mfa: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The user's id. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reset. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Unauthenticated, or a fresh code is needed (`mfa_step_up_required`). */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Insufficient permissions. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description No such user. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description You cannot reset your own. */
+      422: {
         headers: {
           [name: string]: unknown;
         };
@@ -9794,6 +10035,63 @@ export interface operations {
       };
       /** @description Internal server error. */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+    };
+  };
+  reset_member_mfa: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The member's membership id. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Reset. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Unauthenticated, or a fresh code is needed (`mfa_step_up_required`). */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Insufficient permissions, or the user belongs to other workspaces or is platform staff. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description No such member. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description You cannot reset your own. */
+      422: {
         headers: {
           [name: string]: unknown;
         };

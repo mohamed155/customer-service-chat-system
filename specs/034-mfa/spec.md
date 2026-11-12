@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-11
 
-**Status**: In progress (part 1 of 3: the engine and the sign-in flow)
+**Status**: In progress (parts 1 and 2 of 3 are the backend; part 3 is the dashboard)
 
 **Input**: MOH-34, ADR-005 phase M1, threat model risk 4 (row 4.11 E).
 
@@ -25,11 +25,12 @@ There is no second factor. A session is an 8-hour HS256 JWT in the `app_session`
 | Part | Delivers | Issue |
 | -- | -- | -- |
 | 1 | The TOTP engine, enrolment, the two-step sign-in, recovery codes, lockout, audit | MOH-56 |
-| 2 | The dashboard: enrol, sign in with a code, recovery codes, status | MOH-57 |
-| 3 | Enforcement for everyone, step-up for sensitive actions, admin reset | MOH-34 |
+| 2 | Enforcement for everyone, step-up for sensitive actions, recovery-code regeneration, admin reset | MOH-34 |
+| 3 | The dashboard: enrol, sign in with a code, step-up prompt, recovery codes, reset buttons | MOH-57 |
 
-Enforcement ("mandatory") is part 3 on purpose: it cannot ship before part 2, or nobody could
-sign in. Until then the second step applies to users who have enrolled.
+Enforcement is behind `AUTH_MFA_REQUIRED` (on by default in production and staging, off in
+development and tests). It must not be turned on in a deployed environment before part 3, or nobody
+could sign in; no environment is deployed yet.
 
 ## Requirements (part 1)
 
@@ -60,9 +61,27 @@ sign in. Until then the second step applies to users who have enrolled.
 - **FR-008** Challenge issued, enrolment, success, failure, recovery-code use and lockout are
   audited (`auth.mfa_*`), with no secret, code or hash in the row.
 
+## Requirements (part 2)
+
+- **FR-011** With `AUTH_MFA_REQUIRED` on, a session without a second factor is refused on every
+  platform and tenant route with `403` and the code `mfa_enrolment_required`. The profile, the MFA
+  routes and sign-out stay open so the user can set one up.
+- **FR-012** Sensitive actions need a second factor proven in the last five minutes, else `401`
+  with the code `mfa_step_up_required`: member role changes, AI credential changes (tenant and
+  platform), integration connect, update and disconnect, tool create, update and delete, switching
+  into a tenant, replacing recovery codes, and resetting someone's factor. `POST /auth/mfa/step-up`
+  proves a code and replaces the session with a fresh one.
+- **FR-013** A signed-in user can replace their recovery codes (needs step-up); the old ones stop
+  working.
+- **FR-014** A tenant owner (`owner.assign`) can reset a member's factor only if that member
+  belongs to no other workspace and is not platform staff; a platform administrator
+  (`platform.admin`) can reset anyone. Nobody resets their own. A reset removes the factor and the
+  recovery codes, ends every session the user has (`users.sessions_valid_after`), and writes
+  `auth.mfa_reset` naming who did it.
+
 ## Non-goals (part 1)
 
-Enforcement, step-up and admin reset (part 3); the dashboard (part 2); WebAuthn (ADR-005 M2).
+Enforcement, step-up and admin reset (part 2); the dashboard (part 3); WebAuthn (ADR-005 M2).
 
 ## Tenancy and security impact
 
@@ -74,7 +93,7 @@ reveals whether the code, the recovery code or the account was the problem.
 ## Acceptance
 
 See `tasks.md`. Tests: `crates/modules/identity` (TOTP and session unit tests, including the RFC
-4226 and RFC 6238 vectors) and `crates/server/tests/mfa.rs` (18 tests against PostgreSQL).
+4226 and RFC 6238 vectors) and `crates/server/tests/mfa.rs` (20 tests) and `crates/server/tests/mfa_policy.rs` (9 tests) against PostgreSQL.
 
 ## Known gaps (recorded, not done in part 1)
 

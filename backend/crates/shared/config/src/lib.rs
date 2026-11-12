@@ -108,6 +108,10 @@ pub struct AppConfig {
     /// The root key before a rotation (`APP_SECRETS_ROOT_KEY_PREVIOUS`), kept only to unwrap keys
     /// it still wraps until `server secrets rewrap-keks` has moved them.
     pub secrets_root_key_previous: Option<String>,
+    /// Whether every account must use a second factor (`AUTH_MFA_REQUIRED`): sessions without one
+    /// are refused (`mfa_enrolment_required`) and sensitive actions need a fresh code
+    /// (`mfa_step_up_required`). On by default in production and staging.
+    pub auth_mfa_required: bool,
     pub ai_openai_base_url: Option<String>,
     pub ai_anthropic_base_url: Option<String>,
     pub ai_gemini_base_url: Option<String>,
@@ -170,6 +174,7 @@ impl fmt::Debug for AppConfig {
             .field("integration_secrets_key", &integration_secrets_key)
             .field("secrets_root_key", &secrets_root_key)
             .field("secrets_root_key_previous", &secrets_root_key_previous)
+            .field("auth_mfa_required", &self.auth_mfa_required)
             .field("ai_openai_base_url", &self.ai_openai_base_url)
             .field("ai_anthropic_base_url", &self.ai_anthropic_base_url)
             .field("ai_gemini_base_url", &self.ai_gemini_base_url)
@@ -410,6 +415,20 @@ impl AppConfig {
             }
             Err(_) => None,
         };
+        let auth_mfa_required = match env::var("AUTH_MFA_REQUIRED") {
+            Ok(v) => match v.trim().to_ascii_lowercase().as_str() {
+                "true" | "1" => true,
+                "false" | "0" => false,
+                _ => {
+                    return Err(ConfigError(
+                        "AUTH_MFA_REQUIRED must be true or false".into(),
+                    ))
+                }
+            },
+            // Mandatory where real accounts live; off in development and tests, where sessions
+            // come from a script or the dev header.
+            Err(_) => matches!(environment, Environment::Production | Environment::Staging),
+        };
         let ai_openai_base_url = env::var("APP_AI_OPENAI_BASE_URL").ok();
         let ai_anthropic_base_url = env::var("APP_AI_ANTHROPIC_BASE_URL").ok();
         let ai_gemini_base_url = env::var("APP_AI_GEMINI_BASE_URL").ok();
@@ -503,6 +522,7 @@ impl AppConfig {
             integration_secrets_key,
             secrets_root_key,
             secrets_root_key_previous,
+            auth_mfa_required,
             ai_openai_base_url,
             ai_anthropic_base_url,
             ai_gemini_base_url,
