@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Subject, of, throwError } from 'rxjs';
 import { Customer, TenantSummary } from '../../../core/api/tenant-api.models';
 import { provideTenantStore, tenantStore } from '../../../core/state/testing/tenant-store.testing';
-import { CustomersApiService } from './customers-api.service';
+import { CustomersApiService } from '../../../core/api/customers-api.service';
 import { CustomersStore } from './customers.store';
 
 const customer = (id: string, displayName: string): Customer => ({

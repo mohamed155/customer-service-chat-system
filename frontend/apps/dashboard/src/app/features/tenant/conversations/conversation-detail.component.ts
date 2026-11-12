@@ -15,7 +15,7 @@ import {
 } from '../../../shared/components/select-filter/select-filter.component';
 import { SatisfactionBadgeComponent } from '../../../shared/components/satisfaction-badge/satisfaction-badge.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
-import { EscalationBannerComponent } from '../escalations/escalation-banner.component';
+import { EscalationRoutingBannerComponent } from '../../../shared/components/escalation-routing-banner/escalation-routing-banner.component';
 import { AiHandlingBannerComponent } from './ai-handling-banner.component';
 import { ConversationsApiService } from './conversations-api.service';
 import { ConversationDetailStore } from './conversation-detail.store';
@@ -41,7 +41,7 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
     EmptyStateComponent,
     AiHandlingBannerComponent,
     ConversationSummaryComponent,
-    EscalationBannerComponent,
+    EscalationRoutingBannerComponent,
     LoadingStateComponent,
     SatisfactionBadgeComponent,
     SelectFilterComponent,

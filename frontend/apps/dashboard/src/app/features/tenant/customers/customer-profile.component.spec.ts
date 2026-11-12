@@ -11,7 +11,7 @@ import { ApiError } from '../../../core/api/api.models';
 import { ConversationSummary, CustomerDetail } from '../../../core/api/tenant-api.models';
 import { CustomerProfileComponent } from './customer-profile.component';
 import { CustomerProfileStore } from './customer-profile.store';
-import { CustomersApiService } from './customers-api.service';
+import { CustomersApiService } from '../../../core/api/customers-api.service';
 
 const buildCustomer = (overrides: Partial<CustomerDetail> = {}): CustomerDetail => ({
   id: 'customer-1',

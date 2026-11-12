@@ -1,8 +1,8 @@
 import { HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
-import { ApiListQuery, ApiResponse, PaginatedResponse } from '../../../core/api/api.models';
-import { ApiService } from '../../../core/api/api.service';
+import { ApiListQuery, ApiResponse, PaginatedResponse } from './api.models';
+import { ApiService } from './api.service';
 import {
   ConversationSummary,
   conversationSummaryFromWire,
@@ -17,7 +17,7 @@ import {
   CustomerWire,
   UpdateCustomerPayload,
   updatePayloadToWire,
-} from '../../../core/api/tenant-api.models';
+} from './tenant-api.models';
 
 interface CustomerListWireResponse {
   readonly data: CustomerWire[];

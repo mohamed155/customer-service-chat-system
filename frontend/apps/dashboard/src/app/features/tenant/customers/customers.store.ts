@@ -12,7 +12,7 @@ import { catchError, debounceTime, distinctUntilChanged, EMPTY, pipe, switchMap,
 import { ApiError } from '../../../core/api/api.models';
 import { Customer } from '../../../core/api/tenant-api.models';
 import { withTenantScope } from '../../../core/state/tenant-scope';
-import { CustomersApiService } from './customers-api.service';
+import { CustomersApiService } from '../../../core/api/customers-api.service';
 
 type CustomersStatus = 'pending' | 'loading' | 'success' | 'empty' | 'error';
 

@@ -5,6 +5,7 @@
 - Layers inside `apps/dashboard/src/app/`: `core/` (singletons, no feature deps), `shared/` (reusable, no business logic), `layout/`, `features/{auth,platform,tenant}` (lazy route areas), `design-system/` (`--app-*` tokens, light/dark via `data-theme` + Taiga `tuiTheme`).
 - State: global cross-feature → NgRx Store (`appUi` slice: themeMode/sidebarCollapsed); feature-local → NgRx SignalStore; component-temporary → `signal()`. Never duplicate state across mechanisms. Theme persists to localStorage; sidebar does not.
 - HTTP: typed `ApiResponse<T>`/`ApiError`/`PaginatedResponse<T>`/`ApiListQuery` aligned with `specs/001-ai-customer-service-platform/contracts/rest-api.md` (cursor pagination, error envelope, `X-Request-Id`). Functional interceptors only. No fake auth logic.
+- **Module boundaries** (`local/feature-boundaries`, `tools/eslint-rules/`): a feature (`features/tenant/<area>`, `features/platform/<area>`, `features/auth`, ...) never imports another feature; what two features need moves to `shared/` or `core/` (an API service two features call lives in `core/api/`). Presentational code (`shared/`, `core/ui/`) never imports a store, API service or facade. The area route files (`tenant.routes.ts`) may import their own area's features.
 - Route paths come from `APP_PATHS` constants in `core/router` — no string literals in features.
 - `apps/widget` is a standalone Angular application for the embeddable website chat widget:
   - Standalone components, OnPush, signals

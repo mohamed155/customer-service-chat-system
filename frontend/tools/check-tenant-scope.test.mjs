@@ -29,34 +29,15 @@ test('a store that uses withTenantScope passes', () => {
   assert.deepEqual(problems, []);
 });
 
-test('a root-provided store anywhere is held to the same rule', () => {
-  const problems = check([
-    ...exemptFiles(),
-    {
-      path: `${app}/core/notifications/n.store.ts`,
-      source: "signalStore({ providedIn: 'root' }, withState({}))",
-    },
-  ]);
-  assert.equal(problems.length, 1);
-});
-
-test('a root-provided store is found whichever quotes it uses', () => {
-  const problems = check([
-    ...exemptFiles(),
-    {
-      path: `${app}/core/x/x.store.ts`,
-      source: 'signalStore({ providedIn: "root" }, withState({}))',
-    },
-  ]);
-  assert.equal(problems.length, 1);
-});
-
-test('a component-provided store outside features/tenant is not covered', () => {
-  const problems = check([
-    ...exemptFiles(),
-    { path: `${app}/layout/app-shell/layout.store.ts`, source: 'signalStore(withState({}))' },
-  ]);
-  assert.deepEqual(problems, []);
+test('a store anywhere in the dashboard is held to the same rule', () => {
+  for (const path of [
+    `${app}/core/notifications/n.store.ts`,
+    `${app}/core/routed-page/r.store.ts`,
+    `${app}/shared/s.store.ts`,
+  ]) {
+    const problems = check([...exemptFiles(), { path, source: 'signalStore(withState({}))' }]);
+    assert.equal(problems.length, 1, path);
+  }
 });
 
 test('spec files are ignored', () => {

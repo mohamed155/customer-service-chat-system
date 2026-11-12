@@ -9,10 +9,7 @@ import {
   TenantInvitation,
   CreateInvitationPayload,
   CreateInvitationResponse,
-  InvitationPreview,
-  AcceptInvitationRequest,
   PatchMemberPayload,
-  MeResponse,
   InvitationDeliveryResponse,
   Skill,
 } from '../../../core/api/tenant-api.models';
@@ -67,16 +64,5 @@ export class TeamApiService {
 
   setMemberSkills(membershipId: string, skillIds: string[]): Observable<ApiResponse<void>> {
     return this.api.put<void>(`tenant/members/${membershipId}/skills`, { skillIds });
-  }
-
-  previewInvitation(token: string): Observable<ApiResponse<InvitationPreview>> {
-    return this.api.get<InvitationPreview>(`invitations/${token}`);
-  }
-
-  acceptInvitation(
-    token: string,
-    payload: AcceptInvitationRequest,
-  ): Observable<ApiResponse<MeResponse>> {
-    return this.api.post<MeResponse>(`invitations/${token}/accept`, payload);
   }
 }

@@ -29,7 +29,7 @@ import {
   BadgeTone,
   StatusBadgeComponent,
 } from '../../../shared/components/status-badge/status-badge.component';
-import { CustomersApiService } from './customers-api.service';
+import { CustomersApiService } from '../../../core/api/customers-api.service';
 import { CustomerDialogComponent } from './customer-dialog.component';
 import { CustomerProfileStore } from './customer-profile.store';
 

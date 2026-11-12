@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, of, throwError } from 'rxjs';
-import { ApiError } from '../../../core/api/api.models';
-import { ApiService } from '../../../core/api/api.service';
+import { ApiError } from './api.models';
+import { ApiService } from './api.service';
 import {
   ConversationSummaryWire,
   CreateCustomerPayload,
@@ -10,7 +10,7 @@ import {
   conversationSummaryFromWire,
   customerDetailFromWire,
   customerFromWire,
-} from '../../../core/api/tenant-api.models';
+} from './tenant-api.models';
 import { CustomersApiService } from './customers-api.service';
 
 // apiError helper removed - unused

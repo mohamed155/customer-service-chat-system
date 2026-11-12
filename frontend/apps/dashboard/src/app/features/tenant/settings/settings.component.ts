@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { Store } from '@ngrx/store';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
-import { PAGE_ROUTE, RoutedPageStore } from '../routed-page.store';
+import { PAGE_ROUTE, RoutedPageStore } from '../../../core/routed-page/routed-page.store';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';

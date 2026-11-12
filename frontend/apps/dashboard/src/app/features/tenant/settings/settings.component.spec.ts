@@ -3,7 +3,10 @@ import { TestBed } from '@angular/core/testing';
 import { provideMockStore } from '@ngrx/store/testing';
 import { provideTaiga } from '@taiga-ui/core';
 import { of, throwError } from 'rxjs';
-import { PagePayload, RoutedPageDataService } from '../routed-page-data.service';
+import {
+  PagePayload,
+  RoutedPageDataService,
+} from '../../../core/routed-page/routed-page-data.service';
 import { SettingsComponent } from './settings.component';
 
 describe('SettingsComponent', () => {

@@ -1,5 +1,6 @@
 import angular from 'angular-eslint';
 import tseslint from 'typescript-eslint';
+import featureBoundaries from './tools/eslint-rules/feature-boundaries.mjs';
 
 export default tseslint.config(
   {
@@ -54,5 +55,12 @@ export default tseslint.config(
         { patterns: ['**/features/**', '**/layout/**', '**/core/state/**'] },
       ],
     },
+  },
+  {
+    // Module boundaries (MOH-62): features do not import each other; presentational code does not
+    // import stores or API services. See tools/eslint-rules/feature-boundaries.mjs.
+    files: ['apps/dashboard/src/app/**/*.ts'],
+    plugins: { local: featureBoundaries },
+    rules: { 'local/feature-boundaries': 'error' },
   },
 );

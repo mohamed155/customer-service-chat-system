@@ -11,8 +11,8 @@ import {
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
-import { selectActiveTenant } from '../../core/state/tenant-context.feature';
-import { withTenantScope } from '../../core/state/tenant-scope';
+import { selectActiveTenant } from '../state/tenant-context.feature';
+import { withTenantScope } from '../state/tenant-scope';
 import { PAGE_ROUTE, PagePayload, RoutedPageDataService } from './routed-page-data.service';
 
 export { PAGE_ROUTE };

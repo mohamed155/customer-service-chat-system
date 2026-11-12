@@ -5,7 +5,7 @@ import { DashboardCardComponent } from '../../../shared/components/dashboard-car
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { EscalationBannerComponent } from '../../../shared/components/ai/escalation-banner/escalation-banner.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
-import { PAGE_ROUTE, RoutedPageStore } from '../routed-page.store';
+import { PAGE_ROUTE, RoutedPageStore } from '../../../core/routed-page/routed-page.store';
 import { MetricCardComponent } from '../../../shared/components/metric-card/metric-card.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';

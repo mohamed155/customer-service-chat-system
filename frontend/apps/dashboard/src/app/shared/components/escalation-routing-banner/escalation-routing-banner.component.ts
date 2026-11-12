@@ -2,8 +2,8 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { Escalation } from '../../../core/api/tenant-api.models';
 
 @Component({
-  selector: 'app-escalation-banner',
-  templateUrl: './escalation-banner.component.html',
+  selector: 'app-escalation-routing-banner',
+  templateUrl: './escalation-routing-banner.component.html',
   styles: [
     `
       .banner {
@@ -27,7 +27,7 @@ import { Escalation } from '../../../core/api/tenant-api.models';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class EscalationBannerComponent {
+export class EscalationRoutingBannerComponent {
   readonly escalation = input<Escalation | null>(null);
 
   routingReasonLabel(reason?: string): string {

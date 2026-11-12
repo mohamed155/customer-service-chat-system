@@ -3,10 +3,8 @@ import { firstValueFrom, of, throwError } from 'rxjs';
 import { ApiResponse, PaginatedResponse } from '../../../core/api/api.models';
 import { ApiService } from '../../../core/api/api.service';
 import {
-  AcceptInvitationRequest,
   CreateInvitationPayload,
   CreateInvitationResponse,
-  InvitationPreview,
   PatchMemberPayload,
   TeamMember,
   TenantInvitation,
@@ -34,14 +32,6 @@ describe('TeamApiService', () => {
     emailDeliveryStatus: 'unconfigured',
     createdAt: '2026-01-01T00:00:00Z',
     expiresAt: '2026-02-01T00:00:00Z',
-  };
-
-  const mockPreview: InvitationPreview = {
-    tenantName: 'Acme Corp',
-    email: 'user@acme.com',
-    role: 'agent',
-    expiresAt: '2026-02-01T00:00:00Z',
-    accountExists: false,
   };
 
   beforeEach(() => {
@@ -163,17 +153,6 @@ describe('TeamApiService', () => {
     });
   });
 
-  describe('previewInvitation', () => {
-    it('calls api.get with the invitation token', async () => {
-      api.get.mockReturnValue(of({ data: mockPreview }));
-
-      const result = await firstValueFrom(service.previewInvitation('token-123'));
-
-      expect(api.get).toHaveBeenCalledWith('invitations/token-123');
-      expect(result.data).toEqual(mockPreview);
-    });
-  });
-
   describe('getSkills', () => {
     it('calls api.get with tenant/skills', async () => {
       const skills: Skill[] = [
@@ -234,29 +213,6 @@ describe('TeamApiService', () => {
         skillIds: ['s-1', 's-2'],
       });
       expect(result.data).toBeUndefined();
-    });
-  });
-
-  describe('acceptInvitation', () => {
-    it('calls api.post with the token and payload', async () => {
-      const payload: AcceptInvitationRequest = { displayName: 'Alice', password: 'secret123' };
-      api.post.mockReturnValue(
-        of({
-          data: {
-            id: 'u-1',
-            email: 'alice@test.com',
-            displayName: 'Alice',
-            platformRole: null,
-            platformPermissions: [],
-            staffTenantPermissions: null,
-            memberships: [],
-          },
-        }),
-      );
-
-      await firstValueFrom(service.acceptInvitation('token-123', payload));
-
-      expect(api.post).toHaveBeenCalledWith('invitations/token-123/accept', payload);
     });
   });
 });
