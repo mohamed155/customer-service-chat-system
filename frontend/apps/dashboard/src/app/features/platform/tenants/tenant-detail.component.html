@@ -42,6 +42,9 @@
         description="We couldn't load this tenant. Please try again."
       >
         <button type="button" class="primary-button" (click)="load()">Try again</button>
+        @if (err.requestId; as id) {
+          <app-error-reference [requestId]="id" />
+        }
       </app-empty-state>
     </div>
   } @else if (tenant(); as t) {

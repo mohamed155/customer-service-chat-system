@@ -30,6 +30,7 @@ import { FormFieldComponent } from '../../../shared/components/form-field/form-f
 import { IconButtonComponent } from '../../../shared/components/icon-button/icon-button.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
 import { ApiError } from '../../../core/api/api.models';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 
 export type CustomerDialogMode = 'create' | 'edit';
 
@@ -116,6 +117,7 @@ const CHANNEL_LABELS: Record<string, string> = {
 @Component({
   selector: 'app-customer-dialog',
   imports: [
+    ErrorReferenceComponent,
     ButtonComponent,
     DialogShellComponent,
     FormFieldComponent,

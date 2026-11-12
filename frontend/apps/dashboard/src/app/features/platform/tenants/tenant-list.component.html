@@ -41,6 +41,9 @@
       description="We couldn't load the tenants. Please try again."
     >
       <button type="button" class="primary-button" (click)="retry()">Try again</button>
+      @if (store.error()?.requestId; as id) {
+        <app-error-reference [requestId]="id" />
+      }
     </app-empty-state>
   } @else if (store.items().length === 0 && (searchInput() || statusFilter())) {
     <app-empty-state

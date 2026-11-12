@@ -20,10 +20,12 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { TenantsStore } from './tenants.store';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 
 @Component({
   selector: 'app-tenant-detail',
   imports: [
+    ErrorReferenceComponent,
     DatePipe,
     RouterLink,
     PageContainerComponent,

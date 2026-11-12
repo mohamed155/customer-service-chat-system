@@ -271,4 +271,45 @@ describe('HTTP interceptors', () => {
       expect(dispatch).not.toHaveBeenCalled();
     });
   });
+  describe('request reference (MOH-64)', () => {
+    it('hands the request ID of a failed call to the notification', async () => {
+      configure({
+        tenantContext: {
+          activeTenant: { id: 'tenant-1', name: 'T', slug: 't', status: 'active' },
+          status: 'idle',
+        },
+      });
+      const notifications = TestBed.inject(ApiErrorNotificationService);
+      const promise = firstValueFrom(
+        TestBed.inject(HttpClient).get('/api/v1/tenant', {
+          headers: { 'X-Tenant-ID': 'tenant-1' },
+        }),
+      ).catch((error: ApiError) => error);
+
+      TestBed.inject(HttpTestingController)
+        .expectOne('/api/v1/tenant')
+        .flush(
+          { error: { code: 'unauthorized', message: 'raw', request_id: 'req_0123' } },
+          { status: 403, statusText: 'Forbidden' },
+        );
+
+      expect(await promise).toMatchObject({ requestId: 'req_0123' });
+      expect(notifications.requestId()).toBe('req_0123');
+    });
+
+    it('keeps the ID the call was sent with when the network fails', async () => {
+      configure();
+      const promise = firstValueFrom(
+        TestBed.inject(HttpClient).get('/api/v1/tenant/members', {
+          headers: { 'X-Request-ID': 'req_sent' },
+        }),
+      ).catch((error: ApiError) => error);
+
+      TestBed.inject(HttpTestingController)
+        .expectOne('/api/v1/tenant/members')
+        .error(new ProgressEvent('error'), { status: 0 });
+
+      expect(await promise).toMatchObject({ code: 'network_error', requestId: 'req_sent' });
+    });
+  });
 });

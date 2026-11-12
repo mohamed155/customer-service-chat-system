@@ -4,4 +4,7 @@
   [attr.aria-live]="tone() === 'error' ? 'assertive' : 'polite'"
 >
   <ng-content />
+  @if (tone() === 'error' && requestId(); as id) {
+    <app-error-reference [requestId]="id" />
+  }
 </p>

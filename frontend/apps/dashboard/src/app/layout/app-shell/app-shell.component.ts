@@ -8,10 +8,18 @@ import { BreadcrumbComponent } from '../breadcrumb/breadcrumb.component';
 import { SidebarComponent } from '../sidebar/sidebar.component';
 import { TopbarComponent } from '../topbar/topbar.component';
 import { LayoutStore } from './layout.store';
+import { ErrorReferenceComponent } from '../../shared/components/error-reference/error-reference.component';
 
 @Component({
   selector: 'app-shell',
-  imports: [BreadcrumbComponent, RouterOutlet, SidebarComponent, TopbarComponent, TuiIcon],
+  imports: [
+    BreadcrumbComponent,
+    ErrorReferenceComponent,
+    RouterOutlet,
+    SidebarComponent,
+    TopbarComponent,
+    TuiIcon,
+  ],
   providers: [LayoutStore],
   templateUrl: './app-shell.component.html',
   styles: [
@@ -101,6 +109,7 @@ export class AppShellComponent {
   private readonly errorNotifications = inject(ApiErrorNotificationService);
   protected readonly collapsed = this.store.selectSignal(selectSidebarCollapsed);
   protected readonly errorMessage = this.errorNotifications.message;
+  protected readonly errorRequestId = this.errorNotifications.requestId;
   protected readonly isMobile = this.layoutStore.isMobile;
   protected readonly drawerOpen = this.layoutStore.drawerOpen;
 

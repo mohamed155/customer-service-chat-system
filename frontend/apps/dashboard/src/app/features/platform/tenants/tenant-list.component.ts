@@ -10,10 +10,12 @@ import { LoadingStateComponent } from '../../../shared/components/loading-state/
 import { SearchInputComponent } from '../../../shared/components/search-input/search-input.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { TenantStatusFilter, TenantsStore } from './tenants.store';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 
 @Component({
   selector: 'app-tenant-list',
   imports: [
+    ErrorReferenceComponent,
     RouterLink,
     PageContainerComponent,
     PageHeaderComponent,

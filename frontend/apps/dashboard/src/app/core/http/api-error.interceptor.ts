@@ -7,6 +7,7 @@ import { APP_CONFIG } from '../config/app-config';
 import { MFA_ENROLMENT_REQUIRED } from '../auth/mfa.service';
 import { ApiErrorNotificationService } from '../errors/api-error-notification.service';
 import { mapHttpError, userMessageFor } from '../errors/http-error.mapper';
+import { REQUEST_ID_HEADER } from '../errors/request-reference';
 import { APP_PATHS } from '../router/app-paths';
 import { selectActiveTenant, tenantContextActions } from '../state/tenant-context.feature';
 import { CurrentUserService } from '../tenant/current-user.service';
@@ -29,10 +30,13 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
 
   return next(request).pipe(
     catchError((error: unknown) => {
-      const apiError = mapHttpError(error);
+      const apiError = mapHttpError(error, request.headers.get(REQUEST_ID_HEADER));
       if (isSessionExpired(apiError, path)) {
         currentUser.clear();
-        errorNotifications.show('Your session has expired. Sign in again to continue.');
+        errorNotifications.show(
+          'Your session has expired. Sign in again to continue.',
+          apiError.requestId,
+        );
         void router.navigate([`/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`], {
           queryParams: { returnUrl: currentPath() },
         });
@@ -49,7 +53,7 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
           void currentUser.load();
         }
         if (!isIdentityEndpoint(path) && !isPlatformEndpoint(path)) {
-          errorNotifications.show(userMessageFor(apiError));
+          errorNotifications.show(userMessageFor(apiError), apiError.requestId);
           const tenantId = request.headers.get('X-Tenant-ID');
           if (tenantId && activeTenant()?.id === tenantId) {
             store.dispatch(tenantContextActions.clearActiveTenant());

@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ErrorReferenceComponent } from '../error-reference/error-reference.component';
 
 @Component({
   selector: 'app-inline-alert',
+  imports: [ErrorReferenceComponent],
   templateUrl: './inline-alert.component.html',
   styles: [
     `
@@ -25,4 +27,6 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 })
 export class InlineAlertComponent {
   readonly tone = input<'error' | 'info' | 'warning'>('info');
+  /** The request ID of the failed call, to show its short reference (errors only). */
+  readonly requestId = input<string | null | undefined>(null);
 }

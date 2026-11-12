@@ -17,13 +17,25 @@ const validDetails = (value: unknown): ApiErrorDetail[] | undefined => {
   return details.length ? details : undefined;
 };
 
-export const mapHttpError = (error: unknown): ApiError => {
+/**
+ * `sentRequestId` is the ID the call went out with. The reference is, in order: the server's
+ * `request_id` in the error body, the `X-Request-ID` it answered with, the one sent. The last one
+ * covers a failure with no answer at all (offline, a gateway timeout).
+ */
+export const mapHttpError = (error: unknown, sentRequestId?: string | null): ApiError => {
   if (error instanceof HttpErrorResponse) {
     if (
       error.status === 0 ||
       (typeof ProgressEvent !== 'undefined' && error.error instanceof ProgressEvent)
     )
-      return { code: 'network_error', message: 'Network request failed', status: 0 };
+      return {
+        code: 'network_error',
+        message: 'Network request failed',
+        status: 0,
+        ...(sentRequestId ? { requestId: sentRequestId } : {}),
+      };
+    const answeredWith = error.headers?.get('X-Request-ID') ?? undefined;
+    const requestId = answeredWith ?? sentRequestId ?? undefined;
     const body = error.error as ErrorEnvelope | null;
     const envelope = body && typeof body === 'object' ? body.error : undefined;
     if (envelope && typeof envelope.code === 'string' && typeof envelope.message === 'string') {
@@ -33,10 +45,19 @@ export const mapHttpError = (error: unknown): ApiError => {
         message: envelope.message,
         status: error.status,
         ...(details ? { details } : {}),
-        ...(typeof envelope.request_id === 'string' ? { requestId: envelope.request_id } : {}),
+        ...(typeof envelope.request_id === 'string' && envelope.request_id !== ''
+          ? { requestId: envelope.request_id }
+          : requestId
+            ? { requestId }
+            : {}),
       };
     }
-    return { code: 'unknown_error', message: 'Unexpected HTTP error', status: error.status };
+    return {
+      code: 'unknown_error',
+      message: 'Unexpected HTTP error',
+      status: error.status,
+      ...(requestId ? { requestId } : {}),
+    };
   }
   return { code: 'unknown_error', message: 'Unexpected error', status: 0 };
 };

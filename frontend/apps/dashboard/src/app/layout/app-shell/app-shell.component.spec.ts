@@ -85,6 +85,20 @@ describe('AppShellComponent', () => {
     );
   });
 
+  it('shows the reference of the failed request in the access error (MOH-64)', async () => {
+    await TestBed.compileComponents();
+    TestBed.inject(ApiErrorNotificationService).show(
+      "You don't have access to this tenant.",
+      'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+    );
+    const fixture = TestBed.createComponent(AppShellComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+      '3c4d5e6f',
+    );
+  });
+
   it('shows scrim when drawer is open on mobile', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 600 });
     await TestBed.compileComponents();
