@@ -10,6 +10,12 @@ import { mapHttpError, userMessageFor } from '../errors/http-error.mapper';
 import { APP_PATHS } from '../router/app-paths';
 import { selectActiveTenant, tenantContextActions } from '../state/tenant-context.feature';
 import { CurrentUserService } from '../tenant/current-user.service';
+import {
+  apiRelativePath,
+  isIdentityEndpoint,
+  isLoginEndpoint,
+  isPlatformEndpoint,
+} from './api-request';
 
 export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
   const store = inject(Store);
@@ -19,10 +25,12 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
   const errorNotifications = inject(ApiErrorNotificationService);
   const activeTenant = store.selectSignal(selectActiveTenant);
 
+  const path = apiRelativePath(request.url, config.apiBaseUrl);
+
   return next(request).pipe(
     catchError((error: unknown) => {
       const apiError = mapHttpError(error);
-      if (isSessionExpired(apiError, request.url, config.apiBaseUrl)) {
+      if (isSessionExpired(apiError, path)) {
         currentUser.clear();
         errorNotifications.show('Your session has expired. Sign in again to continue.');
         void router.navigate([`/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`], {
@@ -36,12 +44,11 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
             queryParams: { returnUrl: currentPath() },
           });
         }
-      } else if (apiError.status === 403 && apiError.code === 'unauthorized') {
-        const url = request.url;
-        if (!url.includes('/me')) {
+      } else if (apiError.status === 403 && apiError.code === 'unauthorized' && path !== null) {
+        if (!isIdentityEndpoint(path)) {
           void currentUser.load();
         }
-        if (!url.includes('/me') && !url.includes('/platform/')) {
+        if (!isIdentityEndpoint(path) && !isPlatformEndpoint(path)) {
           errorNotifications.show(userMessageFor(apiError));
           const tenantId = request.headers.get('X-Tenant-ID');
           if (tenantId && activeTenant()?.id === tenantId) {
@@ -54,22 +61,12 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
   );
 };
 
-const isSessionExpired = (
-  error: { status: number; code: string },
-  requestUrl: string,
-  apiBaseUrl: string,
-): boolean =>
+const isSessionExpired = (error: { status: number; code: string }, path: string | null): boolean =>
   error.status === 401 &&
   error.code === 'unauthenticated' &&
-  targetsApiBaseUrl(requestUrl, apiBaseUrl) &&
-  !requestUrl.includes('/me') &&
-  !requestUrl.includes('/auth/login');
-
-const targetsApiBaseUrl = (requestUrl: string, apiBaseUrl: string): boolean => {
-  const apiBase = apiBaseUrl.replace(/\/+$/, '');
-  const path = requestUrl.startsWith('http') ? new URL(requestUrl).pathname : requestUrl;
-  return path === apiBase || path.startsWith(`${apiBase}/`);
-};
+  path !== null &&
+  !isIdentityEndpoint(path) &&
+  !isLoginEndpoint(path);
 
 const currentPath = (): string => {
   if (typeof window === 'undefined') return '/';

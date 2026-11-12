@@ -2,11 +2,12 @@ import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { provideMockStore } from '@ngrx/store/testing';
+import { MockStore, provideMockStore } from '@ngrx/store/testing';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../api/api.models';
 import { APP_CONFIG, AppConfig } from '../config/app-config';
 import { ApiErrorNotificationService } from '../errors/api-error-notification.service';
+import { tenantContextActions } from '../state/tenant-context.feature';
 import { CurrentUserService } from '../tenant/current-user.service';
 import { apiErrorInterceptor } from './api-error.interceptor';
 import { authTokenInterceptor } from './auth-token.interceptor';
@@ -198,6 +199,76 @@ describe('HTTP interceptors', () => {
     expect(error.code).toBe('mfa_enrolment_required');
     expect(router.navigate).toHaveBeenCalledWith(['/mfa-setup'], {
       queryParams: { returnUrl: expect.any(String) },
+    });
+  });
+  describe('paths that merely contain "me" are workspace calls (MOH-60)', () => {
+    const tenantState = {
+      tenantContext: {
+        activeTenant: { id: 'tenant-1', name: 'Tenant 1', slug: 'tenant-1', status: 'active' },
+        status: 'idle',
+      },
+    };
+
+    it.each(['/api/v1/tenant/members', '/api/v1/tenant/conversations/c1/messages'])(
+      'handles a 403 on %s: refreshes permissions, tells the user, clears a lost tenant',
+      async (url) => {
+        const { currentUser } = configure(tenantState);
+        const dispatch = vi.spyOn(TestBed.inject(MockStore), 'dispatch');
+        const notifications = TestBed.inject(ApiErrorNotificationService);
+        const requestPromise = firstValueFrom(
+          TestBed.inject(HttpClient).get(url, { headers: { 'X-Tenant-ID': 'tenant-1' } }),
+        ).catch((error: ApiError) => error);
+
+        TestBed.inject(HttpTestingController)
+          .expectOne(url)
+          .flush(
+            { error: { code: 'unauthorized', message: 'raw' } },
+            { status: 403, statusText: 'Forbidden' },
+          );
+        await requestPromise;
+
+        expect(currentUser.load).toHaveBeenCalledTimes(1);
+        expect(notifications.message()).toBe("You don't have access to this tenant.");
+        expect(dispatch).toHaveBeenCalledWith(tenantContextActions.clearActiveTenant());
+      },
+    );
+
+    it('treats an expired session on /tenant/members like any other API call', async () => {
+      const { router, currentUser } = configure();
+      const requestPromise = firstValueFrom(
+        TestBed.inject(HttpClient).get('/api/v1/tenant/members'),
+      ).catch((error: ApiError) => error);
+
+      TestBed.inject(HttpTestingController)
+        .expectOne('/api/v1/tenant/members')
+        .flush(
+          { error: { code: 'unauthenticated', message: 'raw' } },
+          { status: 401, statusText: 'Unauthorized' },
+        );
+      await requestPromise;
+
+      expect(currentUser.clear).toHaveBeenCalledTimes(1);
+      expect(router.navigate).toHaveBeenCalled();
+    });
+
+    it('does not clear the tenant for a 403 on a platform route', async () => {
+      configure(tenantState);
+      const dispatch = vi.spyOn(TestBed.inject(MockStore), 'dispatch');
+      const requestPromise = firstValueFrom(
+        TestBed.inject(HttpClient).get('/api/v1/platform/tenants', {
+          headers: { 'X-Tenant-ID': 'tenant-1' },
+        }),
+      ).catch((error: ApiError) => error);
+
+      TestBed.inject(HttpTestingController)
+        .expectOne('/api/v1/platform/tenants')
+        .flush(
+          { error: { code: 'unauthorized', message: 'raw' } },
+          { status: 403, statusText: 'Forbidden' },
+        );
+      await requestPromise;
+
+      expect(dispatch).not.toHaveBeenCalled();
     });
   });
 });
