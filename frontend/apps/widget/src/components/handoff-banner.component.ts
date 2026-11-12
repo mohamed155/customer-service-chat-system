@@ -1,4 +1,6 @@
-import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy, inject } from '@angular/core';
+
+import { I18n } from '../i18n/i18n.service';
 
 @Component({
   selector: 'hx-handoff-banner',
@@ -7,9 +9,9 @@ import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
   template: `
     <div class="handoff">
       @if (teamOnline) {
-        <span>Connecting you to a support agent…</span>
+        <span>{{ i18n.t('handoff.connecting') }}</span>
       } @else {
-        <span>Our team is away — we'll reply as soon as someone is back.</span>
+        <span>{{ i18n.t('handoff.away') }}</span>
       }
     </div>
   `,
@@ -27,5 +29,6 @@ import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
   ],
 })
 export class HandoffBannerComponent {
+  protected readonly i18n = inject(I18n);
   @Input({ required: true }) teamOnline = false;
 }

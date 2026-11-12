@@ -25,8 +25,9 @@ Follow-up TODOs:
     and `docs/security/threat-model.md` §5 ranks the top risks. Tracked so far:
       - No PostgreSQL RLS (I): MOH-31, blocked by MOH-23 (DB role split) — ADR-004 T1/T2
       - Internal error text returned to clients (II, VIII): MOH-32 — ADR-012 A1
-      - Tenant secrets not envelope-encrypted (II): MOH-33 — ADR-014 E1
-      - No i18n externalization (XII): MOH-41
+      - Tenant secrets envelope-encrypted: done (MOH-33); a cloud KMS adapter remains (II) — ADR-014 E5
+      - i18n externalization (XII): MOH-41 — the widget is done, new hard-coded text fails CI, the dashboard
+        moves area by area (ADR-016 I3–I5)
       - UUIDv7 not used for new PKs (Technology Standards): MOH-42 — ADR-013 U1
       - OpenAPI breaking-change and generated-types checks in CI: done (MOH-43). The dashboard still uses
         hand-written wire types (VIII): ADR-012 A6

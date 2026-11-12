@@ -49,7 +49,9 @@ development and tests). The dashboard screens of part 3 exist, so it can be on w
 - **FR-006** A code is accepted for a time step later than the last accepted one, so it works once,
   also under concurrent requests (one conditional `UPDATE`). A recovery code is burned the same way.
 - **FR-007** Attempts are limited per client address, and wrong codes lock the account's second
-  factor after five in a row, for fifteen minutes. A right code resets the count.
+  factor after five in a row, for fifteen minutes. A right code resets the count. A right code that was
+  already used (a replay) is refused and audited (`reason: replayed_code`) but does not count, so a
+  code someone saw cannot be used to lock the owner out.
 - **FR-009** Starting enrolment needs the current password and is rate limited per client, so a
   stolen session alone cannot add an attacker's authenticator.
 - **FR-010** Once a user has a confirmed factor, a session that skipped the second factor stops

@@ -1,4 +1,13 @@
-import { Component, Output, EventEmitter, ChangeDetectionStrategy, signal } from '@angular/core';
+import {
+  Component,
+  Output,
+  EventEmitter,
+  ChangeDetectionStrategy,
+  signal,
+  inject,
+} from '@angular/core';
+
+import { I18n } from '../i18n/i18n.service';
 
 @Component({
   selector: 'hx-composer',
@@ -13,9 +22,9 @@ import { Component, Output, EventEmitter, ChangeDetectionStrategy, signal } from
           [value]="text()"
           (input)="onInput($event)"
           (keydown)="onKeydown($event)"
-          placeholder="Type your message…"
+          [placeholder]="i18n.t('composer.placeholder')"
           rows="1"
-          aria-label="Message input"
+          [attr.aria-label]="i18n.t('composer.label')"
         ></textarea>
         @if (text().length > 3500) {
           <div class="composer__counter" [class.composer__counter--warn]="text().length >= 4000">
@@ -27,7 +36,7 @@ import { Component, Output, EventEmitter, ChangeDetectionStrategy, signal } from
         class="composer__send"
         [disabled]="!canSend()"
         (click)="onSend()"
-        aria-label="Send message"
+        [attr.aria-label]="i18n.t('composer.send')"
       >
         <svg
           width="20"
@@ -111,6 +120,7 @@ import { Component, Output, EventEmitter, ChangeDetectionStrategy, signal } from
   ],
 })
 export class ComposerComponent {
+  protected readonly i18n = inject(I18n);
   @Output() sendMessage = new EventEmitter<string>();
 
   text = signal('');

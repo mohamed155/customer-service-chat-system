@@ -688,7 +688,9 @@ async fn an_accepted_code_cannot_be_used_again() {
     let (_pool, app, _lock) = setup!();
     let (user, email, secret, _) = enrolled_user(&app).await;
     // Enrolment already used the current step; the next step's code is the only one that works.
-    let next = totp::code_at(&secret, now() + 30, 6);
+    // One reading of the clock: two readings can straddle a 30-second step boundary.
+    let at = now() + 30;
+    let next = totp::code_at(&secret, at, 6);
 
     let first = send(
         &app,
@@ -719,7 +721,54 @@ async fn an_accepted_code_cannot_be_used_again() {
         .fetch_one(&db::testing::seed_pool())
         .await
         .unwrap();
-    assert_eq!(last as u64, totp::step_at(now() + 30));
+    assert_eq!(last as u64, totp::step_at(at));
+}
+
+#[tokio::test]
+async fn replaying_a_used_code_does_not_lock_the_account() {
+    let (_pool, app, _lock) = setup!();
+    let (user, email, secret, _) = enrolled_user(&app).await;
+    let code = totp::code_at(&secret, now() + 30, 6);
+    let first = send(
+        &app,
+        verify_request(&password_step(&app, &email).await, json!({ "code": code })),
+    )
+    .await;
+    assert_eq!(first.status(), StatusCode::OK);
+
+    // Someone who saw that code replays it far more often than the lockout allows.
+    let pending = password_step(&app, &email).await;
+    for _ in 0..8 {
+        let r = send(&app, verify_request(&pending, json!({ "code": code }))).await;
+        assert_eq!(
+            r.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "refused, never locked"
+        );
+    }
+    let attempts: i32 =
+        sqlx::query_scalar("SELECT failed_attempts FROM mfa_factors WHERE user_id = $1")
+            .bind(user)
+            .fetch_one(&db::testing::seed_pool())
+            .await
+            .unwrap();
+    assert_eq!(attempts, 0);
+    let reasons: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM audit_logs WHERE actor_user_id = $1 AND details->>'reason' = 'replayed_code'",
+    )
+    .bind(user)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(reasons, 8, "each replay is audited");
+    assert!(!audit_actions(user)
+        .await
+        .contains(&"auth.mfa_locked".to_string()));
+
+    // Not locked: another wrong code is a plain refusal (422), not a lockout (429), and the
+    // owner's next real code (once its step arrives) would work.
+    let next = send(&app, verify_request(&pending, json!({ "code": "000000" }))).await;
+    assert_eq!(next.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]

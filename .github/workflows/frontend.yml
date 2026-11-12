@@ -40,6 +40,10 @@ jobs:
             exit 1
           fi
       - run: pnpm run lint
+      - name: No new hard-coded user-facing text (ADR-016)
+        run: pnpm lint:i18n
+      - name: The hard-coded text check works
+        run: pnpm test:i18n-check
       - name: Check formatting
         run: pnpm format:check
       - run: pnpm exec ng build dashboard

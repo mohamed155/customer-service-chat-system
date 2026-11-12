@@ -45,7 +45,7 @@ describe('StarRatingComponent', () => {
 
     stars.forEach((star, i) => {
       const label = star.nativeElement.getAttribute('aria-label');
-      expect(label).toBe(`${i + 1} stars`);
+      expect(label).toBe(i === 0 ? '1 star' : `${i + 1} stars`);
     });
   });
 });

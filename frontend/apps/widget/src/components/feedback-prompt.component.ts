@@ -1,6 +1,16 @@
-import { ChangeDetectionStrategy, Component, input, output, signal, computed } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  input,
+  output,
+  signal,
+  computed,
+  inject,
+} from '@angular/core';
 import { StarRatingComponent } from './star-rating.component';
 import { WidgetFeedback } from '../core/models';
+
+import { I18n } from '../i18n/i18n.service';
 
 @Component({
   standalone: true,
@@ -10,12 +20,12 @@ import { WidgetFeedback } from '../core/models';
   template: `
     @if (state() === 'prompt') {
       <div class="prompt">
-        <p class="heading">How did we do?</p>
+        <p class="heading">{{ i18n.t('feedback.heading') }}</p>
         <wgt-star-rating (rate)="onRate($event)" />
         <div class="comment-area">
           <textarea
             class="comment-input"
-            placeholder="Tell us more (optional)"
+            [placeholder]="i18n.t('feedback.commentPlaceholder')"
             [value]="comment()"
             (input)="onInput($event)"
           ></textarea>
@@ -23,18 +33,20 @@ import { WidgetFeedback } from '../core/models';
         </div>
         @if (selectedRating() >= 1) {
           <button type="button" class="submit-btn" [disabled]="overLimit()" (click)="onSubmit()">
-            Send feedback
+            {{ i18n.t('feedback.send') }}
           </button>
         }
-        <button type="button" class="dismiss-btn" (click)="dismiss.emit()">Not now</button>
+        <button type="button" class="dismiss-btn" (click)="dismiss.emit()">
+          {{ i18n.t('feedback.dismiss') }}
+        </button>
       </div>
     } @else if (state() === 'collapsed') {
       <button type="button" class="collapsed-btn" (click)="expand.emit()">
-        Rate this conversation
+        {{ i18n.t('feedback.rate') }}
       </button>
     } @else if (state() === 'submitted' && feedback(); as fb) {
       <div class="submitted">
-        <p class="thank-you">Thank you for your feedback!</p>
+        <p class="thank-you">{{ i18n.t('feedback.thanks') }}</p>
         <wgt-star-rating [value]="fb.rating" [readonly]="true" />
         @if (fb.comment) {
           <p class="comment">{{ fb.comment }}</p>
@@ -150,6 +162,7 @@ import { WidgetFeedback } from '../core/models';
   ],
 })
 export class FeedbackPromptComponent {
+  protected readonly i18n = inject(I18n);
   readonly state = input.required<'prompt' | 'collapsed' | 'submitted'>();
   readonly feedback = input<WidgetFeedback | null>(null);
   readonly submitFeedback = output<{ rating: number; comment?: string }>();
