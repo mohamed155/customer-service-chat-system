@@ -38,11 +38,18 @@ export function targetsApiBaseUrl(requestUrl: string, apiBaseUrl: string): boole
     return false;
   }
 
-  if (!isAbsoluteUrl(apiBase) || !isAbsoluteUrl(requestUrl)) {
+  if (!isAbsoluteUrl(requestUrl)) {
     return true;
   }
 
-  return new URL(requestUrl).origin === new URL(apiBase).origin;
+  // An absolute request URL must be on the API's origin. A relative base means the page's own
+  // origin, so `https://other.test/api/v1/...` is not ours even though its path matches.
+  const apiOrigin = isAbsoluteUrl(apiBase) ? new URL(apiBase).origin : pageOrigin();
+  return apiOrigin !== null && new URL(requestUrl).origin === apiOrigin;
+}
+
+function pageOrigin(): string | null {
+  return typeof location === 'undefined' ? null : location.origin;
 }
 
 function normalizeBase(url: string): string {

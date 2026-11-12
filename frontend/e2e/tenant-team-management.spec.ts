@@ -503,8 +503,15 @@ test.describe('tenant team management', () => {
     await expect(page.getByText('owner@acme.test')).toBeVisible();
     await expect(page.getByText('owner@northwind.test')).toHaveCount(0);
 
+    // The reload below must start after the switch finished and the app stored the new workspace.
+    const switched = page.waitForResponse((response) => response.url().includes('/switch'));
     await page.getByRole('button', { name: 'Switch tenant' }).click();
     await page.locator('.option').filter({ hasText: 'Northwind Help' }).click();
+    await switched;
+    await page.waitForFunction(
+      (id) => JSON.parse(localStorage.getItem('app.tenant') ?? '{}').id === id,
+      tenantB.id,
+    );
     await page.goto('/tenant/team');
 
     await expect(page.getByText('owner@northwind.test')).toBeVisible();
