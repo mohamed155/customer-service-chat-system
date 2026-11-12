@@ -96,8 +96,17 @@
           "options": {
             "tsConfig": "apps/dashboard/tsconfig.spec.json",
             "runner": "vitest",
-            "setupFiles": ["apps/dashboard/src/test-setup.ts"]
-          }
+            "setupFiles": ["apps/dashboard/src/test-setup.ts"],
+            "coverageInclude": ["apps/dashboard/src/**/*.ts"],
+            "coverageExclude": [
+              "**/*.spec.ts",
+              "**/*.testing.ts",
+              "**/generated/**",
+              "**/test-setup.ts"
+            ],
+            "coverageReporters": ["text-summary", "json-summary", "lcov", "html"]
+          },
+          "configurations": { "coverage": { "coverage": true } }
         }
       }
     },
@@ -130,8 +139,17 @@
             "buildTarget": "widget:build",
             "tsConfig": "apps/widget/tsconfig.spec.json",
             "runner": "vitest",
-            "setupFiles": ["apps/widget/src/test-setup.ts"]
-          }
+            "setupFiles": ["apps/widget/src/test-setup.ts"],
+            "coverageInclude": ["apps/widget/src/**/*.ts"],
+            "coverageExclude": [
+              "**/*.spec.ts",
+              "**/*.testing.ts",
+              "**/generated/**",
+              "**/test-setup.ts"
+            ],
+            "coverageReporters": ["text-summary", "json-summary", "lcov", "html"]
+          },
+          "configurations": { "coverage": { "coverage": true } }
         }
       }
     }

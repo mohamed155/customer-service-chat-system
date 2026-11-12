@@ -5,8 +5,7 @@ import { provideRouter, Router, Routes } from '@angular/router';
 import { provideMockStore } from '@ngrx/store/testing';
 import { provideTaiga } from '@taiga-ui/core';
 import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { resolve } from 'path';
 import { of } from 'rxjs';
 
 import { AppComponent } from './app.component';
@@ -20,8 +19,9 @@ import { CurrentUserService } from './core/tenant/current-user.service';
 import { BreadcrumbComponent } from './layout/breadcrumb/breadcrumb.component';
 import { AppShellComponent } from './layout/app-shell/app-shell.component';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Relative to the workspace (where `ng test` runs), not to `import.meta.url`: with coverage on, the
+// spec runs from a different location and a path built from its own URL points nowhere.
+const dashboardSrc = resolve(process.cwd(), 'apps/dashboard/src');
 
 @Component({ template: '', standalone: true })
 class EmptyComponent {}
@@ -152,7 +152,7 @@ function setupShellIntegration(allowedPermissions: Permission[]) {
 describe('Dashboard shell acceptance', () => {
   describe('T001/T002: Pre-bootstrap skeleton markup', () => {
     it('index.html contains skeleton-shell environment', () => {
-      const html = readFileSync(resolve(__dirname, '../index.html'), 'utf-8');
+      const html = readFileSync(resolve(dashboardSrc, 'index.html'), 'utf-8');
       expect(html).toContain('skeleton-shell');
       expect(html).toContain('skeleton-sidebar');
       expect(html).toContain('skeleton-topbar');
@@ -161,7 +161,7 @@ describe('Dashboard shell acceptance', () => {
     });
 
     it('skeleton-shell has correct structural elements', () => {
-      const html = readFileSync(resolve(__dirname, '../index.html'), 'utf-8');
+      const html = readFileSync(resolve(dashboardSrc, 'index.html'), 'utf-8');
       expect(html).toContain('<aside class="skeleton-sidebar">');
       expect(html).toContain('<header class="skeleton-topbar">');
       expect(html).toContain('<main class="skeleton-content">');
@@ -170,12 +170,12 @@ describe('Dashboard shell acceptance', () => {
     });
 
     it('skeleton includes dark-theme media query', () => {
-      const html = readFileSync(resolve(__dirname, '../index.html'), 'utf-8');
+      const html = readFileSync(resolve(dashboardSrc, 'index.html'), 'utf-8');
       expect(html).toContain("html[data-theme='dark'] .skeleton-shell");
     });
 
     it('loads the theme script from a file before first paint, with no inline script', () => {
-      const html = readFileSync(resolve(__dirname, '../index.html'), 'utf-8');
+      const html = readFileSync(resolve(dashboardSrc, 'index.html'), 'utf-8');
       // The dashboard runs under `script-src 'self'`, so the theme initialiser is an external file
       // (an inline script would be blocked). It must still come before the skeleton styles.
       expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
@@ -183,7 +183,7 @@ describe('Dashboard shell acceptance', () => {
       expect(scriptAt).toBeGreaterThan(-1);
       expect(scriptAt).toBeLessThan(html.indexOf('<style>'));
 
-      const script = readFileSync(resolve(__dirname, '../theme-init.js'), 'utf-8');
+      const script = readFileSync(resolve(dashboardSrc, 'theme-init.js'), 'utf-8');
       expect(script).toContain("localStorage.getItem('app.themeMode')");
       expect(script).toContain('data-theme');
     });

@@ -59,8 +59,19 @@ jobs:
       # Starts `ng serve widget` against a local upstream (MOH-51); no browser needed.
       - name: Widget dev-server proxy test
         run: pnpm test:widget-proxy
-      - run: pnpm exec ng test dashboard --watch=false
-      - run: pnpm exec ng test widget --watch=false
+      # The unit tests of both apps, with coverage. Fails when a number falls below
+      # tools/coverage-baseline.json (MOH-66); `pnpm test:coverage --update` raises the baseline.
+      - name: Unit tests with coverage
+        run: pnpm test:coverage
+      - name: The coverage check works
+        run: pnpm test:coverage-check
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+          retention-days: 14
       - name: Install Playwright browsers
         run: pnpm exec playwright install chromium --with-deps
       # Runs after the widget build: the widget specs serve dist/widget.
