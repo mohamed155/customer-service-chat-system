@@ -95,10 +95,10 @@ export function withTenantScope<Input extends SignalStoreFeatureResult>(
       const scope = inject(TenantScope);
       const destroyRef = inject(DestroyRef);
       const asStore = store as unknown as StoreOf<Input>;
-      const initial = (): object =>
-        (typeof config.initialState === 'function'
+      const initial = (): Input['state'] =>
+        typeof config.initialState === 'function'
           ? (config.initialState as () => Input['state'])()
-          : config.initialState) as object;
+          : config.initialState;
 
       const activeId = untracked(() => scope.activeTenantId());
       if (config.loadOnInit && activeId !== null) {
@@ -107,7 +107,7 @@ export function withTenantScope<Input extends SignalStoreFeatureResult>(
 
       const subscription = scope.changes$.subscribe((change) => {
         untracked(() => config.cancel?.(asStore, change));
-        patchState(store as WritableStateSource<object>, initial());
+        patchState(store as WritableStateSource<Input['state']>, initial());
         if (change.to !== null) {
           untracked(() => config.reload?.(asStore, change));
         }

@@ -40,6 +40,17 @@ test('a root-provided store anywhere is held to the same rule', () => {
   assert.equal(problems.length, 1);
 });
 
+test('a root-provided store is found whichever quotes it uses', () => {
+  const problems = check([
+    ...exemptFiles(),
+    {
+      path: `${app}/core/x/x.store.ts`,
+      source: 'signalStore({ providedIn: "root" }, withState({}))',
+    },
+  ]);
+  assert.equal(problems.length, 1);
+});
+
 test('a component-provided store outside features/tenant is not covered', () => {
   const problems = check([
     ...exemptFiles(),

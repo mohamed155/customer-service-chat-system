@@ -21,7 +21,7 @@ export const EXEMPT = {
 };
 
 const isTenantArea = (file) => file.includes(`${appDir}/features/tenant/`);
-const isRootProvided = (source) => /providedIn:\s*'root'/.test(source);
+const isRootProvided = (source) => /providedIn:\s*['"]root['"]/.test(source);
 
 /** Problems in `files` (`[{ path, source }]`, paths relative to the frontend root). */
 export function check(files) {
