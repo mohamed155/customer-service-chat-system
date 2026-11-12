@@ -3,6 +3,8 @@ import { firstValueFrom, of } from 'rxjs';
 import { APP_CONFIG } from '../../../core/config/app-config';
 import { ApiService } from '../../../core/api/api.service';
 import { KnowledgeApiService } from './knowledge-api.service';
+import { HttpContext } from '@angular/common/http';
+import { HTTP_TIMEOUT_MS } from '../../../core/http/http-resilience';
 
 describe('KnowledgeApiService', () => {
   let service: KnowledgeApiService;
@@ -185,7 +187,14 @@ describe('KnowledgeApiService', () => {
 
       const result = await firstValueFrom(service.uploadDocument(formData));
 
-      expect(api.post).toHaveBeenCalledWith('tenant/knowledge/documents', formData);
+      expect(api.post).toHaveBeenCalledWith(
+        'tenant/knowledge/documents',
+        formData,
+        expect.anything(),
+      );
+      // An upload has no request timeout (MOH-166).
+      const context = api.post.mock.calls[0][2] as HttpContext;
+      expect(context.get(HTTP_TIMEOUT_MS)).toBe(0);
       expect(result).toEqual(response);
     });
   });

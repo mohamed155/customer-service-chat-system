@@ -17,6 +17,7 @@ import {
   SetStatusResponse,
   UpdateItemPayload,
 } from '../../../core/api/knowledge.models';
+import { noTimeout } from '../../../core/http/http-resilience';
 
 @Injectable({ providedIn: 'root' })
 export class KnowledgeApiService {
@@ -70,7 +71,8 @@ export class KnowledgeApiService {
   }
 
   uploadDocument(formData: FormData): Observable<ApiResponse<KnowledgeItemDetail>> {
-    return this.api.post('tenant/knowledge/documents', formData);
+    // An upload may take as long as the file needs, so it has no request timeout.
+    return this.api.post('tenant/knowledge/documents', formData, noTimeout());
   }
 
   reindex(id: string): Observable<ApiResponse<ReindexResponse>> {

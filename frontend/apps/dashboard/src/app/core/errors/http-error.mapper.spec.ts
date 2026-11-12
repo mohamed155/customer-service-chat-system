@@ -1,4 +1,5 @@
 import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { TimeoutError } from 'rxjs';
 import { mapHttpError, userMessageFor } from './http-error.mapper';
 
 describe('HTTP error mapping', () => {
@@ -81,5 +82,18 @@ describe('the request reference on a mapped error (MOH-64)', () => {
 
   it('has no reference when nothing carried one', () => {
     expect(mapHttpError(new HttpErrorResponse({ status: 502 })).requestId).toBeUndefined();
+  });
+});
+
+describe('a timeout (MOH-166)', () => {
+  it('maps to a typed error with a message for the person', () => {
+    const result = mapHttpError(new TimeoutError(), 'req_sent');
+
+    expect(result).toMatchObject({ code: 'timeout', status: 0, requestId: 'req_sent' });
+    expect(userMessageFor(result)).toBe('The server took too long to answer. Try again.');
+  });
+
+  it('is not shown as a lost connection', () => {
+    expect(userMessageFor(mapHttpError(new TimeoutError()))).not.toContain('connection');
   });
 });

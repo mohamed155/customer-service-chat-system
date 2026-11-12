@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { TimeoutError } from 'rxjs';
 import { ApiError, ApiErrorDetail } from '../api/api.models';
 
 interface ErrorEnvelope {
@@ -23,6 +24,14 @@ const validDetails = (value: unknown): ApiErrorDetail[] | undefined => {
  * covers a failure with no answer at all (offline, a gateway timeout).
  */
 export const mapHttpError = (error: unknown, sentRequestId?: string | null): ApiError => {
+  if (error instanceof TimeoutError) {
+    return {
+      code: 'timeout',
+      message: 'The request timed out',
+      status: 0,
+      ...(sentRequestId ? { requestId: sentRequestId } : {}),
+    };
+  }
   if (error instanceof HttpErrorResponse) {
     if (
       error.status === 0 ||
@@ -64,6 +73,7 @@ export const mapHttpError = (error: unknown, sentRequestId?: string | null): Api
 
 export const userMessageFor = (error: ApiError): string => {
   if (error.code === 'network_error') return 'Check your connection and try again.';
+  if (error.code === 'timeout') return 'The server took too long to answer. Try again.';
   if (error.status === 401) return 'You do not have access to this action.';
   if (error.status === 403 && error.code === 'unauthorized')
     return "You don't have access to this tenant.";

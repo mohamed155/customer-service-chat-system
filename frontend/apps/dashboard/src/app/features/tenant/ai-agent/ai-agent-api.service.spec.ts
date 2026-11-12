@@ -4,6 +4,8 @@ import { firstValueFrom, of } from 'rxjs';
 import { APP_CONFIG } from '../../../core/config/app-config';
 import { ApiService } from '../../../core/api/api.service';
 import { AiAgentApiService } from './ai-agent-api.service';
+import { HttpContext } from '@angular/common/http';
+import { HTTP_TIMEOUT_MS } from '../../../core/http/http-resilience';
 
 describe('AiAgentApiService', () => {
   let service: AiAgentApiService;
@@ -108,7 +110,11 @@ describe('AiAgentApiService', () => {
       expect(http.put).toHaveBeenCalledWith('/api/v1/tenant/ai/agent/avatar', blob, {
         headers: { 'Content-Type': 'image/png' },
         observe: 'response',
+        context: expect.anything(),
       });
+      // An upload has no request timeout (MOH-166).
+      const { context } = http.put.mock.calls[0][2] as { context: HttpContext };
+      expect(context.get(HTTP_TIMEOUT_MS)).toBe(0);
       expect(result).toEqual(avatarResponse);
     });
   });
