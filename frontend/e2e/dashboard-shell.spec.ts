@@ -11,6 +11,14 @@ const TENANT_PERMISSIONS = [
   'settings.view',
 ] as const;
 
+/** Until a workspace is chosen the menu holds only the account page (security), no workspace item. */
+async function expectNoWorkspaceNavigation(page: Page): Promise<void> {
+  const nav = page.getByRole('navigation', { name: 'Primary navigation' });
+  await expect(nav.getByRole('link')).toHaveCount(1);
+  await expect(nav).toContainText('Account security');
+  await expect(nav).not.toContainText('Overview');
+}
+
 const tenant = { id: 'tenant-1', name: 'Acme Support', slug: 'acme-support', status: 'active' };
 
 const identities = {
@@ -89,7 +97,7 @@ test.describe('dashboard shell', () => {
     await page.goto('/tenant/select');
     await expect(page.getByRole('button', { name: 'Switch tenant' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Platform' })).toBeVisible();
-    await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeEmpty();
+    await expectNoWorkspaceNavigation(page);
 
     await page.unrouteAll({ behavior: 'wait' });
     await mockApi(page, identities.noRole);
@@ -104,7 +112,7 @@ test.describe('dashboard shell', () => {
   }) => {
     await mockApi(page, identities.platform);
     await page.goto('/tenant/select');
-    await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeEmpty();
+    await expectNoWorkspaceNavigation(page);
 
     await page.getByRole('button', { name: 'Switch tenant' }).click();
     await page.locator('.option').filter({ hasText: 'Acme Support' }).click();
@@ -452,12 +460,12 @@ test.describe('dashboard shell', () => {
     });
 
     await page.goto('/tenant/select');
-    await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeEmpty();
+    await expectNoWorkspaceNavigation(page);
 
     await page.getByRole('button', { name: 'Switch tenant' }).click();
     await page.locator('.option').filter({ hasText: 'Acme Support' }).click();
 
-    await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeEmpty();
+    await expectNoWorkspaceNavigation(page);
 
     releaseSwitch();
 
@@ -485,7 +493,7 @@ test.describe('dashboard shell', () => {
     });
 
     await page.goto('/tenant/select');
-    await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeEmpty();
+    await expectNoWorkspaceNavigation(page);
 
     await page.getByRole('button', { name: 'Switch tenant' }).click();
     await page.locator('.option').filter({ hasText: 'Alpha Support' }).click();
