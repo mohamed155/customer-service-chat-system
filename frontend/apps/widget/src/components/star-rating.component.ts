@@ -1,18 +1,24 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output, inject } from '@angular/core';
+
+import { I18n } from '../i18n/i18n.service';
 
 @Component({
   standalone: true,
   selector: 'wgt-star-rating',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div role="radiogroup" class="stars" [attr.aria-label]="'Rating: ' + value() + ' out of 5'">
+    <div
+      role="radiogroup"
+      class="stars"
+      [attr.aria-label]="i18n.t('rating.group', { value: value() })"
+    >
       @for (star of [1, 2, 3, 4, 5]; track star) {
         <button
           type="button"
           class="star"
           [class.filled]="star <= value()"
           [class.readonly]="readonly()"
-          [attr.aria-label]="star + ' stars'"
+          [attr.aria-label]="i18n.t('rating.star', { count: star })"
           [attr.aria-checked]="star === value()"
           [disabled]="readonly()"
           (click)="onRate(star)"
@@ -56,6 +62,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
   ],
 })
 export class StarRatingComponent {
+  protected readonly i18n = inject(I18n);
   readonly value = input<number>(0);
   readonly readonly = input<boolean>(false);
   readonly rate = output<number>();

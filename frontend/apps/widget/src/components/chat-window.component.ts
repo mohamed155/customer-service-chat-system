@@ -14,6 +14,8 @@ import { ComposerComponent } from './composer.component';
 import { HandoffBannerComponent } from './handoff-banner.component';
 import { FeedbackPromptComponent } from './feedback-prompt.component';
 
+import { I18n } from '../i18n/i18n.service';
+
 @Component({
   selector: 'hx-chat-window',
   standalone: true,
@@ -25,10 +27,10 @@ import { FeedbackPromptComponent } from './feedback-prompt.component';
     FeedbackPromptComponent,
   ],
   template: `
-    <div class="window" role="dialog" aria-label="Chat window">
+    <div class="window" role="dialog" [attr.aria-label]="i18n.t('chat.windowLabel')">
       <header class="window__header">
-        <span class="window__title">{{ store.config()?.displayName ?? 'Chat' }}</span>
-        <button class="window__close" (click)="onClose()" aria-label="Close chat">
+        <span class="window__title">{{ store.config()?.displayName ?? i18n.t('chat.title') }}</span>
+        <button class="window__close" (click)="onClose()" [attr.aria-label]="i18n.t('chat.close')">
           <svg
             width="18"
             height="18"
@@ -53,13 +55,13 @@ import { FeedbackPromptComponent } from './feedback-prompt.component';
 
       @if (store.uiState() === 'error') {
         <div class="window__error">
-          <span>Something went wrong.</span>
-          <button class="window__retry" (click)="store.retry()">Try again</button>
+          <span>{{ i18n.t('chat.error') }}</span>
+          <button class="window__retry" (click)="store.retry()">{{ i18n.t('chat.retry') }}</button>
         </div>
       }
 
       @if (store.uiState() === 'rate-limited') {
-        <div class="window__rate-limited">You're sending messages too fast. Please slow down.</div>
+        <div class="window__rate-limited">{{ i18n.t('chat.rateLimited') }}</div>
       }
 
       @if (store.conversation()?.handling === 'human') {
@@ -167,6 +169,7 @@ import { FeedbackPromptComponent } from './feedback-prompt.component';
   ],
 })
 export class ChatWindowComponent {
+  protected readonly i18n = inject(I18n);
   readonly store = inject(WidgetStore);
   private readonly elementRef = inject(ElementRef);
 

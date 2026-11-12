@@ -15,7 +15,9 @@
     "quality": "pnpm ng build dashboard && pnpm ng test dashboard && pnpm test:e2e && pnpm lint && pnpm format:check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "node tools/install-git-hooks.mjs || echo lefthook install skipped"
+    "prepare": "node tools/install-git-hooks.mjs || echo lefthook install skipped",
+    "lint:i18n": "node tools/check-i18n.mjs",
+    "test:i18n-check": "node --test tools/check-i18n.test.mjs"
   },
   "dependencies": {
     "@angular/common": "^22.2.4",

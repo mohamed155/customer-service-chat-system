@@ -1,11 +1,13 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+
+import { I18n } from '../i18n/i18n.service';
 
 @Component({
   selector: 'hx-typing-indicator',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="typing" role="status" aria-label="Assistant is typing">
+    <div class="typing" role="status" [attr.aria-label]="i18n.t('typing.label')">
       <span class="typing__dot"></span>
       <span class="typing__dot"></span>
       <span class="typing__dot"></span>
@@ -61,4 +63,6 @@ import { Component, ChangeDetectionStrategy } from '@angular/core';
     `,
   ],
 })
-export class TypingIndicatorComponent {}
+export class TypingIndicatorComponent {
+  protected readonly i18n = inject(I18n);
+}
