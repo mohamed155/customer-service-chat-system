@@ -326,13 +326,20 @@ pub async fn verify(
         return Err(MfaError::Locked(factor.locked_for_seconds));
     }
 
+    let mut replayed = false;
     let method = match credential {
         Credential::Code(code) => {
             let secret = open_secret(keys, user_id, &factor).await?;
             match totp::matching_step(&secret, code, now_unix) {
                 Some(step) if accept_step(pool, factor.id, step).await? => Some(Method::Otp),
-                // A wrong code, or a right one that was already used (replay).
-                _ => None,
+                // A right code that was already used. It is refused and audited, but it does not
+                // count toward the lockout: a code someone saw over a shoulder must not be a way
+                // to lock the owner out.
+                Some(_) => {
+                    replayed = true;
+                    None
+                }
+                None => None,
             }
         }
         Credential::RecoveryCode(code) => {
@@ -367,6 +374,17 @@ pub async fn verify(
             )
             .await;
             Ok(method)
+        }
+        None if replayed => {
+            audit::record(
+                pool,
+                "auth.mfa_failed",
+                Some(user_id),
+                Some(&resource),
+                &serde_json::json!({ "stage": "signin", "reason": "replayed_code" }),
+            )
+            .await;
+            Err(MfaError::Invalid)
         }
         None => {
             record_failure(pool, user_id, factor.id, "signin").await?;
