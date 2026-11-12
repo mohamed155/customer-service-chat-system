@@ -490,8 +490,12 @@ test.describe('tenant team management', () => {
   test('switches tenants and keeps roster data isolated', async ({ page }) => {
     const state = makeState(makePlatformIdentity(), tenantA.id);
     await installTeamApi(page, state);
+    // Seed the first visit only: this script runs again on every load, and a reload after the
+    // switch must keep the workspace the user chose (the app stores it), not reset it.
     await page.addInitScript((tenant) => {
-      localStorage.setItem('app.tenant', JSON.stringify(tenant));
+      if (!localStorage.getItem('app.tenant')) {
+        localStorage.setItem('app.tenant', JSON.stringify(tenant));
+      }
     }, tenantA);
 
     await page.goto('/tenant/team');
