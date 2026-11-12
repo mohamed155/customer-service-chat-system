@@ -48,3 +48,9 @@
 - Shared utilities: `shared/utils/clipboard.ts` (`copyToClipboard`, used by the webhook-URL copy button) and `shared/utils/relative-time.ts` (`relativeTime`, used by the event log).
 - Routes: `APP_PATHS.tenant.integrations` (list) and `APP_PATHS.tenant.integrationDetail` (`'integrations/:slug'`, detail) — both guarded by `integrations.view` via `PAGE_PERMISSIONS`.
 - Permissions: `integrations.view` (list, detail, events) and `integrations.manage` (connect, update, disconnect) — Owner/Admin/Manager manage, Viewer read-only, Agent denied.
+
+## Two-step verification (MOH-34, spec 034)
+
+- The password step can end in `mfa-required` (a `202` and a challenge cookie, no session): `AuthService.login` returns it and `/auth/mfa` completes the sign-in. A session that lacks a second factor on a deployment that requires one gets `403 mfa_enrolment_required`; `apiErrorInterceptor` sends the user to `/mfa-setup`.
+- A sensitive action answers `401 mfa_step_up_required`. `stepUpInterceptor` (outside `apiErrorInterceptor`, so it sees the mapped error) opens the code prompt (`StepUpService` and the dialog in the app root) and sends the original request once more. Code that can trigger it needs no special handling.
+- Codes and recovery codes are never stored in the app; recovery codes are shown once and cleared from memory afterwards. New API code uses the generated types.

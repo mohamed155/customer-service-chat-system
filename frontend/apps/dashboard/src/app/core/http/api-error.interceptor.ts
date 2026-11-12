@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { catchError, throwError } from 'rxjs';
 import { APP_CONFIG } from '../config/app-config';
+import { MFA_ENROLMENT_REQUIRED } from '../auth/mfa.service';
 import { ApiErrorNotificationService } from '../errors/api-error-notification.service';
 import { mapHttpError, userMessageFor } from '../errors/http-error.mapper';
 import { APP_PATHS } from '../router/app-paths';
@@ -27,6 +28,14 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
         void router.navigate([`/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`], {
           queryParams: { returnUrl: currentPath() },
         });
+      } else if (apiError.status === 403 && apiError.code === MFA_ENROLMENT_REQUIRED) {
+        // The account needs a second factor before anything else: send the user to set one up,
+        // and bring them back to where they were afterwards.
+        if (!router.url.startsWith(`/${APP_PATHS.mfaSetup}`)) {
+          void router.navigate([`/${APP_PATHS.mfaSetup}`], {
+            queryParams: { returnUrl: currentPath() },
+          });
+        }
       } else if (apiError.status === 403 && apiError.code === 'unauthorized') {
         const url = request.url;
         if (!url.includes('/me')) {

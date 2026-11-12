@@ -207,6 +207,15 @@
                                 : 'Enable'
                           }}
                         </app-button>
+                        @if (canResetMfa(member)) {
+                          <app-button
+                            variant="ghost"
+                            [ariaLabel]="'Reset two-step verification for ' + member.displayName"
+                            (pressed)="askResetMfa(member)"
+                          >
+                            Reset 2FA
+                          </app-button>
+                        }
                         @if (
                           store.memberUpdateStatus() === 'error' &&
                           store.memberUpdateMemberId() === member.id
@@ -256,5 +265,37 @@
 @if (showSkillsManager()) {
   <app-dialog-shell (close)="showSkillsManager.set(false)">
     <app-skills-manager />
+  </app-dialog-shell>
+}
+
+@if (resetResult(); as result) {
+  <app-inline-alert [tone]="result.tone === 'success' ? 'info' : 'error'">{{
+    result.text
+  }}</app-inline-alert>
+}
+
+@if (resetTarget(); as target) {
+  <app-dialog-shell
+    [open]="true"
+    role="alertdialog"
+    ariaLabelledby="reset-mfa-title"
+    ariaDescribedby="reset-mfa-desc"
+    [dismissDisabled]="resetting()"
+    (dismiss)="cancelResetMfa()"
+  >
+    <h3 id="reset-mfa-title">Reset two-step verification?</h3>
+    <p id="reset-mfa-desc">
+      This removes {{ target.displayName }}'s authenticator and recovery codes and signs them out
+      everywhere. They will sign in with their password and set up a new authenticator. Only do this
+      once you are sure it is them.
+    </p>
+    <div class="actions">
+      <app-button variant="secondary" [disabled]="resetting()" (pressed)="cancelResetMfa()">
+        Cancel
+      </app-button>
+      <app-button variant="danger" [disabled]="resetting()" (pressed)="confirmResetMfa()">
+        {{ resetting() ? 'Resetting…' : 'Reset' }}
+      </app-button>
+    </div>
   </app-dialog-shell>
 }

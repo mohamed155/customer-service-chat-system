@@ -9,6 +9,12 @@ export const AUTH_ROUTES: Routes = [
     title: 'Sign in',
   },
   {
+    path: APP_PATHS.auth.mfa,
+    loadComponent: () =>
+      import('./mfa-challenge/mfa-challenge.component').then((m) => m.MfaChallengeComponent),
+    title: 'Two-step verification',
+  },
+  {
     path: APP_PATHS.auth.signup,
     loadComponent: () => import('./signup/signup.component').then((m) => m.SignupComponent),
     title: 'Create account',

@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-11
 
-**Status**: In progress (parts 1 and 2 of 3 are the backend; part 3 is the dashboard)
+**Status**: Implemented (parts 1 and 2 are the backend; part 3 is the dashboard)
 
 **Input**: MOH-34, ADR-005 phase M1, threat model risk 4 (row 4.11 E).
 
@@ -29,8 +29,7 @@ There is no second factor. A session is an 8-hour HS256 JWT in the `app_session`
 | 3 | The dashboard: enrol, sign in with a code, step-up prompt, recovery codes, reset buttons | MOH-57 |
 
 Enforcement is behind `AUTH_MFA_REQUIRED` (on by default in production and staging, off in
-development and tests). It must not be turned on in a deployed environment before part 3, or nobody
-could sign in; no environment is deployed yet.
+development and tests). The dashboard screens of part 3 exist, so it can be on wherever it is deployed.
 
 ## Requirements (part 1)
 

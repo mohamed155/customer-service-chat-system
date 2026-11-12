@@ -1,0 +1,44 @@
+<app-auth-card
+  title="Two-step verification"
+  [subtitle]="
+    usingRecovery()
+      ? 'Enter one of your recovery codes'
+      : 'Enter the 6-digit code from your authenticator app'
+  "
+>
+  <form (submit)="$event.preventDefault(); submit()">
+    <label for="mfa-credential">
+      {{ usingRecovery() ? 'Recovery code' : 'Authentication code' }}
+      @if (usingRecovery()) {
+        <input
+          id="mfa-credential"
+          type="text"
+          autocomplete="off"
+          autocapitalize="characters"
+          [formControl]="credential"
+        />
+      } @else {
+        <input
+          id="mfa-credential"
+          type="text"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          [formControl]="credential"
+        />
+      }
+    </label>
+    @if (errorMessage()) {
+      <p role="alert">{{ errorMessage() }}</p>
+    }
+    <button type="submit" [disabled]="pending() || credential.invalid">
+      {{ pending() ? 'Verifying...' : 'Verify' }}
+    </button>
+  </form>
+  <span auth-footer>
+    <button type="button" class="link" (click)="toggleRecovery()">
+      {{ usingRecovery() ? 'Use an authenticator code' : 'Use a recovery code' }}
+    </button>
+    ·
+    <a [routerLink]="loginUrl">Back to sign in</a>
+  </span>
+</app-auth-card>

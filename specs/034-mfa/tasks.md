@@ -21,4 +21,10 @@
 
 ## Part 3: dashboard (MOH-57)
 
-- [ ] Sign-in second step, enrolment, recovery codes shown once, step-up prompt and retry, regeneration, reset buttons
+- [x] T020 `MfaService`; `AuthService` handles the password step ending in `mfa-required` and completes it (`completeMfa`)
+- [x] T021 `/auth/mfa`: the code screen with a switch to a recovery code; expired challenge sends the user back to the password
+- [x] T022 `/mfa-setup`: password, setup key and `otpauth://` link, first code, recovery codes shown once with copy and "I saved them"; reached after sign-in or from `mfa_enrolment_required`
+- [x] T023 Step-up: `StepUpService`, the dialog in the app root and `stepUpInterceptor` (one retry of the original request)
+- [x] T024 `/security`: status and replacing recovery codes (needs step-up); "Account security" in the sidebar
+- [x] T025 Team list: "Reset 2FA" with a confirmation, for owners (by membership) and platform administrators (by user)
+- [x] T026 Component, service and interceptor tests; the CSP browser test covers `/auth/mfa`, `/mfa-setup`, `/security`

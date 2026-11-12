@@ -16,6 +16,7 @@ import {
   TeamMember,
   TenantInvitation,
 } from '../../../core/api/tenant-api.models';
+import { MfaService } from '../../../core/auth/mfa.service';
 import { CurrentUserService } from '../../../core/tenant/current-user.service';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { Store } from '@ngrx/store';
@@ -145,12 +146,16 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
 })
 export class TeamListComponent {
   protected readonly store = inject(TeamStore);
+  private readonly mfa = inject(MfaService);
   private readonly permissions = inject(PermissionsService);
   private readonly currentUserService = inject(CurrentUserService);
   private readonly globalStore = inject(Store, { optional: true });
 
   protected readonly showInviteDialog = signal(false);
   protected readonly showSkillsManager = signal(false);
+  protected readonly resetTarget = signal<TeamMember | null>(null);
+  protected readonly resetting = signal(false);
+  protected readonly resetResult = signal<{ tone: 'success' | 'error'; text: string } | null>(null);
   protected readonly invitationSubmitting = signal(false);
   protected readonly invitationError = signal<string | null>(null);
   protected readonly invitationResult = signal<CreateInvitationResponse | null>(null);
@@ -299,6 +304,57 @@ export class TeamListComponent {
       this.inviteTrigger?.focus();
       this.inviteTrigger = null;
     });
+  }
+
+  /** A workspace owner, or a platform administrator looking at a workspace, can reset a member. */
+  protected canResetMfa(member: TeamMember): boolean {
+    return (
+      !this.isSelf(member) && (this.canAssignOwner() || this.permissions.has('platform.admin'))
+    );
+  }
+
+  protected askResetMfa(member: TeamMember): void {
+    this.resetResult.set(null);
+    this.resetTarget.set(member);
+  }
+
+  protected cancelResetMfa(): void {
+    if (this.resetting()) return;
+    this.resetTarget.set(null);
+  }
+
+  protected async confirmResetMfa(): Promise<void> {
+    const target = this.resetTarget();
+    if (!target) return;
+    this.resetting.set(true);
+    try {
+      // The server checks who may reset whom; an owner only for a member who belongs to this
+      // workspace alone, a platform administrator for anyone.
+      if (this.canAssignOwner()) {
+        await this.mfa.resetMember(target.id);
+      } else {
+        await this.mfa.resetUser(target.userId);
+      }
+      this.resetResult.set({
+        tone: 'success',
+        text: `${target.displayName} was signed out everywhere and must set up two-step verification again.`,
+      });
+    } catch (error) {
+      const status = (error as { status?: number } | null)?.status;
+      const code = (error as { code?: string } | null)?.code;
+      this.resetResult.set({
+        tone: 'error',
+        text:
+          code === 'mfa_step_up_required'
+            ? 'The reset was cancelled.'
+            : status === 403
+              ? 'This person belongs to other workspaces or is platform staff. Ask a platform administrator.'
+              : 'The reset did not go through. Try again.',
+      });
+    } finally {
+      this.resetting.set(false);
+      this.resetTarget.set(null);
+    }
   }
 
   protected isSelf(member: TeamMember): boolean {

@@ -141,11 +141,7 @@ export class AuthService {
 
   private toMfaError(error: unknown): AuthMfaError {
     const apiError = isApiError(error) ? error : mapHttpError(error);
-    return new AuthMfaError(
-      mfaErrorMessage(apiError.status),
-      apiError,
-      apiError.status === 401,
-    );
+    return new AuthMfaError(mfaErrorMessage(apiError.status), apiError, apiError.status === 401);
   }
 
   private toSignupError(error: unknown): AuthSignupError {

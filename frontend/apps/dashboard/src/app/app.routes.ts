@@ -27,10 +27,25 @@ export const routes: Routes = [
     data: { pageTitle: 'inviteAccept' },
   },
   {
+    // Reached by a signed-in user whose account needs a second factor; outside the shell and the
+    // guest-only auth routes.
+    path: APP_PATHS.mfaSetup,
+    canMatch: [authGuard],
+    loadComponent: () =>
+      import('./features/auth/mfa-setup/mfa-setup.component').then((m) => m.MfaSetupComponent),
+    title: 'Set up two-step verification',
+  },
+  {
     path: '',
     component: AppShellComponent,
     canMatch: [authGuard],
     children: [
+      {
+        path: APP_PATHS.security,
+        loadComponent: () =>
+          import('./features/account/security.component').then((m) => m.SecurityComponent),
+        title: 'Security',
+      },
       {
         path: APP_PATHS.platform.base,
         canMatch: [areaAccessGuard, permissionGuard],

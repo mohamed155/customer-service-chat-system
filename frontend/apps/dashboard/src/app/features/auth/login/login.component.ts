@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthLoginError, AuthService } from '../../../core/auth/auth.service';
+import { MfaService } from '../../../core/auth/mfa.service';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { AuthCardComponent } from '../auth-card/auth-card.component';
 
@@ -13,6 +14,7 @@ import { AuthCardComponent } from '../auth-card/auth-card.component';
 })
 export class LoginComponent {
   private readonly auth = inject(AuthService);
+  private readonly mfa = inject(MfaService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -41,10 +43,34 @@ export class LoginComponent {
     const { email, password } = this.form.getRawValue();
 
     try {
-      await this.auth.login(email, password);
+      const outcome = await this.auth.login(email, password);
+      const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+      const queryParams = returnUrl ? { returnUrl } : {};
+      if (outcome === 'mfa-required') {
+        await this.router.navigate([`/${APP_PATHS.auth.base}/${APP_PATHS.auth.mfa}`], {
+          queryParams,
+        });
+        return;
+      }
+      if (await this.needsSecondFactorSetup()) {
+        await this.router.navigate([`/${APP_PATHS.mfaSetup}`], { queryParams });
+        return;
+      }
       await this.router.navigateByUrl(this.safeReturnUrl());
     } catch (error) {
       this.errorMessage.set(error instanceof AuthLoginError ? error.message : 'Sign in failed');
+    }
+  }
+
+  /** The account has no second factor yet but this deployment requires one. */
+  private async needsSecondFactorSetup(): Promise<boolean> {
+    try {
+      const status = await this.mfa.status();
+      return status.required && !status.sessionSecondFactor;
+    } catch {
+      // The status is a convenience: if it cannot be read, the first call that needs a second
+      // factor sends the user to set one up.
+      return false;
     }
   }
 

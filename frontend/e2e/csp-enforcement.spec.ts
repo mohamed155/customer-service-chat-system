@@ -41,6 +41,7 @@ const tenantRoutes = [
   '/tenant/escalations',
   '/tenant/widgets',
   '/tenant/notifications',
+  '/security',
 ];
 const platformPermissions = [
   'platform.admin',
@@ -221,7 +222,13 @@ test.describe('Content-Security-Policy enforcement', () => {
     });
   }
 
-  for (const route of ['/auth/login', '/auth/signup', '/auth/forgot-password', '/no/such/page']) {
+  for (const route of [
+    '/auth/login',
+    '/auth/signup',
+    '/auth/forgot-password',
+    '/auth/mfa',
+    '/no/such/page',
+  ]) {
     test(`${route} renders with no violations`, async ({ page }) => {
       await recordViolations(page);
       await mockSignedOut(page);
@@ -230,4 +237,16 @@ test.describe('Content-Security-Policy enforcement', () => {
       expect(await violations(page)).toEqual([]);
     });
   }
+
+  test('/mfa-setup (a signed-in user setting up a second factor) renders with no violations', async ({
+    page,
+  }) => {
+    await recordViolations(page);
+    await mockSignedIn(page);
+    await page.goto('/mfa-setup');
+    await expect(page.getByText('Set up two-step verification').first()).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    expect(new URL(page.url()).pathname).toBe('/mfa-setup');
+    expect(await violations(page)).toEqual([]);
+  });
 });
