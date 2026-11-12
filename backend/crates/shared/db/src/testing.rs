@@ -380,6 +380,7 @@ pub mod isolation {
         "billing_plans",
         "integration_catalog",
         "revoked_sessions",
+        "secret_keks",
         "tenants",
         "users",
     ];

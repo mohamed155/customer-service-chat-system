@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 /// Public router for WhatsApp webhook endpoints.
 /// Mounted outside tenant middleware — no auth, the token in the URL is the
-/// credential. The server layers `Arc<MasterKey>` (via Extension) and body
+/// credential. The server layers `Arc<Vault>` (via Extension) and body
 /// size limit onto this router before merging into the main API router.
 pub fn public_router() -> Router<PgPool> {
     Router::new()

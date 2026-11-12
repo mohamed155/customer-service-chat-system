@@ -33,5 +33,6 @@ pub mod rate_limit;
 pub mod rate_limit_audit;
 pub mod router;
 pub mod run_mode;
+pub mod secret_maintenance;
 pub mod security_headers;
 pub mod state;

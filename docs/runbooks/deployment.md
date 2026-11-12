@@ -71,7 +71,7 @@ script and the Compose stack run `all`. Splitting a deployment into separate `ap
 A `gateway` process serves only the widget, integration-hook and WhatsApp-webhook routes. It has
 no cookie sessions, no platform or tenant routes and no API docs, and it doesn't load the session-signing secret or
 the AI key (`AUTH_JWT_SECRET` and `APP_AI_KEY_ENCRYPTION_KEY` can be left out of its environment). It still needs `APP_INTEGRATION_SECRETS_KEY` to verify channel
-webhook signatures, until envelope encryption (ADR-014) replaces it.
+webhook signatures, until the secrets still sealed under it have been moved to envelope encryption (`server secrets reencrypt`, ADR-014). Every process, the gateway included, must have the same `APP_SECRETS_ROOT_KEY`: the gateway holds only the integration key, so without it the root key it derives differs and it cannot unwrap the keys the other processes wrote.
 
 The widget's public API lives at `/widget/v1/*` on the public host, next to the static widget
 app under `/widget/*`. `infra/Caddyfile` sends `/widget/v1/*` to the backend as `/api/v1/widget/v1/*`

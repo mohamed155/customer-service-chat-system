@@ -13,7 +13,7 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 
-use crate::crypto::{self, MasterKey};
+use crate::crypto;
 use crate::model;
 use crate::queries;
 
@@ -74,16 +74,13 @@ fn not_found_response() -> Response {
     (StatusCode::NOT_FOUND, Json(json!({ "error": "not found" }))).into_response()
 }
 
-/// Resolve the integration master key from app config. Mirrors the helper
-/// in `routes::load_master_key`; duplicated here so the webhook crate does
-/// not need to call back into `routes`.
+/// The keys for integration secrets (see `crypto::vault_from_config`).
 #[allow(clippy::result_large_err)]
-fn load_master_key(config: &config::AppConfig) -> Result<MasterKey, Response> {
-    let raw = config.integration_secrets_key.as_deref().ok_or_else(|| {
+fn load_vault(pool: &sqlx::PgPool, config: &config::AppConfig) -> Result<secrets::Vault, Response> {
+    crypto::vault_from_config(pool, config).map_err(|e| {
+        tracing::error!(error = %e, "integration secrets keys are not usable");
         ApiError::internal_error("Integration secrets key is not configured").into_response()
-    })?;
-    MasterKey::from_base64(raw)
-        .map_err(|_| ApiError::internal_error("Integration secrets key is invalid").into_response())
+    })
 }
 
 /// Persist a non-throttled rejection event (used for `invalid_signature` and
@@ -238,12 +235,12 @@ pub async fn receive_webhook(
         }
     }
 
-    let master = match load_master_key(&config) {
+    let master = match load_vault(&pool, &config) {
         Ok(m) => m,
         Err(resp) => return resp,
     };
 
-    let (ct, nonce) = match queries::find_secret_ciphertext(
+    let stored = match queries::find_secret_ciphertext(
         &pool,
         conn.tenant_id,
         conn.connection_id,
@@ -251,7 +248,7 @@ pub async fn receive_webhook(
     )
     .await
     {
-        Ok(Some(pair)) => pair,
+        Ok(Some(stored)) => stored,
         Ok(None) => {
             log_rejection_event(
                 &pool,
@@ -269,9 +266,14 @@ pub async fn receive_webhook(
     };
 
     let aad = crypto::aad(conn.tenant_id, &conn.catalog_slug, SIGNING_SECRET_FIELD);
-    let secret = match crypto::open(&master, &aad, &ct, &nonce) {
-        Ok(s) => s,
-        Err(_) => {
+    let secret = match master
+        .open(&aad, &stored)
+        .await
+        .ok()
+        .and_then(|plaintext| crypto::text(&plaintext).ok())
+    {
+        Some(s) => s,
+        None => {
             log_rejection_event(
                 &pool,
                 conn.tenant_id,

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+secrets = { path = "../shared/secrets" }
 analytics = { path = "../modules/analytics" }
 audit = { path = "../modules/audit" }
 async-trait.workspace = true

@@ -1,33 +1,27 @@
-use aes_gcm::aead::Nonce as AeadNonce;
-use aes_gcm::{
-    aead::{Aead, Generate, KeyInit, Payload},
-    Aes256Gcm, Nonce,
-};
-use base64::Engine;
-#[allow(unused_imports)]
-use uuid::Uuid;
+//! Direct (non-envelope) sealing of integration secrets: a thin layer over [`secrets::legacy`].
+//!
+//! New secrets are sealed by the shared [`secrets::SecretBox`] (ADR-014); this module is what
+//! earlier rows and the test fixtures use. The AES code lives in the `secrets` crate only.
 
-pub struct MasterKey([u8; 32]);
+pub use secrets::legacy::MasterKey;
 
-impl std::fmt::Debug for MasterKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("MasterKey([REDACTED])")
-    }
-}
-
-impl MasterKey {
-    pub fn from_base64(s: &str) -> Result<Self, String> {
-        let decoded = base64::engine::general_purpose::STANDARD
-            .decode(s)
-            .map_err(|e| format!("base64 decode failed: {e}"))?;
-        if decoded.len() != 32 {
-            return Err(
-                "integration master key must be a base64-encoded string of exactly 32 bytes".into(),
-            );
-        }
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&decoded);
-        Ok(Self(key))
+/// The keys of a running process for integration secrets: the earlier integration key (rows not
+/// yet moved to envelope encryption) and the root key for everything sealed since (ADR-014).
+/// Fails when none is configured.
+pub fn vault_from_config(
+    pool: &sqlx::PgPool,
+    config: &config::AppConfig,
+) -> Result<secrets::Vault, String> {
+    let vault = secrets::Vault::from_config(
+        pool,
+        config.integration_secrets_key.as_deref(),
+        config.secrets_root_key(),
+        config.secrets_root_key_previous.as_deref(),
+    )?;
+    if vault.has_keys() {
+        Ok(vault)
+    } else {
+        Err("Integration secrets key is not configured".to_string())
     }
 }
 
@@ -36,17 +30,7 @@ pub fn seal(
     scope_aad: &str,
     plaintext: &str,
 ) -> Result<(Vec<u8>, Vec<u8>), String> {
-    let cipher =
-        Aes256Gcm::new_from_slice(&master.0).map_err(|e| format!("AES-256-GCM init: {e}"))?;
-    let nonce = AeadNonce::<Aes256Gcm>::generate();
-    let payload = Payload {
-        msg: plaintext.as_bytes(),
-        aad: scope_aad.as_bytes(),
-    };
-    let ciphertext = cipher
-        .encrypt(&nonce, payload)
-        .map_err(|e| format!("encryption failed: {e}"))?;
-    Ok((ciphertext, nonce.to_vec()))
+    secrets::legacy::seal(master, scope_aad, plaintext.as_bytes()).map_err(|e| e.to_string())
 }
 
 pub fn open(
@@ -55,23 +39,15 @@ pub fn open(
     ciphertext: &[u8],
     nonce: &[u8],
 ) -> Result<String, String> {
-    let cipher =
-        Aes256Gcm::new_from_slice(&master.0).map_err(|e| format!("AES-256-GCM init: {e}"))?;
-    if nonce.len() != 12 {
-        return Err(format!(
-            "invalid nonce length: expected 12, got {}",
-            nonce.len()
-        ));
-    }
-    let nonce = Nonce::try_from(nonce).map_err(|_| "invalid nonce".to_string())?;
-    let payload = Payload {
-        msg: ciphertext,
-        aad: scope_aad.as_bytes(),
-    };
-    let plaintext = cipher
-        .decrypt(&nonce, payload)
-        .map_err(|_| "decryption failed (tampered ciphertext or wrong key)".to_string())?;
-    String::from_utf8(plaintext).map_err(|_| "decrypted data is not valid UTF-8".to_string())
+    let plaintext =
+        secrets::legacy::open(master, scope_aad, ciphertext, nonce).map_err(|e| e.to_string())?;
+    text(&plaintext)
+}
+
+/// A secret from decrypted bytes. Fails if they are not UTF-8.
+pub fn text(plaintext: &[u8]) -> Result<String, String> {
+    String::from_utf8(plaintext.to_vec())
+        .map_err(|_| "decrypted data is not valid UTF-8".to_string())
 }
 
 pub fn aad(tenant_id: uuid::Uuid, slug: &str, field_key: &str) -> String {
@@ -89,15 +65,10 @@ pub fn hint(plaintext: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine;
+    use uuid::Uuid;
 
     fn test_master_key() -> MasterKey {
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
-            .unwrap();
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&bytes);
-        MasterKey(key)
+        MasterKey::from_base64("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=").unwrap()
     }
 
     #[test]

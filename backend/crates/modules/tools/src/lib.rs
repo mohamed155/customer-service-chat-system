@@ -1,5 +1,6 @@
 pub mod approval;
 pub mod audit;
+pub mod credential;
 pub mod executor;
 pub mod model;
 pub mod policy;

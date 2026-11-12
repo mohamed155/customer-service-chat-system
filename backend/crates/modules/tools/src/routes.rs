@@ -708,8 +708,9 @@ pub async fn create_tenant_tool(
             .into_response();
     }
 
-    let credential_ciphertext = seal_credential_if_provided(
+    let credential = seal_credential_if_provided(
         app_config.as_ref().map(|Extension(c)| c.as_ref()),
+        &pool,
         &payload.credential,
         ctx.tenant_id,
         &payload.name,
@@ -717,7 +718,7 @@ pub async fn create_tenant_tool(
     )
     .await;
 
-    let credential_ciphertext = match credential_ciphertext {
+    let credential = match credential {
         Ok(v) => v,
         Err(resp) => return resp,
     };
@@ -728,7 +729,7 @@ pub async fn create_tenant_tool(
         description: payload.description,
         input_schema: payload.input_schema,
         endpoint_url: payload.endpoint_url,
-        credential_ciphertext,
+        credential,
         classification: payload.classification,
         created_by_membership_id: membership_id,
     };
@@ -820,8 +821,9 @@ pub async fn update_tenant_tool_route(
         None => String::new(),
     };
     drop(uow);
-    let credential_ciphertext = seal_credential_if_provided(
+    let credential = seal_credential_if_provided(
         app_config.as_ref().map(|Extension(c)| c.as_ref()),
+        &pool,
         &payload.credential,
         ctx.tenant_id,
         &scope_name,
@@ -829,7 +831,7 @@ pub async fn update_tenant_tool_route(
     )
     .await;
 
-    let credential_ciphertext = match credential_ciphertext {
+    let credential = match credential {
         Ok(v) => v,
         Err(resp) => return resp,
     };
@@ -873,7 +875,7 @@ pub async fn update_tenant_tool_route(
         description: payload.description,
         input_schema: payload.input_schema,
         endpoint_url: payload.endpoint_url,
-        credential_ciphertext,
+        credential,
         classification: payload.classification,
         enabled: payload.enabled,
     };
@@ -960,16 +962,17 @@ pub async fn delete_tenant_tool_route(
     }
 }
 
-/// Shared helper: seal credential if provided, return Ok(None) if not provided.
-/// Stored as `base64(ciphertext)||base64(nonce)`, scoped to tenant + tool name
-/// (the format `executor::execute_tenant_tool` unseals).
+/// Shared helper: seal the credential if one was provided, `Ok(None)` if not. The secret is
+/// sealed under the tenant's key and bound to tenant + tool name (the scope
+/// `executor::execute_tenant_tool` opens it with).
 async fn seal_credential_if_provided(
     config: Option<&config::AppConfig>,
+    pool: &sqlx::PgPool,
     credential: &Option<String>,
     tenant_id: Uuid,
     tool_name: &str,
     request_id: &str,
-) -> Result<Option<String>, Response> {
+) -> Result<Option<secrets::StoredSecret>, Response> {
     let Some(plaintext) = credential else {
         return Ok(None);
     };
@@ -978,18 +981,24 @@ async fn seal_credential_if_provided(
             .with_request_id(request_id)
             .into_response()
     };
-    let key_b64 = config
-        .and_then(|c| c.ai_key_encryption_key.as_deref())
-        .ok_or_else(unavailable)?;
-    let master =
-        ai_providers::crypto::MasterKey::from_base64(key_b64).map_err(|_| unavailable())?;
+    let config = config.ok_or_else(unavailable)?;
+    let vault = secrets::Vault::from_config(
+        pool,
+        config.ai_key_encryption_key.as_deref(),
+        config.secrets_root_key(),
+        config.secrets_root_key_previous.as_deref(),
+    )
+    .map_err(|_| unavailable())?;
+    if !vault.can_seal() {
+        return Err(unavailable());
+    }
     let scope = ai_providers::crypto::aad(Some(tenant_id), tool_name);
-    let (ct, nonce) =
-        ai_providers::crypto::seal(&master, &scope, plaintext).map_err(|_| unavailable())?;
-    let b64 = &base64::engine::general_purpose::STANDARD;
-    Ok(Some(format!(
-        "{}||{}",
-        base64::Engine::encode(b64, ct),
-        base64::Engine::encode(b64, nonce)
-    )))
+    let stored = vault
+        .seal(Some(tenant_id), &scope, plaintext.as_bytes())
+        .await
+        .map_err(|e| {
+            tracing::error!(%e, "tool credential could not be sealed");
+            unavailable()
+        })?;
+    Ok(Some(stored))
 }

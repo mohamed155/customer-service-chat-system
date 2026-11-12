@@ -1,6 +1,6 @@
 # ADR-014: Envelope encryption for tenant secrets
 
-- **Status:** Accepted (MOH-18)
+- **Status:** Accepted (MOH-18); implemented with a local key provider (MOH-33)
 - **Date:** 2026-11-07
 - **Deciders:** Platform engineering
 - **Related:** [System architecture §12.2 and §19](../architecture/system-architecture.md#122-integrations-and-secrets),
@@ -101,12 +101,17 @@ unrecoverable, including copies in backups, without rewriting backups.
 
 ## Current state and migration
 
-These gaps between the current code and this decision are follow-up work. No code changes in
-this ADR.
+Implemented in MOH-33 ([spec 035](../../specs/035-envelope-encryption/)). What was decided and what
+is left:
 
-| # | Gap | Where | Follow-up |
-| -- | -- | -- | -- |
-| E1 | **Direct encryption with static keys, not envelope encryption.** Secrets are sealed with AES-256-GCM directly under one environment-provided master key: `APP_AI_KEY_ENCRYPTION_KEY` for AI provider keys and tool credentials, `APP_INTEGRATION_SECRETS_KEY` for integration secrets. There's no DEK, no tenant KEK, no key version stored with the ciphertext, no KMS, and no rotation path. | `backend/crates/ai-providers/src/crypto.rs`, `backend/crates/modules/integrations/src/crypto.rs`, `docs/configuration.md` | Introduce `SecretBox` with `LocalKms`, store key metadata per secret, migrate existing ciphertexts with a verified re-encrypt job, then add a cloud KMS adapter for staging/production. |
-| E2 | **The crypto code is duplicated** in two crates with near-identical `seal` / `open` functions. | same files | Replace both with the shared `SecretBox`. |
-| E3 | AAD scoping is already in place (`seal(master, scope_aad, plaintext)`), which binds ciphertexts to their scope. Keep this. | same files | Carry the AAD format into `SecretBox`. |
-| E4 | No crypto-shredding on tenant deletion; deleting a tenant leaves secrets decryptable from backups as long as the master key exists. | — | Comes with tenant KEKs (E1). |
+| # | Gap | Status |
+| -- | -- | -- |
+| E1 | Direct encryption with static keys, not envelope encryption | **Resolved.** Every new secret is sealed under its own DEK, wrapped by a per-tenant or platform KEK, wrapped by the root key (`crates/shared/secrets`; migration `0076`). The wrapped DEK, `kek_id`, `kek_version` and the algorithm are stored beside each secret. `server secrets reencrypt` moves earlier rows after checking that the new seal opens to the same plaintext; readers open both kinds until it has run everywhere. Key rotation re-wraps keys, not secrets ([runbook section 7](../runbooks/operations.md#7-rotate-secret-keys-and-move-secrets-to-envelope-encryption)). |
+| E2 | The crypto code is duplicated in two crates | **Resolved.** One implementation in `secrets`; the `crypto` modules of `ai-providers` and `integrations` are thin wrappers for the earlier scheme. |
+| E3 | AAD scoping | **Kept.** The scope strings are unchanged (`{tenant\|platform}\|{provider}`, `integration\|{tenant}\|{slug}\|{field}`, `{tenant}\|{tool}`) and are the AAD of the secret itself; the DEK wrap adds the KEK id and version. |
+| E4 | No crypto-shredding on tenant deletion | **Resolved.** A trigger on `tenants` destroys the tenant's KEK versions (clears the wrapped key) when the tenant is soft- or hard-deleted, whatever code path does it. Restoring the tenant does not restore the keys. Other processes drop a cached KEK within five minutes. |
+| E5 | No cloud KMS adapter | **Open, by decision (2026-11-11).** The `Kms` port is in place with `LocalKms`, which keeps the root key in process memory (`APP_SECRETS_ROOT_KEY`, rotated through `APP_SECRETS_ROOT_KEY_PREVIOUS`). A cloud KMS is one more implementation of the trait. Until then the root key is as safe as the environment that holds it, and a leaked database alone exposes no usable secret. |
+| E6 | The earlier read path remains | **Open.** Rows sealed under a static key still open, so a deployment can migrate without downtime. Remove the path (and the `APP_INTEGRATION_SECRETS_KEY` requirement for the gateway) once `server secrets reencrypt` reports nothing left everywhere. |
+
+A split deployment (ADR-010) has to give every process the same `APP_SECRETS_ROOT_KEY`: the
+gateway holds only the integration key and would otherwise derive a different root.

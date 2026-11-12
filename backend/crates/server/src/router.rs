@@ -1327,11 +1327,8 @@ fn build_app(
     // WhatsApp webhook (spec 029) — mounted outside tenant auth, token-based. It is a public
     // channel webhook, so it belongs to the gateway.
     if let (true, Some(whatsapp_store)) = (mode.serves_gateway(), whatsapp_store) {
-        let master_key = state
-            .config
-            .integration_secrets_key
-            .as_ref()
-            .and_then(|key| integrations::crypto::MasterKey::from_base64(key).ok())
+        let master_key = integrations::crypto::vault_from_config(&state.db, &state.config)
+            .ok()
             .map(Arc::new);
         if let Some(ref mk) = master_key {
             let whatsapp_webhook = whatsapp::routes::public_router()
@@ -1457,6 +1454,8 @@ mod tests {
             public_dashboard_url: String::new(),
             ai_key_encryption_key: None,
             integration_secrets_key: None,
+            secrets_root_key: None,
+            secrets_root_key_previous: None,
             ai_openai_base_url: None,
             ai_anthropic_base_url: None,
             ai_gemini_base_url: None,

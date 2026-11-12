@@ -615,16 +615,19 @@ pub async fn put_tenant_credential(
     let key_hint = crypto::hint(&plaintext_key);
     let aad = crypto::aad(Some(ctx.tenant_id), &provider);
 
-    let master = match ai.master_key() {
-        Some(k) => k,
-        None => {
+    let vault = match ai.vault() {
+        Some(v) if v.can_seal() => v,
+        _ => {
             return ApiError::internal_error("Encryption is not configured")
                 .with_request_id(&ctx.request_id)
                 .into_response();
         }
     };
 
-    let (ciphertext, nonce) = match crypto::seal(master, &aad, &plaintext_key) {
+    let stored = match vault
+        .seal(Some(ctx.tenant_id), &aad, plaintext_key.as_bytes())
+        .await
+    {
         Ok(v) => v,
         Err(e) => {
             tracing::error!(%e, "put_tenant_credential: seal failed");
@@ -667,12 +670,17 @@ pub async fn put_tenant_credential(
         Some(id) => {
             if let Err(e) = sqlx::query(
                 "UPDATE ai_credentials SET ciphertext = $1, nonce = $2, key_hint = $3, \
-                 deleted_at = NULL WHERE id = $4",
+                 deleted_at = NULL, wrapped_dek = $5, kek_id = $6, kek_version = $7, \
+                 algorithm = $8 WHERE id = $4",
             )
-            .bind(&ciphertext)
-            .bind(&nonce)
+            .bind(&stored.ciphertext)
+            .bind(&stored.nonce)
             .bind(&key_hint)
             .bind(id)
+            .bind(stored.wrapped_dek())
+            .bind(stored.kek_id())
+            .bind(stored.kek_version())
+            .bind(stored.algorithm())
             .execute(tx.conn())
             .await
             {
@@ -685,14 +693,19 @@ pub async fn put_tenant_credential(
         }
         None => {
             let id = match sqlx::query_scalar(
-                "INSERT INTO ai_credentials (tenant_id, provider, ciphertext, nonce, key_hint) \
-                 VALUES ($1, $2, $3, $4, $5) RETURNING id",
+                "INSERT INTO ai_credentials (tenant_id, provider, ciphertext, nonce, key_hint, \
+                 wrapped_dek, kek_id, kek_version, algorithm) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
             )
             .bind(ctx.tenant_id)
             .bind(&provider)
-            .bind(&ciphertext)
-            .bind(&nonce)
+            .bind(&stored.ciphertext)
+            .bind(&stored.nonce)
             .bind(&key_hint)
+            .bind(stored.wrapped_dek())
+            .bind(stored.kek_id())
+            .bind(stored.kek_version())
+            .bind(stored.algorithm())
             .fetch_one(tx.conn())
             .await
             {
@@ -889,14 +902,14 @@ pub async fn put_platform_credential(
     let key_hint = crypto::hint(&plaintext_key);
     let aad = crypto::aad(None, &provider);
 
-    let master = match ai.master_key() {
-        Some(k) => k,
-        None => {
+    let vault = match ai.vault() {
+        Some(v) if v.can_seal() => v,
+        _ => {
             return ApiError::internal_error("Encryption is not configured").into_response();
         }
     };
 
-    let (ciphertext, nonce) = match crypto::seal(master, &aad, &plaintext_key) {
+    let stored = match vault.seal(None, &aad, plaintext_key.as_bytes()).await {
         Ok(v) => v,
         Err(e) => {
             tracing::error!(%e, "put_platform_credential: seal failed");
@@ -907,13 +920,17 @@ pub async fn put_platform_credential(
     // Written through the audited function `xtenant.platform_ai_credential_set`, which also writes
     // the `ai_credential.set` audit row in the same transaction.
     if let Err(e) = sqlx::query_as::<_, (Uuid, bool)>(
-        "SELECT id, rotated FROM xtenant.platform_ai_credential_set($1, $2, $3, $4, $5)",
+        "SELECT id, rotated FROM xtenant.platform_ai_credential_set($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
     .bind(principal.user_id)
     .bind(&provider)
-    .bind(&ciphertext)
-    .bind(&nonce)
+    .bind(&stored.ciphertext)
+    .bind(&stored.nonce)
     .bind(&key_hint)
+    .bind(stored.wrapped_dek())
+    .bind(stored.kek_id())
+    .bind(stored.kek_version())
+    .bind(stored.algorithm())
     .fetch_one(&pool)
     .await
     {
@@ -1033,7 +1050,7 @@ pub async fn test_tenant_config(
     let provider_name = &resolved.row.provider;
     let model = &resolved.row.model;
 
-    let master = match ai.master_key() {
+    let vault = match ai.vault() {
         Some(k) => k,
         None => {
             return ApiError::not_found("AI is not configured")
@@ -1042,7 +1059,7 @@ pub async fn test_tenant_config(
         }
     };
 
-    let (key, _) = match resolve_credential(&pool, master, scope, provider_name).await {
+    let (key, _) = match resolve_credential(&pool, vault, scope, provider_name).await {
         Ok(Some(k)) => k,
         Ok(None) => {
             return ApiError::not_found("AI is not configured")
@@ -1160,14 +1177,14 @@ pub async fn test_platform_config(
     let provider_name = &resolved.row.provider;
     let model = &resolved.row.model;
 
-    let master = match ai.master_key() {
+    let vault = match ai.vault() {
         Some(k) => k,
         None => {
             return ApiError::not_found("AI is not configured").into_response();
         }
     };
 
-    let (key, _) = match resolve_credential(&pool, master, scope, provider_name).await {
+    let (key, _) = match resolve_credential(&pool, vault, scope, provider_name).await {
         Ok(Some(k)) => k,
         Ok(None) => {
             return ApiError::not_found("AI is not configured").into_response();

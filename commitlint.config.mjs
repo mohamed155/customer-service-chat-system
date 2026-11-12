@@ -24,6 +24,7 @@ const scopes = [
   "platform",
   "prompts",
   "rbac",
+  "secrets",
   "telegram",
   "tenancy",
   "tools",

@@ -7,7 +7,8 @@ pub struct ToolExecutionCtx {
     pub tenant_id: Uuid,
     pub conversation_id: Uuid,
     pub pool: sqlx::PgPool,
-    pub master_key: Option<ai_providers::crypto::MasterKey>,
+    /// Keys to open tool credentials; `None` when none are configured.
+    pub vault: Option<std::sync::Arc<secrets::Vault>>,
 }
 
 #[async_trait::async_trait]

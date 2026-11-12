@@ -10,6 +10,7 @@ use http_body_util::BodyExt;
 use integrations::crypto::{aad, hint, seal, MasterKey};
 use integrations::webhook::hash_token;
 use kernel::{InMemoryRateLimitStore, RateLimiter};
+use secrets::Vault;
 use serde_json::json;
 use sha2::Sha256;
 use tower::ServiceExt;
@@ -27,8 +28,12 @@ const VERIFY_TOKEN_VALUE: &str = "test_verify_token";
 const APP_SECRET_VALUE: &str = "test_app_secret";
 const PHONE_NUMBER_ID: &str = "123456789";
 
-fn master_key() -> Arc<MasterKey> {
-    Arc::new(MasterKey::from_base64(TEST_MASTER_KEY_B64).unwrap())
+fn master_key() -> Arc<Vault> {
+    // Test rows are sealed the earlier way (one static key); the vault opens them.
+    Arc::new(Vault::new(
+        Some(MasterKey::from_base64(TEST_MASTER_KEY_B64).unwrap()),
+        None,
+    ))
 }
 
 fn require_db_tests() -> bool {
@@ -102,7 +107,7 @@ struct SenderFixture {
 
 async fn setup_sender_fixture(
     pool: &sqlx::PgPool,
-    mk: &MasterKey,
+    mk: &Vault,
     with_customer_message: bool,
     customer_message_age_secs: i64,
 ) -> SenderFixture {
@@ -111,18 +116,26 @@ async fn setup_sender_fixture(
 
     // Encrypt secrets
     let access_token_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_ACCESS_TOKEN);
-    let (access_ct, access_nonce) = seal(mk, &access_token_aad, ACCESS_TOKEN_VALUE).unwrap();
+    let (access_ct, access_nonce) = seal(
+        mk.legacy_key().unwrap(),
+        &access_token_aad,
+        ACCESS_TOKEN_VALUE,
+    )
+    .unwrap();
 
     let verify_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_VERIFY_TOKEN);
-    let (verify_ct, verify_nonce) = seal(mk, &verify_aad, VERIFY_TOKEN_VALUE).unwrap();
+    let (verify_ct, verify_nonce) =
+        seal(mk.legacy_key().unwrap(), &verify_aad, VERIFY_TOKEN_VALUE).unwrap();
 
     let app_secret_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_APP_SECRET);
-    let (app_secret_ct, app_secret_nonce) = seal(mk, &app_secret_aad, APP_SECRET_VALUE).unwrap();
+    let (app_secret_ct, app_secret_nonce) =
+        seal(mk.legacy_key().unwrap(), &app_secret_aad, APP_SECRET_VALUE).unwrap();
 
     let webhook_token = Uuid::new_v4().to_string();
     let token_hash = hash_token(&webhook_token);
     let token_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_WEBHOOK_TOKEN);
-    let (token_ct, token_nonce) = seal(mk, &token_aad, &webhook_token).unwrap();
+    let (token_ct, token_nonce) =
+        seal(mk.legacy_key().unwrap(), &token_aad, &webhook_token).unwrap();
 
     // Insert connection
     let connection_id: Uuid = sqlx::query_scalar(
@@ -356,6 +369,8 @@ fn test_config() -> config::AppConfig {
         release_sha: None,
         ai_key_encryption_key: Some("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=".into()),
         integration_secrets_key: None,
+        secrets_root_key: None,
+        secrets_root_key_previous: None,
         ai_openai_base_url: None,
         ai_anthropic_base_url: None,
         ai_gemini_base_url: None,
@@ -364,7 +379,7 @@ fn test_config() -> config::AppConfig {
     }
 }
 
-fn test_app(pool: sqlx::PgPool, mk: Arc<MasterKey>) -> Router {
+fn test_app(pool: sqlx::PgPool, mk: Arc<Vault>) -> Router {
     let store: Arc<dyn RateLimiter> = Arc::new(InMemoryRateLimitStore::new());
     whatsapp::routes::public_router()
         .layer(axum::extract::Extension(mk))

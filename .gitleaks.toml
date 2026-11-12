@@ -18,6 +18,10 @@ regexes = [
   # Test-only user passwords in server integration tests
   '''securePassword123!''',
   '''password123''',
+  # Fake values in the envelope-encryption and MFA integration tests: a wrong password to prove it
+  # is refused, and a fake provider key sent to the credential route.
+  '''not-the-password''',
+  '''sk-from-the-api-1234''',
 ]
 paths = [
   # Static design mockup with fake, masked Stripe-style keys

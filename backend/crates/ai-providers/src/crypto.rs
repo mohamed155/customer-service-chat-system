@@ -1,52 +1,18 @@
+//! Direct (non-envelope) sealing of provider keys: a thin layer over [`secrets::legacy`].
+//!
+//! New secrets are sealed by the shared [`secrets::SecretBox`] (ADR-014); this module is what
+//! earlier rows and the test fixtures use. The AES code lives in the `secrets` crate only.
+
 use crate::SecretKey;
-use aes_gcm::aead::Nonce as AeadNonce;
-use aes_gcm::{
-    aead::{Aead, Generate, KeyInit, Payload},
-    Aes256Gcm, Nonce,
-};
-use base64::Engine;
 
-pub struct MasterKey([u8; 32]);
-
-impl std::fmt::Debug for MasterKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("MasterKey([REDACTED])")
-    }
-}
-
-impl MasterKey {
-    pub fn from_base64(s: &str) -> Result<Self, String> {
-        let decoded = base64::engine::general_purpose::STANDARD
-            .decode(s)
-            .map_err(|e| format!("base64 decode failed: {e}"))?;
-        if decoded.len() != 32 {
-            return Err(
-                "APP_AI_KEY_ENCRYPTION_KEY must be a base64-encoded string of exactly 32 bytes"
-                    .into(),
-            );
-        }
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&decoded);
-        Ok(Self(key))
-    }
-}
+pub use secrets::legacy::MasterKey;
 
 pub fn seal(
     master: &MasterKey,
     scope_aad: &str,
     plaintext: &str,
 ) -> Result<(Vec<u8>, Vec<u8>), String> {
-    let cipher =
-        Aes256Gcm::new_from_slice(&master.0).map_err(|e| format!("AES-256-GCM init: {e}"))?;
-    let nonce = AeadNonce::<Aes256Gcm>::generate();
-    let payload = Payload {
-        msg: plaintext.as_bytes(),
-        aad: scope_aad.as_bytes(),
-    };
-    let ciphertext = cipher
-        .encrypt(&nonce, payload)
-        .map_err(|e| format!("encryption failed: {e}"))?;
-    Ok((ciphertext, nonce.to_vec()))
+    secrets::legacy::seal(master, scope_aad, plaintext.as_bytes()).map_err(|e| e.to_string())
 }
 
 pub fn open(
@@ -55,25 +21,16 @@ pub fn open(
     ciphertext: &[u8],
     nonce: &[u8],
 ) -> Result<SecretKey, String> {
-    let cipher =
-        Aes256Gcm::new_from_slice(&master.0).map_err(|e| format!("AES-256-GCM init: {e}"))?;
-    if nonce.len() != 12 {
-        return Err(format!(
-            "invalid nonce length: expected 12, got {}",
-            nonce.len()
-        ));
-    }
-    let nonce = Nonce::try_from(nonce).map_err(|_| "invalid nonce".to_string())?;
-    let payload = Payload {
-        msg: ciphertext,
-        aad: scope_aad.as_bytes(),
-    };
-    let plaintext = cipher
-        .decrypt(&nonce, payload)
-        .map_err(|_| "decryption failed (tampered ciphertext or wrong key)".to_string())?;
-    let key_str = String::from_utf8(plaintext)
-        .map_err(|_| "decrypted data is not valid UTF-8".to_string())?;
-    Ok(SecretKey::new(key_str))
+    let plaintext =
+        secrets::legacy::open(master, scope_aad, ciphertext, nonce).map_err(|e| e.to_string())?;
+    secret_key(&plaintext)
+}
+
+/// A provider key from decrypted bytes. Fails if they are not UTF-8.
+pub fn secret_key(plaintext: &[u8]) -> Result<SecretKey, String> {
+    String::from_utf8(plaintext.to_vec())
+        .map(SecretKey::new)
+        .map_err(|_| "decrypted data is not valid UTF-8".to_string())
 }
 
 pub fn aad(tenant_id: Option<uuid::Uuid>, provider: &str) -> String {
@@ -94,15 +51,9 @@ pub fn hint(plaintext: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine;
 
     fn test_master_key() -> MasterKey {
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
-            .unwrap();
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&bytes);
-        MasterKey(key)
+        MasterKey::from_base64("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=").unwrap()
     }
 
     #[test]

@@ -1,4 +1,3 @@
-use crate::crypto;
 use crate::model::{AiConfigRow, FallbackEntry};
 use crate::resolution::{resolve_config, resolve_credential, Scope};
 use crate::usage;
@@ -63,7 +62,7 @@ pub struct AiService(Arc<AiServiceInner>);
 struct AiServiceInner {
     pool: PgPool,
     registry: ai_providers::Registry,
-    master_key: Option<crypto::MasterKey>,
+    vault: Option<Arc<secrets::Vault>>,
 }
 
 #[doc(hidden)]
@@ -231,10 +230,13 @@ fn retry_delay(retry: u32) -> std::time::Duration {
 
 impl AiService {
     pub fn from_config(pool: PgPool, config: &config::AppConfig) -> Result<Self, String> {
-        let master_key = match &config.ai_key_encryption_key {
-            Some(k) => Some(crypto::MasterKey::from_base64(k)?),
-            None => None,
-        };
+        let vault = secrets::Vault::from_config(
+            &pool,
+            config.ai_key_encryption_key.as_deref(),
+            config.secrets_root_key(),
+            config.secrets_root_key_previous.as_deref(),
+        )?;
+        let vault = vault.has_keys().then(|| Arc::new(vault));
         let registry_config = ai_providers::RegistryConfig {
             openai_base_url: config.ai_openai_base_url.clone(),
             anthropic_base_url: config.ai_anthropic_base_url.clone(),
@@ -244,7 +246,7 @@ impl AiService {
         Ok(Self(Arc::new(AiServiceInner {
             pool,
             registry: ai_providers::Registry::new(registry_config),
-            master_key,
+            vault,
         })))
     }
 
@@ -261,16 +263,12 @@ impl AiService {
             .ok_or(AiCallError::NotConfigured)?;
 
         let config: &AiConfigRow = &resolved.row;
-        let master_key = self
-            .0
-            .master_key
-            .as_ref()
-            .ok_or(AiCallError::NotConfigured)?;
+        let vault = self.0.vault.as_deref().ok_or(AiCallError::NotConfigured)?;
 
         let mut attempts: Vec<Attempt> = Vec::new();
 
         if let Some((key, _source_is_tenant)) =
-            resolve_credential(&self.0.pool, master_key, scope, &config.provider)
+            resolve_credential(&self.0.pool, vault, scope, &config.provider)
                 .await
                 .map_err(AiCallError::Internal)?
         {
@@ -302,7 +300,7 @@ impl AiService {
 
         for fb in &fallbacks {
             if let Some((key, _source_is_tenant)) =
-                resolve_credential(&self.0.pool, master_key, scope, &fb.provider)
+                resolve_credential(&self.0.pool, vault, scope, &fb.provider)
                     .await
                     .map_err(AiCallError::Internal)?
             {
@@ -413,13 +411,9 @@ impl AiService {
             .map_err(|e| AiCallError::Internal(e.to_string()))?
             .ok_or(AiCallError::NotConfigured)?;
 
-        let master_key = self
-            .0
-            .master_key
-            .as_ref()
-            .ok_or(AiCallError::NotConfigured)?;
+        let vault = self.0.vault.as_deref().ok_or(AiCallError::NotConfigured)?;
 
-        let key = resolve_credential(&self.0.pool, master_key, scope, provider)
+        let key = resolve_credential(&self.0.pool, vault, scope, provider)
             .await
             .map_err(AiCallError::Internal)?
             .ok_or(AiCallError::NotConfigured)?
@@ -531,14 +525,10 @@ impl AiService {
             .ok_or(AiCallError::NotConfigured)?;
         let provider_name = config.provider.clone();
 
-        let master_key = self
-            .0
-            .master_key
-            .as_ref()
-            .ok_or(AiCallError::NotConfigured)?;
+        let vault = self.0.vault.as_deref().ok_or(AiCallError::NotConfigured)?;
 
         let (key, _source_is_tenant) =
-            resolve_credential(&self.0.pool, master_key, scope, &provider_name)
+            resolve_credential(&self.0.pool, vault, scope, &provider_name)
                 .await
                 .map_err(AiCallError::Internal)?
                 .ok_or(AiCallError::NotConfigured)?;
@@ -635,11 +625,7 @@ impl AiService {
             .ok_or(AiCallError::NotConfigured)?;
 
         let config: &AiConfigRow = &resolved.row;
-        let master_key = self
-            .0
-            .master_key
-            .as_ref()
-            .ok_or(AiCallError::NotConfigured)?;
+        let vault = self.0.vault.as_deref().ok_or(AiCallError::NotConfigured)?;
         let pool = self.0.pool.clone();
         let _registry = self.0.registry.clone(); // Registry is not Clone — use ref
         let capture_content = resolved.capture_content;
@@ -648,7 +634,7 @@ impl AiService {
         let mut attempts: Vec<Attempt> = Vec::new();
 
         if let Some((key, _source_is_tenant)) =
-            resolve_credential(&self.0.pool, master_key, scope, &config.provider)
+            resolve_credential(&self.0.pool, vault, scope, &config.provider)
                 .await
                 .map_err(AiCallError::Internal)?
         {
@@ -680,7 +666,7 @@ impl AiService {
 
         for fb in &fallbacks {
             if let Some((key, _source_is_tenant)) =
-                resolve_credential(&self.0.pool, master_key, scope, &fb.provider)
+                resolve_credential(&self.0.pool, vault, scope, &fb.provider)
                     .await
                     .map_err(AiCallError::Internal)?
             {
@@ -1087,13 +1073,9 @@ impl AiService {
             .map_err(|e| AiCallError::Internal(e.to_string()))?
             .ok_or(AiCallError::NotConfigured)?;
 
-        let master_key = self
-            .0
-            .master_key
-            .as_ref()
-            .ok_or(AiCallError::NotConfigured)?;
+        let vault = self.0.vault.as_deref().ok_or(AiCallError::NotConfigured)?;
 
-        let key = resolve_credential(&self.0.pool, master_key, scope, provider)
+        let key = resolve_credential(&self.0.pool, vault, scope, provider)
             .await
             .map_err(AiCallError::Internal)?
             .ok_or(AiCallError::NotConfigured)?
@@ -1413,8 +1395,14 @@ impl AiService {
         Arc::clone(self.0.registry.resilience())
     }
 
-    pub fn master_key(&self) -> Option<&crypto::MasterKey> {
-        self.0.master_key.as_ref()
+    /// The keys for sealing and opening provider credentials; `None` when none are configured.
+    pub fn vault(&self) -> Option<&secrets::Vault> {
+        self.0.vault.as_deref()
+    }
+
+    /// The same vault, shared (for code that outlives the borrow, such as tool execution).
+    pub fn shared_vault(&self) -> Option<Arc<secrets::Vault>> {
+        self.0.vault.clone()
     }
 }
 

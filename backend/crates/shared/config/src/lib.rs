@@ -103,6 +103,11 @@ pub struct AppConfig {
     pub public_dashboard_url: String,
     pub ai_key_encryption_key: Option<String>,
     pub integration_secrets_key: Option<String>,
+    /// The root key of envelope encryption (`APP_SECRETS_ROOT_KEY`). See [`AppConfig::secrets_root_key`].
+    pub secrets_root_key: Option<String>,
+    /// The root key before a rotation (`APP_SECRETS_ROOT_KEY_PREVIOUS`), kept only to unwrap keys
+    /// it still wraps until `server secrets rewrap-keks` has moved them.
+    pub secrets_root_key_previous: Option<String>,
     pub ai_openai_base_url: Option<String>,
     pub ai_anthropic_base_url: Option<String>,
     pub ai_gemini_base_url: Option<String>,
@@ -138,6 +143,11 @@ impl fmt::Debug for AppConfig {
         let smtp_url = self.smtp_url.as_ref().map(|_| "[REDACTED]");
         let ai_key = self.ai_key_encryption_key.as_ref().map(|_| "[REDACTED]");
         let integration_secrets_key = self.integration_secrets_key.as_ref().map(|_| "[REDACTED]");
+        let secrets_root_key = self.secrets_root_key.as_ref().map(|_| "[REDACTED]");
+        let secrets_root_key_previous = self
+            .secrets_root_key_previous
+            .as_ref()
+            .map(|_| "[REDACTED]");
         f.debug_struct("AppConfig")
             .field("database_url", &"[REDACTED]")
             .field("redis_url", &"[REDACTED]")
@@ -158,6 +168,8 @@ impl fmt::Debug for AppConfig {
             .field("shutdown_grace_seconds", &self.shutdown_grace_seconds)
             .field("ai_key_encryption_key", &ai_key)
             .field("integration_secrets_key", &integration_secrets_key)
+            .field("secrets_root_key", &secrets_root_key)
+            .field("secrets_root_key_previous", &secrets_root_key_previous)
             .field("ai_openai_base_url", &self.ai_openai_base_url)
             .field("ai_anthropic_base_url", &self.ai_anthropic_base_url)
             .field("ai_gemini_base_url", &self.ai_gemini_base_url)
@@ -216,6 +228,17 @@ impl fmt::Display for ConfigError {
 impl Error for ConfigError {}
 
 impl AppConfig {
+    /// The base64 root key for envelope encryption: `APP_SECRETS_ROOT_KEY`, or when that is not
+    /// set the AI key (`APP_AI_KEY_ENCRYPTION_KEY`), then the integration key. A process that
+    /// only holds one of those keys (the `gateway`) must be given the same root explicitly, or it
+    /// cannot unwrap the keys the other processes wrote.
+    pub fn secrets_root_key(&self) -> Option<&str> {
+        self.secrets_root_key
+            .as_deref()
+            .or(self.ai_key_encryption_key.as_deref())
+            .or(self.integration_secrets_key.as_deref())
+    }
+
     /// Parse and validate the full configuration. Requires the dashboard secrets
     /// (`AUTH_JWT_SECRET`, and `APP_AI_KEY_ENCRYPTION_KEY` outside tests).
     pub fn from_env() -> Result<Self, ConfigError> {
@@ -353,6 +376,40 @@ impl AppConfig {
             }
             Err(_) => None,
         };
+        let secrets_root_key = match env::var("APP_SECRETS_ROOT_KEY") {
+            Ok(v) => {
+                use base64::Engine;
+                let decoded = base64::engine::general_purpose::STANDARD
+                    .decode(&v)
+                    .map_err(|_| ConfigError("APP_SECRETS_ROOT_KEY must be valid base64".into()))?;
+                if decoded.len() != 32 {
+                    return Err(ConfigError(
+                        "APP_SECRETS_ROOT_KEY must be a base64-encoded string of exactly 32 bytes"
+                            .into(),
+                    ));
+                }
+                Some(v)
+            }
+            Err(_) => None,
+        };
+        let secrets_root_key_previous = match env::var("APP_SECRETS_ROOT_KEY_PREVIOUS") {
+            Ok(v) => {
+                use base64::Engine;
+                let decoded = base64::engine::general_purpose::STANDARD
+                    .decode(&v)
+                    .map_err(|_| {
+                        ConfigError("APP_SECRETS_ROOT_KEY_PREVIOUS must be valid base64".into())
+                    })?;
+                if decoded.len() != 32 {
+                    return Err(ConfigError(
+                        "APP_SECRETS_ROOT_KEY_PREVIOUS must be a base64-encoded string of exactly 32 bytes"
+                            .into(),
+                    ));
+                }
+                Some(v)
+            }
+            Err(_) => None,
+        };
         let ai_openai_base_url = env::var("APP_AI_OPENAI_BASE_URL").ok();
         let ai_anthropic_base_url = env::var("APP_AI_ANTHROPIC_BASE_URL").ok();
         let ai_gemini_base_url = env::var("APP_AI_GEMINI_BASE_URL").ok();
@@ -444,6 +501,8 @@ impl AppConfig {
             public_dashboard_url,
             ai_key_encryption_key,
             integration_secrets_key,
+            secrets_root_key,
+            secrets_root_key_previous,
             ai_openai_base_url,
             ai_anthropic_base_url,
             ai_gemini_base_url,

@@ -4,7 +4,6 @@ use std::time::Duration;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use integrations::crypto::MasterKey;
 use storage::ObjectStorage;
 
 use crate::api::{SendError, WhatsAppApi};
@@ -13,7 +12,7 @@ pub async fn run_media_fetch_worker(
     pool: PgPool,
     api: Arc<dyn WhatsAppApi>,
     storage: Arc<dyn ObjectStorage>,
-    master_key: Arc<MasterKey>,
+    vault: Arc<secrets::Vault>,
 ) -> ! {
     let mut interval = tokio::time::interval(Duration::from_secs(2));
     loop {
@@ -23,7 +22,7 @@ pub async fn run_media_fetch_worker(
             continue;
         }
 
-        if let Err(e) = process_one(&pool, &*api, &*storage, &master_key).await {
+        if let Err(e) = process_one(&pool, &*api, &*storage, &vault).await {
             tracing::error!(%e, "media worker: process_one failed");
         }
     }
@@ -33,15 +32,14 @@ async fn process_one(
     pool: &PgPool,
     api: &dyn WhatsAppApi,
     storage: &dyn ObjectStorage,
-    master_key: &MasterKey,
+    vault: &secrets::Vault,
 ) -> sqlx::Result<()> {
     let attachment = match crate::queries::claim_pending_attachment(pool).await? {
         Some(a) => a,
         None => return Ok(()),
     };
 
-    let access_token = match get_tenant_access_token(pool, master_key, attachment.tenant_id).await?
-    {
+    let access_token = match get_tenant_access_token(pool, vault, attachment.tenant_id).await? {
         Some(token) => token,
         None => {
             crate::queries::mark_attachment_failed_attempt(
@@ -139,7 +137,7 @@ async fn process_one(
 
 async fn get_tenant_access_token(
     pool: &PgPool,
-    master_key: &MasterKey,
+    vault: &secrets::Vault,
     tenant_id: Uuid,
 ) -> sqlx::Result<Option<String>> {
     let connection_id =
@@ -148,12 +146,6 @@ async fn get_tenant_access_token(
             Some(id) => id,
             None => return Ok(None),
         };
-    integrations::queries::decrypted_secret(
-        pool,
-        tenant_id,
-        master_key,
-        connection_id,
-        "access_token",
-    )
-    .await
+    integrations::queries::decrypted_secret(pool, tenant_id, vault, connection_id, "access_token")
+        .await
 }

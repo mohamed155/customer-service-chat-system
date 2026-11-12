@@ -8,6 +8,7 @@ use axum::Router;
 use http_body_util::BodyExt;
 use integrations::crypto::{aad, hint, seal, MasterKey};
 use integrations::webhook::hash_token;
+use secrets::Vault;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -22,11 +23,15 @@ const CHALLENGE_VALUE: &str = "abc123";
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn master_key() -> Arc<MasterKey> {
-    Arc::new(MasterKey::from_base64(TEST_MASTER_KEY_B64).unwrap())
+fn master_key() -> Arc<Vault> {
+    // Test rows are sealed the earlier way (one static key); the vault opens them.
+    Arc::new(Vault::new(
+        Some(MasterKey::from_base64(TEST_MASTER_KEY_B64).unwrap()),
+        None,
+    ))
 }
 
-fn test_app(pool: sqlx::PgPool, mk: Arc<MasterKey>) -> Router {
+fn test_app(pool: sqlx::PgPool, mk: Arc<Vault>) -> Router {
     whatsapp::routes::public_router()
         .layer(axum::extract::Extension(mk))
         .with_state(pool)
@@ -94,23 +99,21 @@ struct ConnectionFixture {
     tenant_id: Uuid,
 }
 
-async fn setup_connection(
-    pool: &sqlx::PgPool,
-    mk: &MasterKey,
-    is_active: bool,
-) -> ConnectionFixture {
+async fn setup_connection(pool: &sqlx::PgPool, mk: &Vault, is_active: bool) -> ConnectionFixture {
     let tenant_id = seed_tenant(pool).await;
     let catalog_id = whatsapp_catalog_id(pool).await;
 
     // Encrypt verify_token for integration_secrets.
     let verify_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_VERIFY_TOKEN);
-    let (verify_ct, verify_nonce) = seal(mk, &verify_aad, VERIFY_TOKEN_VALUE).unwrap();
+    let (verify_ct, verify_nonce) =
+        seal(mk.legacy_key().unwrap(), &verify_aad, VERIFY_TOKEN_VALUE).unwrap();
 
     // Generate a webhook token and encrypt it for the connection row.
     let webhook_token = Uuid::new_v4().to_string();
     let token_hash = hash_token(&webhook_token);
     let token_aad = aad(tenant_id, WHATSAPP_SLUG, FIELD_WEBHOOK_TOKEN);
-    let (token_ct, token_nonce) = seal(mk, &token_aad, &webhook_token).unwrap();
+    let (token_ct, token_nonce) =
+        seal(mk.legacy_key().unwrap(), &token_aad, &webhook_token).unwrap();
 
     let connection_id: Uuid = sqlx::query_scalar(
         "INSERT INTO integration_connections \
