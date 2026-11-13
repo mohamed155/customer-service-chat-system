@@ -1,14 +1,25 @@
 @if (store.loading()) {
   <app-loading-state />
 } @else if (store.error(); as err) {
-  <app-empty-state icon="@tui.alert-circle" title="Something went wrong" [description]="err">
-    <button type="button" (click)="goBack()">Go back</button>
+  <app-empty-state
+    icon="@tui.alert-circle"
+    [title]="'conversations.detail.errorTitle' | transloco"
+    [description]="errorKey(err) | transloco"
+  >
+    <button type="button" (click)="goBack()">
+      {{ 'conversations.detail.goBack' | transloco }}
+    </button>
+    @if (err.requestId; as id) {
+      <app-error-reference [requestId]="id" />
+    }
   </app-empty-state>
 } @else if (store.conversation(); as conv) {
   <section class="detail-shell">
     <header class="detail-header">
       <div class="header-left">
-        <button type="button" class="back-btn" (click)="goBack()">&larr; Back</button>
+        <button type="button" class="back-btn" (click)="goBack()">
+          &larr; {{ 'conversations.detail.back' | transloco }}
+        </button>
         <app-avatar [initials]="customerInitials(conv)" size="md" />
         <div class="header-copy">
           <strong>{{ conv.customer.displayName }}</strong>
@@ -24,18 +35,18 @@
       @if (hasManagePerm()) {
         <div class="header-right">
           <div class="control-group">
-            <span class="control-label">Status</span>
+            <span class="control-label">{{ 'conversations.detail.status' | transloco }}</span>
             <app-select-filter
-              label="Status"
+              [label]="'conversations.detail.status' | transloco"
               [value]="conv.status"
-              [options]="statusOptions"
+              [options]="statusOptions()"
               (valueChange)="onStatusChange(conv.id, $event)"
             />
           </div>
           <div class="control-group">
-            <span class="control-label">Assignee</span>
+            <span class="control-label">{{ 'conversations.detail.assignee' | transloco }}</span>
             <app-select-filter
-              label="Assignee"
+              [label]="'conversations.detail.assignee' | transloco"
               [value]="assigneeValue(conv)"
               [options]="assigneeOptions()"
               (valueChange)="onAssigneeChange(conv.id, $event)"
@@ -59,7 +70,7 @@
 
     <section class="feedback-section">
       <header class="feedback-header">
-        <span class="feedback-label">Customer Feedback</span>
+        <span class="feedback-label">{{ 'conversations.detail.feedback' | transloco }}</span>
         @if (conv.feedback; as fb) {
           <app-satisfaction-badge [rating]="fb.rating" />
         }
@@ -68,15 +79,17 @@
         @if (fb.comment; as comment) {
           <p class="feedback-comment">{{ comment }}</p>
         }
-        <time class="feedback-time">{{ formatDate(fb.submittedAt) }}</time>
+        <time class="feedback-time">{{ fb.submittedAt | localeDate }}</time>
       } @else {
-        <p class="no-rating">No rating</p>
+        <p class="no-rating">{{ 'conversations.detail.noRating' | transloco }}</p>
       }
     </section>
 
     @if (conv.participants.length) {
       <div class="participants-bar">
-        <span class="participants-label">Participants</span>
+        <span class="participants-label">{{
+          'conversations.detail.participants' | transloco
+        }}</span>
         @for (p of conv.participants; track p.type + (p.id ?? p.membershipId)) {
           <span class="participant-chip" [class.inactive]="p.active === false">
             {{ p.displayName }}

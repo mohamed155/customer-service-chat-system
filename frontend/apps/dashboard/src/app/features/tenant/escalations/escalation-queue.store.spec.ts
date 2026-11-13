@@ -54,7 +54,7 @@ describe('EscalationQueueStore', () => {
     expect(store.loading()).toBe(false);
   });
 
-  it('removes item optimistically on claim and rolls back on 409 with message', () => {
+  it('removes item optimistically on claim and rolls back on 409, keeping the error', () => {
     const secondEntry: QueueEntry = {
       escalation: { ...mockEscalation, id: 'e-2' },
       conversation: { id: 'c-2', channel: 'email', customer: { id: 'cu-2', name: 'Jon Bell' } },
@@ -76,7 +76,7 @@ describe('EscalationQueueStore', () => {
 
     claimSubject.error({ code: 'conflict', message: 'Already claimed', status: 409 });
     expect(store.items().map((i) => i.escalation.id)).toEqual(['e-1', 'e-2']);
-    expect(store.error()).toContain('already claimed by another agent');
+    expect(store.error()).toMatchObject({ code: 'conflict', status: 409 });
   });
 
   it('applies escalation.queued realtime event without refetch', () => {

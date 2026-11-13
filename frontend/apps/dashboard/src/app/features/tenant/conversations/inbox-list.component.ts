@@ -7,15 +7,29 @@ import {
 import { SatisfactionBadgeComponent } from '../../../shared/components/satisfaction-badge/satisfaction-badge.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { Conversation, ConversationListQuery } from '../../../core/api/tenant-api.models';
-import { relativeTime } from '../../../shared/utils/relative-time';
+import { marker } from '../../../core/i18n/marker';
+import { ownValue } from '../../../core/i18n/own-value';
+import { RelativeTimePipe } from '../../../core/i18n/relative-time.pipe';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+
+const FILTER_LABEL_KEYS: Readonly<Record<string, string>> = {
+  all: marker('status.all'),
+  open: marker('status.open'),
+  pending: marker('status.pending'),
+  resolved: marker('status.resolved'),
+  closed: marker('status.closed'),
+};
 
 @Component({
   selector: 'app-inbox-list',
+  providers: [provideTranslocoScope('conversations')],
   imports: [
     AvatarComponent,
     ChannelBadgeComponent,
     SatisfactionBadgeComponent,
     StatusBadgeComponent,
+    TranslocoPipe,
+    RelativeTimePipe,
   ],
   templateUrl: './inbox-list.component.html',
   styles: [
@@ -171,10 +185,9 @@ export class InboxListComponent {
       .slice(0, 2);
   }
 
+  /** Catalog key of a status filter's name. */
   protected filterLabel(filter: ConversationListQuery['status']): string {
-    return filter === 'all'
-      ? 'All'
-      : (filter as string).replace(/\b\w/g, (character) => character.toUpperCase());
+    return ownValue(FILTER_LABEL_KEYS, filter as string) ?? marker('status.all');
   }
 
   protected statusTone(status: Conversation['status']): 'green' | 'amber' | 'red' | 'neutral' {
@@ -183,6 +196,4 @@ export class InboxListComponent {
     if (status === 'open') return 'amber';
     return 'neutral';
   }
-
-  protected relativeTime = relativeTime;
 }

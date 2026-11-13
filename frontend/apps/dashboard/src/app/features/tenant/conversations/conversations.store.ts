@@ -8,6 +8,8 @@ import { Conversation, ConversationListQuery } from '../../../core/api/tenant-ap
 import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
 import { withTenantScope } from '../../../core/state/tenant-scope';
 import { ConversationsApiService } from './conversations-api.service';
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 
 export interface InboxFilters {
   readonly status?: ConversationListQuery['status'];
@@ -22,7 +24,8 @@ interface ConversationsState {
   readonly hasMore: boolean;
   readonly items: Conversation[];
   readonly loading: boolean;
-  readonly error: string | null;
+  /** What went wrong, kept whole: the page shows the text for its code and its request reference. */
+  readonly error: ApiError | null;
   readonly selectedId: string | null;
   readonly averageRating: number | null;
   readonly feedbackCount: number;
@@ -73,7 +76,7 @@ export const ConversationsStore = signalStore(
               catchError((err: unknown) => {
                 patchState(store, {
                   loading: false,
-                  error: (err as Error)?.message ?? 'Failed to load conversations',
+                  error: toApiError(err),
                 });
                 return of(null);
               }),

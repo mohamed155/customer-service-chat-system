@@ -6,7 +6,7 @@
       [class.active]="mode() === 'reply'"
       (click)="mode.set('reply')"
     >
-      Reply
+      {{ 'conversations.composer.reply' | transloco }}
     </button>
     <button
       type="button"
@@ -14,7 +14,7 @@
       [class.active]="mode() === 'note'"
       (click)="mode.set('note')"
     >
-      Internal note
+      {{ 'conversations.composer.note' | transloco }}
     </button>
     <button
       type="button"
@@ -22,29 +22,30 @@
       [class.active]="mode() === 'customer'"
       (click)="mode.set('customer')"
     >
-      Customer
+      {{ 'conversations.composer.customer' | transloco }}
     </button>
   </div>
 
   <form [formGroup]="form" (ngSubmit)="submit()" class="composer-form">
     <textarea
       formControlName="body"
-      aria-label="Message body"
+      [attr.aria-label]="'conversations.composer.bodyLabel' | transloco"
       [placeholder]="
-        mode() === 'reply'
-          ? 'Type a reply…'
+        (mode() === 'reply'
+          ? 'conversations.composer.replyPlaceholder'
           : mode() === 'note'
-            ? 'Add an internal note…'
-            : 'Log a customer message…'
+            ? 'conversations.composer.notePlaceholder'
+            : 'conversations.composer.customerPlaceholder'
+        ) | transloco
       "
       rows="3"
     ></textarea>
     @if (form.controls.body.touched && form.controls.body.invalid) {
       @if (form.controls.body.errors?.['required']) {
-        <span class="field-error">Message is required.</span>
+        <span class="field-error">{{ 'conversations.composer.required' | transloco }}</span>
       }
       @if (form.controls.body.errors?.['maxlength']) {
-        <span class="field-error">Message is too long for WhatsApp (4096 character max).</span>
+        <span class="field-error">{{ 'conversations.composer.tooLong' | transloco }}</span>
       }
     }
     <div class="composer-actions">
@@ -53,7 +54,10 @@
         type="submit"
         [disabled]="submitting() || !form.controls.body.value.trim()"
       >
-        {{ submitting() ? 'Sending…' : 'Send' }}
+        {{
+          (submitting() ? 'conversations.composer.sending' : 'conversations.composer.send')
+            | transloco
+        }}
       </app-button>
     </div>
   </form>

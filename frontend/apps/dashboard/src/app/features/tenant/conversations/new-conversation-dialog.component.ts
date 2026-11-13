@@ -10,15 +10,21 @@ import { DialogShellComponent } from '../../../shared/components/dialog-shell/di
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
 import { ConversationsApiService } from './conversations-api.service';
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-new-conversation-dialog',
+  providers: [provideTranslocoScope('conversations')],
   imports: [
     ButtonComponent,
     DialogShellComponent,
     FormFieldComponent,
     InlineAlertComponent,
     ReactiveFormsModule,
+    TranslocoPipe,
   ],
   templateUrl: './new-conversation-dialog.component.html',
   styles: [
@@ -116,7 +122,12 @@ export class NewConversationDialogComponent {
   private readonly convApi = inject(ConversationsApiService);
 
   protected readonly submitting = signal(false);
-  protected readonly error = signal<string | null>(null);
+  /** What went wrong, kept whole so the dialog can show its text and its request reference. */
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
+
+  protected readonly error = signal<ApiError | null>(null);
   protected readonly searchResults = signal<Customer[]>([]);
   protected readonly selectedCustomer = signal<Customer | null>(null);
 
@@ -186,7 +197,7 @@ export class NewConversationDialogComponent {
       },
       error: (err: unknown) => {
         this.submitting.set(false);
-        this.error.set((err as Error)?.message ?? 'Failed to create conversation');
+        this.error.set(toApiError(err));
       },
     });
   }

@@ -6,10 +6,12 @@ import {
   MessageKind,
 } from '../../../core/api/tenant-api.models';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-composer',
-  imports: [ButtonComponent, ReactiveFormsModule],
+  providers: [provideTranslocoScope('conversations')],
+  imports: [ButtonComponent, ReactiveFormsModule, TranslocoPipe],
   templateUrl: './composer.component.html',
   styles: [
     `

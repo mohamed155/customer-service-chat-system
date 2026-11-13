@@ -1,3 +1,4 @@
+import { provideTranslocoScope } from '@jsverse/transloco';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -128,7 +129,12 @@ describe('ConversationDetailComponent', () => {
     });
     // The component provides its own ConversationDetailStore; swap in the mock there.
     TestBed.overrideComponent(ConversationDetailComponent, {
-      set: { providers: [{ provide: ConversationDetailStore, useValue: storeMock }] },
+      set: {
+        providers: [
+          provideTranslocoScope('conversations'),
+          { provide: ConversationDetailStore, useValue: storeMock },
+        ],
+      },
     });
   });
 
@@ -141,12 +147,31 @@ describe('ConversationDetailComponent', () => {
   });
 
   it('renders error state when error is set', async () => {
-    storeMock.error.mockReturnValue('Something went wrong');
+    storeMock.error.mockReturnValue({ code: 'internal_error', message: 'DB down', status: 503 });
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(ConversationDetailComponent);
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Something went wrong');
+    expect(fixture.nativeElement.textContent).toContain('temporarily unavailable');
+    expect(fixture.nativeElement.textContent).not.toContain('DB down');
     expect(fixture.nativeElement.textContent).toContain('Go back');
+  });
+
+  it('shows the request reference beside the error, and the page’s own wording for a WhatsApp code', async () => {
+    storeMock.error.mockReturnValue({
+      code: 'whatsapp_window_expired',
+      message: 'raw text',
+      status: 422,
+      requestId: 'req_0123456789abcdef0123456789abcdef01234567',
+    });
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(ConversationDetailComponent);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('WhatsApp messaging window has expired');
+    expect(fixture.nativeElement.textContent).not.toContain('raw text');
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]').textContent).toBe(
+      '01234567',
+    );
   });
 
   it('renders header with customer name, channel, status, and assignee', async () => {

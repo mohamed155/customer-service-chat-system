@@ -13,19 +13,25 @@ import { ConversationsStore } from './conversations.store';
 import { InboxListComponent } from './inbox-list.component';
 import { NewConversationDialogComponent } from './new-conversation-dialog.component';
 import { SatisfactionSummaryComponent } from './satisfaction-summary.component';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-conversations',
   imports: [
     EmptyStateComponent,
+    ErrorReferenceComponent,
     InboxListComponent,
     LoadingStateComponent,
     NewConversationDialogComponent,
     PageContainerComponent,
     PageHeaderComponent,
     SatisfactionSummaryComponent,
+    TranslocoPipe,
   ],
-  providers: [ConversationsStore],
+  providers: [provideTranslocoScope('conversations'), ConversationsStore],
   templateUrl: './conversations.component.html',
   styles: [
     `
@@ -96,6 +102,10 @@ import { SatisfactionSummaryComponent } from './satisfaction-summary.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ConversationsComponent {
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
+
   protected readonly store = inject(ConversationsStore);
   private readonly api = inject(ConversationsApiService);
   private readonly router = inject(Router);

@@ -75,16 +75,18 @@ describe('ConversationSummaryComponent', () => {
     const { fixture } = await createComponent('c1');
     fixture.nativeElement.querySelector('button').click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('AI provider unavailable');
+    // The text for a 502 from the catalog, never the API's own message.
+    expect(fixture.nativeElement.textContent).toContain('temporarily unavailable');
+    expect(fixture.nativeElement.textContent).not.toContain('AI provider unavailable');
     expect(fixture.nativeElement.textContent).toContain('Summarize');
   });
 
-  it('shows inline error with fallback text when error has no message', async () => {
+  it('shows the generic text when the error is not an API error at all', async () => {
     configureTesting();
     api.requestSummary.mockReturnValue(throwError(() => ({})));
     const { fixture } = await createComponent('c1');
     fixture.nativeElement.querySelector('button').click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Failed to generate summary');
+    expect(fixture.nativeElement.textContent).toContain('Something went wrong');
   });
 });

@@ -1,24 +1,29 @@
 @if (store.error(); as err) {
-  <div class="error-banner">{{ err }}</div>
+  <div class="error-banner">
+    {{ errorKey(err) | transloco }}
+    @if (err.requestId; as id) {
+      <app-error-reference [requestId]="id" />
+    }
+  </div>
 }
 
 @if (store.items().length === 0 && !store.loading()) {
   <div class="empty">
     <tui-icon icon="@tui.inbox" />
-    <p>No escalations in queue</p>
-    <span>All clear — no conversations need attention right now.</span>
+    <p>{{ 'conversations.escalations.empty' | transloco }}</p>
+    <span>{{ 'conversations.escalations.emptyHint' | transloco }}</span>
   </div>
 } @else {
   <app-data-table>
     <table>
       <thead>
         <tr>
-          <th scope="col">Reason</th>
-          <th scope="col">Required Skills</th>
-          <th scope="col">Customer</th>
-          <th scope="col">Channel</th>
-          <th scope="col">Waiting</th>
-          <th scope="col">Actions</th>
+          <th scope="col">{{ 'conversations.escalations.reason' | transloco }}</th>
+          <th scope="col">{{ 'conversations.escalations.skills' | transloco }}</th>
+          <th scope="col">{{ 'conversations.escalations.customer' | transloco }}</th>
+          <th scope="col">{{ 'conversations.escalations.channel' | transloco }}</th>
+          <th scope="col">{{ 'conversations.escalations.waiting' | transloco }}</th>
+          <th scope="col">{{ 'conversations.escalations.actions' | transloco }}</th>
         </tr>
       </thead>
       <tbody>
@@ -32,11 +37,12 @@
             </td>
             <td>{{ item.conversation.customer.name }}</td>
             <td class="muted">{{ item.conversation.channel }}</td>
-            <td class="muted">{{ formatWaiting(item.waitingSeconds) }}</td>
+            @let waiting = waitingText(item.waitingSeconds);
+            <td class="muted">{{ waiting.key | transloco: waiting.params }}</td>
             <td>
               @if (permissionsService.has('conversations.manage')) {
                 <button type="button" class="claim-btn" (click)="store.claim(item.escalation.id)">
-                  Claim
+                  {{ 'conversations.escalations.claim' | transloco }}
                 </button>
               }
             </td>

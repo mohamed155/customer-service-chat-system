@@ -101,8 +101,24 @@ describe('MessageAttachmentComponent', () => {
     const { component } = await createComponent(
       createAttachment({ kind: 'document', sizeBytes: 500 }),
     );
-    expect(component['formatSize'](500)).toBe('500 B');
-    expect(component['formatSize'](2048)).toBe('2.0 KB');
-    expect(component['formatSize'](1572864)).toBe('1.5 MB');
+    expect(component['sizeText'](500)).toEqual({
+      key: 'conversations.attachment.bytes',
+      params: { size: '500' },
+    });
+    expect(component['sizeText'](2048)).toEqual({
+      key: 'conversations.attachment.kilobytes',
+      params: { size: '2.0' },
+    });
+    expect(component['sizeText'](1572864)).toEqual({
+      key: 'conversations.attachment.megabytes',
+      params: { size: '1.5' },
+    });
+  });
+
+  it('shows the size of a document in the text of the catalog', async () => {
+    const { fixture } = await createComponent(
+      createAttachment({ kind: 'document', sizeBytes: 2048 }),
+    );
+    expect(fixture.nativeElement.textContent).toContain('2.0 KB');
   });
 });

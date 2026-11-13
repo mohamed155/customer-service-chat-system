@@ -2,7 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { RouterModule } from '@angular/router';
 import { provideTaiga } from '@taiga-ui/core';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { APP_CONFIG } from '../../../core/config/app-config';
 import {
   provideTenantStore,
@@ -97,6 +97,29 @@ describe('ConversationsComponent', () => {
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).toContain('Maya Chen');
     });
+  });
+
+  it('shows the text for the error code with its request reference, never the API text', async () => {
+    apiList.mockReturnValue(
+      throwError(() => ({
+        code: 'internal_error',
+        message: 'relation "conversations" does not exist',
+        status: 500,
+        requestId: 'req_0123456789abcdef0123456789abcdef01234567',
+      })),
+    );
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(ConversationsComponent);
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain('temporarily unavailable');
+    });
+    expect(fixture.nativeElement.textContent).not.toContain('relation');
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]').textContent).toBe(
+      '01234567',
+    );
   });
 
   it('shows empty state when no conversations exist', async () => {

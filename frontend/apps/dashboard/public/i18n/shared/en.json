@@ -41,7 +41,8 @@
     "dismiss": "Dismiss",
     "reload": "Reload",
     "close": "Close",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "unassigned": "Unassigned"
   },
   "breadcrumb": {
     "label": "Breadcrumb",
@@ -426,5 +427,12 @@
     "verifyEmail": "Verify email",
     "mfaSetup": "Set up two-step verification",
     "security": "Security"
+  },
+  "status": {
+    "all": "All",
+    "open": "Open",
+    "pending": "Pending",
+    "resolved": "Resolved",
+    "closed": "Closed"
   }
 }

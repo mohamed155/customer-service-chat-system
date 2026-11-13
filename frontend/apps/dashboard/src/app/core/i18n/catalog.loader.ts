@@ -16,6 +16,8 @@ export const ENGLISH_SCOPES: Readonly<Record<string, () => Promise<Translation>>
   // Part of the initial bundle on purpose: the sign-in page is the first screen of a signed-out
   // visit, and its text must not wait for a second request.
   auth: () => Promise.resolve(authEnglish),
+  conversations: () =>
+    import('../../../../public/i18n/conversations/en.json').then((m) => m.default),
 };
 
 /** A catalog is data: only nested objects and strings are kept, and no key can reach a prototype. */

@@ -57,13 +57,13 @@
               },
               "budgets": [
                 { "type": "initial", "maximumWarning": "735kb", "maximumError": "750kb" },
-                { "type": "allScript", "maximumWarning": "2150kb", "maximumError": "2200kb" },
+                { "type": "allScript", "maximumWarning": "2190kb", "maximumError": "2240kb" },
                 { "type": "anyScript", "maximumError": "450kb" },
                 {
                   "type": "bundle",
                   "name": "conversation-detail-component",
-                  "maximumWarning": "63kb",
-                  "maximumError": "66kb"
+                  "maximumWarning": "66kb",
+                  "maximumError": "69kb"
                 },
                 {
                   "type": "bundle",
