@@ -149,16 +149,22 @@ Don't poll by hand in a sleep loop, and never merge before `DONE`.
 
 ## 6. Fix and repeat
 
-**CI failed** — `gh pr checks <n>`. If the only failing check is `Kilo Code Review`, handle it
-as Kilo comments (below). Otherwise run `gh run view <run-id> --log-failed`, find the root cause
+**CI failed** — `gh pr checks <n>`. If the only failing check is `Kilo Code Review` and it ran
+into its own limit, skip it (next paragraph). If it failed with findings, handle it as Kilo
+comments (below). Otherwise run `gh run view <run-id> --log-failed`, find the root cause
 (systematic-debugging), fix it on the branch, verify locally, commit, push. Don't skip, disable
 or `#[ignore]` checks to get green. Go back to step 5.
 
-**Kilo's check failed but it posted nothing** — that's a Kilo-side error, not findings. Its
-check run says `Review failed.` (`gh api repos/{owner}/{repo}/commits/<sha>/check-runs`). The Kilo
-app doesn't support GitHub's re-run API, so push an empty commit
-(`git commit --allow-empty -m "chore: re-trigger Kilo Code review"`) and go back to step 5. If
-it fails the same way twice, stop and ask the user whether to merge without a Kilo review.
+**Kilo hit its limit — skip it.** When Kilo's check fails with `The model reached its output limit`,
+`This review did not finish` or `Review failed.` (see its check run:
+`gh api repos/{owner}/{repo}/commits/<sha>/check-runs`), that is Kilo's own limit, not findings.
+The user decided that this is simply skipped: **don't re-trigger it, don't push an empty commit and
+don't ask**. The watcher reports it as `kilo=skipped` and leaves the failed Kilo check out of
+`ci=`. Carry on with step 7 once everything else is done (CI green apart from the Kilo check,
+CodeRabbit handled as described below). Say so in the Done comment and the final report: "Kilo
+did not review this PR (it hit its output limit)". If a later push makes Kilo review the new head
+after all, its comments count like any other (read them in step 7). Only a Kilo check that
+failed **with findings** (no limit message) is handled as Kilo comments.
 
 **Kilo commented** — read every item in full:
 ```bash
@@ -220,9 +226,11 @@ fix would go beyond the issue's scope.
 
 ## 7. Merge and close
 
-Merge only when: CI all green on the head commit, `DONE` was printed for **this** head commit
+Merge only when: CI all green on the head commit (a Kilo check that hit its limit doesn't
+count, see step 6), `DONE` was printed for **this** head commit
 with `coderabbit=reviewed` or `coderabbit=rate-limited` (never wait for the limit; see step 6),
-or a `skipped`/`off`/timeout outcome the user accepted,
+or a `skipped`/`off`/timeout outcome the user accepted, and `kilo=reviewed`, `kilo=skipped`
+(its limit; accepted by the user) or a timeout outcome the user accepted,
 every Kilo and CodeRabbit comment fixed or answered, no merge conflicts, and the PR is still yours
 and open. Right before merging, read the three `gh api` lists once more for both bots: a review
 that lands between `DONE` and the merge still counts (this is how PR #20 was merged with two
@@ -233,6 +241,10 @@ unread CodeRabbit comments).
 # when everything is green. Don't pipe its output into anything before the `&&`: the pipe's
 # exit code would replace it, and the merge would run whatever the checks say.
 gh pr checks <n> >/dev/null 2>&1 && gh pr merge <n> --squash --delete-branch   # squash-only, PR title becomes the commit
+# `kilo=skipped` leaves the failed Kilo check red, so the guard above refuses. Then every other check
+# must be green and the merge uses the required checks only (Kilo is not required):
+#   [ -z "$(gh pr checks <n> --json name,bucket --jq '.[] | select(.bucket!="pass" and .bucket!="skipping") | select(.name|test("^(Kilo Code|CodeRabbit)")|not) | .name')" ] \
+#     && gh pr checks <n> --required >/dev/null 2>&1 && gh pr merge <n> --squash --delete-branch
 git switch master && git pull --ff-only origin master
 ```
 
