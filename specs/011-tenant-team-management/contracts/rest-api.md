@@ -143,7 +143,7 @@ Two modes:
 | Expired | 410 `gone` |
 | Signed-in email mismatch | 403 `forbidden` |
 | Anonymous, but an active account already exists for the invited email | 409 `conflict` ("sign in to accept") |
-| Existing membership in this tenant: disabled → 409 `conflict` ("membership disabled — ask an admin to re-enable"); active → 409 `conflict` (already a member) | 409 |
+| Existing membership in this tenant: disabled → 409 `membership_disabled` ("membership disabled — ask an admin to re-enable", MOH-156); active → 409 `conflict` (already a member) | 409 |
 | Weak/missing password or display_name (anonymous mode) | 422 `validation_failed` |
 | Tenant soft-deleted or suspended since invite | 404 `not_found` |
 
@@ -151,7 +151,7 @@ Acceptance is transactional and single-use (`UPDATE … WHERE status='pending' A
 
 ## Error vocabulary used
 
-`unauthenticated` (401), `forbidden` (403), `not_found` (404), `conflict` (409), `gone` (410), `validation_failed` (422) — all from the existing `kernel::ApiError` constructors (`gone` added if not yet present; single constructor addition, same envelope).
+`unauthenticated` (401), `forbidden` (403), `not_found` (404), `conflict` (409), `gone` (410), `validation_failed` (422) — all from the existing `kernel::ApiError` constructors (`gone` added if not yet present; single constructor addition, same envelope). `membership_disabled` (409) is built with `ApiError::new_with_code`, so a client can tell a disabled membership from an active one without reading the message (ADR-012).
 
 ## RBAC test matrix additions (server/tests/rbac.rs)
 

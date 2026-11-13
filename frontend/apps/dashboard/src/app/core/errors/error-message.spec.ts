@@ -108,6 +108,15 @@ describe('errorMessageKey', () => {
     expect(errorMessageKey(error('other', 400), overrides)).toBe('errors.requestFailed');
   });
 
+  it('does not take a property of Object for a code, a field code or an override', () => {
+    for (const code of ['constructor', 'toString', 'valueOf', '__proto__', 'hasOwnProperty']) {
+      expect(errorMessageKey(error(code, 400)), code).toBe('errors.requestFailed');
+      expect(errorMessageKey(error(code, 400), {}), code).toBe('errors.requestFailed');
+      expect(fieldErrorKey(code), code).toBe('errors.fieldInvalid');
+      expect(typeof userMessageFor(error(code, 500)), code).toBe('string');
+    }
+  });
+
   it('keeps the old English helper in step with the catalog', () => {
     for (const [code, status] of [
       ['network_error', 0],

@@ -1,5 +1,6 @@
 import { ApiError } from '../api/api.models';
 import { marker } from '../i18n/marker';
+import { ownValue } from '../i18n/own-value';
 
 // Errors are shown by their `code`, never by the backend's `message` (ADR-016 section 5, ADR-012:
 // "clients branch on `code`, never on `detail` text"). This maps an `ApiError` to a catalog key in
@@ -41,9 +42,9 @@ export type ErrorKeyOverrides = Readonly<Record<string | number, string>>;
  * backend's text.
  */
 export function errorMessageKey(error: ApiError, overrides: ErrorKeyOverrides = {}): string {
-  const own = overrides[error.code] ?? overrides[error.status];
+  const own = ownValue(overrides, error.code) ?? ownValue(overrides, error.status);
   if (own) return own;
-  const byCode = ERROR_CODE_KEYS[error.code];
+  const byCode = ownValue(ERROR_CODE_KEYS, error.code);
   if (byCode) return byCode;
   if (error.status === 401) return marker('errors.accessDenied');
   if (error.status === 403) return marker('errors.accessDenied');
@@ -67,5 +68,5 @@ export const FIELD_CODE_KEYS: Readonly<Record<string, string>> = {
 };
 
 export function fieldErrorKey(code: string): string {
-  return FIELD_CODE_KEYS[code] ?? marker('errors.fieldInvalid');
+  return ownValue(FIELD_CODE_KEYS, code) ?? marker('errors.fieldInvalid');
 }
