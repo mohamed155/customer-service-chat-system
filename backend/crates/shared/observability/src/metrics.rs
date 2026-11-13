@@ -73,6 +73,11 @@ pub fn init() {
         "rate_limit_degraded_total",
         "Total number of rate limit degradations"
     );
+    metrics::describe_counter!(
+        "frontend_errors_total",
+        "Errors reported by the dashboard in users' browsers (MOH-168), by kind and by the \
+         release of the backend that received them"
+    );
     metrics::describe_gauge!("outbox_backlog", "Number of pending outbox messages");
     metrics::describe_gauge!(
         "dependency_up",
@@ -83,6 +88,18 @@ pub fn init() {
         "backup_last_success_timestamp_seconds",
         "Unix timestamp of last successful backup"
     );
+}
+
+/// Count browser errors reported by the dashboard. `kind` is one of a closed set and `release` is
+/// the receiving backend's own release, never a value from the client, so the number of series is
+/// bounded (no tenant, user or client-chosen label).
+pub fn record_frontend_errors(kind: &'static str, release: &str, count: u64) {
+    metrics::counter!(
+        "frontend_errors_total",
+        "kind" => kind,
+        "release" => release.to_owned(),
+    )
+    .increment(count);
 }
 
 pub fn set_outbox_backlog(count: i64) {

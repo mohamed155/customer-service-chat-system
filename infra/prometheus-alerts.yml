@@ -63,3 +63,47 @@ groups:
             been stopped. Check the backup script logs and the off-host storage
             destination.
           runbook_url: "https://github.com/mohamed155/customer-service-chat-system/blob/master/docs/runbooks/backup-restore.md"
+
+  # Errors reported by users' browsers (MOH-168). `frontend_errors_total` counts what the dashboard
+  # sends to POST /api/v1/client-errors, by kind and by the release of the backend that received it.
+  # The two rules are the "something broke after a deploy" signal: a jump against yesterday, and a
+  # release that has errors where an hour ago it had none. Read the reports themselves in Loki:
+  #   {container="backend"} |= "frontend error" | json | target="frontend"
+  - name: frontend_errors
+    rules:
+      # At least 20 errors in 10 minutes AND more than three times the average 10 minutes of the
+      # last day. With no history (a quiet day, a new install) the floor alone decides.
+      - alert: FrontendErrorSpike
+        expr: |
+          sum(increase(frontend_errors_total[10m])) >= 20
+            and
+          sum(increase(frontend_errors_total[10m]))
+            > 3 * (sum(increase(frontend_errors_total[1d] offset 10m)) / 144)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Frontend errors are spiking"
+          description: >
+            Browsers reported {{ $value | printf "%.0f" }} errors in the last 10 minutes, more
+            than three times the usual rate. If a release went out recently, suspect it. Query
+            Loki for `frontend error` to see the messages, routes and dashboard releases
+            (docs/runbooks/operations.md, "Frontend errors").
+          runbook_url: "https://github.com/mohamed155/customer-service-chat-system/blob/master/docs/runbooks/operations.md"
+
+      # A release label that had no errors an hour ago and now has ten or more in 10 minutes.
+      - alert: FrontendErrorsAfterRelease
+        expr: |
+          sum by (release) (increase(frontend_errors_total[10m])) >= 10
+            unless on (release)
+          sum by (release) (frontend_errors_total offset 1h)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Release {{ $labels.release }} has frontend errors from its first hour"
+          description: >
+            Browsers reported {{ $value | printf "%.0f" }} errors in 10 minutes under backend
+            release {{ $labels.release }}, which had none an hour ago. The dashboard of that
+            release may be broken (docs/runbooks/operations.md, "Frontend errors").
+          runbook_url: "https://github.com/mohamed155/customer-service-chat-system/blob/master/docs/runbooks/operations.md"

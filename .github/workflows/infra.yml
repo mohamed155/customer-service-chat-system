@@ -44,6 +44,21 @@ jobs:
           REQUIRE_NGINX_TEST: "1"
         run: node --test infra/nginx-spa.test.mjs
 
+  # The alert rules in infra/prometheus-alerts.yml (MOH-168): promtool, from the Prometheus image the
+  # compose file pins, checks the syntax and runs infra/prometheus-alerts.test.yml, which feeds the
+  # rules made-up series and checks which alerts fire.
+  prometheus-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Alert rules are valid and fire when they should
+        run: |
+          image=$(grep -oE 'prom/prometheus:v[0-9.]+' infra/docker-compose.yml | head -1)
+          test -n "$image" || { echo "::error::no prom/prometheus image in infra/docker-compose.yml"; exit 1; }
+          docker run --rm --entrypoint promtool -v "$PWD/infra:/w:ro" -w /w "$image" check rules prometheus-alerts.yml
+          docker run --rm --entrypoint promtool -v "$PWD/infra:/w:ro" -w /w "$image" test rules prometheus-alerts.test.yml
+
   compose-stack:
     runs-on: ubuntu-latest
     timeout-minutes: 15

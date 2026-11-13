@@ -26,6 +26,7 @@
 //! - Add new middleware layers in `build_app` or `api_routes`.
 //! - Add new route groups as `fn *_routes()` called from `api_routes`.
 
+pub mod client_errors;
 pub mod handlers;
 pub mod internal_error;
 pub mod mfa_admin;

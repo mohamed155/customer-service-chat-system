@@ -996,6 +996,102 @@
         ],
         "type": "object"
       },
+      "ClientErrorBatch": {
+        "description": "A batch of reports.",
+        "properties": {
+          "reports": {
+            "description": "One to twenty reports.",
+            "items": {
+              "$ref": "#/components/schemas/ClientErrorReport"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "reports"
+        ],
+        "type": "object"
+      },
+      "ClientErrorKind": {
+        "description": "What went wrong in the browser.",
+        "enum": [
+          "error",
+          "unhandled_rejection",
+          "chunk_load"
+        ],
+        "type": "string"
+      },
+      "ClientErrorReport": {
+        "description": "One error seen in a browser.",
+        "properties": {
+          "count": {
+            "description": "How many identical errors this report stands for (default 1, at most 1000).",
+            "format": "int32",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ClientErrorKind"
+          },
+          "message": {
+            "description": "The error's message, already scrubbed by the dashboard. Up to 1000 characters.",
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "release": {
+            "description": "The dashboard release, taken from its main script's file name. Letters, digits, `.`, `_`, `-`.",
+            "example": "4TYQZ6FJ",
+            "maxLength": 64,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "request_id": {
+            "description": "The request ID of the API call involved, when there is one (`req_` and a lowercase UUID).",
+            "example": "req_0191f3a2-6b1e-7c3d-8e4f-5a6b7c8d9e0f",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "route": {
+            "description": "The route pattern the user was on, such as `tenant/customers/:id`: never the URL.",
+            "maxLength": 200,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stack": {
+            "description": "The stack, already scrubbed. Up to 8000 characters.",
+            "maxLength": 8000,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tenant_id": {
+            "description": "The workspace the user had open. Not verified: it labels the report and nothing more.",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "message"
+        ],
+        "type": "object"
+      },
       "ConfidenceView": {
         "description": "Deterministic confidence metadata attached to AI messages.\nBand is derived server-side using a local 3-line function (see\n`confidence_band`) — intentionally duplicated from `ai::confidence`\nto avoid a circular crate dependency.",
         "properties": {
@@ -6747,6 +6843,76 @@
         "summary": "Create a workspace and its first (Owner) user",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/client-errors": {
+      "post": {
+        "description": "Takes one to twenty error reports from the dashboard and writes them to the backend log (target `frontend`) and to the `frontend_errors_total` counter. Needs a session; errors before sign-in are not reported. Rate limited per user. The body may be at most 64 KiB. The workspace ID in a report is not verified. Requires permission: none (any signed-in user).",
+        "operationId": "report_client_errors",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientErrorBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Received."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "A report is not valid, or the body is not JSON or is larger than 64 KiB."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthenticated."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "A session-cookie request without an allowed origin and the `X-Requested-With` header."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too many requests."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Report errors seen in the browser",
+        "tags": [
+          "observability"
         ]
       }
     },

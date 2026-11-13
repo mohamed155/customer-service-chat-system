@@ -22,7 +22,8 @@
     "test:tenant-scope-check": "node --test tools/check-tenant-scope.test.mjs",
     "test:lint-rules": "node --test tools/eslint-rules/feature-boundaries.test.mjs",
     "test:coverage": "ng test dashboard --watch=false --configuration=coverage && ng test widget --watch=false --configuration=coverage && node tools/check-coverage.mjs",
-    "test:coverage-check": "node --test tools/check-coverage.test.mjs"
+    "test:coverage-check": "node --test tools/check-coverage.test.mjs",
+    "test:symbolicate": "node --test tools/symbolicate.test.mjs"
   },
   "dependencies": {
     "@angular/common": "^22.2.4",
@@ -54,6 +55,7 @@
     "@angular/language-service": "^22.2.4",
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
+    "@jridgewell/trace-mapping": "0.3.31",
     "@ngrx/store-devtools": "22.0.1",
     "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.6",

@@ -111,6 +111,12 @@ jobs:
         run: docker buildx build --push -f infra/Dockerfile.backend -t ghcr.io/${{ github.repository }}-backend:${{ github.sha }} .
       - name: Build and push dashboard image
         run: docker buildx build --push -f infra/Dockerfile.frontend --build-arg APP=dashboard -t ghcr.io/${{ github.repository }}-dashboard:${{ github.sha }} .
+      # The dashboard's source maps, alone in an image of their own (MOH-168). They are not in the
+      # dashboard image above. Keep this package PRIVATE in the repository's package settings: the
+      # maps show the source of a build. A browser error report names the build (its `release` is
+      # the hash of the main script), and `frontend/tools/symbolicate.mjs` reads the stack with them.
+      - name: Build and push dashboard source maps (private package)
+        run: docker buildx build --push -f infra/Dockerfile.frontend --build-arg APP=dashboard --target sourcemaps -t ghcr.io/${{ github.repository }}-dashboard-sourcemaps:${{ github.sha }} .
       - name: Build and push widget image
         run: docker buildx build --push -f infra/Dockerfile.frontend --build-arg APP=widget -t ghcr.io/${{ github.repository }}-widget:${{ github.sha }} .
       - name: Create release manifest
@@ -124,6 +130,7 @@ jobs:
             "images": {
               "backend": "ghcr.io/${{ github.repository }}-backend:${{ github.sha }}",
               "dashboard": "ghcr.io/${{ github.repository }}-dashboard:${{ github.sha }}",
+              "dashboard_sourcemaps": "ghcr.io/${{ github.repository }}-dashboard-sourcemaps:${{ github.sha }}",
               "widget": "ghcr.io/${{ github.repository }}-widget:${{ github.sha }}"
             }
           }

@@ -16,7 +16,7 @@ export const UPDATE_CHECK_MIN_GAP_MS = 60_000;
  */
 export function releaseFingerprint(html: string): string | null {
   const names = new Set<string>();
-  for (const match of html.matchAll(/(?:src|href)="([^"]*-[A-Z0-9]{8}\.(?:js|css))"/g)) {
+  for (const match of html.matchAll(/(?:src|href)="([^"]*-[A-Za-z0-9_-]{8}\.(?:js|css))"/g)) {
     names.add(match[1]);
   }
   return names.size ? [...names].sort().join('|') : null;

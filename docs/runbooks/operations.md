@@ -492,3 +492,69 @@ a new authenticator.
 - **`401 mfa_step_up_required`**: enter a code (`POST /api/v1/auth/mfa/step-up`) and try again.
 - **The user is locked out after wrong codes** (five in a row lock the second step for fifteen
   minutes): wait, or reset the factor.
+
+## 9. Frontend Errors
+
+Browsers send the errors they could not recover from (an unhandled error, an unhandled promise
+rejection, a lazy chunk that will not load) to `POST /api/v1/client-errors`. Each one is a backend
+log line with target `frontend` and a count in `frontend_errors_total{kind, release}`. Errors from a
+page where nobody is signed in are not sent: the endpoint needs a session.
+
+Two alerts watch the counter (`infra/prometheus-alerts.yml`): `FrontendErrorSpike` (at least 20
+errors in 10 minutes and more than three times the usual rate) and `FrontendErrorsAfterRelease` (a
+backend release that had no errors an hour ago and now has ten or more in 10 minutes).
+
+### Steps
+
+1. Open the dashboard **Frontend Errors** in Grafana (folder: General). It shows the rate by kind
+   and by backend release, and the latest reports.
+2. Read the reports in Grafana Explore with the Loki data source:
+
+   ```text
+   {container=~".*backend.*"} |= "frontend error" | json | target="frontend"
+   ```
+
+   Each line has `kind`, `message`, `stack`, `route` (the route pattern, such as
+   `tenant/customers/:id`), `client_release` (the dashboard build: the hash in its main script's
+   file name), `client_request_id` (the API call involved, when there was one: search it with
+   `| json | request_id="<id>"`), `claimed_tenant_id`, `user_id`, `user_agent` and `count`.
+   `claimed_tenant_id` is what the browser says it had open and is **not verified**.
+3. Group by `client_release` and `route`. One release or one route is a regression; errors spread
+   over many releases are usually a browser or an extension. `kind="chunk_load"` right after a
+   deploy is the stale-page case (the page reloads itself once, and shows the update notice if that
+   does not help): it is expected for a few minutes and is only a problem if it lasts.
+   The counter is fed by signed-in browsers, so any user can send reports. Each user can add at
+   most 5 to it in 10 minutes (one per report, whatever count it claims; every report is still
+   logged), so an alert needs several users, not one. It counts users and places failing, not the
+   total number of errors: read the volume in Loki. A big log volume from one `user_id` is noise or
+   abuse, not a regression: count by user with
+   `sum by (fields_user_id) (count_over_time({container=~".*backend.*"} |= "frontend error" | json | target="frontend" [10m]))`.
+4. To read a stack, get the source maps of that build. They are not in the dashboard image; the
+   release job publishes them as a **private** package,
+   `ghcr.io/<owner>/<repo>-dashboard-sourcemaps:<commit>`, holding only the `.map` files:
+
+   ```bash
+   docker create --name maps ghcr.io/<owner>/<repo>-dashboard-sourcemaps:<commit> true
+   docker cp maps:/ ./maps && docker rm maps
+   (cd frontend && node tools/symbolicate.mjs ../maps stack.txt)   # or pipe the stack on stdin
+   ```
+
+   `client_release` is the hash of `main-<hash>.js`: use the build whose maps hold
+   `main-<hash>.js.map`.
+
+### Expected outcome
+
+- The alert clears once the cause is fixed and the rate falls back.
+- A fix that touches a route shows in the next release as fewer reports for that `route`.
+
+### When it fails
+
+- **No reports at all, but users say something is broken**: reports need a signed-in user and the
+  endpoint (`401`, `403` and `429` pause the browser's reporting for a minute). Check the
+  `/api/v1/client-errors` requests in the access log, and that `frontend_errors_total` exists at
+  `/metrics`.
+- **`429` on the endpoint**: one user sends more than 30 requests a minute. The dashboard
+  batches and limits itself, so this points at a loop in a browser; look for one `user_id`.
+- **The maps package is missing, or anyone can pull it**: the package is created by the first
+  release after MOH-168. Its visibility must be **private** (GitHub, Packages, package settings);
+  a public package would publish the source of every build.
