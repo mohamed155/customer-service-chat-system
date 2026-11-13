@@ -539,28 +539,45 @@ fn counter(kind: &str) -> f64 {
 }
 
 #[tokio::test]
-async fn a_claimed_count_cannot_move_the_alert_counter_by_more_than_the_cap() {
+async fn one_user_can_add_only_a_small_budget_to_the_alert_counter() {
     let (app, user, _lock) = setup!();
     let (logs, _guard) = capture_logs();
     observability::metrics::init();
     let before = counter("chunk_load");
+    let budget = server::client_errors::COUNTED_PER_USER;
+    // A request is as large as it can be: twenty reports, each claiming a huge count.
+    let reports: Vec<Value> = (0..20)
+        .map(|i| json!({ "kind": "chunk_load", "message": format!("e{i}"), "count": 1000 }))
+        .collect();
 
+    for _ in 0..3 {
+        let response = send(
+            &app,
+            as_user(report_request(json!({ "reports": reports })), user),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    // Sixty reports, each claiming 1000: the counter moved by the user's budget, no more.
+    assert_eq!(counter("chunk_load") - before, f64::from(budget));
+    // Every report is still logged, with the claim as sent.
+    let events = logs.frontend_events();
+    assert_eq!(events.len(), 60);
+    assert_eq!(events[0]["fields"]["count"], 1000);
+
+    // Another user has a budget of their own: a real spike is many users.
+    let other = seed_user().await;
     let response = send(
         &app,
         as_user(
             report_request(json!({ "reports": [
-                { "kind": "chunk_load", "message": "x", "count": 1000 },
-                { "kind": "chunk_load", "message": "y", "count": 3 }
+                { "kind": "chunk_load", "message": "z", "count": 1000 }
             ] })),
-            user,
+            other,
         ),
     )
     .await;
-
     assert_eq!(response.status(), StatusCode::NO_CONTENT);
-    // 10 (1000 capped) + 3, not 1003.
-    let cap = f64::from(server::client_errors::MAX_COUNTED_PER_REPORT);
-    assert_eq!(counter("chunk_load") - before, cap + 3.0);
-    // The claim itself is still logged as sent.
-    assert_eq!(logs.frontend_events()[0]["fields"]["count"], 1000);
+    assert_eq!(counter("chunk_load") - before, f64::from(budget) + 1.0);
 }

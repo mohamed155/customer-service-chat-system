@@ -11,7 +11,8 @@
 //!
 //! A report is one `tracing` event with target `frontend`, which promtail ships to Loki like any
 //! other backend log line, and a count in `frontend_errors_total{kind, release}` for the alert on
-//! a spike (a report adds at most `MAX_COUNTED_PER_REPORT` to it, whatever count it claims). There is no table: a report is not data the platform keeps, so there is no tenant
+//! a spike. A signed-in user can only add `COUNTED_PER_USER` to that counter per `COUNTED_WINDOW`
+//! (every report is still logged), so one account can never raise an alert by itself. There is no table: a report is not data the platform keeps, so there is no tenant
 //! data to isolate. The tenant ID the browser names is **unverified** and is logged as such
 //! (`claimed_tenant_id`): this route sits outside the tenant context, and a user who names
 //! another tenant only labels their own report.
@@ -47,10 +48,12 @@ const MAX_RELEASE_CHARS: usize = 64;
 const MAX_USER_AGENT_CHARS: usize = 300;
 /// A report stands for this many identical ones at most (the client counts repeats).
 const MAX_COUNT: u32 = 1_000;
-/// What one report adds to `frontend_errors_total`, however large the count it claims. The count is
-/// the browser's own word: it is logged as sent, but the counter the alerts watch is not moved by
-/// it, so one request cannot raise an alert (a real spike is many users, not one big count).
-pub const MAX_COUNTED_PER_REPORT: u32 = 10;
+/// What one signed-in user may add to `frontend_errors_total` in `COUNTED_WINDOW`, one per report
+/// whatever count it claims. Every report is still logged. The counter is what the alerts watch and
+/// any signed-in user can send reports, so a user's share of it is small: a real spike is many
+/// users, and a loop in one browser (or one person spamming) cannot reach an alert threshold alone.
+pub const COUNTED_PER_USER: u32 = 5;
+pub const COUNTED_WINDOW: Duration = Duration::from_secs(600);
 
 /// What went wrong in the browser.
 #[derive(Debug, Clone, Copy, Deserialize, ToSchema, PartialEq, Eq)]
@@ -225,11 +228,9 @@ pub async fn report(
 
     for report in batch.reports {
         let count = report.count.unwrap_or(1);
-        observability::metrics::record_frontend_errors(
-            report.kind.as_str(),
-            release_label,
-            u64::from(count.min(MAX_COUNTED_PER_REPORT)),
-        );
+        if counts_toward_alerts(&config, &limiter, &user_id).await {
+            observability::metrics::record_frontend_errors(report.kind.as_str(), release_label, 1);
+        }
         tracing::warn!(
             target: "frontend",
             kind = report.kind.as_str(),
@@ -247,4 +248,29 @@ pub async fn report(
         );
     }
     StatusCode::NO_CONTENT.into_response()
+}
+
+/// Whether this user may still add to the alert counter in the current window. With rate limiting
+/// off (local development) every report counts.
+async fn counts_toward_alerts(
+    config: &AppConfig,
+    limiter: &Arc<dyn RateLimiter>,
+    user_id: &str,
+) -> bool {
+    if !config.rate_limit_enabled {
+        return true;
+    }
+    !matches!(
+        limiter
+            .check(
+                Scope::ClientErrorsCounted,
+                user_id,
+                Budget {
+                    max_requests: COUNTED_PER_USER,
+                    window: COUNTED_WINDOW,
+                },
+            )
+            .await,
+        Decision::Refused { .. }
+    )
 }

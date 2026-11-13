@@ -523,9 +523,11 @@ backend release that had no errors an hour ago and now has ten or more in 10 min
    over many releases are usually a browser or an extension. `kind="chunk_load"` right after a
    deploy is the stale-page case (the page reloads itself once, and shows the update notice if that
    does not help): it is expected for a few minutes and is only a problem if it lasts.
-   The counter is fed by signed-in browsers, so any user can add to it (a report adds at most 10,
-   whatever count it claims, and a user is limited to 30 requests a minute). A spike from one
-   `user_id` is noise or abuse, not a regression: count by user with
+   The counter is fed by signed-in browsers, so any user can send reports. Each user can add at
+   most 5 to it in 10 minutes (one per report, whatever count it claims; every report is still
+   logged), so an alert needs several users, not one. It counts users and places failing, not the
+   total number of errors: read the volume in Loki. A big log volume from one `user_id` is noise or
+   abuse, not a regression: count by user with
    `sum by (fields_user_id) (count_over_time({container=~".*backend.*"} |= "frontend error" | json | target="frontend" [10m]))`.
 4. To read a stack, get the source maps of that build. They are not in the dashboard image; the
    release job publishes them as a **private** package,

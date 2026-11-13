@@ -28,6 +28,8 @@ pub enum Scope {
     MfaEnrol,
     /// Error reports sent by the dashboard (MOH-168), per signed-in user.
     ClientErrors,
+    /// What one user may add to the frontend error counter (MOH-168).
+    ClientErrorsCounted,
     WidgetSession,
     WidgetMessage,
     Webhook,
@@ -41,6 +43,7 @@ impl Scope {
             Self::Mfa => "mfa",
             Self::MfaEnrol => "mfa_enrol",
             Self::ClientErrors => "client_errors",
+            Self::ClientErrorsCounted => "client_errors_counted",
             Self::WidgetSession => "widget_session",
             Self::WidgetMessage => "widget_message",
             Self::Webhook => "webhook",
