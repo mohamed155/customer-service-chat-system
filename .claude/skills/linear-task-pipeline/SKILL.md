@@ -241,10 +241,16 @@ unread CodeRabbit comments).
 # when everything is green. Don't pipe its output into anything before the `&&`: the pipe's
 # exit code would replace it, and the merge would run whatever the checks say.
 gh pr checks <n> >/dev/null 2>&1 && gh pr merge <n> --squash --delete-branch   # squash-only, PR title becomes the commit
-# `kilo=skipped` leaves the failed Kilo check red, so the guard above refuses. Then every other check
-# must be green and the merge uses the required checks only (Kilo is not required):
-#   [ -z "$(gh pr checks <n> --json name,bucket --jq '.[] | select(.bucket!="pass" and .bucket!="skipping") | select(.name|test("^(Kilo Code|CodeRabbit)")|not) | .name')" ] \
-#     && gh pr checks <n> --required >/dev/null 2>&1 && gh pr merge <n> --squash --delete-branch
+git switch master && git pull --ff-only origin master
+```
+
+**When the watcher said `kilo=skipped`** the failed Kilo check keeps `gh pr checks` red, so the
+guard above would refuse. Use this one instead. It merges only when every check other than Kilo
+and CodeRabbit (neither is required) passed or was skipped, and the required checks are green:
+
+```bash
+others=$(gh pr checks <n> --json name,bucket --jq '[.[] | select(.bucket != "pass" and .bucket != "skipping") | select(.name | test("^(Kilo Code|CodeRabbit)") | not)] | length')
+[ "$others" = 0 ] && gh pr checks <n> --required >/dev/null 2>&1 && gh pr merge <n> --squash --delete-branch
 git switch master && git pull --ff-only origin master
 ```
 
