@@ -130,13 +130,15 @@
   }
 </app-page-container>
 
-@if (showEditDialog()) {
-  <app-customer-dialog
-    mode="edit"
-    [customer]="customer()"
-    [submitting]="dialogSubmitting()"
-    [error]="dialogError()"
-    (update)="onUpdate($event)"
-    (closeDialog)="closeEditDialog()"
-  />
+@defer (when showEditDialog(); prefetch on idle) {
+  @if (showEditDialog()) {
+    <app-customer-dialog
+      mode="edit"
+      [customer]="customer()"
+      [submitting]="dialogSubmitting()"
+      [error]="dialogError()"
+      (update)="onUpdate($event)"
+      (closeDialog)="closeEditDialog()"
+    />
+  }
 }

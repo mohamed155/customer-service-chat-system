@@ -3,8 +3,8 @@
     "total": {
       "lines": 80.9,
       "statements": 80.5,
-      "functions": 76.9,
-      "branches": 76.2
+      "functions": 77,
+      "branches": 76.3
     },
     "groups": {
       "core": {

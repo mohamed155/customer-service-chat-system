@@ -638,7 +638,9 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
   HTTP layer cancels the old workspace's requests and the realtime stream reconnects (ADR-003,
   section 2).
 - Performance: lazy routes, `@defer` blocks, virtual scrolling for inbox and message lists,
-  image optimization.
+  image optimization. The dashboard build fails when the initial bundle or a heavy route chunk
+  grows past its budget, and routes marked for it load when the browser is idle (MOH-171; see
+  `frontend/CLAUDE.md`).
 - i18n with RTL support (Arabic is a likely early market); dates/numbers localized.
 
 ---

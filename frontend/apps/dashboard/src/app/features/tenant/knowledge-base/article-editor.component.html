@@ -54,7 +54,15 @@
       <app-dashboard-card>
         <div class="editor-section">
           <div class="editor-label">Body</div>
-          <app-rich-text-editor [(value)]="body" />
+          <!-- The editor is about 400 kB (Taiga editor, ProseMirror, TipTap): the form above is usable
+               while it loads. -->
+          @defer (on immediate) {
+            <app-rich-text-editor [(value)]="body" />
+          } @placeholder {
+            <div class="editor-placeholder" aria-hidden="true"></div>
+          } @error {
+            <p class="editor-error" role="alert">{{ editorLoadError }}</p>
+          }
         </div>
       </app-dashboard-card>
     </div>

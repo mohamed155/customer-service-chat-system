@@ -17,7 +17,6 @@ describe('ApiService', () => {
             apiBaseUrl: '/api/v1',
             appName: 'Test',
             environmentName: 'development',
-            enableNgRxDevtools: false,
           },
         },
       ],

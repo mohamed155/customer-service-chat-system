@@ -89,10 +89,12 @@
     />
   }
 
-  @if (showNewDialog()) {
-    <app-new-conversation-dialog
-      (create)="onConversationCreated($event)"
-      (closeDialog)="showNewDialog.set(false)"
-    />
+  @defer (when showNewDialog(); prefetch on idle) {
+    @if (showNewDialog()) {
+      <app-new-conversation-dialog
+        (create)="onConversationCreated($event)"
+        (closeDialog)="showNewDialog.set(false)"
+      />
+    }
   }
 </app-page-container>

@@ -68,7 +68,8 @@ export const routes: Routes = [
       {
         path: APP_PATHS.tenant.base,
         canMatch: [areaAccessGuard],
-        data: { area: 'tenant' },
+        // `preload`: the area's routes are looked at for preloading only once the area is loaded.
+        data: { area: 'tenant', preload: true },
         loadChildren: () =>
           import('./features/tenant/tenant.routes').then((module) => module.TENANT_ROUTES),
       },

@@ -157,8 +157,10 @@
   }
 </app-page-container>
 
-<app-upload-document
-  [open]="uploadOpen()"
-  (completed)="onUploaded()"
-  (closed)="uploadOpen.set(false)"
-/>
+@defer (when uploadOpen(); prefetch on idle) {
+  <app-upload-document
+    [open]="uploadOpen()"
+    (completed)="onUploaded()"
+    (closed)="uploadOpen.set(false)"
+  />
+}

@@ -20,8 +20,10 @@
       [(value)]="search"
     />
     @if (isPlatformUser()) {
-      <app-platform-nav />
-      <app-tenant-switcher />
+      @defer (on immediate) {
+        <app-platform-nav />
+        <app-tenant-switcher />
+      }
     }
     <button class="new-button" type="button">
       <tui-icon icon="@tui.plus" /><span class="new-label">New</span>

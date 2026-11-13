@@ -98,10 +98,12 @@
       </app-button>
     </div>
 
-    <app-version-history-drawer
-      [open]="versionHistoryOpen()"
-      (closed)="versionHistoryOpen.set(false); store.clearSelectedVersion()"
-    />
+    @defer (when versionHistoryOpen(); prefetch on idle) {
+      <app-version-history-drawer
+        [open]="versionHistoryOpen()"
+        (closed)="versionHistoryOpen.set(false); store.clearSelectedVersion()"
+      />
+    }
 
     @if (fieldError('content'); as errors) {
       @for (err of errors; track err) {

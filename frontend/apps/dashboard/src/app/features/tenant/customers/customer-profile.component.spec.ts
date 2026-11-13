@@ -335,6 +335,9 @@ describe('CustomerProfileComponent', () => {
       ).find((btn) => btn.textContent?.trim() === 'Edit')!;
       editBtn.click();
       fixture.detectChanges();
+      // The dialog is in a `@defer` block: its chunk loads first.
+      await fixture.whenStable();
+      fixture.detectChanges();
 
       expect(fixture.nativeElement.querySelector('app-customer-dialog')).toBeTruthy();
     });

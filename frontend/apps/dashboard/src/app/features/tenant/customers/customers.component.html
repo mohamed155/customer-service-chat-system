@@ -104,12 +104,14 @@
   }
 </app-page-container>
 
-@if (showCreateDialog()) {
-  <app-customer-dialog
-    mode="create"
-    [submitting]="dialogSubmitting()"
-    [error]="dialogError()"
-    (create)="onCreate($event)"
-    (closeDialog)="closeCreateDialog()"
-  />
+@defer (when showCreateDialog(); prefetch on idle) {
+  @if (showCreateDialog()) {
+    <app-customer-dialog
+      mode="create"
+      [submitting]="dialogSubmitting()"
+      [error]="dialogError()"
+      (create)="onCreate($event)"
+      (closeDialog)="closeCreateDialog()"
+    />
+  }
 }
