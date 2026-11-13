@@ -640,7 +640,9 @@ test.describe('Customer Profiles', () => {
     });
 
     await page.goto('/tenant/customers/nonexistent-id');
-    await expect(page.getByText('Customer not found')).toBeVisible();
+    // The text for the 404 in the catalog, not the API's message.
+    await expect(page.getByText('This customer could not be found.')).toBeVisible();
+    await expect(page.getByText('Customer not found')).toHaveCount(0);
   });
 
   test('Conflict display', async ({ page }) => {

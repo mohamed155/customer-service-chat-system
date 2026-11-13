@@ -156,7 +156,7 @@ describe('CustomerDialogComponent', () => {
     expect(values).toEqual(['email', 'phone', 'web_chat', 'whatsapp', 'telegram']);
   });
 
-  it('renders conflict error with authoritative server message', async () => {
+  it('renders the identifier conflict text, never the API message', async () => {
     const fixture = create('create');
     fixture.componentRef.setInput('error', {
       code: 'conflict',
@@ -173,13 +173,39 @@ describe('CustomerDialogComponent', () => {
     await TestBed.compileComponents();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Identifier already held by Sara Ali');
-    expect(fixture.nativeElement.textContent).not.toContain(
-      'This identifier is already used by another customer',
+    expect(fixture.nativeElement.textContent).toContain(
+      'Another customer already uses one of these',
     );
+    expect(fixture.nativeElement.textContent).not.toContain('Identifier already held by Sara Ali');
   });
 
-  it('falls back to top-level message when conflict has no identifiers detail', async () => {
+  it('names the customer who holds a conflicting identifier from the data fields, not the message', async () => {
+    const fixture = create('create');
+    fixture.componentRef.setInput('error', {
+      code: 'conflict',
+      message: 'Conflict',
+      status: 409,
+      details: [
+        {
+          field: 'identifiers',
+          code: 'identifier_conflict',
+          message: 'TEXT FROM THE API',
+          channel: 'whatsapp',
+          identifier: '+15550000999',
+          existing_customer_name: 'Existing Customer',
+        },
+      ],
+    });
+    await TestBed.compileComponents();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain(
+      'Channel `whatsapp:+15550000999` is already held by `Existing Customer`',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain('TEXT FROM THE API');
+  });
+
+  it('shows the generic text of the code when a conflict names no identifiers', async () => {
     const fixture = create('create');
     fixture.componentRef.setInput('error', {
       code: 'conflict',
@@ -190,7 +216,8 @@ describe('CustomerDialogComponent', () => {
     await TestBed.compileComponents();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('A conflict occurred while saving');
+    expect(fixture.nativeElement.textContent).toContain('The request could not be completed');
+    expect(fixture.nativeElement.textContent).not.toContain('A conflict occurred while saving');
   });
 
   const addIdentifier = (
@@ -204,6 +231,35 @@ describe('CustomerDialogComponent', () => {
   const addMetadata = (component: CustomerDialogComponent, key: string, value: string): void => {
     component['addMetadata'](key, value);
   };
+
+  describe('messages of the form checks', () => {
+    async function textAfter(setup: (fixture: ReturnType<typeof create>) => void): Promise<string> {
+      const fixture = create('create');
+      await TestBed.compileComponents();
+      fixture.detectChanges();
+      setup(fixture);
+      fixture.detectChanges();
+      return fixture.nativeElement.textContent as string;
+    }
+
+    it('names the channel in a phone identifier message', async () => {
+      const text = await textAfter((fixture) => {
+        addIdentifier(fixture.componentInstance, 'whatsapp', 'abc');
+        addIdentifier(fixture.componentInstance, 'phone', '12');
+      });
+      expect(text).toContain('WhatsApp channel must be a valid phone number (7-15 digits');
+      expect(text).toContain('Phone channel must be a valid phone number (7-15 digits');
+    });
+
+    it('says what is wrong with an email identifier', async () => {
+      const text = await textAfter((fixture) => {
+        addIdentifier(fixture.componentInstance, 'email', 'not-an-email');
+        addIdentifier(fixture.componentInstance, 'email', `${'a'.repeat(65)}@example.com`);
+      });
+      expect(text).toContain('Email channel identifiers must be a valid email address.');
+      expect(text).toContain('Email local part must be at most 64 characters.');
+    });
+  });
 
   describe('identifiers', () => {
     it('maintains correct indices after removing a middle identifier', async () => {
@@ -561,9 +617,10 @@ describe('CustomerDialogComponent', () => {
       const rows = fixture.nativeElement.querySelectorAll('.identifier-row');
       expect(rows.length).toBe(2);
       const secondRow = rows[1] as HTMLElement;
-      expect(secondRow.textContent).toContain('Invalid phone format');
+      expect(secondRow.textContent).toContain('This value is not valid.');
+      expect(secondRow.textContent).not.toContain('Invalid phone format');
       const firstRow = rows[0] as HTMLElement;
-      expect(firstRow.textContent).not.toContain('Invalid phone format');
+      expect(firstRow.textContent).not.toContain('This value is not valid.');
     });
 
     it('shows field-level errors on simple fields', async () => {
@@ -579,7 +636,8 @@ describe('CustomerDialogComponent', () => {
       });
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.textContent).toContain('Name is too short');
+      expect(fixture.nativeElement.textContent).toContain('This value is not valid.');
+      expect(fixture.nativeElement.textContent).not.toContain('Name is too short');
     });
 
     it('shows errors on identifier sub-controls', async () => {
@@ -602,7 +660,8 @@ describe('CustomerDialogComponent', () => {
       });
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.textContent).toContain('Unsupported channel');
+      expect(fixture.nativeElement.textContent).toContain('This value is not valid.');
+      expect(fixture.nativeElement.textContent).not.toContain('Unsupported channel');
     });
 
     it('shows errors on metadata value controls', async () => {
@@ -625,7 +684,8 @@ describe('CustomerDialogComponent', () => {
       });
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.textContent).toContain('Metadata plan value exceeds limit');
+      expect(fixture.nativeElement.textContent).toContain('This value is not valid.');
+      expect(fixture.nativeElement.textContent).not.toContain('Metadata plan value exceeds limit');
     });
   });
 });

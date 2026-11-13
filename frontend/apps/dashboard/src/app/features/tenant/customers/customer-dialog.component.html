@@ -6,165 +6,181 @@
 >
   <form [formGroup]="form" (ngSubmit)="submit()">
     <h3 id="customer-dialog-title">
-      {{ mode() === 'create' ? 'New customer' : 'Edit customer' }}
+      {{
+        (mode() === 'create' ? 'customers.dialog.titleNew' : 'customers.dialog.titleEdit')
+          | transloco
+      }}
     </h3>
 
-    <app-form-field label="Display name">
+    <app-form-field [label]="'customers.dialog.displayName' | transloco">
       <input
         type="text"
-        aria-label="Display name"
+        [attr.aria-label]="'customers.dialog.displayName' | transloco"
         formControlName="displayName"
-        placeholder="Full name"
+        [placeholder]="'customers.dialog.displayNamePlaceholder' | transloco"
         maxlength="200"
       />
     </app-form-field>
     @if (form.controls.displayName.touched && form.controls.displayName.invalid) {
-      <app-inline-alert tone="error">
-        Display name is required (1–200 characters).
-      </app-inline-alert>
+      <app-inline-alert tone="error">{{
+        'customers.dialog.errors.displayName' | transloco
+      }}</app-inline-alert>
     }
     @if (fieldError('displayName'); as err) {
-      <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert tone="error">{{ err.key | transloco: err.params }}</app-inline-alert>
     }
 
-    <app-form-field label="Email">
+    <app-form-field [label]="'customers.dialog.email' | transloco">
       <input
         type="email"
-        aria-label="Email"
+        [attr.aria-label]="'customers.dialog.email' | transloco"
         formControlName="email"
-        placeholder="Email address"
+        [placeholder]="'customers.dialog.emailPlaceholder' | transloco"
         maxlength="320"
       />
     </app-form-field>
     @if (form.controls.email.touched && form.controls.email.invalid) {
-      <app-inline-alert tone="error"
-        >Enter a valid email address (max 320 characters).</app-inline-alert
-      >
+      <app-inline-alert tone="error">{{
+        'customers.dialog.errors.email' | transloco
+      }}</app-inline-alert>
     }
     @if (fieldError('email'); as err) {
-      <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert tone="error">{{ err.key | transloco: err.params }}</app-inline-alert>
     }
 
-    <app-form-field label="Phone">
+    <app-form-field [label]="'customers.dialog.phone' | transloco">
       <input
         type="tel"
-        aria-label="Phone"
+        [attr.aria-label]="'customers.dialog.phone' | transloco"
         formControlName="phone"
-        placeholder="+201001234567"
+        [placeholder]="'customers.dialog.phonePlaceholder' | transloco"
         maxlength="16"
       />
     </app-form-field>
     @if (form.controls.phone.touched && form.controls.phone.invalid) {
-      <app-inline-alert tone="error"
-        >Enter a valid phone number (7–15 digits, optional + prefix).</app-inline-alert
-      >
+      <app-inline-alert tone="error">{{
+        'customers.dialog.errors.phone' | transloco
+      }}</app-inline-alert>
     }
     @if (fieldError('phone'); as err) {
-      <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert tone="error">{{ err.key | transloco: err.params }}</app-inline-alert>
     }
 
     <fieldset class="identifiers-section">
-      <legend>Channel identifiers</legend>
+      <legend>{{ 'customers.dialog.identifiers' | transloco }}</legend>
       <div formArrayName="identifiers">
         @for (row of identifierRows(); track row.index) {
           <div class="identifier-row" [formGroupName]="row.index">
-            <app-form-field label="Channel">
-              <select formControlName="channel" aria-label="Channel">
+            <app-form-field [label]="'customers.dialog.channel' | transloco">
+              <select
+                formControlName="channel"
+                [attr.aria-label]="'customers.dialog.channel' | transloco"
+              >
                 @for (ch of channels; track ch) {
-                  <option [value]="ch">{{ channelLabel(ch) }}</option>
+                  <option [value]="ch">{{ channelLabel(ch) | transloco }}</option>
                 }
               </select>
               @if (identifierError(row.index, 'channel'); as err) {
-                <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+                <app-inline-alert tone="error">{{
+                  err.key | transloco: err.params
+                }}</app-inline-alert>
               }
             </app-form-field>
-            <app-form-field label="Identifier">
+            <app-form-field [label]="'customers.dialog.identifier' | transloco">
               <input
                 type="text"
                 formControlName="identifier"
-                aria-label="Identifier"
-                placeholder="Value"
+                [attr.aria-label]="'customers.dialog.identifier' | transloco"
+                [placeholder]="'customers.dialog.value' | transloco"
                 maxlength="320"
               />
               @if (identifierError(row.index, 'identifier'); as err) {
-                <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+                <app-inline-alert tone="error">{{
+                  err.key | transloco: err.params
+                }}</app-inline-alert>
               }
             </app-form-field>
             <app-icon-button
               icon="@tui.x"
-              label="Remove identifier"
+              [label]="'customers.dialog.removeIdentifier' | transloco"
               (click)="removeIdentifier(row.index)"
             />
           </div>
         }
       </div>
       <app-button variant="secondary" size="sm" (pressed)="addIdentifier()">
-        + Add identifier
+        {{ 'customers.dialog.addIdentifier' | transloco }}
       </app-button>
     </fieldset>
 
     <fieldset class="metadata-section">
-      <legend>Metadata ({{ metadataRows().length }}/50)</legend>
+      <legend>
+        {{ 'customers.dialog.metadata' | transloco: { count: metadataRows().length } }}
+      </legend>
       <div formArrayName="metadata">
         @for (row of metadataRows(); track row.index) {
           <div class="metadata-row" [formGroupName]="row.index">
-            <app-form-field label="Key">
+            <app-form-field [label]="'customers.dialog.key' | transloco">
               <input
                 type="text"
                 formControlName="key"
-                aria-label="Metadata key"
-                placeholder="Key"
+                [attr.aria-label]="'customers.dialog.metadataKey' | transloco"
+                [placeholder]="'customers.dialog.key' | transloco"
                 maxlength="100"
               />
             </app-form-field>
-            <app-form-field label="Value">
+            <app-form-field [label]="'customers.dialog.value' | transloco">
               <input
                 type="text"
                 formControlName="value"
-                aria-label="Metadata value"
-                placeholder="Value"
+                [attr.aria-label]="'customers.dialog.metadataValue' | transloco"
+                [placeholder]="'customers.dialog.value' | transloco"
                 maxlength="500"
               />
               @if (metadataError(row.index); as err) {
-                <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+                <app-inline-alert tone="error">{{
+                  err.key | transloco: err.params
+                }}</app-inline-alert>
               }
             </app-form-field>
             <app-icon-button
               icon="@tui.x"
-              label="Remove metadata"
+              [label]="'customers.dialog.removeMetadata' | transloco"
               (click)="removeMetadata(row.index)"
             />
           </div>
         }
       </div>
-      <app-button variant="secondary" size="sm" (pressed)="addMetadata()"
-        >+ Add metadata</app-button
-      >
+      <app-button variant="secondary" size="sm" (pressed)="addMetadata()">{{
+        'customers.dialog.addMetadata' | transloco
+      }}</app-button>
       @if (metadataApproachingLimit()) {
-        <app-inline-alert tone="info"
-          >Approaching the metadata limit ({{ metadataRows().length }}/50).</app-inline-alert
-        >
+        <app-inline-alert tone="info">{{
+          'customers.dialog.metadataNearLimit' | transloco: { count: metadataRows().length }
+        }}</app-inline-alert>
       }
       @if (metadataRows().length >= 50) {
-        <app-inline-alert tone="error">Maximum 50 metadata entries.</app-inline-alert>
+        <app-inline-alert tone="error">{{
+          'customers.dialog.metadataMax' | transloco
+        }}</app-inline-alert>
       }
     </fieldset>
 
     @if (crossFieldError(); as err) {
-      <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert tone="error">{{ err.key | transloco: err.params }}</app-inline-alert>
     }
     @if (contactError(); as err) {
-      <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert tone="error">{{ err.key | transloco: err.params }}</app-inline-alert>
     }
     @if (conflictError(); as err) {
-      <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert tone="error">{{ err.key | transloco: err.params }}</app-inline-alert>
     }
     @for (err of formLevelErrors(); track $index) {
       <app-inline-alert tone="error">
         @if (err.field) {
           <strong>{{ err.field }}:</strong>
         }
-        {{ err.message }}</app-inline-alert
+        {{ err.key | transloco }}</app-inline-alert
       >
     }
     @if (error()?.requestId; as id) {
@@ -172,9 +188,18 @@
     }
 
     <div class="actions">
-      <app-button variant="secondary" (pressed)="closeDialog.emit()">Cancel</app-button>
+      <app-button variant="secondary" (pressed)="closeDialog.emit()">{{
+        'common.cancel' | transloco
+      }}</app-button>
       <app-button variant="primary" type="submit" [disabled]="submitting()">
-        {{ submitting() ? 'Saving…' : mode() === 'create' ? 'Create customer' : 'Save changes' }}
+        {{
+          (submitting()
+            ? 'customers.dialog.saving'
+            : mode() === 'create'
+              ? 'customers.dialog.create'
+              : 'customers.dialog.save'
+          ) | transloco
+        }}
       </app-button>
     </div>
   </form>

@@ -15,6 +15,7 @@ import type { Translation, TranslocoLoader } from '@jsverse/transloco';
 import { Observable, of, throwError } from 'rxjs';
 import authEnglish from '../../../../public/i18n/auth/en.json';
 import conversationsEnglish from '../../../../public/i18n/conversations/en.json';
+import customersEnglish from '../../../../public/i18n/customers/en.json';
 import sharedEnglish from '../../../../public/i18n/shared/en.json';
 import { toCatalog } from './catalog.loader';
 import { IcuTranspiler } from './icu-transpiler';
@@ -28,6 +29,7 @@ import { i18nConfig } from './i18n.providers';
 const TEST_SCOPES: Readonly<Record<string, Translation>> = {
   auth: authEnglish,
   conversations: conversationsEnglish,
+  customers: customersEnglish,
 };
 
 class EnglishTestLoader implements TranslocoLoader {

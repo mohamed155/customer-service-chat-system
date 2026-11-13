@@ -215,7 +215,7 @@ if (REAL_BACKEND) {
       const response = await detailResponse;
       expect(response.status()).toBe(404);
 
-      await expect(agentPage.getByText(/not.?found|404/i)).toBeVisible();
+      await expect(agentPage.getByText(/could not be found/i)).toBeVisible();
     });
 
     test('search: Agent can filter customers by name fragment', async () => {

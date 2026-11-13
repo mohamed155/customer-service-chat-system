@@ -1,15 +1,18 @@
 <app-page-container>
-  <app-page-header title="Customers" description="Customer profiles and conversation history" />
+  <app-page-header
+    [title]="'customers.page.title' | transloco"
+    [description]="'customers.page.description' | transloco"
+  />
 
   @if (showLoading()) {
-    <app-loading-state label="Loading customers..." />
+    <app-loading-state [label]="'customers.page.loading' | transloco" />
   } @else if (store.status() === 'error') {
     <app-empty-state
       icon="@tui.alert-circle"
-      title="Something went wrong"
-      description="We couldn't load the customer directory. Please try again."
+      [title]="'customers.page.errorTitle' | transloco"
+      [description]="'customers.page.errorDescription' | transloco"
     >
-      <app-button (pressed)="store.retry()">Try again</app-button>
+      <app-button (pressed)="store.retry()">{{ 'customers.page.retry' | transloco }}</app-button>
       @if (store.error()?.requestId; as id) {
         <app-error-reference [requestId]="id" />
       }
@@ -21,13 +24,13 @@
       <app-toolbar>
         <app-search-input
           toolbar-start
-          placeholder="Search customers"
+          [placeholder]="'customers.page.search' | transloco"
           [value]="store.query()"
           (valueChange)="onSearchChange($event)"
         />
         @if (canManage()) {
           <app-button toolbar-end variant="primary" (pressed)="openCreateDialog()">
-            New customer
+            {{ 'customers.page.new' | transloco }}
           </app-button>
         }
       </app-toolbar>
@@ -35,28 +38,32 @@
       @if (store.status() === 'empty' && store.query()) {
         <app-empty-state
           icon="@tui.search-x"
-          title="No customers match"
-          description="Try a different search term to find what you're looking for."
+          [title]="'customers.page.noMatchTitle' | transloco"
+          [description]="'customers.page.noMatchDescription' | transloco"
         >
-          <app-button (pressed)="onSearchChange('')">Clear search</app-button>
+          <app-button (pressed)="onSearchChange('')">{{
+            'customers.page.clearSearch' | transloco
+          }}</app-button>
         </app-empty-state>
       } @else if (store.status() === 'empty') {
         <app-empty-state
           icon="@tui.users"
-          title="No customers yet"
-          description="Customer profiles will appear here once your customers start interacting."
+          [title]="'customers.page.emptyTitle' | transloco"
+          [description]="'customers.page.emptyDescription' | transloco"
         />
       } @else {
         <app-data-table>
           <table>
             <caption>
-              Customer directory
+              {{
+                'customers.page.directory' | transloco
+              }}
             </caption>
             <thead>
               <tr>
-                <th scope="col">Customer</th>
-                <th scope="col">Contact</th>
-                <th scope="col">Channels</th>
+                <th scope="col">{{ 'customers.page.columnCustomer' | transloco }}</th>
+                <th scope="col">{{ 'customers.page.columnContact' | transloco }}</th>
+                <th scope="col">{{ 'customers.page.columnChannels' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
@@ -90,12 +97,15 @@
         @if (store.hasMore()) {
           <div class="load-more">
             <app-button (pressed)="store.loadMore()" [disabled]="isLoadingMore()">
-              {{ isLoadingMore() ? 'Loading...' : 'Load more' }}
+              {{
+                (isLoadingMore() ? 'customers.page.loadingMore' : 'customers.page.loadMore')
+                  | transloco
+              }}
             </app-button>
           </div>
           @if (store.loadMoreError(); as loadMoreError) {
             <app-inline-alert tone="error" [requestId]="loadMoreError.requestId">
-              {{ loadMoreError.message }}
+              {{ errorKey(loadMoreError) | transloco }}
             </app-inline-alert>
           }
         }

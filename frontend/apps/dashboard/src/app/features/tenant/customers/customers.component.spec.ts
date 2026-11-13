@@ -205,7 +205,9 @@ describe('CustomersComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('Sara Ali');
-    expect(fixture.nativeElement.textContent).toContain('Connection lost');
+    // The text for the error code, not the message the API sent.
+    expect(fixture.nativeElement.textContent).toContain('Check your connection and try again.');
+    expect(fixture.nativeElement.textContent).not.toContain('Connection lost');
     const loadMoreButton = Array.from(
       fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
     ).find((button) => button.textContent?.trim() === 'Load more')!;
