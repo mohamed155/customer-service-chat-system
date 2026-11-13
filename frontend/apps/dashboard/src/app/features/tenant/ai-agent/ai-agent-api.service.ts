@@ -11,6 +11,7 @@ import {
   AvatarUpdateResponse,
 } from '../../../core/api/ai-agent.models';
 import { APP_CONFIG } from '../../../core/config/app-config';
+import { noTimeout } from '../../../core/http/http-resilience';
 
 @Injectable({ providedIn: 'root' })
 export class AiAgentApiService {
@@ -35,7 +36,7 @@ export class AiAgentApiService {
       .put<AvatarUpdateResponse>(
         `${this.config.apiBaseUrl.replace(/\/$/, '')}/tenant/ai/agent/avatar`,
         blob,
-        { headers: { 'Content-Type': contentType }, observe: 'response' },
+        { headers: { 'Content-Type': contentType }, observe: 'response', context: noTimeout() },
       )
       .pipe(
         map((response) => ({

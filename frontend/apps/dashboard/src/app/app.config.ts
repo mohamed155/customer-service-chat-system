@@ -19,6 +19,7 @@ import { appUiFeature } from './core/state/app-ui.feature';
 import { authTokenInterceptor } from './core/http/auth-token.interceptor';
 import { apiErrorInterceptor } from './core/http/api-error.interceptor';
 import { requestIdInterceptor } from './core/http/request-id.interceptor';
+import { httpResilienceInterceptor } from './core/http/http-resilience.interceptor';
 import { GlobalErrorHandler } from './core/errors/global-error-handler';
 import { TenantContextEffects } from './core/state/tenant-context.effects';
 import { tenantContextFeature } from './core/state/tenant-context.feature';
@@ -42,6 +43,9 @@ export const appConfig: ApplicationConfig = {
         // Outside apiErrorInterceptor on purpose: it sees the mapped error, and it retries once.
         stepUpInterceptor,
         apiErrorInterceptor,
+        // Closest to the network, inside apiErrorInterceptor: it sees raw HTTP errors for the retry
+        // rules, and a timeout it raises is mapped to an ApiError on the way out.
+        httpResilienceInterceptor,
       ]),
     ),
     provideTaiga(),

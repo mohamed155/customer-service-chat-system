@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams, HttpResponse } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { APP_CONFIG } from '../config/app-config';
@@ -11,8 +11,9 @@ export class ApiService {
   get<T>(path: string, params?: HttpParams): Observable<ApiResponse<T>> {
     return this.wrap(this.http.get<T>(this.url(path), { params, observe: 'response' }));
   }
-  post<T>(path: string, body: unknown): Observable<ApiResponse<T>> {
-    return this.wrap(this.http.post<T>(this.url(path), body, { observe: 'response' }));
+  /** `context` carries per-request settings, e.g. `noTimeout()` for an upload. */
+  post<T>(path: string, body: unknown, context?: HttpContext): Observable<ApiResponse<T>> {
+    return this.wrap(this.http.post<T>(this.url(path), body, { observe: 'response', context }));
   }
   patch<T>(path: string, body: unknown): Observable<ApiResponse<T>> {
     return this.wrap(this.http.patch<T>(this.url(path), body, { observe: 'response' }));
