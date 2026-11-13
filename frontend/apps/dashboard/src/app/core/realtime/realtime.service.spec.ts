@@ -25,6 +25,13 @@ describe('RealtimeService', () => {
     return TestBed.inject(RealtimeService);
   }
 
+  beforeEach(() => {
+    // A stream that ends schedules a reconnect after a random delay (full jitter). Pin it near the
+    // top of the range so that retry never fires inside a test that runs on real timers; the
+    // tests of the delay itself set their own value.
+    vi.spyOn(Math, 'random').mockReturnValue(0.999);
+  });
+
   afterEach(() => {
     service.disconnect();
     vi.restoreAllMocks(); // the `fetch` and `Math.random` spies must not leak into the next test

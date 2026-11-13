@@ -44,6 +44,17 @@ import { KnowledgeStore } from './knowledge.store';
         display: grid;
         gap: var(--app-space-3);
       }
+      .editor-placeholder {
+        min-height: 200px;
+        border: 1px solid var(--app-border);
+        border-radius: var(--app-radius-md);
+        background: var(--app-panel-2);
+      }
+      .editor-error {
+        margin: 0;
+        color: var(--app-danger);
+        font-size: var(--app-font-sm);
+      }
       .editor-label {
         color: var(--app-text);
         font-size: var(--app-font-sm);
@@ -100,6 +111,7 @@ export class ArticleEditorComponent {
   protected readonly categoryId = signal<string | null>(null);
   protected readonly tagsInput = signal('');
   protected readonly body = signal('');
+  protected readonly editorLoadError = 'The editor could not load. Reload the page and try again.';
 
   constructor() {
     const id = this.route.snapshot.paramMap.get('id');

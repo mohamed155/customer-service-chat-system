@@ -166,6 +166,9 @@ describe('TopbarComponent', () => {
 
   it('shows platform nav control for platform users', async () => {
     const { fixture } = await setup('light', { authenticated: true, platformUser: true });
+    // The platform controls are in a `@defer` block: their chunk loads first.
+    await fixture.whenStable();
+    fixture.detectChanges();
 
     const platformNav = (fixture.nativeElement as HTMLElement).querySelector('app-platform-nav');
 

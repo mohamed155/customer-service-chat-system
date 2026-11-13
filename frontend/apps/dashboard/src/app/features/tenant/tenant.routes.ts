@@ -29,6 +29,8 @@ export const TENANT_ROUTES: Routes = [
         path: '',
         loadComponent: () =>
           import('./conversations/conversations.component').then((m) => m.ConversationsComponent),
+        // The inbox and its detail page are the next click after Overview: load them when idle.
+        data: { preload: true },
       },
       {
         path: ':id',
@@ -40,6 +42,7 @@ export const TENANT_ROUTES: Routes = [
         data: {
           pageTitle: 'conversationDetail',
           requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.conversationDetail(':id')],
+          preload: true,
         },
         title: PAGE_TITLES.conversationDetail.title,
       },
@@ -53,6 +56,7 @@ export const TENANT_ROUTES: Routes = [
     data: {
       pageTitle: 'customers',
       requiredPermission: PAGE_PERMISSIONS[APP_PATHS.tenant.customers],
+      preload: true,
     },
     title: PAGE_TITLES.customers.title,
   },

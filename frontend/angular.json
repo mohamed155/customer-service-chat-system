@@ -52,7 +52,39 @@
                 "fonts": true
               },
               "budgets": [
-                { "type": "initial", "maximumWarning": "600kb", "maximumError": "1mb" },
+                { "type": "initial", "maximumWarning": "685kb", "maximumError": "700kb" },
+                { "type": "allScript", "maximumWarning": "1950kb", "maximumError": "2000kb" },
+                { "type": "anyScript", "maximumError": "450kb" },
+                {
+                  "type": "bundle",
+                  "name": "conversation-detail-component",
+                  "maximumWarning": "63kb",
+                  "maximumError": "66kb"
+                },
+                {
+                  "type": "bundle",
+                  "name": "team-list-component",
+                  "maximumWarning": "45kb",
+                  "maximumError": "47kb"
+                },
+                {
+                  "type": "bundle",
+                  "name": "widgets-component",
+                  "maximumWarning": "33kb",
+                  "maximumError": "35kb"
+                },
+                {
+                  "type": "bundle",
+                  "name": "ai-agent-component",
+                  "maximumWarning": "31kb",
+                  "maximumError": "33kb"
+                },
+                {
+                  "type": "bundle",
+                  "name": "rich-text-editor-component",
+                  "maximumWarning": "425kb",
+                  "maximumError": "440kb"
+                },
                 { "type": "anyComponentStyle", "maximumWarning": "4kb", "maximumError": "8kb" }
               ],
               "outputHashing": "all",
@@ -66,6 +98,10 @@
                 {
                   "replace": "apps/dashboard/src/environments/environment.ts",
                   "with": "apps/dashboard/src/environments/environment.development.ts"
+                },
+                {
+                  "replace": "apps/dashboard/src/app/core/state/devtools.ts",
+                  "with": "apps/dashboard/src/app/core/state/devtools.development.ts"
                 }
               ]
             },

@@ -4,6 +4,5 @@ export const environment: AppConfig = {
   apiBaseUrl: 'http://localhost:8080/api/v1',
   appName: 'AI Customer Service Platform',
   environmentName: 'development',
-  enableNgRxDevtools: true,
   publicDashboardUrl: 'http://localhost:4200',
 };

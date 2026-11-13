@@ -1,10 +1,10 @@
 {
   "dashboard": {
     "total": {
-      "lines": 80.9,
-      "statements": 80.5,
-      "functions": 76.9,
-      "branches": 76.2
+      "lines": 81.1,
+      "statements": 80.8,
+      "functions": 78.1,
+      "branches": 76.6
     },
     "groups": {
       "core": {
