@@ -1,11 +1,11 @@
-<div class="filters" aria-label="Conversation status filters">
+<div class="filters" [attr.aria-label]="'conversations.inbox.filtersLabel' | transloco">
   @for (filter of filters; track filter) {
     <button
       type="button"
       [class.active]="statusFilter() === filter"
       (click)="filterChanged.emit(filter)"
     >
-      {{ filterLabel(filter) }}
+      {{ filterLabel(filter) | transloco }}
     </button>
   }
 </div>
@@ -21,7 +21,9 @@
       <app-avatar [initials]="customerInitials(conversation)" size="md" />
       <span class="copy">
         <strong>{{ conversation.customer.displayName }}</strong>
-        <span class="preview">{{ conversation.lastMessage?.preview ?? 'No messages' }}</span>
+        <span class="preview">{{
+          conversation.lastMessage?.preview ?? ('conversations.inbox.noMessages' | transloco)
+        }}</span>
         <span class="badges">
           <app-channel-badge [channel]="channelBadge(conversation.channel)" />
           <app-status-badge
@@ -29,7 +31,11 @@
             [tone]="statusTone(conversation.status)"
           />
           @if (conversation.widgetInstance; as wgt) {
-            <span class="widget-badge" title="Chat Widget: {{ wgt.name }}">Widget</span>
+            <span
+              class="widget-badge"
+              [title]="'conversations.inbox.widgetTitle' | transloco: { name: wgt.name }"
+              >{{ 'conversations.inbox.widget' | transloco }}</span
+            >
           }
           @if (conversation.rating; as rating) {
             <app-satisfaction-badge [rating]="rating" />
@@ -42,7 +48,7 @@
             {{ assignee.displayName }}
           </span>
         }
-        <time>{{ relativeTime(conversation.lastActivityAt) }}</time>
+        <time>{{ conversation.lastActivityAt | relativeTime }}</time>
       </span>
     </button>
   }

@@ -3,10 +3,15 @@ import { TuiIcon } from '@taiga-ui/core';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { EscalationQueueStore } from './escalation-queue.store';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { marker } from '../../../core/i18n/marker';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-escalation-queue',
-  imports: [DataTableComponent, TuiIcon],
+  imports: [DataTableComponent, ErrorReferenceComponent, TuiIcon, TranslocoPipe],
   templateUrl: './escalation-queue.component.html',
   styles: [
     `
@@ -66,19 +71,27 @@ import { EscalationQueueStore } from './escalation-queue.store';
       }
     `,
   ],
-  providers: [EscalationQueueStore],
+  providers: [provideTranslocoScope('conversations'), EscalationQueueStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class EscalationQueueComponent {
   readonly store = inject(EscalationQueueStore);
   protected readonly permissionsService = inject(PermissionsService);
 
-  protected formatWaiting(seconds: number): string {
-    if (seconds < 60) return '<1m';
+  /** Catalog key of the text for an error of this page; a failed claim is a lost race. */
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error, { 409: marker('conversations.escalations.alreadyClaimed') });
+  }
+
+  /** The catalog key of how long an escalation has waited, and the values it needs. */
+  protected waitingText(seconds: number): { key: string; params?: Record<string, number> } {
+    if (seconds < 60) return { key: marker('conversations.escalations.waitLessThanMinute') };
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m`;
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return `${hours}h ${remainingMinutes}m`;
+    if (minutes < 60)
+      return { key: marker('conversations.escalations.waitMinutes'), params: { minutes } };
+    return {
+      key: marker('conversations.escalations.waitHours'),
+      params: { hours: Math.floor(minutes / 60), minutes: minutes % 60 },
+    };
   }
 }

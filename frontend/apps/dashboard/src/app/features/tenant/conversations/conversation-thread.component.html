@@ -2,13 +2,13 @@
   @if (hasMore()) {
     <div class="load-older-wrap">
       <button type="button" class="load-older-btn" (click)="loadOlder.emit()">
-        Load older messages
+        {{ 'conversations.thread.loadOlder' | transloco }}
       </button>
     </div>
   }
 
   @if (loading()) {
-    <app-loading-state label="Loading messages" />
+    <app-loading-state [label]="'conversations.thread.loading' | transloco" />
   }
 
   @for (
@@ -24,9 +24,9 @@
         <div class="bubble">
           <div class="bubble-header">
             <span class="sender-name">{{ item.message.sender.displayName }}</span>
-            <span class="message-time">{{ formatTime(item.message.createdAt) }}</span>
+            <span class="message-time">{{ item.message.createdAt | localeDate: 'time' }}</span>
             @if (item.message.kind === 'note') {
-              <span class="note-badge">Note</span>
+              <span class="note-badge">{{ 'conversations.thread.note' | transloco }}</span>
             }
           </div>
           <p>{{ item.message.body }}</p>
@@ -83,8 +83,8 @@
         <app-avatar initials="AI" size="sm" />
         <div class="bubble">
           <div class="bubble-header">
-            <span class="sender-name">AI Assistant</span>
-            <span class="message-time">streaming…</span>
+            <span class="sender-name">{{ 'conversations.thread.aiAssistant' | transloco }}</span>
+            <span class="message-time">{{ 'conversations.thread.streaming' | transloco }}</span>
           </div>
           <p>{{ gen.buffer }}</p>
         </div>
@@ -93,6 +93,6 @@
   }
 
   @if (messages().length === 0 && !activeGeneration() && !loading()) {
-    <div class="empty-timeline">No messages yet</div>
+    <div class="empty-timeline">{{ 'conversations.thread.empty' | transloco }}</div>
   }
 </div>

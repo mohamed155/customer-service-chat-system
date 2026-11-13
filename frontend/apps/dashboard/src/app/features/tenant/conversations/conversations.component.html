@@ -1,8 +1,8 @@
 <app-page-container>
-  <app-page-header title="Conversations">
+  <app-page-header [title]="'conversations.page.title' | transloco">
     @if (hasManagePerm()) {
       <button type="button" class="new-btn" (click)="showNewDialog.set(true)">
-        New conversation
+        {{ 'conversations.page.new' | transloco }}
       </button>
     }
   </app-page-header>
@@ -17,10 +17,15 @@
   } @else if (store.error(); as err) {
     <app-empty-state
       icon="@tui.alert-circle"
-      title="Something went wrong"
-      description="We couldn't load conversations. Please try again."
+      [title]="'conversations.page.errorTitle' | transloco"
+      [description]="errorKey(err) | transloco"
     >
-      <button type="button" (click)="store.loadInbox()">Try again</button>
+      <button type="button" (click)="store.loadInbox()">
+        {{ 'conversations.page.retry' | transloco }}
+      </button>
+      @if (err.requestId; as id) {
+        <app-error-reference [requestId]="id" />
+      }
     </app-empty-state>
   } @else if (store.items().length) {
     <div class="filter-bar">
@@ -29,21 +34,21 @@
         [value]="store.filters().channel ?? ''"
         (change)="onChannelChange($event)"
       >
-        <option value="">All channels</option>
-        <option value="email">Email</option>
-        <option value="web_chat">Web Chat</option>
-        <option value="whatsapp">WhatsApp</option>
-        <option value="telegram">Telegram</option>
-        <option value="phone">Phone</option>
+        <option value="">{{ 'conversations.filters.allChannels' | transloco }}</option>
+        <option value="email">{{ 'conversations.channels.email' | transloco }}</option>
+        <option value="web_chat">{{ 'conversations.channels.webChat' | transloco }}</option>
+        <option value="whatsapp">{{ 'conversations.channels.whatsapp' | transloco }}</option>
+        <option value="telegram">{{ 'conversations.channels.telegram' | transloco }}</option>
+        <option value="phone">{{ 'conversations.channels.phone' | transloco }}</option>
       </select>
       <select
         class="filter-select"
         [value]="store.filters().assignee ?? ''"
         (change)="onAssigneeChange($event)"
       >
-        <option value="">All assignees</option>
-        <option value="me">Me</option>
-        <option value="unassigned">Unassigned</option>
+        <option value="">{{ 'conversations.filters.allAssignees' | transloco }}</option>
+        <option value="me">{{ 'conversations.filters.me' | transloco }}</option>
+        <option value="unassigned">{{ 'common.unassigned' | transloco }}</option>
         @for (member of members(); track member.id) {
           <option [value]="member.id">{{ member.displayName }}</option>
         }
@@ -54,7 +59,7 @@
         [class.active]="store.filters().escalated === 'true'"
         (click)="onEscalatedToggle()"
       >
-        Escalated
+        {{ 'conversations.filters.escalated' | transloco }}
       </button>
     </div>
 
@@ -70,22 +75,26 @@
 
     @if (store.hasMore()) {
       <div class="pagination">
-        <button type="button" class="load-more" (click)="store.nextPage()">Load more</button>
+        <button type="button" class="load-more" (click)="store.nextPage()">
+          {{ 'conversations.page.loadMore' | transloco }}
+        </button>
       </div>
     }
   } @else if (store.statusFilter() !== 'all') {
     <app-empty-state
       icon="@tui.message-circle"
-      title="No conversations match"
-      description="Try adjusting the filters to find what you're looking for."
+      [title]="'conversations.page.noMatchTitle' | transloco"
+      [description]="'conversations.page.noMatchDescription' | transloco"
     >
-      <button type="button" (click)="store.resetFilters()">Show all conversations</button>
+      <button type="button" (click)="store.resetFilters()">
+        {{ 'conversations.page.showAll' | transloco }}
+      </button>
     </app-empty-state>
   } @else {
     <app-empty-state
       icon="@tui.message-circle"
-      title="No conversations yet"
-      description="Customer conversations will appear here once your customers start reaching out."
+      [title]="'conversations.page.emptyTitle' | transloco"
+      [description]="'conversations.page.emptyDescription' | transloco"
     />
   }
 

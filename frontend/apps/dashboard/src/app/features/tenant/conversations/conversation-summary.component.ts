@@ -1,12 +1,18 @@
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
 import { catchError, finalize, of } from 'rxjs';
 import { ConversationsApiService } from './conversations-api.service';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-conversation-summary',
   standalone: true,
-  imports: [ButtonComponent],
+  providers: [provideTranslocoScope('conversations')],
+  imports: [ButtonComponent, TranslocoPipe, ErrorReferenceComponent],
   templateUrl: './conversation-summary.component.html',
   styles: [
     `
@@ -59,7 +65,12 @@ export class ConversationSummaryComponent {
 
   protected readonly summary = signal<string | null>(null);
   protected readonly loading = signal(false);
-  protected readonly error = signal<string | null>(null);
+  /** What went wrong, kept whole so the screen can show its text and its request reference. */
+  protected readonly error = signal<ApiError | null>(null);
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
 
   protected generate(): void {
     this.loading.set(true);
@@ -68,7 +79,7 @@ export class ConversationSummaryComponent {
       .requestSummary(this.conversationId())
       .pipe(
         catchError((err) => {
-          this.error.set(err.message ?? 'Failed to generate summary');
+          this.error.set(toApiError(err));
           return of(null);
         }),
         finalize(() => this.loading.set(false)),

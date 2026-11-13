@@ -1,6 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
+  providers: [provideTranslocoScope('conversations')],
+  imports: [TranslocoPipe],
   selector: 'app-satisfaction-summary',
   standalone: true,
   templateUrl: './satisfaction-summary.component.html',

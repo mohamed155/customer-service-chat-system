@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-ai-handling-banner',
   standalone: true,
-  imports: [ButtonComponent],
+  providers: [provideTranslocoScope('conversations')],
+  imports: [ButtonComponent, TranslocoPipe],
   templateUrl: './ai-handling-banner.component.html',
   styles: [
     `

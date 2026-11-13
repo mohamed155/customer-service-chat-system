@@ -241,7 +241,7 @@ describe('ConversationDetailStore', () => {
 
     await vi.waitFor(() => {
       expect(store.submitting()).toBe(false);
-      expect(store.error()).toBe('Send failed');
+      expect(store.error()).toMatchObject({ code: 'unknown_error' });
     });
   });
 });

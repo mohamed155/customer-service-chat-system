@@ -1,0 +1,124 @@
+{
+  "aiBanner": {
+    "message": "This conversation is awaiting an AI-handling decision.",
+    "usePlatformAi": "Use Platform AI",
+    "assignHuman": "Assign to a Human"
+  },
+  "composer": {
+    "reply": "Reply",
+    "note": "Internal note",
+    "customer": "Customer",
+    "bodyLabel": "Message body",
+    "replyPlaceholder": "Type a reply…",
+    "notePlaceholder": "Add an internal note…",
+    "customerPlaceholder": "Log a customer message…",
+    "required": "Message is required.",
+    "tooLong": "Message is too long for WhatsApp (4096 character max).",
+    "sending": "Sending…",
+    "send": "Send"
+  },
+  "summary": {
+    "generate": "Summarize",
+    "title": "Conversation Summary",
+    "generating": "Generating…"
+  },
+  "satisfaction": {
+    "from": "from {count, plural, one {# rating} other {# ratings}}",
+    "none": "No ratings yet"
+  },
+  "inbox": {
+    "filtersLabel": "Conversation status filters",
+    "noMessages": "No messages",
+    "widgetTitle": "Chat Widget: {name}",
+    "widget": "Widget"
+  },
+  "attachment": {
+    "receiving": "Receiving…",
+    "failed": "Failed to load attachment",
+    "image": "Image attachment",
+    "document": "Document",
+    "bytes": "{size} B",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB"
+  },
+  "page": {
+    "title": "Conversations",
+    "new": "New conversation",
+    "errorTitle": "Something went wrong",
+    "retry": "Try again",
+    "loadMore": "Load more",
+    "noMatchTitle": "No conversations match",
+    "noMatchDescription": "Try adjusting the filters to find what you're looking for.",
+    "showAll": "Show all conversations",
+    "emptyTitle": "No conversations yet",
+    "emptyDescription": "Customer conversations will appear here once your customers start reaching out."
+  },
+  "filters": {
+    "allChannels": "All channels",
+    "allAssignees": "All assignees",
+    "me": "Me",
+    "escalated": "Escalated"
+  },
+  "channels": {
+    "email": "Email",
+    "webChat": "Web Chat",
+    "whatsapp": "WhatsApp",
+    "telegram": "Telegram",
+    "phone": "Phone"
+  },
+  "detail": {
+    "errorTitle": "Something went wrong",
+    "goBack": "Go back",
+    "back": "Back",
+    "status": "Status",
+    "assignee": "Assignee",
+    "feedback": "Customer Feedback",
+    "noRating": "No rating",
+    "participants": "Participants",
+    "errors": {
+      "whatsappWindowExpired": "The WhatsApp messaging window has expired for this conversation.",
+      "whatsappDisconnected": "The WhatsApp channel is disconnected — reconnect it to reply.",
+      "whatsappTooLong": "Message is too long for WhatsApp (4096 character max)."
+    }
+  },
+  "thread": {
+    "loadOlder": "Load older messages",
+    "loading": "Loading messages",
+    "note": "Note",
+    "aiAssistant": "AI Assistant",
+    "streaming": "streaming…",
+    "empty": "No messages yet"
+  },
+  "new": {
+    "title": "New conversation",
+    "customer": "Customer",
+    "searchLabel": "Search customers",
+    "searchPlaceholder": "Search customers by name or email…",
+    "selected": "Selected:",
+    "remove": "Remove selected customer",
+    "selectCustomer": "Select a customer from the results.",
+    "channel": "Channel",
+    "selectChannel": "Select a channel",
+    "channelRequired": "Channel is required.",
+    "firstMessage": "First message",
+    "firstPlaceholder": "Write the first message…",
+    "messageRequired": "Message is required (1–10,000 characters).",
+    "creating": "Creating…",
+    "create": "Create conversation"
+  },
+  "escalations": {
+    "empty": "No escalations in queue",
+    "emptyHint": "All clear — no conversations need attention right now.",
+    "reason": "Reason",
+    "skills": "Required Skills",
+    "customer": "Customer",
+    "channel": "Channel",
+    "waiting": "Waiting",
+    "actions": "Actions",
+    "claim": "Claim",
+    "alreadyClaimed": "This escalation was already claimed by another agent.",
+    "waitLessThanMinute": "<1m",
+    "waitMinutes": "{minutes}m",
+    "waitHours": "{hours}h {minutes}m"
+  }
+}

@@ -9,11 +9,14 @@ import { Message, ToolRequest } from '../../../core/api/tenant-api.models';
 import { ActiveGeneration } from './conversation-detail.store';
 import { AiThinkingIndicatorComponent } from '../../../shared/components/ai/ai-thinking-indicator/ai-thinking-indicator.component';
 import { AiConfidenceBadgeComponent } from '../../../shared/components/ai-confidence-badge/ai-confidence-badge.component';
+import { LocaleDatePipe } from '../../../core/i18n/format';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 type TimelineItem = { kind: 'message'; message: Message } | { kind: 'tool'; tool: ToolRequest };
 
 @Component({
   selector: 'app-conversation-thread',
+  providers: [provideTranslocoScope('conversations')],
   imports: [
     MessageAttachmentComponent,
     AvatarComponent,
@@ -23,6 +26,8 @@ type TimelineItem = { kind: 'message'; message: Message } | { kind: 'tool'; tool
     AiConfidenceBadgeComponent,
     ToolTimelineEntryComponent,
     ToolApprovalCardComponent,
+    TranslocoPipe,
+    LocaleDatePipe,
   ],
   templateUrl: './conversation-thread.component.html',
   styles: [
@@ -201,12 +206,5 @@ export class ConversationThreadComponent {
       .join('')
       .toUpperCase()
       .slice(0, 2);
-  }
-
-  protected formatTime(iso: string): string {
-    const date = new Date(iso);
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
   }
 }

@@ -5,14 +5,14 @@
   (dismiss)="closeDialog.emit()"
 >
   <form [formGroup]="form" (ngSubmit)="submit()">
-    <h3 id="new-conv-title">New conversation</h3>
+    <h3 id="new-conv-title">{{ 'conversations.new.title' | transloco }}</h3>
 
-    <app-form-field label="Customer">
+    <app-form-field [label]="'conversations.new.customer' | transloco">
       <input
         type="text"
-        aria-label="Search customers"
+        [attr.aria-label]="'conversations.new.searchLabel' | transloco"
         formControlName="customerSearch"
-        placeholder="Search customers by name or email…"
+        [placeholder]="'conversations.new.searchPlaceholder' | transloco"
         autocomplete="off"
       />
       @if (searchResults().length) {
@@ -36,7 +36,7 @@
       }
       @if (selectedCustomer(); as customer) {
         <div class="selected-customer">
-          Selected: <strong>{{ customer.displayName }}</strong>
+          {{ 'conversations.new.selected' | transloco }} <strong>{{ customer.displayName }}</strong>
           @if (customer.email) {
             <span> ({{ customer.email }})</span>
           }
@@ -44,51 +44,61 @@
             type="button"
             class="remove-btn"
             (click)="clearCustomer()"
-            aria-label="Remove selected customer"
+            [attr.aria-label]="'conversations.new.remove' | transloco"
           >
             &times;
           </button>
         </div>
       }
       @if (form.controls.customerSearch.touched && !selectedCustomer()) {
-        <app-inline-alert tone="error">Select a customer from the results.</app-inline-alert>
+        <app-inline-alert tone="error">{{
+          'conversations.new.selectCustomer' | transloco
+        }}</app-inline-alert>
       }
     </app-form-field>
 
-    <app-form-field label="Channel">
-      <select formControlName="channel" aria-label="Channel">
-        <option value="">Select a channel</option>
-        <option value="email">Email</option>
-        <option value="web_chat">Web Chat</option>
-        <option value="whatsapp">WhatsApp</option>
-        <option value="telegram">Telegram</option>
-        <option value="phone">Phone</option>
+    <app-form-field [label]="'conversations.new.channel' | transloco">
+      <select formControlName="channel" [attr.aria-label]="'conversations.new.channel' | transloco">
+        <option value="">{{ 'conversations.new.selectChannel' | transloco }}</option>
+        <option value="email">{{ 'conversations.channels.email' | transloco }}</option>
+        <option value="web_chat">{{ 'conversations.channels.webChat' | transloco }}</option>
+        <option value="whatsapp">{{ 'conversations.channels.whatsapp' | transloco }}</option>
+        <option value="telegram">{{ 'conversations.channels.telegram' | transloco }}</option>
+        <option value="phone">{{ 'conversations.channels.phone' | transloco }}</option>
       </select>
       @if (form.controls.channel.touched && form.controls.channel.invalid) {
-        <app-inline-alert tone="error">Channel is required.</app-inline-alert>
+        <app-inline-alert tone="error">{{
+          'conversations.new.channelRequired' | transloco
+        }}</app-inline-alert>
       }
     </app-form-field>
 
-    <app-form-field label="First message">
+    <app-form-field [label]="'conversations.new.firstMessage' | transloco">
       <textarea
         formControlName="body"
-        aria-label="First message"
-        placeholder="Write the first message…"
+        [attr.aria-label]="'conversations.new.firstMessage' | transloco"
+        [placeholder]="'conversations.new.firstPlaceholder' | transloco"
         rows="4"
       ></textarea>
       @if (form.controls.body.touched && form.controls.body.invalid) {
-        <app-inline-alert tone="error">Message is required (1–10,000 characters).</app-inline-alert>
+        <app-inline-alert tone="error">{{
+          'conversations.new.messageRequired' | transloco
+        }}</app-inline-alert>
       }
     </app-form-field>
 
     @if (error(); as err) {
-      <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert tone="error" [requestId]="err.requestId">{{
+        errorKey(err) | transloco
+      }}</app-inline-alert>
     }
 
     <div class="actions">
-      <app-button variant="secondary" (pressed)="closeDialog.emit()">Cancel</app-button>
+      <app-button variant="secondary" (pressed)="closeDialog.emit()">{{
+        'common.cancel' | transloco
+      }}</app-button>
       <app-button variant="primary" type="submit" [disabled]="submitting() || form.invalid">
-        {{ submitting() ? 'Creating…' : 'Create conversation' }}
+        {{ (submitting() ? 'conversations.new.creating' : 'conversations.new.create') | transloco }}
       </app-button>
     </div>
   </form>

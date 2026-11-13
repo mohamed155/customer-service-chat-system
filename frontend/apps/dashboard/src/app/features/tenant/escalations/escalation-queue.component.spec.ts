@@ -1,3 +1,4 @@
+import { provideTranslocoScope } from '@jsverse/transloco';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
@@ -72,7 +73,12 @@ describe('EscalationQueueComponent', () => {
     });
     // The component provides its own EscalationQueueStore; swap in the mock there.
     TestBed.overrideComponent(EscalationQueueComponent, {
-      set: { providers: [{ provide: EscalationQueueStore, useValue: storeMock }] },
+      set: {
+        providers: [
+          provideTranslocoScope('conversations'),
+          { provide: EscalationQueueStore, useValue: storeMock },
+        ],
+      },
     });
   });
 
@@ -121,12 +127,20 @@ describe('EscalationQueueComponent', () => {
   });
 
   it('shows 409 message and removes row when claim conflicts', async () => {
-    storeMock.error.mockReturnValue('This escalation was already claimed by another agent.');
+    storeMock.error.mockReturnValue({
+      code: 'conflict',
+      message: 'TEXT FROM THE API',
+      status: 409,
+      requestId: 'req_0123456789abcdef0123456789abcdef01234567',
+    });
     storeMock.items.mockReturnValue([]);
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(EscalationQueueComponent);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('already claimed');
+    expect(fixture.nativeElement.textContent).not.toContain('TEXT FROM THE API');
+    // The request reference is shown beside the message (MOH-64).
+    expect(fixture.nativeElement.querySelector('app-error-reference')).not.toBeNull();
   });
 });

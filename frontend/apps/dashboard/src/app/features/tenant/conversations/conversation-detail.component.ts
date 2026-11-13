@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnInit, computed } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { map } from 'rxjs';
@@ -23,13 +23,20 @@ import { ConversationSummaryComponent } from './conversation-summary.component';
 import { ConversationThreadComponent } from './conversation-thread.component';
 import { ComposerComponent } from './composer.component';
 import { onTenantChange } from '../../../core/state/tenant-scope';
+import { ApiError } from '../../../core/api/api.models';
+import { ErrorKeyOverrides, errorMessageKey } from '../../../core/errors/error-message';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { LocaleDatePipe } from '../../../core/i18n/format';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { marker } from '../../../core/i18n/marker';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
-const STATUS_OPTIONS: SelectFilterOption[] = [
-  { value: 'open', label: 'Open' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' },
-];
+/** The wording of the errors this page can get beyond the shared ones (WhatsApp send failures). */
+const ERROR_KEYS: ErrorKeyOverrides = {
+  whatsapp_window_expired: marker('conversations.detail.errors.whatsappWindowExpired'),
+  whatsapp_channel_disconnected: marker('conversations.detail.errors.whatsappDisconnected'),
+  whatsapp_body_too_long: marker('conversations.detail.errors.whatsappTooLong'),
+};
 
 @Component({
   selector: 'app-conversation-detail',
@@ -39,6 +46,8 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
     ComposerComponent,
     ConversationThreadComponent,
     EmptyStateComponent,
+    ErrorReferenceComponent,
+    LocaleDatePipe,
     AiHandlingBannerComponent,
     ConversationSummaryComponent,
     EscalationRoutingBannerComponent,
@@ -46,8 +55,9 @@ const STATUS_OPTIONS: SelectFilterOption[] = [
     SatisfactionBadgeComponent,
     SelectFilterComponent,
     StatusBadgeComponent,
+    TranslocoPipe,
   ],
-  providers: [ConversationDetailStore],
+  providers: [provideTranslocoScope('conversations'), ConversationDetailStore],
   templateUrl: './conversation-detail.component.html',
   styles: [
     `
@@ -224,23 +234,33 @@ export class ConversationDetailComponent implements OnInit {
   private readonly permissions = inject(PermissionsService);
   private readonly api = inject(ConversationsApiService);
 
-  protected readonly statusOptions = STATUS_OPTIONS;
+  private readonly locale = inject(LocaleService);
+
+  protected readonly statusOptions = computed<SelectFilterOption[]>(() => [
+    { value: 'open', label: this.locale.translate(marker('status.open')) },
+    {
+      value: 'pending',
+      label: this.locale.translate(marker('status.pending')),
+    },
+    {
+      value: 'resolved',
+      label: this.locale.translate(marker('status.resolved')),
+    },
+    { value: 'closed', label: this.locale.translate(marker('status.closed')) },
+  ]);
   protected readonly members = toSignal(this.api.listAssignableMembers().pipe(map((r) => r.data)), {
     initialValue: [],
   });
 
-  protected readonly assigneeOptions = toSignal(
-    this.api.listAssignableMembers().pipe(
-      map((members) => {
-        const opts: SelectFilterOption[] = [{ value: '', label: 'Unassigned' }];
-        for (const m of members.data) {
-          opts.push({ value: m.id, label: m.displayName });
-        }
-        return opts;
-      }),
-    ),
-    { initialValue: [{ value: '', label: 'Unassigned' }] },
+  private readonly assignable = toSignal(
+    this.api.listAssignableMembers().pipe(map((members) => members.data)),
+    { initialValue: [] },
   );
+
+  protected readonly assigneeOptions = computed<SelectFilterOption[]>(() => [
+    { value: '', label: this.locale.translate(marker('common.unassigned')) },
+    ...this.assignable().map((m) => ({ value: m.id, label: m.displayName })),
+  ]);
 
   protected readonly hasManagePerm = () =>
     this.permissions.has('conversations.manage' as Permission);
@@ -291,7 +311,8 @@ export class ConversationDetailComponent implements OnInit {
     this.store.patchAssignment(id, membershipId || null);
   }
 
-  protected formatDate(iso: string): string {
-    return new Date(iso).toLocaleString();
+  /** Catalog key of the text for an error of this page. */
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error, ERROR_KEYS);
   }
 }

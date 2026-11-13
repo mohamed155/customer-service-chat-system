@@ -7,13 +7,16 @@ import { QueueEntry } from '../../../core/api/tenant-api.models';
 import { EscalationsApiService } from './escalations-api.service';
 import { RealtimeService } from '../../../core/realtime/realtime.service';
 import { withTenantScope } from '../../../core/state/tenant-scope';
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 
 interface EscalationQueueState {
   items: QueueEntry[];
   loading: boolean;
   cursor: string | null;
   hasMore: boolean;
-  error: string | null;
+  /** What went wrong, kept whole: the page shows the text for its code and its request reference. */
+  error: ApiError | null;
 }
 
 const initialState: EscalationQueueState = {
@@ -40,7 +43,8 @@ export const EscalationQueueStore = signalStore(
                   hasMore: res.data.hasMore,
                   loading: false,
                 }),
-              error: () => patchState(store, { loading: false, error: 'Failed to load queue' }),
+              error: (err: unknown) =>
+                patchState(store, { loading: false, error: toApiError(err) }),
             }),
           ),
         ),
@@ -64,7 +68,8 @@ export const EscalationQueueStore = signalStore(
                   hasMore: res.data.hasMore,
                   loading: false,
                 }),
-              error: () => patchState(store, { loading: false, error: 'Failed to load more' }),
+              error: (err: unknown) =>
+                patchState(store, { loading: false, error: toApiError(err) }),
             }),
           );
         }),
@@ -76,10 +81,10 @@ export const EscalationQueueStore = signalStore(
         items: previous.filter((item) => item.escalation.id !== id),
       });
       api.claim(id).subscribe({
-        error: () => {
+        error: (err: unknown) => {
           patchState(store, {
             items: previous,
-            error: 'This escalation was already claimed by another agent.',
+            error: toApiError(err),
           });
         },
       });

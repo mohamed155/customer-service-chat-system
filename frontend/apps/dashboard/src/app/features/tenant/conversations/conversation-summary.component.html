@@ -1,17 +1,22 @@
 <div class="summary-panel">
   <div class="summary-header">
-    <span class="summary-label">Conversation Summary</span>
+    <span class="summary-label">{{ 'conversations.summary.title' | transloco }}</span>
     @if (!summary() && !loading()) {
-      <app-button variant="secondary" size="sm" (pressed)="generate()"> Summarize </app-button>
+      <app-button variant="secondary" size="sm" (pressed)="generate()">
+        {{ 'conversations.summary.generate' | transloco }}
+      </app-button>
     }
     @if (loading()) {
-      <span class="generating">Generating…</span>
+      <span class="generating">{{ 'conversations.summary.generating' | transloco }}</span>
     }
   </div>
   @if (summary(); as s) {
     <p class="summary-text">{{ s }}</p>
   }
   @if (error(); as err) {
-    <p class="summary-error">{{ err }}</p>
+    <p class="summary-error">{{ errorKey(err) | transloco }}</p>
+    @if (err.requestId; as id) {
+      <app-error-reference [requestId]="id" />
+    }
   }
 </div>

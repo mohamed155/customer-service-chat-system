@@ -25,6 +25,8 @@ import {
 import { RealtimeService, SseEvent } from '../../../core/realtime/realtime.service';
 import { ConversationsApiService } from './conversations-api.service';
 import { withTenantScope } from '../../../core/state/tenant-scope';
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 
 export type GenerationPhase = 'idle' | 'thinking' | 'streaming';
 
@@ -46,8 +48,9 @@ interface ConversationDetailState {
   readonly loading: boolean;
   readonly loadingTimeline: boolean;
   readonly submitting: boolean;
-  readonly error: string | null;
-  readonly timelineError: string | null;
+  /** What went wrong, kept whole: the page shows the text for its code and its request reference. */
+  readonly error: ApiError | null;
+  readonly timelineError: ApiError | null;
   readonly activeGeneration: ActiveGeneration | null;
   readonly openConversationId: string | null;
   readonly toolActivity: Record<string, ToolRequest>;
@@ -94,7 +97,7 @@ export const ConversationDetailStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loading: false,
-                error: (err as Error)?.message ?? 'Failed to load conversation',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -120,7 +123,7 @@ export const ConversationDetailStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loadingTimeline: false,
-                timelineError: (err as Error)?.message ?? 'Failed to load timeline',
+                timelineError: toApiError(err),
               });
               return of(null);
             }),
@@ -166,7 +169,7 @@ export const ConversationDetailStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loadingTimeline: false,
-                timelineError: (err as Error)?.message ?? 'Failed to load older messages',
+                timelineError: toApiError(err),
               });
               return of(null);
             }),
@@ -224,21 +227,9 @@ export const ConversationDetailStore = signalStore(
             }
           },
           error: (err: unknown) => {
-            const apiError = err as { code?: string; message?: string };
-            const code = apiError?.code;
-            let message = apiError?.message ?? 'Failed to send message';
-
-            if (code === 'whatsapp_window_expired') {
-              message = 'The WhatsApp messaging window has expired for this conversation.';
-            } else if (code === 'whatsapp_channel_disconnected') {
-              message = 'The WhatsApp channel is disconnected — reconnect it to reply.';
-            } else if (code === 'whatsapp_body_too_long') {
-              message = 'Message is too long for WhatsApp (4096 character max).';
-            }
-
             patchState(store, {
               submitting: false,
-              error: message,
+              error: toApiError(err),
             });
           },
         });
@@ -255,7 +246,7 @@ export const ConversationDetailStore = signalStore(
           },
           error: (err: unknown) => {
             patchState(store, {
-              error: (err as Error)?.message ?? 'Failed to update status',
+              error: toApiError(err),
             });
           },
         });
@@ -425,7 +416,7 @@ export const ConversationDetailStore = signalStore(
           },
           error: (err: unknown) => {
             patchState(store, {
-              error: (err as Error)?.message ?? 'Failed to set AI handling',
+              error: toApiError(err),
             });
           },
         });
@@ -443,7 +434,7 @@ export const ConversationDetailStore = signalStore(
           },
           error: (err: unknown) => {
             patchState(store, {
-              error: (err as Error)?.message ?? 'Failed to update assignment',
+              error: toApiError(err),
             });
           },
         });
