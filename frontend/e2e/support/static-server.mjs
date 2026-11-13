@@ -34,11 +34,25 @@ const TYPES = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
+// The same list as infra/nginx/spa.conf: a route can hold a dot, a file of these types cannot be one.
+const ASSET_EXTENSION =
+  /\.(?:js|mjs|css|map|json|txt|webmanifest|ico|png|jpe?g|gif|webp|svg|woff2?|ttf|otf)$/i;
+
 createServer((req, res) => {
   const pathname = decodeURIComponent(new URL(req.url ?? '/', 'http://localhost').pathname);
   const candidate = normalize(join(root, pathname));
   const isFile =
     candidate.startsWith(root) && existsSync(candidate) && statSync(candidate).isFile();
+  // A missing file with an extension (a build file a deploy removed) is a 404, as on the production
+  // server (infra/nginx/spa.conf); index.html is only the fallback for client routes (MOH-167).
+  if (!isFile && ASSET_EXTENSION.test(pathname)) {
+    res.writeHead(404, {
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
+    });
+    res.end('Not found');
+    return;
+  }
   const file = isFile ? candidate : indexFile; // SPA fallback for client routes
   res.writeHead(200, {
     'content-type': TYPES[extname(file)] ?? 'application/octet-stream',

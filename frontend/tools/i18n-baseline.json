@@ -70,6 +70,7 @@
   "apps/dashboard/src/app/layout/topbar/tenant-switcher.component.html": 3,
   "apps/dashboard/src/app/layout/topbar/topbar.component.html": 4,
   "apps/dashboard/src/app/layout/topbar/user-menu.component.html": 2,
+  "apps/dashboard/src/app/layout/update-banner/update-banner.component.html": 4,
   "apps/dashboard/src/app/shared/components/ai/agent-preview-card/agent-preview-card.component.html": 2,
   "apps/dashboard/src/app/shared/components/ai/ai-suggestion-card/ai-suggestion-card.component.html": 1,
   "apps/dashboard/src/app/shared/components/ai/ai-thinking-indicator/ai-thinking-indicator.component.html": 1,

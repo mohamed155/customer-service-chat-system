@@ -1,14 +1,14 @@
 {
   "dashboard": {
     "total": {
-      "lines": 80,
-      "statements": 79.7,
-      "functions": 76.4,
-      "branches": 75.4
+      "lines": 80.3,
+      "statements": 79.9,
+      "functions": 76.6,
+      "branches": 75.7
     },
     "groups": {
       "core": {
-        "lines": 88.8
+        "lines": 89.2
       },
       "stores": {
         "lines": 76.3

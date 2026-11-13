@@ -6,7 +6,11 @@ import {
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
-import { provideRouter, withComponentInputBinding } from '@angular/router';
+import {
+  provideRouter,
+  withComponentInputBinding,
+  withNavigationErrorHandler,
+} from '@angular/router';
 import { provideTaiga } from '@taiga-ui/core';
 import { provideEffects } from '@ngrx/effects';
 import { provideStore } from '@ngrx/store';
@@ -27,11 +31,18 @@ import { tenantContextInterceptor } from './core/http/tenant-context.interceptor
 import { devIdentityInterceptor } from './core/http/dev-identity.interceptor';
 import { stepUpInterceptor } from './core/http/step-up.interceptor';
 import { CurrentUserService } from './core/tenant/current-user.service';
+import { AppUpdateService } from './core/version/app-update.service';
+import { recoverFromChunkLoadError } from './core/version/chunk-recovery';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes, withComponentInputBinding()),
+    provideRouter(
+      routes,
+      withComponentInputBinding(),
+      // A lazy route whose files a deploy removed: load the page again (MOH-167).
+      withNavigationErrorHandler(recoverFromChunkLoadError),
+    ),
     provideHttpClient(
       withFetch(),
       withInterceptors([
@@ -54,6 +65,8 @@ export const appConfig: ApplicationConfig = {
       [tenantContextFeature.name]: tenantContextFeature.reducer,
     }),
     provideEffects(AppUiEffects, TenantContextEffects),
+    // Watches for a newer release while the page stays open (MOH-167). Does not block start-up.
+    provideAppInitializer(() => inject(AppUpdateService).start()),
     provideAppInitializer(() => {
       const cus = inject(CurrentUserService);
       return cus.load();
