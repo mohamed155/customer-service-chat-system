@@ -30,6 +30,20 @@ jobs:
           REQUIRE_CADDY_TEST: "1"
         run: node --test infra/caddy-routing.test.mjs
 
+  # The web server of the dashboard and widget images (MOH-167): runs the real nginx image with
+  # infra/nginx/spa.conf and checks that a missing build file is a 404, not index.html.
+  nginx-spa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22 }
+      - name: nginx serves routes, 404s missing files, sets cache headers
+        env:
+          REQUIRE_NGINX_TEST: "1"
+        run: node --test infra/nginx-spa.test.mjs
+
   compose-stack:
     runs-on: ubuntu-latest
     timeout-minutes: 15
