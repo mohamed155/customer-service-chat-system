@@ -73,6 +73,20 @@ describe('PageReloader', () => {
     },
   );
 
+  it('reloads the document for a target that ends in an empty fragment', () => {
+    setup('http://localhost/tenant/customers');
+
+    reloader.reload('/tenant/customers#');
+
+    expect(location.assign).not.toHaveBeenCalled();
+    expect(history.replaceState).toHaveBeenCalledExactlyOnceWith(
+      { n: 1 },
+      '',
+      'http://localhost/tenant/customers#',
+    );
+    expect(location.reload).toHaveBeenCalledTimes(1);
+  });
+
   it('does nothing without a window', () => {
     setup('http://localhost/', false);
 
