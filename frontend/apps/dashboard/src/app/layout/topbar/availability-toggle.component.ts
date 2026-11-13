@@ -2,9 +2,12 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { TuiIcon } from '@taiga-ui/core';
 import { filter } from 'rxjs';
 import { ApiService } from '../../core/api/api.service';
-import { Availability, AvailabilityState } from '../../core/api/tenant-api.models';
+import type { components } from '../../core/api/generated/api';
+import { AvailabilityState } from '../../core/api/tenant-api.models';
 import { NotificationsService } from '../../core/realtime/notifications.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
+
+type Schemas = components['schemas'];
 
 @Component({
   selector: 'app-availability-toggle',
@@ -59,7 +62,7 @@ export class AvailabilityToggleComponent {
   }
 
   private loadState(): void {
-    this.api.get<Availability>('tenant/availability/me').subscribe({
+    this.api.get<Schemas['Availability']>('tenant/availability/me').subscribe({
       next: (res) => this.state.set(res.data.state),
       error: () => {},
     });
@@ -70,9 +73,13 @@ export class AvailabilityToggleComponent {
     if (newState === 'available') {
       this.notifications.requestPermission();
     }
-    this.api.put<Availability>('tenant/availability/me', { state: newState }).subscribe({
-      next: (res) => this.state.set(res.data.state),
-      error: () => {},
-    });
+    this.api
+      .put<Schemas['Availability']>('tenant/availability/me', {
+        state: newState,
+      } satisfies Schemas['SetAvailabilityPayload'])
+      .subscribe({
+        next: (res) => this.state.set(res.data.state),
+        error: () => {},
+      });
   }
 }

@@ -1,9 +1,9 @@
 {
   "dashboard": {
     "total": {
-      "lines": 80.7,
-      "statements": 80.3,
-      "functions": 76.7,
+      "lines": 80.8,
+      "statements": 80.4,
+      "functions": 76.9,
       "branches": 76.2
     },
     "groups": {

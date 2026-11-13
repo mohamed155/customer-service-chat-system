@@ -3,7 +3,8 @@ import { Store } from '@ngrx/store';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../api/api.models';
 import { ApiService } from '../api/api.service';
-import { MeResponse, TenantSummary } from '../api/tenant-api.models';
+import type { components } from '../api/generated/api';
+import { MeResponse, meFromWire, TenantSummary } from '../api/tenant-api.models';
 import { selectActiveTenant } from '../state/tenant-context.feature';
 import { tenantContextActions } from '../state/tenant-context.feature';
 
@@ -19,8 +20,10 @@ export class CurrentUserService {
 
   async load(preferredTenantId?: string): Promise<void> {
     try {
-      const response = await firstValueFrom(this.api.get<MeResponse>('/me'));
-      const data = response.data;
+      const response = await firstValueFrom(
+        this.api.get<components['schemas']['MeResponse']>('/me'),
+      );
+      const data = meFromWire(response.data);
       this.user.set(data);
 
       if (data.platformRole == null && data.memberships.length > 0) {

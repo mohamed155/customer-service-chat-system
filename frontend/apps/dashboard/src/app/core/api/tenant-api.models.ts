@@ -1,4 +1,7 @@
 import { Permission } from '../authz/permissions';
+import type { components } from './generated/api';
+
+type Schemas = components['schemas'];
 
 export type TenantStatus = 'active' | 'suspended';
 
@@ -32,6 +35,44 @@ export interface MeResponse {
   readonly platformPermissions: Permission[];
   readonly staffTenantPermissions: Permission[] | null;
   readonly memberships: MembershipSummary[];
+}
+
+// The wire shapes of `/me` and the workspace summaries are the generated ones (`GET /me`,
+// `POST /platform/tenants/{id}/switch`). The contract types roles, permissions, status and plan as
+// plain strings, and the dashboard works with the narrower unions above, so the one place that
+// narrows them is here: a type assertion, because the contract does not list the values. The field
+// names and shapes are checked by the compiler against the generated types.
+
+export function membershipFromWire(wire: Schemas['MembershipSummary']): MembershipSummary {
+  return {
+    tenantId: wire.tenantId,
+    tenantName: wire.tenantName,
+    tenantSlug: wire.tenantSlug,
+    role: wire.role as MembershipRole,
+    permissions: wire.permissions as Permission[],
+  };
+}
+
+export function meFromWire(wire: Schemas['MeResponse']): MeResponse {
+  return {
+    id: wire.id,
+    email: wire.email,
+    displayName: wire.displayName,
+    platformRole: (wire.platformRole ?? null) as PlatformRole | null,
+    platformPermissions: wire.platformPermissions as Permission[],
+    staffTenantPermissions: (wire.staffTenantPermissions ?? null) as Permission[] | null,
+    memberships: wire.memberships.map(membershipFromWire),
+  };
+}
+
+export function tenantSummaryFromWire(wire: Schemas['TenantSummary']): TenantSummary {
+  return {
+    id: wire.id,
+    name: wire.name,
+    slug: wire.slug,
+    status: wire.status as TenantStatus,
+    plan: wire.plan as TenantPlan,
+  };
 }
 
 export interface TenantDirectoryParams {
@@ -134,12 +175,8 @@ export interface AcceptInvitationRequest {
   readonly password?: string;
 }
 
-export interface SignupRequest {
-  readonly workspaceName: string;
-  readonly displayName: string;
-  readonly email: string;
-  readonly password: string;
-}
+/** The sign-up body: the generated type, so a change of the contract is a type error here. */
+export type SignupRequest = Schemas['SignupRequest'];
 
 export interface PatchMemberPayload {
   readonly role?: MembershipRole;
@@ -355,13 +392,9 @@ export interface Skill {
   readonly agentCount: number;
 }
 
-export type AvailabilityState = 'available' | 'away';
+export type AvailabilityState = Schemas['AvailabilityState'];
 
-export interface Availability {
-  readonly membershipId: string;
-  readonly state: AvailabilityState;
-  readonly stateChangedAt: string | null;
-}
+export type Availability = Schemas['Availability'];
 
 export interface ConversationDetailEscalation extends ConversationDetail {
   readonly escalation: Escalation | null;
@@ -1137,31 +1170,11 @@ export function analyticsTimeseriesFromWire(wire: AnalyticsTimeseriesWire): Anal
 
 // ── Notifications (spec 027) ──────────────────────────────────────────
 
-// The notification DTOs are camelCase on the wire (`NotificationDto`, `rename_all = "camelCase"`),
-// unlike the snake_case conversation DTOs. The pagination block is snake_case. The generated
-// OpenAPI types in `generated/api.ts` are the reference (see `contract.spec.ts`).
-export interface NotificationWire {
-  readonly id: string;
-  readonly kind: string;
-  readonly state: string;
-  readonly title: string;
-  readonly body?: string | null;
-  readonly subjectType: string;
-  readonly subjectId: string;
-  readonly actor?: { readonly membershipId: string; readonly displayName: string } | null;
-  readonly createdAt: string;
-  readonly readAt?: string | null;
-}
-
-export interface NotificationListPaginationWire {
-  readonly next_cursor: string | null;
-  readonly has_more: boolean;
-}
-
-export interface NotificationListWire {
-  readonly data: NotificationWire[];
-  readonly pagination: NotificationListPaginationWire;
-}
+// The notification wire types are the generated ones: the backend's `NotificationDto` is camelCase,
+// unlike the snake_case conversation DTOs, and its pagination block is snake_case (`contract.spec.ts`
+// still pins the other hand-written wire types to the contract).
+export type NotificationWire = Schemas['NotificationDto'];
+export type NotificationListWire = Schemas['NotificationListResponse'];
 
 export interface NotificationActor {
   readonly membershipId: string;
@@ -1209,7 +1222,7 @@ export function notificationListFromWire(wire: NotificationListWire): {
   return {
     items: wire.data.map(notificationFromWire),
     hasMore: wire.pagination.has_more,
-    nextCursor: wire.pagination.next_cursor,
+    nextCursor: wire.pagination.next_cursor ?? null,
   };
 }
 
