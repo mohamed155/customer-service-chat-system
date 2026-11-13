@@ -1,13 +1,4 @@
 {
-  "apps/dashboard/src/app/features/account/security.component.html": 7,
-  "apps/dashboard/src/app/features/auth/auth-card/auth-card.component.html": 2,
-  "apps/dashboard/src/app/features/auth/forgot-password/forgot-password.component.html": 4,
-  "apps/dashboard/src/app/features/auth/invite/accept-invitation.component.html": 28,
-  "apps/dashboard/src/app/features/auth/login/login.component.html": 5,
-  "apps/dashboard/src/app/features/auth/mfa-challenge/mfa-challenge.component.html": 2,
-  "apps/dashboard/src/app/features/auth/mfa-setup/mfa-setup.component.html": 10,
-  "apps/dashboard/src/app/features/auth/signup/signup.component.html": 9,
-  "apps/dashboard/src/app/features/auth/verify-email/verify-email.component.html": 6,
   "apps/dashboard/src/app/features/platform/ai-providers/ai-providers.component.html": 12,
   "apps/dashboard/src/app/features/platform/audit-logs/platform-audit-logs.component.html": 4,
   "apps/dashboard/src/app/features/platform/billing/platform-billing.component.html": 28,

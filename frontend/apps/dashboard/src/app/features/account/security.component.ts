@@ -1,12 +1,14 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiError } from '../../core/api/api.models';
-import { MfaService, MfaStatus, mfaErrorMessage } from '../../core/auth/mfa.service';
+import { MfaService, MfaStatus, mfaErrorKey } from '../../core/auth/mfa.service';
 import { mapHttpError } from '../../core/errors/http-error.mapper';
+import { marker } from '../../core/i18n/marker';
 import { APP_PATHS } from '../../core/router/app-paths';
 import { ButtonComponent } from '../../shared/components/button/button.component';
 import { InlineAlertComponent } from '../../shared/components/inline-alert/inline-alert.component';
 import { copyToClipboard } from '../../shared/utils/clipboard';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 /**
  * The signed-in user's own two-step verification: whether it is on, how many recovery codes are
@@ -14,7 +16,8 @@ import { copyToClipboard } from '../../shared/utils/clipboard';
  */
 @Component({
   selector: 'app-security',
-  imports: [ButtonComponent, InlineAlertComponent, RouterLink],
+  providers: [provideTranslocoScope('auth')],
+  imports: [ButtonComponent, InlineAlertComponent, RouterLink, TranslocoPipe],
   templateUrl: './security.component.html',
   styles: [
     `
@@ -47,7 +50,8 @@ export class SecurityComponent implements OnInit {
   protected readonly codes = signal<string[]>([]);
   protected readonly busy = signal(false);
   protected readonly copied = signal(false);
-  protected readonly errorMessage = signal<string | null>(null);
+  /** Catalog key of what went wrong, or `null`. */
+  protected readonly errorKey = signal<string | null>(null);
   protected readonly setupUrl = `/${APP_PATHS.mfaSetup}`;
 
   async ngOnInit(): Promise<void> {
@@ -56,7 +60,7 @@ export class SecurityComponent implements OnInit {
 
   protected async regenerate(): Promise<void> {
     this.busy.set(true);
-    this.errorMessage.set(null);
+    this.errorKey.set(null);
     try {
       this.codes.set(await this.mfa.regenerateRecoveryCodes());
       this.copied.set(false);
@@ -65,7 +69,7 @@ export class SecurityComponent implements OnInit {
       const apiError = isApiError(error) ? error : mapHttpError(error);
       // A cancelled step-up prompt is not worth an error message.
       if (apiError.code !== 'mfa_step_up_required') {
-        this.errorMessage.set(mfaErrorMessage(apiError.status));
+        this.errorKey.set(mfaErrorKey(apiError.status));
       }
     } finally {
       this.busy.set(false);
@@ -77,7 +81,7 @@ export class SecurityComponent implements OnInit {
       await copyToClipboard(this.codes().join('\n'));
       this.copied.set(true);
     } catch {
-      this.errorMessage.set('Copy failed. Select the codes and copy them by hand.');
+      this.errorKey.set(marker('auth.recoveryCodes.copyFailed'));
     }
   }
 
@@ -89,7 +93,7 @@ export class SecurityComponent implements OnInit {
     try {
       this.status.set(await this.mfa.status());
     } catch {
-      this.errorMessage.set('Could not load your security settings.');
+      this.errorKey.set(marker('auth.security.loadFailed'));
     }
   }
 }

@@ -1,4 +1,5 @@
 import { marker } from '../i18n/marker';
+import { ownValue } from '../i18n/own-value';
 import { MeResponse, TenantSummary } from '../api/tenant-api.models';
 
 /** A role line for the user menu: a catalog key, and the workspace name when the key takes one. */
@@ -35,14 +36,14 @@ export function roleLine(
   }
 
   if (user.platformRole) {
-    const key = PLATFORM_ROLE_KEYS[user.platformRole];
+    const key = ownValue(PLATFORM_ROLE_KEYS, user.platformRole);
     return key ? { key } : null;
   }
 
   if (activeTenant) {
     const membership = user.memberships.find((m) => m.tenantId === activeTenant.id);
     if (membership) {
-      const key = TENANT_ROLE_KEYS[membership.role];
+      const key = ownValue(TENANT_ROLE_KEYS, membership.role);
       return key ? { key, params: { tenant: activeTenant.name } } : null;
     }
   }

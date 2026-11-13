@@ -399,5 +399,32 @@
     "label": "Chart: {names}",
     "data": "Chart data",
     "value": "Value"
+  },
+  "errors": {
+    "networkError": "Check your connection and try again.",
+    "timeout": "The server took too long to answer. Try again.",
+    "accessDenied": "You do not have access to this action.",
+    "tenantAccessDenied": "You don't have access to this tenant.",
+    "notFound": "The requested item could not be found.",
+    "tooManyRequests": "Too many requests. Please try again shortly.",
+    "unavailable": "The service is temporarily unavailable. Please try again.",
+    "requestFailed": "The request could not be completed. Check your input and try again.",
+    "generic": "Something went wrong. Please try again.",
+    "codeInvalid": "That code is not valid.",
+    "tooManyAttempts": "Too many attempts. Try again later.",
+    "signInExpired": "Your sign-in expired. Sign in again.",
+    "verificationFailed": "Verification failed. Try again.",
+    "fieldRequired": "This field is required.",
+    "fieldInvalid": "This value is not valid.",
+    "membershipDisabled": "Your account is disabled in this workspace. Ask an Owner or Admin to turn it back on."
+  },
+  "titles": {
+    "signIn": "Sign in",
+    "mfaChallenge": "Two-step verification",
+    "signup": "Create account",
+    "forgotPassword": "Forgot password",
+    "verifyEmail": "Verify email",
+    "mfaSetup": "Set up two-step verification",
+    "security": "Security"
   }
 }

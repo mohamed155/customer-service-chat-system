@@ -160,6 +160,25 @@ describe('roleLine', () => {
     });
   });
 
+  describe('roles the app does not know', () => {
+    it('shows no line for a role named like a property of Object', () => {
+      const user = makeUser({ platformRole: 'constructor' as PlatformRole });
+      expect(roleLine(user, null)).toBeNull();
+      const member = makeUser({
+        memberships: [
+          {
+            tenantId: 't1',
+            tenantName: 'Acme Corp',
+            tenantSlug: 'acme',
+            role: 'toString' as MembershipRole,
+            permissions: [],
+          },
+        ],
+      });
+      expect(roleLine(member, makeTenant())).toBeNull();
+    });
+  });
+
   describe('key maps', () => {
     it('has all 5 tenant role keys', () => {
       expect(TENANT_ROLE_KEYS).toEqual({

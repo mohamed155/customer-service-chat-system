@@ -1,3 +1,4 @@
+import { marker } from '../i18n/marker';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../api/api.service';
@@ -72,10 +73,10 @@ export class MfaService {
   }
 }
 
-/** The message a person sees for a failed code or password step. */
-export function mfaErrorMessage(status: number): string {
-  if (status === 422) return 'That code is not valid.';
-  if (status === 429) return 'Too many attempts. Try again later.';
-  if (status === 401) return 'Your sign-in expired. Sign in again.';
-  return 'Verification failed. Try again.';
+/** The catalog key of what a person sees for a failed code or password step. */
+export function mfaErrorKey(status: number): string {
+  if (status === 422) return marker('errors.codeInvalid');
+  if (status === 429) return marker('errors.tooManyAttempts');
+  if (status === 401) return marker('errors.signInExpired');
+  return marker('errors.verificationFailed');
 }

@@ -73,7 +73,7 @@ data: only strings and plural-form objects are read from it.
 
 ### 5. Errors are shown by `code`, not by the backend's text
 
-A client maps an error's `code` to a catalog key and shows that. The backend `message` is for
+A client maps an error's `code` to a catalog key and shows that (`errorMessageKey`, `core/errors/error-message.ts`; a field error in `details` goes through its own `code` the same way). The backend `message` is for
 logs and developers, and is never shown as it is. An unknown code shows a generic message. The
 backend keeps its stable `code` set (ADR-012); free text may change without breaking a client.
 
@@ -120,5 +120,5 @@ strings in TypeScript; reviewers check those.
 | I1 | **The widget** had about 20 hard-coded strings. | `frontend/apps/widget/src` | **Resolved (MOH-41):** all moved to `I18n`; `?lang=` and `i18n/<locale>.json` work; plural fixed ("1 star"). |
 | I2 | **No check for new hard-coded text.** | CI | **Resolved (MOH-41):** `pnpm lint:i18n` with a per-file baseline (744 texts in 83 dashboard files at the time of writing). |
 | I3 | **The dashboard has no catalog mechanism** and about 740 strings in templates. | `frontend/apps/dashboard/src/app` | **Mechanism and first area resolved (MOH-155):** Transloco, the catalogs, language selection, `Intl` dates and numbers, Taiga's language, the checks in `pnpm lint:i18n` and the test setup; `shared/`, `layout/`, `not-found` and `tenant-select` moved (670 texts in 62 files remain). The feature areas follow, each lowering the baseline (MOH-156 to MOH-165). |
-| I4 | **Backend free-text error messages** (about 65 sites) are shown by some screens. | `backend/crates/**`, dashboard error screens | Show by `code` (section 5); the backend keeps its text for logs. |
+| I4 | **Backend free-text error messages** (about 65 sites) are shown by some screens. | `backend/crates/**`, dashboard error screens | **Mechanism and the sign-in area resolved (MOH-156):** `errorMessageKey` and `fieldErrorKey` map a `code` to a catalog key, a test fails when the backend adds a code (kernel, identity, invitation) that is not listed, and the auth screens, the step-up prompt and the invitation page show no backend text (a disabled membership got its own code, `membership_disabled`, instead of being told apart by its message). The other screens move with their area (MOH-157 to MOH-165); `userMessageFor` (English only) goes with the last. |
 | I5 | **Message strings in TypeScript** are not scanned. | components and services | Moved with their area; reviewed by hand. |

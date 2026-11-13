@@ -580,8 +580,11 @@ describe('AcceptInvitationComponent', () => {
 
     await vi.waitFor(() => {
       fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).toContain('Display name is required.');
-      expect(fixture.nativeElement.textContent).toContain('Password is too short.');
+      // Each field shows the text for its error code, never the API's own message.
+      const text = fixture.nativeElement.textContent as string;
+      expect(text.match(/This value is not valid\./g)).toHaveLength(2);
+      expect(text).not.toContain('Password is too short.');
+      expect(text).toContain('Please correct the highlighted fields.');
     });
   });
 
@@ -694,9 +697,9 @@ describe('AcceptInvitationComponent', () => {
     });
   });
 
-  it('shows error state when preview fails with NOT_FOUND', async () => {
+  it('shows error state when preview fails with a 404', async () => {
     mockApi.previewInvitation.mockReturnValue(
-      throwError(() => ({ code: 'NOT_FOUND', message: 'Not found' })),
+      throwError(() => ({ code: 'not_found', status: 404, message: 'Not found' })),
     );
     await setup();
     const fixture = TestBed.createComponent(AcceptInvitationComponent);
@@ -708,9 +711,9 @@ describe('AcceptInvitationComponent', () => {
     });
   });
 
-  it('shows error state when preview fails with INVITATION_EXPIRED', async () => {
+  it('shows error state when preview fails with a 410', async () => {
     mockApi.previewInvitation.mockReturnValue(
-      throwError(() => ({ code: 'INVITATION_EXPIRED', message: 'Expired' })),
+      throwError(() => ({ code: 'gone', status: 410, message: 'Expired' })),
     );
     await setup();
     const fixture = TestBed.createComponent(AcceptInvitationComponent);
@@ -748,7 +751,11 @@ describe('AcceptInvitationComponent', () => {
       }),
     );
     mockApi.acceptInvitation.mockReturnValue(
-      throwError(() => ({ status: 409, message: 'Your account is disabled in this tenant' })),
+      throwError(() => ({
+        status: 409,
+        code: 'membership_disabled',
+        message: 'Your account is disabled in this tenant',
+      })),
     );
     await setup();
     const fixture = TestBed.createComponent(AcceptInvitationComponent);
@@ -772,9 +779,9 @@ describe('AcceptInvitationComponent', () => {
     });
   });
 
-  it('shows error state when preview fails with INVITATION_ACCEPTED', async () => {
+  it('shows error state when preview fails with a 409', async () => {
     mockApi.previewInvitation.mockReturnValue(
-      throwError(() => ({ code: 'INVITATION_ACCEPTED', message: 'Already accepted' })),
+      throwError(() => ({ code: 'conflict', status: 409, message: 'Already accepted' })),
     );
     await setup();
     const fixture = TestBed.createComponent(AcceptInvitationComponent);

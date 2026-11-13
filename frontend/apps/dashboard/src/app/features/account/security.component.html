@@ -1,32 +1,28 @@
 <div class="page">
-  <h2>Security</h2>
+  <h2>{{ 'auth.security.title' | transloco }}</h2>
   <section aria-labelledby="two-step-title">
-    <h3 id="two-step-title">Two-step verification</h3>
+    <h3 id="two-step-title">{{ 'auth.security.twoStep' | transloco }}</h3>
     @if (status(); as s) {
       @if (s.enrolled) {
         <p data-testid="enrolled">
-          On. {{ s.recoveryCodesRemaining }} recovery
-          {{ s.recoveryCodesRemaining === 1 ? 'code' : 'codes' }} left.
+          {{ 'auth.security.on' | transloco: { count: s.recoveryCodesRemaining } }}
         </p>
         <app-button variant="secondary" [disabled]="busy()" (pressed)="regenerate()">
-          Replace recovery codes
+          {{ 'auth.security.replace' | transloco }}
         </app-button>
       } @else {
         <p data-testid="not-enrolled">
-          Off. Turn it on to protect your account with a code from an authenticator app.
+          {{ 'auth.security.off' | transloco }}
         </p>
-        <a [routerLink]="setupUrl">Set up two-step verification</a>
+        <a [routerLink]="setupUrl">{{ 'auth.security.setUp' | transloco }}</a>
       }
     }
-    @if (errorMessage(); as message) {
-      <app-inline-alert tone="error">{{ message }}</app-inline-alert>
+    @if (errorKey(); as key) {
+      <app-inline-alert tone="error">{{ key | transloco }}</app-inline-alert>
     }
     @if (codes().length > 0) {
       <div data-testid="new-codes">
-        <p>
-          Your new recovery codes. The old ones no longer work. Save them now; they are shown only
-          once.
-        </p>
+        <p>{{ 'auth.security.newCodes' | transloco }}</p>
         <ul>
           @for (code of codes(); track code) {
             <li>
@@ -35,9 +31,11 @@
           }
         </ul>
         <app-button variant="secondary" (pressed)="copy()">
-          {{ copied() ? 'Copied' : 'Copy codes' }}
+          {{ (copied() ? 'auth.recoveryCodes.copied' : 'auth.recoveryCodes.copy') | transloco }}
         </app-button>
-        <app-button variant="primary" (pressed)="dismiss()">I saved them</app-button>
+        <app-button variant="primary" (pressed)="dismiss()">{{
+          'auth.security.dismiss' | transloco
+        }}</app-button>
       </div>
     }
   </section>

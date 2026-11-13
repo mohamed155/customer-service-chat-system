@@ -3,6 +3,7 @@ import { TuiIcon } from '@taiga-ui/core';
 import { Channel as FixtureChannel } from '../../fixtures/fixture.models';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { marker } from '../../../core/i18n/marker';
+import { ownValue } from '../../../core/i18n/own-value';
 
 export type ChannelBadgeChannel =
   FixtureChannel | 'email' | 'phone' | 'web_chat' | 'whatsapp' | 'telegram' | 'widget';
@@ -59,6 +60,6 @@ const CHANNEL_ICONS: Partial<Record<ChannelBadgeChannel, string>> = {
 })
 export class ChannelBadgeComponent {
   readonly channel = input.required<ChannelBadgeChannel>();
-  protected readonly label = computed(() => CHANNEL_LABELS[this.channel()]);
+  protected readonly label = computed(() => ownValue(CHANNEL_LABELS, this.channel()));
   protected readonly icon = computed(() => CHANNEL_ICONS[this.channel()]);
 }

@@ -1,38 +1,39 @@
 <app-auth-card
-  title="Set up two-step verification"
-  subtitle="Your workspace requires a second step at sign-in"
+  [title]="'auth.mfaSetup.title' | transloco"
+  [subtitle]="'auth.mfaSetup.subtitle' | transloco"
 >
   @switch (step()) {
     @case ('password') {
       <form (submit)="$event.preventDefault(); start()">
-        <p>Confirm your password to begin.</p>
+        <p>{{ 'auth.mfaSetup.confirmPassword' | transloco }}</p>
         <label>
-          Password
+          {{ 'auth.password' | transloco }}
           <input type="password" autocomplete="current-password" [formControl]="password" />
         </label>
-        @if (errorMessage()) {
-          <p role="alert">{{ errorMessage() }}</p>
+        @if (errorKey(); as key) {
+          <p role="alert">{{ key | transloco }}</p>
         }
         <button type="submit" [disabled]="pending() || password.invalid">
-          {{ pending() ? 'Checking...' : 'Continue' }}
+          {{ (pending() ? 'auth.mfaSetup.checking' : 'auth.mfaSetup.continue') | transloco }}
         </button>
       </form>
     }
     @case ('code') {
       <form (submit)="$event.preventDefault(); confirm()">
+        <p>{{ 'auth.mfaSetup.addAccount' | transloco }}</p>
         <p>
-          Add this account to an authenticator app (such as Google Authenticator, 1Password or
-          Authy): open the link on this device, or type the setup key.
-        </p>
-        <p>
-          Setup key:
+          {{ 'auth.mfaSetup.setupKey' | transloco }}
           <code data-testid="setup-key">{{ setupKey() }}</code>
         </p>
         @if (setupLink()) {
-          <p><a [href]="setupLink()" data-testid="setup-link">Open in your authenticator app</a></p>
+          <p>
+            <a [href]="setupLink()" data-testid="setup-link">{{
+              'auth.mfaSetup.openLink' | transloco
+            }}</a>
+          </p>
         }
         <label>
-          Then enter the 6-digit code it shows
+          {{ 'auth.mfaSetup.enterCode' | transloco }}
           <input
             type="text"
             inputmode="numeric"
@@ -40,20 +41,17 @@
             [formControl]="code"
           />
         </label>
-        @if (errorMessage()) {
-          <p role="alert">{{ errorMessage() }}</p>
+        @if (errorKey(); as key) {
+          <p role="alert">{{ key | transloco }}</p>
         }
         <button type="submit" [disabled]="pending() || code.invalid">
-          {{ pending() ? 'Checking...' : 'Turn on' }}
+          {{ (pending() ? 'auth.mfaSetup.checking' : 'auth.mfaSetup.turnOn') | transloco }}
         </button>
       </form>
     }
     @case ('recovery') {
       <div>
-        <p>
-          Save these recovery codes somewhere safe. Each works once if you lose your authenticator.
-          They are shown only now.
-        </p>
+        <p>{{ 'auth.mfaSetup.saveCodes' | transloco }}</p>
         <ul data-testid="recovery-codes">
           @for (recoveryCode of recoveryCodes(); track recoveryCode) {
             <li>
@@ -62,16 +60,18 @@
           }
         </ul>
         <button type="button" (click)="copyCodes()">
-          {{ copied() ? 'Copied' : 'Copy codes' }}
+          {{ (copied() ? 'auth.recoveryCodes.copied' : 'auth.recoveryCodes.copy') | transloco }}
         </button>
-        @if (errorMessage()) {
-          <p role="alert">{{ errorMessage() }}</p>
+        @if (errorKey(); as key) {
+          <p role="alert">{{ key | transloco }}</p>
         }
         <label>
           <input type="checkbox" [checked]="saved()" (change)="saved.set(!saved())" />
-          I saved my recovery codes
+          {{ 'auth.mfaSetup.saved' | transloco }}
         </label>
-        <button type="button" [disabled]="!saved()" (click)="finish()">Continue</button>
+        <button type="button" [disabled]="!saved()" (click)="finish()">
+          {{ 'auth.mfaSetup.continue' | transloco }}
+        </button>
       </div>
     }
   }

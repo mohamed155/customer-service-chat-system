@@ -1,11 +1,14 @@
-<app-auth-card title="Create workspace" subtitle="Start a Helix Support AI workspace">
+<app-auth-card
+  [title]="'auth.signup.title' | transloco"
+  [subtitle]="'auth.signup.subtitle' | transloco"
+>
   <form [formGroup]="form" (ngSubmit)="submit()">
-    <app-form-field label="Workspace name" for="signup-workspace-name">
+    <app-form-field [label]="'auth.signup.workspaceName' | transloco" for="signup-workspace-name">
       <input
         id="signup-workspace-name"
         type="text"
         autocomplete="organization"
-        placeholder="Acme Corp"
+        [placeholder]="'auth.signup.workspacePlaceholder' | transloco"
         formControlName="workspaceName"
         [attr.aria-invalid]="
           form.controls.workspaceName.invalid && form.controls.workspaceName.touched
@@ -14,10 +17,12 @@
       />
     </app-form-field>
     @if (controlError('workspaceName'); as err) {
-      <app-inline-alert id="workspace-name-error" tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert id="workspace-name-error" tone="error">{{
+        err | transloco
+      }}</app-inline-alert>
     }
 
-    <app-form-field label="Your name" for="signup-display-name">
+    <app-form-field [label]="'auth.signup.displayName' | transloco" for="signup-display-name">
       <input
         id="signup-display-name"
         type="text"
@@ -28,10 +33,12 @@
       />
     </app-form-field>
     @if (controlError('displayName'); as err) {
-      <app-inline-alert id="display-name-error" tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert id="display-name-error" tone="error">{{
+        err | transloco
+      }}</app-inline-alert>
     }
 
-    <app-form-field label="Email" for="signup-email">
+    <app-form-field [label]="'auth.email' | transloco" for="signup-email">
       <input
         id="signup-email"
         type="email"
@@ -42,34 +49,38 @@
       />
     </app-form-field>
     @if (controlError('email'); as err) {
-      <app-inline-alert id="signup-email-error" tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert id="signup-email-error" tone="error">{{
+        err | transloco
+      }}</app-inline-alert>
     }
 
-    <app-form-field label="Password" for="signup-password">
+    <app-form-field [label]="'auth.password' | transloco" for="signup-password">
       <input
         id="signup-password"
         type="password"
         autocomplete="new-password"
-        placeholder="At least 8 characters"
+        [placeholder]="'auth.signup.passwordPlaceholder' | transloco"
         formControlName="password"
         [attr.aria-invalid]="form.controls.password.invalid && form.controls.password.touched"
         [attr.aria-describedby]="controlError('password') ? 'signup-password-error' : null"
       />
     </app-form-field>
     @if (controlError('password'); as err) {
-      <app-inline-alert id="signup-password-error" tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert id="signup-password-error" tone="error">{{
+        err | transloco
+      }}</app-inline-alert>
     }
 
-    @if (errorMessage()) {
-      <app-inline-alert tone="error">{{ errorMessage() }}</app-inline-alert>
+    @if (errorKey(); as key) {
+      <app-inline-alert tone="error">{{ key | transloco }}</app-inline-alert>
     }
 
     <app-button variant="primary" type="submit" [disabled]="pending() || form.invalid">
-      {{ pending() ? 'Creating workspace...' : 'Create account' }}
+      {{ (pending() ? 'auth.signup.pending' : 'auth.createAccount') | transloco }}
     </app-button>
   </form>
   <span auth-footer>
-    By continuing you agree to the workspace terms. Already have an account?
-    <a [routerLink]="loginUrl">Sign in</a>
+    {{ 'auth.signup.terms' | transloco }}
+    <a [routerLink]="loginUrl">{{ 'auth.login.submit' | transloco }}</a>
   </span>
 </app-auth-card>

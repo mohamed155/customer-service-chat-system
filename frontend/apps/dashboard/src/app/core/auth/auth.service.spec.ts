@@ -6,7 +6,7 @@ import { MeResponse } from '../api/tenant-api.models';
 import { ApiService } from '../api/api.service';
 import { CurrentUserService } from '../tenant/current-user.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
-import { AuthLoginError, AuthService, INVALID_CREDENTIALS_MESSAGE } from './auth.service';
+import { AuthLoginError, AuthService, INVALID_CREDENTIALS_KEY } from './auth.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -65,7 +65,7 @@ describe('AuthService', () => {
     api.post.mockReturnValue(throwError(() => apiError));
 
     await expect(service.login('missing@example.com', 'wrong')).rejects.toMatchObject({
-      message: INVALID_CREDENTIALS_MESSAGE,
+      messageKey: INVALID_CREDENTIALS_KEY,
       apiError,
     } satisfies Partial<AuthLoginError>);
 
@@ -82,7 +82,7 @@ describe('AuthService', () => {
     api.post.mockReturnValue(throwError(() => apiError));
 
     await expect(service.login('agent@example.com', 'password')).rejects.toMatchObject({
-      message: 'Check your connection and try again.',
+      messageKey: 'errors.networkError',
       apiError,
     } satisfies Partial<AuthLoginError>);
 

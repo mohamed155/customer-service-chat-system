@@ -19,7 +19,7 @@ describe('StepUpService', () => {
     await service.submit({ code: '123456' });
     await expect(answer).resolves.toBe(true);
     expect(service.open()).toBe(false);
-    expect(service.errorMessage()).toBeNull();
+    expect(service.errorKey()).toBeNull();
   });
 
   it('resolves false when the user cancels', async () => {
@@ -34,7 +34,7 @@ describe('StepUpService', () => {
     mfa.stepUp.mockRejectedValue({ code: 'x', message: 'x', status: 422 });
     await service.submit({ code: '000000' });
     expect(service.open()).toBe(true);
-    expect(service.errorMessage()).toBe('That code is not valid.');
+    expect(service.errorKey()).toBe('errors.codeInvalid');
     expect(service.pending()).toBe(false);
     service.cancel();
     await expect(answer).resolves.toBe(false);

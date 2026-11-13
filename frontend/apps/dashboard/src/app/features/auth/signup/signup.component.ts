@@ -3,11 +3,14 @@ import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { Router, RouterLink } from '@angular/router';
 import { ApiError } from '../../../core/api/api.models';
 import { AuthService, AuthSignupError } from '../../../core/auth/auth.service';
+import { fieldErrorKey } from '../../../core/errors/error-message';
+import { marker } from '../../../core/i18n/marker';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { AuthCardComponent } from '../auth-card/auth-card.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 type SignupField = 'workspaceName' | 'displayName' | 'email' | 'password';
 
@@ -20,6 +23,7 @@ const API_FIELD_BY_NAME: Record<string, SignupField> = {
 
 @Component({
   selector: 'app-signup',
+  providers: [provideTranslocoScope('auth')],
   imports: [
     AuthCardComponent,
     ReactiveFormsModule,
@@ -27,6 +31,7 @@ const API_FIELD_BY_NAME: Record<string, SignupField> = {
     ButtonComponent,
     FormFieldComponent,
     InlineAlertComponent,
+    TranslocoPipe,
   ],
   templateUrl: './signup.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -54,7 +59,8 @@ export class SignupComponent {
     }),
   });
   protected readonly pending = this.auth.pending;
-  protected readonly errorMessage = signal<string | null>(null);
+  /** Catalog key of what went wrong with the whole form, or `null`. */
+  protected readonly errorKey = signal<string | null>(null);
   protected readonly loginUrl = `/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`;
 
   protected async submit(): Promise<void> {
@@ -63,7 +69,7 @@ export class SignupComponent {
       return;
     }
 
-    this.errorMessage.set(null);
+    this.errorKey.set(null);
     this.clearApiControlErrors();
     const { workspaceName, displayName, email, password } = this.form.getRawValue();
 
@@ -75,16 +81,19 @@ export class SignupComponent {
     }
   }
 
+  /** The catalog key of what is wrong with a field, or `null`. */
   protected controlError(name: SignupField): string | null {
     const control = this.form.controls[name];
     if (!control.touched || !control.errors) return null;
 
-    if (control.errors['required']) return `${fieldLabel(name)} is required.`;
-    if (control.errors['maxlength']) return `${fieldLabel(name)} must be 200 characters or fewer.`;
-    if (name === 'email' && control.errors['email']) return 'Enter a valid email address.';
+    if (control.errors['required']) return REQUIRED_KEYS[name];
+    if (control.errors['maxlength']) return TOO_LONG_KEYS[name];
+    if (name === 'email' && control.errors['email'])
+      return marker('auth.signup.errors.emailInvalid');
     if (name === 'password' && control.errors['minlength']) {
-      return 'Password must be at least 8 characters.';
+      return marker('auth.signup.errors.passwordShort');
     }
+    // The key of an error the API reported for this field.
     if (control.errors['api']) return control.errors['api'] as string;
 
     return null;
@@ -92,17 +101,17 @@ export class SignupComponent {
 
   private handleSignupError(error: unknown): void {
     if (!(error instanceof AuthSignupError)) {
-      this.errorMessage.set('Something went wrong. Please try again.');
+      this.errorKey.set(marker('errors.generic'));
       return;
     }
 
     if (error.apiError.status === 422) {
       this.applyFieldErrors(error.apiError);
-      this.errorMessage.set(null);
+      this.errorKey.set(null);
       return;
     }
 
-    this.errorMessage.set(error.message);
+    this.errorKey.set(error.messageKey);
   }
 
   private applyFieldErrors(apiError: ApiError): void {
@@ -111,7 +120,7 @@ export class SignupComponent {
       if (!field) continue;
 
       const control = this.form.controls[field];
-      control.setErrors({ ...(control.errors ?? {}), api: detail.message });
+      control.setErrors({ ...(control.errors ?? {}), api: fieldErrorKey(detail.code) });
       control.markAsTouched();
     }
   }
@@ -126,15 +135,16 @@ export class SignupComponent {
   }
 }
 
-const fieldLabel = (name: SignupField): string => {
-  switch (name) {
-    case 'workspaceName':
-      return 'Workspace name';
-    case 'displayName':
-      return 'Your name';
-    case 'email':
-      return 'Email';
-    case 'password':
-      return 'Password';
-  }
+const REQUIRED_KEYS: Record<SignupField, string> = {
+  workspaceName: marker('auth.signup.errors.workspaceNameRequired'),
+  displayName: marker('auth.signup.errors.displayNameRequired'),
+  email: marker('auth.signup.errors.emailRequired'),
+  password: marker('auth.signup.errors.passwordRequired'),
+};
+
+const TOO_LONG_KEYS: Record<SignupField, string> = {
+  workspaceName: marker('auth.signup.errors.workspaceNameTooLong'),
+  displayName: marker('auth.signup.errors.displayNameTooLong'),
+  email: marker('auth.signup.errors.emailTooLong'),
+  password: marker('auth.signup.errors.passwordTooLong'),
 };

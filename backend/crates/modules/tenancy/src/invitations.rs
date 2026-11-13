@@ -1292,8 +1292,14 @@ pub async fn accept_invitation(
 
         if let Some((m_status,)) = existing {
             if m_status == "disabled" {
-                return ApiError::conflict("Your account is disabled in this tenant")
-                    .into_response();
+                // Its own code (a `conflict` with a distinct text told the two apart only by the
+                // text): the dashboard shows "ask an admin to turn your access back on".
+                return ApiError::new_with_code(
+                    StatusCode::CONFLICT,
+                    "membership_disabled",
+                    "Your account is disabled in this tenant",
+                )
+                .into_response();
             }
             return ApiError::conflict("You are already a member of this tenant").into_response();
         }

@@ -2,6 +2,7 @@ import { HttpBackend, HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Translation, TranslocoLoader } from '@jsverse/transloco';
 import { from, map, Observable, of, throwError } from 'rxjs';
+import authEnglish from '../../../../public/i18n/auth/en.json';
 import sharedEnglish from '../../../../public/i18n/shared/en.json';
 import { DEFAULT_LOCALE } from './locale';
 
@@ -11,7 +12,11 @@ import { DEFAULT_LOCALE } from './locale';
  * feature area gets a scope (frontend/CLAUDE.md, "User-facing text"). The `shared` scope is the
  * default catalog and is bundled with the app.
  */
-export const ENGLISH_SCOPES: Readonly<Record<string, () => Promise<Translation>>> = {};
+export const ENGLISH_SCOPES: Readonly<Record<string, () => Promise<Translation>>> = {
+  // Part of the initial bundle on purpose: the sign-in page is the first screen of a signed-out
+  // visit, and its text must not wait for a second request.
+  auth: () => Promise.resolve(authEnglish),
+};
 
 /** A catalog is data: only nested objects and strings are kept, and no key can reach a prototype. */
 export function toCatalog(value: unknown): Translation | null {

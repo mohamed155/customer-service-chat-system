@@ -4,6 +4,7 @@ import { areaAccessGuard } from './core/router/area-access.guard';
 import { authGuard } from './core/router/auth.guard';
 import { guestGuard } from './core/router/guest.guard';
 import { APP_PATHS } from './core/router/app-paths';
+import { marker } from './core/i18n/marker';
 import { PAGE_TITLES } from './core/router/page-title';
 import { AppShellComponent } from './layout/app-shell/app-shell.component';
 
@@ -33,7 +34,7 @@ export const routes: Routes = [
     canMatch: [authGuard],
     loadComponent: () =>
       import('./features/auth/mfa-setup/mfa-setup.component').then((m) => m.MfaSetupComponent),
-    title: 'Set up two-step verification',
+    title: marker('titles.mfaSetup'),
   },
   {
     path: '',
@@ -44,7 +45,7 @@ export const routes: Routes = [
         path: APP_PATHS.security,
         loadComponent: () =>
           import('./features/account/security.component').then((m) => m.SecurityComponent),
-        title: 'Security',
+        title: marker('titles.security'),
       },
       {
         path: APP_PATHS.platform.base,

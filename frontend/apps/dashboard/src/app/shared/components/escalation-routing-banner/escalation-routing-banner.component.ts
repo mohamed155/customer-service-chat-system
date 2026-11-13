@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { Escalation } from '../../../core/api/tenant-api.models';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { marker } from '../../../core/i18n/marker';
+import { ownValue } from '../../../core/i18n/own-value';
 
 const ROUTING_REASON_KEYS: Readonly<Record<string, string>> = {
   skill_match: marker('escalationRouting.reason.skill_match'),
@@ -44,6 +45,6 @@ export class EscalationRoutingBannerComponent {
   /** Catalog key of the routing reason; a code this app does not know shows a generic text. */
   routingReasonLabel(reason?: string): string {
     if (!reason) return marker('escalationRouting.reason.unknown');
-    return ROUTING_REASON_KEYS[reason] ?? marker('escalationRouting.reason.other');
+    return ownValue(ROUTING_REASON_KEYS, reason) ?? marker('escalationRouting.reason.other');
   }
 }
