@@ -326,7 +326,13 @@ describe('TeamListComponent', () => {
     mockApi.getMembers.mockReturnValue(
       of({ data: { items: members, nextCursor: null, hasMore: false } }),
     );
-    mockApi.getInvitations.mockReturnValue(throwError(() => new Error('Invitation load failed')));
+    mockApi.getInvitations.mockReturnValue(
+      throwError(() => ({
+        code: 'internal_error',
+        message: 'Invitation load failed',
+        status: 503,
+      })),
+    );
     configureModule();
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(TeamListComponent);
@@ -335,7 +341,9 @@ describe('TeamListComponent', () => {
     await vi.waitFor(() => {
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).toContain('Unable to load invitations');
-      expect(fixture.nativeElement.textContent).toContain('Invitation load failed');
+      // The text for the code from the catalog, not the API's message.
+      expect(fixture.nativeElement.textContent).toContain('temporarily unavailable');
+      expect(fixture.nativeElement.textContent).not.toContain('Invitation load failed');
       expect(fixture.nativeElement.textContent).not.toContain('No invitations found');
     });
   });
@@ -681,7 +689,11 @@ describe('TeamListComponent', () => {
       of({ data: { items: [], nextCursor: null, hasMore: false } }),
     );
     mockApi.patchMember.mockReturnValue(
-      throwError(() => ({ message: 'Cannot disable the last owner' })),
+      throwError(() => ({
+        code: 'conflict',
+        message: 'Cannot disable the last owner',
+        status: 409,
+      })),
     );
     mockPermissions.has.mockReturnValue(true);
     configureModule();
@@ -700,7 +712,8 @@ describe('TeamListComponent', () => {
     });
     await vi.waitFor(() => {
       fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).toContain('Cannot disable the last owner');
+      expect(fixture.nativeElement.textContent).toContain('The request could not be completed');
+      expect(fixture.nativeElement.textContent).not.toContain('Cannot disable the last owner');
       expect(fixture.nativeElement.querySelector('app-inline-alert [role="alert"]')).toBeTruthy();
     });
   });
@@ -835,6 +848,22 @@ describe('TeamListComponent', () => {
       await fixture.whenStable();
       fixture.detectChanges();
       expect(el.textContent).toContain('Ask a platform administrator');
+    });
+
+    it.each([
+      [{ code: 'mfa_step_up_required', message: 'raw', status: 401 }, 'The reset was cancelled.'],
+      [{ code: 'internal_error', message: 'raw', status: 500 }, 'The reset did not go through.'],
+    ])('words a failed reset by its code (%j)', async (failure, text) => {
+      mfa.resetMember.mockRejectedValue(failure);
+      const fixture = await renderMembers();
+      const el: HTMLElement = fixture.nativeElement;
+      resetButton(el, 'Bob')!.click();
+      fixture.detectChanges();
+      dialogButton(el, 'Reset').click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(el.textContent).toContain(text);
+      expect(el.textContent).not.toContain('raw');
     });
 
     it("does not offer a reset on the signed-in user's own row", async () => {

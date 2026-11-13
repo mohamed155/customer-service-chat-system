@@ -1,3 +1,6 @@
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { marker } from '../../../core/i18n/marker';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -21,9 +24,11 @@ import { IconButtonComponent } from '../../../shared/components/icon-button/icon
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
 import { copyToClipboard } from '../../../shared/utils/clipboard';
 import { RoleSelectComponent } from './role-select.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-invite-dialog',
+  providers: [provideTranslocoScope('team')],
   imports: [
     ButtonComponent,
     DialogShellComponent,
@@ -32,6 +37,7 @@ import { RoleSelectComponent } from './role-select.component';
     InlineAlertComponent,
     ReactiveFormsModule,
     RoleSelectComponent,
+    TranslocoPipe,
   ],
   templateUrl: './invite-dialog.component.html',
   styles: [
@@ -94,9 +100,11 @@ export class InviteDialogComponent {
   readonly closeDialog = output<void>();
 
   readonly submitting = input(false);
-  readonly error = input<string | null>(null);
+  /** What went wrong sending the invitation, kept whole for its text and request reference. */
+  readonly error = input<ApiError | null>(null);
   readonly result = input<CreateInvitationResponse | null>(null);
-  readonly deliveryPollingError = input<string | null>(null);
+  /** The delivery status of the invitation email could not be refreshed. */
+  readonly deliveryPollingFailed = input(false);
   readonly currentRole = input<MembershipRole>('viewer');
   readonly canAssignOwner = input(false);
 
@@ -143,17 +151,22 @@ export class InviteDialogComponent {
       if (request === this.copyRequest) this.copyStatus.set('failed');
     }
   }
+  /** Catalog key of what happened to the invitation email; it takes the invited address. */
   protected deliveryMessage(): string {
     switch (this.result()?.emailDeliveryStatus) {
       case 'sent':
-        return 'An invitation email has been sent to ';
+        return marker('team.invite.delivery.sent');
       case 'queued':
-        return 'The invitation email is queued for ';
+        return marker('team.invite.delivery.queued');
       case 'failed':
-        return 'We tried to send an invitation email to ';
+        return marker('team.invite.delivery.failed');
       case 'unconfigured':
       default:
-        return 'We did not send an email automatically. Copy the link below and share it with ';
+        return marker('team.invite.delivery.unconfigured');
     }
+  }
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
   }
 }

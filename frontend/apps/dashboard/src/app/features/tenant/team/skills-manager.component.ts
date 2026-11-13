@@ -4,10 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/api/api.service';
 import { Skill } from '../../../core/api/tenant-api.models';
 import { PermissionsService } from '../../../core/authz/permissions.service';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-skills-manager',
-  imports: [TuiIcon, FormsModule],
+  providers: [provideTranslocoScope('team')],
+  imports: [TuiIcon, FormsModule, TranslocoPipe],
   templateUrl: './skills-manager.component.html',
   styles: [
     `

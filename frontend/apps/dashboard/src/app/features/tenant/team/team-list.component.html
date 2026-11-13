@@ -1,19 +1,25 @@
 <app-page-container>
-  <app-page-header title="Team" description="Manage team members and invitations" />
+  <app-page-header
+    [title]="'team.page.title' | transloco"
+    [description]="'team.page.description' | transloco"
+  />
 
   @switch (store.status()) {
     @case ('loading') {
       @if (store.members().length === 0) {
-        <app-loading-state label="Loading team roster..." />
+        <app-loading-state [label]="'team.page.loading' | transloco" />
       }
     }
     @case ('error') {
       <app-empty-state
         icon="@tui.alert-circle"
-        title="Something went wrong"
-        description="We couldn't load the team roster. Please try again."
+        [title]="'team.page.errorTitle' | transloco"
+        [description]="errorKey(store.error()) | transloco"
       >
-        <app-button (pressed)="store.retry()">Try again</app-button>
+        <app-button (pressed)="store.retry()">{{ 'team.page.retry' | transloco }}</app-button>
+        @if (store.error()?.requestId; as id) {
+          <app-error-reference [requestId]="id" />
+        }
       </app-empty-state>
     }
   }
@@ -25,32 +31,32 @@
       <app-toolbar>
         <app-search-input
           toolbar-start
-          placeholder="Search members"
+          [placeholder]="'team.page.search' | transloco"
           [value]="store.query().q ?? ''"
           (valueChange)="store.search($event)"
         />
         <app-select-filter
           toolbar-end
-          label="Status filter"
+          [label]="'team.page.statusFilter' | transloco"
           [value]="store.query().status ?? 'all'"
-          [options]="memberStatusOptions"
+          [options]="memberStatusOptions()"
           (valueChange)="onStatusChange($event)"
         />
         <app-select-filter
           toolbar-end
-          label="Invitation status filter"
+          [label]="'team.page.invitationFilter' | transloco"
           [value]="invitationFilter()"
-          [options]="invitationStatusOptions"
+          [options]="invitationStatusOptions()"
           (valueChange)="onInvitationStatusChange($event)"
         />
         @if (canManage()) {
           <app-button toolbar-end variant="ghost" (pressed)="showSkillsManager.set(true)">
-            Skills
+            {{ 'team.page.skills' | transloco }}
           </app-button>
         }
         @if (canManage()) {
           <app-button toolbar-end variant="primary" (pressed)="openInviteDialog($event)">
-            Invite
+            {{ 'team.page.invite' | transloco }}
           </app-button>
         }
       </app-toolbar>
@@ -58,20 +64,21 @@
       @if (store.invitationsStatus() === 'error') {
         <app-empty-state
           icon="@tui.alert-circle"
-          title="Unable to load invitations"
-          [description]="
-            store.invitationsError() ?? 'We could not load invitations. Please try again.'
-          "
+          [title]="'team.invitations.loadFailedTitle' | transloco"
+          [description]="errorKey(store.invitationsError()) | transloco"
         >
           <app-button (pressed)="store.loadInvitations({ query: store.invitationQuery() })">
-            Try again
+            {{ 'team.page.retry' | transloco }}
           </app-button>
+          @if (store.invitationsError()?.requestId; as id) {
+            <app-error-reference [requestId]="id" />
+          }
         </app-empty-state>
       } @else {
         @if (invitationFilter() === 'all') {
           @if (pendingInvitations().length > 0) {
             <app-invitation-table
-              title="Pending invitations"
+              [title]="'team.invitations.pending' | transloco"
               headingId="pending-invitations-title"
               [invitations]="pendingInvitations()"
               [revocableIds]="revocableInvitationIds()"
@@ -80,16 +87,18 @@
               (revoke)="revoke($event)"
             >
               @if (store.revokeInvitationStatus() === 'error') {
-                <app-inline-alert tone="error">{{
-                  store.revokeInvitationError()
-                }}</app-inline-alert>
+                <app-inline-alert
+                  tone="error"
+                  [requestId]="store.revokeInvitationError()?.requestId"
+                  >{{ errorKey(store.revokeInvitationError()) | transloco }}</app-inline-alert
+                >
               }
             </app-invitation-table>
           }
 
           @if (expiredInvitations().length > 0) {
             <app-invitation-table
-              title="Expired invitations"
+              [title]="'team.invitations.expired' | transloco"
               headingId="expired-invitations-title"
               [invitations]="expiredInvitations()"
             />
@@ -97,7 +106,7 @@
 
           @if (otherInvitations().length > 0) {
             <app-invitation-table
-              title="Accepted and revoked invitations"
+              [title]="'team.invitations.history' | transloco"
               headingId="invitation-history-title"
               [invitations]="otherInvitations()"
             />
@@ -105,7 +114,7 @@
         } @else {
           @if (filteredInvitations().length > 0) {
             <app-invitation-table
-              [title]="invitationSectionTitle(invitationFilter())"
+              [title]="invitationSectionTitle(invitationFilter()) | transloco"
               headingId="filtered-invitations-title"
               [invitations]="filteredInvitations()"
               [revocableIds]="revocableInvitationIds()"
@@ -116,8 +125,8 @@
           } @else {
             <app-empty-state
               icon="@tui.users"
-              title="No invitations found"
-              description="Try a different invitation status filter."
+              [title]="'team.invitations.noneTitle' | transloco"
+              [description]="'team.invitations.noneDescription' | transloco"
             />
           }
         }
@@ -125,31 +134,35 @@
 
       @if (store.invitationHasMore()) {
         <div class="load-more invitations-load-more">
-          <app-button (pressed)="store.loadMoreInvitations()">Load more invitations</app-button>
+          <app-button (pressed)="store.loadMoreInvitations()">{{
+            'team.invitations.loadMore' | transloco
+          }}</app-button>
         </div>
       }
 
       @if (store.status() === 'empty') {
         <app-empty-state
           icon="@tui.users"
-          title="No team members"
-          description="Invite team members to collaborate on support conversations."
+          [title]="'team.members.emptyTitle' | transloco"
+          [description]="'team.members.emptyDescription' | transloco"
         />
       } @else {
         <app-data-table>
           <table>
             <caption>
-              Team members
+              {{
+                'team.members.caption' | transloco
+              }}
             </caption>
             <thead>
               <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Email</th>
-                <th scope="col">Role</th>
-                <th scope="col">Status</th>
-                <th scope="col">Joined</th>
+                <th scope="col">{{ 'team.table.name' | transloco }}</th>
+                <th scope="col">{{ 'team.table.email' | transloco }}</th>
+                <th scope="col">{{ 'team.table.role' | transloco }}</th>
+                <th scope="col">{{ 'team.table.status' | transloco }}</th>
+                <th scope="col">{{ 'team.table.joined' | transloco }}</th>
                 @if (canManage()) {
-                  <th scope="col">Actions</th>
+                  <th scope="col">{{ 'team.table.actions' | transloco }}</th>
                 }
               </tr>
             </thead>
@@ -174,12 +187,20 @@
                   </td>
                   <td class="muted">{{ member.email }}</td>
                   <td>
-                    <app-status-badge [status]="member.role" [tone]="roleTone(member.role)" />
+                    <app-status-badge
+                      [status]="member.role"
+                      [text]="roleLabelKey(member.role) | transloco"
+                      [tone]="roleTone(member.role)"
+                    />
                   </td>
                   <td>
-                    <app-status-badge [status]="member.status" [tone]="statusTone(member.status)" />
+                    <app-status-badge
+                      [status]="member.status"
+                      [text]="statusLabelKey(member.status) | transloco"
+                      [tone]="statusTone(member.status)"
+                    />
                   </td>
-                  <td class="muted">{{ member.joinedAt | date: 'mediumDate' }}</td>
+                  <td class="muted">{{ member.joinedAt | localeDate: 'date' }}</td>
                   @if (canManage()) {
                     <td class="actions-cell">
                       @if (!isSelf(member) && canManageMember(member)) {
@@ -193,36 +214,43 @@
                         <app-button
                           variant="ghost"
                           [ariaLabel]="
-                            (member.status === 'active' ? 'Disable ' : 'Enable ') +
-                            member.displayName
+                            (member.status === 'active'
+                              ? 'team.members.disableLabel'
+                              : 'team.members.enableLabel'
+                            ) | transloco: { name: member.displayName }
                           "
                           [disabled]="isMemberUpdating(member.id)"
                           (pressed)="toggleStatus(member)"
                         >
                           {{
-                            isMemberUpdating(member.id)
-                              ? 'Working…'
+                            (isMemberUpdating(member.id)
+                              ? 'team.members.working'
                               : member.status === 'active'
-                                ? 'Disable'
-                                : 'Enable'
+                                ? 'team.members.disable'
+                                : 'team.members.enable'
+                            ) | transloco
                           }}
                         </app-button>
                         @if (canResetMfa(member)) {
                           <app-button
                             variant="ghost"
-                            [ariaLabel]="'Reset two-step verification for ' + member.displayName"
+                            [ariaLabel]="
+                              'team.reset.label' | transloco: { name: member.displayName }
+                            "
                             (pressed)="askResetMfa(member)"
                           >
-                            Reset 2FA
+                            {{ 'team.reset.button' | transloco }}
                           </app-button>
                         }
                         @if (
                           store.memberUpdateStatus() === 'error' &&
                           store.memberUpdateMemberId() === member.id
                         ) {
-                          <app-inline-alert tone="error">{{
-                            store.memberUpdateError()
-                          }}</app-inline-alert>
+                          <app-inline-alert
+                            tone="error"
+                            [requestId]="store.memberUpdateError()?.requestId"
+                            >{{ errorKey(store.memberUpdateError()) | transloco }}</app-inline-alert
+                          >
                         }
                       }
                     </td>
@@ -236,11 +264,10 @@
         @if (store.hasMore()) {
           <div class="load-more">
             <app-button (pressed)="store.loadNext()" [disabled]="store.status() === 'loading'">
-              @if (store.status() === 'loading') {
-                Loading...
-              } @else {
-                Load more
-              }
+              {{
+                (store.status() === 'loading' ? 'team.page.loadingMore' : 'team.page.loadMore')
+                  | transloco
+              }}
             </app-button>
           </div>
         }
@@ -256,7 +283,7 @@
     [submitting]="invitationSubmitting()"
     [error]="invitationError()"
     [result]="invitationResult()"
-    [deliveryPollingError]="store.invitationDeliveryPollingError()"
+    [deliveryPollingFailed]="store.invitationDeliveryPollingFailed()"
     [currentRole]="currentRole()"
     [canAssignOwner]="canAssignOwner()"
   />
@@ -270,7 +297,7 @@
 
 @if (resetResult(); as result) {
   <app-inline-alert [tone]="result.tone === 'success' ? 'info' : 'error'">{{
-    result.text
+    result.key | transloco: result.params
   }}</app-inline-alert>
 }
 
@@ -283,18 +310,16 @@
     [dismissDisabled]="resetting()"
     (dismiss)="cancelResetMfa()"
   >
-    <h3 id="reset-mfa-title">Reset two-step verification?</h3>
+    <h3 id="reset-mfa-title">{{ 'team.reset.title' | transloco }}</h3>
     <p id="reset-mfa-desc">
-      This removes {{ target.displayName }}'s authenticator and recovery codes and signs them out
-      everywhere. They will sign in with their password and set up a new authenticator. Only do this
-      once you are sure it is them.
+      {{ 'team.reset.description' | transloco: { name: target.displayName } }}
     </p>
     <div class="actions">
       <app-button variant="secondary" [disabled]="resetting()" (pressed)="cancelResetMfa()">
-        Cancel
+        {{ 'common.cancel' | transloco }}
       </app-button>
       <app-button variant="danger" [disabled]="resetting()" (pressed)="confirmResetMfa()">
-        {{ resetting() ? 'Resetting…' : 'Reset' }}
+        {{ (resetting() ? 'team.reset.resetting' : 'team.reset.confirm') | transloco }}
       </app-button>
     </div>
   </app-dialog-shell>

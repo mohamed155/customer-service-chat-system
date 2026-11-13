@@ -10,13 +10,13 @@
       </caption>
       <thead>
         <tr>
-          <th scope="col">Email</th>
-          <th scope="col">Role</th>
-          <th scope="col">Status</th>
-          <th scope="col">Email delivery</th>
-          <th scope="col">Invited</th>
+          <th scope="col">{{ 'team.table.email' | transloco }}</th>
+          <th scope="col">{{ 'team.table.role' | transloco }}</th>
+          <th scope="col">{{ 'team.table.status' | transloco }}</th>
+          <th scope="col">{{ 'team.invitations.delivery' | transloco }}</th>
+          <th scope="col">{{ 'team.invitations.invited' | transloco }}</th>
           @if (showActions()) {
-            <th scope="col">Actions</th>
+            <th scope="col">{{ 'team.table.actions' | transloco }}</th>
           }
         </tr>
       </thead>
@@ -26,21 +26,32 @@
             <td>
               <strong>{{ invitation.email }}</strong>
             </td>
-            <td class="role">{{ invitation.role }}</td>
+            <td class="role">{{ roleLabelKey(invitation.role) | transloco }}</td>
             <td>
-              <app-status-badge [status]="invitation.status" [tone]="invitationTone(invitation)" />
+              <app-status-badge
+                [status]="invitation.status"
+                [text]="statusLabelKey(invitation.status) | transloco"
+                [tone]="invitationTone(invitation)"
+              />
             </td>
-            <td>{{ deliveryLabel(invitation) }}</td>
-            <td class="muted">{{ invitation.createdAt | date: 'mediumDate' }}</td>
+            <td>{{ deliveryLabel(invitation) | transloco }}</td>
+            <td class="muted">{{ invitation.createdAt | localeDate: 'date' }}</td>
             @if (showActions()) {
               <td>
                 @if (revocableIds().includes(invitation.id)) {
                   <app-button
                     variant="danger"
-                    [ariaLabel]="'Revoke invitation for ' + invitation.email"
+                    [ariaLabel]="
+                      'team.invitations.revokeLabel' | transloco: { email: invitation.email }
+                    "
                     [disabled]="revokingId() === invitation.id"
                     (pressed)="revoke.emit(invitation.id)"
-                    >{{ revokingId() === invitation.id ? 'Revoking…' : 'Revoke' }}</app-button
+                    >{{
+                      (revokingId() === invitation.id
+                        ? 'team.invitations.revoking'
+                        : 'team.invitations.revoke'
+                      ) | transloco
+                    }}</app-button
                   >
                 }
               </td>

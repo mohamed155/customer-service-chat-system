@@ -433,6 +433,18 @@
     "open": "Open",
     "pending": "Pending",
     "resolved": "Resolved",
-    "closed": "Closed"
+    "closed": "Closed",
+    "active": "Active",
+    "disabled": "Disabled",
+    "expired": "Expired",
+    "accepted": "Accepted",
+    "revoked": "Revoked"
+  },
+  "roleNames": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "manager": "Manager",
+    "agent": "Support Agent",
+    "viewer": "Viewer"
   }
 }

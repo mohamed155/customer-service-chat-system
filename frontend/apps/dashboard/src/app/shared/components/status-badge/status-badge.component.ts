@@ -47,11 +47,15 @@ export type BadgeTone = 'green' | 'amber' | 'red' | 'accent' | 'neutral';
 export class StatusBadgeComponent {
   readonly status = input.required<string>();
   readonly tone = input<BadgeTone>('neutral');
+  /** The text to show, already in the active language. Without it the status code is shown. */
+  readonly text = input<string | null>(null);
 
   protected readonly toneClass = computed(() => this.tone());
-  protected readonly label = computed(() =>
-    this.status()
-      .replaceAll('-', ' ')
-      .replace(/\b\w/g, (character) => character.toUpperCase()),
+  protected readonly label = computed(
+    () =>
+      this.text() ??
+      this.status()
+        .replaceAll('-', ' ')
+        .replace(/\b\w/g, (character) => character.toUpperCase()),
   );
 }

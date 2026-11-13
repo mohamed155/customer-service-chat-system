@@ -161,7 +161,8 @@ describe('TeamStore', () => {
     const store = configureStore();
     TestBed.flushEffects();
     expect(store.invitationsStatus()).toBe('error');
-    expect(store.invitationsError()).toBe('Network error');
+    // The whole error is kept (its code, status and request reference), not a message string.
+    expect(store.invitationsError()).toMatchObject({ code: 'unknown_error', status: 0 });
   });
 
   it('creates invitation and captures result', () => {
@@ -262,7 +263,7 @@ describe('TeamStore', () => {
     await vi.advanceTimersByTimeAsync(3000);
 
     expect(requestAttempts).toBe(3);
-    expect(store.invitationDeliveryPollingError()).toContain('delivery status');
+    expect(store.invitationDeliveryPollingFailed()).toBe(true);
     vi.useRealTimers();
   });
 
@@ -339,7 +340,7 @@ describe('TeamStore', () => {
 
     expect(firstPollSubscriptions).toBe(3);
     expect(poll).toBe(2);
-    expect(store.invitationDeliveryPollingError()).toContain('delivery status');
+    expect(store.invitationDeliveryPollingFailed()).toBe(true);
     vi.useRealTimers();
   });
 
@@ -425,7 +426,7 @@ describe('TeamStore', () => {
     const store = configureStore();
     TestBed.flushEffects();
     expect(store.status()).toBe('error');
-    expect(store.error()).toBe('Network error');
+    expect(store.error()).toMatchObject({ code: 'unknown_error', status: 0 });
   });
 
   it('resets and reloads when the active tenant changes', () => {
@@ -636,12 +637,12 @@ describe('TeamStore', () => {
     TestBed.flushEffects();
 
     mockApi.revokeInvitation.mockReturnValue(
-      throwError(() => ({ message: 'Invitation already accepted', status: 409 })),
+      throwError(() => ({ code: 'conflict', message: 'Invitation already accepted', status: 409 })),
     );
     store.revokeInvitation('i-1');
 
     expect(store.revokeInvitationStatus()).toBe('error');
-    expect(store.revokeInvitationError()).toBe('Invitation already accepted');
+    expect(store.revokeInvitationError()).toMatchObject({ code: 'conflict', status: 409 });
     expect(store.revokeInvitationId()).toBe('i-1');
     // The stale invitation list is left as-is; loadInvitations is not re-triggered on error.
     expect(store.invitations()).toEqual([mockInvitation]);
@@ -719,13 +720,17 @@ describe('TeamStore', () => {
     TestBed.flushEffects();
 
     mockApi.patchMember.mockReturnValue(
-      throwError(() => ({ message: 'Cannot disable the last owner', status: 409 })),
+      throwError(() => ({
+        code: 'conflict',
+        message: 'Cannot disable the last owner',
+        status: 409,
+      })),
     );
     store.setMemberStatus('m-1', 'disabled');
 
     expect(mockApi.patchMember).toHaveBeenCalledWith('m-1', { status: 'disabled' });
     expect(store.memberUpdateStatus()).toBe('error');
-    expect(store.memberUpdateError()).toBe('Cannot disable the last owner');
+    expect(store.memberUpdateError()).toMatchObject({ code: 'conflict', status: 409 });
     expect(store.memberUpdateMemberId()).toBe('m-1');
   });
 

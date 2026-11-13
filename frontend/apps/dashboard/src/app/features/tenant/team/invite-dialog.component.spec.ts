@@ -114,10 +114,12 @@ describe('InviteDialogComponent', () => {
       emailSent: false,
       emailDeliveryStatus: 'queued',
     });
-    fixture.componentRef.setInput('deliveryPollingError', 'Unable to refresh delivery status.');
+    fixture.componentRef.setInput('deliveryPollingFailed', true);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Unable to refresh delivery status.');
+    expect(fixture.nativeElement.textContent).toContain(
+      'Unable to refresh invitation email delivery status.',
+    );
   });
 
   it('copies the resolved public dashboard invitation URL', async () => {
