@@ -1,21 +1,23 @@
 <header>
   <app-icon-button
     icon="@tui.menu"
-    label="Toggle sidebar"
+    [label]="'topbar.toggleSidebar' | transloco"
     [active]="collapsed()"
     [attr.aria-expanded]="!collapsed()"
     (click)="toggleSidebar()"
   />
 
   <div class="title">
-    <strong>{{ pageTitle()?.title ?? 'Helix' }}</strong>
-    <span>{{ pageTitle()?.subtitle ?? 'Support AI' }}</span>
+    <strong>{{ pageTitle()?.title ?? 'app.brandName' | transloco }}</strong>
+    <span>{{
+      pageTitle()?.subtitle ?? 'app.tagline' | transloco: pageTitle()?.subtitleParams
+    }}</span>
   </div>
 
-  <div class="tools" aria-label="Dashboard tools">
+  <div class="tools" [attr.aria-label]="'topbar.tools' | transloco">
     <app-search-input
       class="search"
-      placeholder="Search conversations, customers..."
+      [placeholder]="'topbar.search' | transloco"
       shortcutHint="⌘K"
       [(value)]="search"
     />
@@ -26,7 +28,7 @@
       }
     }
     <button class="new-button" type="button">
-      <tui-icon icon="@tui.plus" /><span class="new-label">New</span>
+      <tui-icon icon="@tui.plus" /><span class="new-label">{{ 'topbar.new' | transloco }}</span>
     </button>
     @if (canManageConversations()) {
       <app-availability-toggle />
@@ -34,7 +36,7 @@
     <app-icon-button
       class="theme-toggle"
       [icon]="themeIcon()"
-      [label]="themeLabel()"
+      [label]="themeLabelKey() | transloco"
       (click)="cycleTheme()"
     />
     <div class="notification-wrapper">

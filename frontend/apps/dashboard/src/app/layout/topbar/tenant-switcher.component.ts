@@ -15,10 +15,11 @@ import { ApiService } from '../../core/api/api.service';
 import { CurrentUserService } from '../../core/tenant/current-user.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { TenantSummary } from '../../core/api/tenant-api.models';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-tenant-switcher',
-  imports: [FormsModule, TuiIcon],
+  imports: [FormsModule, TuiIcon, TranslocoPipe],
   templateUrl: './tenant-switcher.component.html',
   styles: [
     `

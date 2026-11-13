@@ -1,15 +1,15 @@
 <aside>
-  <div class="brand" aria-label="Helix Support AI">
+  <div class="brand" [attr.aria-label]="'app.brandLabel' | transloco">
     <span class="logo"><tui-icon icon="@tui.sparkles" /></span>
     @if (!collapsed()) {
       <div>
-        <strong>Helix</strong>
-        <span>Support AI</span>
+        <strong>{{ 'app.brandName' | transloco }}</strong>
+        <span>{{ 'app.tagline' | transloco }}</span>
       </div>
     }
   </div>
 
-  <nav aria-label="Primary navigation">
+  <nav [attr.aria-label]="'sidebar.primaryNav' | transloco">
     @if (
       permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.overview]) ||
       permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.conversations]) ||
@@ -17,11 +17,14 @@
       permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.customers]) ||
       permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.team])
     ) {
-      <app-sidebar-nav-group label="Workspace" [collapsed]="collapsed()">
+      <app-sidebar-nav-group
+        [label]="'sidebar.group.workspace' | transloco"
+        [collapsed]="collapsed()"
+      >
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.overview])) {
           <app-sidebar-nav-item
             icon="@tui.layout-dashboard"
-            label="Overview"
+            [label]="'sidebar.item.overview' | transloco"
             [link]="links.overview"
             [collapsed]="collapsed()"
           />
@@ -29,7 +32,7 @@
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.conversations])) {
           <app-sidebar-nav-item
             icon="@tui.messages-square"
-            label="Conversations"
+            [label]="'sidebar.item.conversations' | transloco"
             [link]="links.conversations"
             [collapsed]="collapsed()"
             [badgeCount]="6"
@@ -38,7 +41,7 @@
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.escalations])) {
           <app-sidebar-nav-item
             icon="@tui.arrow-up-from-line"
-            label="Escalations"
+            [label]="'sidebar.item.escalations' | transloco"
             [link]="links.escalations"
             [collapsed]="collapsed()"
           />
@@ -46,7 +49,7 @@
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.customers])) {
           <app-sidebar-nav-item
             icon="@tui.users"
-            label="Customers"
+            [label]="'sidebar.item.customers' | transloco"
             [link]="links.customers"
             [collapsed]="collapsed()"
           />
@@ -54,7 +57,7 @@
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.team])) {
           <app-sidebar-nav-item
             icon="@tui.badge-check"
-            label="Team"
+            [label]="'sidebar.item.team' | transloco"
             [link]="links.team"
             [collapsed]="collapsed()"
           />
@@ -69,11 +72,11 @@
       permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.integrations]) ||
       permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.widgets])
     ) {
-      <app-sidebar-nav-group label="AI" [collapsed]="collapsed()">
+      <app-sidebar-nav-group [label]="'sidebar.group.ai' | transloco" [collapsed]="collapsed()">
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.aiAgent])) {
           <app-sidebar-nav-item
             icon="@tui.bot"
-            label="AI Agent"
+            [label]="'sidebar.item.aiAgent' | transloco"
             [link]="links.aiAgent"
             [collapsed]="collapsed()"
           />
@@ -81,7 +84,7 @@
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.settingsTools])) {
           <app-sidebar-nav-item
             icon="@tui.wrench"
-            label="AI Tools"
+            [label]="'sidebar.item.aiTools' | transloco"
             [link]="links.aiTools"
             [collapsed]="collapsed()"
           />
@@ -89,7 +92,7 @@
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.knowledgeBase])) {
           <app-sidebar-nav-item
             icon="@tui.book-open"
-            label="Knowledge Base"
+            [label]="'sidebar.item.knowledgeBase' | transloco"
             [link]="links.knowledgeBase"
             [collapsed]="collapsed()"
           />
@@ -97,7 +100,7 @@
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.integrations])) {
           <app-sidebar-nav-item
             icon="@tui.plug"
-            label="Integrations"
+            [label]="'sidebar.item.integrations' | transloco"
             [link]="links.integrations"
             [collapsed]="collapsed()"
           />
@@ -105,7 +108,7 @@
         @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.widgets])) {
           <app-sidebar-nav-item
             icon="@tui.message-square"
-            label="Chat Widget"
+            [label]="'sidebar.item.chatWidget' | transloco"
             [link]="links.widgets"
             [collapsed]="collapsed()"
           />
@@ -114,10 +117,13 @@
     }
 
     @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.analytics])) {
-      <app-sidebar-nav-group label="Insights" [collapsed]="collapsed()">
+      <app-sidebar-nav-group
+        [label]="'sidebar.group.insights' | transloco"
+        [collapsed]="collapsed()"
+      >
         <app-sidebar-nav-item
           icon="@tui.chart-line"
-          label="Analytics"
+          [label]="'sidebar.item.analytics' | transloco"
           [link]="links.analytics"
           [collapsed]="collapsed()"
         />
@@ -125,10 +131,13 @@
     }
 
     @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.auditLogs])) {
-      <app-sidebar-nav-group label="Security" [collapsed]="collapsed()">
+      <app-sidebar-nav-group
+        [label]="'sidebar.group.security' | transloco"
+        [collapsed]="collapsed()"
+      >
         <app-sidebar-nav-item
           icon="@tui.scroll-text"
-          label="Audit Logs"
+          [label]="'sidebar.item.auditLogs' | transloco"
           [link]="links.auditLogs"
           [collapsed]="collapsed()"
         />
@@ -136,10 +145,13 @@
     }
 
     @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.billing])) {
-      <app-sidebar-nav-group label="Billing" [collapsed]="collapsed()">
+      <app-sidebar-nav-group
+        [label]="'sidebar.group.billing' | transloco"
+        [collapsed]="collapsed()"
+      >
         <app-sidebar-nav-item
           icon="@tui.receipt"
-          label="Billing"
+          [label]="'sidebar.item.billing' | transloco"
           [link]="links.billing"
           [collapsed]="collapsed()"
         />
@@ -147,19 +159,22 @@
     }
 
     @if (permissionsService.has(PAGE_PERMISSIONS[APP_PATHS.tenant.settings])) {
-      <app-sidebar-nav-group label="Settings" [collapsed]="collapsed()">
+      <app-sidebar-nav-group
+        [label]="'sidebar.group.settings' | transloco"
+        [collapsed]="collapsed()"
+      >
         <app-sidebar-nav-item
           icon="@tui.settings"
-          label="Settings"
+          [label]="'sidebar.item.settings' | transloco"
           [link]="links.settings"
           [collapsed]="collapsed()"
         />
       </app-sidebar-nav-group>
     }
-    <app-sidebar-nav-group label="Account" [collapsed]="collapsed()">
+    <app-sidebar-nav-group [label]="'sidebar.group.account' | transloco" [collapsed]="collapsed()">
       <app-sidebar-nav-item
         icon="@tui.shield"
-        label="Account security"
+        [label]="'sidebar.item.accountSecurity' | transloco"
         [link]="links.security"
         [collapsed]="collapsed()"
       />

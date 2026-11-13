@@ -1,19 +1,21 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
 import { Channel as FixtureChannel } from '../../fixtures/fixture.models';
+import { TranslocoPipe } from '@jsverse/transloco';
+import { marker } from '../../../core/i18n/marker';
 
 export type ChannelBadgeChannel =
   FixtureChannel | 'email' | 'phone' | 'web_chat' | 'whatsapp' | 'telegram' | 'widget';
 
 const CHANNEL_LABELS: Record<ChannelBadgeChannel, string> = {
-  web: 'Website',
-  web_chat: 'Web chat',
-  whatsapp: 'WhatsApp',
-  telegram: 'Telegram',
-  'mobile-sdk': 'Mobile SDK',
-  email: 'Email',
-  phone: 'Phone',
-  widget: 'Widget',
+  web: marker('channels.web'),
+  web_chat: marker('channels.web_chat'),
+  whatsapp: marker('channels.whatsapp'),
+  telegram: marker('channels.telegram'),
+  'mobile-sdk': marker('channels.mobile_sdk'),
+  email: marker('channels.email'),
+  phone: marker('channels.phone'),
+  widget: marker('channels.widget'),
 };
 
 const CHANNEL_ICONS: Partial<Record<ChannelBadgeChannel, string>> = {
@@ -23,7 +25,7 @@ const CHANNEL_ICONS: Partial<Record<ChannelBadgeChannel, string>> = {
 
 @Component({
   selector: 'app-channel-badge',
-  imports: [TuiIcon],
+  imports: [TuiIcon, TranslocoPipe],
   templateUrl: './channel-badge.component.html',
   styles: [
     `

@@ -35,8 +35,8 @@ describe('injectBreadcrumbs', () => {
     const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
 
     const expected: Crumb[] = [
-      { label: 'Workspace', link: '/tenant/overview' },
-      { label: 'Conversations', link: null },
+      { label: 'breadcrumb.workspace', link: '/tenant/overview' },
+      { label: 'pages.conversations.title', link: null },
     ];
     expect(crumbs()).toEqual(expected);
   });
@@ -79,8 +79,8 @@ describe('injectBreadcrumbs', () => {
     const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
 
     const expected: Crumb[] = [
-      { label: 'Platform', link: '/platform/overview-placeholder' },
-      { label: 'Conversations', link: null },
+      { label: 'breadcrumb.platform', link: '/platform/overview-placeholder' },
+      { label: 'pages.conversations.title', link: null },
     ];
     expect(crumbs()).toEqual(expected);
   });
@@ -123,8 +123,8 @@ describe('injectBreadcrumbs', () => {
     const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
 
     const expected: Crumb[] = [
-      { label: 'Home', link: null },
-      { label: 'Overview', link: null },
+      { label: 'breadcrumb.home', link: null },
+      { label: 'pages.overview.title', link: null },
     ];
     expect(crumbs()).toEqual(expected);
   });
@@ -140,7 +140,7 @@ describe('injectBreadcrumbs', () => {
     await router.navigateByUrl('/no-title');
     const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
 
-    expect(crumbs()).toEqual([{ label: 'Home', link: null }]);
+    expect(crumbs()).toEqual([{ label: 'breadcrumb.home', link: null }]);
   });
 
   it('forces the final crumb link to null', async () => {
@@ -205,8 +205,8 @@ describe('injectBreadcrumbs', () => {
     const crumbs = TestBed.runInInjectionContext(() => injectBreadcrumbs());
 
     expect(crumbs()).toEqual([
-      { label: 'Platform', link: '/platform/overview-placeholder' },
-      { label: 'Platform overview', link: null },
+      { label: 'breadcrumb.platform', link: '/platform/overview-placeholder' },
+      { label: 'pages.platformOverview.title', link: null },
     ]);
   });
 });

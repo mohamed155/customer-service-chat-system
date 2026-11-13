@@ -3,20 +3,20 @@
 } @else if (entries().length === 0) {
   <app-empty-state
     icon="@tui.scroll-text"
-    title="No audit entries"
-    description="No activity has been recorded yet."
+    [title]="'audit.empty.title' | transloco"
+    [description]="'audit.empty.description' | transloco"
   />
 } @else {
   <app-data-table>
     <table>
       <thead>
         <tr>
-          <th>Time</th>
-          <th>Actor</th>
-          <th>Action</th>
-          <th>Target</th>
+          <th>{{ 'audit.time' | transloco }}</th>
+          <th>{{ 'audit.actor' | transloco }}</th>
+          <th>{{ 'audit.action' | transloco }}</th>
+          <th>{{ 'audit.target' | transloco }}</th>
           @if (showTenantColumn()) {
-            <th>Tenant</th>
+            <th>{{ 'audit.tenant' | transloco }}</th>
           }
         </tr>
       </thead>
@@ -29,17 +29,17 @@
             (keydown.enter)="rowSelected.emit(entry)"
             role="button"
           >
-            <td>{{ entry.createdAt | date: 'medium' }}</td>
+            <td>{{ entry.createdAt | localeDate }}</td>
             <td>
               @if (entry.actor.kind === 'system') {
-                <span>System</span>
+                <span>{{ 'audit.system' | transloco }}</span>
               } @else {
                 <span>{{ entry.actor.displayName }}</span>
                 @if (entry.actor.isPlatformStaff) {
-                  <span class="staff-badge">Platform staff</span>
+                  <span class="staff-badge">{{ 'audit.platformStaff' | transloco }}</span>
                 }
                 @if (entry.actor.deleted) {
-                  <span class="deleted-badge">deleted</span>
+                  <span class="deleted-badge">{{ 'audit.deleted' | transloco }}</span>
                 }
               }
             </td>

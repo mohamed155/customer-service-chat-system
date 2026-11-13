@@ -6,10 +6,10 @@
       (click)="toggle()"
       [attr.aria-expanded]="open()"
       aria-haspopup="menu"
-      aria-label="Platform"
+      [attr.aria-label]="'platformNav.label' | transloco"
     >
       <tui-icon icon="@tui.layout-dashboard" />
-      <span>Platform</span>
+      <span>{{ 'platformNav.label' | transloco }}</span>
     </button>
 
     @if (open()) {
@@ -28,7 +28,7 @@
             (click)="navigate(dest)"
             (keydown.enter)="navigate(dest)"
           >
-            {{ dest.label }}
+            {{ dest.label | transloco }}
           </button>
         }
       </div>

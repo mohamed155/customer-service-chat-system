@@ -1,12 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { shortReference } from '../../../core/errors/request-reference';
 import { copyToClipboard } from '../../utils/clipboard';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 /**
  * The short reference of a failed request, with a button that copies the full request ID: what a
  * person sends to support so the failure can be found in the backend's logs (MOH-64).
  */
 @Component({
+  imports: [TranslocoPipe],
   selector: 'app-error-reference',
   templateUrl: './error-reference.component.html',
   styles: [

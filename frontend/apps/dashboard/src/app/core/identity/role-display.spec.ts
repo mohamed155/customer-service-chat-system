@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { roleLabel, TENANT_ROLE_LABELS, PLATFORM_ROLE_LABELS } from './role-display';
+import { roleLine, TENANT_ROLE_KEYS, PLATFORM_ROLE_KEYS } from './role-display';
 import { MeResponse, TenantSummary } from '../api/tenant-api.models';
 import { MembershipRole, PlatformRole } from '../api/tenant-api.models';
 
@@ -27,23 +27,23 @@ function makeTenant(overrides: Partial<TenantSummary> = {}): TenantSummary {
   };
 }
 
-describe('roleLabel', () => {
+describe('roleLine', () => {
   describe('null/empty cases', () => {
     it('returns null when user is null', () => {
-      expect(roleLabel(null, makeTenant())).toBeNull();
+      expect(roleLine(null, makeTenant())).toBeNull();
     });
 
     it('returns null when user has no platform role and no active tenant', () => {
-      expect(roleLabel(makeUser(), null)).toBeNull();
+      expect(roleLine(makeUser(), null)).toBeNull();
     });
 
     it('returns null when user has no platform role and active tenant is null', () => {
-      expect(roleLabel(makeUser(), null)).toBeNull();
+      expect(roleLine(makeUser(), null)).toBeNull();
     });
 
     it('returns null when user has no memberships and active tenant is provided', () => {
       const user = makeUser({ memberships: [] });
-      expect(roleLabel(user, makeTenant())).toBeNull();
+      expect(roleLine(user, makeTenant())).toBeNull();
     });
 
     it('returns null when membership for active tenant does not exist', () => {
@@ -59,7 +59,7 @@ describe('roleLabel', () => {
         ],
       });
       expect(
-        roleLabel(
+        roleLine(
           user,
           makeTenant({
             id: 't1',
@@ -74,23 +74,23 @@ describe('roleLabel', () => {
 
     it('returns null when user has no platform role and no memberships', () => {
       const user = makeUser({ platformRole: null, memberships: [] });
-      expect(roleLabel(user, makeTenant())).toBeNull();
+      expect(roleLine(user, makeTenant())).toBeNull();
     });
   });
 
   describe('platform roles', () => {
     const platformRoles: Array<{ key: PlatformRole; expected: string }> = [
-      { key: 'super_admin', expected: 'Super Admin' },
-      { key: 'developer', expected: 'Developer' },
-      { key: 'support', expected: 'Support Engineer' },
-      { key: 'sales', expected: 'Sales' },
-      { key: 'finance', expected: 'Finance' },
+      { key: 'super_admin', expected: 'roles.platform.super_admin' },
+      { key: 'developer', expected: 'roles.platform.developer' },
+      { key: 'support', expected: 'roles.platform.support' },
+      { key: 'sales', expected: 'roles.platform.sales' },
+      { key: 'finance', expected: 'roles.platform.finance' },
     ];
 
     platformRoles.forEach(({ key, expected }) => {
       it(`returns "${expected}" for platform role "${key}"`, () => {
         const user = makeUser({ platformRole: key });
-        expect(roleLabel(user, null)).toBe(expected);
+        expect(roleLine(user, null)).toEqual({ key: expected });
       });
     });
 
@@ -107,21 +107,21 @@ describe('roleLabel', () => {
           },
         ],
       });
-      expect(roleLabel(user, makeTenant())).toBe('Super Admin');
+      expect(roleLine(user, makeTenant())).toEqual({ key: 'roles.platform.super_admin' });
     });
   });
 
   describe('tenant roles', () => {
     const tenantRoles: Array<{ key: MembershipRole; expected: string }> = [
-      { key: 'owner', expected: 'Owner' },
-      { key: 'admin', expected: 'Admin' },
-      { key: 'manager', expected: 'Manager' },
-      { key: 'agent', expected: 'Support Agent' },
-      { key: 'viewer', expected: 'Viewer' },
+      { key: 'owner', expected: 'roles.tenant.owner' },
+      { key: 'admin', expected: 'roles.tenant.admin' },
+      { key: 'manager', expected: 'roles.tenant.manager' },
+      { key: 'agent', expected: 'roles.tenant.agent' },
+      { key: 'viewer', expected: 'roles.tenant.viewer' },
     ];
 
     tenantRoles.forEach(({ key, expected }) => {
-      it(`returns "${expected} · Acme Corp" for tenant role "${key}"`, () => {
+      it(`returns "${expected}" with the workspace name for tenant role "${key}"`, () => {
         const user = makeUser({
           platformRole: null,
           memberships: [
@@ -135,7 +135,7 @@ describe('roleLabel', () => {
           ],
         });
         const tenant = makeTenant({ id: 't1', name: 'Acme Corp' });
-        expect(roleLabel(user, tenant)).toBe(`${expected} · Acme Corp`);
+        expect(roleLine(user, tenant)).toEqual({ key: expected, params: { tenant: 'Acme Corp' } });
       });
     });
 
@@ -153,28 +153,31 @@ describe('roleLabel', () => {
         ],
       });
       const tenant = makeTenant({ id: 't1', name: 'Widgets Inc' });
-      expect(roleLabel(user, tenant)).toBe('Owner · Widgets Inc');
+      expect(roleLine(user, tenant)).toEqual({
+        key: 'roles.tenant.owner',
+        params: { tenant: 'Widgets Inc' },
+      });
     });
   });
 
-  describe('label maps export correctness', () => {
-    it('has all 5 tenant role labels', () => {
-      expect(TENANT_ROLE_LABELS).toEqual({
-        owner: 'Owner',
-        admin: 'Admin',
-        manager: 'Manager',
-        agent: 'Support Agent',
-        viewer: 'Viewer',
+  describe('key maps', () => {
+    it('has all 5 tenant role keys', () => {
+      expect(TENANT_ROLE_KEYS).toEqual({
+        owner: 'roles.tenant.owner',
+        admin: 'roles.tenant.admin',
+        manager: 'roles.tenant.manager',
+        agent: 'roles.tenant.agent',
+        viewer: 'roles.tenant.viewer',
       });
     });
 
-    it('has all 5 platform role labels', () => {
-      expect(PLATFORM_ROLE_LABELS).toEqual({
-        super_admin: 'Super Admin',
-        developer: 'Developer',
-        support: 'Support Engineer',
-        sales: 'Sales',
-        finance: 'Finance',
+    it('has all 5 platform role keys', () => {
+      expect(PLATFORM_ROLE_KEYS).toEqual({
+        super_admin: 'roles.platform.super_admin',
+        developer: 'roles.platform.developer',
+        support: 'roles.platform.support',
+        sales: 'roles.platform.sales',
+        finance: 'roles.platform.finance',
       });
     });
   });

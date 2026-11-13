@@ -6,16 +6,12 @@
   (dismiss)="cancel()"
 >
   <form (submit)="$event.preventDefault(); submit()">
-    <h3 id="step-up-title">Confirm it is you</h3>
+    <h3 id="step-up-title">{{ 'stepUp.title' | transloco }}</h3>
     <p id="step-up-desc">
-      {{
-        usingRecovery()
-          ? 'Enter one of your recovery codes to continue.'
-          : 'Enter the 6-digit code from your authenticator app to continue.'
-      }}
+      {{ (usingRecovery() ? 'stepUp.recoveryHint' : 'stepUp.codeHint') | transloco }}
     </p>
     <label for="step-up-credential">
-      {{ usingRecovery() ? 'Recovery code' : 'Authentication code' }}
+      {{ (usingRecovery() ? 'stepUp.recoveryLabel' : 'stepUp.codeLabel') | transloco }}
       @if (usingRecovery()) {
         <input
           id="step-up-credential"
@@ -39,15 +35,17 @@
     }
     <div class="actions">
       <button type="button" class="link" (click)="toggleRecovery()">
-        {{ usingRecovery() ? 'Use an authenticator code' : 'Use a recovery code' }}
+        {{ (usingRecovery() ? 'stepUp.useCode' : 'stepUp.useRecovery') | transloco }}
       </button>
-      <app-button variant="secondary" (pressed)="cancel()">Cancel</app-button>
+      <app-button variant="secondary" (pressed)="cancel()">{{
+        'common.cancel' | transloco
+      }}</app-button>
       <app-button
         variant="primary"
         type="submit"
         [disabled]="stepUp.pending() || credential.invalid"
       >
-        {{ stepUp.pending() ? 'Checking…' : 'Continue' }}
+        {{ (stepUp.pending() ? 'stepUp.checking' : 'stepUp.continue') | transloco }}
       </app-button>
     </div>
   </form>

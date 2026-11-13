@@ -1,7 +1,18 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { Escalation } from '../../../core/api/tenant-api.models';
+import { TranslocoPipe } from '@jsverse/transloco';
+import { marker } from '../../../core/i18n/marker';
+
+const ROUTING_REASON_KEYS: Readonly<Record<string, string>> = {
+  skill_match: marker('escalationRouting.reason.skill_match'),
+  load_fallback: marker('escalationRouting.reason.load_fallback'),
+  manual_claim: marker('escalationRouting.reason.manual_claim'),
+  queue_auto: marker('escalationRouting.reason.queue_auto'),
+  manual_reassignment: marker('escalationRouting.reason.manual_reassignment'),
+};
 
 @Component({
+  imports: [TranslocoPipe],
   selector: 'app-escalation-routing-banner',
   templateUrl: './escalation-routing-banner.component.html',
   styles: [
@@ -30,14 +41,9 @@ import { Escalation } from '../../../core/api/tenant-api.models';
 export class EscalationRoutingBannerComponent {
   readonly escalation = input<Escalation | null>(null);
 
+  /** Catalog key of the routing reason; a code this app does not know shows a generic text. */
   routingReasonLabel(reason?: string): string {
-    const labels: Record<string, string> = {
-      skill_match: 'Skill match',
-      load_fallback: 'Load fallback',
-      manual_claim: 'Manual claim',
-      queue_auto: 'Queue auto',
-      manual_reassignment: 'Manual reassignment',
-    };
-    return reason ? (labels[reason] ?? reason) : 'Unknown';
+    if (!reason) return marker('escalationRouting.reason.unknown');
+    return ROUTING_REASON_KEYS[reason] ?? marker('escalationRouting.reason.other');
   }
 }

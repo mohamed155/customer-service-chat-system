@@ -1,9 +1,13 @@
 @if (update.bannerVisible()) {
   <section class="update-banner" role="status" aria-live="polite">
-    <span>A new version is available. Reload to get it.</span>
-    <button type="button" (click)="update.reload()">Reload</button>
-    <button type="button" (click)="update.dismiss()" aria-label="Dismiss update notice">
-      Dismiss
+    <span>{{ 'updateBanner.message' | transloco }}</span>
+    <button type="button" (click)="update.reload()">{{ 'common.reload' | transloco }}</button>
+    <button
+      type="button"
+      (click)="update.dismiss()"
+      [attr.aria-label]="'updateBanner.dismiss' | transloco"
+    >
+      {{ 'common.dismiss' | transloco }}
     </button>
   </section>
 }

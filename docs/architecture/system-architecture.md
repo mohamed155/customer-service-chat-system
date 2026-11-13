@@ -641,7 +641,10 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
   image optimization. The dashboard build fails when the initial bundle or a heavy route chunk
   grows past its budget, and routes marked for it load when the browser is idle (MOH-171; see
   `frontend/CLAUDE.md`).
-- i18n with RTL support (Arabic is a likely early market); dates/numbers localized.
+- i18n with RTL support (Arabic is a likely early market); dates/numbers localized. The dashboard
+  shows text from runtime catalogs (`public/i18n/<scope>/<locale>.json`, Transloco, ICU messages read
+  without `eval` so the CSP stays strict) and writes dates and numbers with `Intl` for the active
+  language; a language is a set of files (ADR-016, MOH-155). Right-to-left layout is not done yet.
 
 ---
 

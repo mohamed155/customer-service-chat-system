@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 export interface BreakdownBarItem {
   label: string;
@@ -7,6 +8,7 @@ export interface BreakdownBarItem {
 }
 
 @Component({
+  imports: [TranslocoPipe],
   selector: 'app-breakdown-bars',
   templateUrl: './breakdown-bars.component.html',
   styles: [
@@ -54,7 +56,7 @@ export interface BreakdownBarItem {
 })
 export class BreakdownBarsComponent {
   readonly items = input.required<readonly BreakdownBarItem[]>();
-  readonly ariaLabel = input('Channel breakdown');
+  readonly ariaLabel = input<string | null>(null);
 
   protected formatPct(share: number): string {
     return `${(share * 100).toFixed(1)}%`;

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 export interface ChoiceGroupOption {
   value: string;
@@ -6,6 +7,7 @@ export interface ChoiceGroupOption {
 }
 
 @Component({
+  imports: [TranslocoPipe],
   selector: 'app-choice-group',
   templateUrl: './choice-group.component.html',
   styles: [
@@ -45,5 +47,5 @@ export interface ChoiceGroupOption {
 export class ChoiceGroupComponent {
   readonly options = input.required<ChoiceGroupOption[]>();
   readonly value = model.required<string>();
-  readonly ariaLabel = input('Options');
+  readonly ariaLabel = input<string | null>(null);
 }

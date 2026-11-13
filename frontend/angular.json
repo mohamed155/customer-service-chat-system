@@ -41,6 +41,10 @@
                 "glob": "theme-init.js",
                 "input": "apps/dashboard/src",
                 "output": "/"
+              },
+              {
+                "glob": "**/*",
+                "input": "apps/dashboard/public"
               }
             ]
           },
@@ -52,8 +56,8 @@
                 "fonts": true
               },
               "budgets": [
-                { "type": "initial", "maximumWarning": "695kb", "maximumError": "710kb" },
-                { "type": "allScript", "maximumWarning": "1950kb", "maximumError": "2000kb" },
+                { "type": "initial", "maximumWarning": "735kb", "maximumError": "750kb" },
+                { "type": "allScript", "maximumWarning": "2150kb", "maximumError": "2200kb" },
                 { "type": "anyScript", "maximumError": "450kb" },
                 {
                   "type": "bundle",

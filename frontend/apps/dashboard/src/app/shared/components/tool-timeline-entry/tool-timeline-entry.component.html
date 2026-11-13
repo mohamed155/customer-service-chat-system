@@ -23,10 +23,12 @@
       <span class="duration">{{ dur }}</span>
     }
     @if (request().toolSource === 'tenant') {
-      <span class="source-badge">tenant</span>
+      <span class="source-badge">{{ 'toolTimeline.tenant' | transloco }}</span>
     }
     @if (request().decidedByDisplayName; as decider) {
-      <span class="decider-name">by {{ decider }}</span>
+      <span class="decider-name">{{
+        'toolTimeline.decidedBy' | transloco: { name: decider }
+      }}</span>
     }
   </div>
   @if (request().error; as err) {
@@ -36,7 +38,10 @@
     <div class="args-viewer">
       <button class="args-toggle" (click)="toggleArguments()" type="button">
         <span class="toggle-icon">{{ argumentsExpanded ? '▾' : '▸' }}</span>
-        <span>{{ argumentsExpanded ? 'Hide arguments' : 'Show arguments' }}</span>
+        <span>{{
+          (argumentsExpanded ? 'toolTimeline.hideArguments' : 'toolTimeline.showArguments')
+            | transloco
+        }}</span>
       </button>
       @if (argumentsExpanded) {
         <div class="args-content">

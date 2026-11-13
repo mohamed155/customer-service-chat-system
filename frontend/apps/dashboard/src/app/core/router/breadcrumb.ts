@@ -1,4 +1,5 @@
 import { inject, Signal } from '@angular/core';
+import { marker } from '../i18n/marker';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRouteSnapshot, NavigationEnd, Router } from '@angular/router';
 import { filter, map } from 'rxjs';
@@ -7,6 +8,7 @@ import { PAGE_TITLES } from './page-title';
 import type { PageTitleKey } from './page-title';
 
 export interface Crumb {
+  /** Catalog key of the crumb's text. */
   readonly label: string;
   readonly link: string | null;
 }
@@ -38,17 +40,17 @@ function readCrumbs(router: Router): Crumb[] {
   const firstSegment = segments[0] ?? '';
   let areaLabel: string;
   if (firstSegment === 'tenant') {
-    areaLabel = 'Workspace';
+    areaLabel = marker('breadcrumb.workspace');
   } else if (firstSegment === 'platform') {
-    areaLabel = 'Platform';
+    areaLabel = marker('breadcrumb.platform');
   } else {
-    areaLabel = 'Home';
+    areaLabel = marker('breadcrumb.home');
   }
 
   const areaLink: string | null =
-    areaLabel === 'Workspace'
+    areaLabel === marker('breadcrumb.workspace')
       ? '/tenant/overview'
-      : areaLabel === 'Platform'
+      : areaLabel === marker('breadcrumb.platform')
         ? '/platform/overview-placeholder'
         : null;
 

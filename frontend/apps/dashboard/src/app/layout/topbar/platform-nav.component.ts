@@ -13,8 +13,11 @@ import { TuiIcon } from '@taiga-ui/core';
 import { Permission } from '../../core/authz/permissions';
 import { PermissionsService } from '../../core/authz/permissions.service';
 import { APP_PATHS } from '../../core/router/app-paths';
+import { TranslocoPipe } from '@jsverse/transloco';
+import { marker } from '../../core/i18n/marker';
 
 interface PlatformDestination {
+  /** Catalog key of the destination's name. */
   readonly label: string;
   readonly path: string;
   readonly permission: Permission;
@@ -22,32 +25,32 @@ interface PlatformDestination {
 
 const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
   {
-    label: 'Tenants',
+    label: marker('platformNav.tenants'),
     path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.tenants}`,
     permission: 'platform.tenants.list',
   },
   {
-    label: 'Audit Logs',
+    label: marker('platformNav.auditLogs'),
     path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.auditLogs}`,
     permission: 'platform.audit.view',
   },
   {
-    label: 'Billing',
+    label: marker('platformNav.billing'),
     path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.billing}`,
     permission: 'platform.billing.view',
   },
   {
-    label: 'System health',
+    label: marker('platformNav.systemHealth'),
     path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.systemHealth}`,
     permission: 'platform.diagnostics.view',
   },
   {
-    label: 'AI providers',
+    label: marker('platformNav.aiProviders'),
     path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.aiProviders}`,
     permission: 'platform.diagnostics.view',
   },
   {
-    label: 'Platform overview',
+    label: marker('platformNav.overview'),
     path: `/${APP_PATHS.platform.base}/${APP_PATHS.platform.overviewPlaceholder}`,
     permission: 'platform.analytics.view',
   },
@@ -55,7 +58,7 @@ const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
 
 @Component({
   selector: 'app-platform-nav',
-  imports: [TuiIcon],
+  imports: [TuiIcon, TranslocoPipe],
   templateUrl: './platform-nav.component.html',
   styles: [
     `

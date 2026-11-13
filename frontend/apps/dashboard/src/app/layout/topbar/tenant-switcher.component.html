@@ -5,10 +5,10 @@
     (click)="toggle()"
     [attr.aria-expanded]="open()"
     aria-haspopup="listbox"
-    aria-label="Switch tenant"
+    [attr.aria-label]="'tenantSwitcher.label' | transloco"
   >
     <tui-icon icon="@tui.building" />
-    <span class="name">{{ activeTenant()?.name ?? 'Select tenant...' }}</span>
+    <span class="name">{{ activeTenant()?.name ?? ('tenantSwitcher.select' | transloco) }}</span>
     <tui-icon icon="@tui.chevron-down" [style.rotate]="open() ? '180deg' : '0deg'" />
   </button>
 
@@ -20,7 +20,7 @@
           class="search-input"
           type="search"
           #searchInput
-          placeholder="Search tenants..."
+          [placeholder]="'tenantSwitcher.search' | transloco"
           [(ngModel)]="query"
         />
       </label>
@@ -38,7 +38,7 @@
             <span class="option-slug">{{ tenant.slug }}</span>
           </button>
         } @empty {
-          <div class="empty">No tenants found</div>
+          <div class="empty">{{ 'tenantSwitcher.empty' | transloco }}</div>
         }
       </div>
     </div>

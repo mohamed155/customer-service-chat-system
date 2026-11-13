@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-escalation-banner',
-  imports: [TuiIcon],
+  imports: [TuiIcon, TranslocoPipe],
   templateUrl: './escalation-banner.component.html',
   styles: [
     `

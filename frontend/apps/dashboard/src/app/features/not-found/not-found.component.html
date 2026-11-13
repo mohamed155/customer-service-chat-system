@@ -1,8 +1,8 @@
 <main>
   <section>
     <span>404</span>
-    <h1>Page not found</h1>
-    <p>The route you opened does not map to a Helix workspace screen.</p>
-    <a [routerLink]="homeUrl">Return to overview</a>
+    <h1>{{ 'notFound.title' | transloco }}</h1>
+    <p>{{ 'notFound.message' | transloco }}</p>
+    <a [routerLink]="homeUrl">{{ 'notFound.back' | transloco }}</a>
   </section>
 </main>

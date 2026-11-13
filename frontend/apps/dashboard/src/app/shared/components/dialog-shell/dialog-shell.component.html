@@ -2,7 +2,7 @@
   <button
     class="dialog-backdrop"
     type="button"
-    aria-label="Close dialog"
+    [attr.aria-label]="'dialog.close' | transloco"
     [disabled]="dismissDisabled()"
     (click)="requestDismiss()"
   ></button>

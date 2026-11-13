@@ -1,9 +1,12 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { JsonPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { ToolRequest } from '../../../core/api/tenant-api.models';
 
+import { marker } from '../../../core/i18n/marker';
+
 @Component({
-  imports: [JsonPipe],
+  imports: [JsonPipe, TranslocoPipe],
   selector: 'app-tool-approval-card',
   templateUrl: './tool-approval-card.component.html',
   styles: [
@@ -168,15 +171,18 @@ export class ToolApprovalCardComponent {
 
   protected readonly isResolved = computed(() => this.request().status !== 'awaiting_approval');
 
-  protected readonly expiryText = computed(() => {
-    const expiresAt = this.request().expiresAt;
-    if (!expiresAt) return '';
-    const remaining = new Date(expiresAt).getTime() - Date.now();
-    if (remaining <= 0) return 'Expired';
-    const mins = Math.floor(remaining / 60000);
-    const secs = Math.floor((remaining % 60000) / 1000);
-    return `${mins}m ${secs}s`;
-  });
+  /** What the countdown says: a catalog key and the minutes and seconds it takes. */
+  protected readonly expiry = computed<{ key: string; params?: { mins: number; secs: number } }>(
+    () => {
+      const expiresAt = this.request().expiresAt;
+      if (!expiresAt) return { key: '' };
+      const remaining = new Date(expiresAt).getTime() - Date.now();
+      if (remaining <= 0) return { key: marker('toolApproval.expired') };
+      const mins = Math.floor(remaining / 60000);
+      const secs = Math.floor((remaining % 60000) / 1000);
+      return { key: marker('toolApproval.remaining'), params: { mins, secs } };
+    },
+  );
 
   protected onApprove(): void {
     this.approve.emit(this.request().id);

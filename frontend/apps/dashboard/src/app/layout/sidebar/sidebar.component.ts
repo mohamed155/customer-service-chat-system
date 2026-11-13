@@ -5,10 +5,11 @@ import { PermissionsService } from '../../core/authz/permissions.service';
 import { APP_PATHS } from '../../core/router/app-paths';
 import { SidebarNavGroupComponent } from './sidebar-nav-group.component';
 import { SidebarNavItemComponent } from './sidebar-nav-item.component';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-sidebar',
-  imports: [SidebarNavGroupComponent, SidebarNavItemComponent, TuiIcon],
+  imports: [SidebarNavGroupComponent, SidebarNavItemComponent, TuiIcon, TranslocoPipe],
   host: { '[class.collapsed]': 'collapsed()' },
   templateUrl: './sidebar.component.html',
   styles: [

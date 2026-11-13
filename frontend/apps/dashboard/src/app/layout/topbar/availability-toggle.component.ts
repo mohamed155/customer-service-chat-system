@@ -6,12 +6,13 @@ import type { components } from '../../core/api/generated/api';
 import { AvailabilityState } from '../../core/api/tenant-api.models';
 import { NotificationsService } from '../../core/realtime/notifications.service';
 import { RealtimeService } from '../../core/realtime/realtime.service';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 type Schemas = components['schemas'];
 
 @Component({
   selector: 'app-availability-toggle',
-  imports: [TuiIcon],
+  imports: [TuiIcon, TranslocoPipe],
   templateUrl: './availability-toggle.component.html',
   styles: [
     `

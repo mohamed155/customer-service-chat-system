@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { AppUpdateService } from '../../core/version/app-update.service';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 /** The notice that a newer release is out (MOH-167). Sits in the app root, so every page has it. */
 @Component({
+  imports: [TranslocoPipe],
   selector: 'app-update-banner',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './update-banner.component.html',

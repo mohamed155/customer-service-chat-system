@@ -1,16 +1,17 @@
 <span
-  >Ref <code data-testid="reference">{{ reference() }}</code></span
+  >{{ 'errorReference.ref' | transloco }}
+  <code data-testid="reference">{{ reference() }}</code></span
 >
-<button type="button" (click)="copy()" aria-label="Copy the full request ID to send to support">
+<button type="button" (click)="copy()" [attr.aria-label]="'errorReference.copyLabel' | transloco">
   @switch (copied()) {
     @case ('copied') {
-      Copied
+      {{ 'errorReference.copied' | transloco }}
     }
     @case ('failed') {
-      Copy failed
+      {{ 'errorReference.failed' | transloco }}
     }
     @default {
-      Copy
+      {{ 'errorReference.copy' | transloco }}
     }
   }
 </button>

@@ -1,6 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, inject } from '@angular/core';
+import { marker } from '../../../core/i18n/marker';
+import { LocaleService } from '../../../core/i18n/locale.service';
 
 @Component({
+  imports: [],
   selector: 'app-satisfaction-badge',
   host: { '[class]': 'toneClass()', '[attr.aria-label]': 'ariaLabel()' },
   templateUrl: './satisfaction-badge.component.html',
@@ -34,6 +37,8 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SatisfactionBadgeComponent {
+  private readonly locale = inject(LocaleService);
+
   readonly rating = input.required<number>();
 
   protected readonly toneClass = computed(() => {
@@ -43,5 +48,7 @@ export class SatisfactionBadgeComponent {
     return 'red';
   });
 
-  protected readonly ariaLabel = computed(() => `Rated ${this.rating()} out of 5`);
+  protected readonly ariaLabel = computed(() =>
+    this.locale.translate(marker('satisfaction.rated'), { rating: this.rating() }),
+  );
 }

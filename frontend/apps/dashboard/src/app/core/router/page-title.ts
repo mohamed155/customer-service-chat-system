@@ -1,7 +1,10 @@
 import { inject, Signal } from '@angular/core';
+import { marker } from '../i18n/marker';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter, map } from 'rxjs';
+import { formatDate } from '../i18n/format';
+import { LocaleService } from '../i18n/locale.service';
 
 /** Stable key identifying a routed page, used as `route.data['pageTitle']` and as a `PAGE_TITLES` lookup key. */
 export type PageTitleKey =
@@ -38,111 +41,144 @@ export type PageTitleKey =
   | 'billing'
   | 'notifications';
 
-/** A page's resolved topbar title/subtitle. */
+/** A page's resolved topbar title/subtitle: catalog keys, and values the subtitle's message needs. */
 export interface PageTitleData {
+  /** Catalog key of the title. */
   readonly title: string;
+  /** Catalog key of the subtitle. */
   readonly subtitle: string;
+  readonly subtitleParams?: Readonly<Record<string, unknown>>;
 }
 
-/** A `PAGE_TITLES` entry — subtitle is either static text or a function computed fresh on each read. */
+/** A `PAGE_TITLES` entry: catalog keys, and values the subtitle needs, computed fresh on each read. */
 interface PageTitleEntry {
   readonly title: string;
-  readonly subtitle: string | (() => string);
+  readonly subtitle: string;
+  /** Computed fresh on each read, for the locale the date is written in. */
+  readonly subtitleParams?: (locale: string) => Readonly<Record<string, unknown>>;
 }
 
-/** Formats today's date as e.g. "Tuesday, June 20 · Your support cockpit" (computed fresh, not baked in). */
-function overviewSubtitle(): string {
-  const formattedDate = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
-  return `${formattedDate} · Your support cockpit`;
-}
-
-/** Typed, readonly map of topbar title/subtitle text for every route that renders inside the Helix shell. */
+/** Typed, readonly map of topbar title/subtitle catalog keys for every route that renders inside the Helix shell. */
 export const PAGE_TITLES: Readonly<Record<PageTitleKey, PageTitleEntry>> = {
-  overview: { title: 'Overview', subtitle: overviewSubtitle },
-  conversations: { title: 'Conversations', subtitle: 'Manage your team conversations' },
+  overview: {
+    title: marker('pages.overview.title'),
+    subtitle: marker('pages.overview.subtitle'),
+    subtitleParams: (locale) => ({ date: formatDate(new Date(), locale, 'longDate') }),
+  },
+  conversations: {
+    title: marker('pages.conversations.title'),
+    subtitle: marker('pages.conversations.subtitle'),
+  },
   conversationDetail: {
-    title: 'Conversation',
-    subtitle: 'Customer conversation details and timeline',
+    title: marker('pages.conversationDetail.title'),
+    subtitle: marker('pages.conversationDetail.subtitle'),
   },
-  customers: { title: 'Customers', subtitle: 'Customer profiles and conversation history' },
+  customers: {
+    title: marker('pages.customers.title'),
+    subtitle: marker('pages.customers.subtitle'),
+  },
   customerProfile: {
-    title: 'Customer profile',
-    subtitle: 'Contact, identifiers, and conversation history',
+    title: marker('pages.customerProfile.title'),
+    subtitle: marker('pages.customerProfile.subtitle'),
   },
-  aiAgent: { title: 'AI Agent', subtitle: 'Configure how your assistant behaves' },
+  aiAgent: { title: marker('pages.aiAgent.title'), subtitle: marker('pages.aiAgent.subtitle') },
   aiAgentPrompt: {
-    title: 'System Prompt',
-    subtitle: 'Manage the base instruction given to the AI',
+    title: marker('pages.aiAgentPrompt.title'),
+    subtitle: marker('pages.aiAgentPrompt.subtitle'),
   },
   knowledgeBase: {
-    title: 'Knowledge Base',
-    subtitle: 'Train your AI with trusted company knowledge',
+    title: marker('pages.knowledgeBase.title'),
+    subtitle: marker('pages.knowledgeBase.subtitle'),
   },
   knowledgeBaseNew: {
-    title: 'New Article',
-    subtitle: 'Create a knowledge article',
+    title: marker('pages.knowledgeBaseNew.title'),
+    subtitle: marker('pages.knowledgeBaseNew.subtitle'),
   },
   knowledgeBaseDetail: {
-    title: 'Article',
-    subtitle: 'Knowledge article details',
+    title: marker('pages.knowledgeBaseDetail.title'),
+    subtitle: marker('pages.knowledgeBaseDetail.subtitle'),
   },
   knowledgeBaseEdit: {
-    title: 'Edit Article',
-    subtitle: 'Update the knowledge article',
+    title: marker('pages.knowledgeBaseEdit.title'),
+    subtitle: marker('pages.knowledgeBaseEdit.subtitle'),
   },
-  integrations: { title: 'Integrations', subtitle: 'Connect channels and business systems' },
-  analytics: { title: 'Analytics', subtitle: 'Trends across every channel' },
-  settings: { title: 'Settings', subtitle: 'Workspace preferences and security' },
+  integrations: {
+    title: marker('pages.integrations.title'),
+    subtitle: marker('pages.integrations.subtitle'),
+  },
+  analytics: {
+    title: marker('pages.analytics.title'),
+    subtitle: marker('pages.analytics.subtitle'),
+  },
+  settings: { title: marker('pages.settings.title'), subtitle: marker('pages.settings.subtitle') },
   toolsSettings: {
-    title: 'AI Tool Settings',
-    subtitle: 'Manage built-in and custom AI tools',
+    title: marker('pages.toolsSettings.title'),
+    subtitle: marker('pages.toolsSettings.subtitle'),
   },
-  team: { title: 'Team', subtitle: 'Manage team members and invitations' },
-  inviteAccept: { title: 'Accept invitation', subtitle: 'Join your team' },
-  platform: { title: 'Platform', subtitle: 'Platform administration' },
-  platformOverview: { title: 'Platform overview', subtitle: 'Platform administration' },
-  selectTenant: { title: 'Select tenant', subtitle: 'Choose a tenant context to continue' },
-  platformTenants: { title: 'Tenants', subtitle: 'Manage customer organizations' },
-  platformTenantDetail: { title: 'Tenant details', subtitle: 'View and manage this organization' },
-  platformTenantNew: { title: 'New tenant', subtitle: 'Onboard a new customer organization' },
-  escalations: { title: 'Escalations', subtitle: 'Manage queued and active escalations' },
-  widgets: {
-    title: 'Chat Widget',
-    subtitle: 'Embed the chat widget on your website',
+  team: { title: marker('pages.team.title'), subtitle: marker('pages.team.subtitle') },
+  inviteAccept: {
+    title: marker('pages.inviteAccept.title'),
+    subtitle: marker('pages.inviteAccept.subtitle'),
   },
-  billing: { title: 'Billing', subtitle: 'Your plan and usage this month' },
-  auditLogs: { title: 'Audit Logs', subtitle: 'Track sensitive actions in your workspace' },
+  platform: { title: marker('pages.platform.title'), subtitle: marker('pages.platform.subtitle') },
+  platformOverview: {
+    title: marker('pages.platformOverview.title'),
+    subtitle: marker('pages.platformOverview.subtitle'),
+  },
+  selectTenant: {
+    title: marker('pages.selectTenant.title'),
+    subtitle: marker('pages.selectTenant.subtitle'),
+  },
+  platformTenants: {
+    title: marker('pages.platformTenants.title'),
+    subtitle: marker('pages.platformTenants.subtitle'),
+  },
+  platformTenantDetail: {
+    title: marker('pages.platformTenantDetail.title'),
+    subtitle: marker('pages.platformTenantDetail.subtitle'),
+  },
+  platformTenantNew: {
+    title: marker('pages.platformTenantNew.title'),
+    subtitle: marker('pages.platformTenantNew.subtitle'),
+  },
+  escalations: {
+    title: marker('pages.escalations.title'),
+    subtitle: marker('pages.escalations.subtitle'),
+  },
+  widgets: { title: marker('pages.widgets.title'), subtitle: marker('pages.widgets.subtitle') },
+  billing: { title: marker('pages.billing.title'), subtitle: marker('pages.billing.subtitle') },
+  auditLogs: {
+    title: marker('pages.auditLogs.title'),
+    subtitle: marker('pages.auditLogs.subtitle'),
+  },
   platformAuditLogs: {
-    title: 'Audit Logs',
-    subtitle: 'Platform-wide activity across all tenants',
+    title: marker('pages.platformAuditLogs.title'),
+    subtitle: marker('pages.platformAuditLogs.subtitle'),
   },
   platformBilling: {
-    title: 'Platform Billing',
-    subtitle: 'Manage plans and subscriptions',
+    title: marker('pages.platformBilling.title'),
+    subtitle: marker('pages.platformBilling.subtitle'),
   },
   platformSystemHealth: {
-    title: 'System health',
-    subtitle: 'Platform administration',
+    title: marker('pages.platformSystemHealth.title'),
+    subtitle: marker('pages.platformSystemHealth.subtitle'),
   },
   platformAiProviders: {
-    title: 'AI provider status',
-    subtitle: 'Platform administration',
+    title: marker('pages.platformAiProviders.title'),
+    subtitle: marker('pages.platformAiProviders.subtitle'),
   },
   notifications: {
-    title: 'Notifications',
-    subtitle: 'Your recent activity and alerts',
+    title: marker('pages.notifications.title'),
+    subtitle: marker('pages.notifications.subtitle'),
   },
 } as const;
 
-/** Resolves a `PAGE_TITLES` entry to its current title/subtitle, evaluating a function subtitle fresh. */
-function resolvePageTitle(entry: PageTitleEntry): PageTitleData {
+/** Resolves a `PAGE_TITLES` entry to its keys and the values its subtitle needs now. */
+function resolvePageTitle(entry: PageTitleEntry, locale: string): PageTitleData {
   return {
     title: entry.title,
-    subtitle: typeof entry.subtitle === 'function' ? entry.subtitle() : entry.subtitle,
+    subtitle: entry.subtitle,
+    ...(entry.subtitleParams ? { subtitleParams: entry.subtitleParams(locale) } : {}),
   };
 }
 
@@ -163,10 +199,11 @@ function readDeepestPageTitleKey(router: Router): PageTitleKey | undefined {
  */
 export function injectPageTitle(): Signal<PageTitleData | undefined> {
   const router = inject(Router);
+  const locale = inject(LocaleService);
 
   const resolve = (): PageTitleData | undefined => {
     const key = readDeepestPageTitleKey(router);
-    return key ? resolvePageTitle(PAGE_TITLES[key]) : undefined;
+    return key ? resolvePageTitle(PAGE_TITLES[key], locale.formatLocale()) : undefined;
   };
 
   return toSignal(

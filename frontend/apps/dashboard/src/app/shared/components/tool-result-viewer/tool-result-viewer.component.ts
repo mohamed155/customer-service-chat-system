@@ -1,8 +1,9 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 
 @Component({
   selector: 'app-tool-result-viewer',
-  imports: [],
+  imports: [TranslocoPipe],
   templateUrl: './tool-result-viewer.component.html',
   styleUrl: './tool-result-viewer.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -1,14 +1,23 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
-import { DatePipe, SlicePipe } from '@angular/common';
+import { SlicePipe } from '@angular/common';
+import { LocaleDatePipe } from '../../../core/i18n/format';
 import { AuditEntry } from '../../../core/api/tenant-api.models';
 import { DataTableComponent } from '../data-table/data-table.component';
 import { EmptyStateComponent } from '../empty-state/empty-state.component';
 import { LoadingStateComponent } from '../loading-state/loading-state.component';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-audit-log-table',
   standalone: true,
-  imports: [DatePipe, SlicePipe, DataTableComponent, EmptyStateComponent, LoadingStateComponent],
+  imports: [
+    LocaleDatePipe,
+    SlicePipe,
+    DataTableComponent,
+    EmptyStateComponent,
+    LoadingStateComponent,
+    TranslocoPipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './audit-log-table.component.html',
   styles: [

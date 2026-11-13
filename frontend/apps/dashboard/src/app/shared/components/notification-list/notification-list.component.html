@@ -3,8 +3,8 @@
 } @else if (items().length === 0) {
   <app-empty-state
     icon="@tui.bell-off"
-    title="No notifications"
-    description="You're all caught up."
+    [title]="'notifications.empty.title' | transloco"
+    [description]="'notifications.empty.description' | transloco"
   />
 } @else {
   <div class="list" role="listbox">
@@ -20,7 +20,7 @@
         <div class="item-content">
           <div class="item-header">
             <span class="item-title">{{ item.title }}</span>
-            <span class="item-time">{{ relativeTime(item.createdAt) }}</span>
+            <span class="item-time">{{ item.createdAt | relativeTime }}</span>
           </div>
           @if (item.body; as body) {
             <p class="item-body">{{ body }}</p>
@@ -32,7 +32,7 @@
               (click)="$event.stopPropagation(); markRead.emit(item.id)"
             >
               <tui-icon icon="@tui.check" />
-              Mark read
+              {{ 'notifications.markRead' | transloco }}
             </button>
           }
         </div>
@@ -41,6 +41,8 @@
     }
   </div>
   @if (hasMore()) {
-    <button type="button" class="load-more" (click)="loadMore.emit()">Load more</button>
+    <button type="button" class="load-more" (click)="loadMore.emit()">
+      {{ 'notifications.loadMore' | transloco }}
+    </button>
   }
 }

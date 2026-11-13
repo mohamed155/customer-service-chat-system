@@ -9,8 +9,10 @@ import {
   input,
   output,
 } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
+  imports: [TranslocoPipe],
   selector: 'app-dialog-shell',
   templateUrl: './dialog-shell.component.html',
   styles: [

@@ -1,4 +1,9 @@
-<button type="button" class="bell-button" aria-label="Notifications" (click)="togglePanel.emit()">
+<button
+  type="button"
+  class="bell-button"
+  [attr.aria-label]="'notifications.label' | transloco"
+  (click)="togglePanel.emit()"
+>
   <tui-icon icon="@tui.bell" />
   @if (count() > 0) {
     <span class="badge">{{ count() > 99 ? '99+' : count() }}</span>

@@ -13,7 +13,7 @@
       (keydown.enter)="closeDrawer()"
       role="button"
       tabindex="0"
-      aria-label="Close navigation drawer"
+      [attr.aria-label]="'shell.closeDrawer' | transloco"
     ></div>
   }
   <div class="workspace">
@@ -25,8 +25,12 @@
         @if (errorRequestId(); as id) {
           <app-error-reference [requestId]="id" />
         }
-        <button type="button" (click)="dismissError()" aria-label="Dismiss tenant access alert">
-          Dismiss
+        <button
+          type="button"
+          (click)="dismissError()"
+          [attr.aria-label]="'shell.dismissAlert' | transloco"
+        >
+          {{ 'common.dismiss' | transloco }}
         </button>
       </section>
     }

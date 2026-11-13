@@ -2,10 +2,11 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { injectBreadcrumbs } from '../../core/router/breadcrumb';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-breadcrumb',
-  imports: [RouterLink],
+  imports: [RouterLink, TranslocoPipe],
   templateUrl: './breadcrumb.component.html',
   styles: [
     `

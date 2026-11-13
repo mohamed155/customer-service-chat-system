@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 export interface TrendSeries {
@@ -8,6 +9,7 @@ export interface TrendSeries {
 }
 
 @Component({
+  imports: [TranslocoPipe],
   selector: 'app-trend-chart',
   standalone: true,
   styleUrls: ['./trend-chart.component.css'],
@@ -59,16 +61,16 @@ export interface TrendSeries {
 export class TrendChartComponent {
   readonly series = input.required<readonly TrendSeries[]>();
   readonly labels = input.required<readonly string[]>();
-  readonly valueLabel = input('Value');
+  /** The heading of the data column; the default is "Value". */
+  readonly valueLabel = input<string | null>(null);
 
   protected readonly viewBox = computed(() => '0 0 100 40');
 
-  protected readonly ariaLabel = computed(() => {
-    const names = this.series()
+  protected readonly seriesNames = computed(() =>
+    this.series()
       .map((s) => s.label)
-      .join(', ');
-    return `Chart: ${names}`;
-  });
+      .join(', '),
+  );
 
   protected readonly sharedScale = computed(() => {
     let min = Infinity;

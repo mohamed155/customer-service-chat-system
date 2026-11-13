@@ -6,5 +6,7 @@
   [class.away]="state() === 'away'"
 >
   <tui-icon [icon]="state() === 'available' ? '@tui.circle-check' : '@tui.circle-minus'" />
-  <span>{{ state() === 'available' ? 'Available' : 'Away' }}</span>
+  <span>{{
+    (state() === 'available' ? 'availability.available' : 'availability.away') | transloco
+  }}</span>
 </button>

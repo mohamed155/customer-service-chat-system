@@ -1,3 +1,6 @@
+import { TestBed } from '@angular/core/testing';
+import { provideI18nTesting, takeMissingKeys } from './app/core/i18n/i18n.testing';
+
 if (typeof globalThis.localStorage?.getItem !== 'function') {
   const values = new Map<string, string>();
   Object.defineProperty(globalThis, 'localStorage', {
@@ -33,3 +36,21 @@ if (typeof window.matchMedia !== 'function') {
     },
   });
 }
+
+// Every test renders text from the real English catalog, and a key the catalog lacks fails the test
+// that renders it (MOH-155). Providers a spec adds are merged on top of these.
+beforeEach(() => {
+  takeMissingKeys();
+  TestBed.configureTestingModule({ providers: [provideI18nTesting()] });
+});
+
+// A template's pipe reports a missing key from inside a subscription, so the error may not reach
+// the test; the handler also notes the key, and the test fails here.
+afterEach(() => {
+  const missing = takeMissingKeys();
+  if (missing.length) {
+    throw new Error(
+      `Keys missing from the English catalog (apps/dashboard/public/i18n): ${missing.join(', ')}`,
+    );
+  }
+});
