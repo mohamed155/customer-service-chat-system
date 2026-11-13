@@ -1,4 +1,5 @@
-import { expect, Page, Route, test } from '@playwright/test';
+import { Page, Route } from '@playwright/test';
+import { expect, test } from './support/test';
 import type { ConversationDetailWire } from '../apps/dashboard/src/app/core/api/tenant-api.models';
 
 type EscalationStatus = 'queued' | 'assigned' | 'closed';

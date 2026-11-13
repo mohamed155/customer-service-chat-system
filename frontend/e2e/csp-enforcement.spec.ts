@@ -144,6 +144,19 @@ test.describe('Content-Security-Policy enforcement', () => {
     expect(directives['frame-ancestors']).toEqual(["'none'"]);
   });
 
+  test('Trusted Types is required for scripts and only Angular’s policies are allowed', async () => {
+    const directives = Object.fromEntries(
+      csp.split(';').map((d) => {
+        const [name, ...values] = d.trim().split(/\s+/);
+        return [name, values];
+      }),
+    );
+    expect(directives['require-trusted-types-for']).toEqual(["'script'"]);
+    // No `default` policy and no `'allow-duplicates'`: a policy this app does not know about
+    // cannot be created.
+    expect(directives['trusted-types']).toEqual(['angular', 'angular#unsafe-bypass']);
+  });
+
   test('the built document needs no inline script or inline event handler', async ({ page }) => {
     await mockSignedOut(page);
     await page.goto('/');
@@ -163,15 +176,126 @@ test.describe('Content-Security-Policy enforcement', () => {
     await recordViolations(page);
     await mockSignedOut(page);
     await page.goto('/');
+    // Trusted Types alone would stop `script.textContent = '...'` before the CSP is asked, so make
+    // the script through a policy the page allows. The CSP must still refuse to run it.
     await page.evaluate(() => {
+      const tt = (
+        window as unknown as {
+          trustedTypes: {
+            createPolicy(
+              name: string,
+              rules: { createScript(s: string): string },
+            ): { createScript(s: string): unknown };
+          };
+        }
+      ).trustedTypes;
+      const policy = tt.createPolicy('angular#unsafe-bypass', { createScript: (s) => s });
       const script = document.createElement('script');
-      script.textContent = 'window.__ran = true';
+      script.textContent = policy.createScript('window.__ran = true') as string;
       document.head.appendChild(script);
     });
     await expect.poll(() => violations(page)).not.toEqual([]);
+    expect(await violations(page)).toEqual([expect.stringContaining('script-src')]);
     expect(await page.evaluate(() => (window as unknown as { __ran?: boolean }).__ran)).toBe(
       undefined,
     );
+  });
+
+  test('a plain string written to an HTML sink is refused and reported', async ({ page }) => {
+    await recordViolations(page);
+    await mockSignedOut(page);
+    await page.goto('/');
+    const outcome = await page.evaluate(() => {
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+      const attempts: Record<string, string> = {};
+      const attempt = (name: string, write: () => void) => {
+        try {
+          write();
+          attempts[name] = 'allowed';
+        } catch (error) {
+          attempts[name] = (error as Error).name;
+        }
+      };
+      attempt('innerHTML', () => (host.innerHTML = '<img src=x onerror=alert(1)>'));
+      attempt('insertAdjacentHTML', () => host.insertAdjacentHTML('beforeend', '<b>x</b>'));
+      attempt('iframe srcdoc', () => {
+        const frame = document.createElement('iframe');
+        frame.srcdoc = '<p>x</p>';
+      });
+      return { attempts, html: host.innerHTML };
+    });
+    expect(outcome.attempts).toEqual({
+      innerHTML: 'TypeError',
+      insertAdjacentHTML: 'TypeError',
+      'iframe srcdoc': 'TypeError',
+    });
+    expect(outcome.html).toBe('');
+    await expect
+      .poll(async () =>
+        (await violations(page)).filter((v) => v.startsWith('require-trusted-types-for')),
+      )
+      .toHaveLength(3);
+  });
+
+  // The knowledge article page binds `[innerHTML]` (reviewed in MOH-170). Angular sanitises the
+  // value with its own Trusted Types policy: markup it allows renders and the browser reports
+  // nothing.
+  async function openArticle(page: Page, body: string) {
+    await recordViolations(page);
+    await mockSignedIn(page);
+    await page.route('**/api/v1/tenant/knowledge/items/art-1', (route) =>
+      json(route, {
+        id: 'art-1',
+        itemType: 'article',
+        title: 'Refund policy',
+        status: 'published',
+        categoryId: null,
+        categoryName: null,
+        createdByDisplay: 'Olivia Owner',
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-02T00:00:00Z',
+        tags: [],
+        source: 'authored',
+        createdByUserId: null,
+        document: null,
+        body,
+      }),
+    );
+    await page.goto('/tenant/knowledge-base/art-1');
+    await expect(page.locator('.body').getByRole('heading', { name: 'Refunds' })).toBeVisible();
+  }
+
+  test('an article body renders under Trusted Types with no violation', async ({ page }) => {
+    await openArticle(page, '<h2>Refunds</h2><p>Within <strong>30 days</strong>.</p>');
+
+    await expect(page.locator('.body strong')).toHaveText('30 days');
+    expect(await violations(page)).toEqual([]);
+  });
+
+  // The server sanitises article bodies on write, so this markup never arrives in practice. It is
+  // the second line: whatever does arrive is cleaned by Angular, nothing runs, and the sink is
+  // never fed a string the policy did not make. (The browser may still report the inline handler
+  // Angular drops while it parses the markup in an inert document; it is not executed.)
+  test('a hostile article body is sanitised, not run, and never breaks Trusted Types', async ({
+    page,
+  }) => {
+    await openArticle(
+      page,
+      '<h2>Refunds</h2><img src="x" onerror="window.__xss = true"><script>window.__xss = true</script><a href="javascript:window.__xss = true">x</a>',
+    );
+
+    const body = page.locator('.body');
+    expect(await body.locator('script').count()).toBe(0);
+    expect(await body.locator('[onerror]').count()).toBe(0);
+    // Angular keeps the link but prefixes it, so the browser will not run it.
+    expect(await body.locator('a').getAttribute('href')).toMatch(/^unsafe:/);
+    expect(await page.evaluate(() => (window as unknown as { __xss?: boolean }).__xss)).toBe(
+      undefined,
+    );
+    expect(
+      (await violations(page)).filter((v) => v.startsWith('require-trusted-types-for')),
+    ).toEqual([]);
   });
 
   test('the signed-out page loads, is styled and applies the saved theme with no violations', async ({

@@ -25,7 +25,7 @@ use url::Url;
 /// with the same string, and a test in the `server` crate fails if the two differ.
 /// `'unsafe-inline'` is on `style-src` only (Angular injects component styles at runtime), never on
 /// `script-src`.
-pub const DEFAULT_CSP_POLICY: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+pub const DEFAULT_CSP_POLICY: &str = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; require-trusted-types-for 'script'; trusted-types angular angular#unsafe-bypass";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Environment {

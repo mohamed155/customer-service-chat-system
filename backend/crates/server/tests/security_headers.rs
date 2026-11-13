@@ -247,6 +247,29 @@ async fn widget_responses_carry_no_dashboard_csp_or_frame_options() {
     assert!(header(&response, "x-frame-options").is_none());
 }
 
+/// Trusted Types (MOH-170): script sinks accept only what Angular's own policies make. No other
+/// policy name, no `default` policy and no `'allow-duplicates'`.
+#[test]
+fn default_policy_requires_trusted_types_with_only_angulars_policies() {
+    let directive = |name: &str| -> Option<Vec<String>> {
+        config::DEFAULT_CSP_POLICY.split(';').find_map(|part| {
+            let mut words = part.split_whitespace();
+            (words.next() == Some(name)).then(|| words.map(str::to_string).collect())
+        })
+    };
+    assert_eq!(
+        directive("require-trusted-types-for"),
+        Some(vec!["'script'".to_string()])
+    );
+    assert_eq!(
+        directive("trusted-types"),
+        Some(vec![
+            "angular".to_string(),
+            "angular#unsafe-bypass".to_string()
+        ])
+    );
+}
+
 fn caddyfile() -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../infra/Caddyfile");
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()))

@@ -201,7 +201,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | STRIDE | Threat | Controls | Status | Owner |
 | -- | -- | -- | -- | -- |
 | S | Clickjacking or framing of the dashboard | HSTS, `X-Frame-Options` / `frame-ancestors` | ✓ `X-Frame-Options` (033) | Frontend |
-| T | XSS via message or knowledge content | Angular escaping; no `bypassSecurityTrust*` without review; CSP | ✓ escaping · ✓ CSP enforced at the edge and by default in the API (MOH-38); Trusted Types not yet | Frontend |
+| T | XSS via message or knowledge content | Angular escaping; no `bypassSecurityTrust*` or `[innerHTML]` without review (lint); CSP; Trusted Types | ✓ escaping · ✓ CSP enforced at the edge and by default in the API (MOH-38) · ✓ Trusted Types enforced for the dashboard, the `html-safety` lint rule flags new HTML sinks, the server sanitises article bodies on write (MOH-170) | Frontend |
 | R | — | — | — | — |
 | I | Tokens or tenant data in `localStorage` | Cookies only for tokens; only theme and last tenant summary persisted | ✓ dashboard | Frontend |
 | D | — | — | — | — |

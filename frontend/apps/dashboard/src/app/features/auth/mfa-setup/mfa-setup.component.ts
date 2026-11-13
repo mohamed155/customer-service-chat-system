@@ -56,10 +56,12 @@ export class MfaSetupComponent {
       const enrolment = await this.mfa.startEnrolment(this.password.getRawValue());
       this.setupKey.set(enrolment.secret);
       // Angular treats an `otpauth:` link as unsafe. This one comes from our own server and is
-      // only trusted when it has the one shape an authenticator link has.
+      // only trusted when it has the one shape an authenticator link has. It is a URL for an
+      // `href`, not HTML or script, so it is not a Trusted Types sink (MOH-170).
       this.setupLink.set(
         enrolment.otpauthUri.startsWith('otpauth://totp/')
-          ? this.sanitizer.bypassSecurityTrustUrl(enrolment.otpauthUri)
+          ? // eslint-disable-next-line html-safety/unsafe-html -- `otpauth://totp/` only, checked on this line; used as an `href`, never as HTML
+            this.sanitizer.bypassSecurityTrustUrl(enrolment.otpauthUri)
           : null,
       );
       this.password.reset('');

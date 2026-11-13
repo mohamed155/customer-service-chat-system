@@ -1,4 +1,5 @@
-import { expect, Page, Route, test } from '@playwright/test';
+import { Page, Route } from '@playwright/test';
+import { expect, test } from './support/test';
 
 // MOH-168: an error nobody handled in a signed-in user's browser is sent to the backend, scrubbed,
 // batched and with the page's own context (route pattern, release, workspace).
