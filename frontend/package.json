@@ -47,8 +47,7 @@
     "@taiga-ui/kit": "^5.31.0",
     "@taiga-ui/styles": "^5.31.0",
     "rxjs": "^7.8.2",
-    "tslib": "^2.9.1",
-    "zone.js": "~0.16.3"
+    "tslib": "^2.9.1"
   },
   "devDependencies": {
     "@angular/build": "^22.2.6",
@@ -74,6 +73,7 @@
     "prettier": "^3.9.10",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.1",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "zone.js": "~0.16.3"
   }
 }
