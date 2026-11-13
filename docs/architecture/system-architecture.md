@@ -553,8 +553,9 @@ if none  → enqueue in shared queue
 
 ### 13.2 Application security controls
 
-- HTTP: TLS 1.2+ (1.3 preferred), HSTS, strict **CSP** (no inline scripts; Trusted Types in
-  Angular), `X-Content-Type-Options`, `Referrer-Policy`, frame-ancestors restrictions (widget
+- HTTP: TLS 1.2+ (1.3 preferred), HSTS, strict **CSP** (no inline scripts; Trusted Types required
+  for scripts, with only Angular's policies allowed: `require-trusted-types-for 'script'`,
+  MOH-170), `X-Content-Type-Options`, `Referrer-Policy`, frame-ancestors restrictions (widget
   embedding handled explicitly).
 - CORS: dashboard origin only for `api`; widget origins per tenant for `gateway`.
 - Input validation at DTO level (Serde + validator), size limits on bodies and fields.

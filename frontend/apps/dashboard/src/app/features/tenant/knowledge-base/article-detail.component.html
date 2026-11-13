@@ -108,6 +108,7 @@
 
       @if (article.body) {
         <app-dashboard-card>
+          <!-- eslint-disable-next-line html-safety/unsafe-html-template -- the server sanitises the body with ammonia on every write, and Angular sanitises it again here; Trusted Types blocks anything else. See frontend/CLAUDE.md, Trusted Types. -->
           <div class="body" [innerHTML]="article.body"></div>
         </app-dashboard-card>
       }

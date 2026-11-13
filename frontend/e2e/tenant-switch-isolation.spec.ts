@@ -1,4 +1,5 @@
-import { expect, Page, Route, test } from '@playwright/test';
+import { Page, Route } from '@playwright/test';
+import { expect, test } from './support/test';
 
 // MOH-61: switching the active workspace in place must never leave the old workspace's data on
 // screen, not even while the new workspace's data is still loading, and a response that was

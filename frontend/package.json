@@ -22,7 +22,7 @@
     "lint:api-types": "node tools/check-generated-api-types.mjs",
     "test:tenant-scope-check": "node --test tools/check-tenant-scope.test.mjs",
     "test:api-types-check": "node --test tools/check-generated-api-types.test.mjs",
-    "test:lint-rules": "node --test tools/eslint-rules/feature-boundaries.test.mjs",
+    "test:lint-rules": "node --test tools/eslint-rules/feature-boundaries.test.mjs tools/eslint-rules/unsafe-html.test.mjs",
     "test:coverage": "ng test dashboard --watch=false --configuration=coverage && ng test widget --watch=false --configuration=coverage && node tools/check-coverage.mjs",
     "test:coverage-check": "node --test tools/check-coverage.test.mjs",
     "test:symbolicate": "node --test tools/symbolicate.test.mjs"

@@ -1,6 +1,7 @@
 import angular from 'angular-eslint';
 import tseslint from 'typescript-eslint';
 import featureBoundaries from './tools/eslint-rules/feature-boundaries.mjs';
+import htmlSafety from './tools/eslint-rules/unsafe-html.mjs';
 
 export default tseslint.config(
   {
@@ -62,5 +63,19 @@ export default tseslint.config(
     files: ['apps/dashboard/src/app/**/*.ts'],
     plugins: { local: featureBoundaries },
     rules: { 'local/feature-boundaries': 'error' },
+  },
+  {
+    // Trusted Types review gate (MOH-170): code that writes HTML, or turns Angular's sanitiser off,
+    // needs a disable comment that says why it is safe. Dashboard only: the widget has its own
+    // policy. Specs build DOM fixtures freely.
+    files: ['apps/dashboard/**/*.ts'],
+    ignores: ['**/*.spec.ts'],
+    plugins: { 'html-safety': htmlSafety },
+    rules: { 'html-safety/unsafe-html': 'error' },
+  },
+  {
+    files: ['apps/dashboard/**/*.html'],
+    plugins: { 'html-safety': htmlSafety },
+    rules: { 'html-safety/unsafe-html-template': 'error' },
   },
 );

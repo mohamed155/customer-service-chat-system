@@ -1,4 +1,5 @@
-import { expect, Page, Route, test } from '@playwright/test';
+import { Page, Route } from '@playwright/test';
+import { expect, test } from './support/test';
 
 // MOH-167: a page opened before a deploy still has the old main bundle, whose lazy routes point at
 // files the new release no longer serves (a 404, as infra/nginx/spa.conf answers). Going to an area

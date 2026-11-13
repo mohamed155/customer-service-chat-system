@@ -60,7 +60,9 @@ export const appConfig: ApplicationConfig = {
         httpResilienceInterceptor,
       ]),
     ),
-    provideTaiga(),
+    // Taiga's text-scale watcher writes HTML into a hidden iframe, which Trusted Types blocks and a
+    // policy cannot cover (the iframe is its own context). See frontend/CLAUDE.md, Trusted Types.
+    provideTaiga({ fontScaling: false }),
     provideStore({
       [appUiFeature.name]: appUiFeature.reducer,
       [tenantContextFeature.name]: tenantContextFeature.reducer,

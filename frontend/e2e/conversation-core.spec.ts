@@ -1,4 +1,5 @@
-import { expect, Page, Route, test } from '@playwright/test';
+import { Page, Route } from '@playwright/test';
+import { expect, test } from './support/test';
 
 type ConversationStatus = 'open' | 'pending' | 'resolved' | 'closed';
 type ConversationChannel = 'email' | 'phone' | 'web_chat' | 'whatsapp' | 'telegram';
