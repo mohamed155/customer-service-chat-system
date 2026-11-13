@@ -1,55 +1,68 @@
-<app-auth-card title="Accept invitation" [subtitle]="cardSubtitle()">
+<app-auth-card
+  [title]="'auth.invite.title' | transloco"
+  [subtitle]="cardSubtitle().key | transloco: cardSubtitle().params"
+>
   @switch (status()) {
     @case ('loading') {
-      <app-loading-state label="Verifying invitation…" />
+      <app-loading-state [label]="'auth.invite.verifying' | transloco" />
     }
     @case ('preview') {
       <app-dashboard-card>
         <div class="row">
-          <span>Email</span><strong>{{ preview()?.email }}</strong>
+          <span>{{ 'auth.email' | transloco }}</span
+          ><strong>{{ preview()?.email }}</strong>
         </div>
         <div class="row">
-          <span>Role</span><strong>{{ preview()?.role }}</strong>
+          <span>{{ 'auth.invite.role' | transloco }}</span
+          ><strong>{{ preview()?.role }}</strong>
         </div>
         <div class="row">
-          <span>Expires</span><strong>{{ preview()?.expiresAt | date: 'mediumDate' }}</strong>
+          <span>{{ 'auth.invite.expires' | transloco }}</span
+          ><strong>{{ preview()?.expiresAt | localeDate: 'date' }}</strong>
         </div>
       </app-dashboard-card>
       @if (signedInEmailMismatch()) {
         <app-inline-alert tone="error">
-          This invitation was issued to {{ preview()?.email }}. Sign out and use that email to
-          accept it.
+          {{ 'auth.invite.wrongAccount' | transloco: { email: preview()?.email } }}
         </app-inline-alert>
-        <app-button variant="primary" (pressed)="signOut()">Sign out and switch account</app-button>
+        <app-button variant="primary" (pressed)="signOut()">{{
+          'auth.invite.switchAccount' | transloco
+        }}</app-button>
       } @else if (isAuthenticated()) {
-        <p class="info">You’re already signed in. Accept this invitation to join the team.</p>
-        <app-button variant="primary" (pressed)="acceptSignedIn()">Accept invitation</app-button>
+        <p class="info">{{ 'auth.invite.signedIn' | transloco }}</p>
+        <app-button variant="primary" (pressed)="acceptSignedIn()">{{
+          'auth.invite.title' | transloco
+        }}</app-button>
       } @else {
-        <p class="info">You already have an account. Sign in to accept this invitation.</p>
-        <app-button variant="primary" (pressed)="goToLogin()">Sign in</app-button>
+        <p class="info">{{ 'auth.invite.hasAccount' | transloco }}</p>
+        <app-button variant="primary" (pressed)="goToLogin()">{{
+          'auth.login.submit' | transloco
+        }}</app-button>
       }
     }
     @case ('form') {
       @if (signedInEmailMismatch()) {
         <app-inline-alert tone="error">
-          This invitation was issued to {{ preview()?.email }}. Sign out and use that email to
-          accept it.
+          {{ 'auth.invite.wrongAccount' | transloco: { email: preview()?.email } }}
         </app-inline-alert>
-        <app-button variant="primary" (pressed)="signOut()">Sign out</app-button>
+        <app-button variant="primary" (pressed)="signOut()">{{
+          'userMenu.signOut' | transloco
+        }}</app-button>
       } @else {
         <app-dashboard-card>
           <p>
-            <strong>{{ preview()?.email }}</strong> will be invited as
-            <strong>{{ preview()?.role }}</strong
-            >.
+            {{
+              'auth.invite.invitedAs'
+                | transloco: { email: preview()?.email, role: preview()?.role }
+            }}
           </p>
         </app-dashboard-card>
         <form class="form-fields" [formGroup]="form" (ngSubmit)="submit()">
-          <app-form-field label="Display name" for="invite-display-name">
+          <app-form-field [label]="'auth.invite.displayName' | transloco" for="invite-display-name">
             <input
               id="invite-display-name"
               type="text"
-              placeholder="Your full name"
+              [placeholder]="'auth.invite.displayNamePlaceholder' | transloco"
               formControlName="displayName"
               [attr.aria-invalid]="
                 form.controls.displayName.invalid && form.controls.displayName.touched
@@ -58,73 +71,82 @@
             />
           </app-form-field>
           @if (controlError('displayName'); as err) {
-            <app-inline-alert id="display-name-error" tone="error">{{ err }}</app-inline-alert>
+            <app-inline-alert id="display-name-error" tone="error">{{
+              err | transloco
+            }}</app-inline-alert>
           }
-          <app-form-field label="Password" for="invite-password">
+          <app-form-field [label]="'auth.password' | transloco" for="invite-password">
             <input
               id="invite-password"
               type="password"
-              placeholder="Create a password (min 8 characters)"
+              [placeholder]="'auth.invite.passwordPlaceholder' | transloco"
               formControlName="password"
               [attr.aria-invalid]="form.controls.password.invalid && form.controls.password.touched"
               [attr.aria-describedby]="controlError('password') ? 'password-error' : null"
             />
           </app-form-field>
           @if (controlError('password'); as err) {
-            <app-inline-alert id="password-error" tone="error">{{ err }}</app-inline-alert>
+            <app-inline-alert id="password-error" tone="error">{{
+              err | transloco
+            }}</app-inline-alert>
           }
-          @if (errorMessage(); as err) {
-            <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+          @if (errorKey(); as key) {
+            <app-inline-alert tone="error">{{ key | transloco }}</app-inline-alert>
           }
           @if (recoveryAction() === 'switchAccount') {
-            <app-button variant="primary" (pressed)="signOut()">Sign out</app-button>
+            <app-button variant="primary" (pressed)="signOut()">{{
+              'userMenu.signOut' | transloco
+            }}</app-button>
           } @else if (recoveryAction() === 'login') {
-            <app-button variant="primary" (pressed)="goToLogin()">Sign in</app-button>
+            <app-button variant="primary" (pressed)="goToLogin()">{{
+              'auth.login.submit' | transloco
+            }}</app-button>
           } @else if (recoveryAction() === 'freshInvitation') {
-            <p class="info">Ask a workspace admin to issue a fresh invitation.</p>
+            <p class="info">{{ 'auth.invite.recovery.fresh' | transloco }}</p>
           } @else if (recoveryAction() === 'reenableMembership') {
-            <p class="info">
-              Ask a workspace Owner or Admin to re-enable your existing membership. A new invitation
-              cannot restore disabled access.
-            </p>
+            <p class="info">{{ 'auth.invite.recovery.reenable' | transloco }}</p>
           }
           <app-button variant="primary" type="submit" [disabled]="status() === 'submitting'">
-            {{ status() === 'submitting' ? 'Accepting…' : 'Accept & join' }}
+            {{
+              (status() === 'submitting' ? 'auth.invite.accepting' : 'auth.invite.acceptAndJoin')
+                | transloco
+            }}
           </app-button>
         </form>
       }
     }
     @case ('submitting') {
-      <app-loading-state label="Accepting invitation…" />
+      <app-loading-state [label]="'auth.invite.acceptingInvitation' | transloco" />
     }
     @case ('success') {
       <app-empty-state
         icon="@tui.check"
-        title="Welcome aboard!"
-        description="Your account has been created. You can now sign in and start collaborating."
+        [title]="'auth.invite.welcomeTitle' | transloco"
+        [description]="'auth.invite.welcomeDescription' | transloco"
       >
-        <app-button variant="primary" (pressed)="goToLogin()">Sign in</app-button>
+        <app-button variant="primary" (pressed)="goToLogin()">{{
+          'auth.login.submit' | transloco
+        }}</app-button>
       </app-empty-state>
     }
     @case ('error') {
       <app-empty-state
         icon="@tui.alert-circle"
-        title="Invitation issue"
-        [description]="errorMessage()"
+        [title]="'auth.invite.issueTitle' | transloco"
+        [description]="errorKey() ?? 'errors.generic' | transloco"
       >
         @if (recoveryAction() === 'switchAccount') {
-          <app-button variant="primary" (pressed)="signOut()"
-            >Sign out and switch account</app-button
-          >
+          <app-button variant="primary" (pressed)="signOut()">{{
+            'auth.invite.switchAccount' | transloco
+          }}</app-button>
         } @else if (recoveryAction() === 'login') {
-          <app-button variant="primary" (pressed)="goToLogin()">Sign in</app-button>
+          <app-button variant="primary" (pressed)="goToLogin()">{{
+            'auth.login.submit' | transloco
+          }}</app-button>
         } @else if (recoveryAction() === 'freshInvitation') {
-          <p class="info">Ask a workspace admin to issue a fresh invitation.</p>
+          <p class="info">{{ 'auth.invite.recovery.fresh' | transloco }}</p>
         } @else if (recoveryAction() === 'reenableMembership') {
-          <p class="info">
-            Ask a workspace Owner or Admin to re-enable your existing membership. A new invitation
-            cannot restore disabled access.
-          </p>
+          <p class="info">{{ 'auth.invite.recovery.reenable' | transloco }}</p>
         }
       </app-empty-state>
     }

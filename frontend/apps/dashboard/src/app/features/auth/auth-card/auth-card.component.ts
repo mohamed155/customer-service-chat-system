@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-auth-card',
-  imports: [TuiIcon],
+  imports: [TuiIcon, TranslocoPipe],
   templateUrl: './auth-card.component.html',
   styles: [
     `

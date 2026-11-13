@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { ApiService } from '../api/api.service';
-import { MfaService, mfaErrorMessage } from './mfa.service';
+import { MfaService, mfaErrorKey } from './mfa.service';
 
 describe('MfaService', () => {
   let service: MfaService;
@@ -59,9 +59,9 @@ describe('MfaService', () => {
   });
 
   it('words the failures people can act on', () => {
-    expect(mfaErrorMessage(422)).toBe('That code is not valid.');
-    expect(mfaErrorMessage(429)).toBe('Too many attempts. Try again later.');
-    expect(mfaErrorMessage(401)).toBe('Your sign-in expired. Sign in again.');
-    expect(mfaErrorMessage(500)).toBe('Verification failed. Try again.');
+    expect(mfaErrorKey(422)).toBe('errors.codeInvalid');
+    expect(mfaErrorKey(429)).toBe('errors.tooManyAttempts');
+    expect(mfaErrorKey(401)).toBe('errors.signInExpired');
+    expect(mfaErrorKey(500)).toBe('errors.verificationFailed');
   });
 });

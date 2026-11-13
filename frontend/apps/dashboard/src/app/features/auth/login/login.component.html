@@ -1,23 +1,26 @@
-<app-auth-card title="Welcome back" subtitle="Sign in to your Helix workspace">
+<app-auth-card
+  [title]="'auth.login.title' | transloco"
+  [subtitle]="'auth.login.subtitle' | transloco"
+>
   <form [formGroup]="form" (ngSubmit)="submit()">
     <label>
-      Email
+      {{ 'auth.email' | transloco }}
       <input type="email" autocomplete="email" formControlName="email" />
     </label>
     <label>
-      Password
+      {{ 'auth.password' | transloco }}
       <input type="password" autocomplete="current-password" formControlName="password" />
     </label>
-    @if (errorMessage()) {
-      <p role="alert">{{ errorMessage() }}</p>
+    @if (errorKey(); as key) {
+      <p role="alert">{{ key | transloco }}</p>
     }
     <button type="submit" [disabled]="pending() || form.invalid">
-      {{ pending() ? 'Signing in...' : 'Sign in' }}
+      {{ (pending() ? 'auth.login.pending' : 'auth.login.submit') | transloco }}
     </button>
   </form>
   <span auth-footer>
-    <a [routerLink]="forgotUrl">Forgot password?</a>
+    <a [routerLink]="forgotUrl">{{ 'auth.login.forgot' | transloco }}</a>
     ·
-    <a [routerLink]="signupUrl">Create account</a>
+    <a [routerLink]="signupUrl">{{ 'auth.createAccount' | transloco }}</a>
   </span>
 </app-auth-card>

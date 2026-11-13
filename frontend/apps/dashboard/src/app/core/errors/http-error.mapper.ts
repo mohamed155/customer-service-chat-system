@@ -1,6 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError } from 'rxjs';
+import sharedEnglish from '../../../../public/i18n/shared/en.json';
 import { ApiError, ApiErrorDetail } from '../api/api.models';
+import { errorMessageKey } from './error-message';
 
 interface ErrorEnvelope {
   error?: { code?: unknown; message?: unknown; details?: unknown; request_id?: unknown };
@@ -71,17 +73,16 @@ export const mapHttpError = (error: unknown, sentRequestId?: string | null): Api
   return { code: 'unknown_error', message: 'Unexpected error', status: 0 };
 };
 
+/**
+ * The English text of an error, for screens that have not moved to the catalog yet.
+ * @deprecated Show `errorMessageKey(error)` with the `transloco` pipe. English only; it goes when
+ * the last area moves (MOH-156 to MOH-165).
+ */
 export const userMessageFor = (error: ApiError): string => {
-  if (error.code === 'network_error') return 'Check your connection and try again.';
-  if (error.code === 'timeout') return 'The server took too long to answer. Try again.';
-  if (error.status === 401) return 'You do not have access to this action.';
-  if (error.status === 403 && error.code === 'unauthorized')
-    return "You don't have access to this tenant.";
-  if (error.status === 403) return 'You do not have access to this action.';
-  if (error.status === 404) return 'The requested item could not be found.';
-  if (error.status === 429) return 'Too many requests. Please try again shortly.';
-  if (error.status >= 500) return 'The service is temporarily unavailable. Please try again.';
-  if (error.status >= 400)
-    return 'The request could not be completed. Check your input and try again.';
-  return 'Something went wrong. Please try again.';
+  const parts = errorMessageKey(error).split('.');
+  const text = parts.reduce<unknown>(
+    (node, part) => (node as Record<string, unknown>)?.[part],
+    sharedEnglish,
+  );
+  return typeof text === 'string' ? text : 'Something went wrong. Please try again.';
 };

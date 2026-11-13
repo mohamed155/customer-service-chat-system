@@ -8,7 +8,7 @@ describe('StepUpDialogComponent', () => {
   let stepUp: {
     open: ReturnType<typeof signal<boolean>>;
     pending: ReturnType<typeof signal<boolean>>;
-    errorMessage: ReturnType<typeof signal<string | null>>;
+    errorKey: ReturnType<typeof signal<string | null>>;
     submit: ReturnType<typeof vi.fn>;
     cancel: ReturnType<typeof vi.fn>;
   };
@@ -18,7 +18,7 @@ describe('StepUpDialogComponent', () => {
     stepUp = {
       open: signal(false),
       pending: signal(false),
-      errorMessage: signal<string | null>(null),
+      errorKey: signal<string | null>(null),
       submit: vi.fn().mockResolvedValue(undefined),
       cancel: vi.fn(),
     };
@@ -83,7 +83,7 @@ describe('StepUpDialogComponent', () => {
 
   it('shows why a code was refused', () => {
     open();
-    stepUp.errorMessage.set('That code is not valid.');
+    stepUp.errorKey.set('errors.codeInvalid');
     fixture.detectChanges();
     expect(el().textContent).toContain('That code is not valid.');
   });

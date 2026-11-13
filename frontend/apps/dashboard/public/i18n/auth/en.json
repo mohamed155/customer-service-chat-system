@@ -1,0 +1,139 @@
+{
+  "forgotPassword": {
+    "title": "Reset password",
+    "subtitle": "Send a reset link to your workspace email",
+    "submit": "Send reset link"
+  },
+  "email": "Email",
+  "backToSignIn": "Back to sign in",
+  "verifyEmail": {
+    "title": "Verify email",
+    "subtitle": "Enter the six-digit code sent to your inbox",
+    "codeLabel": "Verification code",
+    "digit": "Digit {n}",
+    "submit": "Verify email",
+    "noCode": "Did not receive it?",
+    "resend": "Resend code"
+  },
+  "login": {
+    "title": "Welcome back",
+    "subtitle": "Sign in to your Helix workspace",
+    "pending": "Signing in...",
+    "submit": "Sign in",
+    "forgot": "Forgot password?"
+  },
+  "password": "Password",
+  "createAccount": "Create account",
+  "errors": {
+    "signInFailed": "Sign in failed",
+    "invalidCredentials": "Invalid email or password",
+    "passwordWrong": "The password is not correct.",
+    "alreadySetUp": "Two-step verification is already set up for this account.",
+    "accountExists": "An account with this email already exists. Please sign in instead."
+  },
+  "mfaChallenge": {
+    "title": "Two-step verification",
+    "recoverySubtitle": "Enter one of your recovery codes",
+    "codeSubtitle": "Enter the 6-digit code from your authenticator app",
+    "recoveryLabel": "Recovery code",
+    "codeLabel": "Authentication code",
+    "pending": "Verifying...",
+    "submit": "Verify",
+    "useCode": "Use an authenticator code",
+    "useRecovery": "Use a recovery code"
+  },
+  "mfaSetup": {
+    "title": "Set up two-step verification",
+    "subtitle": "Your workspace requires a second step at sign-in",
+    "confirmPassword": "Confirm your password to begin.",
+    "checking": "Checking...",
+    "continue": "Continue",
+    "addAccount": "Add this account to an authenticator app (such as Google Authenticator, 1Password or Authy): open the link on this device, or type the setup key.",
+    "setupKey": "Setup key:",
+    "openLink": "Open in your authenticator app",
+    "enterCode": "Then enter the 6-digit code it shows",
+    "turnOn": "Turn on",
+    "saveCodes": "Save these recovery codes somewhere safe. Each works once if you lose your authenticator. They are shown only now.",
+    "saved": "I saved my recovery codes"
+  },
+  "recoveryCodes": {
+    "copied": "Copied",
+    "copy": "Copy codes",
+    "copyFailed": "Copy failed. Select the codes and copy them by hand."
+  },
+  "security": {
+    "title": "Security",
+    "twoStep": "Two-step verification",
+    "on": "On. {count, plural, one {# recovery code} other {# recovery codes}} left.",
+    "replace": "Replace recovery codes",
+    "off": "Off. Turn it on to protect your account with a code from an authenticator app.",
+    "setUp": "Set up two-step verification",
+    "newCodes": "Your new recovery codes. The old ones no longer work. Save them now; they are shown only once.",
+    "dismiss": "I saved them",
+    "loadFailed": "Could not load your security settings."
+  },
+  "signup": {
+    "title": "Create workspace",
+    "subtitle": "Start a Helix Support AI workspace",
+    "workspaceName": "Workspace name",
+    "workspacePlaceholder": "Acme Corp",
+    "displayName": "Your name",
+    "passwordPlaceholder": "At least 8 characters",
+    "pending": "Creating workspace...",
+    "terms": "By continuing you agree to the workspace terms. Already have an account?",
+    "errors": {
+      "workspaceNameRequired": "Workspace name is required.",
+      "displayNameRequired": "Your name is required.",
+      "emailRequired": "Email is required.",
+      "passwordRequired": "Password is required.",
+      "workspaceNameTooLong": "Workspace name must be 200 characters or fewer.",
+      "displayNameTooLong": "Your name must be 200 characters or fewer.",
+      "emailTooLong": "Email must be 200 characters or fewer.",
+      "passwordTooLong": "Password must be 200 characters or fewer.",
+      "emailInvalid": "Enter a valid email address.",
+      "passwordShort": "Password must be at least 8 characters."
+    }
+  },
+  "invite": {
+    "title": "Accept invitation",
+    "verifying": "Verifying invitation…",
+    "role": "Role",
+    "expires": "Expires",
+    "wrongAccount": "This invitation was issued to {email}. Sign out and use that email to accept it.",
+    "switchAccount": "Sign out and switch account",
+    "signedIn": "You’re already signed in. Accept this invitation to join the team.",
+    "hasAccount": "You already have an account. Sign in to accept this invitation.",
+    "invitedAs": "{email} will be invited as {role}.",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "Your full name",
+    "passwordPlaceholder": "Create a password (min 8 characters)",
+    "recovery": {
+      "fresh": "Ask a workspace admin to issue a fresh invitation.",
+      "reenable": "Ask a workspace Owner or Admin to re-enable your existing membership. A new invitation cannot restore disabled access."
+    },
+    "accepting": "Accepting…",
+    "acceptAndJoin": "Accept & join",
+    "acceptingInvitation": "Accepting invitation…",
+    "welcomeTitle": "Welcome aboard!",
+    "welcomeDescription": "Your account has been created. You can now sign in and start collaborating.",
+    "issueTitle": "Invitation issue",
+    "subtitle": "Join {tenant} on Customer Service Platform",
+    "subtitleAnonymous": "Join your workspace on Customer Service Platform",
+    "errors": {
+      "invalidLink": "This invitation link is invalid or has expired.",
+      "expired": "This invitation has expired. Ask a workspace admin to issue a fresh invitation.",
+      "alreadyAccepted": "This invitation has already been accepted. Please sign in to access the team.",
+      "loadFailed": "Failed to load invitation",
+      "displayNameRequired": "Display name is required.",
+      "passwordRequired": "Password is required.",
+      "displayNameTooLong": "Display name must be 120 characters or fewer.",
+      "passwordShort": "Password must be at least 8 characters.",
+      "differentEmail": "This invitation was issued to a different email address.",
+      "disabled": "Your account is disabled in this tenant.",
+      "alreadyMember": "You are already a member of this tenant.",
+      "notFound": "Invitation not found.",
+      "fixFields": "Please correct the highlighted fields.",
+      "acceptFailed": "Failed to accept invitation"
+    }
+  }
+}

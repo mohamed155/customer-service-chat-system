@@ -84,7 +84,7 @@ describe('SignupComponent', () => {
 
   it('shows a friendly message and does not navigate on a 409 email conflict', async () => {
     auth.signup.mockRejectedValue(
-      new AuthSignupError('An account with this email already exists. Please sign in instead.', {
+      new AuthSignupError('auth.errors.accountExists', {
         code: 'conflict',
         message: 'raw',
         status: 409,
@@ -106,7 +106,7 @@ describe('SignupComponent', () => {
 
   it('maps 422 field errors from the server onto the matching control', async () => {
     auth.signup.mockRejectedValue(
-      new AuthSignupError('Please correct the highlighted fields.', {
+      new AuthSignupError('errors.requestFailed', {
         code: 'validation_failed',
         message: 'Please correct the highlighted fields.',
         status: 422,
@@ -123,7 +123,9 @@ describe('SignupComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Email is already taken');
+    // The field shows the text for its error code, never the API's own message.
+    expect(fixture.nativeElement.textContent).toContain('This value is not valid.');
+    expect(fixture.nativeElement.textContent).not.toContain('Email is already taken');
   });
 
   it('disables resubmission while pending', () => {

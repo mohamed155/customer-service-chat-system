@@ -30,8 +30,8 @@
         />
       }
     </label>
-    @if (stepUp.errorMessage(); as message) {
-      <app-inline-alert tone="error">{{ message }}</app-inline-alert>
+    @if (stepUp.errorKey(); as key) {
+      <app-inline-alert tone="error">{{ key | transloco }}</app-inline-alert>
     }
     <div class="actions">
       <button type="button" class="link" (click)="toggleRecovery()">

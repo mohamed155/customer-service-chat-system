@@ -1,9 +1,11 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { catchError, EMPTY, from, map, pipe, switchMap, tap } from 'rxjs';
+import { LocaleDatePipe } from '../../../core/i18n/format';
+import { fieldErrorKey } from '../../../core/errors/error-message';
+import { marker } from '../../../core/i18n/marker';
 import { AcceptInvitationRequest, InvitationPreview } from '../../../core/api/tenant-api.models';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { CurrentUserService } from '../../../core/tenant/current-user.service';
@@ -18,6 +20,14 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+
+/** The part of an `ApiError` the page reads. */
+interface InviteApiError {
+  readonly status?: number;
+  readonly code?: string;
+  readonly details?: readonly { field?: string; code: string }[];
+}
 
 type InvitePageStatus = 'loading' | 'preview' | 'form' | 'submitting' | 'success' | 'error';
 type InviteRecoveryAction =
@@ -36,8 +46,9 @@ const TENANT_LANDING_ORDER = [
 
 @Component({
   selector: 'app-accept-invitation',
+  providers: [provideTranslocoScope('auth')],
   imports: [
-    DatePipe,
+    LocaleDatePipe,
     ReactiveFormsModule,
     AuthCardComponent,
     EmptyStateComponent,
@@ -46,6 +57,7 @@ const TENANT_LANDING_ORDER = [
     DashboardCardComponent,
     FormFieldComponent,
     InlineAlertComponent,
+    TranslocoPipe,
   ],
   templateUrl: './accept-invitation.component.html',
   styles: [
@@ -85,7 +97,8 @@ export class AcceptInvitationComponent {
 
   protected readonly status = signal<InvitePageStatus>('loading');
   protected readonly preview = signal<InvitationPreview | null>(null);
-  protected readonly errorMessage = signal('');
+  /** Catalog key of what went wrong, or `null`. */
+  protected readonly errorKey = signal<string | null>(null);
   protected readonly recoveryAction = signal<InviteRecoveryAction>(null);
   readonly form = new FormGroup({
     displayName: new FormControl('', {
@@ -109,8 +122,10 @@ export class AcceptInvitationComponent {
     );
   });
   protected readonly cardSubtitle = computed(() => {
-    const tenantName = this.preview()?.tenantName ?? 'your workspace';
-    return `Join ${tenantName} on Customer Service Platform`;
+    const tenant = this.preview()?.tenantName;
+    return tenant
+      ? { key: marker('auth.invite.subtitle'), params: { tenant } }
+      : { key: marker('auth.invite.subtitleAnonymous'), params: undefined };
   });
 
   private readonly token = this.route.snapshot.paramMap.get('token') ?? '';
@@ -129,20 +144,15 @@ export class AcceptInvitationComponent {
             error: (err) => {
               this.status.set('error');
               this.recoveryAction.set(this.recoveryActionForError(err));
-              const code = err?.code ?? '';
               const status = err?.status ?? 0;
-              if (code === 'NOT_FOUND' || status === 404) {
-                this.errorMessage.set('This invitation link is invalid or has expired.');
-              } else if (code === 'INVITATION_EXPIRED' || status === 410) {
-                this.errorMessage.set(
-                  'This invitation has expired. Ask a workspace admin to issue a fresh invitation.',
-                );
-              } else if (code === 'INVITATION_ACCEPTED' || status === 409) {
-                this.errorMessage.set(
-                  'This invitation has already been accepted. Please sign in to access the team.',
-                );
+              if (status === 404) {
+                this.errorKey.set(marker('auth.invite.errors.invalidLink'));
+              } else if (status === 410) {
+                this.errorKey.set(marker('auth.invite.errors.expired'));
+              } else if (status === 409) {
+                this.errorKey.set(marker('auth.invite.errors.alreadyAccepted'));
               } else {
-                this.errorMessage.set(err?.message ?? 'Failed to load invitation');
+                this.errorKey.set(marker('auth.invite.errors.loadFailed'));
               }
             },
           }),
@@ -156,7 +166,7 @@ export class AcceptInvitationComponent {
     pipe(
       tap(() => {
         this.status.set('submitting');
-        this.errorMessage.set('');
+        this.errorKey.set(null);
         this.clearControlErrors();
       }),
       switchMap((payload) => {
@@ -188,7 +198,7 @@ export class AcceptInvitationComponent {
             },
             error: (err) => {
               this.recoveryAction.set(this.recoveryActionForError(err));
-              this.errorMessage.set(this.mapAcceptError(err));
+              this.errorKey.set(this.mapAcceptError(err));
               this.status.set(this.isAuthenticated() ? 'error' : 'form');
             },
           }),
@@ -231,14 +241,17 @@ export class AcceptInvitationComponent {
     if (!control.touched || !control.errors) return null;
 
     if (control.errors['required']) {
-      return name === 'displayName' ? 'Display name is required.' : 'Password is required.';
+      return name === 'displayName'
+        ? marker('auth.invite.errors.displayNameRequired')
+        : marker('auth.invite.errors.passwordRequired');
     }
     if (name === 'displayName' && control.errors['maxlength']) {
-      return 'Display name must be 120 characters or fewer.';
+      return marker('auth.invite.errors.displayNameTooLong');
     }
     if (name === 'password' && control.errors['minlength']) {
-      return 'Password must be at least 8 characters.';
+      return marker('auth.invite.errors.passwordShort');
     }
+    // The key of an error the API reported for this field.
     if (control.errors['api']) {
       return control.errors['api'] as string;
     }
@@ -246,53 +259,42 @@ export class AcceptInvitationComponent {
     return null;
   }
 
-  private mapAcceptError(
-    err: {
-      status?: number;
-      code?: string;
-      message?: string;
-      details?: { field?: string; message: string }[];
-    } | null,
-  ): string {
+  /** The catalog key of what to tell the person; the API's own text is never shown. */
+  private mapAcceptError(err: InviteApiError | null): string {
     const status = err?.status ?? 0;
-    const code = err?.code ?? '';
     if (status === 403) {
-      return 'This invitation was issued to a different email address.';
+      return marker('auth.invite.errors.differentEmail');
     }
     if (status === 409) {
-      if ((err?.message ?? '').toLowerCase().includes('disabled')) {
-        return 'Your account is disabled in this tenant.';
-      }
-      return 'You are already a member of this tenant.';
+      return err?.code === 'membership_disabled'
+        ? marker('auth.invite.errors.disabled')
+        : marker('auth.invite.errors.alreadyMember');
     }
-    if (status === 410 || code === 'INVITATION_EXPIRED') {
-      return 'This invitation has expired. Ask a workspace admin to issue a fresh invitation.';
+    if (status === 410) {
+      return marker('auth.invite.errors.expired');
     }
-    if (status === 404 || code === 'NOT_FOUND') {
-      return 'Invitation not found.';
+    if (status === 404) {
+      return marker('auth.invite.errors.notFound');
     }
     if (status === 422) {
       this.applyFieldErrors(err);
-      return err?.message ?? 'Please correct the highlighted fields.';
+      return marker('auth.invite.errors.fixFields');
     }
-    return err?.message ?? 'Failed to accept invitation';
+    return marker('auth.invite.errors.acceptFailed');
   }
 
-  private recoveryActionForError(
-    err: { status?: number; code?: string; message?: string } | null,
-  ): InviteRecoveryAction {
+  private recoveryActionForError(err: InviteApiError | null): InviteRecoveryAction {
     const status = err?.status ?? 0;
-    const code = err?.code ?? '';
     if (status === 403) {
       return 'switchAccount';
     }
-    if (status === 409 && (err?.message ?? '').toLowerCase().includes('disabled')) {
+    if (status === 409 && err?.code === 'membership_disabled') {
       return 'reenableMembership';
     }
-    if (status === 404 || code === 'NOT_FOUND' || status === 410 || code === 'INVITATION_EXPIRED') {
+    if (status === 404 || status === 410) {
       return 'freshInvitation';
     }
-    if (status === 409 || code === 'INVITATION_ACCEPTED') {
+    if (status === 409) {
       return 'login';
     }
     return null;
@@ -302,13 +304,13 @@ export class AcceptInvitationComponent {
     return `/${APP_PATHS.invite}/${this.token}`;
   }
 
-  private applyFieldErrors(err: { details?: { field?: string; message: string }[] } | null): void {
+  private applyFieldErrors(err: InviteApiError | null): void {
     for (const detail of err?.details ?? []) {
       const field = detail.field === 'display_name' ? 'displayName' : detail.field;
       if (field !== 'displayName' && field !== 'password') continue;
 
       const control = this.form.controls[field];
-      control.setErrors({ ...(control.errors ?? {}), api: detail.message });
+      control.setErrors({ ...(control.errors ?? {}), api: fieldErrorKey(detail.code) });
       control.markAsTouched();
     }
   }

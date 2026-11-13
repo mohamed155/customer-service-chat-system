@@ -1,7 +1,7 @@
 import { inject, Injectable, Injector, signal } from '@angular/core';
 import { ApiError } from '../api/api.models';
 import { mapHttpError } from '../errors/http-error.mapper';
-import { MfaCredential, MfaService, mfaErrorMessage } from './mfa.service';
+import { MfaCredential, MfaService, mfaErrorKey } from './mfa.service';
 
 /**
  * Asks the user for a fresh code when the server says a sensitive action needs one
@@ -17,7 +17,8 @@ export class StepUpService {
 
   readonly open = signal(false);
   readonly pending = signal(false);
-  readonly errorMessage = signal<string | null>(null);
+  /** Catalog key of what went wrong with the last code, or `null`. */
+  readonly errorKey = signal<string | null>(null);
 
   /** Show the prompt. Resolves `true` once a code was proven, `false` if the user cancels. */
   prompt(): Promise<boolean> {
@@ -29,13 +30,13 @@ export class StepUpService {
 
   async submit(credential: MfaCredential): Promise<void> {
     this.pending.set(true);
-    this.errorMessage.set(null);
+    this.errorKey.set(null);
     try {
       await this.injector.get(MfaService).stepUp(credential);
       this.settle(true);
     } catch (error) {
       const apiError = isApiError(error) ? error : mapHttpError(error);
-      this.errorMessage.set(mfaErrorMessage(apiError.status));
+      this.errorKey.set(mfaErrorKey(apiError.status));
     } finally {
       this.pending.set(false);
     }
@@ -47,7 +48,7 @@ export class StepUpService {
 
   private settle(proven: boolean): void {
     this.open.set(false);
-    this.errorMessage.set(null);
+    this.errorKey.set(null);
     const waiting = this.waiting;
     this.waiting = [];
     waiting.forEach((resolve) => resolve(proven));

@@ -3,12 +3,15 @@ import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthLoginError, AuthService } from '../../../core/auth/auth.service';
 import { MfaService } from '../../../core/auth/mfa.service';
+import { marker } from '../../../core/i18n/marker';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { AuthCardComponent } from '../auth-card/auth-card.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-login',
-  imports: [AuthCardComponent, ReactiveFormsModule, RouterLink],
+  providers: [provideTranslocoScope('auth')],
+  imports: [AuthCardComponent, ReactiveFormsModule, RouterLink, TranslocoPipe],
   templateUrl: './login.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -29,7 +32,8 @@ export class LoginComponent {
     }),
   });
   protected readonly pending = this.auth.pending;
-  protected readonly errorMessage = signal<string | null>(null);
+  /** Catalog key of what went wrong, or `null`. */
+  protected readonly errorKey = signal<string | null>(null);
   protected readonly signupUrl = `/${APP_PATHS.auth.base}/${APP_PATHS.auth.signup}`;
   protected readonly forgotUrl = `/${APP_PATHS.auth.base}/${APP_PATHS.auth.forgotPassword}`;
 
@@ -39,7 +43,7 @@ export class LoginComponent {
       return;
     }
 
-    this.errorMessage.set(null);
+    this.errorKey.set(null);
     const { email, password } = this.form.getRawValue();
 
     try {
@@ -58,7 +62,9 @@ export class LoginComponent {
       }
       await this.router.navigateByUrl(this.safeReturnUrl());
     } catch (error) {
-      this.errorMessage.set(error instanceof AuthLoginError ? error.message : 'Sign in failed');
+      this.errorKey.set(
+        error instanceof AuthLoginError ? error.messageKey : marker('auth.errors.signInFailed'),
+      );
     }
   }
 

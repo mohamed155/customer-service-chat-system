@@ -1594,6 +1594,68 @@ async fn accept_invitation_still_works_after_inviter_is_disabled() {
     assert_eq!(status, "accepted");
 }
 
+/// A signed-in person accepting an invitation into a workspace where they already have a
+/// membership gets a 409. A disabled membership has its own `code`, so the dashboard can tell the
+/// two apart without reading the message (ADR-012: clients branch on `code`).
+async fn accept_signed_in(pool: sqlx::PgPool, raw_token: &str, user: Uuid) -> Response {
+    let request = Request::post(format!("/api/v1/invitations/{raw_token}/accept"))
+        .header("content-type", "application/json")
+        .header("X-Dev-User-Id", user.to_string())
+        .body(Body::from("{}"))
+        .unwrap();
+    send(pool, request).await
+}
+
+#[tokio::test]
+#[serial_test::serial(team_members_db)]
+async fn accept_invitation_signed_in_disabled_member_has_its_own_code() {
+    let Some(pool) = get_pool().await else { return };
+    db::testing::migrate().await;
+    let tenant_id = seed_tenant(&pool).await;
+    let owner = seed_user(&pool, "Owner", "owner-disabled-accept@example.com").await;
+    seed_membership(&pool, tenant_id, owner, "owner", "active").await;
+    let invitee = seed_user(&pool, "Invitee", "disabled-accept@example.com").await;
+    seed_membership(&pool, tenant_id, invitee, "agent", "disabled").await;
+    let (_, raw_token) = seed_invitation_with_token(
+        &pool,
+        tenant_id,
+        "disabled-accept@example.com",
+        "agent",
+        owner,
+    )
+    .await;
+
+    let response = accept_signed_in(pool, &raw_token, invitee).await;
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = body_json(response).await;
+    assert_eq!(body["error"]["code"], "membership_disabled", "{body:?}");
+}
+
+#[tokio::test]
+#[serial_test::serial(team_members_db)]
+async fn accept_invitation_signed_in_active_member_keeps_the_conflict_code() {
+    let Some(pool) = get_pool().await else { return };
+    db::testing::migrate().await;
+    let tenant_id = seed_tenant(&pool).await;
+    let owner = seed_user(&pool, "Owner", "owner-active-accept@example.com").await;
+    seed_membership(&pool, tenant_id, owner, "owner", "active").await;
+    let invitee = seed_user(&pool, "Invitee", "active-accept@example.com").await;
+    seed_membership(&pool, tenant_id, invitee, "agent", "active").await;
+    let (_, raw_token) = seed_invitation_with_token(
+        &pool,
+        tenant_id,
+        "active-accept@example.com",
+        "agent",
+        owner,
+    )
+    .await;
+
+    let response = accept_signed_in(pool, &raw_token, invitee).await;
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = body_json(response).await;
+    assert_eq!(body["error"]["code"], "conflict", "{body:?}");
+}
+
 #[tokio::test]
 #[serial_test::serial(team_members_db)]
 async fn list_invitations() {

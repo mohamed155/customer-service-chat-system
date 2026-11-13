@@ -52,15 +52,15 @@ describe('AuthService two-step sign-in', () => {
   });
 
   it.each([
-    [422, 'That code is not valid.', false],
-    [429, 'Too many attempts. Try again later.', false],
-    [401, 'Your sign-in expired. Sign in again.', true],
-    [500, 'Verification failed. Try again.', false],
-  ])('maps a %s from the second step to a message', async (status, message, expired) => {
+    [422, 'errors.codeInvalid', false],
+    [429, 'errors.tooManyAttempts', false],
+    [401, 'errors.signInExpired', true],
+    [500, 'errors.verificationFailed', false],
+  ])('maps a %s from the second step to a catalog key', async (status, message, expired) => {
     mfa.verify.mockRejectedValue({ code: 'x', message: 'raw', status });
     const error = await service.completeMfa({ code: '123456' }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(AuthMfaError);
-    expect((error as AuthMfaError).message).toBe(message);
+    expect((error as AuthMfaError).messageKey).toBe(message);
     expect((error as AuthMfaError).challengeExpired).toBe(expired);
     expect(currentUser.load).not.toHaveBeenCalled();
     expect(service.pending()).toBe(false);
@@ -68,6 +68,8 @@ describe('AuthService two-step sign-in', () => {
 
   it('keeps unrelated errors out of the way of the password step', async () => {
     api.post.mockReturnValue(throwError(() => ({ code: 'x', message: 'x', status: 401 })));
-    await expect(service.login('a@b.test', 'bad')).rejects.toThrow('Invalid email or password');
+    await expect(service.login('a@b.test', 'bad')).rejects.toMatchObject({
+      messageKey: 'auth.errors.invalidCredentials',
+    });
   });
 });

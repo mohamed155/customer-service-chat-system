@@ -5,24 +5,28 @@ import { ApiError } from '../api/api.models';
 import type { components } from '../api/generated/api';
 import { SignupRequest } from '../api/tenant-api.models';
 import { ApiService } from '../api/api.service';
-import { mapHttpError, userMessageFor } from '../errors/http-error.mapper';
-import { MfaCredential, MfaRequired, MfaService, mfaErrorMessage } from './mfa.service';
+import { errorMessageKey } from '../errors/error-message';
+import { mapHttpError } from '../errors/http-error.mapper';
+import { marker } from '../i18n/marker';
+import { MfaCredential, MfaRequired, MfaService, mfaErrorKey } from './mfa.service';
 import { APP_PATHS } from '../router/app-paths';
 import { CurrentUserService } from '../tenant/current-user.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
 
 type Schemas = components['schemas'];
 
-export const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
+/** Catalog key (auth scope) of the text for a refused email or password. */
+export const INVALID_CREDENTIALS_KEY = marker('auth.errors.invalidCredentials');
 
 export class AuthLoginError extends Error {
   override readonly name = 'AuthLoginError';
 
   constructor(
-    message: string,
+    /** Catalog key of what to tell the person. */
+    readonly messageKey: string,
     readonly apiError: ApiError,
   ) {
-    super(message);
+    super(messageKey);
   }
 }
 
@@ -33,12 +37,13 @@ export class AuthMfaError extends Error {
   override readonly name = 'AuthMfaError';
 
   constructor(
-    message: string,
+    /** Catalog key of what to tell the person. */
+    readonly messageKey: string,
     readonly apiError: ApiError,
     /** The challenge is gone (expired or used): the user has to start again from the password. */
     readonly challengeExpired: boolean,
   ) {
-    super(message);
+    super(messageKey);
   }
 }
 
@@ -46,10 +51,11 @@ export class AuthSignupError extends Error {
   override readonly name = 'AuthSignupError';
 
   constructor(
-    message: string,
+    /** Catalog key of what to tell the person. */
+    readonly messageKey: string,
     readonly apiError: ApiError,
   ) {
-    super(message);
+    super(messageKey);
   }
 }
 
@@ -140,23 +146,21 @@ export class AuthService {
   private toLoginError(error: unknown): AuthLoginError {
     const apiError = isApiError(error) ? error : mapHttpError(error);
     return new AuthLoginError(
-      apiError.status === 401 ? INVALID_CREDENTIALS_MESSAGE : userMessageFor(apiError),
+      apiError.status === 401 ? INVALID_CREDENTIALS_KEY : errorMessageKey(apiError),
       apiError,
     );
   }
 
   private toMfaError(error: unknown): AuthMfaError {
     const apiError = isApiError(error) ? error : mapHttpError(error);
-    return new AuthMfaError(mfaErrorMessage(apiError.status), apiError, apiError.status === 401);
+    return new AuthMfaError(mfaErrorKey(apiError.status), apiError, apiError.status === 401);
   }
 
   private toSignupError(error: unknown): AuthSignupError {
     const apiError = isApiError(error) ? error : mapHttpError(error);
-    const message =
-      apiError.status === 409
-        ? 'An account with this email already exists. Please sign in instead.'
-        : userMessageFor(apiError);
-    return new AuthSignupError(message, apiError);
+    const key =
+      apiError.status === 409 ? marker('auth.errors.accountExists') : errorMessageKey(apiError);
+    return new AuthSignupError(key, apiError);
   }
 }
 

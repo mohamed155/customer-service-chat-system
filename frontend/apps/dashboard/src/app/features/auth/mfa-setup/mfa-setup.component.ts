@@ -3,12 +3,14 @@ import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiError } from '../../../core/api/api.models';
-import { MfaService, mfaErrorMessage } from '../../../core/auth/mfa.service';
+import { MfaService, mfaErrorKey } from '../../../core/auth/mfa.service';
 import { mapHttpError } from '../../../core/errors/http-error.mapper';
+import { marker } from '../../../core/i18n/marker';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { CurrentUserService } from '../../../core/tenant/current-user.service';
 import { copyToClipboard } from '../../../shared/utils/clipboard';
 import { AuthCardComponent } from '../auth-card/auth-card.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 type Step = 'password' | 'code' | 'recovery';
 
@@ -19,7 +21,8 @@ type Step = 'password' | 'code' | 'recovery';
  */
 @Component({
   selector: 'app-mfa-setup',
-  imports: [AuthCardComponent, ReactiveFormsModule],
+  providers: [provideTranslocoScope('auth')],
+  imports: [AuthCardComponent, ReactiveFormsModule, TranslocoPipe],
   templateUrl: './mfa-setup.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -40,7 +43,8 @@ export class MfaSetupComponent {
     validators: [Validators.required, Validators.pattern(/^\s*\d{6}\s*$/)],
   });
   protected readonly pending = signal(false);
-  protected readonly errorMessage = signal<string | null>(null);
+  /** Catalog key of what went wrong, or `null`. */
+  protected readonly errorKey = signal<string | null>(null);
   protected readonly setupKey = signal('');
   protected readonly setupLink = signal<SafeUrl | null>(null);
   protected readonly recoveryCodes = signal<string[]>([]);
@@ -66,7 +70,7 @@ export class MfaSetupComponent {
       );
       this.password.reset('');
       this.step.set('code');
-    }, 'The password is not correct.');
+    }, marker('auth.errors.passwordWrong'));
   }
 
   protected async confirm(): Promise<void> {
@@ -80,7 +84,7 @@ export class MfaSetupComponent {
       this.setupKey.set('');
       this.setupLink.set(null);
       this.step.set('recovery');
-    }, 'That code is not valid.');
+    }, marker('errors.codeInvalid'));
   }
 
   protected async copyCodes(): Promise<void> {
@@ -88,7 +92,7 @@ export class MfaSetupComponent {
       await copyToClipboard(this.recoveryCodes().join('\n'));
       this.copied.set(true);
     } catch {
-      this.errorMessage.set('Copy failed. Select the codes and copy them by hand.');
+      this.errorKey.set(marker('auth.recoveryCodes.copyFailed'));
     }
   }
 
@@ -100,19 +104,19 @@ export class MfaSetupComponent {
     await this.router.navigateByUrl(this.safeReturnUrl());
   }
 
-  private async run(action: () => Promise<void>, invalidMessage: string): Promise<void> {
+  private async run(action: () => Promise<void>, invalidKey: string): Promise<void> {
     this.pending.set(true);
-    this.errorMessage.set(null);
+    this.errorKey.set(null);
     try {
       await action();
     } catch (error) {
       const apiError = isApiError(error) ? error : mapHttpError(error);
-      this.errorMessage.set(
+      this.errorKey.set(
         apiError.status === 422
-          ? invalidMessage
+          ? invalidKey
           : apiError.status === 409
-            ? 'Two-step verification is already set up for this account.'
-            : mfaErrorMessage(apiError.status),
+            ? marker('auth.errors.alreadySetUp')
+            : mfaErrorKey(apiError.status),
       );
     } finally {
       this.pending.set(false);

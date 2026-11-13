@@ -1,14 +1,16 @@
 <app-auth-card
-  title="Two-step verification"
+  [title]="'auth.mfaChallenge.title' | transloco"
   [subtitle]="
-    usingRecovery()
-      ? 'Enter one of your recovery codes'
-      : 'Enter the 6-digit code from your authenticator app'
+    (usingRecovery() ? 'auth.mfaChallenge.recoverySubtitle' : 'auth.mfaChallenge.codeSubtitle')
+      | transloco
   "
 >
   <form (submit)="$event.preventDefault(); submit()">
     <label for="mfa-credential">
-      {{ usingRecovery() ? 'Recovery code' : 'Authentication code' }}
+      {{
+        (usingRecovery() ? 'auth.mfaChallenge.recoveryLabel' : 'auth.mfaChallenge.codeLabel')
+          | transloco
+      }}
       @if (usingRecovery()) {
         <input
           id="mfa-credential"
@@ -27,18 +29,21 @@
         />
       }
     </label>
-    @if (errorMessage()) {
-      <p role="alert">{{ errorMessage() }}</p>
+    @if (errorKey(); as key) {
+      <p role="alert">{{ key | transloco }}</p>
     }
     <button type="submit" [disabled]="pending() || credential.invalid">
-      {{ pending() ? 'Verifying...' : 'Verify' }}
+      {{ (pending() ? 'auth.mfaChallenge.pending' : 'auth.mfaChallenge.submit') | transloco }}
     </button>
   </form>
   <span auth-footer>
     <button type="button" class="link" (click)="toggleRecovery()">
-      {{ usingRecovery() ? 'Use an authenticator code' : 'Use a recovery code' }}
+      {{
+        (usingRecovery() ? 'auth.mfaChallenge.useCode' : 'auth.mfaChallenge.useRecovery')
+          | transloco
+      }}
     </button>
     ·
-    <a [routerLink]="loginUrl">Back to sign in</a>
+    <a [routerLink]="loginUrl">{{ 'auth.backToSignIn' | transloco }}</a>
   </span>
 </app-auth-card>

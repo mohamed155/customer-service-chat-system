@@ -13,6 +13,7 @@ import {
 } from '@jsverse/transloco';
 import type { Translation, TranslocoLoader } from '@jsverse/transloco';
 import { Observable, of, throwError } from 'rxjs';
+import authEnglish from '../../../../public/i18n/auth/en.json';
 import sharedEnglish from '../../../../public/i18n/shared/en.json';
 import { toCatalog } from './catalog.loader';
 import { IcuTranspiler } from './icu-transpiler';
@@ -23,7 +24,7 @@ import { i18nConfig } from './i18n.providers';
  * shows its text on the first change detection. Add a line next to `ENGLISH_SCOPES` in
  * `catalog.loader.ts` when a feature area gets a scope.
  */
-const TEST_SCOPES: Readonly<Record<string, Translation>> = {};
+const TEST_SCOPES: Readonly<Record<string, Translation>> = { auth: authEnglish };
 
 class EnglishTestLoader implements TranslocoLoader {
   getTranslation(path: string): Observable<Translation> {

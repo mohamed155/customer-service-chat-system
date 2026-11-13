@@ -2,8 +2,10 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthMfaError, AuthService } from '../../../core/auth/auth.service';
+import { marker } from '../../../core/i18n/marker';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { AuthCardComponent } from '../auth-card/auth-card.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 const CODE_PATTERN = /^\s*\d{6}\s*$/;
 const RECOVERY_PATTERN = /^[A-Za-z0-9\s-]{10,16}$/;
@@ -11,7 +13,8 @@ const RECOVERY_PATTERN = /^[A-Za-z0-9\s-]{10,16}$/;
 /** The second sign-in step: a code from the authenticator app, or a recovery code. */
 @Component({
   selector: 'app-mfa-challenge',
-  imports: [AuthCardComponent, ReactiveFormsModule, RouterLink],
+  providers: [provideTranslocoScope('auth')],
+  imports: [AuthCardComponent, ReactiveFormsModule, RouterLink, TranslocoPipe],
   templateUrl: './mfa-challenge.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -26,7 +29,8 @@ export class MfaChallengeComponent {
   });
   protected readonly usingRecovery = signal(false);
   protected readonly pending = this.auth.pending;
-  protected readonly errorMessage = signal<string | null>(null);
+  /** Catalog key of what went wrong, or `null`. */
+  protected readonly errorKey = signal<string | null>(null);
   protected readonly loginUrl = `/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`;
 
   protected toggleRecovery(): void {
@@ -37,7 +41,7 @@ export class MfaChallengeComponent {
       Validators.pattern(recovery ? RECOVERY_PATTERN : CODE_PATTERN),
     ]);
     this.credential.reset('');
-    this.errorMessage.set(null);
+    this.errorKey.set(null);
   }
 
   protected async submit(): Promise<void> {
@@ -45,14 +49,14 @@ export class MfaChallengeComponent {
       this.credential.markAsTouched();
       return;
     }
-    this.errorMessage.set(null);
+    this.errorKey.set(null);
     const value = this.credential.getRawValue().trim();
     try {
       await this.auth.completeMfa(this.usingRecovery() ? { recoveryCode: value } : { code: value });
       await this.router.navigateByUrl(this.safeReturnUrl());
     } catch (error) {
       if (error instanceof AuthMfaError) {
-        this.errorMessage.set(error.message);
+        this.errorKey.set(error.messageKey);
         if (error.challengeExpired) {
           await this.router.navigate([this.loginUrl], {
             queryParams: this.route.snapshot.queryParamMap.has('returnUrl')
@@ -61,7 +65,7 @@ export class MfaChallengeComponent {
           });
         }
       } else {
-        this.errorMessage.set('Verification failed. Try again.');
+        this.errorKey.set(marker('errors.verificationFailed'));
       }
       this.credential.reset('');
     }

@@ -5,7 +5,7 @@ import { provideTaiga } from '@taiga-ui/core';
 import {
   AuthLoginError,
   AuthService,
-  INVALID_CREDENTIALS_MESSAGE,
+  INVALID_CREDENTIALS_KEY,
 } from '../../../core/auth/auth.service';
 import { MfaService } from '../../../core/auth/mfa.service';
 import { LoginComponent } from './login.component';
@@ -139,7 +139,7 @@ describe('LoginComponent', () => {
 
   it('shows the generic invalid credentials message on 401', async () => {
     auth.login.mockRejectedValue(
-      new AuthLoginError(INVALID_CREDENTIALS_MESSAGE, {
+      new AuthLoginError(INVALID_CREDENTIALS_KEY, {
         code: 'unauthenticated',
         message: 'raw',
         status: 401,
@@ -153,7 +153,7 @@ describe('LoginComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain(INVALID_CREDENTIALS_MESSAGE);
+    expect(fixture.nativeElement.textContent).toContain('Invalid email or password');
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 

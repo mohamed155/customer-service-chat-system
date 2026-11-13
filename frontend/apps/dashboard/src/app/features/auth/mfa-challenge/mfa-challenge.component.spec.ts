@@ -88,7 +88,7 @@ describe('MfaChallengeComponent', () => {
 
   it('shows the message for a wrong code and clears the field', async () => {
     auth.completeMfa.mockRejectedValue(
-      new AuthMfaError('That code is not valid.', { code: 'x', message: 'x', status: 422 }, false),
+      new AuthMfaError('errors.codeInvalid', { code: 'x', message: 'x', status: 422 }, false),
     );
     await submit('123456');
     expect(fixture.nativeElement.textContent).toContain('That code is not valid.');
@@ -99,11 +99,7 @@ describe('MfaChallengeComponent', () => {
   it('goes back to the password step when the challenge has expired', async () => {
     setReturnUrl('/tenant/team');
     auth.completeMfa.mockRejectedValue(
-      new AuthMfaError(
-        'Your sign-in expired. Sign in again.',
-        { code: 'x', message: 'x', status: 401 },
-        true,
-      ),
+      new AuthMfaError('errors.signInExpired', { code: 'x', message: 'x', status: 401 }, true),
     );
     await submit('123456');
     expect(router.navigate).toHaveBeenCalledWith(['/auth/login'], {
