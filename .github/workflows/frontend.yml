@@ -48,6 +48,11 @@ jobs:
         run: pnpm lint:tenant-scope
       - name: The tenant-scope check works
         run: pnpm test:tenant-scope-check
+      # Shared code (core/, layout/) types its API calls with the generated types (MOH-169).
+      - name: Shared code uses the generated API types
+        run: pnpm lint:api-types
+      - name: The API types check works
+        run: pnpm test:api-types-check
       - name: The module-boundary lint rule works (MOH-62)
         run: pnpm test:lint-rules
       - name: Check formatting

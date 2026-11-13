@@ -2,7 +2,6 @@ import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../api/api.service';
 import type { components } from '../api/generated/api';
-import { MeResponse } from '../api/tenant-api.models';
 
 type Schemas = components['schemas'];
 
@@ -41,9 +40,12 @@ export class MfaService {
     return [...response.data.recoveryCodes];
   }
 
-  /** The second sign-in step. */
-  async verify(credential: MfaCredential): Promise<MeResponse> {
-    return (await firstValueFrom(this.api.post<MeResponse>('/auth/mfa/verify', credential))).data;
+  /**
+   * The second sign-in step. The session is the `app_session` cookie the answer sets; the answer's
+   * body is not typed in the contract and nothing needs it (`AuthService` loads the user next).
+   */
+  async verify(credential: MfaCredential): Promise<void> {
+    await firstValueFrom(this.api.post<unknown>('/auth/mfa/verify', credential));
   }
 
   /** Prove a code again for a sensitive action. */

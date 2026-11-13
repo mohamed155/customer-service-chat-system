@@ -2,13 +2,16 @@ import { inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../api/api.models';
-import { MeResponse, SignupRequest } from '../api/tenant-api.models';
+import type { components } from '../api/generated/api';
+import { SignupRequest } from '../api/tenant-api.models';
 import { ApiService } from '../api/api.service';
 import { mapHttpError, userMessageFor } from '../errors/http-error.mapper';
 import { MfaCredential, MfaRequired, MfaService, mfaErrorMessage } from './mfa.service';
 import { APP_PATHS } from '../router/app-paths';
 import { CurrentUserService } from '../tenant/current-user.service';
 import { TenantContextService } from '../tenant/tenant-context.service';
+
+type Schemas = components['schemas'];
 
 export const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
 
@@ -70,7 +73,10 @@ export class AuthService {
 
     try {
       const response = await firstValueFrom(
-        this.api.post<MeResponse | MfaRequired>('/auth/login', { email, password }),
+        this.api.post<Schemas['MeResponse'] | Schemas['MfaRequiredResponse']>('/auth/login', {
+          email,
+          password,
+        } satisfies Schemas['LoginRequest']),
       );
       if (isMfaRequired(response.data)) {
         return 'mfa-required';
@@ -102,7 +108,7 @@ export class AuthService {
     this.pendingSignal.set(true);
 
     try {
-      await firstValueFrom(this.api.post<MeResponse>('/auth/signup', payload));
+      await firstValueFrom(this.api.post<Schemas['MeResponse']>('/auth/signup', payload));
       await this.currentUser.load();
     } catch (error) {
       throw this.toSignupError(error);
@@ -154,7 +160,7 @@ export class AuthService {
   }
 }
 
-const isMfaRequired = (data: MeResponse | MfaRequired): data is MfaRequired =>
+const isMfaRequired = (data: Schemas['MeResponse'] | MfaRequired): data is MfaRequired =>
   typeof data === 'object' && data !== null && (data as MfaRequired).mfaRequired === true;
 
 const isApiError = (error: unknown): error is ApiError =>

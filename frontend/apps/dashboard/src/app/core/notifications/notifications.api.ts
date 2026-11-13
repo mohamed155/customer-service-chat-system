@@ -3,13 +3,14 @@ import { HttpParams } from '@angular/common/http';
 import { map, Observable } from 'rxjs';
 import { ApiService } from '../api/api.service';
 import { ApiResponse } from '../api/api.models';
+import type { components } from '../api/generated/api';
 import {
   NotificationEntry,
-  NotificationListWire,
-  NotificationWire,
   notificationFromWire,
   notificationListFromWire,
 } from '../api/tenant-api.models';
+
+type Schemas = components['schemas'];
 
 @Injectable({ providedIn: 'root' })
 export class NotificationsApiService {
@@ -24,7 +25,7 @@ export class NotificationsApiService {
     let params = new HttpParams();
     if (state) params = params.set('state', state);
     if (cursor) params = params.set('cursor', cursor);
-    return this.api.get<NotificationListWire>('/tenant/notifications', params).pipe(
+    return this.api.get<Schemas['NotificationListResponse']>('/tenant/notifications', params).pipe(
       map(({ data, ...rest }) => ({
         ...rest,
         data: notificationListFromWire(data),
@@ -33,16 +34,16 @@ export class NotificationsApiService {
   }
 
   unreadCount(): Observable<ApiResponse<{ count: number }>> {
-    return this.api.get<{ count: number }>('/tenant/notifications/unread-count');
+    return this.api.get<Schemas['UnreadCountResponse']>('/tenant/notifications/unread-count');
   }
 
   markRead(id: string): Observable<ApiResponse<NotificationEntry>> {
     return this.api
-      .post<NotificationWire>(`/tenant/notifications/${id}/read`, null)
+      .post<Schemas['NotificationDto']>(`/tenant/notifications/${id}/read`, null)
       .pipe(map(({ data, ...rest }) => ({ ...rest, data: notificationFromWire(data) })));
   }
 
   markAllRead(): Observable<ApiResponse<{ marked: number }>> {
-    return this.api.post<{ marked: number }>('/tenant/notifications/read-all', null);
+    return this.api.post<Schemas['MarkedResponse']>('/tenant/notifications/read-all', null);
   }
 }
