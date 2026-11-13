@@ -9,7 +9,7 @@
 #   KILO <review|inline|comment> <id>@<version> <first line of body>
 #   CODERABBIT <review|inline|comment> <id>@<version> <first line of body>
 #   CODERABBIT <trigger posted|trigger already requested|skipped: ...|not requested ...>
-#   DONE ci=<pass|fail> kilo=<reviewed|timeout> coderabbit=<reviewed|timeout|rate-limited|failed|skipped|off> head=<sha>
+#   DONE ci=<pass|fail> kilo=<reviewed|skipped|timeout> coderabbit=<reviewed|timeout|rate-limited|failed|skipped|off> head=<sha>
 #   ERROR <message>
 #
 # Kilo's signals, in order of preference:
@@ -113,7 +113,8 @@ cr_rate_limit_notice() {
 
 while true; do
   ci=""   # recomputed every poll: a check that registers late must flip it back to pending
-  # --- CI (includes the Kilo Code Review check; CodeRabbit is handled separately below) ---
+  # --- CI (includes the Kilo Code Review check, except a Kilo run that hit its own limit; CodeRabbit
+  # is handled separately below) ---
   # gh's built-in --jq is used so the script doesn't need a separate jq install.
   # `gh pr checks` exits non-zero while checks are pending/failing, so ignore its status.
   done_lines=$(gh pr checks "$pr" --json name,bucket \
@@ -122,8 +123,20 @@ while true; do
     [ -n "$l" ] && ! grep -qxF "$l" <<<"$seen_checks" && { echo "CHECK $l"; seen_checks+="$l"$'\n'; }
   done <<<"$done_lines"
   # Summary, without CodeRabbit: "<total> <pending> <failed> <kilo checks> <kilo checks pending>"
-  read -r total pending failed kilo_checks kilo_pending < <(gh pr checks "$pr" --json name,bucket \
-    --jq '[.[] | select(.name != "CodeRabbit")] as $c | "\($c|length) \([$c[]|select(.bucket=="pending")]|length) \([$c[]|select(.bucket=="fail" or .bucket=="cancel")]|length) \([$c[]|select(.name|test("^Kilo Code";"i"))]|length) \([$c[]|select((.name|test("^Kilo Code";"i")) and .bucket=="pending")]|length)"' 2>/dev/null || echo "0 0 0 0 0")
+  read -r total pending failed kilo_checks kilo_pending kilo_failed < <(gh pr checks "$pr" --json name,bucket \
+    --jq '[.[] | select(.name != "CodeRabbit")] as $c | "\($c|length) \([$c[]|select(.bucket=="pending")]|length) \([$c[]|select(.bucket=="fail" or .bucket=="cancel")]|length) \([$c[]|select(.name|test("^Kilo Code";"i"))]|length) \([$c[]|select((.name|test("^Kilo Code";"i")) and .bucket=="pending")]|length) \([$c[]|select((.name|test("^Kilo Code";"i")) and (.bucket=="fail" or .bucket=="cancel"))]|length)"' 2>/dev/null || echo "0 0 0 0 0 0")
+  # A Kilo run that ends with "the model reached its output limit" / "Review failed." produced no
+  # review: that is Kilo's own limit, not a finding and not a CI failure. It is skipped (the user's
+  # decision): no retry, no question, and it doesn't turn ci= into fail. A Kilo check that failed
+  # because it found issues has other output and stays a failure.
+  kilo_skipped=0
+  if [ "${kilo_failed:-0}" -gt 0 ]; then
+    limited=$(gh api "repos/$repo/commits/$head/check-runs" --jq '[.check_runs[] | select(.name|test("^Kilo Code";"i")) | select(.conclusion=="failure") | ((.output.title // "") + " " + (.output.summary // ""))] | map(select(test("output limit|did not finish|review failed";"i"))) | length' 2>/dev/null || echo 0)
+    if [ "${limited:-0}" -gt 0 ] && [ "$limited" -ge "$kilo_failed" ]; then
+      kilo_skipped=1
+      failed=$(( failed - kilo_failed ))
+    fi
+  fi
   if [ "${total:-0}" -gt 0 ] && [ "${pending:-1}" -eq 0 ]; then
     if [ "${failed:-0}" -gt 0 ]; then ci=fail; else ci=pass; fi
   fi
@@ -132,7 +145,9 @@ while true; do
   # --- Kilo ---
   emit_new KILO "$is_kilo"
   kilo_result=""
-  if { [ "${kilo_checks:-0}" -gt 0 ] && [ "${kilo_pending:-1}" -eq 0 ]; } || [ "$kilo_seen" = 1 ]; then
+  if [ "$kilo_skipped" = 1 ] && [ "${kilo_pending:-1}" -eq 0 ]; then
+    kilo_result=skipped
+  elif { [ "${kilo_checks:-0}" -gt 0 ] && [ "${kilo_pending:-1}" -eq 0 ]; } || [ "$kilo_seen" = 1 ]; then
     kilo_result=reviewed
   elif [ $(( elapsed_sec / 60 )) -ge "$kilo_timeout_min" ]; then
     kilo_result=timeout
