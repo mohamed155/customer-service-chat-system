@@ -30,9 +30,12 @@ import { CustomersApiService } from '../../../core/api/customers-api.service';
 import { CustomerDialogComponent } from './customer-dialog.component';
 import { CustomersStore } from './customers.store';
 import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-customers',
+  providers: [provideTranslocoScope('customers')],
   imports: [
     ErrorReferenceComponent,
     RouterLink,
@@ -48,6 +51,7 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
     PageHeaderComponent,
     SearchInputComponent,
     ToolbarComponent,
+    TranslocoPipe,
   ],
   templateUrl: './customers.component.html',
   styles: [
@@ -122,6 +126,11 @@ export class CustomersComponent {
   );
 
   protected readonly canManage = computed(() => this.permissions.has('customers.manage'));
+
+  /** Catalog key of the text for an error of this page. */
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
 
   constructor() {
     onTenantChange(() => {

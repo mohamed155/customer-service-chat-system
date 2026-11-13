@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { LocaleDatePipe } from '../../../core/i18n/format';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -32,11 +32,16 @@ import {
 import { CustomersApiService } from '../../../core/api/customers-api.service';
 import { CustomerDialogComponent } from './customer-dialog.component';
 import { CustomerProfileStore } from './customer-profile.store';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { marker } from '../../../core/i18n/marker';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-customer-profile',
+  providers: [provideTranslocoScope('customers')],
   imports: [
-    DatePipe,
+    LocaleDatePipe,
     RouterLink,
     AvatarComponent,
     ButtonComponent,
@@ -49,6 +54,7 @@ import { CustomerProfileStore } from './customer-profile.store';
     PageHeaderComponent,
     SectionHeaderComponent,
     StatusBadgeComponent,
+    TranslocoPipe,
   ],
   templateUrl: './customer-profile.component.html',
   styles: [
@@ -213,6 +219,7 @@ import { CustomerProfileStore } from './customer-profile.store';
 export class CustomerProfileComponent {
   protected readonly store = inject(CustomerProfileStore);
   private readonly route = inject(ActivatedRoute);
+  private readonly locale = inject(LocaleService);
   private readonly api = inject(CustomersApiService);
   private readonly permissions = inject(PermissionsService);
 
@@ -226,7 +233,7 @@ export class CustomerProfileComponent {
   protected readonly backLink = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.customers}`;
 
   protected readonly headerTitle = computed(
-    () => this.customer()?.displayName ?? 'Customer profile',
+    () => this.customer()?.displayName ?? this.locale.translate(marker('customers.profile.title')),
   );
 
   protected readonly showLoading = computed(
@@ -245,11 +252,12 @@ export class CustomerProfileComponent {
     return Object.entries(metadata);
   });
 
-  protected readonly errorMessage = computed(
-    () =>
-      this.error()?.message ??
-      (this.notFound() ? 'This customer could not be found.' : 'Please try again.'),
-  );
+  /** Catalog key of what to tell the person about a failed load. */
+  protected readonly errorKey = computed(() => {
+    if (this.notFound()) return marker('customers.profile.notFound');
+    const error = this.error();
+    return error ? errorMessageKey(error) : marker('customers.profile.tryAgain');
+  });
 
   protected readonly canManage = computed(() => this.permissions.has('customers.manage'));
 

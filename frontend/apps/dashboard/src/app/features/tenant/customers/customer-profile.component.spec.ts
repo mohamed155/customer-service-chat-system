@@ -207,7 +207,8 @@ describe('CustomerProfileComponent', () => {
     const fixture = TestBed.createComponent(CustomerProfileComponent);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Service unavailable');
+    expect(fixture.nativeElement.textContent).toContain('temporarily unavailable');
+    expect(fixture.nativeElement.textContent).not.toContain('Service unavailable');
     const retryButton = Array.from(
       fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,
     ).find((button) => button.textContent?.trim() === 'Try again');
@@ -292,7 +293,7 @@ describe('CustomerProfileComponent', () => {
     const fixture = TestBed.createComponent(CustomerProfileComponent);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('most recent conversations');
+    expect(fixture.nativeElement.textContent).toContain('Showing 1 most recent conversation.');
   });
 
   describe('permissions', () => {
@@ -398,7 +399,9 @@ describe('CustomerProfileComponent', () => {
       submitBtn.click();
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.textContent).toContain('Name is too short');
+      // A field shows the text for its error code, never the API's own message.
+      expect(fixture.nativeElement.textContent).toContain('This value is not valid.');
+      expect(fixture.nativeElement.textContent).not.toContain('Name is too short');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect((fixture.componentInstance as any).dialogSubmitting()).toBe(false);
     });

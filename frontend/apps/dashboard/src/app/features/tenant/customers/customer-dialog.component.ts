@@ -31,18 +31,30 @@ import { IconButtonComponent } from '../../../shared/components/icon-button/icon
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
 import { ApiError } from '../../../core/api/api.models';
 import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { errorMessageKey, fieldErrorKey } from '../../../core/errors/error-message';
+import { marker } from '../../../core/i18n/marker';
+import { ownValue } from '../../../core/i18n/own-value';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 export type CustomerDialogMode = 'create' | 'edit';
 
 const CHANNELS = ['email', 'phone', 'web_chat', 'whatsapp', 'telegram'] as const;
+
+/** What a form error says: a catalog key and the values its message needs. */
+export interface ErrorText {
+  readonly key: string;
+  readonly params?: Readonly<Record<string, unknown>>;
+}
+
+const text = (key: string, params?: Record<string, unknown>): ErrorText => ({ key, params });
 
 function phoneValidator(control: AbstractControl): ValidationErrors | null {
   const value = control.value;
   if (!value) return null;
   const str = String(value);
   const digits = str.replace(/\D/g, '');
-  if (digits.length < 7 || digits.length > 15)
-    return { phone: 'Phone number must have 7-15 digits (optional + prefix).' };
+  // The page shows its own text for this field; the value only marks the control invalid.
+  if (digits.length < 7 || digits.length > 15) return { phone: true };
   return null;
 }
 
@@ -53,26 +65,26 @@ function channelIdentifierValidator(control: AbstractControl): ValidationErrors 
   if (!channel || !identifier) return null;
 
   if (!identifier.trim()) {
-    return { channelIdentifier: 'Identifier value is required.' };
+    return { channelIdentifier: text(marker('customers.dialog.errors.identifierRequired')) };
   }
 
   if (channel === 'email') {
     const parts = identifier.split('@');
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      return { channelIdentifier: 'Email channel identifiers must be a valid email address.' };
+      return { channelIdentifier: text(marker('customers.dialog.errors.identifierEmail')) };
     }
     const local = parts[0];
     const domain = parts[1];
     if (local.length > 64) {
-      return { channelIdentifier: 'Email local part must be at most 64 characters.' };
+      return { channelIdentifier: text(marker('customers.dialog.errors.identifierEmailLocal')) };
     }
     const labels = domain.split('.');
     if (labels.length < 2 || labels.some((l) => !l || l.length > 63)) {
-      return { channelIdentifier: 'Email channel identifiers must be a valid email address.' };
+      return { channelIdentifier: text(marker('customers.dialog.errors.identifierEmail')) };
     }
     const tld = labels[labels.length - 1];
     if (tld.length < 2) {
-      return { channelIdentifier: 'Email channel identifiers must be a valid email address.' };
+      return { channelIdentifier: text(marker('customers.dialog.errors.identifierEmail')) };
     }
   }
 
@@ -81,7 +93,7 @@ function channelIdentifierValidator(control: AbstractControl): ValidationErrors 
     const digits = str.replace(/\D/g, '');
     if (digits.length < 7 || digits.length > 15) {
       return {
-        channelIdentifier: `${CHANNEL_LABELS[channel] ?? channel} channel must be a valid phone number (7-15 digits, optional + prefix).`,
+        channelIdentifier: text(marker('customers.dialog.errors.identifierPhone'), { channel }),
       };
     }
   }
@@ -101,21 +113,21 @@ function contactOrIdentifierValidator(control: AbstractControl): ValidationError
     });
     if (hasValid) return null;
   }
-  return {
-    contactOrIdentifier: 'At least one contact method (email, phone, or identifier) is required.',
-  };
+  return { contactOrIdentifier: text(marker('customers.dialog.errors.contactRequired')) };
 }
 
-const CHANNEL_LABELS: Record<string, string> = {
-  email: 'Email',
-  phone: 'Phone',
-  web_chat: 'Web chat',
-  whatsapp: 'WhatsApp',
-  telegram: 'Telegram',
+/** Catalog keys (shared) of the channel names. */
+const CHANNEL_LABEL_KEYS: Readonly<Record<string, string>> = {
+  email: marker('channels.email'),
+  phone: marker('channels.phone'),
+  web_chat: marker('channels.web_chat'),
+  whatsapp: marker('channels.whatsapp'),
+  telegram: marker('channels.telegram'),
 };
 
 @Component({
   selector: 'app-customer-dialog',
+  providers: [provideTranslocoScope('customers')],
   imports: [
     ErrorReferenceComponent,
     ButtonComponent,
@@ -124,6 +136,7 @@ const CHANNEL_LABELS: Record<string, string> = {
     IconButtonComponent,
     InlineAlertComponent,
     ReactiveFormsModule,
+    TranslocoPipe,
   ],
   templateUrl: './customer-dialog.component.html',
   styles: [
@@ -264,7 +277,7 @@ export class CustomerDialogComponent {
   }
 
   protected channelLabel(channel: string): string {
-    return CHANNEL_LABELS[channel] ?? channel;
+    return ownValue(CHANNEL_LABEL_KEYS, channel) ?? channel;
   }
 
   protected addIdentifier(channel: ChannelIdentifier['channel'] = 'email', identifier = ''): void {
@@ -299,58 +312,34 @@ export class CustomerDialogComponent {
     this.metadataVersion.update((v) => v + 1);
   }
 
-  protected fieldError(field: string): string | null {
+  /** What the API said about a field: the text for its error code, never its own message. */
+  protected fieldError(field: string): ErrorText | null {
     const err = this.error();
     if (!err?.details) return null;
     const detail = err.details.find((d) => d.field === field);
-    return detail?.message ?? null;
+    return detail ? text(fieldErrorKey(detail.code)) : null;
   }
 
-  protected identifierError(index: number, field: string): string | null {
+  protected identifierError(index: number, field: string): ErrorText | null {
     this.error();
     const group = this.form.controls.identifiers.at(index) as FormGroup | null;
     if (!group) return null;
-    const serverErr = group.controls[field]?.errors?.['server'];
+    const serverErr = group.controls[field]?.errors?.['server'] as ErrorText | undefined;
     if (serverErr) return serverErr;
     if (field === 'identifier') {
-      const channelErr = group.errors?.['channelIdentifier'] as string | undefined;
+      const channelErr = group.errors?.['channelIdentifier'] as ErrorText | undefined;
       if (channelErr) return channelErr;
     }
     return null;
   }
 
-  protected metadataError(index: number): string | null {
+  protected metadataError(index: number): ErrorText | null {
     this.error();
     const group = this.form.controls.metadata.at(index) as FormGroup | null;
-    return group?.controls['value']?.errors?.['server'] ?? null;
+    return (group?.controls['value']?.errors?.['server'] as ErrorText | undefined) ?? null;
   }
 
-  private readonly unhandledErrors = signal<readonly { field: string; message: string }[]>([]);
-
-  protected readonly errorState = computed(() => {
-    const err = this.error();
-    if (!err) return null;
-
-    const details = err.details ?? [];
-    const simpleFields = new Set(['displayName', 'email', 'phone']);
-    const hasFieldLevelError = details.some((d) => d.field && simpleFields.has(d.field));
-
-    return {
-      code: err.code,
-      message: err.message,
-      status: err.status,
-      conflict: err.code === 'conflict',
-      conflictMessage:
-        err.code === 'conflict'
-          ? (details.find((d) => d.field === 'identifiers')?.message ?? err.message)
-          : null,
-      contactMessage:
-        err.code === 'validation_failed' && !hasFieldLevelError
-          ? (details.find((d) => d.field === 'contact')?.message ?? null)
-          : null,
-      unhandled: this.unhandledErrors(),
-    };
-  });
+  private readonly unhandledErrors = signal<readonly { field: string; key: string }[]>([]);
 
   private clearServerErrors(): void {
     const clear = (control: AbstractControl): void => {
@@ -377,11 +366,11 @@ export class CustomerDialogComponent {
     const err = this.error();
     if (!err?.details) return;
 
-    const unconsumed: { field: string; message: string }[] = [];
+    const unconsumed: { field: string; key: string }[] = [];
 
     for (const detail of err.details) {
       if (!detail.field) {
-        unconsumed.push({ field: '', message: detail.message });
+        unconsumed.push({ field: '', key: fieldErrorKey(detail.code) });
         continue;
       }
 
@@ -391,9 +380,9 @@ export class CustomerDialogComponent {
         const field = idMatch[2];
         const group = this.form.controls.identifiers.at(idx) as FormGroup | null;
         if (group?.controls[field]) {
-          group.controls[field].setErrors({ server: detail.message });
+          group.controls[field].setErrors({ server: text(fieldErrorKey(detail.code)) });
         } else {
-          unconsumed.push({ field: detail.field, message: detail.message });
+          unconsumed.push({ field: detail.field, key: fieldErrorKey(detail.code) });
         }
         continue;
       }
@@ -404,27 +393,27 @@ export class CustomerDialogComponent {
         const rows = this.form.controls.metadata.controls as FormGroup[];
         const row = rows.find((r) => r.controls['key']?.value === key);
         if (row?.controls['value']) {
-          row.controls['value'].setErrors({ server: detail.message });
+          row.controls['value'].setErrors({ server: text(fieldErrorKey(detail.code)) });
         } else {
-          unconsumed.push({ field: detail.field, message: detail.message });
+          unconsumed.push({ field: detail.field, key: fieldErrorKey(detail.code) });
         }
         continue;
       }
 
       if (detail.field in this.form.controls) {
         const ctrl = (this.form.controls as Record<string, AbstractControl>)[detail.field];
-        ctrl.setErrors({ server: detail.message });
+        ctrl.setErrors({ server: text(fieldErrorKey(detail.code)) });
       } else {
-        unconsumed.push({ field: detail.field, message: detail.message });
+        unconsumed.push({ field: detail.field, key: fieldErrorKey(detail.code) });
       }
     }
 
     this.unhandledErrors.set(unconsumed);
   }
 
-  protected readonly crossFieldError = computed(() => {
+  protected readonly crossFieldError = computed<ErrorText | null>(() => {
     if (this.form.hasError('contactOrIdentifier') && (this.form.dirty || this.form.touched)) {
-      return this.form.getError('contactOrIdentifier') as string;
+      return this.form.getError('contactOrIdentifier') as ErrorText;
     }
     return null;
   });
@@ -433,17 +422,14 @@ export class CustomerDialogComponent {
     () => this.metadataRows().length >= 45 && this.metadataRows().length < 50,
   );
 
-  protected contactError = computed(() => {
+  protected contactError = computed<ErrorText | null>(() => {
     const err = this.error();
     if (!err?.details) return null;
     const contactFields = ['displayName', 'email', 'phone'];
     const hasContactDetail = err.details.some((d) => contactFields.includes(d.field ?? ''));
     if (hasContactDetail) return null;
     if (err.code === 'validation_failed' && err.details.some((d) => d.field === 'contact')) {
-      const detail = err.details.find((d) => d.field === 'contact');
-      return (
-        detail?.message ?? 'At least one contact method (email, phone, or identifier) is required.'
-      );
+      return text(marker('customers.dialog.errors.contactRequired'));
     }
     return null;
   });
@@ -457,7 +443,7 @@ export class CustomerDialogComponent {
     if (details.length === 0) {
       // conflictError() already renders a bare conflict; don't show it twice.
       if (err.status >= 400 && err.code !== 'conflict') {
-        return [{ field: '', message: err.message }];
+        return [{ field: '', key: errorMessageKey(err) }];
       }
       return [];
     }
@@ -479,18 +465,23 @@ export class CustomerDialogComponent {
         if (d.code === 'identifier_conflict') return false;
         return true;
       })
-      .map((d) => ({ field: d.field ?? '', message: d.message }));
+      .map((d) => ({ field: d.field ?? '', key: fieldErrorKey(d.code) }));
   });
 
-  protected conflictError = computed(() => {
+  protected conflictError = computed<ErrorText | null>(() => {
     const err = this.error();
     if (!err) return null;
     if (err.code === 'conflict') {
       const detail = err.details?.find((d) => d.field === 'identifiers');
-      if (detail) {
-        return detail.message;
-      }
-      return err.message;
+      if (!detail) return text(errorMessageKey(err));
+      // The API names the customer who holds the identifier in separate fields; those are data.
+      const held = detail as unknown as Record<string, unknown>;
+      const { channel, identifier, existing_customer_name: name } = held;
+      return typeof channel === 'string' &&
+        typeof identifier === 'string' &&
+        typeof name === 'string'
+        ? text(marker('customers.dialog.errors.identifierHeld'), { channel, identifier, name })
+        : text(marker('customers.dialog.errors.identifierConflict'));
     }
     return null;
   });

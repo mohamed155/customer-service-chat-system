@@ -1,42 +1,44 @@
 <app-page-container>
-  <a [routerLink]="backLink" class="back-link">← Back to customers</a>
+  <a [routerLink]="backLink" class="back-link">{{ 'customers.profile.back' | transloco }}</a>
 
   <app-page-header
     [title]="headerTitle()"
-    description="Contact, identifiers, metadata, and conversation history"
+    [description]="'customers.profile.description' | transloco"
   >
     @if (canManage() && hasData()) {
-      <app-button toolbar-end variant="primary" (pressed)="openEditDialog()">Edit</app-button>
+      <app-button toolbar-end variant="primary" (pressed)="openEditDialog()">{{
+        'customers.profile.edit' | transloco
+      }}</app-button>
     }
   </app-page-header>
 
   @if (showLoading()) {
-    <app-loading-state label="Loading customer..." />
+    <app-loading-state [label]="'customers.profile.loading' | transloco" />
   } @else if (hasError()) {
     <app-empty-state
       icon="@tui.alert-circle"
-      title="Something went wrong"
-      [description]="errorMessage()"
+      [title]="'customers.profile.errorTitle' | transloco"
+      [description]="errorKey() | transloco"
     >
-      <app-button (pressed)="retry()">Try again</app-button>
+      <app-button (pressed)="retry()">{{ 'customers.profile.retry' | transloco }}</app-button>
     </app-empty-state>
   } @else if (hasData()) {
     <div class="profile-grid">
       <app-dashboard-card>
-        <app-section-header card-header title="Contact" />
+        <app-section-header card-header [title]="'customers.profile.contact' | transloco" />
         <div class="contact">
           <app-avatar [initials]="initials(customer()!.displayName)" size="lg" />
           <div class="contact-body">
             <strong class="name">{{ customer()!.displayName }}</strong>
             @if (customer()!.email) {
               <div class="contact-row">
-                <span class="label">Email</span>
+                <span class="label">{{ 'customers.dialog.email' | transloco }}</span>
                 <span>{{ customer()!.email }}</span>
               </div>
             }
             @if (customer()!.phone) {
               <div class="contact-row">
-                <span class="label">Phone</span>
+                <span class="label">{{ 'customers.dialog.phone' | transloco }}</span>
                 <span>{{ customer()!.phone }}</span>
               </div>
             }
@@ -44,23 +46,23 @@
         </div>
         <div class="timestamps">
           <div>
-            <span class="label">Created</span>
-            <time>{{ customer()!.createdAt | date: 'medium' }}</time>
+            <span class="label">{{ 'customers.profile.created' | transloco }}</span>
+            <time>{{ customer()!.createdAt | localeDate }}</time>
           </div>
           <div>
-            <span class="label">Updated</span>
-            <time>{{ customer()!.updatedAt | date: 'medium' }}</time>
+            <span class="label">{{ 'customers.profile.updated' | transloco }}</span>
+            <time>{{ customer()!.updatedAt | localeDate }}</time>
           </div>
         </div>
       </app-dashboard-card>
 
       <app-dashboard-card>
-        <app-section-header card-header title="Channel identifiers" />
+        <app-section-header card-header [title]="'customers.profile.identifiers' | transloco" />
         @if (identifiers().length === 0) {
           <app-empty-state
             icon="@tui.waypoints"
-            title="No channel identifiers"
-            description="This customer has no channel identifiers configured."
+            [title]="'customers.profile.noIdentifiersTitle' | transloco"
+            [description]="'customers.profile.noIdentifiersDescription' | transloco"
           />
         } @else {
           <ul class="identifiers">
@@ -75,12 +77,12 @@
       </app-dashboard-card>
 
       <app-dashboard-card>
-        <app-section-header card-header title="Metadata" />
+        <app-section-header card-header [title]="'customers.profile.metadata' | transloco" />
         @if (metadataEntries().length === 0) {
           <app-empty-state
             icon="@tui.list"
-            title="No metadata"
-            description="This customer has no metadata entries."
+            [title]="'customers.profile.noMetadataTitle' | transloco"
+            [description]="'customers.profile.noMetadataDescription' | transloco"
           />
         } @else {
           <dl class="metadata">
@@ -97,14 +99,14 @@
       <app-dashboard-card>
         <app-section-header
           card-header
-          title="Conversation history"
-          subtitle="Recent conversations, newest first"
+          [title]="'customers.profile.history' | transloco"
+          [subtitle]="'customers.profile.historySubtitle' | transloco"
         />
         @if (conversations().length === 0) {
           <app-empty-state
             icon="@tui.message-circle"
-            title="No conversations yet"
-            description="This customer hasn't had any conversations."
+            [title]="'customers.profile.noConversationsTitle' | transloco"
+            [description]="'customers.profile.noConversationsDescription' | transloco"
           />
         } @else {
           <ul class="conversations">
@@ -115,13 +117,13 @@
                   [status]="conversation.status"
                   [tone]="conversationTone(conversation.status)"
                 />
-                <time>{{ conversation.lastActivityAt | date: 'short' }}</time>
+                <time>{{ conversation.lastActivityAt | localeDate }}</time>
               </li>
             }
           </ul>
           @if (hasMoreConversations()) {
             <p class="has-more-note">
-              Showing {{ conversations().length }} most recent conversations.
+              {{ 'customers.profile.showingRecent' | transloco: { count: conversations().length } }}
             </p>
           }
         }
