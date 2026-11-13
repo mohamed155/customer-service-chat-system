@@ -26,6 +26,7 @@ tsTester.run('unsafe-html', unsafeHtml, {
     { code: 'el.innerHTML = value', errors: [{ messageId: 'sink' }] },
     { code: 'this.host.nativeElement.outerHTML = value', errors: [{ messageId: 'sink' }] },
     { code: 'el["innerHTML"] = value', errors: [{ messageId: 'sink' }] },
+    { code: 'frame.srcdoc = html', errors: [{ messageId: 'sink' }] },
     { code: 'el.insertAdjacentHTML("beforeend", html)', errors: [{ messageId: 'sink' }] },
     { code: 'document.write(html)', errors: [{ messageId: 'sink' }] },
     { code: 'document.writeln(html)', errors: [{ messageId: 'sink' }] },
@@ -49,5 +50,6 @@ templateTester.run('unsafe-html-template', unsafeHtmlTemplate, {
       errors: [{ messageId: 'binding' }],
     },
     { code: '<div [outerHTML]="html"></div>', errors: [{ messageId: 'binding' }] },
+    { code: '<iframe [srcdoc]="html"></iframe>', errors: [{ messageId: 'binding' }] },
   ],
 });

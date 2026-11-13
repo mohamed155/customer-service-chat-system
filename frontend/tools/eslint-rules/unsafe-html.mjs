@@ -9,11 +9,15 @@
 //
 // In a template: `<!-- eslint-disable-next-line html-safety/unsafe-html-template -- reason -->`.
 //
-// TypeScript (`unsafeHtml`): `bypassSecurityTrust*()`, assignment to `innerHTML` / `outerHTML`,
-// `insertAdjacentHTML()` and `document.write()` / `writeln()`.
-// Templates (`unsafeHtmlTemplate`): `[innerHTML]` and `[outerHTML]` bindings.
+// TypeScript (`unsafeHtml`): `bypassSecurityTrust*()`, assignment to `innerHTML` / `outerHTML` /
+// `srcdoc`, `insertAdjacentHTML()` and `document.write()` / `writeln()`.
+// Templates (`unsafeHtmlTemplate`): `[innerHTML]`, `[outerHTML]` and `[srcdoc]` bindings.
+//
+// Not covered: a script's `text` / `textContent` / `src`. The names are ordinary on other elements
+// and the element type is not known without type information. Trusted Types blocks them in the
+// browser and the e2e guard (frontend/e2e/support/test.ts) fails a spec that hits one.
 
-const SINK_PROPERTIES = new Set(['innerHTML', 'outerHTML']);
+const SINK_PROPERTIES = new Set(['innerHTML', 'outerHTML', 'srcdoc']);
 const SINK_METHODS = new Set(['insertAdjacentHTML']);
 const DOCUMENT_WRITERS = new Set(['write', 'writeln']);
 
