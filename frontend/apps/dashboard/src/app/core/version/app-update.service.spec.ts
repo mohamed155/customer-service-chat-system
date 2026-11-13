@@ -164,7 +164,8 @@ describe('AppUpdateService', () => {
     const service = TestBed.inject(AppUpdateService);
     const doc = TestBed.inject(DOCUMENT);
     service.start();
-    await service.check('x'); // a check just ran
+    await service.check(releaseFingerprint(runningPage)!); // a check just ran: same release
+    expect(service.updateAvailable()).toBe(false);
     fetchMock.mockClear();
 
     doc.dispatchEvent(new Event('visibilitychange'));

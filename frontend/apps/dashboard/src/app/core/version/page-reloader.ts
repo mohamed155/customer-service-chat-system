@@ -8,9 +8,22 @@ export class PageReloader {
 
   /** Load `url` as a new page, or the current page again when there is no URL. */
   reload(url?: string): void {
-    const location = this.document.defaultView?.location;
-    if (!location) return;
-    if (url) location.assign(url);
-    else location.reload();
+    const view = this.document.defaultView;
+    const location = view?.location;
+    if (!view || !location) return;
+    if (!url) {
+      location.reload();
+      return;
+    }
+    const target = new URL(url, location.href);
+    const withoutFragment = (u: string | URL) => String(u).split('#')[0];
+    if (target.hash && withoutFragment(target) === withoutFragment(location.href)) {
+      // `assign` to the same document with a fragment is a jump within the page, not a load: take
+      // over the target's fragment, then load the document again.
+      view.history.replaceState(view.history.state, '', target.href);
+      location.reload();
+      return;
+    }
+    location.assign(target.href);
   }
 }
