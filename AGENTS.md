@@ -113,7 +113,9 @@ CI also checks internal links and anchors (lychee) and runs the full Compose sta
 
 - `backend/crates/server`: HTTP binary and router. `backend/crates/modules/*`: one crate per
   module. `backend/crates/shared/*`: db, config, kernel, cache, events, storage, observability.
-- `frontend/apps/dashboard`, `frontend/apps/widget`, shared code in `frontend/libs/`.
+- `frontend/apps/dashboard` (all dashboard code: `core/`, `shared/`, `layout/`, `features/`, see
+  `frontend/CLAUDE.md`), `frontend/apps/widget`. `frontend/libs/ui` holds Helix components nothing
+  imports; put new shared dashboard code in `apps/dashboard/src/app/shared` or `core`, not in a lib.
 - `docs/` (index: `docs/README.md`): architecture, ADRs, specs index, runbooks, security,
   configuration. Module README template: `docs/architecture/module-readme-template.md`.
 - `specs/`: one folder per feature. `.specify/`: constitution, templates, scripts.

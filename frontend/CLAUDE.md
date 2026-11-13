@@ -1,5 +1,15 @@
 # Frontend Agent Context
 
+## Where code lives
+
+- The dashboard's code is all under `apps/dashboard/src/app`: `core/`, `shared/`, `layout/` and
+  `features/` (see the layers below). There are no libraries for features: the seven placeholder
+  libs (`data-access`, `feature-*`, `realtime`) were empty and were removed (MOH-63).
+- `libs/ui` is the only library left: Helix components that nothing imports, not built and not
+  tested by `ng test` (its README says so). Do not add to it; shared dashboard code goes in
+  `shared/` or `core/`.
+- `apps/widget` is its own app (see below) and imports nothing from `libs/`.
+
 ## Frontend rules (from spec 002)
 
 - Layers inside `apps/dashboard/src/app/`: `core/` (singletons, no feature deps), `shared/` (reusable, no business logic), `layout/`, `features/{auth,platform,tenant}` (lazy route areas), `design-system/` (`--app-*` tokens, light/dark via `data-theme` + Taiga `tuiTheme`).

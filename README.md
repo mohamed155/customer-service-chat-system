@@ -23,7 +23,7 @@ S3-compatible storage sit underneath.
 | Path | What it holds |
 | -- | -- |
 | `backend/` | Rust Cargo workspace. `crates/server` is the HTTP binary, `crates/modules/*` the business modules (conversations, knowledge, tenancy, …), `crates/shared/*` shared crates (db, config, kernel, …), `crates/ai-providers` the LLM provider adapters, `migrations/` the SQL migrations |
-| `frontend/` | Angular + pnpm workspace. `apps/dashboard` (tenant and platform admin) and `apps/widget` (embeddable chat), shared code in `libs/`, Playwright tests in `e2e/`. Conventions are in [`frontend/CLAUDE.md`](frontend/CLAUDE.md) |
+| `frontend/` | Angular + pnpm workspace. `apps/dashboard` (tenant and platform admin) and `apps/widget` (embeddable chat), Playwright tests in `e2e/`. The dashboard's code, shared or not, is under `apps/dashboard/src/app` (`core/`, `shared/`, `layout/`, `features/`); `libs/ui` is an unused set of Helix components, see its README. Conventions are in [`frontend/CLAUDE.md`](frontend/CLAUDE.md) |
 | `infra/` | Docker Compose stack for local development and staging, Dockerfiles, and Prometheus, Grafana and Loki configuration |
 | `ops/` | Staging deploy, rollback, backup and restore scripts |
 | `loadtest/` | k6 load tests |

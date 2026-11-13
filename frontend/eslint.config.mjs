@@ -22,7 +22,7 @@ export default tseslint.config(
   },
   {
     // Dashboard rule: component templates live in separate .html files, never inline in TS.
-    // (apps/widget and libs/* are frozen scaffolding — excluded.)
+    // (apps/widget and libs/ui are not part of the dashboard — excluded.)
     // styles/animations ceilings are intentionally unrestricted; only `template` is banned.
     files: ['apps/dashboard/**/*.ts'],
     rules: {
