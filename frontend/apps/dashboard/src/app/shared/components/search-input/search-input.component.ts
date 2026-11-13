@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, input, model, output } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-search-input',
-  imports: [TuiIcon],
+  imports: [TuiIcon, TranslocoPipe],
   templateUrl: './search-input.component.html',
   styles: [
     `
@@ -62,7 +63,7 @@ import { TuiIcon } from '@taiga-ui/core';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SearchInputComponent {
-  readonly placeholder = input('Search');
+  readonly placeholder = input<string | null>(null);
   readonly shortcutHint = input<string | undefined>();
   readonly value = model('');
   readonly searchSubmit = output<string>();

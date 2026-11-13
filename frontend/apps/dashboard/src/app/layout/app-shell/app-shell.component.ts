@@ -9,6 +9,7 @@ import { SidebarComponent } from '../sidebar/sidebar.component';
 import { TopbarComponent } from '../topbar/topbar.component';
 import { LayoutStore } from './layout.store';
 import { ErrorReferenceComponent } from '../../shared/components/error-reference/error-reference.component';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-shell',
@@ -19,6 +20,7 @@ import { ErrorReferenceComponent } from '../../shared/components/error-reference
     SidebarComponent,
     TopbarComponent,
     TuiIcon,
+    TranslocoPipe,
   ],
   providers: [LayoutStore],
   templateUrl: './app-shell.component.html',

@@ -25,6 +25,7 @@ import { apiErrorInterceptor } from './core/http/api-error.interceptor';
 import { requestIdInterceptor } from './core/http/request-id.interceptor';
 import { httpResilienceInterceptor } from './core/http/http-resilience.interceptor';
 import { ClientErrorReporter } from './core/errors/client-error-reporter';
+import { provideI18n } from './core/i18n/i18n.providers';
 import { GlobalErrorHandler } from './core/errors/global-error-handler';
 import { TenantContextEffects } from './core/state/tenant-context.effects';
 import { devtoolsProviders } from './core/state/devtools';
@@ -80,6 +81,8 @@ export const appConfig: ApplicationConfig = {
       const cus = inject(CurrentUserService);
       return cus.load();
     }),
+    // Text, dates and numbers in the active language, and Taiga's own text with it (MOH-155).
+    ...provideI18n(),
     ...devtoolsProviders,
     { provide: APP_CONFIG, useValue: environment },
     { provide: ErrorHandler, useClass: GlobalErrorHandler },

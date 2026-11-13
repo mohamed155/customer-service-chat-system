@@ -1,0 +1,403 @@
+{
+  "app": {
+    "brandLabel": "Helix Support AI",
+    "brandName": "Helix",
+    "tagline": "Support AI"
+  },
+  "sidebar": {
+    "primaryNav": "Primary navigation",
+    "group": {
+      "workspace": "Workspace",
+      "ai": "AI",
+      "insights": "Insights",
+      "security": "Security",
+      "account": "Account",
+      "billing": "Billing",
+      "settings": "Settings"
+    },
+    "item": {
+      "overview": "Overview",
+      "conversations": "Conversations",
+      "escalations": "Escalations",
+      "customers": "Customers",
+      "team": "Team",
+      "aiAgent": "AI Agent",
+      "aiTools": "AI Tools",
+      "knowledgeBase": "Knowledge Base",
+      "integrations": "Integrations",
+      "chatWidget": "Chat Widget",
+      "analytics": "Analytics",
+      "auditLogs": "Audit Logs",
+      "billing": "Billing",
+      "settings": "Settings",
+      "accountSecurity": "Account security"
+    }
+  },
+  "shell": {
+    "closeDrawer": "Close navigation drawer",
+    "dismissAlert": "Dismiss tenant access alert"
+  },
+  "common": {
+    "dismiss": "Dismiss",
+    "reload": "Reload",
+    "close": "Close",
+    "cancel": "Cancel"
+  },
+  "breadcrumb": {
+    "label": "Breadcrumb",
+    "workspace": "Workspace",
+    "platform": "Platform",
+    "home": "Home"
+  },
+  "platformNav": {
+    "label": "Platform",
+    "tenants": "Tenants",
+    "auditLogs": "Audit Logs",
+    "billing": "Billing",
+    "systemHealth": "System health",
+    "aiProviders": "AI providers",
+    "overview": "Platform overview"
+  },
+  "tenantSwitcher": {
+    "label": "Switch tenant",
+    "select": "Select tenant...",
+    "search": "Search tenants...",
+    "empty": "No tenants found"
+  },
+  "topbar": {
+    "toggleSidebar": "Toggle sidebar",
+    "tools": "Dashboard tools",
+    "search": "Search conversations, customers...",
+    "new": "New",
+    "themeLightToDark": "Theme is light; switch to dark",
+    "themeDarkToSystem": "Theme is dark; switch to system",
+    "themeSystemToLight": "Theme is system; switch to light"
+  },
+  "userMenu": {
+    "label": "User menu",
+    "signOut": "Sign out"
+  },
+  "updateBanner": {
+    "message": "A new version is available. Reload to get it.",
+    "dismiss": "Dismiss update notice"
+  },
+  "availability": {
+    "available": "Available",
+    "away": "Away"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "message": "The route you opened does not map to a Helix workspace screen.",
+    "back": "Return to overview"
+  },
+  "tenantSelect": {
+    "title": "Select a workspace",
+    "description": "Choose a workspace from the tenant switcher in the topbar to get started.",
+    "noneSelectedTitle": "Select a tenant to get started",
+    "noneSelectedDescription": "You are a member of one or more workspaces. Choose a tenant from the tenant switcher in the topbar to access your conversations, customers, and settings. If you don't see a tenant switcher, contact your workspace administrator to ensure you have the correct access permissions.",
+    "back": "Back to tenant area",
+    "noAccessTitle": "No workspace access",
+    "noAccessDescription": "You don't currently have access to any workspace. Contact your workspace administrator to get the correct permissions. If you believe this is an error, try signing out and back in."
+  },
+  "roles": {
+    "tenant": {
+      "owner": "Owner · {tenant}",
+      "admin": "Admin · {tenant}",
+      "manager": "Manager · {tenant}",
+      "agent": "Support Agent · {tenant}",
+      "viewer": "Viewer · {tenant}"
+    },
+    "platform": {
+      "super_admin": "Super Admin",
+      "developer": "Developer",
+      "support": "Support Engineer",
+      "sales": "Sales",
+      "finance": "Finance"
+    }
+  },
+  "pages": {
+    "overview": {
+      "title": "Overview",
+      "subtitle": "{date} · Your support cockpit"
+    },
+    "conversations": {
+      "title": "Conversations",
+      "subtitle": "Manage your team conversations"
+    },
+    "conversationDetail": {
+      "title": "Conversation",
+      "subtitle": "Customer conversation details and timeline"
+    },
+    "customers": {
+      "title": "Customers",
+      "subtitle": "Customer profiles and conversation history"
+    },
+    "customerProfile": {
+      "title": "Customer profile",
+      "subtitle": "Contact, identifiers, and conversation history"
+    },
+    "aiAgent": {
+      "title": "AI Agent",
+      "subtitle": "Configure how your assistant behaves"
+    },
+    "aiAgentPrompt": {
+      "title": "System Prompt",
+      "subtitle": "Manage the base instruction given to the AI"
+    },
+    "knowledgeBase": {
+      "title": "Knowledge Base",
+      "subtitle": "Train your AI with trusted company knowledge"
+    },
+    "knowledgeBaseNew": {
+      "title": "New Article",
+      "subtitle": "Create a knowledge article"
+    },
+    "knowledgeBaseDetail": {
+      "title": "Article",
+      "subtitle": "Knowledge article details"
+    },
+    "knowledgeBaseEdit": {
+      "title": "Edit Article",
+      "subtitle": "Update the knowledge article"
+    },
+    "integrations": {
+      "title": "Integrations",
+      "subtitle": "Connect channels and business systems"
+    },
+    "analytics": {
+      "title": "Analytics",
+      "subtitle": "Trends across every channel"
+    },
+    "settings": {
+      "title": "Settings",
+      "subtitle": "Workspace preferences and security"
+    },
+    "toolsSettings": {
+      "title": "AI Tool Settings",
+      "subtitle": "Manage built-in and custom AI tools"
+    },
+    "team": {
+      "title": "Team",
+      "subtitle": "Manage team members and invitations"
+    },
+    "inviteAccept": {
+      "title": "Accept invitation",
+      "subtitle": "Join your team"
+    },
+    "platform": {
+      "title": "Platform",
+      "subtitle": "Platform administration"
+    },
+    "platformOverview": {
+      "title": "Platform overview",
+      "subtitle": "Platform administration"
+    },
+    "selectTenant": {
+      "title": "Select tenant",
+      "subtitle": "Choose a tenant context to continue"
+    },
+    "platformTenants": {
+      "title": "Tenants",
+      "subtitle": "Manage customer organizations"
+    },
+    "platformTenantDetail": {
+      "title": "Tenant details",
+      "subtitle": "View and manage this organization"
+    },
+    "platformTenantNew": {
+      "title": "New tenant",
+      "subtitle": "Onboard a new customer organization"
+    },
+    "escalations": {
+      "title": "Escalations",
+      "subtitle": "Manage queued and active escalations"
+    },
+    "widgets": {
+      "title": "Chat Widget",
+      "subtitle": "Embed the chat widget on your website"
+    },
+    "billing": {
+      "title": "Billing",
+      "subtitle": "Your plan and usage this month"
+    },
+    "auditLogs": {
+      "title": "Audit Logs",
+      "subtitle": "Track sensitive actions in your workspace"
+    },
+    "platformAuditLogs": {
+      "title": "Audit Logs",
+      "subtitle": "Platform-wide activity across all tenants"
+    },
+    "platformBilling": {
+      "title": "Platform Billing",
+      "subtitle": "Manage plans and subscriptions"
+    },
+    "platformSystemHealth": {
+      "title": "System health",
+      "subtitle": "Platform administration"
+    },
+    "platformAiProviders": {
+      "title": "AI provider status",
+      "subtitle": "Platform administration"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "subtitle": "Your recent activity and alerts"
+    }
+  },
+  "aiPreview": {
+    "question": "Can I exchange an order without losing the promotion?",
+    "answer": "Yes. I can preserve eligible promotional credit while starting the exchange."
+  },
+  "aiSuggestion": {
+    "title": "Suggested reply"
+  },
+  "aiThinking": {
+    "label": "AI is thinking..."
+  },
+  "escalationBanner": {
+    "dismiss": "Dismiss alert"
+  },
+  "audit": {
+    "entry": "Audit Entry",
+    "time": "Time",
+    "actor": "Actor",
+    "system": "System",
+    "platformStaff": "Platform staff",
+    "deleted": "deleted",
+    "action": "Action",
+    "category": "Category",
+    "targetType": "Target type",
+    "targetId": "Target ID",
+    "tenant": "Tenant",
+    "metadata": "Metadata",
+    "empty": {
+      "title": "No audit entries",
+      "description": "No activity has been recorded yet."
+    },
+    "target": "Target"
+  },
+  "citations": {
+    "sources": "Sources",
+    "unavailable": "No longer available"
+  },
+  "dialog": {
+    "close": "Close dialog"
+  },
+  "errorReference": {
+    "ref": "Ref",
+    "copyLabel": "Copy the full request ID to send to support",
+    "copied": "Copied",
+    "failed": "Copy failed",
+    "copy": "Copy"
+  },
+  "escalationRouting": {
+    "assigned": "Assigned to agent",
+    "queued": "Waiting in queue",
+    "escalated": "Escalated · {reason}",
+    "reason": {
+      "skill_match": "Skill match",
+      "load_fallback": "Load fallback",
+      "manual_claim": "Manual claim",
+      "queue_auto": "Queue auto",
+      "manual_reassignment": "Manual reassignment",
+      "unknown": "Unknown",
+      "other": "Other"
+    }
+  },
+  "notifications": {
+    "label": "Notifications",
+    "empty": {
+      "title": "No notifications",
+      "description": "You're all caught up."
+    },
+    "markRead": "Mark read",
+    "loadMore": "Load more"
+  },
+  "relativeTime": {
+    "justNow": "just now",
+    "minutes": "{n}m ago",
+    "hours": "{n}h ago",
+    "days": "{n}d ago"
+  },
+  "health": {
+    "healthy": "Healthy",
+    "degraded": "Degraded",
+    "unhealthy": "Unhealthy"
+  },
+  "confidence": {
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "channels": {
+    "web": "Website",
+    "web_chat": "Web chat",
+    "whatsapp": "WhatsApp",
+    "telegram": "Telegram",
+    "mobile_sdk": "Mobile SDK",
+    "email": "Email",
+    "phone": "Phone",
+    "widget": "Widget"
+  },
+  "satisfaction": {
+    "rated": "Rated {rating} out of 5"
+  },
+  "loadingState": {
+    "label": "Loading"
+  },
+  "breakdownBars": {
+    "label": "Channel breakdown"
+  },
+  "choiceGroup": {
+    "label": "Options"
+  },
+  "searchInput": {
+    "placeholder": "Search"
+  },
+  "stepUp": {
+    "title": "Confirm it is you",
+    "recoveryHint": "Enter one of your recovery codes to continue.",
+    "codeHint": "Enter the 6-digit code from your authenticator app to continue.",
+    "recoveryLabel": "Recovery code",
+    "codeLabel": "Authentication code",
+    "useCode": "Use an authenticator code",
+    "useRecovery": "Use a recovery code",
+    "checking": "Checking…",
+    "continue": "Continue"
+  },
+  "toolApproval": {
+    "pending": "pending approval",
+    "arguments": "Arguments:",
+    "expires": "Expires:",
+    "approve": "Approve",
+    "deny": "Deny",
+    "state": {
+      "approved": "Approved — tool will execute",
+      "denied": "Denied",
+      "expired": "Expired — no decision was made in time",
+      "cancelled": "Cancelled",
+      "succeeded": "Executed successfully",
+      "failed": "Execution failed"
+    },
+    "expired": "Expired",
+    "remaining": "{mins}m {secs}s"
+  },
+  "toolResult": {
+    "hide": "Hide details",
+    "show": "Show details",
+    "error": "Error:",
+    "result": "Result:"
+  },
+  "toolTimeline": {
+    "tenant": "tenant",
+    "decidedBy": "by {name}",
+    "hideArguments": "Hide arguments",
+    "showArguments": "Show arguments"
+  },
+  "trendChart": {
+    "label": "Chart: {names}",
+    "data": "Chart data",
+    "value": "Value"
+  }
+}

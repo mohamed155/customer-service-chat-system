@@ -2,20 +2,20 @@
   <div class="card-header">
     <span class="tool-name">{{ request().toolName }}</span>
     <span class="status-badge" [class.active]="!isResolved()" [class.settled]="isResolved()">
-      {{ isResolved() ? request().status : 'pending approval' }}
+      {{ isResolved() ? request().status : ('toolApproval.pending' | transloco) }}
     </span>
   </div>
 
   <div class="card-body">
     <div class="args-section">
-      <span class="label">Arguments:</span>
+      <span class="label">{{ 'toolApproval.arguments' | transloco }}</span>
       <pre class="args-json">{{ request().arguments | json }}</pre>
     </div>
 
     @if (request().expiresAt && !isResolved()) {
       <div class="expiry-section">
-        <span class="label">Expires:</span>
-        <span class="countdown">{{ expiryText() }}</span>
+        <span class="label">{{ 'toolApproval.expires' | transloco }}</span>
+        <span class="countdown">{{ expiry().key | transloco: expiry().params }}</span>
       </div>
     }
   </div>
@@ -28,26 +28,30 @@
         (click)="onApprove()"
         [disabled]="actionInProgress()"
       >
-        Approve
+        {{ 'toolApproval.approve' | transloco }}
       </button>
       <button type="button" class="btn btn-deny" (click)="onDeny()" [disabled]="actionInProgress()">
-        Deny
+        {{ 'toolApproval.deny' | transloco }}
       </button>
     </div>
   } @else {
     <div class="resolved-state">
       @if (request().status === 'approved') {
-        <span class="resolved-text approved">Approved — tool will execute</span>
+        <span class="resolved-text approved">{{ 'toolApproval.state.approved' | transloco }}</span>
       } @else if (request().status === 'denied') {
-        <span class="resolved-text denied">Denied</span>
+        <span class="resolved-text denied">{{ 'toolApproval.state.denied' | transloco }}</span>
       } @else if (request().status === 'expired') {
-        <span class="resolved-text expired">Expired — no decision was made in time</span>
+        <span class="resolved-text expired">{{ 'toolApproval.state.expired' | transloco }}</span>
       } @else if (request().status === 'cancelled') {
-        <span class="resolved-text cancelled">Cancelled</span>
+        <span class="resolved-text cancelled">{{
+          'toolApproval.state.cancelled' | transloco
+        }}</span>
       } @else if (request().status === 'succeeded') {
-        <span class="resolved-text succeeded">Executed successfully</span>
+        <span class="resolved-text succeeded">{{
+          'toolApproval.state.succeeded' | transloco
+        }}</span>
       } @else if (request().status === 'failed' || request().status === 'timed_out') {
-        <span class="resolved-text failed">Execution failed</span>
+        <span class="resolved-text failed">{{ 'toolApproval.state.failed' | transloco }}</span>
       } @else {
         <span class="resolved-text">{{ request().status }}</span>
       }

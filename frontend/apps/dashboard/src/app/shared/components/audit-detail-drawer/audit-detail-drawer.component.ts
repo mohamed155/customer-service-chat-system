@@ -1,12 +1,14 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
-import { DatePipe, JsonPipe } from '@angular/common';
+import { JsonPipe } from '@angular/common';
+import { LocaleDatePipe } from '../../../core/i18n/format';
 import { AuditEntry } from '../../../core/api/tenant-api.models';
 import { DialogShellComponent } from '../dialog-shell/dialog-shell.component';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-audit-detail-drawer',
   standalone: true,
-  imports: [DatePipe, JsonPipe, DialogShellComponent],
+  imports: [LocaleDatePipe, JsonPipe, DialogShellComponent, TranslocoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './audit-detail-drawer.component.html',
   styles: [

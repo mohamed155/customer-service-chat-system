@@ -11,14 +11,15 @@ import {
 } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
 import { AuthService } from '../../core/auth/auth.service';
-import { roleLabel } from '../../core/identity/role-display';
+import { roleLine } from '../../core/identity/role-display';
 import { CurrentUserService } from '../../core/tenant/current-user.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-user-menu',
-  imports: [AvatarComponent, TuiIcon],
+  imports: [AvatarComponent, TuiIcon, TranslocoPipe],
   templateUrl: './user-menu.component.html',
   styles: [
     `
@@ -145,7 +146,7 @@ export class UserMenuComponent {
   });
 
   protected readonly roleLine = computed(() =>
-    roleLabel(this.currentUser(), this.tenantContext.activeTenant()),
+    roleLine(this.currentUser(), this.tenantContext.activeTenant()),
   );
 
   toggle(): void {

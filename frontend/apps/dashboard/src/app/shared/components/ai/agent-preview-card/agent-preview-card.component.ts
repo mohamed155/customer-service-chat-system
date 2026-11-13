@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { AvatarComponent } from '../../avatar/avatar.component';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-agent-preview-card',
-  imports: [AvatarComponent],
+  imports: [AvatarComponent, TranslocoPipe],
   templateUrl: './agent-preview-card.component.html',
   styles: [
     `

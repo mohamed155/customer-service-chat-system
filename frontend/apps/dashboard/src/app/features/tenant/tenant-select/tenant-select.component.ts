@@ -5,10 +5,17 @@ import { CurrentUserService } from '../../../core/tenant/current-user.service';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-tenant-select',
-  imports: [EmptyStateComponent, PageContainerComponent, PageHeaderComponent, RouterLink],
+  imports: [
+    EmptyStateComponent,
+    PageContainerComponent,
+    PageHeaderComponent,
+    RouterLink,
+    TranslocoPipe,
+  ],
   templateUrl: './tenant-select.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

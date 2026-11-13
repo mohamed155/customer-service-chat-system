@@ -1,12 +1,14 @@
-<nav aria-label="Breadcrumb">
+<nav [attr.aria-label]="'breadcrumb.label' | transloco">
   <div class="breadcrumb-inner">
     <ol>
       @for (crumb of crumbs(); track $index) {
         <li>
           @if (crumb.link; as link) {
-            <a [routerLink]="[link]">{{ crumb.label }}</a>
+            <a [routerLink]="[link]">{{ crumb.label | transloco }}</a>
           } @else {
-            <span [attr.aria-current]="$last ? 'page' : undefined">{{ crumb.label }}</span>
+            <span [attr.aria-current]="$last ? 'page' : undefined">{{
+              crumb.label | transloco
+            }}</span>
           }
         </li>
       }

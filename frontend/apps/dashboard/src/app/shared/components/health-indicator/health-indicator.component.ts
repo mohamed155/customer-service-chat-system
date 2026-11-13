@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
+import { TranslocoPipe } from '@jsverse/transloco';
+import { marker } from '../../../core/i18n/marker';
 
 @Component({
   selector: 'app-health-indicator',
   standalone: true,
-  imports: [TuiIcon],
+  imports: [TuiIcon, TranslocoPipe],
   templateUrl: './health-indicator.component.html',
   styles: [
     `
@@ -43,11 +45,11 @@ export class HealthIndicatorComponent {
   protected readonly label = computed(() => {
     switch (this.verdict()) {
       case 'healthy':
-        return 'Healthy';
+        return marker('health.healthy');
       case 'degraded':
-        return 'Degraded';
+        return marker('health.degraded');
       case 'unhealthy':
-        return 'Unhealthy';
+        return marker('health.unhealthy');
     }
   });
 

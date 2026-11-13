@@ -35,14 +35,24 @@ language needs no code change" would only mean "needs a new build".
 - `@jsverse/transloco` with the English catalog as the default and fallback. A feature area is a
   Transloco *scope*, loaded with its lazy route, so the initial bundle holds only the shared and
   auth catalogs.
-- Catalog files: `apps/dashboard/public/i18n/<scope>/<locale>.json`. A new locale is a new file per
-  scope; no code changes. The active locale comes from the signed-in user's choice, then the
-  browser's.
-- Plurals and select use ICU MessageFormat (`@jsverse/transloco-messageformat`). Dates and numbers
-  go through Angular's `DatePipe`/`DecimalPipe` or `Intl` with the active locale, never a
-  hand-built format.
+- Catalog files: `apps/dashboard/public/i18n/<scope>/<locale>.json`. The `shared` scope is the
+  default catalog: its English is part of the build (no request to show the first screen) and
+  every other language is the file `shared/<locale>.json`. A new locale is a new file per scope;
+  no code changes. A language is offered when its `shared` file loads: the active one is the
+  person's own choice, then the browser's languages in order, then English. Nothing in the API
+  stores a per-user language yet, so the choice is kept in the browser (`app.locale`).
+- Plurals, select and ordinals use **ICU MessageFormat**, read by a small interpreter of our own
+  (`core/i18n/icu.ts`, about 2 kB) on `Intl.PluralRules`, `Intl.NumberFormat` and
+  `Intl.DateTimeFormat`. `@jsverse/transloco-messageformat` is not used: it builds a function from
+  every message with the `Function` constructor, which the dashboard's policy forbids
+  (`script-src 'self'` has no `unsafe-eval`, and Trusted Types refuses a string turned into code,
+  MOH-170); allowing it would undo that work. The message syntax is the same, so a catalog can move
+  to another ICU implementation without change. Dates and numbers go through `Intl` with the
+  active locale (`localeDate`, `localeNumber`, `relativeTime`), never a hand-built format and not
+  Angular's `DatePipe`, which needs locale data registered in code for each language.
 - Taiga UI's own text (calendar, validation messages) follows the same locale through Taiga's
-  language providers.
+  `TUI_LANGUAGE`, from `@taiga-ui/i18n` for the languages Taiga ships (each a lazy chunk); a
+  language Taiga lacks keeps English for Taiga's text only.
 
 ### 3. Widget: a small lookup of its own
 
@@ -81,6 +91,7 @@ strings in TypeScript; reviewers check those.
 | -- | -- |
 | **Angular built-in i18n** | One build per locale; extraction and merge tooling for XLIFF; the product owner chose a runtime catalog. |
 | **ngx-translate** | Comparable to Transloco but less maintained, and without scoped lazy loading as a first-class feature. |
+| **`@jsverse/transloco-messageformat`** | It compiles each message with `new Function`, blocked by the dashboard's CSP and Trusted Types (MOH-170). |
 | **Transloco in the widget** | The widget's size budget and its no-library rule (ADR-011). |
 | **A single hand-written service for both apps** | Duplicates a maintained library's plural, scope and loader work in the dashboard for no gain; the widget is small enough that its own lookup is cheaper than a library. |
 
@@ -94,7 +105,9 @@ strings in TypeScript; reviewers check those.
 
 **Negative and costs**
 
-- A catalog request at start-up for a non-English locale (the default needs none).
+- A catalog request at start-up for a non-English locale (English needs none), and a failed request for each browser language that has no file (the server answers 404 and the page goes on in English).
+- The initial bundle grew by about 37 kB raw (11 kB transferred): Transloco, the message reader and the shared English catalog. Taiga's language files add about 200 kB of lazy chunks.
+- A message reader of our own to maintain, covering only the ICU features the catalogs use (a test keeps every English message readable).
 - A migration of about 740 strings in 83 dashboard files, staged by area (below).
 - Reviewers still have to catch message strings in TypeScript, which the check does not read.
 - The widget's initial size grew by about 3 kB for the lookup (its warning threshold moved from 190
@@ -106,6 +119,6 @@ strings in TypeScript; reviewers check those.
 | -- | -- | -- | -- |
 | I1 | **The widget** had about 20 hard-coded strings. | `frontend/apps/widget/src` | **Resolved (MOH-41):** all moved to `I18n`; `?lang=` and `i18n/<locale>.json` work; plural fixed ("1 star"). |
 | I2 | **No check for new hard-coded text.** | CI | **Resolved (MOH-41):** `pnpm lint:i18n` with a per-file baseline (744 texts in 83 dashboard files at the time of writing). |
-| I3 | **The dashboard has no catalog mechanism** and about 740 strings in templates. | `frontend/apps/dashboard/src/app` | Transloco, shared layout, auth and errors first, then one feature area at a time; each area lowers the baseline. |
+| I3 | **The dashboard has no catalog mechanism** and about 740 strings in templates. | `frontend/apps/dashboard/src/app` | **Mechanism and first area resolved (MOH-155):** Transloco, the catalogs, language selection, `Intl` dates and numbers, Taiga's language, the checks in `pnpm lint:i18n` and the test setup; `shared/`, `layout/`, `not-found` and `tenant-select` moved (670 texts in 62 files remain). The feature areas follow, each lowering the baseline (MOH-156 to MOH-165). |
 | I4 | **Backend free-text error messages** (about 65 sites) are shown by some screens. | `backend/crates/**`, dashboard error screens | Show by `code` (section 5); the backend keeps its text for logs. |
 | I5 | **Message strings in TypeScript** are not scanned. | components and services | Moved with their area; reviewed by hand. |

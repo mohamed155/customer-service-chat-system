@@ -3,7 +3,8 @@ import { TuiIcon } from '@taiga-ui/core';
 import { NotificationEntry } from '../../../core/api/tenant-api.models';
 import { EmptyStateComponent } from '../empty-state/empty-state.component';
 import { LoadingStateComponent } from '../loading-state/loading-state.component';
-import { relativeTime } from '../../utils/relative-time';
+import { RelativeTimePipe } from '../../../core/i18n/relative-time.pipe';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 function stateClass(state: string): string {
   if (state === 'unread') return 'state-unread';
@@ -13,7 +14,7 @@ function stateClass(state: string): string {
 
 @Component({
   selector: 'app-notification-list',
-  imports: [TuiIcon, EmptyStateComponent, LoadingStateComponent],
+  imports: [RelativeTimePipe, TuiIcon, EmptyStateComponent, LoadingStateComponent, TranslocoPipe],
   templateUrl: './notification-list.component.html',
   styles: [
     `
@@ -125,7 +126,6 @@ export class NotificationListComponent {
   readonly markRead = output<string>();
   readonly loadMore = output<void>();
 
-  protected relativeTime = relativeTime;
   protected stateClass = stateClass;
 
   protected iconForKind(kind: string): string {

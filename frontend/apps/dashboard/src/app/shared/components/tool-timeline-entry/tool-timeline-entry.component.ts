@@ -1,10 +1,11 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { ToolRequest } from '../../../core/api/tenant-api.models';
 import { ToolResultViewerComponent } from '../tool-result-viewer/tool-result-viewer.component';
 
 @Component({
   selector: 'app-tool-timeline-entry',
-  imports: [ToolResultViewerComponent],
+  imports: [ToolResultViewerComponent, TranslocoPipe],
   templateUrl: './tool-timeline-entry.component.html',
   styleUrl: './tool-timeline-entry.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

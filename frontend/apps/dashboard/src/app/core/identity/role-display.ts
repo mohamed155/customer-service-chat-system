@@ -1,38 +1,49 @@
+import { marker } from '../i18n/marker';
 import { MeResponse, TenantSummary } from '../api/tenant-api.models';
 
-export const TENANT_ROLE_LABELS: Record<string, string> = {
-  owner: 'Owner',
-  admin: 'Admin',
-  manager: 'Manager',
-  agent: 'Support Agent',
-  viewer: 'Viewer',
+/** A role line for the user menu: a catalog key, and the workspace name when the key takes one. */
+export interface RoleLine {
+  readonly key: string;
+  readonly params?: { readonly tenant: string };
+}
+
+/** Catalog keys of a role inside a workspace: "Owner · {tenant}". */
+export const TENANT_ROLE_KEYS: Record<string, string> = {
+  owner: marker('roles.tenant.owner'),
+  admin: marker('roles.tenant.admin'),
+  manager: marker('roles.tenant.manager'),
+  agent: marker('roles.tenant.agent'),
+  viewer: marker('roles.tenant.viewer'),
 };
 
-export const PLATFORM_ROLE_LABELS: Record<string, string> = {
-  super_admin: 'Super Admin',
-  developer: 'Developer',
-  support: 'Support Engineer',
-  sales: 'Sales',
-  finance: 'Finance',
+/** Catalog keys of a platform staff role. */
+export const PLATFORM_ROLE_KEYS: Record<string, string> = {
+  super_admin: marker('roles.platform.super_admin'),
+  developer: marker('roles.platform.developer'),
+  support: marker('roles.platform.support'),
+  sales: marker('roles.platform.sales'),
+  finance: marker('roles.platform.finance'),
 };
 
-export function roleLabel(
+/** What to show under the user's name: platform staff by role, others by role in the workspace. */
+export function roleLine(
   user: MeResponse | null,
   activeTenant: TenantSummary | null,
-): string | null {
+): RoleLine | null {
   if (!user) {
     return null;
   }
 
   if (user.platformRole) {
-    return PLATFORM_ROLE_LABELS[user.platformRole] ?? null;
+    const key = PLATFORM_ROLE_KEYS[user.platformRole];
+    return key ? { key } : null;
   }
 
   if (activeTenant) {
     const membership = user.memberships.find((m) => m.tenantId === activeTenant.id);
     if (membership) {
-      const label = TENANT_ROLE_LABELS[membership.role];
-      return label ? `${label} · ${activeTenant.name}` : null;
+      const key = TENANT_ROLE_KEYS[membership.role];
+      return key ? { key, params: { tenant: activeTenant.name } } : null;
     }
   }
 

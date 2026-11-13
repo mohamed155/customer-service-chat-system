@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideI18nTesting } from '../../../core/i18n/i18n.testing';
 import { Escalation, RoutingReason } from '../../../core/api/tenant-api.models';
 import { EscalationRoutingBannerComponent } from './escalation-routing-banner.component';
 
@@ -18,7 +19,7 @@ describe('EscalationRoutingBannerComponent', () => {
   function createFixture() {
     TestBed.configureTestingModule({
       imports: [EscalationRoutingBannerComponent],
-      providers: [provideZonelessChangeDetection()],
+      providers: [provideI18nTesting(), provideZonelessChangeDetection()],
     });
     const fixture = TestBed.createComponent(EscalationRoutingBannerComponent);
     return fixture;
@@ -86,7 +87,7 @@ describe('EscalationRoutingBannerComponent', () => {
     }
   });
 
-  it('falls back to raw reason string when label is unknown', async () => {
+  it('shows a generic text for a routing reason it does not know', async () => {
     TestBed.resetTestingModule();
     const fixture = createFixture();
     fixture.componentRef.setInput('escalation', {
@@ -100,6 +101,7 @@ describe('EscalationRoutingBannerComponent', () => {
       },
     });
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('custom_reason');
+    expect(fixture.nativeElement.textContent).toContain('Escalated · Other');
+    expect(fixture.nativeElement.textContent).not.toContain('custom_reason');
   });
 });

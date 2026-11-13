@@ -2,7 +2,7 @@
   [attr.viewBox]="viewBox()"
   preserveAspectRatio="none"
   role="img"
-  [attr.aria-label]="ariaLabel()"
+  [attr.aria-label]="'trendChart.label' | transloco: { names: seriesNames() }"
 >
   @for (segment of segments(); track $index) {
     <polyline
@@ -31,11 +31,13 @@
 }
 <table class="sr-only" role="table">
   <caption>
-    Chart data
+    {{
+      'trendChart.data' | transloco
+    }}
   </caption>
   <thead>
     <tr>
-      <th scope="col">{{ valueLabel() }}</th>
+      <th scope="col">{{ valueLabel() ?? ('trendChart.value' | transloco) }}</th>
       @for (s of series(); track s.id) {
         <th scope="col">{{ s.label }}</th>
       }

@@ -3,6 +3,10 @@
   <strong>{{ title() }}</strong>
   <p>{{ description() }}</p>
 </div>
-<button type="button" aria-label="Dismiss alert" (click)="dismissed.emit()">
+<button
+  type="button"
+  [attr.aria-label]="'escalationBanner.dismiss' | transloco"
+  (click)="dismissed.emit()"
+>
   <tui-icon icon="@tui.x" />
 </button>

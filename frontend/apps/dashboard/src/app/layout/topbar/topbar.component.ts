@@ -24,6 +24,8 @@ import { AvailabilityToggleComponent } from './availability-toggle.component';
 import { PlatformNavComponent } from './platform-nav.component';
 import { TenantSwitcherComponent } from './tenant-switcher.component';
 import { UserMenuComponent } from './user-menu.component';
+import { TranslocoPipe } from '@jsverse/transloco';
+import { marker } from '../../core/i18n/marker';
 
 @Component({
   selector: 'app-topbar',
@@ -37,6 +39,7 @@ import { UserMenuComponent } from './user-menu.component';
     NotificationBellComponent,
     NotificationListComponent,
     TuiIcon,
+    TranslocoPipe,
   ],
   templateUrl: './topbar.component.html',
   styles: [
@@ -179,10 +182,16 @@ export class TopbarComponent {
     const mode = this.themeMode();
     return mode === 'light' ? '@tui.sun' : mode === 'dark' ? '@tui.moon' : '@tui.monitor';
   });
-  protected readonly themeLabel = computed(() => {
-    const current = this.themeMode();
-    const next = this.nextThemeMode(current);
-    return `Theme is ${current}; switch to ${next}`;
+  /** Catalog key of the theme button's label: what it is now and what a click switches to. */
+  protected readonly themeLabelKey = computed(() => {
+    switch (this.themeMode()) {
+      case 'light':
+        return marker('topbar.themeLightToDark');
+      case 'dark':
+        return marker('topbar.themeDarkToSystem');
+      default:
+        return marker('topbar.themeSystemToLight');
+    }
   });
 
   protected toggleSidebar(): void {

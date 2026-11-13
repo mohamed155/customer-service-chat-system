@@ -1,4 +1,4 @@
-<ul [attr.aria-label]="ariaLabel()">
+<ul [attr.aria-label]="ariaLabel() ?? ('breakdownBars.label' | transloco)">
   @for (item of items(); track item.label) {
     <li>
       <span class="label">{{ item.label }}</span>

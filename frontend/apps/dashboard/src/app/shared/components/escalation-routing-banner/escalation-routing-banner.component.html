@@ -1,11 +1,14 @@
 @if (escalation(); as esc) {
   <div class="banner">
-    <span class="label">Escalated · {{ routingReasonLabel(esc.routing?.reason) }}</span>
+    <span class="label">{{
+      'escalationRouting.escalated'
+        | transloco: { reason: routingReasonLabel(esc.routing?.reason) | transloco }
+    }}</span>
     @if (esc.status === 'assigned' && esc.routing) {
-      <span class="detail">Assigned to agent</span>
+      <span class="detail">{{ 'escalationRouting.assigned' | transloco }}</span>
     }
     @if (esc.status === 'queued') {
-      <span class="detail">Waiting in queue</span>
+      <span class="detail">{{ 'escalationRouting.queued' | transloco }}</span>
     }
   </div>
 }

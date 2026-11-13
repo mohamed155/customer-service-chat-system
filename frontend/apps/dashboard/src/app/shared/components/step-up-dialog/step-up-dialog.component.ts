@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { StepUpService } from '../../../core/auth/step-up.service';
@@ -11,7 +12,13 @@ const RECOVERY_PATTERN = /^[A-Za-z0-9\s-]{10,16}$/;
 /** The prompt for a fresh code. Mounted once, in the app root; shown by `StepUpService`. */
 @Component({
   selector: 'app-step-up-dialog',
-  imports: [ButtonComponent, DialogShellComponent, InlineAlertComponent, ReactiveFormsModule],
+  imports: [
+    ButtonComponent,
+    DialogShellComponent,
+    InlineAlertComponent,
+    ReactiveFormsModule,
+    TranslocoPipe,
+  ],
   templateUrl: './step-up-dialog.component.html',
   styles: [
     `

@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
 
 @Component({
+  imports: [TranslocoPipe],
   selector: 'app-loading-state',
   templateUrl: './loading-state.component.html',
   styles: [
@@ -34,5 +36,6 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class LoadingStateComponent {
-  readonly label = input('Loading');
+  /** The text under the spinner; the default is "Loading". */
+  readonly label = input<string | null>(null);
 }

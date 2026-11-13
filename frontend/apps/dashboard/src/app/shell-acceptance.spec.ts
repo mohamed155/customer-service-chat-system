@@ -12,6 +12,7 @@ import { AppComponent } from './app.component';
 import { APP_CONFIG } from './core/config/app-config';
 import { environment } from '../environments/environment';
 import { ApiService } from './core/api/api.service';
+import { provideI18nTesting } from './core/i18n/i18n.testing';
 import { AuthService } from './core/auth/auth.service';
 import { Permission } from './core/authz/permissions';
 import { PermissionsService } from './core/authz/permissions.service';
@@ -92,6 +93,7 @@ function setupShellIntegration(allowedPermissions: Permission[]) {
   TestBed.configureTestingModule({
     imports: [AppShellComponent],
     providers: [
+      provideI18nTesting(),
       provideRouter([
         { path: '', redirectTo: '/tenant/overview', pathMatch: 'full' },
         {
@@ -320,7 +322,7 @@ describe('Dashboard shell acceptance', () => {
       ];
       TestBed.resetTestingModule();
       await TestBed.configureTestingModule({
-        providers: [provideRouter(routes), provideZonelessChangeDetection()],
+        providers: [provideI18nTesting(), provideRouter(routes), provideZonelessChangeDetection()],
       }).compileComponents();
       const router = TestBed.inject(Router);
       await router.navigateByUrl('/tenant/settings');
