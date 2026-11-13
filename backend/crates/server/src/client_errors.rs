@@ -191,7 +191,7 @@ pub async fn report(
     ApiJson(batch): ApiJson<ClientErrorBatch>,
 ) -> Response {
     if config.rate_limit_enabled {
-        if let Decision::Refused { retry_after } = limiter
+        let decision = limiter
             .check(
                 Scope::ClientErrors,
                 &principal.user_id.to_string(),
@@ -200,8 +200,8 @@ pub async fn report(
                     window: REQUEST_WINDOW,
                 },
             )
-            .await
-        {
+            .await;
+        if let Some(retry_after) = refusal(&decision) {
             return ApiError::rate_limited("Too many error reports", retry_after).into_response();
         }
     }
@@ -260,17 +260,26 @@ async fn counts_toward_alerts(
     if !config.rate_limit_enabled {
         return true;
     }
-    !matches!(
-        limiter
-            .check(
-                Scope::ClientErrorsCounted,
-                user_id,
-                Budget {
-                    max_requests: COUNTED_PER_USER,
-                    window: COUNTED_WINDOW,
-                },
-            )
-            .await,
-        Decision::Refused { .. }
-    )
+    let decision = limiter
+        .check(
+            Scope::ClientErrorsCounted,
+            user_id,
+            Budget {
+                max_requests: COUNTED_PER_USER,
+                window: COUNTED_WINDOW,
+            },
+        )
+        .await;
+    refusal(&decision).is_none()
+}
+
+/// When a decision is a refusal, how long to wait. A `Degraded` decision (Redis unreachable, so
+/// the process's own counters decided) is a refusal when its local decision is one: it must not
+/// read as "allowed" just because it is wrapped.
+fn refusal(decision: &Decision) -> Option<Duration> {
+    match decision {
+        Decision::Refused { retry_after } => Some(*retry_after),
+        Decision::Degraded { local_decision } => refusal(local_decision),
+        Decision::Allowed { .. } => None,
+    }
 }
