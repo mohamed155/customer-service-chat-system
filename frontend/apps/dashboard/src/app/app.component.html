@@ -1,7 +1,5 @@
 <tui-root [attr.tuiTheme]="theme()"
   ><router-outlet />
-  @defer (when stepUp.open(); prefetch on idle) {
-    <app-step-up-dialog />
-  }
+  <app-step-up-dialog />
   <app-update-banner
 /></tui-root>

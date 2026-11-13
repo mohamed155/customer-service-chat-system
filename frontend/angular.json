@@ -52,7 +52,7 @@
                 "fonts": true
               },
               "budgets": [
-                { "type": "initial", "maximumWarning": "685kb", "maximumError": "700kb" },
+                { "type": "initial", "maximumWarning": "695kb", "maximumError": "710kb" },
                 { "type": "allScript", "maximumWarning": "1950kb", "maximumError": "2000kb" },
                 { "type": "anyScript", "maximumError": "450kb" },
                 {
