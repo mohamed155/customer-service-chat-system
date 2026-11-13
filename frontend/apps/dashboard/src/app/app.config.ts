@@ -24,6 +24,7 @@ import { authTokenInterceptor } from './core/http/auth-token.interceptor';
 import { apiErrorInterceptor } from './core/http/api-error.interceptor';
 import { requestIdInterceptor } from './core/http/request-id.interceptor';
 import { httpResilienceInterceptor } from './core/http/http-resilience.interceptor';
+import { ClientErrorReporter } from './core/errors/client-error-reporter';
 import { GlobalErrorHandler } from './core/errors/global-error-handler';
 import { TenantContextEffects } from './core/state/tenant-context.effects';
 import { tenantContextFeature } from './core/state/tenant-context.feature';
@@ -67,6 +68,8 @@ export const appConfig: ApplicationConfig = {
     provideEffects(AppUiEffects, TenantContextEffects),
     // Watches for a newer release while the page stays open (MOH-167). Does not block start-up.
     provideAppInitializer(() => inject(AppUpdateService).start()),
+    // Listens for page hide and unhandled rejections, to report browser errors (MOH-168).
+    provideAppInitializer(() => inject(ClientErrorReporter).start()),
     provideAppInitializer(() => {
       const cus = inject(CurrentUserService);
       return cus.load();

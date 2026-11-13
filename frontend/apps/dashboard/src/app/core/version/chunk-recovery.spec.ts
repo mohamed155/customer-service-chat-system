@@ -1,6 +1,7 @@
 import { Location } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
 import { NavigationError } from '@angular/router';
+import { ClientErrorReporter } from '../errors/client-error-reporter';
 import { AppUpdateService } from './app-update.service';
 import {
   CHUNK_RELOAD_KEY,
@@ -15,13 +16,16 @@ const navigationError = (error: unknown, url = '/tenant/customers') =>
 
 describe('recoverFromChunkLoadError', () => {
   let reloader: { reload: ReturnType<typeof vi.fn> };
+  let reporter: { report: ReturnType<typeof vi.fn>; flush: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     sessionStorage.clear();
     reloader = { reload: vi.fn() };
+    reporter = { report: vi.fn(), flush: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         { provide: PageReloader, useValue: reloader },
+        { provide: ClientErrorReporter, useValue: reporter },
         { provide: Location, useValue: { prepareExternalUrl: (url: string) => url } },
       ],
     });
@@ -47,6 +51,7 @@ describe('recoverFromChunkLoadError', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: PageReloader, useValue: reloader },
+        { provide: ClientErrorReporter, useValue: reporter },
         { provide: Location, useValue: { prepareExternalUrl: (url: string) => `/app${url}` } },
       ],
     });
@@ -100,5 +105,29 @@ describe('recoverFromChunkLoadError', () => {
     // blocked store), so the person gets the notice rather than a loop.
     expect(reloader.reload).not.toHaveBeenCalled();
     expect(TestBed.inject(AppUpdateService).updateAvailable()).toBe(true);
+  });
+
+  it('reports the failure and sends it before the page reloads (MOH-168)', () => {
+    const failure = chunkError();
+    const order: string[] = [];
+    reporter.report.mockImplementation(() => order.push('report'));
+    reporter.flush.mockImplementation(() => order.push('flush'));
+    reloader.reload.mockImplementation(() => order.push('reload'));
+
+    run(navigationError(failure));
+
+    expect(reporter.report).toHaveBeenCalledExactlyOnceWith(failure, 'chunk_load');
+    expect(order).toEqual(['report', 'flush', 'reload']);
+  });
+
+  it('reports a failure it does not answer with a reload too, and nothing else', () => {
+    run(navigationError(chunkError()));
+    run(navigationError(chunkError())); // the guard holds: the update notice, no reload
+
+    expect(reporter.report).toHaveBeenCalledTimes(2);
+
+    reporter.report.mockClear();
+    run(navigationError(new Error('Cannot read properties of undefined')));
+    expect(reporter.report).not.toHaveBeenCalled();
   });
 });

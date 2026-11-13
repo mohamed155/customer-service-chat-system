@@ -6,6 +6,16 @@ COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY frontend ./
 RUN pnpm exec ng build ${APP}
+# The production build writes source maps without pointing at them ("hidden"). They never go into
+# the served image: they are moved out here and published separately (target `sourcemaps`), so the
+# web root holds none and a stack trace from a user's browser can be read by whoever holds them
+# (frontend/CLAUDE.md, "Browser error reports").
+RUN mkdir /sourcemaps && find dist/${APP}/browser -name '*.map' -exec mv {} /sourcemaps/ \;
+
+# Only the source maps of this build, for a private registry: `docker buildx build --target
+# sourcemaps` (the release job pushes it). Not the default target, so it is never deployed.
+FROM scratch AS sourcemaps
+COPY --from=builder /sourcemaps /
 
 FROM nginx:alpine
 ARG APP=dashboard

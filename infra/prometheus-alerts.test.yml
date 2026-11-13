@@ -1,0 +1,87 @@
+# Unit tests for the alert rules (MOH-168). Run with promtool, from the Prometheus image the
+# compose file pins (`node --test infra/prometheus-alerts.test.mjs` does it).
+rule_files:
+  - prometheus-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # A flat, quiet day: nothing fires.
+  - name: frontend errors, a quiet day
+    interval: 1m
+    input_series:
+      - series: 'frontend_errors_total{kind="error",release="r1"}'
+        values: "0+1x1600"
+    alert_rule_test:
+      - eval_time: 1500m
+        alertname: FrontendErrorSpike
+        exp_alerts: []
+      - eval_time: 1500m
+        alertname: FrontendErrorsAfterRelease
+        exp_alerts: []
+
+  # One error a minute for a day (10 in 10 minutes), then 8 a minute: a spike that stays.
+  - name: frontend errors, a spike against yesterday
+    interval: 1m
+    input_series:
+      - series: 'frontend_errors_total{kind="error",release="r1"}'
+        values: "0+1x1440 1440+8x40"
+    alert_rule_test:
+      - eval_time: 1443m
+        alertname: FrontendErrorSpike
+        exp_alerts: [] # not for 5 minutes yet
+      - eval_time: 1470m
+        alertname: FrontendErrorSpike
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Frontend errors are spiking"
+              description: "Browsers reported 80 errors in the last 10 minutes, more than three times the usual rate. If a release went out recently, suspect it. Query Loki for `frontend error` to see the messages, routes and dashboard releases (docs/runbooks/operations.md, \"Frontend errors\").\n"
+              runbook_url: "https://github.com/mohamed155/customer-service-chat-system/blob/master/docs/runbooks/operations.md"
+
+  # A busy site that is simply busy: 30 in 10 minutes all day is not a spike (not 3x yesterday).
+  - name: frontend errors, a steady busy day is not a spike
+    interval: 1m
+    input_series:
+      - series: 'frontend_errors_total{kind="error",release="r1"}'
+        values: "0+3x1600"
+    alert_rule_test:
+      - eval_time: 1500m
+        alertname: FrontendErrorSpike
+        exp_alerts: []
+
+  # Below the floor, however sharp the jump against a quiet day.
+  - name: frontend errors, a small jump stays under the floor
+    interval: 1m
+    input_series:
+      - series: 'frontend_errors_total{kind="error",release="r1"}'
+        values: "0+0x1440 0+1x40"
+    alert_rule_test:
+      - eval_time: 1480m
+        alertname: FrontendErrorSpike
+        exp_alerts: []
+
+  # Release r2 appears an hour after r1 and starts reporting at once.
+  - name: frontend errors, a release that reports from its first hour
+    interval: 1m
+    input_series:
+      - series: 'frontend_errors_total{kind="error",release="r1"}'
+        values: "0+0x300"
+      - series: 'frontend_errors_total{kind="chunk_load",release="r2"}'
+        values: "_x200 0+2x100"
+    alert_rule_test:
+      - eval_time: 230m
+        alertname: FrontendErrorsAfterRelease
+        exp_alerts:
+          - exp_labels:
+              release: r2
+              severity: warning
+            exp_annotations:
+              summary: "Release r2 has frontend errors from its first hour"
+              description: "Browsers reported 20 errors in 10 minutes under backend release r2, which had none an hour ago. The dashboard of that release may be broken (docs/runbooks/operations.md, \"Frontend errors\").\n"
+              runbook_url: "https://github.com/mohamed155/customer-service-chat-system/blob/master/docs/runbooks/operations.md"
+      # Two hours later r2 had errors an hour ago, so it is not "new" any more.
+      - eval_time: 290m
+        alertname: FrontendErrorsAfterRelease
+        exp_alerts: []

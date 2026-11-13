@@ -501,6 +501,12 @@ fn authenticated_routes() -> OpenApiRouter<sqlx::PgPool> {
         )
         .routes(routes!(identity::mfa_routes::confirm_enrolment))
         .routes(routes!(identity::mfa_routes::status))
+        // Browser error reports (MOH-168): any signed-in user, a small body (a `keepalive` request
+        // can't carry more than 64 KiB), a budget per user inside the handler.
+        .routes(
+            routes!(crate::client_errors::report)
+                .layer(DefaultBodyLimit::max(crate::client_errors::MAX_BODY_BYTES)),
+        )
         .routes(
             routes!(identity::mfa_routes::step_up)
                 .layer(middleware::from_fn(crate::rate_limit::mfa_rate_limit)),

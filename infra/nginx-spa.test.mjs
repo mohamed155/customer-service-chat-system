@@ -77,7 +77,10 @@ describe(
       writeFileSync(join(site, "index.html"), "<html>the app</html>");
       writeFileSync(join(site, "main-4TYQZ6FJ.js"), "export const main = 1;");
       writeFileSync(join(site, "styles-QWERTY12.css"), "body{}");
+      writeFileSync(join(site, "chunk-54ZL8lHj.js"), "export const a = 1;");
+      writeFileSync(join(site, "chunk--HMCNCmS.js"), "export const b = 2;");
       writeFileSync(join(site, "theme-init.js"), "document.title = 'x';");
+      writeFileSync(join(site, "main-4TYQZ6FJ.js.map"), '{"version":3}');
       // The nginx worker runs as another user than the one that owns this directory (on Linux the
       // bind mount keeps the host's permissions; mkdtemp makes it 0700).
       chmodSync(site, 0o755);
@@ -85,7 +88,10 @@ describe(
         "index.html",
         "main-4TYQZ6FJ.js",
         "styles-QWERTY12.css",
+        "chunk-54ZL8lHj.js",
+        "chunk--HMCNCmS.js",
         "theme-init.js",
+        "main-4TYQZ6FJ.js.map",
       ]) {
         chmodSync(join(site, name), 0o644);
       }
@@ -143,6 +149,16 @@ describe(
         js.headers["cache-control"],
         "public, max-age=31536000, immutable",
       );
+      // Chunks other than the entry have mixed-case hashes, one of them starting with a dash.
+      for (const path of ["/chunk-54ZL8lHj.js", "/chunk--HMCNCmS.js"]) {
+        const chunk = await get(port, path);
+        assert.equal(chunk.status, 200, path);
+        assert.equal(
+          chunk.headers["cache-control"],
+          "public, max-age=31536000, immutable",
+          path,
+        );
+      }
       const css = await get(port, "/styles-QWERTY12.css");
       assert.equal(css.status, 200);
       assert.equal(
@@ -168,6 +184,14 @@ describe(
       const themeInit = await get(port, "/theme-init.js");
       assert.equal(themeInit.status, 200);
       assert.equal(themeInit.headers["cache-control"], "no-cache");
+    });
+
+    it("never serves a source map, even one that is in the web root", async () => {
+      for (const path of ["/main-4TYQZ6FJ.js.map", "/missing.js.map"]) {
+        const res = await get(port, path);
+        assert.equal(res.status, 404, path);
+        assert.ok(!res.text.includes("version"), `${path} must not be served`);
+      }
     });
 
     it("serves index.html itself without caching", async () => {

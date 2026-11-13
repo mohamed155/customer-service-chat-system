@@ -204,6 +204,8 @@ const EXPECTED: &[(&str, &str)] = &[
     ("POST", "/tenant/integrations/{slug}/disconnect"),
     ("GET", "/tenant/integrations/{slug}/events"),
     ("POST", "/hooks/v1/{token}"),
+    // Browser error reports (MOH-168)
+    ("POST", "/client-errors"),
     // Operational
     ("GET", "/health"),
     ("GET", "/ready"),

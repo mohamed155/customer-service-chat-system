@@ -1,6 +1,7 @@
 import { DOCUMENT, Location } from '@angular/common';
 import { inject } from '@angular/core';
 import { NavigationError } from '@angular/router';
+import { ClientErrorReporter } from '../errors/client-error-reporter';
 import { AppUpdateService } from './app-update.service';
 import { isChunkLoadError } from './chunk-load-error';
 import { PageReloader } from './page-reloader';
@@ -27,6 +28,13 @@ export function recoverFromChunkLoadError(error: NavigationError): void {
   const update = inject(AppUpdateService);
   const target = inject(Location).prepareExternalUrl(error.url);
   const view = inject(DOCUMENT).defaultView;
+
+  // Say so before the page reloads (MOH-168): the report goes out with `keepalive`, so it survives
+  // the reload. The router rethrows this error to the global handler afterwards; the reporter has
+  // already taken it in and ignores it there.
+  const reporter = inject(ClientErrorReporter);
+  reporter.report(error.error, 'chunk_load');
+  reporter.flush();
 
   if (!guardAllowsReload(view, target)) {
     update.markUpdateAvailable();

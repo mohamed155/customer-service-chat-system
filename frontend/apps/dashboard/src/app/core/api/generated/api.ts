@@ -184,6 +184,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/client-errors': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Report errors seen in the browser
+     * @description Takes one to twenty error reports from the dashboard and writes them to the backend log (target `frontend`) and to the `frontend_errors_total` counter. Needs a session; errors before sign-in are not reported. Rate limited per user. The body may be at most 64 KiB. The workspace ID in a report is not verified. Requires permission: none (any signed-in user).
+     */
+    post: operations['report_client_errors'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/health': {
     parameters: {
       query?: never;
@@ -2363,6 +2383,46 @@ export interface components {
       /** Format: float */
       relevance_score: number;
     };
+    /** @description A batch of reports. */
+    ClientErrorBatch: {
+      /** @description One to twenty reports. */
+      reports: components['schemas']['ClientErrorReport'][];
+    };
+    /**
+     * @description What went wrong in the browser.
+     * @enum {string}
+     */
+    ClientErrorKind: 'error' | 'unhandled_rejection' | 'chunk_load';
+    /** @description One error seen in a browser. */
+    ClientErrorReport: {
+      /**
+       * Format: int32
+       * @description How many identical errors this report stands for (default 1, at most 1000).
+       */
+      count?: number | null;
+      kind: components['schemas']['ClientErrorKind'];
+      /** @description The error's message, already scrubbed by the dashboard. Up to 1000 characters. */
+      message: string;
+      /**
+       * @description The dashboard release, taken from its main script's file name. Letters, digits, `.`, `_`, `-`.
+       * @example 4TYQZ6FJ
+       */
+      release?: string | null;
+      /**
+       * @description The request ID of the API call involved, when there is one (`req_` and a lowercase UUID).
+       * @example req_0191f3a2-6b1e-7c3d-8e4f-5a6b7c8d9e0f
+       */
+      request_id?: string | null;
+      /** @description The route pattern the user was on, such as `tenant/customers/:id`: never the URL. */
+      route?: string | null;
+      /** @description The stack, already scrubbed. Up to 8000 characters. */
+      stack?: string | null;
+      /**
+       * Format: uuid
+       * @description The workspace the user had open. Not verified: it labels the report and nothing more.
+       */
+      tenant_id?: string | null;
+    };
     /**
      * @description Deterministic confidence metadata attached to AI messages.
      *     Band is derived server-side using a local 3-line function (see
@@ -4385,6 +4445,64 @@ export interface operations {
       };
       /** @description Internal server error. */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+    };
+  };
+  report_client_errors: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ClientErrorBatch'];
+      };
+    };
+    responses: {
+      /** @description Received. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description A report is not valid, or the body is not JSON or is larger than 64 KiB. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Unauthenticated. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description A session-cookie request without an allowed origin and the `X-Requested-With` header. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
+      /** @description Too many requests. */
+      429: {
         headers: {
           [name: string]: unknown;
         };

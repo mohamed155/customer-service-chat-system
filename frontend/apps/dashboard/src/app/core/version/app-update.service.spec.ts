@@ -16,6 +16,13 @@ const page = (main: string, styles = 'styles-QWERTY12.css') => `<!doctype html><
   <script src="${main}" type="module"></script></body></html>`;
 
 describe('releaseFingerprint', () => {
+  it('counts chunks with mixed-case hashes, one of them starting with a dash', () => {
+    const html =
+      '<link rel="modulepreload" href="chunk-54ZL8lHj.js"><script src="chunk--HMCNCmS.js"></script>';
+
+    expect(releaseFingerprint(html)).toBe('chunk--HMCNCmS.js|chunk-54ZL8lHj.js');
+  });
+
   it('lists the hashed files in a fixed order and ignores the unhashed ones', () => {
     expect(releaseFingerprint(page('main-AAAAAAAA.js'))).toBe(
       'main-AAAAAAAA.js|polyfills-ABCD1234.js|styles-QWERTY12.css'.split('|').sort().join('|'),
