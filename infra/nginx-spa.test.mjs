@@ -10,7 +10,12 @@
 // Needs Docker. With REQUIRE_NGINX_TEST=1 (CI) a missing Docker fails the test instead of skipping it.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer, request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -73,6 +78,17 @@ describe(
       writeFileSync(join(site, "main-4TYQZ6FJ.js"), "export const main = 1;");
       writeFileSync(join(site, "styles-QWERTY12.css"), "body{}");
       writeFileSync(join(site, "theme-init.js"), "document.title = 'x';");
+      // The nginx worker runs as another user than the one that owns this directory (on Linux the
+      // bind mount keeps the host's permissions; mkdtemp makes it 0700).
+      chmodSync(site, 0o755);
+      for (const name of [
+        "index.html",
+        "main-4TYQZ6FJ.js",
+        "styles-QWERTY12.css",
+        "theme-init.js",
+      ]) {
+        chmodSync(join(site, name), 0o644);
+      }
       execFileSync("docker", [
         "run",
         "-d",
