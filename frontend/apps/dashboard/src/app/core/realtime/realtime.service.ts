@@ -1,4 +1,4 @@
-import { inject, Injectable, NgZone } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
 import { Observable, Subject } from 'rxjs';
 import { APP_CONFIG } from '../config/app-config';
@@ -11,14 +11,41 @@ export interface SseEvent {
   data: string;
 }
 
+/** The first reconnect waits at most this long; each failure doubles the ceiling. */
+export const RECONNECT_BASE_MS = 1_000;
+/** The ceiling of the wait never goes above this. */
+export const RECONNECT_CAP_MS = 30_000;
+
+/**
+ * How long to wait before the next reconnect, with **full jitter**: a random time between zero and
+ * `min(cap, base * 2^attempt)` (`attempt` counts from 0). After a backend restart every open
+ * dashboard reconnects, and a fixed or merely doubling delay would send them all at the same
+ * moments (a thundering herd); a random wait spreads them out (Principle XI).
+ */
+export function reconnectDelay(attempt: number, random: () => number = Math.random): number {
+  const ceiling = Math.min(RECONNECT_CAP_MS, RECONNECT_BASE_MS * 2 ** attempt);
+  return Math.floor(random() * ceiling);
+}
+
+/**
+ * The tenant event stream (Server-Sent Events over `fetch`, because `EventSource` cannot send the
+ * `X-Tenant-ID` header).
+ *
+ * A stream that ends or fails is opened again after a jittered, growing wait; a successful
+ * connection starts the count over. The server keeps no event log and sends no resumable ids
+ * (`/tenant/events` is an in-process broadcast, ADR-009), so it ignores `Last-Event-ID`: events
+ * sent while the stream was down are lost, and a screen that must be right after a gap has to
+ * reload its data.
+ */
 @Injectable({ providedIn: 'root' })
 export class RealtimeService {
   private readonly store = inject(Store);
   private readonly config = inject(APP_CONFIG);
-  private readonly zone = inject(NgZone);
   private readonly events$ = new Subject<SseEvent>();
   private abortController?: AbortController;
-  private retryDelay = 1000;
+  private retryTimer?: ReturnType<typeof setTimeout>;
+  /** Failed or ended connections in a row; a successful connection resets it. */
+  private attempt = 0;
 
   constructor() {
     // The stream carries the workspace it was opened for. After a switch it must be opened again
@@ -37,8 +64,14 @@ export class RealtimeService {
     return this.events$;
   }
 
+  /** Open the stream for the active workspace, closing any earlier one. */
   connect(): void {
     this.disconnect();
+    this.open();
+  }
+
+  /** Open a stream. Unlike `connect()` it keeps the reconnect count. */
+  private open(): void {
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
     const tenantId = this.store.selectSignal(selectActiveTenant)()?.id;
@@ -58,6 +91,8 @@ export class RealtimeService {
         if (!response.ok || !response.body) {
           throw new Error(`SSE connection failed: ${response.status}`);
         }
+        // Connected: the next failure starts the backoff over.
+        this.attempt = 0;
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -85,9 +120,7 @@ export class RealtimeService {
             }
 
             if (event && data) {
-              this.zone.run(() => {
-                this.events$.next({ event, id, data });
-              });
+              this.events$.next({ event, id, data });
             }
           }
         }
@@ -95,22 +128,29 @@ export class RealtimeService {
         if (err instanceof DOMException && err.name === 'AbortError') return;
       }
 
-      if (!this.abortController?.signal.aborted) {
-        this.zone.run(() => {
-          setTimeout(() => {
-            this.retryDelay = Math.min(this.retryDelay * 2, 30000);
-            this.connect();
-          }, this.retryDelay);
-        });
+      if (!signal.aborted) {
+        this.scheduleReconnect();
       }
     };
 
     start();
   }
 
+  private scheduleReconnect(): void {
+    const delay = reconnectDelay(this.attempt);
+    this.attempt += 1;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      this.open();
+    }, delay);
+  }
+
+  /** Close the stream and cancel a reconnect that is waiting. */
   disconnect(): void {
+    clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
     this.abortController?.abort();
     this.abortController = undefined;
-    this.retryDelay = 1000;
+    this.attempt = 0;
   }
 }

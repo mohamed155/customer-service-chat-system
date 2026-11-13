@@ -140,14 +140,8 @@
             "buildTarget": "widget:build",
             "tsConfig": "apps/widget/tsconfig.spec.json",
             "runner": "vitest",
-            "setupFiles": ["apps/widget/src/test-setup.ts"],
             "coverageInclude": ["apps/widget/src/**/*.ts"],
-            "coverageExclude": [
-              "**/*.spec.ts",
-              "**/*.testing.ts",
-              "**/generated/**",
-              "**/test-setup.ts"
-            ],
+            "coverageExclude": ["**/*.spec.ts", "**/*.testing.ts", "**/generated/**"],
             "coverageReporters": ["text-summary", "json-summary", "lcov", "html"]
           },
           "configurations": { "coverage": { "coverage": true } }

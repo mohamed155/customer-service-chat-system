@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "outDir": "../../out-tsc/widget-spec", "types": ["vitest/globals"] },
-  "include": ["src/**/*.spec.ts", "src/test-setup.ts"]
+  "include": ["src/**/*.spec.ts"]
 }
