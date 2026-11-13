@@ -150,6 +150,11 @@ backend/
 
 ### 4.2 Frontend (Angular)
 
+The sketch below is the target shape. In the repository the dashboard lives in
+`frontend/apps/dashboard/src/app` (all its features, shared code and state), the widget in
+`frontend/apps/widget`, and `frontend/libs/` holds only `ui` (unused Helix components, see its
+README); there are no feature libraries (MOH-63).
+
 ```text
 frontend/src/app/
   core/          # auth, tenant context, http interceptors, error handling, app shell, global store
