@@ -1,0 +1,137 @@
+{
+  "page": {
+    "title": "Settings",
+    "description": "Workspace preferences and security",
+    "errorTitle": "Something went wrong",
+    "retry": "Try again",
+    "tabsLabel": "Settings sections",
+    "emptyTitle": "Default settings apply",
+    "emptyDescription": "Customize your workspace preferences and configurations."
+  },
+  "tabs": {
+    "general": "General",
+    "team": "Team",
+    "billing": "Billing",
+    "apiKeys": "API Keys",
+    "security": "Security"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "general": {
+    "profileTitle": "Workspace profile",
+    "profileSubtitle": "Static workspace preferences",
+    "name": "Name",
+    "domain": "Domain",
+    "timezone": "Timezone",
+    "defaultLanguage": "Default language",
+    "themeTitle": "Theme preference",
+    "themeSubtitle": "Uses the global app UI action",
+    "emailNotifications": "Email notifications",
+    "aiAlerts": "AI quality alerts"
+  },
+  "team": {
+    "member": "Member",
+    "role": "Role",
+    "status": "Status",
+    "invited": "Invited"
+  },
+  "billing": {
+    "usageTitle": "Usage",
+    "usageSubtitle": "Current plan limits",
+    "usageLine": "{used, number} / {limit, number} {unit}",
+    "invoice": "Invoice",
+    "amount": "Amount",
+    "status": "Status",
+    "paid": "Paid",
+    "due": "Due"
+  },
+  "apiKeys": {
+    "title": "API keys",
+    "subtitle": "Masked fixture value only",
+    "created": "Created {date}"
+  },
+  "security": {
+    "title": "Two-factor authentication",
+    "subtitle": "Visual switch",
+    "enabled": "Enabled",
+    "device": "Device",
+    "location": "Location",
+    "lastActive": "Last active",
+    "current": "Current"
+  },
+  "tools": {
+    "title": "AI Tool Settings",
+    "description": "Manage built-in and custom AI tools",
+    "readOnly": "You have read-only access. Only Owners and Admins can change tool settings.",
+    "retry": "Retry",
+    "builtinTitle": "Built-in tools",
+    "builtinSubtitle": "Platform-provided tools the AI may use",
+    "enabled": "Enabled",
+    "requireApproval": "Require approval",
+    "effectiveApproval": "Effective approval: required",
+    "customTitle": "Custom tools",
+    "customSubtitle": "Tools you define routed to an external HTTPS endpoint",
+    "add": "Add tool",
+    "noCustom": "No custom tools yet.",
+    "name": "Name",
+    "classification": "Classification",
+    "status": "Status",
+    "edit": "Edit",
+    "delete": "Delete",
+    "approval": "Approval",
+    "auto": "Auto",
+    "approvalOption": "Approval (staff must approve)",
+    "autoOption": "Auto (AI decides)",
+    "statusEnabled": "Enabled",
+    "statusDisabled": "Disabled",
+    "dialog": {
+      "addTitle": "Add custom tool",
+      "editTitle": "Edit tool",
+      "namePlaceholder": "my_custom_tool",
+      "descriptionPlaceholder": "Describe what this tool does",
+      "schema": "Input schema (JSON)",
+      "endpoint": "Endpoint URL",
+      "credential": "Credential",
+      "keepCredential": "Leave empty to keep current",
+      "optionalCredential": "Optional API key",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "save": "Save changes",
+      "create": "Create tool",
+      "schemaInvalid": "Input schema is not valid JSON",
+      "invalid": "The tool could not be saved. Check the name, the input schema and the endpoint URL (it must start with https)."
+    },
+    "deleteDialog": {
+      "title": "Delete tool",
+      "confirm": "Are you sure you want to delete {name}? Existing tool requests referencing it will remain intact.",
+      "deleting": "Deleting…",
+      "delete": "Delete"
+    },
+    "descriptionLabel": "Description"
+  },
+  "billingPage": {
+    "title": "Billing",
+    "loading": "Loading billing overview…",
+    "plan": "Plan",
+    "pricePerMonth": "{price}/mo",
+    "tokens": "Tokens",
+    "conversations": "Conversations",
+    "unlimited": "Unlimited",
+    "percentUsed": "{percent} used",
+    "period": "{start} – {end}",
+    "pausedTokenLimit": "AI replies are paused — the monthly token allowance is used up.",
+    "pausedConversationLimit": "AI replies are paused — the monthly conversation allowance is used up.",
+    "pausedSubscription": "AI replies are paused — the subscription is past due or canceled.",
+    "subscription": {
+      "active": "Active",
+      "trialing": "Trial",
+      "pastDue": "Past due",
+      "canceled": "Canceled",
+      "incomplete": "Incomplete",
+      "incompleteExpired": "Expired"
+    }
+  }
+}

@@ -1,5 +1,10 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../../core/api/api.models';
+import { toApiError } from '../../../../core/errors/api-error';
+import { ErrorKeyOverrides, errorMessageKey } from '../../../../core/errors/error-message';
+import { marker } from '../../../../core/i18n/marker';
 import { lastValueFrom } from 'rxjs';
 import {
   BuiltinToolSetting,
@@ -19,6 +24,9 @@ import { StatusBadgeComponent } from '../../../../shared/components/status-badge
 import { PermissionsService } from '../../../../core/authz/permissions.service';
 import { ToolsSettingsApiService } from './tools-settings-api.service';
 
+/** Every refusal of a tool's fields (name, schema, endpoint) is a `422` with no code of its own. */
+const TOOL_ERRORS: ErrorKeyOverrides = { 422: marker('settings.tools.dialog.invalid') };
+
 @Component({
   selector: 'app-tools-settings',
   imports: [
@@ -32,7 +40,9 @@ import { ToolsSettingsApiService } from './tools-settings-api.service';
     PageHeaderComponent,
     SectionHeaderComponent,
     StatusBadgeComponent,
+    TranslocoPipe,
   ],
+  providers: [provideTranslocoScope('settings')],
   templateUrl: './tools-settings.component.html',
   styles: [
     `
@@ -183,15 +193,20 @@ export class ToolsSettingsComponent {
   /** Managers can read tool settings (`tools.view`); changes need `ai_agent.manage`. */
   protected readonly canManage = () => this.permissions.has('ai_agent.manage');
 
+  /** Examples of what to type: a value, not a sentence, so they are the same in every language. */
+  protected readonly schemaExample = '{"type":"object","properties":{...}}';
+  protected readonly endpointExample = 'https://api.example.com/tools/...';
+
   protected readonly loading = signal(true);
-  protected readonly error = signal<string | null>(null);
+  protected readonly error = signal<ApiError | null>(null);
   protected readonly builtinTools = signal<BuiltinToolSetting[]>([]);
   protected readonly tenantDefinedTools = signal<TenantDefinedTool[]>([]);
 
   protected readonly dialogOpen = signal(false);
   protected readonly editingTool = signal<TenantDefinedTool | null>(null);
   protected readonly submitting = signal(false);
-  protected readonly dialogError = signal<string | null>(null);
+  /** What the dialog says went wrong: a catalog key, and the request reference of an API failure. */
+  protected readonly dialogError = signal<{ key: string; requestId?: string } | null>(null);
 
   protected readonly deleteConfirmTool = signal<TenantDefinedTool | null>(null);
 
@@ -217,7 +232,7 @@ export class ToolsSettingsComponent {
         this.loading.set(false);
       },
       (err: unknown) => {
-        this.error.set(err instanceof Error ? err.message : 'Failed to load tools');
+        this.error.set(toApiError(err));
         this.loading.set(false);
       },
     );
@@ -232,8 +247,8 @@ export class ToolsSettingsComponent {
           list.map((t) => (t.name === name ? { ...t, enabled } : t)),
         );
       },
-      () => {
-        this.error.set(`Failed to update ${name}`);
+      (err: unknown) => {
+        this.error.set(toApiError(err));
       },
     );
   }
@@ -249,8 +264,8 @@ export class ToolsSettingsComponent {
           ),
         );
       },
-      () => {
-        this.error.set(`Failed to update ${name}`);
+      (err: unknown) => {
+        this.error.set(toApiError(err));
       },
     );
   }
@@ -287,7 +302,7 @@ export class ToolsSettingsComponent {
     try {
       inputSchema = JSON.parse(this.formSchema || '{}');
     } catch {
-      this.dialogError.set('Input schema is not valid JSON');
+      this.dialogError.set({ key: marker('settings.tools.dialog.schemaInvalid') });
       return;
     }
 
@@ -313,7 +328,7 @@ export class ToolsSettingsComponent {
           this.closeDialog();
         },
         (err: unknown) => {
-          this.dialogError.set(err instanceof Error ? err.message : 'Failed to update tool');
+          this.dialogError.set(this.dialogFailure(err));
           this.submitting.set(false);
         },
       );
@@ -333,7 +348,7 @@ export class ToolsSettingsComponent {
           this.closeDialog();
         },
         (err: unknown) => {
-          this.dialogError.set(err instanceof Error ? err.message : 'Failed to create tool');
+          this.dialogError.set(this.dialogFailure(err));
           this.submitting.set(false);
         },
       );
@@ -355,12 +370,28 @@ export class ToolsSettingsComponent {
         this.deleteConfirmTool.set(null);
         this.submitting.set(false);
       },
-      () => {
-        this.error.set('Failed to delete tool');
+      (err: unknown) => {
+        this.error.set(toApiError(err));
         this.submitting.set(false);
         this.deleteConfirmTool.set(null);
       },
     );
+  }
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
+
+  /** The catalog key of a tool's classification, which is `approval` or `auto`. */
+  protected classificationKey(classification: string): string {
+    return classification === 'approval'
+      ? marker('settings.tools.approval')
+      : marker('settings.tools.auto');
+  }
+
+  private dialogFailure(err: unknown): { key: string; requestId?: string } {
+    const error = toApiError(err);
+    return { key: errorMessageKey(error, TOOL_ERRORS), requestId: error.requestId };
   }
 
   private resetForm(): void {

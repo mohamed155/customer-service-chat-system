@@ -1,5 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { Store } from '@ngrx/store';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { LocaleDatePipe, LocaleNumberPipe } from '../../../core/i18n/format';
+import { roleNameKey } from '../../../core/i18n/labels';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { marker } from '../../../core/i18n/marker';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import { PAGE_ROUTE, RoutedPageStore } from '../../../core/routed-page/routed-page.store';
@@ -21,12 +26,20 @@ import { SettingsStore, SettingsTab } from './settings.store';
     DataTableComponent,
     EmptyStateComponent,
     LoadingStateComponent,
+    LocaleDatePipe,
+    LocaleNumberPipe,
     PageContainerComponent,
     PageHeaderComponent,
     SectionHeaderComponent,
     StatusBadgeComponent,
+    TranslocoPipe,
   ],
-  providers: [SettingsStore, RoutedPageStore, { provide: PAGE_ROUTE, useValue: 'settings' }],
+  providers: [
+    SettingsStore,
+    RoutedPageStore,
+    { provide: PAGE_ROUTE, useValue: 'settings' },
+    provideTranslocoScope('settings'),
+  ],
   templateUrl: './settings.component.html',
   styles: [
     `
@@ -143,13 +156,19 @@ export class SettingsComponent {
   protected readonly hasError = computed(() => this.page.error() !== null);
   private readonly globalStore = inject(Store);
   protected readonly store = inject(SettingsStore);
-  protected readonly themeModes: readonly ThemeMode[] = ['light', 'dark', 'system'];
-  protected readonly tabs: readonly { id: SettingsTab; label: string }[] = [
-    { id: 'general', label: 'General' },
-    { id: 'team', label: 'Team' },
-    { id: 'billing', label: 'Billing' },
-    { id: 'api-keys', label: 'API Keys' },
-    { id: 'security', label: 'Security' },
+  private readonly locale = inject(LocaleService);
+  protected readonly roleNameKey = roleNameKey;
+  protected readonly themeModes: readonly { id: ThemeMode; key: string }[] = [
+    { id: 'light', key: marker('settings.theme.light') },
+    { id: 'dark', key: marker('settings.theme.dark') },
+    { id: 'system', key: marker('settings.theme.system') },
+  ];
+  protected readonly tabs: readonly { id: SettingsTab; key: string }[] = [
+    { id: 'general', key: marker('settings.tabs.general') },
+    { id: 'team', key: marker('settings.tabs.team') },
+    { id: 'billing', key: marker('settings.tabs.billing') },
+    { id: 'api-keys', key: marker('settings.tabs.apiKeys') },
+    { id: 'security', key: marker('settings.tabs.security') },
   ];
 
   protected readonly pageData = computed(() => {
@@ -157,6 +176,19 @@ export class SettingsComponent {
     if (data?.page === 'settings') return data.data;
     return undefined;
   });
+
+  /** The name from the catalog, or the data's own word for a value this app has no name for. */
+  protected nameOf(key: string | null, fallback: string): string {
+    return key ? this.locale.translate(key) : fallback;
+  }
+
+  protected memberStatusKey(status: string): string | null {
+    return status === 'active'
+      ? marker('status.active')
+      : status === 'invited'
+        ? marker('settings.team.invited')
+        : null;
+  }
 
   protected setTheme(themeMode: ThemeMode): void {
     this.globalStore.dispatch(appUiActions.themeModeChanged({ themeMode }));

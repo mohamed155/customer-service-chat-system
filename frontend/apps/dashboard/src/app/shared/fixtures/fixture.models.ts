@@ -99,8 +99,12 @@ export interface UsageFixture {
 
 export interface InvoiceFixture {
   id: string;
-  period: string;
-  amount: string;
+  /** The first day of the month the invoice covers, as an ISO date. */
+  periodStart: string;
+  /** In the major unit of `currency` (1240 is 1,240 dollars). */
+  amount: number;
+  /** An ISO 4217 code: the symbol and the grouping come from the locale. */
+  currency: string;
   status: 'paid' | 'due';
 }
 

@@ -1,31 +1,43 @@
 <div class="page">
-  <h1 class="page-title">Billing</h1>
+  <h1 class="page-title">{{ 'settings.billingPage.title' | transloco }}</h1>
 
   @if (store.loading()) {
-    <app-loading-state label="Loading billing overview…" />
+    <app-loading-state [label]="'settings.billingPage.loading' | transloco" />
   } @else if (store.error(); as error) {
-    <app-inline-alert tone="error">{{ error }}</app-inline-alert>
+    <app-inline-alert tone="error" [requestId]="error.requestId">{{
+      errorKey(error) | transloco
+    }}</app-inline-alert>
   } @else if (store.overview(); as ov) {
-    @if (ov.aiPaused) {
-      <app-inline-alert tone="warning">{{ aiPausedMessage(ov.aiPausedReason) }}</app-inline-alert>
+    @if (ov.aiPaused && pausedKey(ov.aiPausedReason); as pausedText) {
+      <app-inline-alert tone="warning">{{ pausedText | transloco }}</app-inline-alert>
     }
     <div class="grid">
       <app-dashboard-card>
         <div card-header>
-          <span class="plan-label">Plan</span>
+          <span class="plan-label">{{ 'settings.billingPage.plan' | transloco }}</span>
         </div>
         <div class="plan-info">
           <span class="plan-name">{{ ov.plan.name }}</span>
-          <span class="plan-price">{{ formatCents(ov.plan.monthlyPriceCents) }}/mo</span>
+          <span class="plan-price">{{
+            'settings.billingPage.pricePerMonth'
+              | transloco
+                : { price: (ov.plan.monthlyPriceCents / 100 | localeNumber: currencyFormat) }
+          }}</span>
           <app-status-badge
             [status]="ov.subscriptionStatus"
+            [text]="nameOf(subscriptionKey(ov.subscriptionStatus), ov.subscriptionStatus)"
             [tone]="subscriptionTone(ov.subscriptionStatus)"
           />
         </div>
         <div card-footer>
-          <span class="period"
-            >{{ formatDate(ov.period.start) }} – {{ formatDate(ov.period.end) }}</span
-          >
+          <span class="period">{{
+            'settings.billingPage.period'
+              | transloco
+                : {
+                    start: (ov.period.start | localeDate: 'date'),
+                    end: (ov.period.end | localeDate: 'date'),
+                  }
+          }}</span>
         </div>
       </app-dashboard-card>
 
@@ -36,17 +48,27 @@
         "
       >
         <div card-header>
-          <span class="metric-title">Tokens</span>
+          <span class="metric-title">{{ 'settings.billingPage.tokens' | transloco }}</span>
         </div>
         <div class="metric-row">
-          <span class="metric-value">{{ ov.usage.tokens.used.toLocaleString() }}</span>
+          <span class="metric-value">{{ ov.usage.tokens.used | localeNumber }}</span>
           <span class="metric-divider">/</span>
-          <span class="metric-allowance">{{ metricLabel(ov.usage.tokens.allowance) }}</span>
+          <span class="metric-allowance">{{
+            ov.usage.tokens.allowance === null
+              ? ('settings.billingPage.unlimited' | transloco)
+              : (ov.usage.tokens.allowance | localeNumber)
+          }}</span>
         </div>
         <div class="bar-track">
           <div class="bar-fill" [style.width.%]="ov.usage.tokens.percent ?? 0"></div>
         </div>
-        <div class="metric-footnote">{{ (ov.usage.tokens.percent ?? 0).toFixed(1) }}% used</div>
+        <div class="metric-footnote">
+          {{
+            'settings.billingPage.percentUsed'
+              | transloco
+                : { percent: ((ov.usage.tokens.percent ?? 0) / 100 | localeNumber: percentFormat) }
+          }}
+        </div>
       </app-dashboard-card>
 
       <app-dashboard-card
@@ -58,18 +80,29 @@
         "
       >
         <div card-header>
-          <span class="metric-title">Conversations</span>
+          <span class="metric-title">{{ 'settings.billingPage.conversations' | transloco }}</span>
         </div>
         <div class="metric-row">
-          <span class="metric-value">{{ ov.usage.conversations.used.toLocaleString() }}</span>
+          <span class="metric-value">{{ ov.usage.conversations.used | localeNumber }}</span>
           <span class="metric-divider">/</span>
-          <span class="metric-allowance">{{ metricLabel(ov.usage.conversations.allowance) }}</span>
+          <span class="metric-allowance">{{
+            ov.usage.conversations.allowance === null
+              ? ('settings.billingPage.unlimited' | transloco)
+              : (ov.usage.conversations.allowance | localeNumber)
+          }}</span>
         </div>
         <div class="bar-track">
           <div class="bar-fill" [style.width.%]="ov.usage.conversations.percent ?? 0"></div>
         </div>
         <div class="metric-footnote">
-          {{ (ov.usage.conversations.percent ?? 0).toFixed(1) }}% used
+          {{
+            'settings.billingPage.percentUsed'
+              | transloco
+                : {
+                    percent:
+                      ((ov.usage.conversations.percent ?? 0) / 100 | localeNumber: percentFormat),
+                  }
+          }}
         </div>
       </app-dashboard-card>
     </div>

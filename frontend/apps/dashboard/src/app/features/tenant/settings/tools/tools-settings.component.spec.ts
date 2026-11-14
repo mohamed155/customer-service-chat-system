@@ -116,7 +116,14 @@ describe('ToolsSettingsComponent', () => {
 
   it('shows error state and retries', async () => {
     const mockApi = {
-      getTools: vi.fn().mockReturnValue(throwError(() => new Error('Network error'))),
+      getTools: vi.fn().mockReturnValue(
+        throwError(() => ({
+          code: 'network_error',
+          message: 'raw network text',
+          status: 0,
+          requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+        })),
+      ),
       updateBuiltinPolicy: vi.fn().mockReturnValue(of(undefined)),
       createTenantTool: vi.fn().mockReturnValue(of(MOCK_NEW_TOOL)),
       updateTenantTool: vi.fn().mockReturnValue(of(MOCK_TENANT[0])),
@@ -137,11 +144,17 @@ describe('ToolsSettingsComponent', () => {
 
     await vi.waitFor(() => {
       fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).toContain('Network error');
+      expect(fixture.nativeElement.textContent).toContain('Check your connection and try again.');
+      expect(fixture.nativeElement.textContent).not.toContain('raw network text');
+      expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+        '3c4d5e6f',
+      );
     });
 
     mockApi.getTools.mockReturnValue(of({ builtin: MOCK_BUILTIN, tenantDefined: MOCK_TENANT }));
-    const retryBtn = fixture.nativeElement.querySelector('button');
+    const retryBtn = (
+      Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLElement[]
+    ).find((b) => b.textContent?.trim() === 'Retry');
     retryBtn?.click();
     fixture.detectChanges();
 
@@ -235,6 +248,60 @@ describe('ToolsSettingsComponent', () => {
       await vi.waitFor(() => {
         expect(mockApi.createTenantTool).toHaveBeenCalledWith(
           expect.objectContaining({ name: 'refund_order' }),
+        );
+      });
+    });
+
+    it('words a refused tool by its status, never the API text, and checks the schema itself', async () => {
+      const { fixture, mockApi } = await setup();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(fixture.nativeElement.textContent).toContain('check_order_status');
+      });
+      const button = (label: string) =>
+        (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLElement[]).find(
+          (b) => b.textContent?.trim() === label,
+        ) as HTMLElement;
+      const type = (selector: string, value: string) => {
+        const el = fixture.nativeElement.querySelector(selector) as HTMLInputElement;
+        el.value = value;
+        el.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+      };
+      button('Add tool').click();
+      fixture.detectChanges();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(fixture.nativeElement.textContent).toContain('Add custom tool');
+      });
+      type('#tool-name', 'refund_order');
+      type('#tool-url', 'http://insecure.example.com');
+
+      type('#tool-schema', '{not json');
+      button('Create tool').click();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain('Input schema is not valid JSON');
+      expect(mockApi.createTenantTool).not.toHaveBeenCalled();
+
+      mockApi.createTenantTool.mockReturnValue(
+        throwError(() => ({
+          code: 'validation_failed',
+          message: 'endpointUrl must use https scheme',
+          status: 422,
+          requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+        })),
+      );
+      type('#tool-schema', '{"type":"object"}');
+      button('Create tool').click();
+      fixture.detectChanges();
+
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        const text = fixture.nativeElement.textContent as string;
+        expect(text).toContain('The tool could not be saved. Check the name, the input schema');
+        expect(text).not.toContain('endpointUrl must use https scheme');
+        expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+          '3c4d5e6f',
         );
       });
     });

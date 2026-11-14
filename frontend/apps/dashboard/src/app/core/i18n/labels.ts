@@ -17,3 +17,17 @@ const CHANNEL_KEYS: Readonly<Record<string, string>> = {
 export function channelLabelKey(channel: string): string | null {
   return ownValue(CHANNEL_KEYS, channel) ?? null;
 }
+
+/** Catalog keys (shared catalog) of the role names. */
+const ROLE_KEYS: Readonly<Record<string, string>> = {
+  owner: marker('roleNames.owner'),
+  admin: marker('roleNames.admin'),
+  manager: marker('roleNames.manager'),
+  agent: marker('roleNames.agent'),
+  viewer: marker('roleNames.viewer'),
+};
+
+/** The catalog key of a role's name, or `null` for a role this app has no name for. */
+export function roleNameKey(role: string): string | null {
+  return ownValue(ROLE_KEYS, role) ?? null;
+}

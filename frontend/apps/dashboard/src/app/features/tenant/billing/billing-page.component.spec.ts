@@ -1,7 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { BillingOverview } from '../../../core/api/tenant-api.models';
 import { BillingApiService } from './billing-api.service';
 import { BillingStore } from './billing.store';
@@ -165,6 +165,46 @@ describe('BillingPageComponent', () => {
     const element = await renderWithOverview(MOCK_OVERVIEW);
     expect(element.textContent).toContain('Professional');
     expect(element.textContent).toContain('$299.00/mo');
+  });
+
+  it('writes the period, the percentage and the numbers for the language', async () => {
+    const element = await renderWithOverview(MOCK_OVERVIEW);
+    expect(element.querySelector('.period')?.textContent).toBe('Jul 1, 2026 – Aug 1, 2026');
+    const notes = Array.from(element.querySelectorAll('.metric-footnote')).map((n) =>
+      n.textContent?.trim(),
+    );
+    expect(notes).toEqual(['40.0% used', '20.0% used']);
+    expect(element.querySelector('.plan-price')?.textContent).toBe('$299.00/mo');
+  });
+
+  it('names the subscription status from the catalog and shows an unknown one as sent', async () => {
+    const pastDue = await renderWithOverview({ ...MOCK_OVERVIEW, subscriptionStatus: 'past_due' });
+    expect(pastDue.textContent).toContain('Past due');
+    TestBed.resetTestingModule();
+  });
+
+  it('words a failed load by its code with the request reference, never the API text', async () => {
+    getOverview.mockReturnValue(
+      throwError(() => ({
+        code: 'internal_error',
+        message: 'Failed to load billing',
+        status: 500,
+        requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+      })),
+    );
+    await TestBed.compileComponents();
+    const { fixture, store } = createComponent();
+    store.load();
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('The service is temporarily unavailable. Please try again.');
+      expect(text).not.toContain('Failed to load billing');
+      expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+        '3c4d5e6f',
+      );
+    });
   });
 
   it('renders token and conversation usage cards', async () => {

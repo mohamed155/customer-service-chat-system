@@ -1,4 +1,11 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleDatePipe, LocaleNumberPipe } from '../../../core/i18n/format';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { marker } from '../../../core/i18n/marker';
+import { ownValue } from '../../../core/i18n/own-value';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
@@ -6,30 +13,29 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
 import { BadgeTone } from '../../../shared/components/status-badge/status-badge.component';
 import { BillingStore } from './billing.store';
 
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
-}
+/**
+ * The currency of every price on this page. The billing API sends a price in cents and no
+ * currency; the plans are priced in US dollars. The symbol, the grouping and where it goes come
+ * from the locale (`Intl`), so nothing writes a `$`.
+ */
+const BILLING_CURRENCY = 'USD';
 
-function formatDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+/** Catalog keys of why AI replies are paused (`ai_paused_reason`). */
+const PAUSED_KEYS: Readonly<Record<string, string>> = {
+  token_limit: marker('settings.billingPage.pausedTokenLimit'),
+  conversation_limit: marker('settings.billingPage.pausedConversationLimit'),
+  subscription_status: marker('settings.billingPage.pausedSubscription'),
+};
 
-function metricLabel(allowance: number | null): string {
-  return allowance === null ? 'Unlimited' : allowance.toLocaleString();
-}
-
-function aiPausedMessage(reason: string | null): string {
-  switch (reason) {
-    case 'token_limit':
-      return 'AI replies are paused — the monthly token allowance is used up.';
-    case 'conversation_limit':
-      return 'AI replies are paused — the monthly conversation allowance is used up.';
-    case 'subscription_status':
-      return 'AI replies are paused — the subscription is past due or canceled.';
-    default:
-      return '';
-  }
-}
+/** Catalog keys of the subscription statuses. */
+const SUBSCRIPTION_KEYS: Readonly<Record<string, string>> = {
+  active: marker('settings.billingPage.subscription.active'),
+  trialing: marker('settings.billingPage.subscription.trialing'),
+  past_due: marker('settings.billingPage.subscription.pastDue'),
+  canceled: marker('settings.billingPage.subscription.canceled'),
+  incomplete: marker('settings.billingPage.subscription.incomplete'),
+  incomplete_expired: marker('settings.billingPage.subscription.incompleteExpired'),
+};
 
 function subscriptionTone(status: string): BadgeTone {
   switch (status) {
@@ -55,9 +61,12 @@ function subscriptionTone(status: string): BadgeTone {
     DashboardCardComponent,
     InlineAlertComponent,
     LoadingStateComponent,
+    LocaleDatePipe,
+    LocaleNumberPipe,
     StatusBadgeComponent,
+    TranslocoPipe,
   ],
-  providers: [BillingStore],
+  providers: [BillingStore, provideTranslocoScope('settings')],
   templateUrl: './billing-page.component.html',
   styles: [
     `
@@ -152,9 +161,29 @@ function subscriptionTone(status: string): BadgeTone {
 })
 export class BillingPageComponent {
   protected readonly store = inject(BillingStore);
-  protected readonly formatCents = formatCents;
-  protected readonly formatDate = formatDate;
-  protected readonly metricLabel = metricLabel;
+  private readonly locale = inject(LocaleService);
   protected readonly subscriptionTone = subscriptionTone;
-  protected readonly aiPausedMessage = aiPausedMessage;
+  protected readonly currencyFormat = { style: 'currency', currency: BILLING_CURRENCY } as const;
+  protected readonly percentFormat = {
+    style: 'percent',
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  } as const;
+
+  protected pausedKey(reason: string | null): string | null {
+    return reason ? (ownValue(PAUSED_KEYS, reason) ?? null) : null;
+  }
+
+  protected subscriptionKey(status: string): string | null {
+    return ownValue(SUBSCRIPTION_KEYS, status) ?? null;
+  }
+
+  /** The name from the catalog, or the API's own word for a status this app has no name for. */
+  protected nameOf(key: string | null, fallback: string): string {
+    return key ? this.locale.translate(key) : fallback;
+  }
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
 }
