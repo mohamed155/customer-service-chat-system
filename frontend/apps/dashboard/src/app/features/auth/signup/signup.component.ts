@@ -61,6 +61,8 @@ export class SignupComponent {
   protected readonly pending = this.auth.pending;
   /** Catalog key of what went wrong with the whole form, or `null`. */
   protected readonly errorKey = signal<string | null>(null);
+  /** The request reference of the failed call, shown with the message (MOH-64). */
+  protected readonly errorRequestId = signal<string | null>(null);
   protected readonly loginUrl = `/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`;
 
   protected async submit(): Promise<void> {
@@ -70,6 +72,7 @@ export class SignupComponent {
     }
 
     this.errorKey.set(null);
+    this.errorRequestId.set(null);
     this.clearApiControlErrors();
     const { workspaceName, displayName, email, password } = this.form.getRawValue();
 
@@ -112,6 +115,7 @@ export class SignupComponent {
     }
 
     this.errorKey.set(error.messageKey);
+    this.errorRequestId.set(error.apiError.requestId ?? null);
   }
 
   private applyFieldErrors(apiError: ApiError): void {

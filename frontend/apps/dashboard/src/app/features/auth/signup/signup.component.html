@@ -72,7 +72,9 @@
     }
 
     @if (errorKey(); as key) {
-      <app-inline-alert tone="error">{{ key | transloco }}</app-inline-alert>
+      <app-inline-alert tone="error" [requestId]="errorRequestId()">{{
+        key | transloco
+      }}</app-inline-alert>
     }
 
     <app-button variant="primary" type="submit" [disabled]="pending() || form.invalid">

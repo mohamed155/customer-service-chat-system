@@ -1,3 +1,4 @@
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
@@ -22,7 +23,7 @@ type Step = 'password' | 'code' | 'recovery';
 @Component({
   selector: 'app-mfa-setup',
   providers: [provideTranslocoScope('auth')],
-  imports: [AuthCardComponent, ReactiveFormsModule, TranslocoPipe],
+  imports: [AuthCardComponent, ErrorReferenceComponent, ReactiveFormsModule, TranslocoPipe],
   templateUrl: './mfa-setup.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -45,6 +46,8 @@ export class MfaSetupComponent {
   protected readonly pending = signal(false);
   /** Catalog key of what went wrong, or `null`. */
   protected readonly errorKey = signal<string | null>(null);
+  /** The request reference of the failed call, shown with the message (MOH-64). */
+  protected readonly errorRequestId = signal<string | null>(null);
   protected readonly setupKey = signal('');
   protected readonly setupLink = signal<SafeUrl | null>(null);
   protected readonly recoveryCodes = signal<string[]>([]);
@@ -92,6 +95,7 @@ export class MfaSetupComponent {
       await copyToClipboard(this.recoveryCodes().join('\n'));
       this.copied.set(true);
     } catch {
+      this.errorRequestId.set(null);
       this.errorKey.set(marker('auth.recoveryCodes.copyFailed'));
     }
   }
@@ -107,10 +111,12 @@ export class MfaSetupComponent {
   private async run(action: () => Promise<void>, invalidKey: string): Promise<void> {
     this.pending.set(true);
     this.errorKey.set(null);
+    this.errorRequestId.set(null);
     try {
       await action();
     } catch (error) {
       const apiError = isApiError(error) ? error : mapHttpError(error);
+      this.errorRequestId.set(apiError.requestId ?? null);
       this.errorKey.set(
         apiError.status === 422
           ? invalidKey

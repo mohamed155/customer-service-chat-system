@@ -21,6 +21,9 @@
       [description]="errorKey() | transloco"
     >
       <app-button (pressed)="retry()">{{ 'customers.profile.retry' | transloco }}</app-button>
+      @if (error()?.requestId; as id) {
+        <app-error-reference [requestId]="id" />
+      }
     </app-empty-state>
   } @else if (hasData()) {
     <div class="profile-grid">

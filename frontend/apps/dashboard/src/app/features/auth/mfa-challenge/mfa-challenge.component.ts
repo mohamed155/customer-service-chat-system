@@ -1,3 +1,4 @@
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -14,7 +15,13 @@ const RECOVERY_PATTERN = /^[A-Za-z0-9\s-]{10,16}$/;
 @Component({
   selector: 'app-mfa-challenge',
   providers: [provideTranslocoScope('auth')],
-  imports: [AuthCardComponent, ReactiveFormsModule, RouterLink, TranslocoPipe],
+  imports: [
+    AuthCardComponent,
+    ErrorReferenceComponent,
+    ReactiveFormsModule,
+    RouterLink,
+    TranslocoPipe,
+  ],
   templateUrl: './mfa-challenge.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -31,6 +38,8 @@ export class MfaChallengeComponent {
   protected readonly pending = this.auth.pending;
   /** Catalog key of what went wrong, or `null`. */
   protected readonly errorKey = signal<string | null>(null);
+  /** The request reference of the failed call, shown with the message (MOH-64). */
+  protected readonly errorRequestId = signal<string | null>(null);
   protected readonly loginUrl = `/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`;
 
   protected toggleRecovery(): void {
@@ -42,6 +51,7 @@ export class MfaChallengeComponent {
     ]);
     this.credential.reset('');
     this.errorKey.set(null);
+    this.errorRequestId.set(null);
   }
 
   protected async submit(): Promise<void> {
@@ -50,6 +60,7 @@ export class MfaChallengeComponent {
       return;
     }
     this.errorKey.set(null);
+    this.errorRequestId.set(null);
     const value = this.credential.getRawValue().trim();
     try {
       await this.auth.completeMfa(this.usingRecovery() ? { recoveryCode: value } : { code: value });
@@ -57,6 +68,7 @@ export class MfaChallengeComponent {
     } catch (error) {
       if (error instanceof AuthMfaError) {
         this.errorKey.set(error.messageKey);
+        this.errorRequestId.set(error.apiError.requestId ?? null);
         if (error.challengeExpired) {
           await this.router.navigate([this.loginUrl], {
             queryParams: this.route.snapshot.queryParamMap.has('returnUrl')

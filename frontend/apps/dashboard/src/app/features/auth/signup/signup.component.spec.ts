@@ -104,6 +104,27 @@ describe('SignupComponent', () => {
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
+  it('shows the request reference of a failed sign-up', async () => {
+    auth.signup.mockRejectedValue(
+      new AuthSignupError('errors.unavailable', {
+        code: 'internal_error',
+        message: 'raw',
+        status: 500,
+        requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+      }),
+    );
+    setInput(fixture, 'signup-workspace-name', 'Acme Corp');
+    setInput(fixture, 'signup-display-name', 'Jane Doe');
+    setInput(fixture, '#signup-email', 'jane@example.com');
+    setInput(fixture, 'signup-password', 'correct horse battery');
+    form(fixture).dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+      '3c4d5e6f',
+    );
+  });
+
   it('maps 422 field errors from the server onto the matching control', async () => {
     auth.signup.mockRejectedValue(
       new AuthSignupError('errors.requestFailed', {

@@ -97,6 +97,20 @@ describe('SecurityComponent', () => {
     expect(el().querySelector('[data-testid="new-codes"]')).toBeNull();
   });
 
+  it('shows the request reference when the replacement fails', async () => {
+    mfa.regenerateRecoveryCodes.mockRejectedValue({
+      code: 'x',
+      message: 'x',
+      status: 500,
+      requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+    });
+    await create();
+    button('Replace recovery codes').click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="reference"]')?.textContent).toBe('3c4d5e6f');
+  });
+
   it('says so when the replacement fails for another reason', async () => {
     mfa.regenerateRecoveryCodes.mockRejectedValue({ code: 'x', message: 'x', status: 500 });
     await create();

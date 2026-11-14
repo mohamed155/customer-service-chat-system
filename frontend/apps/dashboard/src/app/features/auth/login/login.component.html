@@ -12,7 +12,12 @@
       <input type="password" autocomplete="current-password" formControlName="password" />
     </label>
     @if (errorKey(); as key) {
-      <p role="alert">{{ key | transloco }}</p>
+      <p role="alert">
+        {{ key | transloco }}
+        @if (errorRequestId(); as id) {
+          <app-error-reference [requestId]="id" />
+        }
+      </p>
     }
     <button type="submit" [disabled]="pending() || form.invalid">
       {{ (pending() ? 'auth.login.pending' : 'auth.login.submit') | transloco }}

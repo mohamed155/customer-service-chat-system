@@ -9,6 +9,7 @@ describe('StepUpDialogComponent', () => {
     open: ReturnType<typeof signal<boolean>>;
     pending: ReturnType<typeof signal<boolean>>;
     errorKey: ReturnType<typeof signal<string | null>>;
+    errorRequestId: ReturnType<typeof signal<string | null>>;
     submit: ReturnType<typeof vi.fn>;
     cancel: ReturnType<typeof vi.fn>;
   };
@@ -19,6 +20,7 @@ describe('StepUpDialogComponent', () => {
       open: signal(false),
       pending: signal(false),
       errorKey: signal<string | null>(null),
+      errorRequestId: signal<string | null>(null),
       submit: vi.fn().mockResolvedValue(undefined),
       cancel: vi.fn(),
     };
@@ -86,6 +88,14 @@ describe('StepUpDialogComponent', () => {
     stepUp.errorKey.set('errors.codeInvalid');
     fixture.detectChanges();
     expect(el().textContent).toContain('That code is not valid.');
+  });
+
+  it('shows the request reference of the failed call beside why a code was refused', () => {
+    open();
+    stepUp.errorKey.set('errors.codeInvalid');
+    stepUp.errorRequestId.set('req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f');
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="reference"]')?.textContent).toBe('3c4d5e6f');
   });
 
   it('cancels through the service', () => {

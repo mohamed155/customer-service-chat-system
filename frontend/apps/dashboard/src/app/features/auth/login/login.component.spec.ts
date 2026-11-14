@@ -157,6 +157,27 @@ describe('LoginComponent', () => {
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
+  it('shows the request reference of a failed sign-in', async () => {
+    auth.login.mockRejectedValue(
+      new AuthLoginError('errors.unavailable', {
+        code: 'internal_error',
+        message: 'raw',
+        status: 500,
+        requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+      }),
+    );
+    setInput(fixture, 'input[type="email"]', 'agent@example.com');
+    setInput(fixture, 'input[type="password"]', 'pw');
+    form(fixture).dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('temporarily unavailable');
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+      '3c4d5e6f',
+    );
+  });
+
   it('disables resubmission while pending', () => {
     auth.pending.set(true);
     fixture.detectChanges();

@@ -33,6 +33,7 @@ import { CustomersApiService } from '../../../core/api/customers-api.service';
 import { CustomerDialogComponent } from './customer-dialog.component';
 import { CustomerProfileStore } from './customer-profile.store';
 import { errorMessageKey } from '../../../core/errors/error-message';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 import { LocaleService } from '../../../core/i18n/locale.service';
 import { marker } from '../../../core/i18n/marker';
 import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
@@ -49,6 +50,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
     CustomerDialogComponent,
     DashboardCardComponent,
     EmptyStateComponent,
+    ErrorReferenceComponent,
     LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,

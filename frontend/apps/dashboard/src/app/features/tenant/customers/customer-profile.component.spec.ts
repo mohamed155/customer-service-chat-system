@@ -202,12 +202,20 @@ describe('CustomerProfileComponent', () => {
 
   it('renders an error state with a retry action that re-invokes the store', async () => {
     await setup();
-    error.set({ code: 'service_unavailable', message: 'Service unavailable', status: 503 });
+    error.set({
+      code: 'service_unavailable',
+      message: 'Service unavailable',
+      status: 503,
+      requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+    });
     await TestBed.compileComponents();
     const fixture = TestBed.createComponent(CustomerProfileComponent);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('temporarily unavailable');
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+      '3c4d5e6f',
+    );
     expect(fixture.nativeElement.textContent).not.toContain('Service unavailable');
     const retryButton = Array.from(
       fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>,

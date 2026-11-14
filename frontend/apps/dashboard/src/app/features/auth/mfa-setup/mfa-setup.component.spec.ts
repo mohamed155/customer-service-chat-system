@@ -83,6 +83,17 @@ describe('MfaSetupComponent', () => {
     expect(el().querySelector('[data-testid="setup-key"]')!.textContent).toContain('ABC');
   });
 
+  it('shows the request reference of a refused password', async () => {
+    mfa.startEnrolment.mockRejectedValue({
+      code: 'x',
+      message: 'x',
+      status: 422,
+      requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+    });
+    await toCodeStep();
+    expect(el().querySelector('[data-testid="reference"]')?.textContent).toBe('3c4d5e6f');
+  });
+
   it('says the password is wrong on a 422', async () => {
     mfa.startEnrolment.mockRejectedValue({ code: 'x', message: 'x', status: 422 });
     await toCodeStep();
