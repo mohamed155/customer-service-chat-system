@@ -1,17 +1,20 @@
 <app-page-container>
-  <app-page-header title="Settings" [description]="'Workspace preferences and security'" />
+  <app-page-header
+    [title]="'settings.page.title' | transloco"
+    [description]="'settings.page.description' | transloco"
+  />
   @if (page.loading()) {
     <app-loading-state />
   } @else if (hasError()) {
     <app-empty-state
       icon="@tui.alert-circle"
-      title="Something went wrong"
-      description="We couldn't load this page. Please try again."
+      [title]="'settings.page.errorTitle' | transloco"
+      [description]="'errors.generic' | transloco"
     >
-      <button type="button" (click)="retry()">Try again</button>
+      <button type="button" (click)="retry()">{{ 'settings.page.retry' | transloco }}</button>
     </app-empty-state>
   } @else if (hasData()) {
-    <div class="tabs" role="tablist" aria-label="Settings sections">
+    <div class="tabs" role="tablist" [attr.aria-label]="'settings.page.tabsLabel' | transloco">
       @for (tab of tabs; track tab.id) {
         <button
           type="button"
@@ -20,7 +23,7 @@
           [attr.aria-selected]="store.activeTab() === tab.id"
           (click)="store.setTab(tab.id)"
         >
-          {{ tab.label }}
+          {{ tab.key | transloco }}
         </button>
       }
     </div>
@@ -31,27 +34,46 @@
           <app-dashboard-card>
             <app-section-header
               card-header
-              title="Workspace profile"
-              subtitle="Static workspace preferences"
+              [title]="'settings.general.profileTitle' | transloco"
+              [subtitle]="'settings.general.profileSubtitle' | transloco"
             />
-            <label>Name<input [value]="pageData()!.profile.name" /></label>
-            <label>Domain<input [value]="pageData()!.profile.domain" /></label>
-            <label>Timezone<input [value]="pageData()!.profile.timezone" /></label>
-            <label>Default language<input [value]="pageData()!.profile.defaultLanguage" /></label>
+            <label
+              >{{ 'settings.general.name' | transloco }}<input [value]="pageData()!.profile.name"
+            /></label>
+            <label
+              >{{ 'settings.general.domain' | transloco
+              }}<input [value]="pageData()!.profile.domain"
+            /></label>
+            <label
+              >{{ 'settings.general.timezone' | transloco
+              }}<input [value]="pageData()!.profile.timezone"
+            /></label>
+            <label
+              >{{ 'settings.general.defaultLanguage' | transloco
+              }}<input [value]="pageData()!.profile.defaultLanguage"
+            /></label>
           </app-dashboard-card>
           <app-dashboard-card>
             <app-section-header
               card-header
-              title="Theme preference"
-              subtitle="Uses the global app UI action"
+              [title]="'settings.general.themeTitle' | transloco"
+              [subtitle]="'settings.general.themeSubtitle' | transloco"
             />
             <div class="segmented">
-              @for (mode of themeModes; track mode) {
-                <button type="button" (click)="setTheme(mode)">{{ mode }}</button>
+              @for (mode of themeModes; track mode.id) {
+                <button type="button" (click)="setTheme(mode.id)">
+                  {{ mode.key | transloco }}
+                </button>
               }
             </div>
-            <label class="check"><input type="checkbox" checked /> Email notifications</label>
-            <label class="check"><input type="checkbox" checked /> AI quality alerts</label>
+            <label class="check"
+              ><input type="checkbox" checked />
+              {{ 'settings.general.emailNotifications' | transloco }}</label
+            >
+            <label class="check"
+              ><input type="checkbox" checked />
+              {{ 'settings.general.aiAlerts' | transloco }}</label
+            >
           </app-dashboard-card>
         </section>
       }
@@ -60,9 +82,9 @@
           <table>
             <thead>
               <tr>
-                <th>Member</th>
-                <th>Role</th>
-                <th>Status</th>
+                <th>{{ 'settings.team.member' | transloco }}</th>
+                <th>{{ 'settings.team.role' | transloco }}</th>
+                <th>{{ 'settings.team.status' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
@@ -75,10 +97,17 @@
                       >
                     </div>
                   </td>
-                  <td><app-status-badge [status]="member.role" tone="accent" /></td>
+                  <td>
+                    <app-status-badge
+                      [status]="member.role"
+                      [text]="nameOf(roleNameKey(member.role), member.role)"
+                      tone="accent"
+                    />
+                  </td>
                   <td>
                     <app-status-badge
                       [status]="member.status"
+                      [text]="nameOf(memberStatusKey(member.status), member.status)"
                       [tone]="member.status === 'active' ? 'green' : 'amber'"
                     />
                   </td>
@@ -91,11 +120,18 @@
       @case ('billing') {
         <section class="grid two">
           <app-dashboard-card>
-            <app-section-header card-header title="Usage" subtitle="Current plan limits" />
+            <app-section-header
+              card-header
+              [title]="'settings.billing.usageTitle' | transloco"
+              [subtitle]="'settings.billing.usageSubtitle' | transloco"
+            />
             @for (usage of pageData()!.usage; track usage.label) {
               <div class="usage">
                 <span>{{ usage.label }}</span
-                ><strong>{{ usage.used }} / {{ usage.limit }} {{ usage.unit }}</strong>
+                ><strong>{{
+                  'settings.billing.usageLine'
+                    | transloco: { used: usage.used, limit: usage.limit, unit: usage.unit }
+                }}</strong>
                 <div><i [style.width.%]="(usage.used / usage.limit) * 100"></i></div>
               </div>
             }
@@ -104,19 +140,35 @@
             <table>
               <thead>
                 <tr>
-                  <th>Invoice</th>
-                  <th>Amount</th>
-                  <th>Status</th>
+                  <th>{{ 'settings.billing.invoice' | transloco }}</th>
+                  <th>{{ 'settings.billing.amount' | transloco }}</th>
+                  <th>{{ 'settings.billing.status' | transloco }}</th>
                 </tr>
               </thead>
               <tbody>
                 @for (invoice of pageData()!.invoices; track invoice.id) {
                   <tr>
-                    <td>{{ invoice.period }}</td>
-                    <td>{{ invoice.amount }}</td>
+                    <td>{{ invoice.periodStart | localeDate: 'monthYear' }}</td>
+                    <td>
+                      {{
+                        invoice.amount
+                          | localeNumber
+                            : {
+                                style: 'currency',
+                                currency: invoice.currency,
+                                maximumFractionDigits: 0,
+                              }
+                      }}
+                    </td>
                     <td>
                       <app-status-badge
                         [status]="invoice.status"
+                        [text]="
+                          (invoice.status === 'paid'
+                            ? 'settings.billing.paid'
+                            : 'settings.billing.due'
+                          ) | transloco
+                        "
                         [tone]="invoice.status === 'paid' ? 'green' : 'amber'"
                       />
                     </td>
@@ -129,12 +181,21 @@
       }
       @case ('api-keys') {
         <app-dashboard-card>
-          <app-section-header card-header title="API keys" subtitle="Masked fixture value only" />
+          <app-section-header
+            card-header
+            [title]="'settings.apiKeys.title' | transloco"
+            [subtitle]="'settings.apiKeys.subtitle' | transloco"
+          />
           <label
             >{{ pageData()!.apiKey.label
             }}<input class="mono" [value]="pageData()!.apiKey.maskedValue" readonly
           /></label>
-          <p>Created {{ pageData()!.apiKey.createdAt }}</p>
+          <p>
+            {{
+              'settings.apiKeys.created'
+                | transloco: { date: (pageData()!.apiKey.createdAt | localeDate: 'date') }
+            }}
+          </p>
         </app-dashboard-card>
       }
       @case ('security') {
@@ -142,18 +203,21 @@
           <app-dashboard-card>
             <app-section-header
               card-header
-              title="Two-factor authentication"
-              subtitle="Visual switch"
+              [title]="'settings.security.title' | transloco"
+              [subtitle]="'settings.security.subtitle' | transloco"
             />
-            <label class="switch"><input type="checkbox" checked /><span></span>Enabled</label>
+            <label class="switch"
+              ><input type="checkbox" checked /><span></span
+              >{{ 'settings.security.enabled' | transloco }}</label
+            >
           </app-dashboard-card>
           <app-data-table>
             <table>
               <thead>
                 <tr>
-                  <th>Device</th>
-                  <th>Location</th>
-                  <th>Last active</th>
+                  <th>{{ 'settings.security.device' | transloco }}</th>
+                  <th>{{ 'settings.security.location' | transloco }}</th>
+                  <th>{{ 'settings.security.lastActive' | transloco }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -162,11 +226,11 @@
                     <td>
                       {{ session.device }}
                       @if (session.current) {
-                        <span class="current">Current</span>
+                        <span class="current">{{ 'settings.security.current' | transloco }}</span>
                       }
                     </td>
                     <td>{{ session.location }}</td>
-                    <td class="muted">{{ session.lastActiveAt }}</td>
+                    <td class="muted">{{ session.lastActiveAt | localeDate: 'dateTime' }}</td>
                   </tr>
                 }
               </tbody>
@@ -178,8 +242,8 @@
   } @else {
     <app-empty-state
       icon="@tui.settings"
-      title="Default settings apply"
-      description="Customize your workspace preferences and configurations."
+      [title]="'settings.page.emptyTitle' | transloco"
+      [description]="'settings.page.emptyDescription' | transloco"
     />
   }
 </app-page-container>

@@ -65,9 +65,9 @@ export const USAGE_FIXTURES: readonly UsageFixture[] = [
 ];
 
 export const INVOICE_FIXTURES: readonly InvoiceFixture[] = [
-  { id: 'inv-2026-07', period: 'July 2026', amount: '$1,240', status: 'due' },
-  { id: 'inv-2026-06', period: 'June 2026', amount: '$1,188', status: 'paid' },
-  { id: 'inv-2026-05', period: 'May 2026', amount: '$1,104', status: 'paid' },
+  { id: 'inv-2026-07', periodStart: '2026-07-01', amount: 1240, currency: 'USD', status: 'due' },
+  { id: 'inv-2026-06', periodStart: '2026-06-01', amount: 1188, currency: 'USD', status: 'paid' },
+  { id: 'inv-2026-05', periodStart: '2026-05-01', amount: 1104, currency: 'USD', status: 'paid' },
 ];
 
 export const API_KEY_FIXTURE: ApiKeyFixture = {

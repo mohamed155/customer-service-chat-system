@@ -2,7 +2,7 @@ import { Pipe, PipeTransform, inject } from '@angular/core';
 import { LocaleService } from './locale.service';
 
 /** The ways a date is written. The words and the order come from the locale, never from here. */
-export type DateStyle = 'date' | 'shortDate' | 'dateTime' | 'time' | 'longDate';
+export type DateStyle = 'date' | 'shortDate' | 'dateTime' | 'time' | 'longDate' | 'monthYear';
 
 const DATE_OPTIONS: Readonly<Record<DateStyle, Intl.DateTimeFormatOptions>> = {
   date: { dateStyle: 'medium' },
@@ -10,6 +10,7 @@ const DATE_OPTIONS: Readonly<Record<DateStyle, Intl.DateTimeFormatOptions>> = {
   dateTime: { dateStyle: 'medium', timeStyle: 'short' },
   time: { timeStyle: 'short' },
   longDate: { weekday: 'long', month: 'long', day: 'numeric' },
+  monthYear: { month: 'long', year: 'numeric' },
 };
 
 const dateFormats = new Map<string, Intl.DateTimeFormat>();

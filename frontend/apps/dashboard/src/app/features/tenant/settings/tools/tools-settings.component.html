@@ -1,10 +1,11 @@
 <app-page-container>
-  <app-page-header title="AI Tool Settings" description="Manage built-in and custom AI tools" />
+  <app-page-header
+    [title]="'settings.tools.title' | transloco"
+    [description]="'settings.tools.description' | transloco"
+  />
 
   @if (!canManage()) {
-    <app-inline-alert>
-      You have read-only access. Only Owners and Admins can change tool settings.
-    </app-inline-alert>
+    <app-inline-alert>{{ 'settings.tools.readOnly' | transloco }}</app-inline-alert>
   }
 
   @if (loading()) {
@@ -12,11 +13,18 @@
       <div class="shimmer"></div>
       <div class="shimmer"></div>
     </div>
-  } @else if (error()) {
-    <app-inline-alert tone="error">{{ error() }}</app-inline-alert>
-    <button type="button" class="btn" (click)="loadTools()">Retry</button>
+  } @else if (error(); as err) {
+    <app-inline-alert tone="error" [requestId]="err.requestId">{{
+      errorKey(err) | transloco
+    }}</app-inline-alert>
+    <button type="button" class="btn" (click)="loadTools()">
+      {{ 'settings.tools.retry' | transloco }}
+    </button>
   } @else {
-    <app-section-header title="Built-in tools" subtitle="Platform-provided tools the AI may use" />
+    <app-section-header
+      [title]="'settings.tools.builtinTitle' | transloco"
+      [subtitle]="'settings.tools.builtinSubtitle' | transloco"
+    />
     <section class="builtin-grid">
       @for (tool of builtinTools(); track tool.name) {
         <app-dashboard-card>
@@ -24,6 +32,7 @@
             <strong>{{ tool.name }}</strong>
             <app-status-badge
               [status]="tool.classification"
+              [text]="classificationKey(tool.classification) | transloco"
               [tone]="tool.classification === 'approval' ? 'amber' : 'green'"
             />
           </div>
@@ -36,7 +45,7 @@
                 [disabled]="!canManage()"
                 (change)="toggleBuiltinEnabled(tool.name, !tool.enabled)"
               />
-              <span>Enabled</span>
+              <span>{{ 'settings.tools.enabled' | transloco }}</span>
             </label>
             <label
               class="toggle"
@@ -48,11 +57,11 @@
                 [disabled]="tool.classification === 'approval' || !canManage()"
                 (change)="toggleBuiltinApproval(tool.name, tool.enabled, !tool.requireApproval)"
               />
-              <span>Require approval</span>
+              <span>{{ 'settings.tools.requireApproval' | transloco }}</span>
             </label>
           </div>
           @if (tool.effectiveApproval) {
-            <p class="hint">Effective approval: required</p>
+            <p class="hint">{{ 'settings.tools.effectiveApproval' | transloco }}</p>
           }
         </app-dashboard-card>
       }
@@ -60,27 +69,27 @@
 
     <div class="tenant-header">
       <app-section-header
-        title="Custom tools"
-        subtitle="Tools you define routed to an external HTTPS endpoint"
+        [title]="'settings.tools.customTitle' | transloco"
+        [subtitle]="'settings.tools.customSubtitle' | transloco"
       />
       @if (canManage()) {
         <button type="button" class="btn btn--primary" (click)="openCreateDialog()">
-          Add tool
+          {{ 'settings.tools.add' | transloco }}
         </button>
       }
     </div>
 
     @if (tenantDefinedTools().length === 0) {
-      <p class="empty">No custom tools yet.</p>
+      <p class="empty">{{ 'settings.tools.noCustom' | transloco }}</p>
     } @else {
       <app-data-table>
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Description</th>
-              <th>Classification</th>
-              <th>Status</th>
+              <th>{{ 'settings.tools.name' | transloco }}</th>
+              <th>{{ 'settings.tools.descriptionLabel' | transloco }}</th>
+              <th>{{ 'settings.tools.classification' | transloco }}</th>
+              <th>{{ 'settings.tools.status' | transloco }}</th>
               @if (canManage()) {
                 <th></th>
               }
@@ -94,26 +103,33 @@
                 <td>
                   <app-status-badge
                     [status]="tool.classification"
+                    [text]="classificationKey(tool.classification) | transloco"
                     [tone]="tool.classification === 'approval' ? 'amber' : 'green'"
                   />
                 </td>
                 <td>
                   <app-status-badge
                     [status]="tool.enabled ? 'enabled' : 'disabled'"
+                    [text]="
+                      (tool.enabled
+                        ? 'settings.tools.statusEnabled'
+                        : 'settings.tools.statusDisabled'
+                      ) | transloco
+                    "
                     [tone]="tool.enabled ? 'green' : 'neutral'"
                   />
                 </td>
                 @if (canManage()) {
                   <td class="actions">
                     <button type="button" class="btn btn--sm" (click)="openEditDialog(tool)">
-                      Edit
+                      {{ 'settings.tools.edit' | transloco }}
                     </button>
                     <button
                       type="button"
                       class="btn btn--sm btn--danger"
                       (click)="confirmDelete(tool)"
                     >
-                      Delete
+                      {{ 'settings.tools.delete' | transloco }}
                     </button>
                   </td>
                 }
@@ -134,71 +150,77 @@
     (dismiss)="closeDialog()"
   >
     <h2 id="tool-dialog-title">
-      {{ editingTool() ? 'Edit tool' : 'Add custom tool' }}
+      {{
+        (editingTool() ? 'settings.tools.dialog.editTitle' : 'settings.tools.dialog.addTitle')
+          | transloco
+      }}
     </h2>
 
-    @if (dialogError()) {
-      <app-inline-alert tone="error">{{ dialogError() }}</app-inline-alert>
+    @if (dialogError(); as err) {
+      <app-inline-alert tone="error" [requestId]="err.requestId">{{
+        err.key | transloco
+      }}</app-inline-alert>
     }
 
-    <app-form-field label="Name">
+    <app-form-field [label]="'settings.tools.name' | transloco">
       <input
         id="tool-name"
         [(ngModel)]="formName"
-        placeholder="my_custom_tool"
+        [placeholder]="'settings.tools.dialog.namePlaceholder' | transloco"
         [disabled]="!!editingTool()"
       />
     </app-form-field>
 
-    <app-form-field label="Description">
+    <app-form-field [label]="'settings.tools.descriptionLabel' | transloco">
       <input
         id="tool-desc"
         [(ngModel)]="formDescription"
-        placeholder="Describe what this tool does"
+        [placeholder]="'settings.tools.dialog.descriptionPlaceholder' | transloco"
       />
     </app-form-field>
 
-    <app-form-field label="Input schema (JSON)">
+    <app-form-field [label]="'settings.tools.dialog.schema' | transloco">
       <textarea
         id="tool-schema"
         [(ngModel)]="formSchema"
         rows="5"
-        placeholder='{"type":"object","properties":{...}}'
+        [placeholder]="schemaExample"
       ></textarea>
     </app-form-field>
 
-    <app-form-field label="Endpoint URL">
-      <input
-        id="tool-url"
-        [(ngModel)]="formEndpointUrl"
-        placeholder="https://api.example.com/tools/..."
-      />
+    <app-form-field [label]="'settings.tools.dialog.endpoint' | transloco">
+      <input id="tool-url" [(ngModel)]="formEndpointUrl" [placeholder]="endpointExample" />
     </app-form-field>
 
-    <app-form-field label="Credential">
+    <app-form-field [label]="'settings.tools.dialog.credential' | transloco">
       <input
         id="tool-credential"
         type="password"
         [(ngModel)]="formCredential"
-        [placeholder]="editingTool() ? 'Leave empty to keep current' : 'Optional API key'"
+        [placeholder]="
+          (editingTool()
+            ? 'settings.tools.dialog.keepCredential'
+            : 'settings.tools.dialog.optionalCredential'
+          ) | transloco
+        "
       />
     </app-form-field>
 
-    <app-form-field label="Classification">
+    <app-form-field [label]="'settings.tools.classification' | transloco">
       <select id="tool-classification" [(ngModel)]="formClassification">
-        <option value="approval">Approval (staff must approve)</option>
-        <option value="auto">Auto (AI decides)</option>
+        <option value="approval">{{ 'settings.tools.approvalOption' | transloco }}</option>
+        <option value="auto">{{ 'settings.tools.autoOption' | transloco }}</option>
       </select>
     </app-form-field>
 
     <label class="toggle">
       <input type="checkbox" [(ngModel)]="formEnabled" />
-      <span>Enabled</span>
+      <span>{{ 'settings.tools.enabled' | transloco }}</span>
     </label>
 
     <div class="dialog-actions">
       <button type="button" class="btn" (click)="closeDialog()" [disabled]="submitting()">
-        Cancel
+        {{ 'settings.tools.dialog.cancel' | transloco }}
       </button>
       <button
         type="button"
@@ -206,7 +228,14 @@
         (click)="submitTool()"
         [disabled]="submitting()"
       >
-        {{ submitting() ? 'Saving…' : editingTool() ? 'Save changes' : 'Create tool' }}
+        {{
+          (submitting()
+            ? 'settings.tools.dialog.saving'
+            : editingTool()
+              ? 'settings.tools.dialog.save'
+              : 'settings.tools.dialog.create'
+          ) | transloco
+        }}
       </button>
     </div>
   </app-dialog-shell>
@@ -219,10 +248,9 @@
     ariaLabelledby="delete-dialog-title"
     (dismiss)="deleteConfirmTool.set(null)"
   >
-    <h2 id="delete-dialog-title">Delete tool</h2>
+    <h2 id="delete-dialog-title">{{ 'settings.tools.deleteDialog.title' | transloco }}</h2>
     <p>
-      Are you sure you want to delete <strong>{{ deleteConfirmTool()?.name }}</strong
-      >? Existing tool requests referencing it will remain intact.
+      {{ 'settings.tools.deleteDialog.confirm' | transloco: { name: deleteConfirmTool()?.name } }}
     </p>
     <div class="dialog-actions">
       <button
@@ -231,7 +259,7 @@
         (click)="deleteConfirmTool.set(null)"
         [disabled]="submitting()"
       >
-        Cancel
+        {{ 'settings.tools.dialog.cancel' | transloco }}
       </button>
       <button
         type="button"
@@ -239,7 +267,12 @@
         (click)="executeDelete()"
         [disabled]="submitting()"
       >
-        {{ submitting() ? 'Deleting…' : 'Delete' }}
+        {{
+          (submitting()
+            ? 'settings.tools.deleteDialog.deleting'
+            : 'settings.tools.deleteDialog.delete'
+          ) | transloco
+        }}
       </button>
     </div>
   </app-dialog-shell>

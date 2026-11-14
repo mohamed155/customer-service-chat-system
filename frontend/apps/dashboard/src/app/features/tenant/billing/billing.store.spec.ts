@@ -52,7 +52,7 @@ describe('BillingStore', () => {
     const store = TestBed.inject(BillingStore);
     store.load();
     await vi.waitFor(() => {
-      expect(store.error()).toBe('boom');
+      expect(store.error()).toMatchObject({ code: 'unknown_error' });
       expect(store.loading()).toBe(false);
       expect(store.overview()).toBeNull();
     });
