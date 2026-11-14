@@ -2,7 +2,8 @@ import { Pipe, PipeTransform, inject } from '@angular/core';
 import { LocaleService } from './locale.service';
 
 /** The ways a date is written. The words and the order come from the locale, never from here. */
-export type DateStyle = 'date' | 'shortDate' | 'dateTime' | 'time' | 'longDate' | 'monthYear';
+export type DateStyle =
+  'date' | 'shortDate' | 'dateTime' | 'time' | 'longDate' | 'monthYear' | 'utcDate' | 'utcDateTime';
 
 const DATE_OPTIONS: Readonly<Record<DateStyle, Intl.DateTimeFormatOptions>> = {
   date: { dateStyle: 'medium' },
@@ -11,6 +12,17 @@ const DATE_OPTIONS: Readonly<Record<DateStyle, Intl.DateTimeFormatOptions>> = {
   time: { timeStyle: 'short' },
   longDate: { weekday: 'long', month: 'long', day: 'numeric' },
   monthYear: { month: 'long', year: 'numeric' },
+  // For a figure the API gives in UTC (a reporting window): written in UTC, with the zone named.
+  utcDate: { dateStyle: 'medium', timeZone: 'UTC' },
+  utcDateTime: {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  },
 };
 
 const dateFormats = new Map<string, Intl.DateTimeFormat>();

@@ -1,10 +1,12 @@
 <app-page-container>
-  <app-page-header title="Platform overview" />
+  <app-page-header [title]="'platform.overview.title' | transloco" />
 
   @if (store.loading() && !store.summary()) {
-    <app-loading-state label="Loading platform overview…" />
+    <app-loading-state [label]="'platform.overview.loading' | transloco" />
   } @else if (store.error(); as error) {
-    <app-inline-alert tone="error">{{ error }}</app-inline-alert>
+    <app-inline-alert tone="error" [requestId]="error.requestId">{{
+      errorKey(error) | transloco
+    }}</app-inline-alert>
     @if (store.summary(); as summary) {
       <div class="cards">
         @for (card of metricCards(summary); track card.metric.id) {
@@ -25,7 +27,7 @@
           type="date"
           [ngModel]="fromValue()"
           (ngModelChange)="fromValue.set($event)"
-          aria-label="From date"
+          [attr.aria-label]="'platform.overview.fromDate' | transloco"
         />
       </tui-textfield>
       <tui-textfield>
@@ -34,19 +36,19 @@
           type="date"
           [ngModel]="toValue()"
           (ngModelChange)="toValue.set($event)"
-          aria-label="To date"
+          [attr.aria-label]="'platform.overview.toDate' | transloco"
         />
       </tui-textfield>
-      <app-button variant="primary" size="sm" (pressed)="store.setRange(fromValue(), toValue())"
-        >Apply</app-button
-      >
+      <app-button variant="primary" size="sm" (pressed)="store.setRange(fromValue(), toValue())">{{
+        'platform.overview.apply' | transloco
+      }}</app-button>
     </div>
 
     @if (isZeroState(summary)) {
       <app-empty-state
         icon="@tui.chart-line"
-        title="No data yet"
-        description="Platform figures will appear once tenants, conversations, and AI usage are recorded."
+        [title]="'platform.overview.zeroTitle' | transloco"
+        [description]="'platform.overview.zeroDescription' | transloco"
       />
     } @else {
       <div class="cards">
@@ -62,22 +64,29 @@
     }
 
     <p class="utc-note">
-      Range: {{ summary.range.from }} – {{ summary.range.to }} UTC · Generated at
-      {{ summary.generatedAt }} UTC
+      {{
+        'platform.overview.range'
+          | transloco
+            : {
+                from: (summary.range.from | localeDate: 'utcDate'),
+                to: (summary.range.to | localeDate: 'utcDate'),
+                generated: (summary.generatedAt | localeDate: 'utcDateTime'),
+              }
+      }}
     </p>
 
     @if (canViewDiagnostics()) {
       <a
         [routerLink]="'/' + APP_PATHS.platform.base + '/' + APP_PATHS.platform.systemHealth"
         class="link"
-        >System Health →</a
+        >{{ 'platform.overview.systemHealth' | transloco }}</a
       >
     }
   } @else {
     <app-empty-state
       icon="@tui.chart-line"
-      title="No data yet"
-      description="Platform figures will appear once tenants, conversations, and AI usage are recorded."
+      [title]="'platform.overview.zeroTitle' | transloco"
+      [description]="'platform.overview.zeroDescription' | transloco"
     />
   }
 </app-page-container>

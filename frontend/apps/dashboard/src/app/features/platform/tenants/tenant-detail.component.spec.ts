@@ -176,7 +176,8 @@ describe('TenantDetailComponent', () => {
     expect(container).toBeTruthy();
     const empty = container.querySelector('app-empty-state');
     expect(empty).toBeTruthy();
-    expect(empty.textContent).toContain('Tenant not found');
+    expect(empty.textContent).toContain('The requested item could not be found.');
+    expect(empty.textContent).not.toContain('Tenant not found');
     const retry = empty.querySelector('button') as HTMLButtonElement;
     expect(retry.textContent).toContain('Try again');
   });
@@ -190,7 +191,8 @@ describe('TenantDetailComponent', () => {
 
     const container = fixture.nativeElement.querySelector('[role="alert"]');
     expect(container).toBeTruthy();
-    expect(container.textContent).toContain('Tenant not found');
+    expect(container.textContent).toContain('The requested item could not be found.');
+    expect(container.textContent).not.toContain('Tenant not found');
   });
 
   it('refetches the tenant when the retry button is clicked after an error', async () => {
@@ -218,7 +220,7 @@ describe('TenantDetailComponent', () => {
     expect(mockGetDetail).not.toHaveBeenCalled();
     const empty = fixture.nativeElement.querySelector('app-empty-state');
     expect(empty).toBeTruthy();
-    expect(empty.textContent).toContain('No tenant id in route');
+    expect(empty.textContent).toContain('The requested item could not be found.');
   });
 
   it('renders a back link to the tenant list', async () => {
@@ -265,7 +267,10 @@ describe('TenantDetailComponent', () => {
 
       const errEl = fixture.nativeElement.querySelector('.action-error') as HTMLElement;
       expect(errEl).toBeTruthy();
-      expect(errEl.textContent).toContain('Update failed');
+      expect(errEl.textContent).toContain(
+        'The service is temporarily unavailable. Please try again.',
+      );
+      expect(errEl.textContent).not.toContain('Update failed');
 
       const record = fixture.nativeElement.querySelector('dl.record');
       expect(record).toBeTruthy();
@@ -354,6 +359,18 @@ describe('TenantDetailComponent', () => {
       expect(button).toBeTruthy();
       expect(button.textContent).toContain('Deactivate');
       expect(button.classList.contains('danger')).toBe(true);
+    });
+
+    it('asks the deactivate question with the tenant name, and the reactivate one for a suspended tenant', async () => {
+      await setup({ canManage: true });
+      (fixture.nativeElement.querySelector('button.action-button') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      const dialog = fixture.nativeElement.querySelector('[role="alertdialog"]') as HTMLElement;
+      expect(dialog.querySelector('h2')?.textContent).toBe('Deactivate tenant');
+      expect(dialog.querySelector('p')?.textContent).toContain(
+        'Deactivating “Acme Corp” will immediately block all of its members',
+      );
+      expect(dialog.querySelector('.dialog-confirm')?.textContent?.trim()).toBe('Deactivate');
     });
 
     it('renders a Reactivate button for a suspended tenant when the user can manage', async () => {

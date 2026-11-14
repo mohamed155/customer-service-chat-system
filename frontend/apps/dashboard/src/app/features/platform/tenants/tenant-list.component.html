@@ -1,5 +1,8 @@
 <app-page-container>
-  <app-page-header title="Tenants" description="Manage customer organizations">
+  <app-page-header
+    [title]="'platform.tenants.title' | transloco"
+    [description]="'platform.tenants.description' | transloco"
+  >
     <a
       *appHasPermission="'platform.tenants.manage'"
       class="new-link"
@@ -10,13 +13,13 @@
         APP_PATHS.platform.newTenant,
       ]"
     >
-      New tenant
+      {{ 'platform.tenants.newTenant' | transloco }}
     </a>
   </app-page-header>
 
   <div class="toolbar">
     <app-search-input
-      placeholder="Search by name or slug"
+      [placeholder]="'platform.tenants.search' | transloco"
       [value]="searchInput()"
       (valueChange)="onSearchChange($event)"
     />
@@ -24,11 +27,11 @@
       class="status-filter"
       [value]="statusFilter() ?? ''"
       (change)="onStatusFilterChange($event)"
-      aria-label="Status filter"
+      [attr.aria-label]="'platform.tenants.statusFilter' | transloco"
     >
-      <option value="">All statuses</option>
-      <option value="active">Active</option>
-      <option value="suspended">Suspended</option>
+      <option value="">{{ 'platform.tenants.allStatuses' | transloco }}</option>
+      <option value="active">{{ 'platform.tenants.active' | transloco }}</option>
+      <option value="suspended">{{ 'platform.tenants.suspended' | transloco }}</option>
     </select>
   </div>
 
@@ -37,10 +40,12 @@
   } @else if (store.status() === 'error') {
     <app-empty-state
       icon="@tui.alert-circle"
-      title="Something went wrong"
-      description="We couldn't load the tenants. Please try again."
+      [title]="'platform.common.errorTitle' | transloco"
+      [description]="errorKey(store.error()) | transloco"
     >
-      <button type="button" class="primary-button" (click)="retry()">Try again</button>
+      <button type="button" class="primary-button" (click)="retry()">
+        {{ 'platform.common.retry' | transloco }}
+      </button>
       @if (store.error()?.requestId; as id) {
         <app-error-reference [requestId]="id" />
       }
@@ -48,16 +53,18 @@
   } @else if (store.items().length === 0 && (searchInput() || statusFilter())) {
     <app-empty-state
       icon="@tui.search-x"
-      title="No tenants match"
-      description="Try adjusting your search or filters."
+      [title]="'platform.tenants.noMatchTitle' | transloco"
+      [description]="'platform.tenants.noMatchDescription' | transloco"
     >
-      <button type="button" class="primary-button" (click)="clearFilters()">Clear filters</button>
+      <button type="button" class="primary-button" (click)="clearFilters()">
+        {{ 'platform.tenants.clearFilters' | transloco }}
+      </button>
     </app-empty-state>
   } @else if (store.items().length === 0) {
     <app-empty-state
       icon="@tui.users"
-      title="No tenants yet"
-      description="Customer organizations will appear here once they are created."
+      [title]="'platform.tenants.emptyTitle' | transloco"
+      [description]="'platform.tenants.emptyDescription' | transloco"
     >
       <a
         *appHasPermission="'platform.tenants.manage'"
@@ -69,7 +76,7 @@
           APP_PATHS.platform.newTenant,
         ]"
       >
-        New tenant
+        {{ 'platform.tenants.newTenant' | transloco }}
       </a>
     </app-empty-state>
   } @else {
@@ -77,10 +84,10 @@
       <table>
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Slug</th>
-            <th>Status</th>
-            <th>Plan</th>
+            <th>{{ 'platform.tenants.name' | transloco }}</th>
+            <th>{{ 'platform.tenants.slug' | transloco }}</th>
+            <th>{{ 'platform.tenants.status' | transloco }}</th>
+            <th>{{ 'platform.tenants.plan' | transloco }}</th>
           </tr>
         </thead>
         <tbody>
@@ -103,10 +110,11 @@
               <td>
                 <app-status-badge
                   [status]="tenant.status"
+                  [text]="nameOf(tenantStatusKey(tenant.status), tenant.status)"
                   [tone]="tenant.status === 'active' ? 'green' : 'neutral'"
                 />
               </td>
-              <td class="muted">{{ tenant.plan }}</td>
+              <td class="muted">{{ nameOf(planKey(tenant.plan), tenant.plan) }}</td>
             </tr>
           }
         </tbody>
@@ -115,7 +123,12 @@
     @if (store.hasMore()) {
       <div class="load-more">
         @if (store.loadMoreError(); as err) {
-          <div class="load-more-error" role="alert">{{ err.message }}</div>
+          <div class="load-more-error" role="alert">
+            {{ errorKey(err) | transloco }}
+            @if (err.requestId; as id) {
+              <app-error-reference [requestId]="id" />
+            }
+          </div>
         }
         <button
           type="button"
@@ -123,7 +136,10 @@
           (click)="store.loadMore()"
           [disabled]="store.loadingMore()"
         >
-          {{ store.loadingMore() ? 'Loading…' : 'Load more' }}
+          {{
+            (store.loadingMore() ? 'platform.common.loadingMore' : 'platform.common.loadMore')
+              | transloco
+          }}
         </button>
       </div>
     }

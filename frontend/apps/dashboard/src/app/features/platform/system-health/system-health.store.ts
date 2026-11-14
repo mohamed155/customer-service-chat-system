@@ -1,3 +1,5 @@
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import { inject } from '@angular/core';
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
@@ -9,7 +11,7 @@ import { SystemHealthApiService } from './system-health-api.service';
 export interface SystemHealthState {
   readonly health: SystemHealth | null;
   readonly loading: boolean;
-  readonly error: string | null;
+  readonly error: ApiError | null;
 }
 
 export const SystemHealthStore = signalStore(
@@ -28,7 +30,7 @@ export const SystemHealthStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loading: false,
-                error: (err as Error)?.message ?? 'Failed to load system health',
+                error: toApiError(err),
               });
               return of(null);
             }),

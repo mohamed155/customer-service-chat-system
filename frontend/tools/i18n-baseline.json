@@ -1,12 +1,4 @@
 {
-  "apps/dashboard/src/app/features/platform/ai-providers/ai-providers.component.html": 12,
-  "apps/dashboard/src/app/features/platform/audit-logs/platform-audit-logs.component.html": 4,
-  "apps/dashboard/src/app/features/platform/billing/platform-billing.component.html": 28,
-  "apps/dashboard/src/app/features/platform/overview/platform-overview.component.html": 8,
-  "apps/dashboard/src/app/features/platform/system-health/system-health.component.html": 4,
-  "apps/dashboard/src/app/features/platform/tenants/tenant-detail.component.html": 13,
-  "apps/dashboard/src/app/features/platform/tenants/tenant-form.component.html": 15,
-  "apps/dashboard/src/app/features/platform/tenants/tenant-list.component.html": 17,
   "apps/dashboard/src/app/features/tenant/analytics/analytics.component.html": 12,
   "apps/dashboard/src/app/features/tenant/audit-logs/audit-logs.component.html": 3,
   "apps/dashboard/src/app/features/tenant/notifications/notifications-page.component.html": 2,

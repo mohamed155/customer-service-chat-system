@@ -1234,7 +1234,7 @@ test.describe('platform tenant management', () => {
               code: 'validation_failed',
               message: 'Validation failed',
               details: [
-                { field: 'name', code: 'too_short', message: 'Name is too short' },
+                { field: 'name', code: 'invalid_length', message: 'Name is too short' },
                 { field: 'slug', code: 'invalid_format', message: 'Slug has invalid format' },
               ],
             },
@@ -1263,8 +1263,12 @@ test.describe('platform tenant management', () => {
     await page.getByRole('button', { name: 'Create tenant' }).click();
     await createResponsePromise;
 
-    await expect(page.getByText('Name is too short')).toBeVisible();
-    await expect(page.getByText('Slug has invalid format')).toBeVisible();
+    // The form says it by the code of each field, not with the API's sentence.
+    await expect(page.getByText('Value is too long or too short')).toBeVisible();
+    await expect(
+      page.getByText('Slug must be lowercase letters/digits with optional single hyphens'),
+    ).toBeVisible();
+    await expect(page.getByText('Name is too short')).toHaveCount(0);
   });
 
   test('create form shows 409 slug conflict error on slug field', async ({ page }) => {
@@ -1311,7 +1315,8 @@ test.describe('platform tenant management', () => {
     await page.getByRole('button', { name: 'Create tenant' }).click();
     await createResponsePromise;
 
-    await expect(page.getByText('Slug is already taken').first()).toBeVisible();
+    await expect(page.getByText('This slug is already in use').first()).toBeVisible();
+    await expect(page.getByText('Slug is already taken')).toHaveCount(0);
   });
 
   test('update form shows 409 slug conflict error on slug field', async ({ page }) => {
@@ -1385,7 +1390,8 @@ test.describe('platform tenant management', () => {
     await page.getByRole('button', { name: 'Save changes' }).click();
     await patchResponsePromise;
 
-    await expect(page.getByText('Slug is already taken').first()).toBeVisible();
+    await expect(page.getByText('This slug is already in use').first()).toBeVisible();
+    await expect(page.getByText('Slug is already taken')).toHaveCount(0);
   });
 
   test('update form shows 422 validation errors on fields', async ({ page }) => {
@@ -1424,7 +1430,7 @@ test.describe('platform tenant management', () => {
               code: 'validation_failed',
               message: 'Validation failed',
               details: [
-                { field: 'name', code: 'too_short', message: 'Name is too short' },
+                { field: 'name', code: 'invalid_length', message: 'Name is too short' },
                 { field: 'slug', code: 'invalid_format', message: 'Slug has invalid format' },
               ],
             },
@@ -1463,8 +1469,12 @@ test.describe('platform tenant management', () => {
     await page.getByRole('button', { name: 'Save changes' }).click();
     await patchResponsePromise;
 
-    await expect(page.getByText('Name is too short')).toBeVisible();
-    await expect(page.getByText('Slug has invalid format')).toBeVisible();
+    // The form says it by the code of each field, not with the API's sentence.
+    await expect(page.getByText('Value is too long or too short')).toBeVisible();
+    await expect(
+      page.getByText('Slug must be lowercase letters/digits with optional single hyphens'),
+    ).toBeVisible();
+    await expect(page.getByText('Name is too short')).toHaveCount(0);
   });
 
   test('no-match search shows empty state', async ({ page }) => {

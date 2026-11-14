@@ -1,5 +1,6 @@
 import { computed, inject } from '@angular/core';
 import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import {
   CreateTenantPayload,
   PlatformTenantDetail,
@@ -108,7 +109,7 @@ export const TenantsStore = signalStore(
               });
             }),
             catchError((error: unknown) => {
-              patchState(store, { status: 'error', error: error as ApiError });
+              patchState(store, { status: 'error', error: toApiError(error) });
               return EMPTY;
             }),
           );
@@ -133,7 +134,7 @@ export const TenantsStore = signalStore(
               });
             }),
             catchError((error: unknown) => {
-              patchState(store, { status: 'success', loadMoreError: error as ApiError });
+              patchState(store, { status: 'success', loadMoreError: toApiError(error) });
               return EMPTY;
             }),
           );
@@ -194,7 +195,7 @@ export const TenantsStore = signalStore(
               result$.complete();
             }),
             catchError((error: unknown) => {
-              result$.error(error as ApiError);
+              result$.error(toApiError(error));
               return EMPTY;
             }),
           ),
@@ -215,7 +216,7 @@ export const TenantsStore = signalStore(
               result$.complete();
             }),
             catchError((error: unknown) => {
-              result$.error(error as ApiError);
+              result$.error(toApiError(error));
               return EMPTY;
             }),
           ),

@@ -14,6 +14,16 @@ describe('formatDate and formatNumber', () => {
     expect(formatDate(date, 'en', 'dateTime')).toMatch(/Jun 16, 2026.*2:30/);
   });
 
+  it('write a month and a year, and a time in UTC with the zone named', () => {
+    expect(formatDate('2026-07-01', 'en', 'monthYear')).toMatch(/^(July|June) (2026|30)?/);
+    expect(formatDate('2026-07-26T12:00:00Z', 'en', 'utcDate')).toBe('Jul 26, 2026');
+    expect(formatDate('2026-07-26T23:30:00Z', 'en', 'utcDate')).toBe('Jul 26, 2026');
+    expect(formatDate('2026-07-26T12:00:00Z', 'en', 'utcDateTime')).toBe(
+      'Jul 26, 2026, 12:00 PM UTC',
+    );
+    expect(formatDate('2026-07-26T12:00:00Z', 'de', 'utcDateTime')).toContain('UTC');
+  });
+
   it('accept an ISO string and a timestamp', () => {
     expect(formatDate('2026-06-16T14:30:00', 'en', 'date')).toBe('Jun 16, 2026');
     expect(formatDate(date.getTime(), 'en', 'date')).toBe('Jun 16, 2026');

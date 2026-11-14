@@ -399,7 +399,10 @@ describe('TenantListComponent', () => {
 
       const errorEl = fixture.nativeElement.querySelector('.load-more-error');
       expect(errorEl).toBeTruthy();
-      expect(errorEl.textContent).toContain('Network failure');
+      expect(errorEl.textContent).toContain(
+        'The service is temporarily unavailable. Please try again.',
+      );
+      expect(errorEl.textContent).not.toContain('Network failure');
       expect(errorEl.getAttribute('role')).toBe('alert');
     });
   });

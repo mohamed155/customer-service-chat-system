@@ -1,11 +1,14 @@
 <app-page-container>
-  <app-page-header title="Tenant details" description="View this organization's record">
+  <app-page-header
+    [title]="'platform.tenantDetail.title' | transloco"
+    [description]="'platform.tenantDetail.description' | transloco"
+  >
     <div class="header-actions">
       <a
         [routerLink]="['/', APP_PATHS.platform.base, APP_PATHS.platform.tenants]"
         class="back-link"
       >
-        ← Back to tenants
+        {{ 'platform.tenantDetail.back' | transloco }}
       </a>
       @if (tenant(); as t) {
         <a
@@ -13,7 +16,7 @@
           [routerLink]="['/', APP_PATHS.platform.base, APP_PATHS.platform.tenants, t.id, 'edit']"
           class="action-link"
         >
-          Edit
+          {{ 'platform.tenantDetail.edit' | transloco }}
         </a>
         <button
           *appHasPermission="'platform.tenants.manage'"
@@ -23,12 +26,22 @@
           [disabled]="actionPending()"
           (click)="onToggleStatus(t)"
         >
-          {{ t.status === 'active' ? 'Deactivate' : 'Reactivate' }}
+          {{
+            (t.status === 'active'
+              ? 'platform.tenantDetail.deactivate'
+              : 'platform.tenantDetail.reactivate'
+            ) | transloco
+          }}
         </button>
       }
     </div>
-    @if (actionError(); as errMsg) {
-      <div class="action-error" role="alert">{{ errMsg }}</div>
+    @if (actionError(); as actionErr) {
+      <div class="action-error" role="alert">
+        {{ errorKey(actionErr) | transloco }}
+        @if (actionErr.requestId; as id) {
+          <app-error-reference [requestId]="id" />
+        }
+      </div>
     }
   </app-page-header>
 
@@ -38,10 +51,12 @@
     <div role="alert">
       <app-empty-state
         icon="@tui.alert-circle"
-        [title]="err.message"
-        description="We couldn't load this tenant. Please try again."
+        [title]="errorKey(err) | transloco"
+        [description]="'platform.tenantDetail.loadErrorDescription' | transloco"
       >
-        <button type="button" class="primary-button" (click)="load()">Try again</button>
+        <button type="button" class="primary-button" (click)="load()">
+          {{ 'platform.common.retry' | transloco }}
+        </button>
         @if (err.requestId; as id) {
           <app-error-reference [requestId]="id" />
         }
@@ -50,41 +65,42 @@
   } @else if (tenant(); as t) {
     <dl class="record">
       <div class="row">
-        <dt>Name</dt>
+        <dt>{{ 'platform.tenantDetail.name' | transloco }}</dt>
         <dd>{{ t.name }}</dd>
       </div>
       <div class="row">
-        <dt>Slug</dt>
+        <dt>{{ 'platform.tenantDetail.slug' | transloco }}</dt>
         <dd class="muted">{{ t.slug }}</dd>
       </div>
       <div class="row">
-        <dt>Status</dt>
+        <dt>{{ 'platform.tenantDetail.status' | transloco }}</dt>
         <dd>
           <app-status-badge
             [status]="t.status"
+            [text]="nameOf(tenantStatusKey(t.status), t.status)"
             [tone]="t.status === 'active' ? 'green' : 'neutral'"
           />
         </dd>
       </div>
       <div class="row">
-        <dt>Plan</dt>
+        <dt>{{ 'platform.tenantDetail.plan' | transloco }}</dt>
         <dd class="muted">{{ planLabel() }}</dd>
       </div>
       <div class="row">
-        <dt>Contact name</dt>
-        <dd>{{ t.contactName ?? '—' }}</dd>
+        <dt>{{ 'platform.tenantDetail.contactName' | transloco }}</dt>
+        <dd>{{ t.contactName ?? ('platform.common.none' | transloco) }}</dd>
       </div>
       <div class="row">
-        <dt>Contact email</dt>
-        <dd>{{ t.contactEmail ?? '—' }}</dd>
+        <dt>{{ 'platform.tenantDetail.contactEmail' | transloco }}</dt>
+        <dd>{{ t.contactEmail ?? ('platform.common.none' | transloco) }}</dd>
       </div>
       <div class="row">
-        <dt>Created</dt>
-        <dd class="muted">{{ t.createdAt | date: 'medium' }}</dd>
+        <dt>{{ 'platform.tenantDetail.created' | transloco }}</dt>
+        <dd class="muted">{{ t.createdAt | localeDate: 'dateTime' }}</dd>
       </div>
       <div class="row">
-        <dt>Updated</dt>
-        <dd class="muted">{{ t.updatedAt | date: 'medium' }}</dd>
+        <dt>{{ 'platform.tenantDetail.updated' | transloco }}</dt>
+        <dd class="muted">{{ t.updatedAt | localeDate: 'dateTime' }}</dd>
       </div>
     </dl>
   }
@@ -107,12 +123,14 @@
       (keydown.escape)="cancelDialog()"
       (keydown)="onDialogKeydown($event)"
     >
-      <h2 id="dialog-title">{{ dialogTitle() }}</h2>
-      <p id="dialog-desc">{{ dialogMessage() }}</p>
+      <h2 id="dialog-title">{{ dialogTitleKey() | transloco }}</h2>
+      <p id="dialog-desc">{{ dialogMessageKey() | transloco: { name: dialogTenantName() } }}</p>
       <div class="dialog-actions">
-        <button type="button" class="dialog-cancel" (click)="cancelDialog()">Cancel</button>
+        <button type="button" class="dialog-cancel" (click)="cancelDialog()">
+          {{ 'platform.tenantDetail.cancel' | transloco }}
+        </button>
         <button type="button" class="dialog-confirm danger" (click)="confirmDialog()">
-          {{ dialogConfirmLabel() }}
+          {{ dialogConfirmKey() | transloco }}
         </button>
       </div>
     </div>

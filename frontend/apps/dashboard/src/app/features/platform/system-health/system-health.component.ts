@@ -1,4 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleDatePipe } from '../../../core/i18n/format';
 import { HealthIndicatorComponent } from '../../../shared/components/health-indicator/health-indicator.component';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
@@ -21,8 +25,10 @@ import { SystemHealthStore } from './system-health.store';
     LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,
+    LocaleDatePipe,
+    TranslocoPipe,
   ],
-  providers: [SystemHealthStore],
+  providers: [SystemHealthStore, provideTranslocoScope('platform')],
   templateUrl: './system-health.component.html',
   styles: [
     `
@@ -66,4 +72,8 @@ import { SystemHealthStore } from './system-health.store';
 })
 export class SystemHealthComponent {
   protected readonly store = inject(SystemHealthStore);
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
 }

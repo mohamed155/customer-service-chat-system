@@ -1,50 +1,52 @@
 <div class="page">
-  <h1 class="page-title">Platform Billing</h1>
+  <h1 class="page-title">{{ 'platform.billing.title' | transloco }}</h1>
 
   @if (store.loading()) {
-    <app-loading-state label="Loading billing data…" />
+    <app-loading-state [label]="'platform.billing.loading' | transloco" />
   } @else if (store.error(); as error) {
-    <app-inline-alert tone="error">{{ error }}</app-inline-alert>
+    <app-inline-alert tone="error" [requestId]="error.requestId">{{
+      errorKey(error) | transloco
+    }}</app-inline-alert>
   } @else {
     <section class="section">
       <div class="section-header">
-        <h2>Plan Catalog</h2>
+        <h2>{{ 'platform.billing.planCatalog' | transloco }}</h2>
         @if (canManage()) {
           <div class="form-inline">
             <tui-textfield>
               <input
                 tuiTextfield
                 type="text"
-                placeholder="Name"
+                [placeholder]="'platform.billing.namePlaceholder' | transloco"
                 [(ngModel)]="newPlanName"
-                aria-label="Plan name"
+                [attr.aria-label]="'platform.billing.planNameLabel' | transloco"
               />
             </tui-textfield>
             <tui-textfield>
               <input
                 tuiTextfield
                 type="number"
-                placeholder="Price (cents)"
+                [placeholder]="'platform.billing.pricePlaceholder' | transloco"
                 [(ngModel)]="newPlanPrice"
-                aria-label="Monthly price in cents"
+                [attr.aria-label]="'platform.billing.priceLabel' | transloco"
               />
             </tui-textfield>
             <tui-textfield>
               <input
                 tuiTextfield
                 type="number"
-                placeholder="Token allowance"
+                [placeholder]="'platform.billing.tokensPlaceholder' | transloco"
                 [(ngModel)]="newPlanTokens"
-                aria-label="Token allowance"
+                [attr.aria-label]="'platform.billing.tokensLabel' | transloco"
               />
             </tui-textfield>
             <tui-textfield>
               <input
                 tuiTextfield
                 type="number"
-                placeholder="Conv. allowance"
+                [placeholder]="'platform.billing.conversationsPlaceholder' | transloco"
                 [(ngModel)]="newPlanConversations"
-                aria-label="Conversation allowance"
+                [attr.aria-label]="'platform.billing.conversationsLabel' | transloco"
               />
             </tui-textfield>
             <app-button
@@ -53,27 +55,29 @@
               (pressed)="onCreatePlan()"
               [disabled]="!newPlanName() || !newPlanPrice() || store.saving()"
             >
-              {{ store.saving() ? 'Saving…' : 'Create' }}
+              {{
+                (store.saving() ? 'platform.billing.saving' : 'platform.billing.create') | transloco
+              }}
             </app-button>
           </div>
         }
       </div>
 
       @if (store.plans().length === 0) {
-        <p class="empty-muted">No plans defined yet.</p>
+        <p class="empty-muted">{{ 'platform.billing.noPlans' | transloco }}</p>
       } @else {
         <app-data-table>
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Price</th>
-                <th>Tokens</th>
-                <th>Conversations</th>
-                <th>Default</th>
-                <th>Status</th>
+                <th>{{ 'platform.billing.name' | transloco }}</th>
+                <th>{{ 'platform.billing.price' | transloco }}</th>
+                <th>{{ 'platform.billing.tokens' | transloco }}</th>
+                <th>{{ 'platform.billing.conversations' | transloco }}</th>
+                <th>{{ 'platform.billing.default' | transloco }}</th>
+                <th>{{ 'platform.billing.status' | transloco }}</th>
                 @if (canManage()) {
-                  <th>Actions</th>
+                  <th>{{ 'platform.billing.actions' | transloco }}</th>
                 }
               </tr>
             </thead>
@@ -81,16 +85,42 @@
               @for (plan of store.plans(); track plan.id) {
                 <tr>
                   <td>{{ plan.name }}</td>
-                  <td>{{ formatCents(plan.monthlyPriceCents) }}/mo</td>
-                  <td>{{ plan.tokenAllowance ?? 'Unlimited' }}</td>
-                  <td>{{ plan.conversationAllowance ?? 'Unlimited' }}</td>
+                  <td>
+                    {{
+                      'platform.billing.pricePerMonth'
+                        | transloco
+                          : { price: (plan.monthlyPriceCents / 100 | localeNumber: priceFormat) }
+                    }}
+                  </td>
+                  <td>
+                    {{
+                      plan.tokenAllowance === null
+                        ? ('platform.billing.unlimited' | transloco)
+                        : (plan.tokenAllowance | localeNumber)
+                    }}
+                  </td>
+                  <td>
+                    {{
+                      plan.conversationAllowance === null
+                        ? ('platform.billing.unlimited' | transloco)
+                        : (plan.conversationAllowance | localeNumber)
+                    }}
+                  </td>
                   <td>
                     @if (plan.isDefault) {
-                      <app-status-badge status="Default" tone="accent" />
+                      <app-status-badge
+                        status="default"
+                        [text]="'platform.billing.default' | transloco"
+                        tone="accent"
+                      />
                     }
                   </td>
                   <td>
-                    <app-status-badge [status]="plan.status" tone="neutral" />
+                    <app-status-badge
+                      [status]="plan.status"
+                      [text]="nameOf(planStatusKey(plan.status), plan.status)"
+                      tone="neutral"
+                    />
                   </td>
                   @if (canManage()) {
                     <td>
@@ -101,7 +131,7 @@
                           (pressed)="store.retirePlan(plan.id)"
                           [disabled]="store.saving()"
                         >
-                          Retire
+                          {{ 'platform.billing.retire' | transloco }}
                         </app-button>
                       } @else if (plan.status === 'retired') {
                         <app-button
@@ -110,7 +140,7 @@
                           (pressed)="store.activatePlan(plan.id)"
                           [disabled]="store.saving()"
                         >
-                          Activate
+                          {{ 'platform.billing.activate' | transloco }}
                         </app-button>
                       }
                     </td>
@@ -125,22 +155,22 @@
 
     <section class="section">
       <div class="section-header">
-        <h2>Tenant Subscriptions</h2>
+        <h2>{{ 'platform.billing.subscriptions' | transloco }}</h2>
       </div>
 
       @if (store.subscriptions().length === 0) {
-        <p class="empty-muted">No subscriptions found.</p>
+        <p class="empty-muted">{{ 'platform.billing.noSubscriptions' | transloco }}</p>
       } @else {
         <app-data-table>
           <table>
             <thead>
               <tr>
-                <th>Tenant</th>
-                <th>Plan</th>
-                <th>Status</th>
-                <th>Explicit</th>
+                <th>{{ 'platform.billing.tenant' | transloco }}</th>
+                <th>{{ 'platform.billing.plan' | transloco }}</th>
+                <th>{{ 'platform.billing.status' | transloco }}</th>
+                <th>{{ 'platform.billing.explicit' | transloco }}</th>
                 @if (canManage()) {
-                  <th>Assign</th>
+                  <th>{{ 'platform.billing.assign' | transloco }}</th>
                 }
               </tr>
             </thead>
@@ -150,9 +180,15 @@
                   <td>{{ sub.tenantName }}</td>
                   <td>{{ sub.planName }}</td>
                   <td>
-                    <app-status-badge [status]="sub.status" tone="neutral" />
+                    <app-status-badge
+                      [status]="sub.status"
+                      [text]="nameOf(subscriptionKey(sub.status), sub.status)"
+                      tone="neutral"
+                    />
                   </td>
-                  <td>{{ sub.explicit ? 'Yes' : 'No' }}</td>
+                  <td>
+                    {{ (sub.explicit ? 'platform.common.yes' : 'platform.common.no') | transloco }}
+                  </td>
                   @if (canManage()) {
                     <td>
                       <select
