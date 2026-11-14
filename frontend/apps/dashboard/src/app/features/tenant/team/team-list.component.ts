@@ -171,6 +171,7 @@ export class TeamListComponent {
     tone: 'success' | 'error';
     key: string;
     params?: Record<string, unknown>;
+    requestId?: string;
   } | null>(null);
   protected readonly invitationSubmitting = signal(false);
   protected readonly invitationError = signal<ApiError | null>(null);
@@ -374,8 +375,10 @@ export class TeamListComponent {
     } catch (error) {
       const status = (error as { status?: number } | null)?.status;
       const code = (error as { code?: string } | null)?.code;
+      const requestId = (error as { requestId?: string } | null)?.requestId;
       this.resetResult.set({
         tone: 'error',
+        requestId,
         key:
           code === 'mfa_step_up_required'
             ? marker('team.reset.cancelled')

@@ -852,7 +852,15 @@ describe('TeamListComponent', () => {
 
     it.each([
       [{ code: 'mfa_step_up_required', message: 'raw', status: 401 }, 'The reset was cancelled.'],
-      [{ code: 'internal_error', message: 'raw', status: 500 }, 'The reset did not go through.'],
+      [
+        {
+          code: 'internal_error',
+          message: 'raw',
+          status: 500,
+          requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+        },
+        'The reset did not go through.',
+      ],
     ])('words a failed reset by its code (%j)', async (failure, text) => {
       mfa.resetMember.mockRejectedValue(failure);
       const fixture = await renderMembers();
@@ -864,6 +872,9 @@ describe('TeamListComponent', () => {
       fixture.detectChanges();
       expect(el.textContent).toContain(text);
       expect(el.textContent).not.toContain('raw');
+      expect(el.querySelector('[data-testid="reference"]')?.textContent ?? null).toBe(
+        failure.status === 500 ? '3c4d5e6f' : null,
+      );
     });
 
     it("does not offer a reset on the signed-in user's own row", async () => {

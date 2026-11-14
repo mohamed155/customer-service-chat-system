@@ -44,7 +44,9 @@ export class LocaleService {
   constructor() {
     const loads = this.transloco.events$
       .pipe(filter((event) => event.type === 'translationLoadSuccess'))
-      .subscribe(() => this.loadedCatalogs.update((n) => n + 1));
+      // The event can fire while a template is being rendered (a pipe asks for its scope's
+      // catalog), where writing a signal is an error: do it right after.
+      .subscribe(() => queueMicrotask(() => this.loadedCatalogs.update((n) => n + 1)));
     inject(DestroyRef).onDestroy(() => loads.unsubscribe());
   }
 

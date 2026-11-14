@@ -296,9 +296,11 @@
 }
 
 @if (resetResult(); as result) {
-  <app-inline-alert [tone]="result.tone === 'success' ? 'info' : 'error'">{{
-    result.key | transloco: result.params
-  }}</app-inline-alert>
+  <app-inline-alert
+    [tone]="result.tone === 'success' ? 'info' : 'error'"
+    [requestId]="result.requestId"
+    >{{ result.key | transloco: result.params }}</app-inline-alert
+  >
 }
 
 @if (resetTarget(); as target) {
