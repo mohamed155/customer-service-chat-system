@@ -20,9 +20,13 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
 import { IndexStatusBadgeComponent } from './index-status-badge.component';
 import { KnowledgeStore } from './knowledge.store';
 
-/** The one rejection the status buttons get from the API: publishing an article with no content. */
+/**
+ * The status buttons only offer a change the rules allow, so the API's `422 validation_failed`
+ * (it answers an illegal change and a publish with no content with the same code) means the
+ * article has no content to publish.
+ */
 const DETAIL_ERRORS: ErrorKeyOverrides = {
-  unprocessable: marker('knowledge-base.detail.publishNeedsContent'),
+  422: marker('knowledge-base.detail.publishNeedsContent'),
 };
 
 @Component({

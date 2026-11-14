@@ -122,8 +122,35 @@ describe('UploadDocumentComponent', () => {
       'The file is larger than the upload limit.',
     ],
     [
-      { code: 'unsupported_media_type', message: 'raw', status: 415 },
+      {
+        code: 'validation_failed',
+        message: 'Upload validation failed',
+        status: 422,
+        details: [{ field: 'file', code: 'too_large', message: 'raw' }],
+      },
+      'The file is larger than the upload limit.',
+    ],
+    [
+      {
+        code: 'validation_failed',
+        message: 'Upload validation failed',
+        status: 422,
+        details: [{ field: 'file', code: 'invalid_content_type', message: 'raw' }],
+      },
       'This file type is not supported.',
+    ],
+    [
+      {
+        code: 'validation_failed',
+        message: 'Upload validation failed',
+        status: 422,
+        details: [{ field: 'file', code: 'invalid_extension', message: 'raw' }],
+      },
+      'This file type is not supported.',
+    ],
+    [
+      { code: 'validation_failed', message: 'Upload validation failed', status: 422 },
+      'The request could not be completed. Check your input and try again.',
     ],
     [
       { code: 'internal_error', message: 'raw', status: 500 },
@@ -148,6 +175,7 @@ describe('UploadDocumentComponent', () => {
     const content = fixture.nativeElement.textContent as string;
     expect(content).toContain(text);
     expect(content).not.toContain('raw');
+    expect(content).not.toContain('Upload validation failed');
     expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
       '3c4d5e6f',
     );

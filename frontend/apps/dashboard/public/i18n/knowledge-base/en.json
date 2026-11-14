@@ -67,7 +67,7 @@
     "tags": "Tags",
     "createdBy": "Created by",
     "updated": "Updated",
-    "publishNeedsContent": "Add content before you publish this article."
+    "publishNeedsContent": "The status could not be changed. An article needs content before it can be published."
   },
   "editor": {
     "newTitle": "New article",

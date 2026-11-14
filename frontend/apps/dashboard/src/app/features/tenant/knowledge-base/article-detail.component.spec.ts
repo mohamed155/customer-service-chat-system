@@ -211,7 +211,7 @@ describe('ArticleDetailComponent', () => {
 
     errSubject.error({
       message: 'Cannot publish without body',
-      code: 'unprocessable',
+      code: 'validation_failed',
       status: 422,
       requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
     });
@@ -220,7 +220,7 @@ describe('ArticleDetailComponent', () => {
     await vi.waitFor(() => {
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).toContain(
-        'Add content before you publish this article.',
+        'An article needs content before it can be published.',
       );
       expect(fixture.nativeElement.textContent).not.toContain('Cannot publish without body');
       expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(

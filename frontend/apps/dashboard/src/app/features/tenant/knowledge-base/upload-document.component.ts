@@ -6,6 +6,7 @@ import { ApiError } from '../../../core/api/api.models';
 import { toApiError } from '../../../core/errors/api-error';
 import { ErrorKeyOverrides, errorMessageKey } from '../../../core/errors/error-message';
 import { marker } from '../../../core/i18n/marker';
+import { ownValue } from '../../../core/i18n/own-value';
 import { KnowledgeItemDetail } from '../../../core/api/knowledge.models';
 import { DialogShellComponent } from '../../../shared/components/dialog-shell/dialog-shell.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
@@ -15,10 +16,16 @@ import { KnowledgeApiService } from './knowledge-api.service';
 const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'txt', 'md'];
 const MAX_SIZE_BYTES = 20 * 1024 * 1024;
 
-/** What the upload's own failures say; any other failure is worded by its code. */
+/** The upload route's own refusals: the body limit of the route (`413`)... */
 const UPLOAD_ERRORS: ErrorKeyOverrides = {
   413: marker('knowledge-base.upload.serverTooLarge'),
-  415: marker('knowledge-base.upload.serverUnsupported'),
+};
+
+/** ...and the reasons the API gives in `details` of its `422` for a file it will not take. */
+const UPLOAD_DETAIL_ERRORS: Readonly<Record<string, string>> = {
+  too_large: marker('knowledge-base.upload.serverTooLarge'),
+  invalid_content_type: marker('knowledge-base.upload.serverUnsupported'),
+  invalid_extension: marker('knowledge-base.upload.serverUnsupported'),
 };
 
 /** What a form message says: a catalog key and the values its text needs. */
@@ -126,6 +133,10 @@ export class UploadDocumentComponent {
   protected readonly selectedFile = signal<File | null>(null);
 
   protected errorKey(error: ApiError): string {
+    for (const detail of error.details ?? []) {
+      const key = ownValue(UPLOAD_DETAIL_ERRORS, detail.code);
+      if (key) return key;
+    }
     return errorMessageKey(error, UPLOAD_ERRORS);
   }
 
