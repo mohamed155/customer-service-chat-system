@@ -11,13 +11,13 @@
       />
     }
   </svg>
-  <strong>100%</strong>
+  <strong>{{ 1 | localeNumber: percentFormat }}</strong>
 </div>
 <div class="list">
   @for (item of breakdown(); track item.channel) {
     <div>
       <app-channel-badge [channel]="item.channel" />
-      <span>{{ item.percentage }}%</span>
+      <span>{{ item.percentage / 100 | localeNumber: percentFormat }}</span>
     </div>
   }
 </div>

@@ -1,4 +1,9 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { AUDIT_FILTER_CATEGORIES } from '../../../core/i18n/audit-labels';
+import { LocaleService } from '../../../core/i18n/locale.service';
 import { FormsModule } from '@angular/forms';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
@@ -21,8 +26,9 @@ import { AuditLogsStore } from './audit-logs.store';
     ToolbarComponent,
     AuditDetailDrawerComponent,
     AuditLogTableComponent,
+    TranslocoPipe,
   ],
-  providers: [AuditLogsStore],
+  providers: [AuditLogsStore, provideTranslocoScope('insights')],
   templateUrl: './audit-logs.component.html',
   styles: [
     `
@@ -40,21 +46,16 @@ import { AuditLogsStore } from './audit-logs.store';
 })
 export class AuditLogsComponent {
   protected readonly store = inject(AuditLogsStore);
-  protected readonly categoryOptions = [
-    { value: 'all', label: 'All Categories' },
-    { value: 'auth', label: 'Auth' },
-    { value: 'tenant', label: 'Tenant' },
-    { value: 'members', label: 'Members' },
-    { value: 'prompts', label: 'Prompts' },
-    { value: 'ai', label: 'AI' },
-    { value: 'tools', label: 'Tools' },
-    { value: 'billing', label: 'Billing' },
-    { value: 'conversations', label: 'Conversations' },
-    { value: 'customers', label: 'Customers' },
-    { value: 'escalations', label: 'Escalations' },
-    { value: 'knowledge', label: 'Knowledge' },
-    { value: 'widgets', label: 'Widgets' },
-  ];
+  private readonly locale = inject(LocaleService);
+
+  /** The category filter: the value the API takes and its name in the active language. */
+  protected readonly categoryOptions = computed(() =>
+    AUDIT_FILTER_CATEGORIES.map((c) => ({ value: c.value, label: this.locale.translate(c.key) })),
+  );
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
 
   protected onFromChange(value: string): void {
     this.store.setDateRange(value, this.store.to());

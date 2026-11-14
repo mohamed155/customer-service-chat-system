@@ -1,8 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError } from 'rxjs';
-import sharedEnglish from '../../../../public/i18n/shared/en.json';
 import { ApiError, ApiErrorDetail } from '../api/api.models';
-import { errorMessageKey } from './error-message';
 
 interface ErrorEnvelope {
   error?: { code?: unknown; message?: unknown; details?: unknown; request_id?: unknown };
@@ -71,18 +69,4 @@ export const mapHttpError = (error: unknown, sentRequestId?: string | null): Api
     };
   }
   return { code: 'unknown_error', message: 'Unexpected error', status: 0 };
-};
-
-/**
- * The English text of an error, for screens that have not moved to the catalog yet.
- * @deprecated Show `errorMessageKey(error)` with the `transloco` pipe. English only; it goes when
- * the last area moves (MOH-156 to MOH-165).
- */
-export const userMessageFor = (error: ApiError): string => {
-  const parts = errorMessageKey(error).split('.');
-  const text = parts.reduce<unknown>(
-    (node, part) => (node as Record<string, unknown>)?.[part],
-    sharedEnglish,
-  );
-  return typeof text === 'string' ? text : 'Something went wrong. Please try again.';
 };

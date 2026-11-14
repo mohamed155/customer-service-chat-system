@@ -35,6 +35,22 @@ describe('AuditLogTableComponent', () => {
     expect(rows.length).toBe(AUDIT_ENTRY_FIXTURES.length);
   });
 
+  it('shows the name of each action from the catalog, and the code of one it has no name for', async () => {
+    const [first, second] = AUDIT_ENTRY_FIXTURES;
+    const { fixture } = await setup({
+      entries: [
+        { ...first, action: 'member.disabled', category: 'members' },
+        { ...second, action: 'something.brand_new', category: 'elsewhere' },
+      ],
+    });
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Member disabled');
+    expect(text).toContain('Members');
+    expect(text).not.toContain('member.disabled');
+    expect(text).toContain('something.brand_new');
+    expect(text).toContain('elsewhere');
+  });
+
   it('system-actor row renders "System"', async () => {
     const { fixture } = await setup();
     const text = fixture.nativeElement.textContent;

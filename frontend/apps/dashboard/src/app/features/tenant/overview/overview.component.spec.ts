@@ -78,6 +78,22 @@ describe('OverviewComponent', () => {
     });
   });
 
+  it('names a conversation status from the catalog and writes the time and the shares for the language', async () => {
+    const fixture = await createLoadedComponent();
+    const text = (fixture.nativeElement as HTMLElement).textContent as string;
+    const statuses = new Set(CONVERSATION_FIXTURES.slice(0, 5).map((c) => c.status));
+    for (const status of statuses) {
+      const name =
+        status === 'escalated' ? 'Escalated' : status.charAt(0).toUpperCase() + status.slice(1);
+      expect(text, status).toContain(name);
+    }
+    // The donut's centre and the list read as percentages written by the locale.
+    expect(text).toContain('100%');
+    expect(
+      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('time')).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('removes the escalation alert when dismissed', async () => {
     const fixture = await createLoadedComponent();
 

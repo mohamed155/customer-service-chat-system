@@ -88,7 +88,10 @@ test.describe('languages', () => {
       'Account security',
     );
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
-    expect(asked).toEqual(['/i18n/shared/de.json']);
+    // The overview is an area with its own scope: German has no file for it, which is not a
+    // failure. The area shows its English, the rest of the page stays German.
+    await expect(page.getByText('Conversation trends')).toBeVisible();
+    expect(asked).toEqual(['/i18n/shared/de.json', '/i18n/insights/de.json']);
   });
 
   test("the browser's language is used when it has a catalog", async ({ browser }) => {

@@ -1,6 +1,7 @@
 import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { TimeoutError } from 'rxjs';
-import { mapHttpError, userMessageFor } from './http-error.mapper';
+import { errorMessageKey } from './error-message';
+import { mapHttpError } from './http-error.mapper';
 
 describe('HTTP error mapping', () => {
   it('maps a backend envelope', () => {
@@ -18,7 +19,8 @@ describe('HTTP error mapping', () => {
       }),
     );
     expect(result).toMatchObject({ code: 'validation_failed', status: 422, requestId: 'req-1' });
-    expect(userMessageFor(result)).not.toContain('raw detail');
+    // The screen shows the text for the code, never the backend's sentence.
+    expect(errorMessageKey(result)).toBe('errors.requestFailed');
   });
   it('maps network failure', () =>
     expect(mapHttpError(new HttpErrorResponse({ status: 0 })).code).toBe('network_error'));
@@ -28,11 +30,11 @@ describe('HTTP error mapping', () => {
     ));
   it('maps unknown values', () =>
     expect(mapHttpError(new Error('boom')).code).toBe('unknown_error'));
-  it('returns safe status copy and fallback', () => {
-    expect(userMessageFor({ code: 'x', message: 'secret', status: 503 })).toContain('temporarily');
-    expect(userMessageFor({ code: 'x', message: 'secret', status: 0 })).toBe(
-      'Something went wrong. Please try again.',
+  it('returns safe status wording and a generic fallback', () => {
+    expect(errorMessageKey({ code: 'x', message: 'secret', status: 503 })).toBe(
+      'errors.unavailable',
     );
+    expect(errorMessageKey({ code: 'x', message: 'secret', status: 0 })).toBe('errors.generic');
   });
 });
 
@@ -90,10 +92,10 @@ describe('a timeout (MOH-166)', () => {
     const result = mapHttpError(new TimeoutError(), 'req_sent');
 
     expect(result).toMatchObject({ code: 'timeout', status: 0, requestId: 'req_sent' });
-    expect(userMessageFor(result)).toBe('The server took too long to answer. Try again.');
+    expect(errorMessageKey(result)).toBe('errors.timeout');
   });
 
   it('is not shown as a lost connection', () => {
-    expect(userMessageFor(mapHttpError(new TimeoutError()))).not.toContain('connection');
+    expect(errorMessageKey(mapHttpError(new TimeoutError()))).not.toBe('errors.networkError');
   });
 });

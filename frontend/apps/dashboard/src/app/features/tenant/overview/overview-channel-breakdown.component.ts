@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { LocaleNumberPipe } from '../../../core/i18n/format';
 import { ChannelBreakdownFixture } from '../../../shared/fixtures/fixture.models';
 import { ChannelBadgeComponent } from '../../../shared/components/channel-badge/channel-badge.component';
 
 @Component({
   selector: 'app-overview-channel-breakdown',
-  imports: [ChannelBadgeComponent],
+  imports: [ChannelBadgeComponent, LocaleNumberPipe],
   templateUrl: './overview-channel-breakdown.component.html',
   styles: [
     `
@@ -64,6 +65,7 @@ import { ChannelBadgeComponent } from '../../../shared/components/channel-badge/
 })
 export class OverviewChannelBreakdownComponent {
   readonly breakdown = input.required<readonly ChannelBreakdownFixture[]>();
+  protected readonly percentFormat = { style: 'percent', maximumFractionDigits: 1 } as const;
   protected readonly colors = [
     'var(--app-accent)',
     'var(--app-green)',

@@ -1,7 +1,1 @@
-{
-  "apps/dashboard/src/app/features/tenant/analytics/analytics.component.html": 12,
-  "apps/dashboard/src/app/features/tenant/audit-logs/audit-logs.component.html": 3,
-  "apps/dashboard/src/app/features/tenant/notifications/notifications-page.component.html": 2,
-  "apps/dashboard/src/app/features/tenant/overview/overview-trend-chart.component.html": 1,
-  "apps/dashboard/src/app/features/tenant/overview/overview.component.html": 8
-}
+{}

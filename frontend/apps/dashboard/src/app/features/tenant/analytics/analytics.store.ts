@@ -3,6 +3,8 @@ import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import { AnalyticsSummary, AnalyticsTimeseries } from '../../../core/api/tenant-api.models';
 import { AnalyticsApiService } from './analytics-api.service';
 import { withTenantScope } from '../../../core/state/tenant-scope';
@@ -15,7 +17,9 @@ export interface AnalyticsState {
   readonly summary: AnalyticsSummary | null;
   readonly timeseries: AnalyticsTimeseries | null;
   readonly loading: boolean;
-  readonly error: string | null;
+  readonly error: ApiError | null;
+  /** The range the person picked ends before it starts; nothing is asked of the API. */
+  readonly rangeInvalid: boolean;
 }
 
 function formatDate(d: Date): string {
@@ -44,6 +48,7 @@ const initialState = (): AnalyticsState => ({
   timeseries: null,
   loading: false,
   error: null,
+  rangeInvalid: false,
 });
 
 export const AnalyticsStore = signalStore(
@@ -64,7 +69,7 @@ export const AnalyticsStore = signalStore(
               catchError((err: unknown) => {
                 patchState(store, {
                   loading: false,
-                  error: (err as Error)?.message ?? 'Failed to load analytics',
+                  error: toApiError(err),
                 });
                 return of(null);
               }),
@@ -93,7 +98,7 @@ export const AnalyticsStore = signalStore(
               catchError((err: unknown) => {
                 patchState(store, {
                   loading: false,
-                  error: (err as Error)?.message ?? 'Failed to load analytics',
+                  error: toApiError(err),
                 });
                 return of(null);
               }),
@@ -125,19 +130,17 @@ export const AnalyticsStore = signalStore(
           preset: days,
           from: formatDate(from),
           to: formatDate(to),
+          rangeInvalid: false,
         });
         loadSummary({ from: store.from(), to: store.to(), channel: store.channel() });
         loadTimeseries({ from: store.from(), to: store.to(), channel: store.channel() });
       },
       setCustomRange(from: string, to: string): void {
         if (from > to) {
-          patchState(store, {
-            preset: 'custom',
-            error: 'From date must be on or before To date',
-          });
+          patchState(store, { preset: 'custom', rangeInvalid: true });
           return;
         }
-        patchState(store, { from, to, preset: 'custom' });
+        patchState(store, { from, to, preset: 'custom', rangeInvalid: false });
         loadSummary({ from: store.from(), to: store.to(), channel: store.channel() });
         loadTimeseries({ from: store.from(), to: store.to(), channel: store.channel() });
       },

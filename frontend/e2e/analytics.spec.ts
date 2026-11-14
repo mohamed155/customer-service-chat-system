@@ -223,11 +223,11 @@ test.describe('Analytics', () => {
     const cards = page.locator('app-metric-card');
     await expect(cards).toHaveCount(7);
 
-    await expect(cards.nth(0)).toContainText('1240');
+    await expect(cards.nth(0)).toContainText('1,240');
     await expect(cards.nth(1)).toContainText('78.0%');
     await expect(cards.nth(2)).toContainText('19.0%');
-    await expect(cards.nth(3)).toContainText('4s');
-    await expect(cards.nth(4)).toContainText('7s');
+    await expect(cards.nth(3)).toContainText('4 s');
+    await expect(cards.nth(4)).toContainText('7 s');
     await expect(cards.nth(5)).toContainText('4.3 / 5 (312 ratings)');
     await expect(cards.nth(6)).toContainText((5482210).toLocaleString());
   });

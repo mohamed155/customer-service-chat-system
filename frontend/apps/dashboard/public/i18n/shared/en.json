@@ -276,7 +276,159 @@
       "title": "No audit entries",
       "description": "No activity has been recorded yet."
     },
-    "target": "Target"
+    "target": "Target",
+    "actions": {
+      "agent_config": {
+        "created": "AI agent created",
+        "updated": "AI agent updated",
+        "avatar_updated": "AI agent avatar updated"
+      },
+      "agent_prompt": {
+        "version_created": "Prompt version saved",
+        "version_restored": "Prompt version restored"
+      },
+      "ai_config": {
+        "updated": "AI settings updated",
+        "deleted": "AI settings removed",
+        "capture_content_changed": "AI content capture changed"
+      },
+      "ai_credential": {
+        "set": "AI credential set",
+        "deleted": "AI credential removed"
+      },
+      "auth": {
+        "logged_out": "Signed out",
+        "login_failed": "Sign-in failed",
+        "login_succeeded": "Signed in",
+        "mfa_challenged": "Two-step check requested",
+        "mfa_enrolled": "Two-step verification set up",
+        "mfa_failed": "Two-step check failed",
+        "mfa_locked": "Two-step verification locked",
+        "mfa_recovery_codes_regenerated": "Recovery codes regenerated",
+        "mfa_recovery_used": "Recovery code used",
+        "mfa_reset": "Two-step verification reset",
+        "mfa_verified": "Two-step check passed"
+      },
+      "availability": {
+        "changed": "Availability changed"
+      },
+      "billing_plan": {
+        "created": "Billing plan created",
+        "status_changed": "Billing plan status changed"
+      },
+      "billing_subscription": {
+        "changed": "Subscription changed"
+      },
+      "conversation": {
+        "ai_handling_set": "AI handling changed",
+        "assigned": "Conversation assigned",
+        "assignment_changed": "Assignment changed",
+        "created": "Conversation created",
+        "customer_message": "Customer message received",
+        "message_status": "Message status updated",
+        "status_changed": "Conversation status changed",
+        "updated": "Conversation updated"
+      },
+      "customer": {
+        "created": "Customer created",
+        "updated": "Customer updated"
+      },
+      "escalation": {
+        "assigned": "Escalation assigned",
+        "claimed": "Escalation claimed",
+        "closed": "Escalation closed",
+        "created": "Escalation created",
+        "new": "New escalation",
+        "queued": "Escalation queued",
+        "removed": "Escalation removed"
+      },
+      "integration": {
+        "config_updated": "Integration settings changed",
+        "connected": "Integration connected",
+        "disconnected": "Integration disconnected",
+        "secret_rotated": "Integration secret rotated"
+      },
+      "knowledge_category": {
+        "created": "Knowledge category created",
+        "deleted": "Knowledge category deleted",
+        "renamed": "Knowledge category renamed"
+      },
+      "knowledge_document": {
+        "uploaded": "Knowledge document uploaded"
+      },
+      "knowledge_item": {
+        "archived": "Knowledge article archived",
+        "created": "Knowledge article created",
+        "published": "Knowledge article published",
+        "reindex_requested": "Knowledge re-index requested",
+        "reindex_skipped": "Knowledge re-index skipped",
+        "restored": "Knowledge article restored",
+        "updated": "Knowledge article updated"
+      },
+      "member": {
+        "disabled": "Member disabled",
+        "enabled": "Member enabled",
+        "invitation_accepted": "Invitation accepted",
+        "invitation_revoked": "Invitation revoked",
+        "invited": "Member invited",
+        "role_changed": "Member role changed",
+        "skills_changed": "Member skills changed"
+      },
+      "platform": {
+        "tenant_created": "Tenant created",
+        "tenant_status_changed": "Tenant status changed",
+        "tenant_switched": "Switched tenant",
+        "tenant_updated": "Tenant updated"
+      },
+      "skill": {
+        "created": "Skill created",
+        "deleted": "Skill deleted",
+        "updated": "Skill updated"
+      },
+      "tenant": {
+        "access_denied": "Workspace access denied",
+        "signup_completed": "Workspace signup completed"
+      },
+      "tool": {
+        "approval_required": "Tool needs approval",
+        "created": "Tool created",
+        "deleted": "Tool deleted",
+        "executed": "Tool ran",
+        "policy": {
+          "updated": "Tool policy updated"
+        },
+        "request": {
+          "created": "Tool request created",
+          "updated": "Tool request updated"
+        },
+        "updated": "Tool updated"
+      },
+      "user": {
+        "soft_deleted": "User deleted"
+      },
+      "widget_instance": {
+        "created": "Chat widget created",
+        "deleted": "Chat widget deleted",
+        "updated": "Chat widget updated"
+      }
+    },
+    "categories": {
+      "all": "All Categories",
+      "auth": "Auth",
+      "tenant": "Tenant",
+      "members": "Members",
+      "prompts": "Prompts",
+      "ai": "AI",
+      "tools": "Tools",
+      "billing": "Billing",
+      "conversations": "Conversations",
+      "customers": "Customers",
+      "escalations": "Escalations",
+      "knowledge": "Knowledge",
+      "widgets": "Widgets",
+      "integrations": "Integrations",
+      "other": "Other"
+    }
   },
   "citations": {
     "sources": "Sources",
@@ -417,7 +569,8 @@
     "verificationFailed": "Verification failed. Try again.",
     "fieldRequired": "This field is required.",
     "fieldInvalid": "This value is not valid.",
-    "membershipDisabled": "Your account is disabled in this workspace. Ask an Owner or Admin to turn it back on."
+    "membershipDisabled": "Your account is disabled in this workspace. Ask an Owner or Admin to turn it back on.",
+    "sessionExpired": "Your session has expired. Sign in again to continue."
   },
   "titles": {
     "signIn": "Sign in",

@@ -22,6 +22,7 @@ import knowledgeBaseEnglish from '../../../../public/i18n/knowledge-base/en.json
 import settingsEnglish from '../../../../public/i18n/settings/en.json';
 import integrationsEnglish from '../../../../public/i18n/integrations/en.json';
 import platformEnglish from '../../../../public/i18n/platform/en.json';
+import insightsEnglish from '../../../../public/i18n/insights/en.json';
 import sharedEnglish from '../../../../public/i18n/shared/en.json';
 import { toCatalog } from './catalog.loader';
 import { IcuTranspiler } from './icu-transpiler';
@@ -42,6 +43,7 @@ const TEST_SCOPES: Readonly<Record<string, Translation>> = {
   settings: settingsEnglish,
   integrations: integrationsEnglish,
   platform: platformEnglish,
+  insights: insightsEnglish,
 };
 
 class EnglishTestLoader implements TranslocoLoader {
