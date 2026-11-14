@@ -10,7 +10,7 @@
         [style.background]="formState().primaryColor || '#0066FF'"
         [style.bottom-right]="formState().position === 'bottom-left' ? undefined : '20px'"
         [style.bottom-left]="formState().position === 'bottom-left' ? '20px' : undefined"
-        aria-label="Open chat"
+        [attr.aria-label]="'integrations.widgets.preview.launcher' | transloco"
       >
         <svg
           width="24"
@@ -29,17 +29,33 @@
     <div class="wgt-window">
       <div class="wgt-header" [style.background]="formState().primaryColor || '#0066FF'">
         <span class="wgt-header-name">{{
-          formState().displayName || formState().name || 'Chat'
+          formState().displayName ||
+            formState().name ||
+            ('integrations.widgets.preview.defaultName' | transloco)
         }}</span>
-        <button class="wgt-close" aria-label="Close">&times;</button>
+        <button
+          class="wgt-close"
+          [attr.aria-label]="'integrations.widgets.preview.close' | transloco"
+        >
+          {{ closeGlyph }}
+        </button>
       </div>
       <div class="wgt-messages">
         <div class="wgt-bubble wgt-bubble-assistant">
-          {{ formState().welcomeMessage || 'Hello! How can we help you today?' }}
+          {{
+            formState().welcomeMessage ||
+              ('integrations.widgets.preview.defaultWelcome' | transloco)
+          }}
         </div>
       </div>
       <div class="wgt-composer">
-        <input class="wgt-input" type="text" placeholder="Type a message..." disabled value="" />
+        <input
+          class="wgt-input"
+          type="text"
+          [placeholder]="'integrations.widgets.preview.inputPlaceholder' | transloco"
+          disabled
+          value=""
+        />
         <button class="wgt-send-btn" disabled>
           <svg
             width="18"

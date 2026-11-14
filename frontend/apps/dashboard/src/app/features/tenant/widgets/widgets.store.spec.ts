@@ -112,7 +112,7 @@ describe('WidgetsStore', () => {
     const store = configureStore();
 
     expect(store.loading()).toBe(false);
-    expect(store.error()).toBe('Failed to load');
+    expect(store.error()).toEqual(error);
   });
 
   it('selects an instance and loads its snippet', () => {
@@ -211,7 +211,7 @@ describe('WidgetsStore', () => {
     createSubject.error(error);
 
     expect(store.saving()).toBe(false);
-    expect(store.error()).toBe('Validation failed');
+    expect(store.error()).toEqual(error);
   });
 
   it('computed selectedInstance returns correct instance', () => {

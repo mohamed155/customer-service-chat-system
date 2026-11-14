@@ -16,6 +16,7 @@ export const ENGLISH_SCOPES: Readonly<Record<string, () => Promise<Translation>>
   // Part of the initial bundle on purpose: the sign-in page is the first screen of a signed-out
   // visit, and its text must not wait for a second request.
   auth: () => Promise.resolve(authEnglish),
+  integrations: () => import('../../../../public/i18n/integrations/en.json').then((m) => m.default),
   settings: () => import('../../../../public/i18n/settings/en.json').then((m) => m.default),
   'knowledge-base': () =>
     import('../../../../public/i18n/knowledge-base/en.json').then((m) => m.default),

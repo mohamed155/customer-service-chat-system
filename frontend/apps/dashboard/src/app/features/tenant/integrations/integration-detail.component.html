@@ -1,26 +1,33 @@
 <app-page-container>
-  <a class="back" [routerLink]="backLink()">← Back to integrations</a>
+  <a class="back" [routerLink]="backLink()">{{ 'integrations.detail.back' | transloco }}</a>
   <app-page-header [title]="title()" [description]="description()" />
   @if (loading() && !detail()) {
     <app-loading-state />
-  } @else if (error()) {
+  } @else if (!detail() && error(); as err) {
     <app-empty-state
       icon="@tui.alert-circle"
-      title="Something went wrong"
-      [description]="error() ?? ''"
+      [title]="'integrations.list.errorTitle' | transloco"
+      [description]="errorKey(err) | transloco"
     >
-      <button type="button" (click)="retry()">Try again</button>
+      <button type="button" (click)="retry()">{{ 'integrations.list.retry' | transloco }}</button>
+      @if (err.requestId; as id) {
+        <app-error-reference [requestId]="id" />
+      }
     </app-empty-state>
   } @else if (detail(); as d) {
     <section class="summary">
       <span class="category">{{ d.category }}</span>
-      <app-status-badge [status]="d.status" [tone]="tone(d.status)" />
+      <app-status-badge
+        [status]="d.status"
+        [text]="nameOf(statusKey(d.status), d.status)"
+        [tone]="tone(d.status)"
+      />
       @if (!d.isAvailable) {
-        <span class="badge-soon">Coming soon</span>
+        <span class="badge-soon">{{ 'integrations.list.comingSoon' | transloco }}</span>
       }
     </section>
 
-    <app-section-header title="Configuration" />
+    <app-section-header [title]="'integrations.detail.configuration' | transloco" />
     <app-dashboard-card>
       <form class="config-form" (ngSubmit)="onSubmit()">
         @for (field of d.configSchema; track field.key) {
@@ -30,13 +37,15 @@
                 [id]="field.key"
                 type="password"
                 autocomplete="off"
-                placeholder="Leave blank to keep current value"
+                [placeholder]="'integrations.detail.secretPlaceholder' | transloco"
                 [ngModel]="formValues().secrets[field.key]"
                 (ngModelChange)="onSecretChange(field.key, $event)"
                 [name]="field.key"
               />
               @if (secretHint(field.key); as hint) {
-                <span class="secret-hint">Stored: ••••{{ hint }}</span>
+                <span class="secret-hint">{{
+                  'integrations.detail.stored' | transloco: { hint }
+                }}</span>
               }
             </app-form-field>
           } @else {
@@ -53,8 +62,13 @@
         }
 
         @if (canManage()) {
-          @if (storeError()) {
-            <p class="form-error">{{ storeError() }}</p>
+          @if (storeError(); as storeErr) {
+            <p class="form-error">
+              {{ errorKey(storeErr) | transloco }}
+              @if (storeErr.requestId; as id) {
+                <app-error-reference [requestId]="id" />
+              }
+            </p>
           }
 
           <div class="actions">
@@ -65,7 +79,10 @@
                 [disabled]="saving()"
                 (pressed)="onSubmit()"
               >
-                {{ saving() ? 'Connecting…' : 'Connect' }}
+                {{
+                  (saving() ? 'integrations.detail.connecting' : 'integrations.detail.connect')
+                    | transloco
+                }}
               </app-button>
             } @else {
               <app-button
@@ -74,10 +91,15 @@
                 [disabled]="saving()"
                 (pressed)="onSubmit()"
               >
-                {{ saving() ? 'Saving…' : 'Save' }}
+                {{
+                  (saving() ? 'integrations.detail.saving' : 'integrations.detail.save') | transloco
+                }}
               </app-button>
               <app-button variant="danger" [disabled]="saving()" (pressed)="onDisconnect()">
-                {{ saving() ? 'Working…' : 'Disconnect' }}
+                {{
+                  (saving() ? 'integrations.detail.working' : 'integrations.detail.disconnect')
+                    | transloco
+                }}
               </app-button>
             }
           </div>
@@ -85,39 +107,49 @@
       </form>
     </app-dashboard-card>
 
-    <app-section-header title="Connection" />
+    <app-section-header [title]="'integrations.detail.connection' | transloco" />
     <app-dashboard-card>
       @if (d.connection; as c) {
         <dl class="connection">
           <div class="row">
-            <dt>Connected at</dt>
-            <dd>{{ c.connectedAt | date: 'medium' }}</dd>
+            <dt>{{ 'integrations.detail.connectedAt' | transloco }}</dt>
+            <dd>{{ c.connectedAt | localeDate: 'dateTime' }}</dd>
           </div>
           @if (c.disconnectedAt) {
             <div class="row">
-              <dt>Disconnected at</dt>
-              <dd>{{ c.disconnectedAt | date: 'medium' }}</dd>
+              <dt>{{ 'integrations.detail.disconnectedAt' | transloco }}</dt>
+              <dd>{{ c.disconnectedAt | localeDate: 'dateTime' }}</dd>
             </div>
           }
           @if (c.webhookUrl) {
             <div class="row">
-              <dt>Webhook URL</dt>
+              <dt>{{ 'integrations.detail.webhookUrl' | transloco }}</dt>
               <dd class="webhook">
                 <code>{{ c.webhookUrl }}</code>
                 <app-button
                   size="sm"
                   variant="ghost"
                   (pressed)="onCopyWebhook(c.webhookUrl)"
-                  [attr.aria-label]="copyStatus() === 'copied' ? 'Copied' : 'Copy webhook URL'"
+                  [attr.aria-label]="
+                    (copyStatus() === 'copied'
+                      ? 'integrations.detail.copied'
+                      : 'integrations.detail.copyLabel'
+                    ) | transloco
+                  "
                 >
-                  {{ copyStatus() === 'copied' ? 'Copied' : 'Copy' }}
+                  {{
+                    (copyStatus() === 'copied'
+                      ? 'integrations.detail.copied'
+                      : 'integrations.detail.copy'
+                    ) | transloco
+                  }}
                 </app-button>
               </dd>
             </div>
           }
           @if (c.secrets.length > 0) {
             <div class="row">
-              <dt>Secrets</dt>
+              <dt>{{ 'integrations.detail.secrets' | transloco }}</dt>
               <dd>
                 <ul class="secrets">
                   @for (s of c.secrets; track s.fieldKey) {
@@ -131,41 +163,59 @@
           }
         </dl>
       } @else {
-        <p class="muted">Not connected.</p>
+        <p class="muted">{{ 'integrations.detail.notConnected' | transloco }}</p>
       }
     </app-dashboard-card>
 
-    <app-section-header title="Recent events" />
+    <app-section-header [title]="'integrations.detail.events' | transloco" />
     <app-dashboard-card>
       @if (eventsLoading() && events().length === 0) {
         <app-loading-state />
-      } @else if (eventsError() && events().length === 0) {
+      } @else if (events().length === 0 && eventsError(); as eventsErr) {
         <app-empty-state
           icon="@tui.alert-circle"
-          title="Could not load events"
-          [description]="eventsError() ?? ''"
+          [title]="'integrations.detail.eventsErrorTitle' | transloco"
+          [description]="errorKey(eventsErr) | transloco"
         >
-          <button type="button" (click)="retryEvents()">Try again</button>
+          <button type="button" (click)="retryEvents()">
+            {{ 'integrations.list.retry' | transloco }}
+          </button>
+          @if (eventsErr.requestId; as id) {
+            <app-error-reference [requestId]="id" />
+          }
         </app-empty-state>
       } @else if (events().length === 0) {
         <app-empty-state
           icon="@tui.activity"
-          title="No events yet"
-          description="Delivery attempts and lifecycle changes will appear here."
+          [title]="'integrations.detail.eventsEmptyTitle' | transloco"
+          [description]="'integrations.detail.eventsEmptyDescription' | transloco"
         />
       } @else {
         <ul class="events">
           @for (event of events(); track event.id) {
             <li class="event">
               <div class="event-row">
-                <span class="event-type">{{ event.eventType }}</span>
+                <span class="event-type">{{
+                  nameOf(eventKey(event.eventType), event.eventType)
+                }}</span>
                 @if (event.outcome; as outcome) {
-                  <app-status-badge [status]="outcome" [tone]="outcomeTone(outcome)" />
+                  <app-status-badge
+                    [status]="outcome"
+                    [text]="nameOf(outcomeKey(outcome), outcome)"
+                    [tone]="outcomeTone(outcome)"
+                  />
                 }
-                <time class="event-time">{{ formatEventTime(event.createdAt) }}</time>
+                <time class="event-time" [attr.datetime]="event.createdAt">{{
+                  event.createdAt | relativeTime
+                }}</time>
               </div>
               @if (event.reason) {
-                <p class="event-reason">Reason: {{ event.reason }}</p>
+                <p class="event-reason">
+                  {{
+                    'integrations.detail.reason'
+                      | transloco: { reason: nameOf(reasonKey(event.reason), event.reason) }
+                  }}
+                </p>
               }
             </li>
           }
@@ -178,7 +228,10 @@
               (pressed)="onLoadMoreEvents()"
               [disabled]="eventsLoading()"
             >
-              {{ eventsLoading() ? 'Loading…' : 'Load more' }}
+              {{
+                (eventsLoading() ? 'integrations.detail.loading' : 'integrations.detail.loadMore')
+                  | transloco
+              }}
             </app-button>
           </div>
         }

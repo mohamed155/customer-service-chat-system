@@ -1,4 +1,6 @@
 import { inject } from '@angular/core';
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
@@ -10,7 +12,7 @@ import { withTenantScope } from '../../../core/state/tenant-scope';
 export interface IntegrationsState {
   readonly items: IntegrationListItem[];
   readonly loading: boolean;
-  readonly error: string | null;
+  readonly error: ApiError | null;
 }
 
 const initialState: IntegrationsState = {
@@ -31,7 +33,7 @@ export const IntegrationsStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loading: false,
-                error: (err as Error)?.message ?? 'Failed to load integrations',
+                error: toApiError(err),
               });
               return of(null);
             }),

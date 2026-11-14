@@ -1,5 +1,10 @@
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { ErrorKeyOverrides, errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleDatePipe } from '../../../core/i18n/format';
+import { marker } from '../../../core/i18n/marker';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { TuiIcon } from '@taiga-ui/core';
 import { WidgetInstance } from '../../../core/api/widget.models';
 import { PermissionsService } from '../../../core/authz/permissions.service';
@@ -14,22 +19,27 @@ import { WidgetPreviewComponent } from './widget-preview.component';
 import { WidgetEditorComponent } from './widget-editor.component';
 import { WidgetsStore } from './widgets.store';
 
+/** The widget API refuses a field with a `422`; the editor already marks the field. */
+const WIDGET_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.invalid') };
+
 @Component({
   selector: 'app-widgets',
   standalone: true,
   imports: [
     ButtonComponent,
     DashboardCardComponent,
-    DatePipe,
     EmptyStateComponent,
+    ErrorReferenceComponent,
     LoadingStateComponent,
+    LocaleDatePipe,
     PageContainerComponent,
     PageHeaderComponent,
+    TranslocoPipe,
     TuiIcon,
     WidgetEditorComponent,
     WidgetPreviewComponent,
   ],
-  providers: [WidgetsStore],
+  providers: [WidgetsStore, provideTranslocoScope('integrations')],
   templateUrl: './widgets.component.html',
   styles: [
     `
@@ -217,6 +227,10 @@ export class WidgetsComponent {
   protected readonly copied = signal(false);
 
   protected readonly canManage = () => this.permissions.has('widgets.manage');
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error, WIDGET_ERRORS);
+  }
 
   protected startCreate(): void {
     this.store.updateFormState({

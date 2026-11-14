@@ -116,7 +116,7 @@ describe('IntegrationDetailStore', () => {
     const store = TestBed.inject(IntegrationDetailStore);
     store.load('generic-webhook');
     await vi.waitFor(() => {
-      expect(store.error()).toBe('boom');
+      expect(store.error()).toMatchObject({ code: 'unknown_error' });
       expect(store.loading()).toBe(false);
     });
   });
@@ -157,7 +157,7 @@ describe('IntegrationDetailStore', () => {
       secrets: { signing_secret: 'whsec_abc123' },
     });
     await vi.waitFor(() => {
-      expect(store.error()).toBe('connect failed');
+      expect(store.error()).toMatchObject({ code: 'unknown_error' });
       expect(store.saving()).toBe(false);
     });
   });
@@ -192,7 +192,7 @@ describe('IntegrationDetailStore', () => {
     const store = TestBed.inject(IntegrationDetailStore);
     store.loadFirstPageEvents('generic-webhook');
     await vi.waitFor(() => {
-      expect(store.eventsError()).toBe('events boom');
+      expect(store.eventsError()).toMatchObject({ code: 'unknown_error' });
       expect(store.eventsLoading()).toBe(false);
     });
   });

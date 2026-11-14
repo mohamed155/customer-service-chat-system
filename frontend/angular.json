@@ -74,8 +74,8 @@
                 {
                   "type": "bundle",
                   "name": "widgets-component",
-                  "maximumWarning": "33kb",
-                  "maximumError": "35kb"
+                  "maximumWarning": "37kb",
+                  "maximumError": "39kb"
                 },
                 {
                   "type": "bundle",

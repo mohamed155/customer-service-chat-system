@@ -1,20 +1,41 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { ErrorKeyOverrides, errorMessageKey } from '../../../core/errors/error-message';
+import { marker } from '../../../core/i18n/marker';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 import { WidgetInstance } from '../../../core/api/widget.models';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 
-interface ValidationErrors {
-  name?: string;
-  displayName?: string;
-  primaryColor?: string;
-  welcomeMessage?: string;
-  allowedDomains?: string;
+/** What a field says is wrong: a catalog key and the values its text needs. */
+interface FieldMessage {
+  readonly key: string;
+  readonly params?: Record<string, unknown>;
 }
+
+interface ValidationErrors {
+  name?: FieldMessage;
+  displayName?: FieldMessage;
+  primaryColor?: FieldMessage;
+  welcomeMessage?: FieldMessage;
+  allowedDomains?: FieldMessage;
+}
+
+/** The limits the widget API enforces (`admin_routes.rs`). */
+const MAX_NAME = 80;
+const MAX_WELCOME = 500;
+const MAX_DOMAINS = 20;
+const COLOR_EXAMPLE = '#0066FF';
+
+/** The widget API refuses a field with a `422`; the form already marks the field. */
+const EDITOR_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.invalid') };
 
 @Component({
   selector: 'app-widget-editor',
   standalone: true,
-  imports: [ButtonComponent, FormsModule],
+  imports: [ButtonComponent, ErrorReferenceComponent, FormsModule, TranslocoPipe],
+  providers: [provideTranslocoScope('integrations')],
   host: { '[class.visible]': 'visible()' },
   templateUrl: './widget-editor.component.html',
   styles: [
@@ -208,13 +229,19 @@ export class WidgetEditorComponent {
   readonly isNew = input(false);
   readonly visible = input(true);
   readonly saving = input(false);
-  readonly error = input<string | null>(null);
+  readonly error = input<ApiError | null>(null);
 
   readonly save = output<void>();
   readonly dismissed = output<void>();
   readonly formChange = output<Partial<WidgetInstance>>();
 
+  /** The sign on a close button: a symbol, the same in every language. */
+  protected readonly closeGlyph = '\u00d7';
   protected readonly newDomain = signal('');
+
+  /** An example of what to type: a value, not a sentence, so it is the same in every language. */
+  protected readonly domainExample = 'example.com';
+  protected readonly colorExample = COLOR_EXAMPLE;
 
   private readonly hexColorRe = /^#[0-9a-fA-F]{6}$/;
 
@@ -223,25 +250,48 @@ export class WidgetEditorComponent {
     const errs: ValidationErrors = {};
 
     const name = (f.name ?? '').trim();
-    if (!name || name.length < 1) errs.name = 'Name is required';
-    else if (name.length > 80) errs.name = 'Name must be 80 characters or fewer';
+    if (!name) errs.name = { key: marker('integrations.widgets.editor.errors.nameRequired') };
+    else if (name.length > MAX_NAME)
+      errs.name = {
+        key: marker('integrations.widgets.editor.errors.nameLength'),
+        params: { max: MAX_NAME },
+      };
 
     const displayName = (f.displayName ?? '').trim();
-    if (displayName.length > 80) errs.displayName = 'Display name must be 80 characters or fewer';
+    if (displayName.length > MAX_NAME)
+      errs.displayName = {
+        key: marker('integrations.widgets.editor.errors.displayNameLength'),
+        params: { max: MAX_NAME },
+      };
 
     const color = f.primaryColor || '';
     if (color && !this.hexColorRe.test(color))
-      errs.primaryColor = 'Must be a valid hex color (e.g. #0066FF)';
+      errs.primaryColor = {
+        key: marker('integrations.widgets.editor.errors.color'),
+        params: { example: COLOR_EXAMPLE },
+      };
 
     const msg = f.welcomeMessage || '';
-    if (msg.length > 500) errs.welcomeMessage = 'Message must be 500 characters or fewer';
+    if (msg.length > MAX_WELCOME)
+      errs.welcomeMessage = {
+        key: marker('integrations.widgets.editor.errors.welcomeLength'),
+        params: { max: MAX_WELCOME },
+      };
 
     const domains = f.allowedDomains || [];
-    if (domains.length > 20) errs.allowedDomains = 'Maximum 20 domains allowed';
+    if (domains.length > MAX_DOMAINS)
+      errs.allowedDomains = {
+        key: marker('integrations.widgets.editor.errors.domainCount'),
+        params: { max: MAX_DOMAINS },
+      };
     const invalidDomain = domains.find(
       (d) => !/^(?:\*\.)?[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(d),
     );
-    if (invalidDomain) errs.allowedDomains = `Invalid domain: ${invalidDomain}`;
+    if (invalidDomain)
+      errs.allowedDomains = {
+        key: marker('integrations.widgets.editor.errors.domainInvalid'),
+        params: { domain: invalidDomain },
+      };
 
     return errs;
   });
@@ -251,6 +301,10 @@ export class WidgetEditorComponent {
     const f = this.form();
     return Object.keys(errs).length === 0 && (f.name ?? '').trim().length > 0;
   });
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error, EDITOR_ERRORS);
+  }
 
   protected onChange(field: string, value: unknown): void {
     this.formChange.emit({ [field]: value });
