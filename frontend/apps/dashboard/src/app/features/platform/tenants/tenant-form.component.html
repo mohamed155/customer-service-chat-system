@@ -1,31 +1,36 @@
 <app-page-container>
   <app-page-header
-    [title]="isEditMode() ? 'Edit tenant' : 'New tenant'"
+    [title]="
+      (isEditMode() ? 'platform.tenantForm.editTitle' : 'platform.tenantForm.newTitle') | transloco
+    "
     [description]="
-      isEditMode() ? 'Update this customer organization' : 'Onboard a new customer organization'
+      (isEditMode() ? 'platform.tenantForm.editDescription' : 'platform.tenantForm.newDescription')
+        | transloco
     "
   />
 
   @if (!canManage()) {
     <app-empty-state
       icon="@tui.shield-off"
-      title="Management not permitted"
-      description="You do not have permission to manage tenants. Please contact an administrator if you need access."
+      [title]="'platform.tenantForm.notPermittedTitle' | transloco"
+      [description]="'platform.tenantForm.notPermittedDescription' | transloco"
     />
   } @else if (loadingInitial()) {
-    <app-loading-state label="Loading tenant" />
+    <app-loading-state [label]="'platform.tenantForm.loading' | transloco" />
   } @else if (editInitFailed()) {
     <app-empty-state
       icon="@tui.alert-circle"
-      title="Couldn't load tenant"
-      description="We couldn't load this tenant for editing. Please try again."
+      [title]="'platform.tenantForm.loadErrorTitle' | transloco"
+      [description]="'platform.tenantForm.loadErrorDescription' | transloco"
     >
-      <button type="button" class="primary-button" (click)="retryLoad()">Try again</button>
+      <button type="button" class="primary-button" (click)="retryLoad()">
+        {{ 'platform.tenantForm.retry' | transloco }}
+      </button>
     </app-empty-state>
   } @else {
     <form [formGroup]="form" (ngSubmit)="onSubmit()" class="form" novalidate>
       <label class="field">
-        <span>Display name *</span>
+        <span>{{ 'platform.tenantForm.displayName' | transloco }}</span>
         <input
           type="text"
           formControlName="name"
@@ -35,45 +40,57 @@
           [attr.aria-describedby]="ariaInvalid('name') ? errorIdFor('name') : null"
         />
         @if (showError('name')) {
-          <small [id]="errorIdFor('name')" class="error">{{ errorMessage('name') }}</small>
+          <small [id]="errorIdFor('name')" class="error">{{
+            errorKeyFor('name') | transloco
+          }}</small>
         }
       </label>
 
       <label class="field">
-        <span>Slug *</span>
+        <span>{{ 'platform.tenantForm.slug' | transloco }}</span>
         <input
           type="text"
           formControlName="slug"
-          maxlength="63"
+          [attr.maxlength]="slugMaxLength"
           autocomplete="off"
           [attr.aria-invalid]="ariaInvalid('slug') ? 'true' : null"
           [attr.aria-describedby]="ariaInvalid('slug') ? errorIdFor('slug') : null"
         />
-        <small class="hint">Lowercase letters, digits, and single hyphens. Max 63 chars.</small>
+        <small class="hint">{{
+          'platform.tenantForm.slugHint' | transloco: { max: slugMaxLength }
+        }}</small>
         @if (showError('slug')) {
-          <small [id]="errorIdFor('slug')" class="error">{{ errorMessage('slug') }}</small>
+          <small [id]="errorIdFor('slug')" class="error">{{
+            errorKeyFor('slug') | transloco
+          }}</small>
         }
       </label>
 
       <label class="field">
-        <span>Plan</span>
+        <span>{{ 'platform.tenantForm.plan' | transloco }}</span>
         <select
           formControlName="plan"
           [attr.aria-invalid]="ariaInvalid('plan') ? 'true' : null"
           [attr.aria-describedby]="ariaInvalid('plan') ? errorIdFor('plan') : null"
         >
-          <option value="trial">Trial</option>
-          <option value="starter">Starter</option>
-          <option value="professional">Professional</option>
-          <option value="enterprise">Enterprise</option>
+          <option value="trial">{{ 'platform.tenants.plans.trial' | transloco }}</option>
+          <option value="starter">{{ 'platform.tenants.plans.starter' | transloco }}</option>
+          <option value="professional">
+            {{ 'platform.tenants.plans.professional' | transloco }}
+          </option>
+          <option value="enterprise">
+            {{ 'platform.tenants.plans.enterprise' | transloco }}
+          </option>
         </select>
         @if (showError('plan')) {
-          <small [id]="errorIdFor('plan')" class="error">{{ errorMessage('plan') }}</small>
+          <small [id]="errorIdFor('plan')" class="error">{{
+            errorKeyFor('plan') | transloco
+          }}</small>
         }
       </label>
 
       <label class="field">
-        <span>Contact name</span>
+        <span>{{ 'platform.tenantForm.contactName' | transloco }}</span>
         <input
           type="text"
           formControlName="contactName"
@@ -84,13 +101,13 @@
         />
         @if (showError('contactName')) {
           <small [id]="errorIdFor('contactName')" class="error">{{
-            errorMessage('contactName')
+            errorKeyFor('contactName') | transloco
           }}</small>
         }
       </label>
 
       <label class="field">
-        <span>Contact email</span>
+        <span>{{ 'platform.tenantForm.contactEmail' | transloco }}</span>
         <input
           type="email"
           formControlName="contactEmail"
@@ -100,14 +117,14 @@
         />
         @if (showError('contactEmail')) {
           <small [id]="errorIdFor('contactEmail')" class="error">{{
-            errorMessage('contactEmail')
+            errorKeyFor('contactEmail') | transloco
           }}</small>
         }
       </label>
 
       @if (serverError(); as err) {
         <div class="form-error" role="alert">
-          {{ err.message }}
+          {{ errorKey(err) | transloco }}
           @if (err.requestId; as id) {
             <app-error-reference [requestId]="id" />
           }
@@ -115,15 +132,27 @@
       }
 
       <div class="actions">
-        <a [routerLink]="cancelLink()">Cancel</a>
+        <a [routerLink]="cancelLink()">{{ 'platform.tenantForm.cancel' | transloco }}</a>
         <button type="submit" [disabled]="submitting() || form.invalid || loadingInitial()">
-          {{ submitting() ? (isEditMode() ? 'Saving…' : 'Creating…') : submitLabel() }}
+          {{
+            (submitting()
+              ? isEditMode()
+                ? 'platform.tenantForm.saving'
+                : 'platform.tenantForm.creating'
+              : submitLabelKey()
+            ) | transloco
+          }}
         </button>
       </div>
     </form>
   }
 
   @if (submitting()) {
-    <app-loading-state [label]="isEditMode() ? 'Saving changes' : 'Creating tenant'" />
+    <app-loading-state
+      [label]="
+        (isEditMode() ? 'platform.tenantForm.savingChanges' : 'platform.tenantForm.creatingTenant')
+          | transloco
+      "
+    />
   }
 </app-page-container>

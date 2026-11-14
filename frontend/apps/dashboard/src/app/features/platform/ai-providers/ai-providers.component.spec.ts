@@ -1,3 +1,4 @@
+import { provideTranslocoScope } from '@jsverse/transloco';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
@@ -100,6 +101,7 @@ describe('AiProvidersComponent', () => {
       .overrideComponent(AiProvidersComponent, {
         set: {
           providers: [
+            provideTranslocoScope('platform'),
             {
               provide: AiProvidersStore,
               useValue: {
@@ -123,23 +125,32 @@ describe('AiProvidersComponent', () => {
     const text = fixture.nativeElement.textContent;
     expect(text).toContain('Healthy');
     expect(text).toContain('Degraded');
-    expect(text).toContain('No_activity');
+    expect(text).toContain('No activity');
     expect(text).toContain('—');
   });
 
   it('renders the five failure-category labels', () => {
     const text = fixture.nativeElement.textContent;
-    expect(text).toContain('rate_limited');
+    expect(text).toContain('Rate limited');
     expect(text).toContain('Unavailable');
-    expect(text).toContain('timeout');
+    expect(text).toContain('Timeout');
+    expect(text).toContain('Authentication');
     expect(text).toContain('Invalid request');
+  });
+
+  it('writes the window in UTC and the failure rate as a percentage for the language', () => {
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('Window: Jul 25, 2026, 12:00 PM UTC – Jul 26, 2026, 12:00 PM UTC');
+    expect(text).toContain('Failure rate: 1%');
+    expect(text).toContain('p50: 350 ms · p95: 1,200 ms');
+    expect(text).toContain('Tokens in: 40,000 · out: 80,000');
   });
 
   it('renders recent-failures rows with model and latency', () => {
     const text = fixture.nativeElement.textContent;
     expect(text).toContain('gpt-4');
     expect(text).toContain('claude-3');
-    expect(text).toContain('2300');
-    expect(text).toContain('15000');
+    expect(text).toContain('2,300 ms');
+    expect(text).toContain('15,000 ms');
   });
 });

@@ -1,6 +1,12 @@
-import { DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleDatePipe, LocaleNumberPipe } from '../../../core/i18n/format';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { marker } from '../../../core/i18n/marker';
+import { failureCategoryKey, providerVerdictKey } from '../../../core/i18n/platform-labels';
 import { HealthIndicatorComponent } from '../../../shared/components/health-indicator/health-indicator.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
@@ -26,15 +32,17 @@ import { AiProvidersStore } from './ai-providers.store';
     StatusBadgeComponent,
     DashboardCardComponent,
     DataTableComponent,
-    DecimalPipe,
     EmptyStateComponent,
     InlineAlertComponent,
     LoadingStateComponent,
     SelectFilterComponent,
     PageContainerComponent,
     PageHeaderComponent,
+    LocaleDatePipe,
+    LocaleNumberPipe,
+    TranslocoPipe,
   ],
-  providers: [AiProvidersStore],
+  providers: [AiProvidersStore, provideTranslocoScope('platform')],
   templateUrl: './ai-providers.component.html',
   styles: [
     `
@@ -88,11 +96,32 @@ import { AiProvidersStore } from './ai-providers.store';
 })
 export class AiProvidersComponent implements OnInit {
   protected readonly store = inject(AiProvidersStore);
-  protected readonly windowOptions: SelectFilterOption[] = [
-    { value: '1h', label: 'Last hour' },
-    { value: '24h', label: 'Last 24 hours' },
-    { value: '7d', label: 'Last 7 days' },
-  ];
+  private readonly locale = inject(LocaleService);
+  protected readonly failureCategoryKey = failureCategoryKey;
+  protected readonly providerVerdictKey = providerVerdictKey;
+  protected readonly percentFormat = { style: 'percent', maximumFractionDigits: 1 } as const;
+
+  protected readonly windowOptions = computed<SelectFilterOption[]>(() => [
+    { value: '1h', label: this.locale.translate(marker('platform.providers.lastHour')) },
+    { value: '24h', label: this.locale.translate(marker('platform.providers.last24h')) },
+    { value: '7d', label: this.locale.translate(marker('platform.providers.last7d')) },
+  ]);
+
+  /** The name from the catalog, or the API's own word for a value this app has no name for. */
+  protected nameOf(key: string | null, fallback: string): string {
+    return key ? this.locale.translate(key) : fallback;
+  }
+
+  /** A duration in milliseconds written for the language; a dash when there is none. */
+  protected milliseconds(ms: number | null): string {
+    return ms === null
+      ? this.locale.translate(marker('platform.common.none'))
+      : this.locale.translate(marker('platform.providers.milliseconds'), { ms });
+  }
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
 
   ngOnInit(): void {
     this.store.load(this.store.window());

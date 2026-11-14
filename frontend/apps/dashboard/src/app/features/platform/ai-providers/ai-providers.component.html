@@ -1,21 +1,30 @@
 <app-page-container>
-  <app-page-header title="AI provider status" />
+  <app-page-header [title]="'platform.providers.title' | transloco" />
 
   @if (store.loading() && !store.status()) {
-    <app-loading-state label="Loading provider status…" />
+    <app-loading-state [label]="'platform.providers.loading' | transloco" />
   } @else if (store.error(); as error) {
-    <app-inline-alert tone="error">{{ error }}</app-inline-alert>
+    <app-inline-alert tone="error" [requestId]="error.requestId">{{
+      errorKey(error) | transloco
+    }}</app-inline-alert>
   }
 
   @if (store.status(); as status) {
     <div class="toolbar">
       <app-select-filter
-        label="Window"
-        [options]="windowOptions"
+        [label]="'platform.providers.window' | transloco"
+        [options]="windowOptions()"
         [value]="store.window()"
         (valueChange)="onWindowChange($event)"
       />
-      <span class="utc-note">Window: {{ status.window.from }} – {{ status.window.to }} UTC</span>
+      <span class="utc-note">{{
+        'platform.providers.windowRange'
+          | transloco
+            : {
+                from: (status.window.from | localeDate: 'utcDateTime'),
+                to: (status.window.to | localeDate: 'utcDateTime'),
+              }
+      }}</span>
     </div>
 
     <div class="cards">
@@ -23,33 +32,79 @@
         <app-dashboard-card [title]="prov.provider">
           <div class="prov-row">
             @if (prov.verdict === 'no_activity' || prov.verdict === 'insufficient_data') {
-              <app-status-badge [status]="prov.verdict" tone="neutral" />
+              <app-status-badge
+                [status]="prov.verdict"
+                [text]="nameOf(providerVerdictKey(prov.verdict), prov.verdict)"
+                tone="neutral"
+              />
             } @else {
               <app-health-indicator [verdict]="healthVerdict(prov.verdict)" />
             }
             <p class="meta">
-              Calls: {{ prov.totalCalls }} · Success: {{ prov.successes }} · Failures:
-              {{ prov.failures }}
-            </p>
-            <p class="meta">
-              Failure rate:
               {{
-                prov.failureRate !== null ? (prov.failureRate * 100 | number: '1.0-1') + '%' : '—'
+                'platform.providers.calls'
+                  | transloco
+                    : { total: prov.totalCalls, successes: prov.successes, failures: prov.failures }
               }}
             </p>
             <p class="meta">
-              p50: {{ prov.p50LatencyMs !== null ? prov.p50LatencyMs + 'ms' : '—' }} · p95:
-              {{ prov.p95LatencyMs !== null ? prov.p95LatencyMs + 'ms' : '—' }}
+              {{
+                'platform.providers.failureRate'
+                  | transloco
+                    : {
+                        rate:
+                          prov.failureRate !== null
+                            ? (prov.failureRate | localeNumber: percentFormat)
+                            : ('platform.common.none' | transloco),
+                      }
+              }}
             </p>
-            <p class="meta">Tokens in: {{ prov.inputTokens }} · out: {{ prov.outputTokens }}</p>
+            <p class="meta">
+              {{
+                'platform.providers.latency'
+                  | transloco
+                    : { p50: milliseconds(prov.p50LatencyMs), p95: milliseconds(prov.p95LatencyMs) }
+              }}
+            </p>
+            <p class="meta">
+              {{
+                'platform.providers.tokens'
+                  | transloco: { input: prov.inputTokens, output: prov.outputTokens }
+              }}
+            </p>
             <details class="categories">
-              <summary>Failures by category</summary>
+              <summary>{{ 'platform.providers.byCategory' | transloco }}</summary>
               <ul>
-                <li>Authentication: {{ prov.failuresByCategory.authentication }}</li>
-                <li>Rate limited: {{ prov.failuresByCategory.rateLimited }}</li>
-                <li>Unavailable: {{ prov.failuresByCategory.unavailable }}</li>
-                <li>Timeout: {{ prov.failuresByCategory.timeout }}</li>
-                <li>Invalid request: {{ prov.failuresByCategory.invalidRequest }}</li>
+                <li>
+                  {{
+                    'platform.providers.authentication'
+                      | transloco: { count: prov.failuresByCategory.authentication }
+                  }}
+                </li>
+                <li>
+                  {{
+                    'platform.providers.rateLimited'
+                      | transloco: { count: prov.failuresByCategory.rateLimited }
+                  }}
+                </li>
+                <li>
+                  {{
+                    'platform.providers.unavailable'
+                      | transloco: { count: prov.failuresByCategory.unavailable }
+                  }}
+                </li>
+                <li>
+                  {{
+                    'platform.providers.timeout'
+                      | transloco: { count: prov.failuresByCategory.timeout }
+                  }}
+                </li>
+                <li>
+                  {{
+                    'platform.providers.invalidRequest'
+                      | transloco: { count: prov.failuresByCategory.invalidRequest }
+                  }}
+                </li>
               </ul>
             </details>
           </div>
@@ -58,23 +113,23 @@
     </div>
 
     <section class="failures">
-      <h3>Recent Failures</h3>
+      <h3>{{ 'platform.providers.recentFailures' | transloco }}</h3>
       @if (status.recentFailures.length === 0) {
         <app-empty-state
           icon="@tui.circle-check"
-          title="No recent failures"
-          description="No failed AI calls were recorded in this window."
+          [title]="'platform.providers.noFailuresTitle' | transloco"
+          [description]="'platform.providers.noFailuresDescription' | transloco"
         />
       } @else {
         <app-data-table>
           <table>
             <thead>
               <tr>
-                <th>Provider</th>
-                <th>Model</th>
-                <th>Category</th>
-                <th>Latency</th>
-                <th>Time (UTC)</th>
+                <th>{{ 'platform.providers.provider' | transloco }}</th>
+                <th>{{ 'platform.providers.model' | transloco }}</th>
+                <th>{{ 'platform.providers.category' | transloco }}</th>
+                <th>{{ 'platform.providers.latencyColumn' | transloco }}</th>
+                <th>{{ 'platform.providers.time' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
@@ -82,9 +137,15 @@
                 <tr>
                   <td>{{ f.provider }}</td>
                   <td>{{ f.model }}</td>
-                  <td>{{ f.errorCategory ?? '—' }}</td>
-                  <td>{{ f.latencyMs }}ms</td>
-                  <td>{{ f.occurredAt }}</td>
+                  <td>
+                    {{
+                      f.errorCategory
+                        ? nameOf(failureCategoryKey(f.errorCategory), f.errorCategory)
+                        : ('platform.common.none' | transloco)
+                    }}
+                  </td>
+                  <td>{{ milliseconds(f.latencyMs) }}</td>
+                  <td>{{ f.occurredAt | localeDate: 'utcDateTime' }}</td>
                 </tr>
               }
             </tbody>
@@ -95,8 +156,8 @@
   } @else {
     <app-empty-state
       icon="@tui.bot"
-      title="No provider data available"
-      description="Provider metrics will appear once AI calls are recorded."
+      [title]="'platform.providers.emptyTitle' | transloco"
+      [description]="'platform.providers.emptyDescription' | transloco"
     />
   }
 </app-page-container>

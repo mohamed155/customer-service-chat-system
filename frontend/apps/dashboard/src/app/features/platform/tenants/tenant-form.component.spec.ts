@@ -1,3 +1,4 @@
+import { provideI18nTesting } from '../../../core/i18n/i18n.testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
@@ -183,7 +184,7 @@ describe('TenantFormComponent', () => {
     });
   });
 
-  it('renders the exact backend ErrorDetail.message beside the matching control on a 422 validation_failed', async () => {
+  it('words a field error from the server by its code beside the matching control on a 422', async () => {
     const details: ApiErrorDetail[] = [
       { field: 'slug', code: 'invalid_format', message: 'Slug is already in use' },
     ];
@@ -201,15 +202,20 @@ describe('TenantFormComponent', () => {
 
     await vi.waitFor(() => {
       expect(fixture.componentInstance.form.controls.slug.errors).toEqual({
-        server: 'Slug is already in use',
+        server: 'platform.tenantForm.errors.slugFormat',
       });
     });
     fixture.detectChanges();
 
     const slugErrorId = errorIdFor('slug');
     const slugError = fixture.nativeElement.querySelector(`#${slugErrorId}`);
-    expect(slugError?.textContent).toContain('Slug is already in use');
-    expect(fixture.nativeElement.textContent).toContain('Validation failed');
+    expect(slugError?.textContent).toContain(
+      'Slug must be lowercase letters/digits with optional single hyphens',
+    );
+    // The API's own sentences are not shown: the field says it by code, the banner by status.
+    expect(fixture.nativeElement.textContent).not.toContain('Slug is already in use');
+    expect(fixture.nativeElement.textContent).not.toContain('Validation failed');
+    expect(fixture.nativeElement.textContent).toContain('The request could not be completed.');
     expect(router.navigate).not.toHaveBeenCalled();
   });
 
@@ -227,14 +233,15 @@ describe('TenantFormComponent', () => {
 
     await vi.waitFor(() => {
       expect(fixture.componentInstance.form.controls.slug.errors).toEqual({
-        server: 'Tenant slug is already in use',
+        server: 'platform.tenantForm.errors.slugTaken',
       });
     });
     fixture.detectChanges();
 
     expect(fixture.componentInstance.form.controls.slug.touched).toBe(true);
     const slugError = fixture.nativeElement.querySelector(`#${errorIdFor('slug')}`);
-    expect(slugError?.textContent).toContain('Tenant slug is already in use');
+    expect(slugError?.textContent).toContain('This slug is already in use');
+    expect(fixture.nativeElement.textContent).not.toContain('Tenant slug is already in use');
     expect(router.navigate).not.toHaveBeenCalled();
   });
 
@@ -256,7 +263,7 @@ describe('TenantFormComponent', () => {
 
     await vi.waitFor(() => {
       expect(fixture.componentInstance.form.controls.slug.errors).toEqual({
-        server: 'Slug is already in use',
+        server: 'platform.tenantForm.errors.slugFormat',
       });
     });
     fixture.detectChanges();
@@ -285,7 +292,7 @@ describe('TenantFormComponent', () => {
 
     await vi.waitFor(() => {
       expect(fixture.componentInstance.form.controls.slug.errors).toEqual({
-        server: 'Slug is already in use',
+        server: 'platform.tenantForm.errors.slugFormat',
       });
     });
     fixture.detectChanges();
@@ -297,7 +304,9 @@ describe('TenantFormComponent', () => {
     expect(describedBy).toBe(errorIdFor('slug'));
     const described = fixture.nativeElement.querySelector(`#${describedBy}`);
     expect(described).toBeTruthy();
-    expect(described?.textContent).toContain('Slug is already in use');
+    expect(described?.textContent).toContain(
+      'Slug must be lowercase letters/digits with optional single hyphens',
+    );
   });
 
   it('disables the submit button while submitting and re-enables after', async () => {
@@ -328,7 +337,7 @@ describe('TenantFormComponent', () => {
     );
   });
 
-  it('renders the exact plan server validation message and matching ARIA error element on a 422', async () => {
+  it('words a plan error from the server by its code, with the matching ARIA error element, on a 422', async () => {
     const details: ApiErrorDetail[] = [
       {
         field: 'plan',
@@ -351,7 +360,7 @@ describe('TenantFormComponent', () => {
 
     await vi.waitFor(() => {
       expect(fixture.componentInstance.form.controls.plan.errors).toEqual({
-        server: 'Plan must be one of: trial, starter, professional, enterprise',
+        server: 'errors.fieldInvalid',
       });
     });
     fixture.detectChanges();
@@ -359,12 +368,8 @@ describe('TenantFormComponent', () => {
     const planErrorId = errorIdFor('plan');
     const planError = fixture.nativeElement.querySelector(`#${planErrorId}`) as HTMLElement;
     expect(planError).toBeTruthy();
-    expect(planError.textContent).toContain(
-      'Plan must be one of: trial, starter, professional, enterprise',
-    );
-    expect(fixture.nativeElement.textContent).toContain(
-      'Plan must be one of: trial, starter, professional, enterprise',
-    );
+    expect(planError.textContent).toContain('This value is not valid.');
+    expect(fixture.nativeElement.textContent).not.toContain('Plan must be one of');
 
     const planSelect = fixture.nativeElement.querySelector(
       'select[formControlName="plan"]',
@@ -398,6 +403,7 @@ describe('TenantFormComponent (edit mode)', () => {
     await TestBed.configureTestingModule({
       imports: [TenantFormComponent],
       providers: [
+        ...provideI18nTesting(),
         provideRouter([]),
         { provide: TenantsStore, useValue: editStore },
         { provide: PlatformTenantsService, useValue: editService },
@@ -508,6 +514,7 @@ describe('TenantFormComponent (edit mode)', () => {
     TestBed.configureTestingModule({
       imports: [TenantFormComponent],
       providers: [
+        ...provideI18nTesting(),
         provideRouter([]),
         { provide: TenantsStore, useValue: pendingStore },
         { provide: PlatformTenantsService, useValue: failingService },
@@ -560,6 +567,7 @@ describe('TenantFormComponent (initial input)', () => {
     await TestBed.configureTestingModule({
       imports: [TenantFormComponent],
       providers: [
+        ...provideI18nTesting(),
         provideRouter([]),
         { provide: TenantsStore, useValue: initialStore },
         { provide: PlatformTenantsService, useValue: initialService },
@@ -612,6 +620,7 @@ describe('TenantFormComponent (initial input only, no route param)', () => {
     await TestBed.configureTestingModule({
       imports: [TenantFormComponent],
       providers: [
+        ...provideI18nTesting(),
         provideRouter([]),
         { provide: TenantsStore, useValue: initialOnlyStore },
         { provide: PlatformTenantsService, useValue: initialOnlyService },
@@ -694,6 +703,7 @@ describe('TenantFormComponent (manage-permission form gate)', () => {
     await TestBed.configureTestingModule({
       imports: [TenantFormComponent],
       providers: [
+        ...provideI18nTesting(),
         provideRouter([]),
         { provide: TenantsStore, useValue: store },
         { provide: PlatformTenantsService, useValue: service },

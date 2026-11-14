@@ -1,17 +1,23 @@
 <app-page-container>
-  <app-page-header title="System health" />
+  <app-page-header [title]="'platform.health.title' | transloco" />
 
   <div class="toolbar">
-    <app-button variant="primary" size="sm" (pressed)="store.load()">Refresh</app-button>
+    <app-button variant="primary" size="sm" (pressed)="store.load()">{{
+      'platform.health.refresh' | transloco
+    }}</app-button>
     @if (store.health(); as health) {
-      <span class="utc-note">Read at {{ health.readAt }} UTC</span>
+      <span class="utc-note">{{
+        'platform.health.readAt' | transloco: { when: (health.readAt | localeDate: 'utcDateTime') }
+      }}</span>
     }
   </div>
 
   @if (store.loading() && !store.health()) {
-    <app-loading-state label="Loading system health…" />
+    <app-loading-state [label]="'platform.health.loading' | transloco" />
   } @else if (store.error(); as error) {
-    <app-inline-alert tone="error">{{ error }}</app-inline-alert>
+    <app-inline-alert tone="error" [requestId]="error.requestId">{{
+      errorKey(error) | transloco
+    }}</app-inline-alert>
   }
 
   @if (store.health(); as health) {
@@ -27,18 +33,36 @@
             @if (dep.reason) {
               <p class="reason">{{ dep.reason }}</p>
             }
-            <p class="meta">Probe: {{ dep.probeMs }}ms</p>
+            <p class="meta">{{ 'platform.health.probe' | transloco: { ms: dep.probeMs } }}</p>
             @if (dep.detail?.kind === 'queue') {
               <p class="meta">
-                Pending: {{ dep.detail.pendingCount }} · Stuck: {{ dep.detail.stuckRetryCount }}
+                {{
+                  'platform.health.queue'
+                    | transloco
+                      : { pending: dep.detail.pendingCount, stuck: dep.detail.stuckRetryCount }
+                }}
               </p>
               @if (dep.detail.oldestPendingAgeSeconds !== null) {
-                <p class="meta">Oldest: {{ dep.detail.oldestPendingAgeSeconds }}s</p>
+                <p class="meta">
+                  {{
+                    'platform.health.oldest'
+                      | transloco: { seconds: dep.detail.oldestPendingAgeSeconds }
+                  }}
+                </p>
               }
             }
             @if (dep.detail?.kind === 'storage') {
               <p class="meta">
-                Backend: {{ dep.detail.backend }} · S3 configured: {{ dep.detail.s3Configured }}
+                {{
+                  'platform.health.storage'
+                    | transloco
+                      : {
+                          backend: dep.detail.backend,
+                          configured:
+                            (dep.detail.s3Configured ? 'platform.common.yes' : 'platform.common.no')
+                            | transloco,
+                        }
+                }}
               </p>
             }
           </div>
@@ -48,8 +72,8 @@
   } @else {
     <app-empty-state
       icon="@tui.alert-circle"
-      title="No health data available"
-      description="Health readings will appear once the first probe completes."
+      [title]="'platform.health.emptyTitle' | transloco"
+      [description]="'platform.health.emptyDescription' | transloco"
     />
   }
 </app-page-container>

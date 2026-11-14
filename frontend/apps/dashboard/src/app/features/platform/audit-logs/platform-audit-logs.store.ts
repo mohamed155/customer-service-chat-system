@@ -1,3 +1,5 @@
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import { inject } from '@angular/core';
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
@@ -34,7 +36,9 @@ export interface PlatformAuditLogsState {
   readonly tenantId: string | null;
   readonly loading: boolean;
   readonly loadingMore: boolean;
-  readonly error: string | null;
+  readonly error: ApiError | null;
+  /** The range the person picked ends before it starts; nothing is asked of the API. */
+  readonly dateRangeInvalid: boolean;
   readonly selectedEntry: AuditEntry | null;
   readonly drawerOpen: boolean;
 }
@@ -52,6 +56,7 @@ export const PlatformAuditLogsStore = signalStore(
     loading: false,
     loadingMore: false,
     error: null,
+    dateRangeInvalid: false,
     selectedEntry: null,
     drawerOpen: false,
   }),
@@ -71,7 +76,7 @@ export const PlatformAuditLogsStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loading: false,
-                error: (err as Error)?.message ?? 'Failed to load audit logs',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -106,7 +111,7 @@ export const PlatformAuditLogsStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loadingMore: false,
-                error: (err as Error)?.message ?? 'Failed to load more audit logs',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -159,10 +164,10 @@ export const PlatformAuditLogsStore = signalStore(
       },
       setDateRange(from: string, to: string): void {
         if (from > to) {
-          patchState(store, { error: 'From date must be on or before To date' });
+          patchState(store, { dateRangeInvalid: true });
           return;
         }
-        patchState(store, { from, to });
+        patchState(store, { from, to, dateRangeInvalid: false });
         load({
           from,
           to,

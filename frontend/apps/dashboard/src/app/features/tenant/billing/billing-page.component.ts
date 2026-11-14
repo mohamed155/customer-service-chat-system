@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { ApiError } from '../../../core/api/api.models';
+import { BILLING_PRICE_FORMAT } from '../../../core/billing/billing-currency';
 import { errorMessageKey } from '../../../core/errors/error-message';
 import { LocaleDatePipe, LocaleNumberPipe } from '../../../core/i18n/format';
 import { LocaleService } from '../../../core/i18n/locale.service';
@@ -12,13 +13,6 @@ import { LoadingStateComponent } from '../../../shared/components/loading-state/
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { BadgeTone } from '../../../shared/components/status-badge/status-badge.component';
 import { BillingStore } from './billing.store';
-
-/**
- * The currency of every price on this page. The billing API sends a price in cents and no
- * currency; the plans are priced in US dollars. The symbol, the grouping and where it goes come
- * from the locale (`Intl`), so nothing writes a `$`.
- */
-const BILLING_CURRENCY = 'USD';
 
 /** Catalog keys of why AI replies are paused (`ai_paused_reason`). */
 const PAUSED_KEYS: Readonly<Record<string, string>> = {
@@ -163,7 +157,7 @@ export class BillingPageComponent {
   protected readonly store = inject(BillingStore);
   private readonly locale = inject(LocaleService);
   protected readonly subscriptionTone = subscriptionTone;
-  protected readonly currencyFormat = { style: 'currency', currency: BILLING_CURRENCY } as const;
+  protected readonly currencyFormat = BILLING_PRICE_FORMAT;
   protected readonly percentFormat = {
     style: 'percent',
     minimumFractionDigits: 1,

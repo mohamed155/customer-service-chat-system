@@ -53,7 +53,7 @@ describe('PlatformOverviewStore', () => {
     const store = TestBed.inject(PlatformOverviewStore);
     store.load({});
     await vi.waitFor(() => {
-      expect(store.error()).toBe('boom');
+      expect(store.error()).toMatchObject({ code: 'unknown_error' });
       expect(store.loading()).toBe(false);
     });
   });

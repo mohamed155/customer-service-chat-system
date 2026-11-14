@@ -1,3 +1,5 @@
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import { inject } from '@angular/core';
 import { patchState, signalStore, withHooks, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
@@ -10,7 +12,7 @@ export interface PlatformBillingState {
   readonly plans: PlatformPlan[];
   readonly subscriptions: PlatformSubscriptionRow[];
   readonly loading: boolean;
-  readonly error: string | null;
+  readonly error: ApiError | null;
   readonly saving: boolean;
 }
 
@@ -32,7 +34,7 @@ export const PlatformBillingStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loading: false,
-                error: (err as Error)?.message ?? 'Failed to load plans',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -46,7 +48,7 @@ export const PlatformBillingStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loading: false,
-                error: (err as Error)?.message ?? 'Failed to load subscriptions',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -69,7 +71,7 @@ export const PlatformBillingStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 saving: false,
-                error: (err as Error)?.message ?? 'Failed to create plan',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -92,7 +94,7 @@ export const PlatformBillingStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 saving: false,
-                error: (err as Error)?.message ?? 'Failed to retire plan',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -118,7 +120,7 @@ export const PlatformBillingStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 saving: false,
-                error: (err as Error)?.message ?? 'Failed to activate plan',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -144,7 +146,7 @@ export const PlatformBillingStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 saving: false,
-                error: (err as Error)?.message ?? 'Failed to assign subscription',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -156,7 +158,7 @@ export const PlatformBillingStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 saving: false,
-                error: (err as Error)?.message ?? 'Failed to reload subscriptions',
+                error: toApiError(err),
               });
               return of(null);
             }),

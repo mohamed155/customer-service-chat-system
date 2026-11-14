@@ -10,6 +10,7 @@ import {
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { catchError, EMPTY, pipe, Subject, switchMap, tap } from 'rxjs';
 import { ApiError } from '../../../core/api/api.models';
 import {
@@ -19,6 +20,12 @@ import {
   UpdateTenantPayload,
 } from '../../../core/api/tenant-api.models';
 import { PermissionsService } from '../../../core/authz/permissions.service';
+import {
+  ErrorKeyOverrides,
+  errorMessageKey,
+  fieldErrorKey,
+} from '../../../core/errors/error-message';
+import { marker } from '../../../core/i18n/marker';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
@@ -28,8 +35,25 @@ import { PlatformTenantsService } from './platform-tenants.service';
 import { TenantsStore } from './tenants.store';
 import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 
+const SLUG_MAX_LENGTH = 63;
 const SLUG_PATTERN = /^[a-z0-9](-?[a-z0-9])*$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** A repeated slug is the one conflict this form can cause. */
+const FORM_ERRORS: ErrorKeyOverrides = { conflict: marker('platform.tenantForm.errors.slugTaken') };
+
+/** The catalog key of what the API says is wrong with a field, by its code. */
+function serverFieldKey(field: string, code: string): string {
+  if (code === 'invalid_format') {
+    if (field === 'slug') return marker('platform.tenantForm.errors.slugFormat');
+    if (field === 'contactEmail') return marker('platform.tenantForm.errors.email');
+    return marker('platform.tenantForm.errors.format');
+  }
+  if (code === 'invalid_length') return marker('platform.tenantForm.errors.length');
+  if (code === 'conflict' && field === 'slug')
+    return marker('platform.tenantForm.errors.slugTaken');
+  return fieldErrorKey(code);
+}
 
 @Component({
   selector: 'app-tenant-form',
@@ -41,7 +65,9 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     PageHeaderComponent,
     EmptyStateComponent,
     LoadingStateComponent,
+    TranslocoPipe,
   ],
+  providers: [provideTranslocoScope('platform')],
   templateUrl: './tenant-form.component.html',
   styles: [
     `
@@ -263,14 +289,25 @@ export class TenantFormComponent {
 
   readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.minLength(1), Validators.maxLength(200)]],
-    slug: ['', [Validators.required, Validators.pattern(SLUG_PATTERN), Validators.maxLength(63)]],
+    slug: [
+      '',
+      [
+        Validators.required,
+        Validators.pattern(SLUG_PATTERN),
+        Validators.maxLength(SLUG_MAX_LENGTH),
+      ],
+    ],
     plan: ['trial' as TenantPlan, Validators.required],
     contactName: ['', [Validators.maxLength(200)]],
     contactEmail: ['', [Validators.pattern(EMAIL_PATTERN)]],
   });
 
-  protected readonly submitLabel = computed(() =>
-    this.isEditMode() ? 'Save changes' : 'Create tenant',
+  protected readonly slugMaxLength = SLUG_MAX_LENGTH;
+
+  protected readonly submitLabelKey = computed(() =>
+    this.isEditMode()
+      ? marker('platform.tenantForm.saveChanges')
+      : marker('platform.tenantForm.createTenant'),
   );
 
   protected readonly cancelLink = computed(() => {
@@ -346,21 +383,23 @@ export class TenantFormComponent {
     return `tenant-form-${field}-error`;
   }
 
-  protected errorMessage(field: keyof typeof this.form.controls): string {
+  /** The catalog key of what is wrong with a field: the server's, else the form's own check. */
+  protected errorKeyFor(field: keyof typeof this.form.controls): string {
     const control = this.form.controls[field];
-    if (control.hasError('server')) {
-      return control.getError('server') as string;
-    }
-    if (control.hasError('required')) return 'This field is required';
+    if (control.hasError('server')) return control.getError('server') as string;
+    if (control.hasError('required')) return marker('platform.tenantForm.errors.required');
     if (control.hasError('pattern')) {
-      if (field === 'slug')
-        return 'Slug must be lowercase letters/digits with optional single hyphens';
-      if (field === 'contactEmail') return 'Enter a valid email address';
-      return 'Invalid format';
+      if (field === 'slug') return marker('platform.tenantForm.errors.slugFormat');
+      if (field === 'contactEmail') return marker('platform.tenantForm.errors.email');
+      return marker('platform.tenantForm.errors.format');
     }
-    if (control.hasError('maxlength')) return 'Value is too long';
-    if (control.hasError('minlength')) return 'Value is too short';
-    return 'Invalid value';
+    if (control.hasError('maxlength')) return marker('platform.tenantForm.errors.tooLong');
+    if (control.hasError('minlength')) return marker('platform.tenantForm.errors.tooShort');
+    return marker('platform.tenantForm.errors.invalid');
+  }
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error, FORM_ERRORS);
   }
 
   protected onSubmit(): void {
@@ -406,14 +445,14 @@ export class TenantFormComponent {
         if (!detail.field) continue;
         const key = fieldMap[detail.field] ?? (detail.field as keyof typeof this.form.controls);
         if (this.form.controls[key]) {
-          this.form.controls[key].setErrors({ server: detail.message });
+          this.form.controls[key].setErrors({ server: serverFieldKey(key, detail.code) });
           this.form.controls[key].markAsTouched();
           if (key === 'slug') slugAlreadyAttached = true;
         }
       }
     }
     if (!slugAlreadyAttached && apiError.code === 'conflict' && apiError.status === 409) {
-      this.form.controls.slug.setErrors({ server: apiError.message });
+      this.form.controls.slug.setErrors({ server: marker('platform.tenantForm.errors.slugTaken') });
       this.form.controls.slug.markAsTouched();
     }
   }

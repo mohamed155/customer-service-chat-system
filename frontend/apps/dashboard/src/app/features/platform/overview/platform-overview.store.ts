@@ -1,3 +1,5 @@
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import { inject } from '@angular/core';
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
@@ -9,7 +11,7 @@ import { PlatformOverviewApiService } from './platform-overview-api.service';
 export interface PlatformOverviewState {
   readonly summary: PlatformSummary | null;
   readonly loading: boolean;
-  readonly error: string | null;
+  readonly error: ApiError | null;
   readonly from: string | null;
   readonly to: string | null;
 }
@@ -32,7 +34,7 @@ export const PlatformOverviewStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loading: false,
-                error: (err as Error)?.message ?? 'Failed to load platform summary',
+                error: toApiError(err),
               });
               return of(null);
             }),

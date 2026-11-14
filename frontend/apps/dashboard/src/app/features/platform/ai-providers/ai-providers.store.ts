@@ -1,3 +1,5 @@
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import { inject } from '@angular/core';
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
@@ -10,7 +12,7 @@ export interface AiProvidersState {
   readonly status: ProviderStatus | null;
   readonly window: '1h' | '24h' | '7d';
   readonly loading: boolean;
-  readonly error: string | null;
+  readonly error: ApiError | null;
 }
 
 export const AiProvidersStore = signalStore(
@@ -30,7 +32,7 @@ export const AiProvidersStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loading: false,
-                error: (err as Error)?.message ?? 'Failed to load provider status',
+                error: toApiError(err),
               });
               return of(null);
             }),

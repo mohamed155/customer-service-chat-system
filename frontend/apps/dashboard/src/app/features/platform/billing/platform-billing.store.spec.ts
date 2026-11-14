@@ -92,7 +92,7 @@ describe('PlatformBillingStore', () => {
       getPlans.mockReturnValue(throwError(() => new Error('API error')));
       const store = TestBed.inject(PlatformBillingStore);
       await vi.waitFor(() => {
-        expect(store.error()).toBe('API error');
+        expect(store.error()).toMatchObject({ code: 'unknown_error' });
         expect(store.loading()).toBe(false);
       });
     });

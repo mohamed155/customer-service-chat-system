@@ -1,3 +1,4 @@
+import { provideTranslocoScope } from '@jsverse/transloco';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
@@ -104,6 +105,7 @@ describe('SystemHealthComponent', () => {
     }).overrideComponent(SystemHealthComponent, {
       set: {
         providers: [
+          provideTranslocoScope('platform'),
           {
             provide: SystemHealthStore,
             useValue: {
@@ -124,10 +126,10 @@ describe('SystemHealthComponent', () => {
     fixture.detectChanges();
     const text = fixture.nativeElement.textContent;
     expect(text).toContain('Healthy');
-    expect(text).toContain('Probe: 5ms');
-    expect(text).toContain('Probe: 3ms');
-    expect(text).toContain('Probe: 10ms');
-    expect(text).toContain('Probe: 20ms');
+    expect(text).toContain('Probe: 5 ms');
+    expect(text).toContain('Probe: 3 ms');
+    expect(text).toContain('Probe: 10 ms');
+    expect(text).toContain('Probe: 20 ms');
     expect(text).toContain('Backend: in_memory');
   });
 
@@ -148,8 +150,8 @@ describe('SystemHealthComponent', () => {
     const text = fixture.nativeElement.textContent;
     expect(text).toContain('connection refused');
     expect(text).toContain('Unhealthy');
-    expect(text).toContain('Probe: 5000ms');
-    expect(text).toContain('Probe: 10ms');
-    expect(text).toContain('Probe: 20ms');
+    expect(text).toContain('Probe: 5,000 ms');
+    expect(text).toContain('Probe: 10 ms');
+    expect(text).toContain('Probe: 20 ms');
   });
 });

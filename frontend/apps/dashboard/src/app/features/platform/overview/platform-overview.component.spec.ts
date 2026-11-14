@@ -1,3 +1,4 @@
+import { provideTranslocoScope } from '@jsverse/transloco';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
@@ -75,7 +76,12 @@ describe('PlatformOverviewComponent', () => {
       ],
     })
       .overrideComponent(PlatformOverviewComponent, {
-        set: { providers: [{ provide: PlatformOverviewStore, useValue: storeMock }] },
+        set: {
+          providers: [
+            { provide: PlatformOverviewStore, useValue: storeMock },
+            provideTranslocoScope('platform'),
+          ],
+        },
       })
       .compileComponents();
 
@@ -90,7 +96,7 @@ describe('PlatformOverviewComponent', () => {
     expect(text).toContain('30 active');
     expect(text).toContain('10 suspended');
     expect(text).toContain('5 created in range');
-    expect(text).toContain('1400 success');
+    expect(text).toContain('1,400 success');
     expect(text).toContain('100 failed');
   });
 

@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -9,10 +8,16 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { catchError, concatMap, EMPTY, pipe, Subject, switchMap, tap } from 'rxjs';
 import { ApiError } from '../../../core/api/api.models';
 import { PlatformTenantDetail, UpdateTenantPayload } from '../../../core/api/tenant-api.models';
 import { HasPermissionDirective } from '../../../core/authz/has-permission.directive';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleDatePipe } from '../../../core/i18n/format';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { marker } from '../../../core/i18n/marker';
+import { planKey, tenantStatusKey } from '../../../core/i18n/platform-labels';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
@@ -26,7 +31,7 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
   selector: 'app-tenant-detail',
   imports: [
     ErrorReferenceComponent,
-    DatePipe,
+    LocaleDatePipe,
     RouterLink,
     PageContainerComponent,
     PageHeaderComponent,
@@ -34,7 +39,9 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
     EmptyStateComponent,
     StatusBadgeComponent,
     HasPermissionDirective,
+    TranslocoPipe,
   ],
+  providers: [provideTranslocoScope('platform')],
   templateUrl: './tenant-detail.component.html',
   styles: [
     `
@@ -228,25 +235,44 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
 export class TenantDetailComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly store = inject(TenantsStore);
+  private readonly locale = inject(LocaleService);
 
   protected readonly APP_PATHS = APP_PATHS;
+  protected readonly tenantStatusKey = tenantStatusKey;
   protected readonly tenant = signal<PlatformTenantDetail | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal<ApiError | null>(null);
   protected readonly actionPending = signal(false);
-  protected readonly actionError = signal<string | null>(null);
+  protected readonly actionError = signal<ApiError | null>(null);
 
   protected readonly showConfirmDialog = signal(false);
   protected readonly pendingToggleTenant = signal<PlatformTenantDetail | null>(null);
-  protected readonly dialogTitle = signal('');
-  protected readonly dialogMessage = signal('');
-  protected readonly dialogConfirmLabel = signal('');
+  /** Which change the confirmation asks about; the title, the question and the button follow. */
+  protected readonly dialogAction = signal<'deactivate' | 'reactivate'>('deactivate');
+  protected readonly dialogTenantName = computed(() => this.pendingToggleTenant()?.name ?? '');
+  protected readonly dialogTitleKey = computed(() =>
+    this.dialogAction() === 'deactivate'
+      ? marker('platform.tenantDetail.deactivateTitle')
+      : marker('platform.tenantDetail.reactivateTitle'),
+  );
+  protected readonly dialogMessageKey = computed(() =>
+    this.dialogAction() === 'deactivate'
+      ? marker('platform.tenantDetail.deactivateMessage')
+      : marker('platform.tenantDetail.reactivateMessage'),
+  );
+  protected readonly dialogConfirmKey = computed(() =>
+    this.dialogAction() === 'deactivate'
+      ? marker('platform.tenantDetail.deactivate')
+      : marker('platform.tenantDetail.reactivate'),
+  );
 
   private readonly previouslyFocused = signal<HTMLElement | null>(null);
 
   protected readonly planLabel = computed(() => {
     const plan = this.tenant()?.plan;
-    return plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : '—';
+    if (!plan) return this.locale.translate(marker('platform.common.none'));
+    const key = planKey(plan);
+    return key ? this.locale.translate(key) : plan;
   });
 
   private readonly loadDetail$ = new Subject<void>();
@@ -259,7 +285,7 @@ export class TenantDetailComponent {
       switchMap(() => {
         const id = this.route.snapshot.paramMap.get('id');
         if (!id) {
-          this.error.set({ code: 'not_found', message: 'No tenant id in route', status: 404 });
+          this.error.set({ code: 'not_found', message: '', status: 404 });
           this.loading.set(false);
           return EMPTY;
         }
@@ -294,7 +320,7 @@ export class TenantDetailComponent {
             this.actionPending.set(false);
           }),
           catchError((err: ApiError) => {
-            this.actionError.set(err.message);
+            this.actionError.set(err);
             this.actionPending.set(false);
             return EMPTY;
           }),
@@ -318,25 +344,23 @@ export class TenantDetailComponent {
     });
   }
 
+  /** The name from the catalog, or the API's own word for a value this app has no name for. */
+  protected nameOf(key: string | null, fallback: string): string {
+    return key ? this.locale.translate(key) : fallback;
+  }
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
+
   protected load(): void {
     this.loadDetail$.next();
   }
 
   protected onToggleStatus(t: PlatformTenantDetail): void {
     this.previouslyFocused.set(document.activeElement as HTMLElement);
-    const newStatus = t.status === 'active' ? 'suspended' : 'active';
     this.pendingToggleTenant.set(t);
-    if (newStatus === 'suspended') {
-      this.dialogTitle.set('Deactivate tenant');
-      this.dialogMessage.set(
-        `Deactivating "${t.name}" will immediately block all of its members from accessing the workspace. Continue?`,
-      );
-      this.dialogConfirmLabel.set('Deactivate');
-    } else {
-      this.dialogTitle.set('Reactivate tenant');
-      this.dialogMessage.set(`Reactivate "${t.name}" and restore member access?`);
-      this.dialogConfirmLabel.set('Reactivate');
-    }
+    this.dialogAction.set(t.status === 'active' ? 'deactivate' : 'reactivate');
     this.showConfirmDialog.set(true);
   }
 

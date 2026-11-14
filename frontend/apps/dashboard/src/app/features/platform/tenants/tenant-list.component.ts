@@ -1,5 +1,10 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { planKey, tenantStatusKey } from '../../../core/i18n/platform-labels';
 import { HasPermissionDirective } from '../../../core/authz/has-permission.directive';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
@@ -25,7 +30,9 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
     SearchInputComponent,
     StatusBadgeComponent,
     HasPermissionDirective,
+    TranslocoPipe,
   ],
+  providers: [provideTranslocoScope('platform')],
   templateUrl: './tenant-list.component.html',
   styles: [
     `
@@ -152,7 +159,10 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
 })
 export class TenantListComponent implements OnInit {
   protected readonly store = inject(TenantsStore);
+  private readonly locale = inject(LocaleService);
   protected readonly APP_PATHS = APP_PATHS;
+  protected readonly tenantStatusKey = tenantStatusKey;
+  protected readonly planKey = planKey;
 
   protected readonly searchInput = signal('');
   protected readonly statusFilter = signal<TenantStatusFilter>(null);
@@ -177,6 +187,15 @@ export class TenantListComponent implements OnInit {
     this.searchInput.set('');
     this.statusFilter.set(null);
     this.store.resetFilters();
+  }
+
+  /** The name from the catalog, or the API's own word for a value this app has no name for. */
+  protected nameOf(key: string | null, fallback: string): string {
+    return key ? this.locale.translate(key) : fallback;
+  }
+
+  protected errorKey(error: ApiError | null): string {
+    return errorMessageKey(error ?? { code: 'unknown_error', message: '', status: 0 });
   }
 
   protected retry(): void {
