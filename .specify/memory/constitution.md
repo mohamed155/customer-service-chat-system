@@ -1,7 +1,7 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 2.0.1 → 2.0.2 (PATCH — compliance-gap tracking links only; no principle changes)
+Version change: 2.0.2 → 2.0.3 (PATCH — compliance-gap status for the frontend only; no principle changes)
 
 Modified principles: none
 Added sections: none
@@ -26,11 +26,17 @@ Follow-up TODOs:
       - No PostgreSQL RLS (I): MOH-31, blocked by MOH-23 (DB role split) — ADR-004 T1/T2
       - Internal error text returned to clients (II, VIII): MOH-32 — ADR-012 A1
       - Tenant secrets envelope-encrypted: done (MOH-33); a cloud KMS adapter remains (II) — ADR-014 E5
-      - i18n externalization (XII): MOH-41 — the widget is done, new hard-coded text fails CI, the dashboard
-        moves area by area (ADR-016 I3–I5)
+      - i18n externalization (XII): done for the widget and the dashboard (MOH-41, MOH-155 to MOH-165):
+        every dashboard area has a catalog scope, no screen shows backend free text, and new
+        hard-coded text fails CI (ADR-016 I1–I4). Message strings in TypeScript are still reviewed by hand (I5)
       - UUIDv7 not used for new PKs (Technology Standards): MOH-42 — ADR-013 U1
       - OpenAPI breaking-change and generated-types checks in CI: done (MOH-43). The dashboard still uses
-        hand-written wire types (VIII): ADR-012 A6
+        hand-written wire types in the feature areas (VIII): ADR-012 A6 (`core/` and `layout/` are done, MOH-169)
+      - Frontend foundation hardening (epic MOH-59, done): tenant header and per-workspace state reset
+        (MOH-60, MOH-61), feature-boundary lint (MOH-62; ADR-003 F4 is partly open: no rule against
+        `HttpClient` in components), request ID on every call and error screen (VII, MOH-64), timeouts and
+        retry with jitter (XI, MOH-65, MOH-166), stale-chunk recovery (MOH-167), frontend error reporting
+        (VII, MOH-168), Trusted Types (MOH-170), coverage ratchet and bundle budgets (MOH-66, MOH-171)
     Other threat-model risks: MOH-34 (MFA), MOH-35 (login timing), MOH-36 (CSRF),
     MOH-37 (gateway split), MOH-38 (CSP), MOH-39 (Actions SHA pinning), MOH-40 (circuit breakers).
 -->
@@ -273,4 +279,4 @@ Adding or replacing a technology in this table requires an ADR and a constitutio
 - Compliance is reviewed at the end of each phase; recurring violations trigger an amendment or a
   corrective spec.
 
-**Version**: 2.0.2 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-11-07
+**Version**: 2.0.3 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-11-14
