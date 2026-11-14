@@ -1,4 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { marker } from '../../../core/i18n/marker';
+import { RelativeTimePipe } from '../../../core/i18n/relative-time.pipe';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { ChannelBadgeComponent } from '../../../shared/components/channel-badge/channel-badge.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
@@ -12,7 +16,6 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
 import { ConversationFixture } from '../../../shared/fixtures/fixture.models';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
-import { relativeTime } from '../../../shared/utils/relative-time';
 import { OverviewChannelBreakdownComponent } from './overview-channel-breakdown.component';
 import { OverviewTrendChartComponent } from './overview-trend-chart.component';
 
@@ -30,10 +33,16 @@ import { OverviewTrendChartComponent } from './overview-trend-chart.component';
     OverviewTrendChartComponent,
     PageContainerComponent,
     PageHeaderComponent,
+    RelativeTimePipe,
     SectionHeaderComponent,
     StatusBadgeComponent,
+    TranslocoPipe,
   ],
-  providers: [RoutedPageStore, { provide: PAGE_ROUTE, useValue: 'overview' }],
+  providers: [
+    RoutedPageStore,
+    { provide: PAGE_ROUTE, useValue: 'overview' },
+    provideTranslocoScope('insights'),
+  ],
   templateUrl: './overview.component.html',
   styles: [
     `
@@ -116,6 +125,7 @@ import { OverviewTrendChartComponent } from './overview-trend-chart.component';
 })
 export class OverviewComponent {
   protected readonly page = inject(RoutedPageStore);
+  private readonly locale = inject(LocaleService);
   protected readonly hasData = computed(() => this.page.data() !== undefined);
   protected readonly hasError = computed(() => this.page.error() !== null);
   protected readonly alertDismissed = signal(false);
@@ -128,8 +138,9 @@ export class OverviewComponent {
 
   protected customerName(conversation: ConversationFixture): string {
     const customers = this.pageData()?.customers;
-    if (!customers) return 'Customer';
-    return customers.find((c) => c.id === conversation.customerId)?.name ?? 'Customer';
+    const fallback = this.locale.translate(marker('insights.overview.customer'));
+    if (!customers) return fallback;
+    return customers.find((c) => c.id === conversation.customerId)?.name ?? fallback;
   }
 
   protected customerInitials(conversation: ConversationFixture): string {
@@ -142,7 +153,18 @@ export class OverviewComponent {
     return status === 'closed' ? 'green' : status === 'escalated' ? 'red' : 'amber';
   }
 
-  protected relativeTime = relativeTime;
+  /** A conversation status's name in the active language; an unknown one shows as sent. */
+  protected statusName(status: ConversationFixture['status']): string {
+    const keys: Record<string, string> = {
+      open: marker('status.open'),
+      pending: marker('status.pending'),
+      resolved: marker('status.resolved'),
+      closed: marker('status.closed'),
+      escalated: marker('insights.overview.escalated'),
+    };
+    const key = Object.prototype.hasOwnProperty.call(keys, status) ? keys[status] : null;
+    return key ? this.locale.translate(key) : status;
+  }
 
   protected retry(): void {
     this.page.retry();

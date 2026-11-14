@@ -1,14 +1,14 @@
 <app-page-container>
-  <app-page-header title="Overview" />
+  <app-page-header [title]="'insights.overview.title' | transloco" />
   @if (page.loading()) {
     <app-loading-state />
   } @else if (hasError()) {
     <app-empty-state
       icon="@tui.alert-circle"
-      title="Something went wrong"
-      description="We couldn't load this page. Please try again."
+      [title]="'insights.overview.errorTitle' | transloco"
+      [description]="'errors.generic' | transloco"
     >
-      <button type="button" (click)="retry()">Try again</button>
+      <button type="button" (click)="retry()">{{ 'insights.overview.retry' | transloco }}</button>
     </app-empty-state>
   } @else if (hasData()) {
     <div class="overview">
@@ -20,7 +20,7 @@
         />
       }
 
-      <section class="metrics" aria-label="Overview metrics">
+      <section class="metrics" [attr.aria-label]="'insights.overview.metricsLabel' | transloco">
         @for (metric of pageData()!.metrics; track metric.id) {
           <app-metric-card [metric]="metric" />
         }
@@ -30,8 +30,8 @@
         <app-dashboard-card>
           <app-section-header
             card-header
-            title="Conversation trends"
-            subtitle="Volume, AI resolution, and escalations over the last 12 periods"
+            [title]="'insights.overview.trendsTitle' | transloco"
+            [subtitle]="'insights.overview.trendsSubtitle' | transloco"
           />
           <app-overview-trend-chart [series]="pageData()!.trendSeries" />
         </app-dashboard-card>
@@ -39,8 +39,8 @@
         <app-dashboard-card>
           <app-section-header
             card-header
-            title="Channel mix"
-            subtitle="Where customers are asking for help"
+            [title]="'insights.overview.mixTitle' | transloco"
+            [subtitle]="'insights.overview.mixSubtitle' | transloco"
           />
           <app-overview-channel-breakdown [breakdown]="pageData()!.breakdown" />
         </app-dashboard-card>
@@ -49,8 +49,8 @@
       <app-dashboard-card>
         <app-section-header
           card-header
-          title="Recent activity"
-          subtitle="Live inbox preview from fixture conversations"
+          [title]="'insights.overview.activityTitle' | transloco"
+          [subtitle]="'insights.overview.activitySubtitle' | transloco"
         />
         <div class="activity">
           @for (conversation of pageData()!.recentConversations; track conversation.id) {
@@ -63,11 +63,14 @@
                   <app-channel-badge [channel]="conversation.channel" />
                   <app-status-badge
                     [status]="conversation.status"
+                    [text]="statusName(conversation.status)"
                     [tone]="statusTone(conversation.status)"
                   />
                 </div>
               </div>
-              <time>{{ relativeTime(conversation.updatedAt) }}</time>
+              <time [attr.datetime]="conversation.updatedAt">{{
+                conversation.updatedAt | relativeTime
+              }}</time>
             </article>
           }
         </div>
@@ -76,8 +79,8 @@
   } @else {
     <app-empty-state
       icon="@tui.layout-dashboard"
-      title="No data yet"
-      description="Metrics and activity will appear here once your workspace is active."
+      [title]="'insights.overview.emptyTitle' | transloco"
+      [description]="'insights.overview.emptyDescription' | transloco"
     />
   }
 </app-page-container>

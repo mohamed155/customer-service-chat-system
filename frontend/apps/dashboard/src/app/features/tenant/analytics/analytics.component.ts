@@ -1,4 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { formatNumber } from '../../../core/i18n/format';
+import { channelLabelKey } from '../../../core/i18n/labels';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { marker } from '../../../core/i18n/marker';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import {
@@ -21,38 +30,13 @@ import {
 import { BreakdownBarsComponent } from '../../../shared/components/breakdown-bars/breakdown-bars.component';
 import { AnalyticsStore } from './analytics.store';
 
-const CHANNEL_LABELS: Record<string, string> = {
-  widget: 'Website widget',
-  email: 'Email',
-  phone: 'Phone',
-  web_chat: 'Web chat',
-  whatsapp: 'WhatsApp',
-  telegram: 'Telegram',
-};
-
-function formatPercent(value: number | null): string {
-  if (value == null) return '\u2014';
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function formatSeconds(totalSeconds: number | null): string {
-  if (totalSeconds == null) return '\u2014';
-  if (totalSeconds < 60) return `${Math.round(totalSeconds)}s`;
-  const m = Math.floor(totalSeconds / 60);
-  const s = Math.round(totalSeconds % 60);
-  return `${m}m ${s}s`;
-}
-
-function formatSatisfaction(avg: number | null, count: number): string {
-  if (avg == null) return '\u2014';
-  return `${avg.toFixed(1)} / 5 (${count} ratings)`;
-}
-
 @Component({
   selector: 'app-analytics',
   imports: [
     DashboardCardComponent,
     EmptyStateComponent,
+    ErrorReferenceComponent,
+    InlineAlertComponent,
     LoadingStateComponent,
     MetricCardComponent,
     PageContainerComponent,
@@ -62,8 +46,9 @@ function formatSatisfaction(avg: number | null, count: number): string {
     SelectFilterComponent,
     TrendChartComponent,
     BreakdownBarsComponent,
+    TranslocoPipe,
   ],
-  providers: [AnalyticsStore],
+  providers: [AnalyticsStore, provideTranslocoScope('insights')],
   templateUrl: './analytics.component.html',
   styles: [
     `
@@ -103,22 +88,34 @@ function formatSatisfaction(avg: number | null, count: number): string {
 export class AnalyticsComponent {
   protected readonly store = inject(AnalyticsStore);
 
-  protected readonly datePresetOptions: SelectFilterOption[] = [
-    { value: '7', label: 'Last 7 days' },
-    { value: '30', label: 'Last 30 days' },
-    { value: '90', label: 'Last 90 days' },
-    { value: 'custom', label: 'Custom range' },
-  ];
+  private readonly locale = inject(LocaleService);
 
-  protected readonly channelOptions: SelectFilterOption[] = [
-    { value: 'all', label: 'All channels' },
-    { value: 'widget', label: 'Website widget' },
-    { value: 'email', label: 'Email' },
-    { value: 'phone', label: 'Phone' },
-    { value: 'web_chat', label: 'Web chat' },
-    { value: 'whatsapp', label: 'WhatsApp' },
-    { value: 'telegram', label: 'Telegram' },
-  ];
+  /** `translate` with the catalog's own wording, for the labels code builds. */
+  private text(key: string, params?: Record<string, unknown>): string {
+    return this.locale.translate(key, params);
+  }
+
+  protected readonly datePresetOptions = computed<SelectFilterOption[]>(() => [
+    { value: '7', label: this.text(marker('insights.analytics.last7')) },
+    { value: '30', label: this.text(marker('insights.analytics.last30')) },
+    { value: '90', label: this.text(marker('insights.analytics.last90')) },
+    { value: 'custom', label: this.text(marker('insights.analytics.custom')) },
+  ]);
+
+  /** The name of a channel: the widget has a name of its own here, the rest are shared. */
+  private channelName(channel: string): string {
+    if (channel === 'widget') return this.text(marker('insights.analytics.websiteWidget'));
+    const key = channelLabelKey(channel);
+    return key ? this.text(key) : channel;
+  }
+
+  protected readonly channelOptions = computed<SelectFilterOption[]>(() => [
+    { value: 'all', label: this.text(marker('insights.analytics.allChannels')) },
+    ...['widget', 'email', 'phone', 'web_chat', 'whatsapp', 'telegram'].map((channel) => ({
+      value: channel,
+      label: this.channelName(channel),
+    })),
+  ]);
 
   protected readonly channelDisplayValue = computed(() => this.store.channel() ?? 'all');
 
@@ -126,7 +123,7 @@ export class AnalyticsComponent {
     const channels = this.store.summary()?.channels;
     if (!channels) return [];
     return channels.map((c) => ({
-      label: CHANNEL_LABELS[c.channel] ?? c.channel,
+      label: this.channelName(c.channel),
       count: c.conversationCount,
       share: c.share,
     }));
@@ -146,50 +143,88 @@ export class AnalyticsComponent {
     this.store.setCustomRange(this.store.from(), to);
   }
 
+  private number(value: number, options?: Intl.NumberFormatOptions): string {
+    return formatNumber(value, this.locale.formatLocale(), options);
+  }
+
+  private percent(value: number | null): string {
+    if (value == null) return this.text(marker('insights.analytics.none'));
+    return this.number(value, {
+      style: 'percent',
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
+  }
+
+  private seconds(totalSeconds: number | null): string {
+    if (totalSeconds == null) return this.text(marker('insights.analytics.none'));
+    if (totalSeconds < 60) {
+      return this.text(marker('insights.analytics.seconds'), {
+        seconds: Math.round(totalSeconds),
+      });
+    }
+    return this.text(marker('insights.analytics.minutesSeconds'), {
+      minutes: Math.floor(totalSeconds / 60),
+      seconds: Math.round(totalSeconds % 60),
+    });
+  }
+
+  private satisfaction(avg: number | null, count: number): string {
+    if (avg == null) return this.text(marker('insights.analytics.none'));
+    return this.text(marker('insights.analytics.satisfactionValue'), {
+      avg: this.number(avg, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+      count,
+    });
+  }
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
+
   protected readonly metricCards = computed<MetricCardData[]>(() => {
     const s = this.store.summary();
     if (!s) return [];
     return [
       {
         id: 'conversations',
-        label: 'Conversations',
-        value: String(s.conversationVolume),
+        label: this.text(marker('insights.analytics.conversations')),
+        value: this.number(s.conversationVolume),
         icon: '@tui.message-square',
       },
       {
         id: 'ai-resolution-rate',
-        label: 'AI resolution rate',
-        value: formatPercent(s.aiResolutionRate),
+        label: this.text(marker('insights.analytics.aiResolutionRate')),
+        value: this.percent(s.aiResolutionRate),
         icon: '@tui.bot',
       },
       {
         id: 'handoffs',
-        label: 'Human handoffs',
-        value: formatPercent(s.handoffRate),
+        label: this.text(marker('insights.analytics.handoffs')),
+        value: this.percent(s.handoffRate),
         icon: '@tui.user-round',
       },
       {
         id: 'avg-first-response',
-        label: 'Avg first response',
-        value: formatSeconds(s.avgFirstResponseSeconds),
+        label: this.text(marker('insights.analytics.avgFirstResponse')),
+        value: this.seconds(s.avgFirstResponseSeconds),
         icon: '@tui.timer',
       },
       {
         id: 'avg-response',
-        label: 'Avg response',
-        value: formatSeconds(s.avgResponseSeconds),
+        label: this.text(marker('insights.analytics.avgResponse')),
+        value: this.seconds(s.avgResponseSeconds),
         icon: '@tui.clock',
       },
       {
         id: 'satisfaction',
-        label: 'Satisfaction',
-        value: formatSatisfaction(s.satisfactionAvg, s.satisfactionCount),
+        label: this.text(marker('insights.analytics.satisfaction')),
+        value: this.satisfaction(s.satisfactionAvg, s.satisfactionCount),
         icon: '@tui.star',
       },
       {
         id: 'tokens',
-        label: 'Tokens used',
-        value: s.totalTokens.toLocaleString(),
+        label: this.text(marker('insights.analytics.tokens')),
+        value: this.number(s.totalTokens),
         icon: '@tui.zap',
       },
     ];
@@ -205,7 +240,7 @@ export class AnalyticsComponent {
     const ts = this.store.timeseries();
     return {
       id: 'conversation-volume',
-      label: 'Conversations',
+      label: this.text(marker('insights.analytics.conversations')),
       color: 'chart-1',
       points: ts ? ts.days.map((d) => d.conversationVolume) : [],
     };
@@ -217,13 +252,13 @@ export class AnalyticsComponent {
     return [
       {
         id: 'ai',
-        label: 'AI resolved',
+        label: this.text(marker('insights.analytics.aiResolved')),
         color: 'chart-1',
         points: ts.days.map((d) => d.aiResolved),
       },
       {
         id: 'handoff',
-        label: 'Human handoff',
+        label: this.text(marker('insights.analytics.humanHandoff')),
         color: 'chart-2',
         points: ts.days.map((d) => d.handedOff),
       },
@@ -234,7 +269,7 @@ export class AnalyticsComponent {
     const ts = this.store.timeseries();
     return {
       id: 'satisfaction',
-      label: 'Avg satisfaction',
+      label: this.text(marker('insights.analytics.avgSatisfaction')),
       color: 'chart-1',
       points: ts ? ts.days.map((d) => d.satisfactionAvg) : [],
     };
@@ -244,7 +279,7 @@ export class AnalyticsComponent {
     const ts = this.store.timeseries();
     return {
       id: 'tokens',
-      label: 'Tokens',
+      label: this.text(marker('insights.analytics.tokensSeries')),
       color: 'chart-1',
       points: ts ? ts.days.map((d) => d.totalTokens) : [],
     };

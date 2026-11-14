@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { TuiIcon } from '@taiga-ui/core';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { NotificationsStore } from '../../../core/notifications/notifications.store';
@@ -8,7 +9,8 @@ import { NotificationListComponent } from '../../../shared/components/notificati
 
 @Component({
   selector: 'app-notifications-page',
-  imports: [TuiIcon, NotificationListComponent],
+  imports: [TuiIcon, NotificationListComponent, TranslocoPipe],
+  providers: [provideTranslocoScope('insights')],
   templateUrl: './notifications-page.component.html',
   styles: [
     `

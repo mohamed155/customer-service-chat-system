@@ -6,7 +6,10 @@ import { catchError, throwError } from 'rxjs';
 import { APP_CONFIG } from '../config/app-config';
 import { MFA_ENROLMENT_REQUIRED } from '../auth/mfa.service';
 import { ApiErrorNotificationService } from '../errors/api-error-notification.service';
-import { mapHttpError, userMessageFor } from '../errors/http-error.mapper';
+import { errorMessageKey } from '../errors/error-message';
+import { mapHttpError } from '../errors/http-error.mapper';
+import { LocaleService } from '../i18n/locale.service';
+import { marker } from '../i18n/marker';
 import { REQUEST_ID_HEADER } from '../errors/request-reference';
 import { APP_PATHS } from '../router/app-paths';
 import { selectActiveTenant, tenantContextActions } from '../state/tenant-context.feature';
@@ -24,6 +27,7 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
   const config = inject(APP_CONFIG);
   const currentUser = inject(CurrentUserService);
   const errorNotifications = inject(ApiErrorNotificationService);
+  const locale = inject(LocaleService);
   const activeTenant = store.selectSignal(selectActiveTenant);
 
   const path = apiRelativePath(request.url, config.apiBaseUrl);
@@ -34,7 +38,7 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
       if (isSessionExpired(apiError, path)) {
         currentUser.clear();
         errorNotifications.show(
-          'Your session has expired. Sign in again to continue.',
+          locale.translate(marker('errors.sessionExpired')),
           apiError.requestId,
         );
         void router.navigate([`/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`], {
@@ -53,7 +57,7 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
           void currentUser.load();
         }
         if (!isIdentityEndpoint(path) && !isPlatformEndpoint(path)) {
-          errorNotifications.show(userMessageFor(apiError), apiError.requestId);
+          errorNotifications.show(locale.translate(errorMessageKey(apiError)), apiError.requestId);
           const tenantId = request.headers.get('X-Tenant-ID');
           if (tenantId && activeTenant()?.id === tenantId) {
             store.dispatch(tenantContextActions.clearActiveTenant());

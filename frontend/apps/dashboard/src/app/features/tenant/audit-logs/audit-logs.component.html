@@ -1,24 +1,41 @@
 <div class="page">
-  <h1>Audit Logs</h1>
+  <h1>{{ 'insights.audit.title' | transloco }}</h1>
 
   <app-toolbar>
     <app-select-filter
-      label="Category"
-      [options]="categoryOptions"
+      [label]="'insights.audit.category' | transloco"
+      [options]="categoryOptions()"
       [value]="store.category() ?? 'all'"
       (valueChange)="store.setCategory($event)"
     />
-    <input type="date" [ngModel]="store.from()" (ngModelChange)="onFromChange($event)" />
-    <input type="date" [ngModel]="store.to()" (ngModelChange)="onToChange($event)" />
+    <input
+      type="date"
+      [attr.aria-label]="'insights.audit.fromDate' | transloco"
+      [ngModel]="store.from()"
+      (ngModelChange)="onFromChange($event)"
+    />
+    <input
+      type="date"
+      [attr.aria-label]="'insights.audit.toDate' | transloco"
+      [ngModel]="store.to()"
+      (ngModelChange)="onToChange($event)"
+    />
     <app-search-input
-      placeholder="Actor ID…"
+      [placeholder]="'insights.audit.actorPlaceholder' | transloco"
       [value]="store.actorId() ?? ''"
       (searchSubmit)="store.setActor($event || null)"
     />
   </app-toolbar>
 
+  @if (store.dateRangeInvalid()) {
+    <app-inline-alert tone="error">{{
+      'insights.audit.rangeInvalid' | transloco
+    }}</app-inline-alert>
+  }
   @if (store.error(); as error) {
-    <app-inline-alert tone="error">{{ error }}</app-inline-alert>
+    <app-inline-alert tone="error" [requestId]="error.requestId">{{
+      errorKey(error) | transloco
+    }}</app-inline-alert>
   }
 
   <app-audit-log-table
@@ -35,7 +52,9 @@
         (pressed)="store.loadMore()"
         [disabled]="store.loadingMore()"
       >
-        {{ store.loadingMore() ? 'Loading…' : 'Load more' }}
+        {{
+          (store.loadingMore() ? 'insights.audit.loading' : 'insights.audit.loadMore') | transloco
+        }}
       </app-button>
     </div>
   }

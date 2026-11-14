@@ -36,12 +36,13 @@
       <div class="def-row">
         <dt>{{ 'audit.action' | transloco }}</dt>
         <dd>
+          <span>{{ actionName(e.action) }}</span>
           <code>{{ e.action }}</code>
         </dd>
       </div>
       <div class="def-row">
         <dt>{{ 'audit.category' | transloco }}</dt>
-        <dd>{{ e.category }}</dd>
+        <dd>{{ categoryName(e.category) }}</dd>
       </div>
       <div class="def-row">
         <dt>{{ 'audit.targetType' | transloco }}</dt>

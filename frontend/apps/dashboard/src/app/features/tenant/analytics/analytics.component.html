@@ -1,31 +1,58 @@
 <app-page-container>
-  <app-page-header title="Analytics" description="Trends across every channel" />
+  <app-page-header
+    [title]="'insights.analytics.title' | transloco"
+    [description]="'insights.analytics.description' | transloco"
+  />
   <app-toolbar>
     <div toolbar-start>
       <app-select-filter
-        label="Date range"
+        [label]="'insights.analytics.dateRange' | transloco"
         [value]="store.preset()"
-        [options]="datePresetOptions"
+        [options]="datePresetOptions()"
         (valueChange)="onPresetChange($event)"
       />
       @if (store.preset() === 'custom') {
-        <input type="date" [value]="store.from()" (change)="onFromChange($event)" />
-        <span>to</span>
-        <input type="date" [value]="store.to()" (change)="onToChange($event)" />
+        <input
+          type="date"
+          [attr.aria-label]="'insights.analytics.fromDate' | transloco"
+          [value]="store.from()"
+          (change)="onFromChange($event)"
+        />
+        <span>{{ 'insights.analytics.to' | transloco }}</span>
+        <input
+          type="date"
+          [attr.aria-label]="'insights.analytics.toDate' | transloco"
+          [value]="store.to()"
+          (change)="onToChange($event)"
+        />
       }
       <app-select-filter
-        label="Channel"
+        [label]="'insights.analytics.channel' | transloco"
         [value]="channelDisplayValue()"
-        [options]="channelOptions"
+        [options]="channelOptions()"
         (valueChange)="store.setChannel($event)"
       />
     </div>
   </app-toolbar>
+  @if (store.rangeInvalid()) {
+    <app-inline-alert tone="error">{{
+      'insights.analytics.rangeInvalid' | transloco
+    }}</app-inline-alert>
+  }
   @if (store.loading()) {
     <app-loading-state />
-  } @else if (store.error(); as errMsg) {
-    <app-empty-state icon="@tui.alert-circle" title="Something went wrong" [description]="errMsg">
-      <button type="button" (click)="store.load()">Try again</button>
+  } @else if (store.error(); as err) {
+    <app-empty-state
+      icon="@tui.alert-circle"
+      [title]="'insights.analytics.errorTitle' | transloco"
+      [description]="errorKey(err) | transloco"
+    >
+      <button type="button" (click)="store.load()">
+        {{ 'insights.analytics.retry' | transloco }}
+      </button>
+      @if (err.requestId; as id) {
+        <app-error-reference [requestId]="id" />
+      }
     </app-empty-state>
   } @else if (store.summary(); as summary) {
     <section class="metrics">
@@ -36,25 +63,31 @@
     @if (store.timeseries(); as timeseries) {
       <section class="charts">
         <app-dashboard-card>
-          <app-section-header card-header title="Conversation volume" />
+          <app-section-header card-header [title]="'insights.analytics.volumeChart' | transloco" />
           <app-trend-chart [series]="[conversationVolumeSeries()]" [labels]="chartLabels()" />
         </app-dashboard-card>
         <app-dashboard-card>
-          <app-section-header card-header title="AI resolved vs human handoff" />
+          <app-section-header
+            card-header
+            [title]="'insights.analytics.aiVsHandoffChart' | transloco"
+          />
           <app-trend-chart [series]="aiVsHandoffSeries()" [labels]="chartLabels()" />
         </app-dashboard-card>
         <app-dashboard-card>
-          <app-section-header card-header title="Satisfaction trend" />
+          <app-section-header
+            card-header
+            [title]="'insights.analytics.satisfactionChart' | transloco"
+          />
           <app-trend-chart [series]="[satisfactionSeries()]" [labels]="chartLabels()" />
         </app-dashboard-card>
         <app-dashboard-card>
-          <app-section-header card-header title="Token usage" />
+          <app-section-header card-header [title]="'insights.analytics.tokenChart' | transloco" />
           <app-trend-chart [series]="[tokenSeries()]" [labels]="chartLabels()" />
         </app-dashboard-card>
       </section>
       <section class="breakdown">
         <app-dashboard-card>
-          <app-section-header card-header title="Channel breakdown" />
+          <app-section-header card-header [title]="'insights.analytics.channelChart' | transloco" />
           <app-breakdown-bars [items]="breakdownItems()" />
         </app-dashboard-card>
       </section>
@@ -62,8 +95,8 @@
   } @else {
     <app-empty-state
       icon="@tui.chart-line"
-      title="No analytics data"
-      description="Reports and charts will populate as customer interactions are recorded."
+      [title]="'insights.analytics.emptyTitle' | transloco"
+      [description]="'insights.analytics.emptyDescription' | transloco"
     />
   }
 </app-page-container>

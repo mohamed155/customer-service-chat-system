@@ -3,7 +3,6 @@ import { resolve } from 'node:path';
 import { ApiError } from '../api/api.models';
 import sharedEnglish from '../../../../public/i18n/shared/en.json';
 import { ERROR_CODE_KEYS, FIELD_CODE_KEYS, errorMessageKey, fieldErrorKey } from './error-message';
-import { userMessageFor } from './http-error.mapper';
 
 const lookup = (key: string): unknown =>
   key
@@ -113,24 +112,7 @@ describe('errorMessageKey', () => {
       expect(errorMessageKey(error(code, 400)), code).toBe('errors.requestFailed');
       expect(errorMessageKey(error(code, 400), {}), code).toBe('errors.requestFailed');
       expect(fieldErrorKey(code), code).toBe('errors.fieldInvalid');
-      expect(typeof userMessageFor(error(code, 500)), code).toBe('string');
-    }
-  });
-
-  it('keeps the old English helper in step with the catalog', () => {
-    for (const [code, status] of [
-      ['network_error', 0],
-      ['timeout', 0],
-      ['unauthenticated', 401],
-      ['unauthorized', 403],
-      ['not_found', 404],
-      ['rate_limited', 429],
-      ['internal_error', 500],
-      ['conflict', 409],
-      ['x', 0],
-    ] as const) {
-      const sample = error(code, status);
-      expect(userMessageFor(sample)).toBe(lookup(errorMessageKey(sample)));
+      expect(errorMessageKey(error(code, 500)), code).toBe('errors.unavailable');
     }
   });
 });

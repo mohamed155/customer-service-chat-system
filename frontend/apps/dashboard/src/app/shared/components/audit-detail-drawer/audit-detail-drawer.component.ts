@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { auditActionName, auditCategoryName } from '../../../core/i18n/audit-labels';
+import { LocaleService } from '../../../core/i18n/locale.service';
 import { JsonPipe } from '@angular/common';
 import { LocaleDatePipe } from '../../../core/i18n/format';
 import { AuditEntry } from '../../../core/api/tenant-api.models';
@@ -102,6 +104,17 @@ import { TranslocoPipe } from '@jsverse/transloco';
   ],
 })
 export class AuditDetailDrawerComponent {
+  private readonly locale = inject(LocaleService);
+
+  /** An action's name in the active language; an action this app has no name for shows its code. */
+  protected actionName(action: string): string {
+    return auditActionName(action, (key) => this.locale.translate(key));
+  }
+
+  protected categoryName(category: string): string {
+    return auditCategoryName(category, (key) => this.locale.translate(key));
+  }
+
   readonly entry = input<AuditEntry | null>(null);
   readonly open = input(false);
   readonly closed = output<void>();

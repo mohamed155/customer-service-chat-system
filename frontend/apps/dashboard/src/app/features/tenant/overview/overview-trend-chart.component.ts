@@ -1,8 +1,11 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { TrendSeriesFixture } from '../../../shared/fixtures/fixture.models';
 
 @Component({
   selector: 'app-overview-trend-chart',
+  imports: [TranslocoPipe],
+  providers: [provideTranslocoScope('insights')],
   templateUrl: './overview-trend-chart.component.html',
   styles: [
     `

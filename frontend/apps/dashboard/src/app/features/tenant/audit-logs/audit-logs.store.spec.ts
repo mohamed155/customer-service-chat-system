@@ -69,7 +69,8 @@ describe('AuditLogsStore', () => {
     const store = TestBed.inject(AuditLogsStore);
     list.mockClear();
     store.setDateRange('2026-03-12', '2026-03-10');
-    expect(store.error()).toBe('From date must be on or before To date');
+    expect(store.dateRangeInvalid()).toBe(true);
+    expect(store.error()).toBeNull();
     expect(list).not.toHaveBeenCalled();
   });
 
@@ -88,7 +89,7 @@ describe('AuditLogsStore', () => {
     const store = TestBed.inject(AuditLogsStore);
     store.load();
     await vi.waitFor(() => {
-      expect(store.error()).toBe('boom');
+      expect(store.error()).toMatchObject({ code: 'unknown_error' });
       expect(store.loading()).toBe(false);
     });
   });

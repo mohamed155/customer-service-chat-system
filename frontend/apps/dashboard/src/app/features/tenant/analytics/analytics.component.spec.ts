@@ -108,6 +108,73 @@ describe('AnalyticsComponent', () => {
     expect(text).toContain('Avg response');
   });
 
+  it('writes the figures for the language: percentages, durations, ratings and tokens', async () => {
+    getSummary.mockReturnValue(of({ data: MOCK_SUMMARY }));
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(AnalyticsComponent);
+    fixture.componentRef.injector.get(AnalyticsStore).load();
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelectorAll('app-metric-card').length).toBe(7);
+    });
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('50,000');
+    expect(text).toMatch(/\d+\.\d%/);
+    expect(text).toContain('/ 5 (42 ratings)');
+    expect(text).toMatch(/\d+ s|\d+ m \d+ s/);
+  });
+
+  it('names the channels, the widget as the website widget, and shows an unknown one as sent', async () => {
+    getSummary.mockReturnValue(
+      of({
+        data: {
+          ...MOCK_SUMMARY,
+          channels: [
+            { channel: 'widget', conversationCount: 5, share: 0.5 },
+            { channel: 'whatsapp', conversationCount: 4, share: 0.4 },
+            { channel: 'carrier_pigeon', conversationCount: 1, share: 0.1 },
+          ],
+        },
+      }),
+    );
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(AnalyticsComponent);
+    fixture.componentRef.injector.get(AnalyticsStore).load();
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('Website widget');
+      expect(text).toContain('WhatsApp');
+      expect(text).toContain('carrier_pigeon');
+    });
+  });
+
+  it('words a failed load by its code with the request reference, never the API text', async () => {
+    getSummary.mockReturnValue(
+      throwError(() => ({
+        code: 'internal_error',
+        message: 'Failed to load analytics',
+        status: 500,
+        requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+      })),
+    );
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(AnalyticsComponent);
+    fixture.componentRef.injector.get(AnalyticsStore).load();
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('The service is temporarily unavailable. Please try again.');
+      expect(text).not.toContain('Failed to load analytics');
+      expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+        '3c4d5e6f',
+      );
+    });
+  });
+
   it('renders em dash for null metrics, not 0%', async () => {
     getSummary.mockReturnValue(of({ data: NULL_SUMMARY }));
     await TestBed.compileComponents();

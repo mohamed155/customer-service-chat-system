@@ -3,7 +3,9 @@ import { patchState, signalStore, withHooks, withMethods, withState } from '@ngr
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
 import { catchError, map, of } from 'rxjs';
+import { ApiError } from '../../../core/api/api.models';
 import { AuditEntry } from '../../../core/api/tenant-api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import { AuditLogsApiService } from './audit-logs-api.service';
 import { withTenantScope } from '../../../core/state/tenant-scope';
 
@@ -34,7 +36,9 @@ export interface AuditLogsState {
   readonly actorId: string | null;
   readonly loading: boolean;
   readonly loadingMore: boolean;
-  readonly error: string | null;
+  readonly error: ApiError | null;
+  /** The range the person picked ends before it starts; nothing is asked of the API. */
+  readonly dateRangeInvalid: boolean;
   readonly selectedEntry: AuditEntry | null;
   readonly drawerOpen: boolean;
 }
@@ -50,6 +54,7 @@ const initialState = (): AuditLogsState => ({
   loading: false,
   loadingMore: false,
   error: null,
+  dateRangeInvalid: false,
   selectedEntry: null,
   drawerOpen: false,
 });
@@ -71,7 +76,7 @@ export const AuditLogsStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loading: false,
-                error: (err as Error)?.message ?? 'Failed to load audit logs',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -105,7 +110,7 @@ export const AuditLogsStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loadingMore: false,
-                error: (err as Error)?.message ?? 'Failed to load more audit logs',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -155,10 +160,10 @@ export const AuditLogsStore = signalStore(
       },
       setDateRange(from: string, to: string): void {
         if (from > to) {
-          patchState(store, { error: 'From date must be on or before To date' });
+          patchState(store, { dateRangeInvalid: true });
           return;
         }
-        patchState(store, { from, to });
+        patchState(store, { from, to, dateRangeInvalid: false });
         load({ from, to, category: store.category(), actorId: store.actorId() });
       },
       setActor(id: string | null): void {

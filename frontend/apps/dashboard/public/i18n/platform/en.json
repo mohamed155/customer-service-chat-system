@@ -86,22 +86,7 @@
     "tenantPlaceholder": "Tenant ID…",
     "rangeInvalid": "From date must be on or before To date",
     "fromDate": "From date",
-    "toDate": "To date",
-    "categories": {
-      "all": "All Categories",
-      "auth": "Auth",
-      "tenant": "Tenant",
-      "members": "Members",
-      "prompts": "Prompts",
-      "ai": "AI",
-      "tools": "Tools",
-      "billing": "Billing",
-      "conversations": "Conversations",
-      "customers": "Customers",
-      "escalations": "Escalations",
-      "knowledge": "Knowledge",
-      "widgets": "Widgets"
-    }
+    "toDate": "To date"
   },
   "billing": {
     "title": "Platform Billing",

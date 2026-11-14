@@ -83,11 +83,53 @@ describe('CatalogLoader', () => {
     expect(requests).toEqual(['i18n/shared/fr.json', 'i18n/shared/fr.json']);
   });
 
-  it('fetches a scope file for a locale, and English of an unregistered scope too', async () => {
+  it('asks for the scope file of a language, and the English of an unregistered scope from the file too', async () => {
     const loader = setup();
     await firstValueFrom(loader.getTranslation('knowledge/de'));
     await firstValueFrom(loader.getTranslation('knowledge/en'));
     expect(requests).toEqual(['i18n/knowledge/de.json', 'i18n/knowledge/en.json']);
+  });
+
+  it('lays a language file over the scope English, so a key it lacks stays English', async () => {
+    body = { page: { title: 'Teamseite' } };
+    const loader = setup();
+    const catalog = (await firstValueFrom(loader.getTranslation('team/de'))) as {
+      page: { title: string; description: string };
+    };
+    expect(catalog.page.title).toBe('Teamseite');
+    expect(catalog.page.description).toBe('Manage team members and invitations');
+    expect(requests).toEqual(['i18n/team/de.json']);
+  });
+
+  it('is not a failure when a language has no file for a scope: the scope is English', async () => {
+    status = 404;
+    body = '<!doctype html>';
+    const loader = setup();
+    const catalog = (await firstValueFrom(loader.getTranslation('team/de'))) as {
+      page: { title: string };
+    };
+    expect(catalog.page.title).toBe('Team');
+    // It is asked for once; the answer, English, is remembered.
+    await firstValueFrom(loader.getTranslation('team/de'));
+    expect(requests).toEqual(['i18n/team/de.json']);
+  });
+
+  it('still fails for the shared file, which is how a language is known not to be offered', async () => {
+    body = '<!doctype html>';
+    const loader = setup();
+    await expect(firstValueFrom(loader.getTranslation('de'))).rejects.toThrow('not an object');
+  });
+
+  it('does not take an inherited property for a scope: it is an unregistered one, read from its file', async () => {
+    const loader = setup();
+    for (const name of ['__proto__/en', '__proto__/de', 'constructor/de']) {
+      expect(await firstValueFrom(loader.getTranslation(name)), name).toEqual({ hello: 'Hallo' });
+    }
+    expect(requests).toEqual([
+      'i18n/__proto__/en.json',
+      'i18n/__proto__/de.json',
+      'i18n/constructor/de.json',
+    ]);
   });
 
   it('fails when the file is not a catalog, as a page that is not JSON would', async () => {
