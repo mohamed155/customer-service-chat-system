@@ -1,4 +1,6 @@
 import { inject } from '@angular/core';
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { pipe, switchMap, tap } from 'rxjs';
@@ -11,12 +13,12 @@ export interface IntegrationDetailState {
   readonly detail: IntegrationDetail | null;
   readonly loading: boolean;
   readonly saving: boolean;
-  readonly error: string | null;
+  readonly error: ApiError | null;
   readonly events: readonly IntegrationEvent[];
   readonly eventsLoading: boolean;
   readonly eventsCursor: string | null;
   readonly eventsHasMore: boolean;
-  readonly eventsError: string | null;
+  readonly eventsError: ApiError | null;
 }
 
 const initialState: IntegrationDetailState = {
@@ -53,7 +55,7 @@ export const IntegrationDetailStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 loading: false,
-                error: (err as Error)?.message ?? 'Failed to load integration',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -76,7 +78,7 @@ export const IntegrationDetailStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 saving: false,
-                error: (err as Error)?.message ?? 'Failed to connect integration',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -99,7 +101,7 @@ export const IntegrationDetailStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 saving: false,
-                error: (err as Error)?.message ?? 'Failed to update integration config',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -122,7 +124,7 @@ export const IntegrationDetailStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 saving: false,
-                error: (err as Error)?.message ?? 'Failed to disconnect integration',
+                error: toApiError(err),
               });
               return of(null);
             }),
@@ -153,7 +155,7 @@ export const IntegrationDetailStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 eventsLoading: false,
-                eventsError: (err as Error)?.message ?? 'Failed to load events',
+                eventsError: toApiError(err),
               });
               return of(null);
             }),
@@ -186,7 +188,7 @@ export const IntegrationDetailStore = signalStore(
             catchError((err: unknown) => {
               patchState(store, {
                 eventsLoading: false,
-                eventsError: (err as Error)?.message ?? 'Failed to load more events',
+                eventsError: toApiError(err),
               });
               return of(null);
             }),

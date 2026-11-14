@@ -1,5 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { statusKey } from './integration-labels';
 import { IntegrationListItem } from '../../../core/api/tenant-api.models';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
@@ -19,12 +25,14 @@ import { IntegrationsStore } from './integrations.store';
   imports: [
     DashboardCardComponent,
     EmptyStateComponent,
+    ErrorReferenceComponent,
     LoadingStateComponent,
     PageContainerComponent,
     PageHeaderComponent,
     RouterLink,
     SectionHeaderComponent,
     StatusBadgeComponent,
+    TranslocoPipe,
   ],
   templateUrl: './integrations.component.html',
   styles: [
@@ -85,11 +93,13 @@ import { IntegrationsStore } from './integrations.store';
       }
     `,
   ],
-  providers: [IntegrationsStore],
+  providers: [IntegrationsStore, provideTranslocoScope('integrations')],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IntegrationsComponent {
   protected readonly store = inject(IntegrationsStore);
+  private readonly locale = inject(LocaleService);
+  protected readonly statusKey = statusKey;
   protected readonly items = this.store.items;
   protected readonly loading = this.store.loading;
   protected readonly error = this.store.error;
@@ -110,6 +120,15 @@ export class IntegrationsComponent {
 
   protected detailLink(slug: string): string[] {
     return ['/', APP_PATHS.tenant.base, APP_PATHS.tenant.integrationDetail.replace(':slug', slug)];
+  }
+
+  /** The name from the catalog, or the API's own word for a value this app has no name for. */
+  protected nameOf(key: string | null, fallback: string): string {
+    return key ? this.locale.translate(key) : fallback;
+  }
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
   }
 
   protected retry(): void {

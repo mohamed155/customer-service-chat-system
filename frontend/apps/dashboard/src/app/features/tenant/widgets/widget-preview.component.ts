@@ -1,9 +1,12 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { WidgetInstance } from '../../../core/api/widget.models';
 
 @Component({
   selector: 'app-widget-preview',
   standalone: true,
+  imports: [TranslocoPipe],
+  providers: [provideTranslocoScope('integrations')],
   templateUrl: './widget-preview.component.html',
   styles: [
     `
@@ -150,5 +153,8 @@ import { WidgetInstance } from '../../../core/api/widget.models';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class WidgetPreviewComponent {
+  /** The sign on a close button: a symbol, the same in every language. */
+  protected readonly closeGlyph = '\u00d7';
+
   readonly formState = input<Partial<WidgetInstance>>({});
 }

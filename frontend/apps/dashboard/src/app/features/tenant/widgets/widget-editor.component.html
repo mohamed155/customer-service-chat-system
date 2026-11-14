@@ -1,40 +1,56 @@
 <div class="editor-panel">
   <div class="editor-header">
-    <h3>{{ isNew() ? 'New Widget' : 'Edit Widget' }}</h3>
-    <button type="button" class="close-btn" (click)="dismissed.emit()" aria-label="Close">
-      &times;
+    <h3>
+      {{
+        (isNew() ? 'integrations.widgets.editor.newTitle' : 'integrations.widgets.editor.editTitle')
+          | transloco
+      }}
+    </h3>
+    <button
+      type="button"
+      class="close-btn"
+      (click)="dismissed.emit()"
+      [attr.aria-label]="'integrations.widgets.editor.close' | transloco"
+    >
+      {{ closeGlyph }}
     </button>
   </div>
 
   @if (visible()) {
     <div class="editor-body">
       <div class="field">
-        <label for="wgt-name">Name *</label>
+        <label for="wgt-name">{{ 'integrations.widgets.editor.name' | transloco }}</label>
         <input
           id="wgt-name"
           type="text"
-          placeholder="My Widget"
+          [placeholder]="'integrations.widgets.editor.namePlaceholder' | transloco"
           [ngModel]="form().name"
           (ngModelChange)="onChange('name', $event)"
         />
         @if (errors().name) {
-          <span class="field-error">{{ errors().name }}</span>
+          <span class="field-error">{{
+            errors().name!.key | transloco: errors().name!.params
+          }}</span>
         }
       </div>
 
       <div class="field">
-        <label for="wgt-display-name">Display name</label>
+        <label for="wgt-display-name">{{
+          'integrations.widgets.editor.displayName' | transloco
+        }}</label>
         <input
           id="wgt-display-name"
           type="text"
-          placeholder="Support Chat"
+          [placeholder]="'integrations.widgets.editor.displayNamePlaceholder' | transloco"
           [ngModel]="form().displayName"
           (ngModelChange)="onChange('displayName', $event)"
         />
       </div>
 
       <div class="field">
-        <label for="wgt-primary-color">Primary color</label>
+        <label for="wgt-primary-color">{{
+          'integrations.widgets.editor.primaryColor' | transloco
+        }}</label>
         <div class="color-row">
           <input
             id="wgt-primary-color"
@@ -45,58 +61,68 @@
           <input
             type="text"
             class="color-hex"
-            placeholder="#0066FF"
+            [placeholder]="colorExample"
             maxlength="7"
             [ngModel]="form().primaryColor"
             (ngModelChange)="onChange('primaryColor', $event)"
           />
         </div>
         @if (errors().primaryColor) {
-          <span class="field-error">{{ errors().primaryColor }}</span>
+          <span class="field-error">{{
+            errors().primaryColor!.key | transloco: errors().primaryColor!.params
+          }}</span>
         }
       </div>
 
       <div class="field">
-        <label for="wgt-welcome">Welcome message</label>
+        <label for="wgt-welcome">{{
+          'integrations.widgets.editor.welcomeMessage' | transloco
+        }}</label>
         <textarea
           id="wgt-welcome"
           rows="3"
-          placeholder="Hello! How can we help you today?"
+          [placeholder]="'integrations.widgets.editor.welcomePlaceholder' | transloco"
           [ngModel]="form().welcomeMessage"
           (ngModelChange)="onChange('welcomeMessage', $event)"
         ></textarea>
         @if (errors().welcomeMessage) {
-          <span class="field-error">{{ errors().welcomeMessage }}</span>
+          <span class="field-error">{{
+            errors().welcomeMessage!.key | transloco: errors().welcomeMessage!.params
+          }}</span>
         }
       </div>
 
       <div class="field-row">
         <div class="field">
-          <label for="wgt-position">Position</label>
+          <label for="wgt-position">{{ 'integrations.widgets.editor.position' | transloco }}</label>
           <select
             id="wgt-position"
             [ngModel]="form().position || 'bottom-right'"
             (ngModelChange)="onChange('position', $event)"
           >
-            <option value="bottom-right">Bottom Right</option>
-            <option value="bottom-left">Bottom Left</option>
+            <option value="bottom-right">
+              {{ 'integrations.widgets.editor.bottomRight' | transloco }}
+            </option>
+            <option value="bottom-left">
+              {{ 'integrations.widgets.editor.bottomLeft' | transloco }}
+            </option>
           </select>
         </div>
         <div class="field">
-          <label for="wgt-theme">Theme</label>
+          <label for="wgt-theme">{{ 'integrations.widgets.editor.theme' | transloco }}</label>
           <select
             id="wgt-theme"
             [ngModel]="form().theme || 'light'"
             (ngModelChange)="onChange('theme', $event)"
           >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
+            <option value="light">{{ 'integrations.widgets.editor.light' | transloco }}</option>
+            <option value="dark">{{ 'integrations.widgets.editor.dark' | transloco }}</option>
           </select>
         </div>
       </div>
 
       <div class="field toggle-row">
-        <label for="wgt-enabled">Enabled</label>
+        <label for="wgt-enabled">{{ 'integrations.widgets.editor.enabled' | transloco }}</label>
         <input
           id="wgt-enabled"
           type="checkbox"
@@ -106,7 +132,9 @@
       </div>
 
       <div class="field">
-        <span class="field-label">Allowed domains</span>
+        <span class="field-label">{{
+          'integrations.widgets.editor.allowedDomains' | transloco
+        }}</span>
         <div class="domains-list">
           @for (domain of form().allowedDomains || []; track $index) {
             <div class="domain-chip">
@@ -115,9 +143,9 @@
                 type="button"
                 class="domain-remove"
                 (click)="removeDomain($index)"
-                aria-label="Remove domain"
+                [attr.aria-label]="'integrations.widgets.editor.removeDomain' | transloco"
               >
-                &times;
+                {{ closeGlyph }}
               </button>
             </div>
           }
@@ -126,7 +154,7 @@
           <input
             type="text"
             class="domain-input"
-            placeholder="example.com"
+            [placeholder]="domainExample"
             [ngModel]="newDomain()"
             (ngModelChange)="newDomain.set($event)"
             (keydown.enter)="addDomain()"
@@ -137,28 +165,44 @@
             (click)="addDomain()"
             [disabled]="!newDomain().trim()"
           >
-            Add
+            {{ 'integrations.widgets.editor.add' | transloco }}
           </button>
         </div>
         @if (errors().allowedDomains) {
-          <span class="field-error">{{ errors().allowedDomains }}</span>
+          <span class="field-error">{{
+            errors().allowedDomains!.key | transloco: errors().allowedDomains!.params
+          }}</span>
         }
       </div>
 
-      @if (error()) {
-        <div class="error-banner">{{ error() }}</div>
+      @if (error(); as err) {
+        <div class="error-banner">
+          {{ errorKey(err) | transloco }}
+          @if (err.requestId; as id) {
+            <app-error-reference [requestId]="id" />
+          }
+        </div>
       }
     </div>
 
     <div class="editor-footer">
-      <app-button variant="secondary" size="sm" (pressed)="dismissed.emit()"> Cancel </app-button>
+      <app-button variant="secondary" size="sm" (pressed)="dismissed.emit()">
+        {{ 'integrations.widgets.editor.cancel' | transloco }}
+      </app-button>
       <app-button
         variant="primary"
         size="sm"
         [disabled]="!isValid() || saving()"
         (pressed)="save.emit()"
       >
-        {{ saving() ? 'Saving…' : isNew() ? 'Create' : 'Save' }}
+        {{
+          (saving()
+            ? 'integrations.widgets.editor.saving'
+            : isNew()
+              ? 'integrations.widgets.editor.create'
+              : 'integrations.widgets.editor.save'
+          ) | transloco
+        }}
       </app-button>
     </div>
   }

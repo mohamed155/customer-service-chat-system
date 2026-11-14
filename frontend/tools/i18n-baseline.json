@@ -9,12 +9,7 @@
   "apps/dashboard/src/app/features/platform/tenants/tenant-list.component.html": 17,
   "apps/dashboard/src/app/features/tenant/analytics/analytics.component.html": 12,
   "apps/dashboard/src/app/features/tenant/audit-logs/audit-logs.component.html": 3,
-  "apps/dashboard/src/app/features/tenant/integrations/integration-detail.component.html": 16,
-  "apps/dashboard/src/app/features/tenant/integrations/integrations.component.html": 6,
   "apps/dashboard/src/app/features/tenant/notifications/notifications-page.component.html": 2,
   "apps/dashboard/src/app/features/tenant/overview/overview-trend-chart.component.html": 1,
-  "apps/dashboard/src/app/features/tenant/overview/overview.component.html": 8,
-  "apps/dashboard/src/app/features/tenant/widgets/widget-editor.component.html": 21,
-  "apps/dashboard/src/app/features/tenant/widgets/widget-preview.component.html": 3,
-  "apps/dashboard/src/app/features/tenant/widgets/widgets.component.html": 11
+  "apps/dashboard/src/app/features/tenant/overview/overview.component.html": 8
 }

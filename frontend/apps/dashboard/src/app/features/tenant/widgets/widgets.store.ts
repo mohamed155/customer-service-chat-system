@@ -10,6 +10,7 @@ import {
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { catchError, EMPTY, pipe, switchMap, tap } from 'rxjs';
 import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 import {
   WidgetInstance,
   CreateWidgetInstancePayload,
@@ -25,7 +26,7 @@ interface WidgetsState {
   snippet: string | null;
   loading: boolean;
   saving: boolean;
-  error: string | null;
+  error: ApiError | null;
 }
 
 const initialState: WidgetsState = {
@@ -59,7 +60,7 @@ export const WidgetsStore = signalStore(
               error: (err: unknown) =>
                 patchState(store, {
                   loading: false,
-                  error: (err as ApiError).message,
+                  error: toApiError(err),
                 }),
             }),
             catchError(() => EMPTY),
@@ -98,7 +99,7 @@ export const WidgetsStore = signalStore(
         error: (err: unknown) =>
           patchState(store, {
             saving: false,
-            error: (err as ApiError).message,
+            error: toApiError(err),
           }),
       });
     },
@@ -121,7 +122,7 @@ export const WidgetsStore = signalStore(
         error: (err: unknown) =>
           patchState(store, {
             saving: false,
-            error: (err as ApiError).message,
+            error: toApiError(err),
           }),
       });
     },
@@ -144,7 +145,7 @@ export const WidgetsStore = signalStore(
         error: (err: unknown) =>
           patchState(store, {
             saving: false,
-            error: (err as ApiError).message,
+            error: toApiError(err),
           }),
       });
     },

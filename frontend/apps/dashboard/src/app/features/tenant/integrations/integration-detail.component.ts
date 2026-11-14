@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -11,6 +10,15 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { ErrorKeyOverrides, errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleDatePipe } from '../../../core/i18n/format';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { marker } from '../../../core/i18n/marker';
+import { RelativeTimePipe } from '../../../core/i18n/relative-time.pipe';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { eventKey, outcomeKey, reasonKey, statusKey } from './integration-labels';
 import { Permission } from '../../../core/authz/permissions';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import {
@@ -32,7 +40,6 @@ import { PageContainerComponent } from '../../../layout/page-container/page-cont
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
 import { copyToClipboard } from '../../../shared/utils/clipboard';
-import { relativeTime } from '../../../shared/utils/relative-time';
 import { IntegrationDetailStore } from './integration-detail.store';
 import { onTenantChange } from '../../../core/state/tenant-scope';
 
@@ -60,21 +67,31 @@ function secretHintFor(
   return ref?.hint ?? null;
 }
 
+/** What the connect, update and disconnect calls say that the shared wording does not. */
+const DETAIL_ERRORS: ErrorKeyOverrides = {
+  integration_already_connected: marker('integrations.errors.alreadyConnected'),
+  integration_not_connected: marker('integrations.errors.notConnected'),
+  422: marker('integrations.errors.invalid'),
+};
+
 @Component({
   selector: 'app-integration-detail',
   imports: [
     ButtonComponent,
-    DatePipe,
     DashboardCardComponent,
     EmptyStateComponent,
+    ErrorReferenceComponent,
     FormFieldComponent,
     FormsModule,
     LoadingStateComponent,
+    LocaleDatePipe,
     PageContainerComponent,
     PageHeaderComponent,
     RouterLink,
+    RelativeTimePipe,
     SectionHeaderComponent,
     StatusBadgeComponent,
+    TranslocoPipe,
   ],
   templateUrl: './integration-detail.component.html',
   styles: [
@@ -209,13 +226,18 @@ function secretHintFor(
       }
     `,
   ],
-  providers: [IntegrationDetailStore],
+  providers: [IntegrationDetailStore, provideTranslocoScope('integrations')],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class IntegrationDetailComponent {
   protected readonly slug = input.required<string>();
   protected readonly store = inject(IntegrationDetailStore);
   private readonly permissions = inject(PermissionsService);
+  private readonly locale = inject(LocaleService);
+  protected readonly statusKey = statusKey;
+  protected readonly eventKey = eventKey;
+  protected readonly outcomeKey = outcomeKey;
+  protected readonly reasonKey = reasonKey;
 
   protected readonly detail = this.store.detail;
   protected readonly loading = this.store.loading;
@@ -231,7 +253,9 @@ export class IntegrationDetailComponent {
   protected readonly copyStatus = signal<'idle' | 'copied' | 'failed'>('idle');
   private copyRequest = 0;
 
-  protected readonly title = computed(() => this.detail()?.name ?? 'Loading…');
+  protected readonly title = computed(
+    () => this.detail()?.name ?? this.locale.translate(marker('integrations.detail.loading')),
+  );
   protected readonly description = computed(() => this.detail()?.description ?? '');
 
   protected readonly backLink = computed(() => [
@@ -295,8 +319,13 @@ export class IntegrationDetailComponent {
     return outcome === 'success' ? 'green' : outcome === 'failure' ? 'red' : 'neutral';
   }
 
-  protected formatEventTime(dateStr: string): string {
-    return relativeTime(dateStr);
+  /** The name from the catalog, or the API's own word for a value this app has no name for. */
+  protected nameOf(key: string | null, fallback: string): string {
+    return key ? this.locale.translate(key) : fallback;
+  }
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error, DETAIL_ERRORS);
   }
 
   protected onLoadMoreEvents(): void {

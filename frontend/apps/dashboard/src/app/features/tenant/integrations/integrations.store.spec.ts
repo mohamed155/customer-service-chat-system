@@ -54,7 +54,7 @@ describe('IntegrationsStore', () => {
     const store = TestBed.inject(IntegrationsStore);
     store.load();
     await vi.waitFor(() => {
-      expect(store.error()).toBe('boom');
+      expect(store.error()).toMatchObject({ code: 'unknown_error' });
       expect(store.loading()).toBe(false);
     });
   });
