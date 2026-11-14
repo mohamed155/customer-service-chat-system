@@ -31,7 +31,9 @@
       }
     </label>
     @if (stepUp.errorKey(); as key) {
-      <app-inline-alert tone="error">{{ key | transloco }}</app-inline-alert>
+      <app-inline-alert tone="error" [requestId]="stepUp.errorRequestId()">{{
+        key | transloco
+      }}</app-inline-alert>
     }
     <div class="actions">
       <button type="button" class="link" (click)="toggleRecovery()">

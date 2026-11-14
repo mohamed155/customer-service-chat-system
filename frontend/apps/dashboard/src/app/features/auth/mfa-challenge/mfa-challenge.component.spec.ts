@@ -96,6 +96,25 @@ describe('MfaChallengeComponent', () => {
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
+  it('shows the request reference of a refused code', async () => {
+    auth.completeMfa.mockRejectedValue(
+      new AuthMfaError(
+        'errors.codeInvalid',
+        {
+          code: 'x',
+          message: 'x',
+          status: 422,
+          requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+        },
+        false,
+      ),
+    );
+    await submit('123456');
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+      '3c4d5e6f',
+    );
+  });
+
   it('goes back to the password step when the challenge has expired', async () => {
     setReturnUrl('/tenant/team');
     auth.completeMfa.mockRejectedValue(

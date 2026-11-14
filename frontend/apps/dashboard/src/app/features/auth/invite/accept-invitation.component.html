@@ -91,7 +91,9 @@
             }}</app-inline-alert>
           }
           @if (errorKey(); as key) {
-            <app-inline-alert tone="error">{{ key | transloco }}</app-inline-alert>
+            <app-inline-alert tone="error" [requestId]="errorRequestId()">{{
+              key | transloco
+            }}</app-inline-alert>
           }
           @if (recoveryAction() === 'switchAccount') {
             <app-button variant="primary" (pressed)="signOut()">{{
@@ -147,6 +149,9 @@
           <p class="info">{{ 'auth.invite.recovery.fresh' | transloco }}</p>
         } @else if (recoveryAction() === 'reenableMembership') {
           <p class="info">{{ 'auth.invite.recovery.reenable' | transloco }}</p>
+        }
+        @if (errorRequestId(); as id) {
+          <app-error-reference [requestId]="id" />
         }
       </app-empty-state>
     }

@@ -11,7 +11,12 @@
           <input type="password" autocomplete="current-password" [formControl]="password" />
         </label>
         @if (errorKey(); as key) {
-          <p role="alert">{{ key | transloco }}</p>
+          <p role="alert">
+            {{ key | transloco }}
+            @if (errorRequestId(); as id) {
+              <app-error-reference [requestId]="id" />
+            }
+          </p>
         }
         <button type="submit" [disabled]="pending() || password.invalid">
           {{ (pending() ? 'auth.mfaSetup.checking' : 'auth.mfaSetup.continue') | transloco }}
@@ -42,7 +47,12 @@
           />
         </label>
         @if (errorKey(); as key) {
-          <p role="alert">{{ key | transloco }}</p>
+          <p role="alert">
+            {{ key | transloco }}
+            @if (errorRequestId(); as id) {
+              <app-error-reference [requestId]="id" />
+            }
+          </p>
         }
         <button type="submit" [disabled]="pending() || code.invalid">
           {{ (pending() ? 'auth.mfaSetup.checking' : 'auth.mfaSetup.turnOn') | transloco }}
@@ -63,7 +73,12 @@
           {{ (copied() ? 'auth.recoveryCodes.copied' : 'auth.recoveryCodes.copy') | transloco }}
         </button>
         @if (errorKey(); as key) {
-          <p role="alert">{{ key | transloco }}</p>
+          <p role="alert">
+            {{ key | transloco }}
+            @if (errorRequestId(); as id) {
+              <app-error-reference [requestId]="id" />
+            }
+          </p>
         }
         <label>
           <input type="checkbox" [checked]="saved()" (change)="saved.set(!saved())" />

@@ -1,3 +1,4 @@
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -11,7 +12,13 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 @Component({
   selector: 'app-login',
   providers: [provideTranslocoScope('auth')],
-  imports: [AuthCardComponent, ReactiveFormsModule, RouterLink, TranslocoPipe],
+  imports: [
+    AuthCardComponent,
+    ErrorReferenceComponent,
+    ReactiveFormsModule,
+    RouterLink,
+    TranslocoPipe,
+  ],
   templateUrl: './login.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -34,6 +41,8 @@ export class LoginComponent {
   protected readonly pending = this.auth.pending;
   /** Catalog key of what went wrong, or `null`. */
   protected readonly errorKey = signal<string | null>(null);
+  /** The request reference of the failed call, shown with the message (MOH-64). */
+  protected readonly errorRequestId = signal<string | null>(null);
   protected readonly signupUrl = `/${APP_PATHS.auth.base}/${APP_PATHS.auth.signup}`;
   protected readonly forgotUrl = `/${APP_PATHS.auth.base}/${APP_PATHS.auth.forgotPassword}`;
 
@@ -44,6 +53,7 @@ export class LoginComponent {
     }
 
     this.errorKey.set(null);
+    this.errorRequestId.set(null);
     const { email, password } = this.form.getRawValue();
 
     try {
@@ -64,6 +74,9 @@ export class LoginComponent {
     } catch (error) {
       this.errorKey.set(
         error instanceof AuthLoginError ? error.messageKey : marker('auth.errors.signInFailed'),
+      );
+      this.errorRequestId.set(
+        error instanceof AuthLoginError ? (error.apiError.requestId ?? null) : null,
       );
     }
   }

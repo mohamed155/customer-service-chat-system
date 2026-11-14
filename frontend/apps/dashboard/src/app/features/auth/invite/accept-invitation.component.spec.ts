@@ -697,6 +697,26 @@ describe('AcceptInvitationComponent', () => {
     });
   });
 
+  it('shows the request reference when the invitation cannot be loaded', async () => {
+    mockApi.previewInvitation.mockReturnValue(
+      throwError(() => ({
+        code: 'internal_error',
+        status: 500,
+        message: 'raw',
+        requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+      })),
+    );
+    await setup();
+    const fixture = TestBed.createComponent(AcceptInvitationComponent);
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+        '3c4d5e6f',
+      );
+    });
+  });
+
   it('shows error state when preview fails with a 404', async () => {
     mockApi.previewInvitation.mockReturnValue(
       throwError(() => ({ code: 'not_found', status: 404, message: 'Not found' })),

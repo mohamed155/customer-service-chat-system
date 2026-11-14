@@ -52,6 +52,8 @@ export class SecurityComponent implements OnInit {
   protected readonly copied = signal(false);
   /** Catalog key of what went wrong, or `null`. */
   protected readonly errorKey = signal<string | null>(null);
+  /** The request reference of the failed call, shown with the message (MOH-64). */
+  protected readonly errorRequestId = signal<string | null>(null);
   protected readonly setupUrl = `/${APP_PATHS.mfaSetup}`;
 
   async ngOnInit(): Promise<void> {
@@ -61,6 +63,7 @@ export class SecurityComponent implements OnInit {
   protected async regenerate(): Promise<void> {
     this.busy.set(true);
     this.errorKey.set(null);
+    this.errorRequestId.set(null);
     try {
       this.codes.set(await this.mfa.regenerateRecoveryCodes());
       this.copied.set(false);
@@ -69,6 +72,7 @@ export class SecurityComponent implements OnInit {
       const apiError = isApiError(error) ? error : mapHttpError(error);
       // A cancelled step-up prompt is not worth an error message.
       if (apiError.code !== 'mfa_step_up_required') {
+        this.errorRequestId.set(apiError.requestId ?? null);
         this.errorKey.set(mfaErrorKey(apiError.status));
       }
     } finally {
@@ -81,6 +85,7 @@ export class SecurityComponent implements OnInit {
       await copyToClipboard(this.codes().join('\n'));
       this.copied.set(true);
     } catch {
+      this.errorRequestId.set(null);
       this.errorKey.set(marker('auth.recoveryCodes.copyFailed'));
     }
   }
@@ -92,7 +97,8 @@ export class SecurityComponent implements OnInit {
   private async refresh(): Promise<void> {
     try {
       this.status.set(await this.mfa.status());
-    } catch {
+    } catch (error) {
+      this.errorRequestId.set((isApiError(error) ? error : mapHttpError(error)).requestId ?? null);
       this.errorKey.set(marker('auth.security.loadFailed'));
     }
   }

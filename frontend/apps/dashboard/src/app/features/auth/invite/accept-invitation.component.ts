@@ -1,3 +1,4 @@
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -24,6 +25,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 /** The part of an `ApiError` the page reads. */
 interface InviteApiError {
+  readonly requestId?: string;
   readonly status?: number;
   readonly code?: string;
   readonly details?: readonly { field?: string; code: string }[];
@@ -53,6 +55,7 @@ const TENANT_LANDING_ORDER = [
     AuthCardComponent,
     EmptyStateComponent,
     LoadingStateComponent,
+    ErrorReferenceComponent,
     ButtonComponent,
     DashboardCardComponent,
     FormFieldComponent,
@@ -99,6 +102,8 @@ export class AcceptInvitationComponent {
   protected readonly preview = signal<InvitationPreview | null>(null);
   /** Catalog key of what went wrong, or `null`. */
   protected readonly errorKey = signal<string | null>(null);
+  /** The request reference of the failed call, shown with the message (MOH-64). */
+  protected readonly errorRequestId = signal<string | null>(null);
   protected readonly recoveryAction = signal<InviteRecoveryAction>(null);
   readonly form = new FormGroup({
     displayName: new FormControl('', {
@@ -143,6 +148,7 @@ export class AcceptInvitationComponent {
             },
             error: (err) => {
               this.status.set('error');
+              this.errorRequestId.set(err?.requestId ?? null);
               this.recoveryAction.set(this.recoveryActionForError(err));
               const status = err?.status ?? 0;
               if (status === 404) {
@@ -167,6 +173,7 @@ export class AcceptInvitationComponent {
       tap(() => {
         this.status.set('submitting');
         this.errorKey.set(null);
+        this.errorRequestId.set(null);
         this.clearControlErrors();
       }),
       switchMap((payload) => {
@@ -198,6 +205,7 @@ export class AcceptInvitationComponent {
             },
             error: (err) => {
               this.recoveryAction.set(this.recoveryActionForError(err));
+              this.errorRequestId.set(err?.requestId ?? null);
               this.errorKey.set(this.mapAcceptError(err));
               this.status.set(this.isAuthenticated() ? 'error' : 'form');
             },

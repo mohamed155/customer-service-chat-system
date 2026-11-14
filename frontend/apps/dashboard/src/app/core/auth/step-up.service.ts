@@ -19,6 +19,8 @@ export class StepUpService {
   readonly pending = signal(false);
   /** Catalog key of what went wrong with the last code, or `null`. */
   readonly errorKey = signal<string | null>(null);
+  /** The request reference of the failed call, shown with the message (MOH-64). */
+  readonly errorRequestId = signal<string | null>(null);
 
   /** Show the prompt. Resolves `true` once a code was proven, `false` if the user cancels. */
   prompt(): Promise<boolean> {
@@ -31,11 +33,13 @@ export class StepUpService {
   async submit(credential: MfaCredential): Promise<void> {
     this.pending.set(true);
     this.errorKey.set(null);
+    this.errorRequestId.set(null);
     try {
       await this.injector.get(MfaService).stepUp(credential);
       this.settle(true);
     } catch (error) {
       const apiError = isApiError(error) ? error : mapHttpError(error);
+      this.errorRequestId.set(apiError.requestId ?? null);
       this.errorKey.set(mfaErrorKey(apiError.status));
     } finally {
       this.pending.set(false);
@@ -49,6 +53,7 @@ export class StepUpService {
   private settle(proven: boolean): void {
     this.open.set(false);
     this.errorKey.set(null);
+    this.errorRequestId.set(null);
     const waiting = this.waiting;
     this.waiting = [];
     waiting.forEach((resolve) => resolve(proven));
