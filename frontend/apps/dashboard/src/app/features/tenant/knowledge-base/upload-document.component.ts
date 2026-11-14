@@ -1,6 +1,12 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { finalize } from 'rxjs/operators';
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
+import { ErrorKeyOverrides, errorMessageKey } from '../../../core/errors/error-message';
+import { marker } from '../../../core/i18n/marker';
+import { ownValue } from '../../../core/i18n/own-value';
 import { KnowledgeItemDetail } from '../../../core/api/knowledge.models';
 import { DialogShellComponent } from '../../../shared/components/dialog-shell/dialog-shell.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
@@ -10,9 +16,34 @@ import { KnowledgeApiService } from './knowledge-api.service';
 const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'txt', 'md'];
 const MAX_SIZE_BYTES = 20 * 1024 * 1024;
 
+/** The upload route's own refusals: the body limit of the route (`413`)... */
+const UPLOAD_ERRORS: ErrorKeyOverrides = {
+  413: marker('knowledge-base.upload.serverTooLarge'),
+};
+
+/** ...and the reasons the API gives in `details` of its `422` for a file it will not take. */
+const UPLOAD_DETAIL_ERRORS: Readonly<Record<string, string>> = {
+  too_large: marker('knowledge-base.upload.serverTooLarge'),
+  invalid_content_type: marker('knowledge-base.upload.serverUnsupported'),
+  invalid_extension: marker('knowledge-base.upload.serverUnsupported'),
+};
+
+/** What a form message says: a catalog key and the values its text needs. */
+interface Message {
+  readonly key: string;
+  readonly params?: Record<string, unknown>;
+}
+
 @Component({
   selector: 'app-upload-document',
-  imports: [DialogShellComponent, FormsModule, FormFieldComponent, InlineAlertComponent],
+  imports: [
+    DialogShellComponent,
+    FormsModule,
+    FormFieldComponent,
+    InlineAlertComponent,
+    TranslocoPipe,
+  ],
+  providers: [provideTranslocoScope('knowledge-base')],
   templateUrl: './upload-document.component.html',
   styles: [
     `
@@ -97,9 +128,22 @@ export class UploadDocumentComponent {
   protected readonly titleSource = signal<'auto' | 'manual'>('auto');
   protected readonly publishImmediately = signal(false);
   protected readonly uploading = signal(false);
-  protected readonly error = signal<string | null>(null);
-  protected readonly validationError = signal<string | null>(null);
+  protected readonly error = signal<ApiError | null>(null);
+  protected readonly validationError = signal<Message | null>(null);
   protected readonly selectedFile = signal<File | null>(null);
+
+  protected errorKey(error: ApiError): string {
+    for (const detail of error.details ?? []) {
+      const key = ownValue(UPLOAD_DETAIL_ERRORS, detail.code);
+      if (key) return key;
+    }
+    return errorMessageKey(error, UPLOAD_ERRORS);
+  }
+
+  /** A file's size in whole kilobytes. */
+  protected kilobytes(bytes: number): number {
+    return Math.round(bytes / 1024);
+  }
 
   protected onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -111,17 +155,22 @@ export class UploadDocumentComponent {
 
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      this.validationError.set(
-        `Invalid file type ".${ext}". Allowed: ${ALLOWED_EXTENSIONS.join(', ')}`,
-      );
+      this.validationError.set({
+        key: marker('knowledge-base.upload.invalidType'),
+        params: { ext, allowed: ALLOWED_EXTENSIONS.join(', ') },
+      });
       this.selectedFile.set(null);
       return;
     }
 
     if (file.size > MAX_SIZE_BYTES) {
-      this.validationError.set(
-        `File exceeds 20 MB limit (${(file.size / 1024 / 1024).toFixed(1)} MB)`,
-      );
+      this.validationError.set({
+        key: marker('knowledge-base.upload.tooLarge'),
+        params: {
+          max: MAX_SIZE_BYTES / 1024 / 1024,
+          size: Math.round((file.size / 1024 / 1024) * 10) / 10,
+        },
+      });
       this.selectedFile.set(null);
       return;
     }
@@ -150,8 +199,7 @@ export class UploadDocumentComponent {
       .pipe(finalize(() => this.uploading.set(false)))
       .subscribe({
         next: (res) => this.completed.emit(res.data),
-        error: (err: unknown) =>
-          this.error.set((err as { message?: string })?.message ?? 'Upload failed'),
+        error: (err: unknown) => this.error.set(toApiError(err)),
       });
   }
 

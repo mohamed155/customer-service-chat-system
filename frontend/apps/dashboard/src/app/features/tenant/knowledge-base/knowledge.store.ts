@@ -19,6 +19,7 @@ import {
   SetStatusPayload,
   UpdateItemPayload,
 } from '../../../core/api/knowledge.models';
+import { toApiError } from '../../../core/errors/api-error';
 import { KnowledgeApiService } from './knowledge-api.service';
 import { withTenantScope } from '../../../core/state/tenant-scope';
 
@@ -31,7 +32,7 @@ interface KnowledgeState {
   hasMore: boolean;
   loading: boolean;
   saving: boolean;
-  error: string | null;
+  error: ApiError | null;
   pollingActive: boolean;
 }
 
@@ -113,7 +114,7 @@ export const KnowledgeStore = signalStore(
                 store.startPolling();
               },
               error: (err: unknown) =>
-                patchState(store, { loading: false, error: (err as ApiError).message }),
+                patchState(store, { loading: false, error: toApiError(err) }),
             }),
             // Error is recorded above; swallow it so the rxMethod keeps working.
             catchError(() => EMPTY),
@@ -140,7 +141,7 @@ export const KnowledgeStore = signalStore(
                   loading: false,
                 }),
               error: (err: unknown) =>
-                patchState(store, { loading: false, error: (err as ApiError).message }),
+                patchState(store, { loading: false, error: toApiError(err) }),
             }),
             catchError(() => EMPTY),
           );
@@ -163,32 +164,28 @@ export const KnowledgeStore = signalStore(
             hasMore: res.data.hasMore,
             loading: false,
           }),
-        error: (err: unknown) =>
-          patchState(store, { loading: false, error: (err as ApiError).message }),
+        error: (err: unknown) => patchState(store, { loading: false, error: toApiError(err) }),
       });
     },
     loadItem(id: string): void {
       patchState(store, { loading: true, error: null, selectedItem: null });
       api.getItem(id).subscribe({
         next: (res) => patchState(store, { selectedItem: res.data, loading: false }),
-        error: (err: unknown) =>
-          patchState(store, { loading: false, error: (err as ApiError).message }),
+        error: (err: unknown) => patchState(store, { loading: false, error: toApiError(err) }),
       });
     },
     createItem(payload: CreateItemPayload): void {
       patchState(store, { saving: true, error: null });
       api.createItem(payload).subscribe({
         next: (res) => patchState(store, { selectedItem: res.data, saving: false }),
-        error: (err: unknown) =>
-          patchState(store, { saving: false, error: (err as ApiError).message }),
+        error: (err: unknown) => patchState(store, { saving: false, error: toApiError(err) }),
       });
     },
     updateItem(id: string, payload: UpdateItemPayload): void {
       patchState(store, { saving: true, error: null });
       api.updateItem(id, payload).subscribe({
         next: (res) => patchState(store, { selectedItem: res.data, saving: false }),
-        error: (err: unknown) =>
-          patchState(store, { saving: false, error: (err as ApiError).message }),
+        error: (err: unknown) => patchState(store, { saving: false, error: toApiError(err) }),
       });
     },
     reindex(id: string): void {
@@ -212,8 +209,7 @@ export const KnowledgeStore = signalStore(
           }
           store.startPolling();
         },
-        error: (err: unknown) =>
-          patchState(store, { saving: false, error: (err as ApiError).message }),
+        error: (err: unknown) => patchState(store, { saving: false, error: toApiError(err) }),
       });
     },
 
@@ -246,8 +242,7 @@ export const KnowledgeStore = signalStore(
             patchState(store, { saving: false });
           }
         },
-        error: (err: unknown) =>
-          patchState(store, { saving: false, error: (err as ApiError).message }),
+        error: (err: unknown) => patchState(store, { saving: false, error: toApiError(err) }),
       });
     },
   })),
@@ -273,8 +268,7 @@ export const KnowledgeStore = signalStore(
           patchState(store, { saving: false });
           store.loadCategories();
         },
-        error: (err: unknown) =>
-          patchState(store, { saving: false, error: (err as ApiError).message }),
+        error: (err: unknown) => patchState(store, { saving: false, error: toApiError(err) }),
       });
     },
     renameCategory(id: string, name: string): void {
@@ -284,8 +278,7 @@ export const KnowledgeStore = signalStore(
           patchState(store, { saving: false });
           store.loadCategories();
         },
-        error: (err: unknown) =>
-          patchState(store, { saving: false, error: (err as ApiError).message }),
+        error: (err: unknown) => patchState(store, { saving: false, error: toApiError(err) }),
       });
     },
     deleteCategory(id: string): void {
@@ -295,8 +288,7 @@ export const KnowledgeStore = signalStore(
           patchState(store, { saving: false });
           store.loadCategories();
         },
-        error: (err: unknown) =>
-          patchState(store, { saving: false, error: (err as ApiError).message }),
+        error: (err: unknown) => patchState(store, { saving: false, error: toApiError(err) }),
       });
     },
   })),

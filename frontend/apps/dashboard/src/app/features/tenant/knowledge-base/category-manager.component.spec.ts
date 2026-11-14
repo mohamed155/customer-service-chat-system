@@ -2,7 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
 import { provideMockStore } from '@ngrx/store/testing';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { APP_CONFIG } from '../../../core/config/app-config';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { CategoryManagerComponent } from './category-manager.component';
@@ -143,6 +143,48 @@ describe('CategoryManagerComponent', () => {
     fixture.detectChanges();
 
     expect(mockApi.createCategory).toHaveBeenCalledWith({ name: 'Support' });
+  });
+
+  it('says a repeated category name is taken, not the API text, with the reference', async () => {
+    mockApi.listItems.mockReturnValue(new Subject());
+    mockApi.listCategories.mockReturnValue(of({ data: [] }));
+    mockApi.createCategory.mockReturnValue(
+      throwError(() => ({
+        code: 'conflict',
+        message: 'Category with this name already exists',
+        status: 409,
+        requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+      })),
+    );
+    const fixture = await createFixture();
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain('Add category');
+    });
+    const click = (label: string) =>
+      (
+        Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find((b) =>
+          b.textContent?.includes(label),
+        ) as HTMLButtonElement
+      ).click();
+    click('Add category');
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector(
+      '[aria-label="New category name"]',
+    ) as HTMLInputElement;
+    input.value = 'Support';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    click('Add');
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('A category with this name already exists.');
+    expect(text).not.toContain('Category with this name already exists');
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+      '3c4d5e6f',
+    );
   });
 
   it('shows delete confirmation with uncategorized note', async () => {

@@ -1,7 +1,11 @@
 @if (showSpinner()) {
   <span class="spinner"></span>
 }
-<span>{{ label() }}</span>
+<span [attr.title]="hintKey() ? (hintKey()! | transloco) : null">{{
+  labelKey() ? (labelKey()! | transloco) : indexStatus().status
+}}</span>
 @if (chunkCount(); as cnt) {
-  <span class="chunks">({{ cnt }})</span>
+  <span class="chunks" [attr.title]="'knowledge-base.index.chunks' | transloco: { count: cnt }"
+    >({{ cnt | localeNumber }})</span
+  >
 }

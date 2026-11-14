@@ -1,51 +1,66 @@
 <app-page-container>
   <app-page-header
-    [title]="isEditing() ? 'Edit article' : 'New article'"
-    [description]="isEditing() ? 'Update the knowledge article' : 'Create a new knowledge article'"
+    [title]="
+      (isEditing() ? 'knowledge-base.editor.editTitle' : 'knowledge-base.editor.newTitle')
+        | transloco
+    "
+    [description]="
+      (isEditing()
+        ? 'knowledge-base.editor.editDescription'
+        : 'knowledge-base.editor.newDescription'
+      ) | transloco
+    "
   />
 
   @if (store.loading() && isEditing()) {
-    <div class="loading">Loading article…</div>
+    <div class="loading">{{ 'knowledge-base.editor.loading' | transloco }}</div>
   } @else {
     <div class="editor-grid">
       <app-dashboard-card>
         <div class="field-group">
-          <app-form-field label="Title" for="title">
+          <app-form-field [label]="'knowledge-base.editor.title' | transloco" for="title">
             <input
               id="title"
               type="text"
               [ngModel]="title()"
               (ngModelChange)="title.set($event); titleTouched.set(true)"
-              placeholder="Article title"
+              [placeholder]="'knowledge-base.editor.titlePlaceholder' | transloco"
             />
           </app-form-field>
           @if (titleTouched() && !title().trim()) {
-            <app-inline-alert tone="error">Title is required</app-inline-alert>
+            <app-inline-alert tone="error">{{
+              'knowledge-base.editor.titleRequired' | transloco
+            }}</app-inline-alert>
           }
 
-          <app-form-field label="Type" for="itemType">
+          <app-form-field [label]="'knowledge-base.editor.type' | transloco" for="itemType">
             <select id="itemType" [ngModel]="itemType()" (ngModelChange)="itemType.set($event)">
-              <option value="article">Article</option>
-              <option value="faq">FAQ</option>
+              <option value="article">{{ 'knowledge-base.type.article' | transloco }}</option>
+              <option value="faq">{{ 'knowledge-base.type.faq' | transloco }}</option>
             </select>
           </app-form-field>
 
-          <app-form-field label="Category" for="category">
+          <app-form-field [label]="'knowledge-base.editor.category' | transloco" for="category">
             <select id="category" [ngModel]="categoryId()" (ngModelChange)="categoryId.set($event)">
-              <option [ngValue]="null">No category</option>
+              <option [ngValue]="null">{{ 'knowledge-base.editor.noCategory' | transloco }}</option>
               @for (cat of store.categories(); track cat.id) {
-                <option [value]="cat.id">{{ cat.name }} ({{ cat.itemCount }})</option>
+                <option [value]="cat.id">
+                  {{
+                    'knowledge-base.editor.categoryOption'
+                      | transloco: { name: cat.name, count: cat.itemCount }
+                  }}
+                </option>
               }
             </select>
           </app-form-field>
 
-          <app-form-field label="Tags" for="tags">
+          <app-form-field [label]="'knowledge-base.editor.tags' | transloco" for="tags">
             <input
               id="tags"
               type="text"
               [ngModel]="tagsInput()"
               (ngModelChange)="tagsInput.set($event)"
-              placeholder="Comma-separated tags"
+              [placeholder]="'knowledge-base.editor.tagsPlaceholder' | transloco"
             />
           </app-form-field>
         </div>
@@ -53,7 +68,7 @@
 
       <app-dashboard-card>
         <div class="editor-section">
-          <div class="editor-label">Body</div>
+          <div class="editor-label">{{ 'knowledge-base.editor.body' | transloco }}</div>
           <!-- The editor is about 400 kB (Taiga editor, ProseMirror, TipTap): the form above is usable
                while it loads. -->
           @defer (on immediate) {
@@ -61,7 +76,9 @@
           } @placeholder {
             <div class="editor-placeholder" aria-hidden="true"></div>
           } @error {
-            <p class="editor-error" role="alert">{{ editorLoadError }}</p>
+            <p class="editor-error" role="alert">
+              {{ 'knowledge-base.editor.loadError' | transloco }}
+            </p>
           }
         </div>
       </app-dashboard-card>
@@ -69,14 +86,19 @@
 
     <div class="actions-bar">
       @if (store.saving()) {
-        <span class="saving-indicator">Saving…</span>
+        <span class="saving-indicator">{{ 'knowledge-base.editor.saving' | transloco }}</span>
       }
       @if (store.error(); as err) {
-        <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+        <app-inline-alert tone="error" [requestId]="err.requestId">{{
+          errorKey(err) | transloco
+        }}</app-inline-alert>
       }
       <button type="button" class="save-btn" [disabled]="store.saving()" (click)="save()">
         <tui-icon icon="@tui.save" />
-        {{ isEditing() ? 'Update' : 'Create' }}
+        {{
+          (isEditing() ? 'knowledge-base.editor.update' : 'knowledge-base.editor.create')
+            | transloco
+        }}
       </button>
     </div>
   }

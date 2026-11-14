@@ -1,9 +1,15 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TuiIcon } from '@taiga-ui/core';
-import { KnowledgeItemStatus, KnowledgeItemType } from '../../../core/api/knowledge.models';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { ApiError } from '../../../core/api/api.models';
+import { KnowledgeItemStatus } from '../../../core/api/knowledge.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleDatePipe } from '../../../core/i18n/format';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { statusKey, statusTone, typeKey } from './knowledge-labels';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
@@ -25,11 +31,12 @@ import { UploadDocumentComponent } from './upload-document.component';
   imports: [
     CategoryManagerComponent,
     DashboardCardComponent,
-    DatePipe,
     EmptyStateComponent,
+    ErrorReferenceComponent,
     FormsModule,
     IndexStatusBadgeComponent,
     LoadingStateComponent,
+    LocaleDatePipe,
     PageContainerComponent,
     PageHeaderComponent,
     RouterLink,
@@ -37,10 +44,11 @@ import { UploadDocumentComponent } from './upload-document.component';
     SectionHeaderComponent,
     StatusBadgeComponent,
     ToolbarComponent,
+    TranslocoPipe,
     TuiIcon,
     UploadDocumentComponent,
   ],
-  providers: [KnowledgeStore],
+  providers: [KnowledgeStore, provideTranslocoScope('knowledge-base')],
   templateUrl: './knowledge-base.component.html',
   styles: [
     `
@@ -192,7 +200,11 @@ import { UploadDocumentComponent } from './upload-document.component';
 export class KnowledgeBaseComponent {
   readonly store = inject(KnowledgeStore);
   private readonly permissions = inject(PermissionsService);
+  private readonly locale = inject(LocaleService);
   protected readonly APP_PATHS = APP_PATHS;
+  protected readonly statusKey = statusKey;
+  protected readonly typeKey = typeKey;
+  protected readonly statusTone = statusTone;
 
   protected readonly query = signal('');
   protected readonly categoryFilter = signal('');
@@ -231,17 +243,12 @@ export class KnowledgeBaseComponent {
     });
   }
 
-  protected statusTone(status: KnowledgeItemStatus): 'green' | 'amber' | 'red' {
-    return status === 'published' ? 'green' : status === 'draft' ? 'amber' : 'red';
+  /** The name from the catalog, or the API's own word for a value this app has no name for. */
+  protected nameOf(key: string | null, fallback: string): string {
+    return key ? this.locale.translate(key) : fallback;
   }
 
-  protected typeLabel(type: KnowledgeItemType): string {
-    return type === 'faq' ? 'FAQ' : type === 'document' ? 'Document' : 'Article';
-  }
-
-  protected indexTooltip(status: { status: string; failureReason?: string }): string {
-    if (status.status === 'failed' && status.failureReason) return status.failureReason;
-    if (status.status === 'not_indexable' && status.failureReason) return status.failureReason;
-    return '';
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
   }
 }

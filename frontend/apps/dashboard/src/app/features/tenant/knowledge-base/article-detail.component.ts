@@ -1,7 +1,14 @@
-import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { TuiIcon } from '@taiga-ui/core';
+import { ApiError } from '../../../core/api/api.models';
+import { ErrorKeyOverrides, errorMessageKey } from '../../../core/errors/error-message';
+import { marker } from '../../../core/i18n/marker';
+import { LocaleDatePipe } from '../../../core/i18n/format';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { statusKey, statusTone, typeKey } from './knowledge-labels';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
@@ -13,21 +20,32 @@ import { StatusBadgeComponent } from '../../../shared/components/status-badge/st
 import { IndexStatusBadgeComponent } from './index-status-badge.component';
 import { KnowledgeStore } from './knowledge.store';
 
+/**
+ * The status buttons only offer a change the rules allow, so the API's `422 validation_failed`
+ * (it answers an illegal change and a publish with no content with the same code) means the
+ * article has no content to publish.
+ */
+const DETAIL_ERRORS: ErrorKeyOverrides = {
+  422: marker('knowledge-base.detail.publishNeedsContent'),
+};
+
 @Component({
   selector: 'app-article-detail',
   imports: [
     DashboardCardComponent,
-    DatePipe,
     EmptyStateComponent,
+    ErrorReferenceComponent,
     IndexStatusBadgeComponent,
     LoadingStateComponent,
+    LocaleDatePipe,
     PageContainerComponent,
     PageHeaderComponent,
     RouterLink,
     StatusBadgeComponent,
+    TranslocoPipe,
     TuiIcon,
   ],
-  providers: [KnowledgeStore],
+  providers: [KnowledgeStore, provideTranslocoScope('knowledge-base')],
   templateUrl: './article-detail.component.html',
   styles: [
     `
@@ -126,8 +144,12 @@ export class ArticleDetailComponent {
   readonly store = inject(KnowledgeStore);
   private readonly route = inject(ActivatedRoute);
   private readonly permissions = inject(PermissionsService);
+  private readonly locale = inject(LocaleService);
 
   protected readonly APP_PATHS = APP_PATHS;
+  protected readonly statusKey = statusKey;
+  protected readonly typeKey = typeKey;
+  protected readonly statusTone = statusTone;
 
   protected readonly item = computed(() => this.store.selectedItem());
   protected readonly editPath = computed(() => {
@@ -163,17 +185,12 @@ export class ArticleDetailComponent {
     if (id) this.store.reindex(id);
   }
 
-  protected indexTooltip(status: { status: string; failureReason?: string }): string {
-    if (status.status === 'failed' && status.failureReason) return status.failureReason;
-    if (status.status === 'not_indexable' && status.failureReason) return status.failureReason;
-    return '';
+  /** The name from the catalog, or the API's own word for a value this app has no name for. */
+  protected nameOf(key: string | null, fallback: string): string {
+    return key ? this.locale.translate(key) : fallback;
   }
 
-  protected typeLabel(type: string): string {
-    return type === 'faq' ? 'FAQ' : type.charAt(0).toUpperCase() + type.slice(1);
-  }
-
-  protected statusTone(status: string): 'green' | 'amber' | 'red' {
-    return status === 'published' ? 'green' : status === 'draft' ? 'amber' : 'red';
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error, DETAIL_ERRORS);
   }
 }

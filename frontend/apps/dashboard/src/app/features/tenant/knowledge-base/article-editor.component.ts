@@ -1,7 +1,10 @@
 import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { TuiIcon } from '@taiga-ui/core';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
 import { KnowledgeItemType } from '../../../core/api/knowledge.models';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { FormFieldComponent } from '../../../shared/components/form-field/form-field.component';
@@ -21,9 +24,10 @@ import { KnowledgeStore } from './knowledge.store';
     PageContainerComponent,
     PageHeaderComponent,
     RichTextEditorComponent,
+    TranslocoPipe,
     TuiIcon,
   ],
-  providers: [KnowledgeStore],
+  providers: [KnowledgeStore, provideTranslocoScope('knowledge-base')],
   templateUrl: './article-editor.component.html',
   styles: [
     `
@@ -111,7 +115,10 @@ export class ArticleEditorComponent {
   protected readonly categoryId = signal<string | null>(null);
   protected readonly tagsInput = signal('');
   protected readonly body = signal('');
-  protected readonly editorLoadError = 'The editor could not load. Reload the page and try again.';
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
 
   constructor() {
     const id = this.route.snapshot.paramMap.get('id');

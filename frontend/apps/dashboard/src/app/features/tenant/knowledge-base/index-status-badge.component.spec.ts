@@ -15,7 +15,7 @@ describe('IndexStatusBadgeComponent', () => {
     const fixture = createFixture({ status: 'not_indexed', chunkCount: 0 });
     const host = fixture.nativeElement as HTMLElement;
     expect(host.classList).toContain('not_indexed');
-    expect(host.textContent).toContain('Not Indexed');
+    expect(host.textContent).toContain('Not indexed');
   });
 
   it('renders pending with spinner', () => {
@@ -51,6 +51,11 @@ describe('IndexStatusBadgeComponent', () => {
     const host = fixture.nativeElement as HTMLElement;
     expect(host.classList).toContain('failed');
     expect(host.textContent).toContain('Failed');
+    // The hint is the catalog's, never the API's own sentence.
+    expect(host.querySelector('[title]')?.getAttribute('title')).toBe(
+      'Indexing failed. Use Re-index to try again.',
+    );
+    expect(host.innerHTML).not.toContain('Provider error');
   });
 
   it('renders not_indexable', () => {
@@ -61,6 +66,22 @@ describe('IndexStatusBadgeComponent', () => {
     });
     const host = fixture.nativeElement as HTMLElement;
     expect(host.classList).toContain('not_indexable');
-    expect(host.textContent).toContain('Not Indexable');
+    expect(host.textContent).toContain('Not indexable');
+    expect(host.querySelector('[title]')?.getAttribute('title')).toBe(
+      'The AI cannot read text from this content.',
+    );
+    expect(host.innerHTML).not.toContain('No extractable text');
+  });
+
+  it('says how many chunks an indexed item has, with the number format of the language', () => {
+    const fixture = createFixture({ status: 'indexed', chunkCount: 1500 });
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('.chunks')?.textContent).toBe('(1,500)');
+    expect(host.querySelector('.chunks')?.getAttribute('title')).toBe('1,500 chunks');
+  });
+
+  it('shows a status the app has no name for as the API sent it', () => {
+    const fixture = createFixture({ status: 'warming_up' as never, chunkCount: 0 });
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('warming_up');
   });
 });

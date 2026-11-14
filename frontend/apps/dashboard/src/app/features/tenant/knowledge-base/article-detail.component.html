@@ -1,18 +1,29 @@
 <app-page-container>
   @if (store.loading()) {
-    <app-loading-state label="Loading article…" />
+    <app-loading-state [label]="'knowledge-base.detail.loading' | transloco" />
   } @else if (store.error(); as err) {
-    <app-empty-state icon="@tui.alert-circle" title="Something went wrong" [description]="err" />
+    <app-empty-state
+      icon="@tui.alert-circle"
+      [title]="'knowledge-base.page.errorTitle' | transloco"
+      [description]="errorKey(err) | transloco"
+    >
+      @if (err.requestId; as id) {
+        <app-error-reference [requestId]="id" />
+      }
+    </app-empty-state>
   } @else if (item(); as article) {
-    <app-page-header [title]="article.title" description="Knowledge article">
+    <app-page-header
+      [title]="article.title"
+      [description]="'knowledge-base.detail.description' | transloco"
+    >
       @if (canManage()) {
         @if (article.status === 'draft') {
           <button class="action-btn" type="button" [disabled]="store.saving()" (click)="publish()">
             @if (store.saving()) {
-              Publishing…
+              {{ 'knowledge-base.detail.publishing' | transloco }}
             } @else {
               <tui-icon icon="@tui.send" />
-              Publish
+              {{ 'knowledge-base.detail.publish' | transloco }}
             }
           </button>
         }
@@ -24,20 +35,20 @@
             (click)="archive()"
           >
             @if (store.saving()) {
-              Archiving…
+              {{ 'knowledge-base.detail.archiving' | transloco }}
             } @else {
               <tui-icon icon="@tui.archive" />
-              Archive
+              {{ 'knowledge-base.detail.archive' | transloco }}
             }
           </button>
         }
         @if (article.status === 'archived') {
           <button class="action-btn" type="button" [disabled]="store.saving()" (click)="restore()">
             @if (store.saving()) {
-              Restoring…
+              {{ 'knowledge-base.detail.restoring' | transloco }}
             } @else {
               <tui-icon icon="@tui.refresh-ccw" />
-              Restore
+              {{ 'knowledge-base.detail.restore' | transloco }}
             }
           </button>
         }
@@ -50,12 +61,12 @@
           (click)="reindex()"
         >
           <tui-icon icon="@tui.refresh-ccw" />
-          Re-index
+          {{ 'knowledge-base.detail.reindex' | transloco }}
         </button>
       }
       <a class="edit-link" [routerLink]="editPath()">
         <tui-icon icon="@tui.edit" />
-        Edit
+        {{ 'knowledge-base.detail.edit' | transloco }}
       </a>
     </app-page-header>
 
@@ -63,31 +74,34 @@
       <app-dashboard-card>
         <div class="meta-grid">
           <div class="meta-item">
-            <span class="meta-label">Status</span>
-            <app-status-badge [status]="article.status" [tone]="statusTone(article.status)" />
+            <span class="meta-label">{{ 'knowledge-base.detail.status' | transloco }}</span>
+            <app-status-badge
+              [status]="article.status"
+              [text]="nameOf(statusKey(article.status), article.status)"
+              [tone]="statusTone(article.status)"
+            />
           </div>
           <div class="meta-item">
-            <span class="meta-label">Type</span>
-            <span class="meta-value">{{ typeLabel(article.itemType) }}</span>
+            <span class="meta-label">{{ 'knowledge-base.detail.type' | transloco }}</span>
+            <span class="meta-value">{{
+              nameOf(typeKey(article.itemType), article.itemType)
+            }}</span>
           </div>
           @if (article.categoryName) {
             <div class="meta-item">
-              <span class="meta-label">Category</span>
+              <span class="meta-label">{{ 'knowledge-base.detail.category' | transloco }}</span>
               <span class="meta-value">{{ article.categoryName }}</span>
             </div>
           }
           @if (article.indexStatus) {
             <div class="meta-item">
-              <span class="meta-label">Index</span>
-              <app-index-status-badge
-                [indexStatus]="article.indexStatus"
-                [title]="indexTooltip(article.indexStatus)"
-              />
+              <span class="meta-label">{{ 'knowledge-base.detail.index' | transloco }}</span>
+              <app-index-status-badge [indexStatus]="article.indexStatus" />
             </div>
           }
           @if (article.tags.length) {
             <div class="meta-item">
-              <span class="meta-label">Tags</span>
+              <span class="meta-label">{{ 'knowledge-base.detail.tags' | transloco }}</span>
               <div class="tags">
                 @for (tag of article.tags; track tag) {
                   <span class="tag">{{ tag }}</span>
@@ -96,12 +110,12 @@
             </div>
           }
           <div class="meta-item">
-            <span class="meta-label">Created by</span>
+            <span class="meta-label">{{ 'knowledge-base.detail.createdBy' | transloco }}</span>
             <span class="meta-value">{{ article.createdByDisplay }}</span>
           </div>
           <div class="meta-item">
-            <span class="meta-label">Updated</span>
-            <span class="meta-value">{{ article.updatedAt | date: 'medium' }}</span>
+            <span class="meta-label">{{ 'knowledge-base.detail.updated' | transloco }}</span>
+            <span class="meta-value">{{ article.updatedAt | localeDate: 'dateTime' }}</span>
           </div>
         </div>
       </app-dashboard-card>
