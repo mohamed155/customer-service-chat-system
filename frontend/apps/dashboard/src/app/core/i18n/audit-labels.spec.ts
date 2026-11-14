@@ -1,4 +1,10 @@
-import { AUDIT_FILTER_CATEGORIES, auditActionKey, auditCategoryKey } from './audit-labels';
+import {
+  AUDIT_FILTER_CATEGORIES,
+  auditActionKey,
+  auditActionName,
+  auditCategoryKey,
+  auditCategoryName,
+} from './audit-labels';
 import sharedEnglish from '../../../../public/i18n/shared/en.json';
 
 const lookup = (key: string): unknown =>
@@ -17,6 +23,20 @@ describe('audit labels', () => {
     expect(auditActionKey('something.brand_new')).toBeNull();
     expect(auditActionKey('constructor')).toBeNull();
     expect(auditCategoryKey('__proto__')).toBeNull();
+  });
+
+  it('writes a name through the translate function, and the code of one it has no name for', () => {
+    const translate = (key: string) => `[${key}]`;
+    expect(auditActionName('member.disabled', translate)).toBe('[audit.actions.member.disabled]');
+    expect(auditActionName('something.brand_new', translate)).toBe('something.brand_new');
+    expect(auditCategoryName('members', translate)).toBe('[audit.categories.members]');
+    expect(auditCategoryName('elsewhere', translate)).toBe('elsewhere');
+  });
+
+  it('filters by the integrations category the API takes, and not by "other", which it refuses', () => {
+    const values = AUDIT_FILTER_CATEGORIES.map((c) => c.value);
+    expect(values).toContain('integrations');
+    expect(values).not.toContain('other');
   });
 
   it('has a name in the shared catalog for every key it hands out', () => {

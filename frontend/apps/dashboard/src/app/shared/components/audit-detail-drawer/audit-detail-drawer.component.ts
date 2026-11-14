@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
-import { auditActionKey, auditCategoryKey } from '../../../core/i18n/audit-labels';
+import { auditActionName, auditCategoryName } from '../../../core/i18n/audit-labels';
 import { LocaleService } from '../../../core/i18n/locale.service';
 import { JsonPipe } from '@angular/common';
 import { LocaleDatePipe } from '../../../core/i18n/format';
@@ -108,13 +108,11 @@ export class AuditDetailDrawerComponent {
 
   /** An action's name in the active language; an action this app has no name for shows its code. */
   protected actionName(action: string): string {
-    const key = auditActionKey(action);
-    return key ? this.locale.translate(key) : action;
+    return auditActionName(action, (key) => this.locale.translate(key));
   }
 
   protected categoryName(category: string): string {
-    const key = auditCategoryKey(category);
-    return key ? this.locale.translate(key) : category;
+    return auditCategoryName(category, (key) => this.locale.translate(key));
   }
 
   readonly entry = input<AuditEntry | null>(null);

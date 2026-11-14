@@ -45,6 +45,11 @@ export function toCatalog(value: unknown): Translation | null {
   return out as Translation;
 }
 
+/** The English loader of a registered scope. A name such as `__proto__` is not a scope. */
+function englishOf(scope: string): (() => Promise<Translation>) | undefined {
+  return Object.hasOwn(ENGLISH_SCOPES, scope) ? ENGLISH_SCOPES[scope] : undefined;
+}
+
 /** `over` laid on `base`, key by key: a key the language has wins, one it lacks stays English. */
 export function mergeCatalogs(base: Translation, over: Translation): Translation {
   const out: Record<string, unknown> = Object.create(null);
@@ -87,13 +92,13 @@ export class CatalogLoader implements TranslocoLoader {
     }
     if (locale === DEFAULT_LOCALE) {
       if (scope === 'shared') return of(toCatalog(sharedEnglish) ?? {});
-      const english = ENGLISH_SCOPES[scope];
+      const english = englishOf(scope);
       if (english) return from(english()).pipe(map((catalog) => toCatalog(catalog) ?? {}));
     }
     const file = `i18n/${scope}/${locale}.json`;
     const known = this.fetched.get(file);
     if (known) return of(known);
-    const english = scope === 'shared' ? undefined : ENGLISH_SCOPES[scope];
+    const english = scope === 'shared' ? undefined : englishOf(scope);
     if (scope !== 'shared') {
       const own$ = this.read(file, scope, locale, false).pipe(
         catchError(() => of<Translation>({})),

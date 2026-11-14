@@ -120,6 +120,18 @@ describe('CatalogLoader', () => {
     await expect(firstValueFrom(loader.getTranslation('de'))).rejects.toThrow('not an object');
   });
 
+  it('does not take an inherited property for a scope: it is an unregistered one, read from its file', async () => {
+    const loader = setup();
+    for (const name of ['__proto__/en', '__proto__/de', 'constructor/de']) {
+      expect(await firstValueFrom(loader.getTranslation(name)), name).toEqual({ hello: 'Hallo' });
+    }
+    expect(requests).toEqual([
+      'i18n/__proto__/en.json',
+      'i18n/__proto__/de.json',
+      'i18n/constructor/de.json',
+    ]);
+  });
+
   it('fails when the file is not a catalog, as a page that is not JSON would', async () => {
     body = '<!doctype html>';
     const loader = setup();

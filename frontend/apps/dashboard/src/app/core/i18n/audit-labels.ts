@@ -134,4 +134,20 @@ export const AUDIT_FILTER_CATEGORIES: readonly { value: string; key: string }[] 
   { value: 'escalations', key: marker('audit.categories.escalations') },
   { value: 'knowledge', key: marker('audit.categories.knowledge') },
   { value: 'widgets', key: marker('audit.categories.widgets') },
+  { value: 'integrations', key: marker('audit.categories.integrations') },
 ];
+
+/**
+ * An audit action's name through `translate` (a function of the active language); an action this
+ * app has no name for shows its code.
+ */
+export function auditActionName(action: string, translate: (key: string) => string): string {
+  const key = auditActionKey(action);
+  return key ? translate(key) : action;
+}
+
+/** An audit category's name through `translate`; a category this app has no name for shows as sent. */
+export function auditCategoryName(category: string, translate: (key: string) => string): string {
+  const key = auditCategoryKey(category);
+  return key ? translate(key) : category;
+}
