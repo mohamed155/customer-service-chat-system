@@ -68,8 +68,8 @@
                 {
                   "type": "bundle",
                   "name": "team-list-component",
-                  "maximumWarning": "45kb",
-                  "maximumError": "47kb"
+                  "maximumWarning": "49kb",
+                  "maximumError": "51kb"
                 },
                 {
                   "type": "bundle",

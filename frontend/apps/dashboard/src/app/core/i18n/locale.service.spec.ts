@@ -2,7 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { TestBed } from '@angular/core/testing';
 import { TRANSLOCO_TRANSPILER, TranslocoService, provideTransloco } from '@jsverse/transloco';
 import { TUI_ENGLISH_LANGUAGE } from '@taiga-ui/i18n/languages/english';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, firstValueFrom, of, throwError } from 'rxjs';
 import { CatalogLoader } from './catalog.loader';
 import { i18nConfig } from './i18n.providers';
 import { IcuTranspiler } from './icu-transpiler';
@@ -144,6 +144,21 @@ describe('LocaleService', () => {
     expect(text()).toBe('Hello');
     await locale.setLocale('de');
     expect(text()).toBe('Hallo');
+  });
+
+  it('translate() follows a catalog that loads after the first read', async () => {
+    const { locale, transloco } = setup();
+    await locale.init();
+    const { computed } = await import('@angular/core');
+    const text = TestBed.runInInjectionContext(() => computed(() => locale.translate('area.late')));
+    expect(text()).toBe('area.late');
+    CATALOGS['area/en'] = { late: 'Arrived' };
+    try {
+      await firstValueFrom(transloco.load('area/en'));
+    } finally {
+      delete CATALOGS['area/en'];
+    }
+    expect(text()).toBe('Arrived');
   });
 
   it('clearChoice forgets the choice and goes back to the browser language', async () => {

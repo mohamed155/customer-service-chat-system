@@ -1,0 +1,103 @@
+{
+  "roleSelect": {
+    "label": "Role"
+  },
+  "table": {
+    "email": "Email",
+    "role": "Role",
+    "status": "Status",
+    "actions": "Actions",
+    "name": "Name",
+    "joined": "Joined"
+  },
+  "invitations": {
+    "delivery": "Email delivery",
+    "invited": "Invited",
+    "revokeLabel": "Revoke invitation for {email}",
+    "revoking": "Revoking…",
+    "revoke": "Revoke",
+    "emailQueued": "Email queued",
+    "emailSent": "Email sent",
+    "emailFailed": "Email failed",
+    "emailUnconfigured": "Email not configured",
+    "loadFailedTitle": "Unable to load invitations",
+    "pending": "Pending invitations",
+    "expired": "Expired invitations",
+    "history": "Accepted and revoked invitations",
+    "noneTitle": "No invitations found",
+    "noneDescription": "Try a different invitation status filter.",
+    "loadMore": "Load more invitations",
+    "accepted": "Accepted invitations",
+    "revoked": "Revoked invitations",
+    "all": "Invitations"
+  },
+  "members": {
+    "unknownRole": "Member",
+    "unknownStatus": "Unknown",
+    "emptyTitle": "No team members",
+    "emptyDescription": "Invite team members to collaborate on support conversations.",
+    "caption": "Team members",
+    "disableLabel": "Disable {name}",
+    "enableLabel": "Enable {name}",
+    "working": "Working…",
+    "disable": "Disable",
+    "enable": "Enable",
+    "changeRole": "Change {name}'s role"
+  },
+  "invite": {
+    "title": "Invite team member",
+    "description": "Invite by email and role.",
+    "emailPlaceholder": "Email address",
+    "emailInvalid": "Enter a valid email address.",
+    "sending": "Sending…",
+    "send": "Send invitation",
+    "sent": "Invitation sent",
+    "pollingFailed": "Unable to refresh invitation email delivery status. Try again later.",
+    "linkHelp": "Select the link to copy it manually if the copy button is unavailable or fails.",
+    "linkLabel": "Invitation link for manual copying",
+    "copyLink": "Copy invitation link",
+    "copied": "Invitation link copied.",
+    "copyFailed": "Could not copy the invitation link. Select and copy it manually.",
+    "delivery": {
+      "sent": "An invitation email has been sent to {email}",
+      "queued": "The invitation email is queued for {email}",
+      "failed": "We tried to send an invitation email to {email}",
+      "unconfigured": "We did not send an email automatically. Copy the link below and share it with {email}"
+    }
+  },
+  "skills": {
+    "title": "Skill Catalog",
+    "newPlaceholder": "New skill name",
+    "agents": "{count, plural, one {# agent} other {# agents}}",
+    "deleteLabel": "Delete skill {name}",
+    "empty": "No skills defined yet."
+  },
+  "page": {
+    "title": "Team",
+    "description": "Manage team members and invitations",
+    "loading": "Loading team roster...",
+    "errorTitle": "Something went wrong",
+    "retry": "Try again",
+    "search": "Search members",
+    "statusFilter": "Status filter",
+    "invitationFilter": "Invitation status filter",
+    "skills": "Skills",
+    "invite": "Invite",
+    "loadingMore": "Loading...",
+    "loadMore": "Load more",
+    "allStatus": "All status",
+    "allInvitations": "All invitations"
+  },
+  "reset": {
+    "label": "Reset two-step verification for {name}",
+    "button": "Reset 2FA",
+    "title": "Reset two-step verification?",
+    "description": "This removes {name}'s authenticator and recovery codes and signs them out everywhere. They will sign in with their password and set up a new authenticator. Only do this once you are sure it is them.",
+    "resetting": "Resetting…",
+    "confirm": "Reset",
+    "done": "{name} was signed out everywhere and must set up two-step verification again.",
+    "cancelled": "The reset was cancelled.",
+    "forbidden": "This person belongs to other workspaces or is platform staff. Ask a platform administrator.",
+    "failed": "The reset did not go through. Try again."
+  }
+}

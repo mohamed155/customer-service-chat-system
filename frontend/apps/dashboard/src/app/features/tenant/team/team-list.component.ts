@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { LocaleDatePipe } from '../../../core/i18n/format';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -48,6 +48,13 @@ import { InvitationTableComponent } from './invitation-table.component';
 import { RoleSelectComponent } from './role-select.component';
 import { SkillsManagerComponent } from './skills-manager.component';
 import { TeamStore } from './team.store';
+import { ApiError } from '../../../core/api/api.models';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleService } from '../../../core/i18n/locale.service';
+import { marker } from '../../../core/i18n/marker';
+import { invitationStatusKey, roleLabelKey } from './team-labels';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 const ROLE_RANKS: Record<MembershipRole, number> = {
   owner: 5,
@@ -60,7 +67,7 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
 @Component({
   selector: 'app-team-list',
   imports: [
-    DatePipe,
+    LocaleDatePipe,
     AvailabilityDotComponent,
     ButtonComponent,
     DataTableComponent,
@@ -79,8 +86,10 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
     SkillsManagerComponent,
     StatusBadgeComponent,
     ToolbarComponent,
+    TranslocoPipe,
+    ErrorReferenceComponent,
   ],
-  providers: [TeamStore],
+  providers: [provideTranslocoScope('team'), TeamStore],
   templateUrl: './team-list.component.html',
   styles: [
     `
@@ -152,29 +161,36 @@ export class TeamListComponent {
   private readonly currentUserService = inject(CurrentUserService);
   private readonly globalStore = inject(Store, { optional: true });
 
+  private readonly locale = inject(LocaleService);
+
   protected readonly showInviteDialog = signal(false);
   protected readonly showSkillsManager = signal(false);
   protected readonly resetTarget = signal<TeamMember | null>(null);
   protected readonly resetting = signal(false);
-  protected readonly resetResult = signal<{ tone: 'success' | 'error'; text: string } | null>(null);
+  protected readonly resetResult = signal<{
+    tone: 'success' | 'error';
+    key: string;
+    params?: Record<string, unknown>;
+    requestId?: string;
+  } | null>(null);
   protected readonly invitationSubmitting = signal(false);
-  protected readonly invitationError = signal<string | null>(null);
+  protected readonly invitationError = signal<ApiError | null>(null);
   protected readonly invitationResult = signal<CreateInvitationResponse | null>(null);
   private readonly activeTenant =
     this.globalStore?.selectSignal(selectActiveTenant) ?? (() => null);
 
-  protected readonly memberStatusOptions: SelectFilterOption[] = [
-    { value: 'all', label: 'All status' },
-    { value: 'active', label: 'Active' },
-    { value: 'disabled', label: 'Disabled' },
-  ];
-  protected readonly invitationStatusOptions: SelectFilterOption[] = [
-    { value: 'all', label: 'All invitations' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'expired', label: 'Expired' },
-    { value: 'accepted', label: 'Accepted' },
-    { value: 'revoked', label: 'Revoked' },
-  ];
+  protected readonly memberStatusOptions = computed<SelectFilterOption[]>(() => [
+    { value: 'all', label: this.locale.translate(marker('team.page.allStatus')) },
+    { value: 'active', label: this.locale.translate(marker('status.active')) },
+    { value: 'disabled', label: this.locale.translate(marker('status.disabled')) },
+  ]);
+  protected readonly invitationStatusOptions = computed<SelectFilterOption[]>(() => [
+    { value: 'all', label: this.locale.translate(marker('team.page.allInvitations')) },
+    { value: 'pending', label: this.locale.translate(marker('status.pending')) },
+    { value: 'expired', label: this.locale.translate(marker('status.expired')) },
+    { value: 'accepted', label: this.locale.translate(marker('status.accepted')) },
+    { value: 'revoked', label: this.locale.translate(marker('status.revoked')) },
+  ]);
 
   protected readonly canManage = computed(() => this.permissions.has('members.manage'));
   protected readonly currentUserId = computed(() => this.currentUserService.currentUser()?.id);
@@ -253,8 +269,22 @@ export class TeamListComponent {
       .toUpperCase();
   }
 
+  /** The accessible name of a member's role control. */
   protected memberRoleLabel(member: TeamMember): string {
-    return `Change ${member.displayName}'s role`;
+    return this.locale.translate(marker('team.members.changeRole'), { name: member.displayName });
+  }
+
+  protected roleLabelKey(role: string): string {
+    return roleLabelKey(role);
+  }
+
+  protected statusLabelKey(status: string): string {
+    return invitationStatusKey(status);
+  }
+
+  /** Catalog key of the text for an error of this page; an absent error gets the generic one. */
+  protected errorKey(error: ApiError | null): string {
+    return errorMessageKey(error ?? { code: 'unknown_error', message: '', status: 0 });
   }
 
   protected onStatusChange(value: string): void {
@@ -265,18 +295,19 @@ export class TeamListComponent {
     this.store.setInvitationStatusFilter(value === 'all' ? undefined : (value as InvitationStatus));
   }
 
+  /** Catalog key of the heading of a filtered list of invitations. */
   protected invitationSectionTitle(status: InvitationStatus | 'all'): string {
     switch (status) {
       case 'pending':
-        return 'Pending invitations';
+        return marker('team.invitations.pending');
       case 'accepted':
-        return 'Accepted invitations';
+        return marker('team.invitations.accepted');
       case 'revoked':
-        return 'Revoked invitations';
+        return marker('team.invitations.revoked');
       case 'expired':
-        return 'Expired invitations';
+        return marker('team.invitations.expired');
       default:
-        return 'Invitations';
+        return marker('team.invitations.all');
     }
   }
 
@@ -338,19 +369,22 @@ export class TeamListComponent {
       }
       this.resetResult.set({
         tone: 'success',
-        text: `${target.displayName} was signed out everywhere and must set up two-step verification again.`,
+        key: marker('team.reset.done'),
+        params: { name: target.displayName },
       });
     } catch (error) {
       const status = (error as { status?: number } | null)?.status;
       const code = (error as { code?: string } | null)?.code;
+      const requestId = (error as { requestId?: string } | null)?.requestId;
       this.resetResult.set({
         tone: 'error',
-        text:
+        requestId,
+        key:
           code === 'mfa_step_up_required'
-            ? 'The reset was cancelled.'
+            ? marker('team.reset.cancelled')
             : status === 403
-              ? 'This person belongs to other workspaces or is platform staff. Ask a platform administrator.'
-              : 'The reset did not go through. Try again.',
+              ? marker('team.reset.forbidden')
+              : marker('team.reset.failed'),
       });
     } finally {
       this.resetting.set(false);

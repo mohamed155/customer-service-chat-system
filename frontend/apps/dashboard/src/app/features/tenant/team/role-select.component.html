@@ -1,5 +1,5 @@
 <app-choice-group
-  [ariaLabel]="ariaLabel()"
+  [ariaLabel]="ariaLabel() ?? ('team.roleSelect.label' | transloco)"
   [options]="filteredRoles()"
   [value]="value()"
   (valueChange)="selectRole($event)"

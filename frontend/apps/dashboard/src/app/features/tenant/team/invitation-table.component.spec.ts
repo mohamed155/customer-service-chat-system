@@ -64,7 +64,7 @@ describe('InvitationTableComponent', () => {
     expect(headers).toEqual(['Email', 'Role', 'Status', 'Email delivery', 'Invited']);
     expect(cells).toEqual([
       'person@example.com',
-      'agent',
+      'Support Agent',
       'Pending',
       'Email queued',
       'Jul 13, 2026',

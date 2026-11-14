@@ -31,10 +31,6 @@
   "apps/dashboard/src/app/features/tenant/overview/overview.component.html": 8,
   "apps/dashboard/src/app/features/tenant/settings/settings.component.html": 27,
   "apps/dashboard/src/app/features/tenant/settings/tools/tools-settings.component.html": 34,
-  "apps/dashboard/src/app/features/tenant/team/invitation-table.component.html": 6,
-  "apps/dashboard/src/app/features/tenant/team/invite-dialog.component.html": 14,
-  "apps/dashboard/src/app/features/tenant/team/skills-manager.component.html": 3,
-  "apps/dashboard/src/app/features/tenant/team/team-list.component.html": 29,
   "apps/dashboard/src/app/features/tenant/widgets/widget-editor.component.html": 21,
   "apps/dashboard/src/app/features/tenant/widgets/widget-preview.component.html": 3,
   "apps/dashboard/src/app/features/tenant/widgets/widgets.component.html": 11

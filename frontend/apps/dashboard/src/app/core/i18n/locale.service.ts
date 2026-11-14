@@ -1,9 +1,9 @@
 import { DOCUMENT } from '@angular/common';
-import { Injectable, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
 import { TUI_ENGLISH_LANGUAGE } from '@taiga-ui/i18n/languages/english';
 import type { TuiLanguage } from '@taiga-ui/i18n/types';
-import { firstValueFrom } from 'rxjs';
+import { filter, firstValueFrom } from 'rxjs';
 import { CatalogLoader } from './catalog.loader';
 import {
   DEFAULT_LOCALE,
@@ -32,6 +32,8 @@ export class LocaleService {
   private readonly document = inject(DOCUMENT);
 
   private readonly active = signal(DEFAULT_LOCALE);
+  /** Counts catalogs that finished loading: a scope's file arrives after the first render. */
+  private readonly loadedCatalogs = signal(0);
   private readonly formatting = signal(DEFAULT_LOCALE);
   private readonly taiga = signal<TuiLanguage>(TUI_ENGLISH_LANGUAGE);
 
@@ -39,12 +41,24 @@ export class LocaleService {
   readonly formatLocale = this.formatting.asReadonly();
   readonly taigaLanguage = this.taiga.asReadonly();
 
+  constructor() {
+    const loads = this.transloco.events$
+      .pipe(filter((event) => event.type === 'translationLoadSuccess'))
+      // The event can fire while a template is being rendered (a pipe asks for its scope's
+      // catalog), where writing a signal is an error: do it right after.
+      .subscribe(() => queueMicrotask(() => this.loadedCatalogs.update((n) => n + 1)));
+    inject(DestroyRef).onDestroy(() => loads.unsubscribe());
+  }
+
   /**
    * Text for a key in the active language, for code that cannot use the `transloco` pipe. A
-   * `computed()` or `effect()` that calls it runs again when the language changes.
+   * `computed()` or `effect()` that calls it runs again when the language changes and when a
+   * catalog finishes loading (an area's file is fetched with its lazy route, after the first
+   * render, so a key read before that would otherwise stay as the key for good).
    */
   translate(key: string, params?: Record<string, unknown>): string {
     this.active();
+    this.loadedCatalogs();
     return this.transloco.translate(key, params);
   }
 

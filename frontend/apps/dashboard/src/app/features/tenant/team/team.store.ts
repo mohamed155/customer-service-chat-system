@@ -30,6 +30,8 @@ import {
 } from '../../../core/api/tenant-api.models';
 import { withTenantScope } from '../../../core/state/tenant-scope';
 import { TeamApiService } from './team-api.service';
+import { ApiError } from '../../../core/api/api.models';
+import { toApiError } from '../../../core/errors/api-error';
 
 export type TeamListStatus = 'pending' | 'loading' | 'success' | 'error' | 'empty';
 export type MemberMutationStatus = 'idle' | 'submitting' | 'success' | 'error';
@@ -40,22 +42,22 @@ interface TeamState {
   query: TeamMemberQuery;
   nextCursor: string | null;
   hasMore: boolean;
-  error: string | null;
+  error: ApiError | null;
   invitations: TenantInvitation[];
   invitationQuery: InvitationQuery;
   invitationNextCursor: string | null;
   invitationHasMore: boolean;
   invitationsStatus: 'pending' | 'loading' | 'success' | 'error';
-  invitationsError: string | null;
+  invitationsError: ApiError | null;
   lastCreatedInvitation: CreateInvitationResponse | null;
   createInvitationStatus: 'idle' | 'submitting' | 'success' | 'error';
-  createInvitationError: string | null;
-  invitationDeliveryPollingError: string | null;
+  createInvitationError: ApiError | null;
+  invitationDeliveryPollingFailed: boolean;
   memberUpdateStatus: MemberMutationStatus;
-  memberUpdateError: string | null;
+  memberUpdateError: ApiError | null;
   memberUpdateMemberId: string | null;
   revokeInvitationStatus: MemberMutationStatus;
-  revokeInvitationError: string | null;
+  revokeInvitationError: ApiError | null;
   revokeInvitationId: string | null;
 }
 
@@ -75,7 +77,7 @@ const initialState: TeamState = {
   lastCreatedInvitation: null,
   createInvitationStatus: 'idle',
   createInvitationError: null,
-  invitationDeliveryPollingError: null,
+  invitationDeliveryPollingFailed: false,
   memberUpdateStatus: 'idle',
   memberUpdateError: null,
   memberUpdateMemberId: null,
@@ -106,7 +108,7 @@ export const TeamStore = signalStore(
               error: (err) =>
                 patchState(store, {
                   status: 'error' as const,
-                  error: err?.message ?? 'Failed to load members',
+                  error: toApiError(err),
                 }),
             }),
             catchError(() => EMPTY),
@@ -138,7 +140,7 @@ export const TeamStore = signalStore(
               error: (err) =>
                 patchState(store, {
                   invitationsStatus: 'error' as const,
-                  invitationsError: err?.message ?? 'Failed to load invitations',
+                  invitationsError: toApiError(err),
                 }),
             }),
             catchError(() => EMPTY),
@@ -183,7 +185,7 @@ export const TeamStore = signalStore(
               const invitation = invitations.find((item) => item.id === invitationId);
               patchState(store, {
                 invitations,
-                invitationDeliveryPollingError: null,
+                invitationDeliveryPollingFailed: false,
               });
               const created = store.lastCreatedInvitation();
               if (invitation && created?.invitation.id === invitationId) {
@@ -200,8 +202,7 @@ export const TeamStore = signalStore(
             takeWhile((response) => response.data.emailDeliveryStatus === 'queued', true),
             catchError(() => {
               patchState(store, {
-                invitationDeliveryPollingError:
-                  'Unable to refresh invitation email delivery status. Try again later.',
+                invitationDeliveryPollingFailed: true,
               });
               return EMPTY;
             }),
@@ -239,7 +240,7 @@ export const TeamStore = signalStore(
                       .invitations()
                       .filter((item) => item.id !== response.data.invitation.id),
                   ],
-                  invitationDeliveryPollingError: null,
+                  invitationDeliveryPollingFailed: false,
                 });
                 patchState(store, { createInvitationStatus: 'success' as const });
                 if (response.data.emailDeliveryStatus === 'queued') {
@@ -252,7 +253,7 @@ export const TeamStore = signalStore(
               error: (err) =>
                 patchState(store, {
                   createInvitationStatus: 'error' as const,
-                  createInvitationError: err?.message ?? 'Failed to create invitation',
+                  createInvitationError: toApiError(err),
                 }),
             }),
             catchError(() => EMPTY),
@@ -284,7 +285,7 @@ export const TeamStore = signalStore(
               error: (err) =>
                 patchState(store, {
                   revokeInvitationStatus: 'error' as const,
-                  revokeInvitationError: err?.message ?? 'Failed to revoke invitation',
+                  revokeInvitationError: toApiError(err),
                   revokeInvitationId: id,
                 }),
             }),
@@ -317,7 +318,7 @@ export const TeamStore = signalStore(
               error: (err) =>
                 patchState(store, {
                   memberUpdateStatus: 'error' as const,
-                  memberUpdateError: err?.message ?? 'Failed to update member',
+                  memberUpdateError: toApiError(err),
                   memberUpdateMemberId: id,
                 }),
             }),
@@ -399,7 +400,7 @@ export const TeamStore = signalStore(
         pollInvitationDelivery(null);
         patchState(store, {
           lastCreatedInvitation: null,
-          invitationDeliveryPollingError: null,
+          invitationDeliveryPollingFailed: false,
         });
       },
       loadMoreInvitations(): void {

@@ -130,4 +130,23 @@ describe('SkillsManagerComponent', () => {
       expect(api.delete).toHaveBeenCalledWith('tenant/skills/s-1');
     });
   });
+
+  it('counts agents with the plural of the language', async () => {
+    setup(true);
+    api.get.mockReturnValue(
+      of({
+        data: [
+          { id: 's-1', name: 'billing', agentCount: 1 },
+          { id: 's-2', name: 'support', agentCount: 5 },
+        ],
+      }),
+    );
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(SkillsManagerComponent);
+    fixture.detectChanges();
+    const counts = [...fixture.nativeElement.querySelectorAll('.skill-count')].map((el: Element) =>
+      el.textContent?.trim(),
+    );
+    expect(counts).toEqual(['1 agent', '5 agents']);
+  });
 });

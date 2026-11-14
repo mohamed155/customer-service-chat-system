@@ -1,14 +1,24 @@
-import { DatePipe } from '@angular/common';
+import { marker } from '../../../core/i18n/marker';
+import { invitationStatusKey, roleLabelKey } from './team-labels';
+import { LocaleDatePipe } from '../../../core/i18n/format';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { TenantInvitation } from '../../../core/api/tenant-api.models';
 import { INVITATION_STATUS_TONES } from '../../../core/ui/status-badge-config';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-invitation-table',
-  imports: [ButtonComponent, DataTableComponent, DatePipe, StatusBadgeComponent],
+  providers: [provideTranslocoScope('team')],
+  imports: [
+    ButtonComponent,
+    DataTableComponent,
+    LocaleDatePipe,
+    StatusBadgeComponent,
+    TranslocoPipe,
+  ],
   templateUrl: './invitation-table.component.html',
   styles: `
     h3 {
@@ -42,16 +52,25 @@ export class InvitationTableComponent {
     return INVITATION_STATUS_TONES[invitation.status];
   }
 
+  /** Catalog key of how the invitation email went. */
   protected deliveryLabel(invitation: TenantInvitation): string {
     switch (invitation.emailDeliveryStatus) {
       case 'queued':
-        return 'Email queued';
+        return marker('team.invitations.emailQueued');
       case 'sent':
-        return 'Email sent';
+        return marker('team.invitations.emailSent');
       case 'failed':
-        return 'Email failed';
+        return marker('team.invitations.emailFailed');
       default:
-        return 'Email not configured';
+        return marker('team.invitations.emailUnconfigured');
     }
+  }
+
+  protected roleLabelKey(role: string): string {
+    return roleLabelKey(role);
+  }
+
+  protected statusLabelKey(status: string): string {
+    return invitationStatusKey(status);
   }
 }

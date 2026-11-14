@@ -7,18 +7,20 @@
 >
   @if (step() === 'form') {
     <form [formGroup]="form" (ngSubmit)="submit()">
-      <h3 id="invite-dialog-title">Invite team member</h3>
-      <p id="invite-dialog-desc" class="sr-only">Invite by email and role.</p>
-      <app-form-field label="Email">
+      <h3 id="invite-dialog-title">{{ 'team.invite.title' | transloco }}</h3>
+      <p id="invite-dialog-desc" class="sr-only">{{ 'team.invite.description' | transloco }}</p>
+      <app-form-field [label]="'team.table.email' | transloco">
         <input
           type="email"
-          aria-label="Email"
+          [attr.aria-label]="'team.table.email' | transloco"
           formControlName="email"
-          placeholder="Email address"
+          [placeholder]="'team.invite.emailPlaceholder' | transloco"
         />
       </app-form-field>
       @if (form.controls.email.touched && form.controls.email.invalid) {
-        <app-inline-alert tone="error">Enter a valid email address.</app-inline-alert>
+        <app-inline-alert tone="error">{{
+          'team.invite.emailInvalid' | transloco
+        }}</app-inline-alert>
       }
       <app-role-select
         [value]="form.controls.role.value"
@@ -27,45 +29,55 @@
         (valueChange)="form.controls.role.setValue($event)"
       />
       @if (error(); as err) {
-        <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+        <app-inline-alert tone="error" [requestId]="err.requestId">{{
+          errorKey(err) | transloco
+        }}</app-inline-alert>
       }
       <div class="actions">
-        <app-button variant="secondary" (pressed)="closeDialog.emit()">Cancel</app-button>
+        <app-button variant="secondary" (pressed)="closeDialog.emit()">{{
+          'common.cancel' | transloco
+        }}</app-button>
         <app-button variant="primary" type="submit" [disabled]="form.invalid || submitting()">
-          {{ submitting() ? 'Sending…' : 'Send invitation' }}
+          {{ (submitting() ? 'team.invite.sending' : 'team.invite.send') | transloco }}
         </app-button>
       </div>
     </form>
   }
   @if (step() === 'result') {
-    <h3 id="invite-result-title">Invitation sent</h3>
+    <h3 id="invite-result-title">{{ 'team.invite.sent' | transloco }}</h3>
     <p id="invite-result-desc">
-      {{ deliveryMessage() }}<strong>{{ result()?.invitation?.email }}</strong>
+      {{ deliveryMessage() | transloco: { email: result()?.invitation?.email } }}
     </p>
-    @if (deliveryPollingError(); as pollingError) {
-      <app-inline-alert tone="error">{{ pollingError }}</app-inline-alert>
+    @if (deliveryPollingFailed()) {
+      <app-inline-alert tone="error">{{
+        'team.invite.pollingFailed' | transloco
+      }}</app-inline-alert>
     }
     <p id="invite-link-instructions" class="link-instructions">
-      Select the link to copy it manually if the copy button is unavailable or fails.
+      {{ 'team.invite.linkHelp' | transloco }}
     </p>
     <div class="link-box">
       <input
         readonly
-        aria-label="Invitation link for manual copying"
+        [attr.aria-label]="'team.invite.linkLabel' | transloco"
         aria-describedby="invite-link-instructions"
         [value]="acceptUrl()"
       />
-      <app-icon-button icon="@tui.copy" label="Copy invitation link" (click)="copyLink()" />
+      <app-icon-button
+        icon="@tui.copy"
+        [label]="'team.invite.copyLink' | transloco"
+        (click)="copyLink()"
+      />
     </div>
     @if (copyStatus() === 'copied') {
-      <app-inline-alert>Invitation link copied.</app-inline-alert>
+      <app-inline-alert>{{ 'team.invite.copied' | transloco }}</app-inline-alert>
     } @else if (copyStatus() === 'failed') {
-      <app-inline-alert tone="error">
-        Could not copy the invitation link. Select and copy it manually.
-      </app-inline-alert>
+      <app-inline-alert tone="error">{{ 'team.invite.copyFailed' | transloco }}</app-inline-alert>
     }
     <div class="actions">
-      <app-button variant="secondary" (pressed)="closeDialog.emit()">Close</app-button>
+      <app-button variant="secondary" (pressed)="closeDialog.emit()">{{
+        'common.close' | transloco
+      }}</app-button>
     </div>
   }
 </app-dialog-shell>
