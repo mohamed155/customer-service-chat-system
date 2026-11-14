@@ -7,7 +7,11 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { TuiIcon } from '@taiga-ui/core';
+import { ApiError } from '../../../core/api/api.models';
+import { ErrorKeyOverrides, errorMessageKey } from '../../../core/errors/error-message';
+import { marker } from '../../../core/i18n/marker';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { DialogShellComponent } from '../../../shared/components/dialog-shell/dialog-shell.component';
@@ -15,6 +19,11 @@ import { FormFieldComponent } from '../../../shared/components/form-field/form-f
 import { IconButtonComponent } from '../../../shared/components/icon-button/icon-button.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
 import { KnowledgeStore } from './knowledge.store';
+
+/** A category's name is unique in a workspace; the API answers a repeated one with a conflict. */
+const CATEGORY_ERRORS: ErrorKeyOverrides = {
+  conflict: marker('knowledge-base.categories.duplicate'),
+};
 
 @Component({
   selector: 'app-category-manager',
@@ -25,8 +34,10 @@ import { KnowledgeStore } from './knowledge.store';
     FormsModule,
     IconButtonComponent,
     InlineAlertComponent,
+    TranslocoPipe,
     TuiIcon,
   ],
+  providers: [provideTranslocoScope('knowledge-base')],
   templateUrl: './category-manager.component.html',
   styles: [
     `
@@ -132,6 +143,10 @@ export class CategoryManagerComponent {
   protected readonly editingId = signal<string | null>(null);
   protected readonly editName = signal('');
   protected readonly deletingId = signal<string | null>(null);
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error, CATEGORY_ERRORS);
+  }
 
   protected startEdit(cat: { id: string; name: string }): void {
     this.editingId.set(cat.id);

@@ -2,7 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
 import { provideMockStore } from '@ngrx/store/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { APP_CONFIG } from '../../../core/config/app-config';
 import { KnowledgeApiService } from './knowledge-api.service';
 import { UploadDocumentComponent } from './upload-document.component';
@@ -92,7 +92,7 @@ describe('UploadDocumentComponent', () => {
 
     await vi.waitFor(() => {
       fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).toContain('exceeds 20 MB');
+      expect(fixture.nativeElement.textContent).toContain('File exceeds the 20 MB limit (21 MB)');
     });
   });
 
@@ -114,6 +114,60 @@ describe('UploadDocumentComponent', () => {
       const titleInput = fixture.nativeElement.querySelector('#title') as HTMLInputElement;
       expect(titleInput.value).toBe('my-report');
     });
+  });
+
+  it.each([
+    [
+      { code: 'payload_too_large', message: 'raw', status: 413 },
+      'The file is larger than the upload limit.',
+    ],
+    [
+      { code: 'unsupported_media_type', message: 'raw', status: 415 },
+      'This file type is not supported.',
+    ],
+    [
+      { code: 'internal_error', message: 'raw', status: 500 },
+      'The service is temporarily unavailable. Please try again.',
+    ],
+  ])('words a failed upload by its status or code (%j)', async (failure, text) => {
+    mockApi.uploadDocument.mockReturnValue(
+      throwError(() => ({ ...failure, requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f' })),
+    );
+    const fixture = await createFixture();
+    fixture.componentRef.setInput('open', true);
+    fixture.detectChanges();
+    const fileInput = fixture.nativeElement.querySelector('#file') as HTMLInputElement;
+    const file = new File([new Blob(['hello'])], 'notes.pdf', { type: 'application/pdf' });
+    Object.defineProperty(fileInput, 'files', { value: [file] });
+    fileInput.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    const submit = fixture.nativeElement.querySelector('.btn-upload') as HTMLButtonElement;
+    submit.click();
+    fixture.detectChanges();
+
+    const content = fixture.nativeElement.textContent as string;
+    expect(content).toContain(text);
+    expect(content).not.toContain('raw');
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+      '3c4d5e6f',
+    );
+  });
+
+  it('shows the size of the chosen file in kilobytes', async () => {
+    const fixture = await createFixture();
+    fixture.componentRef.setInput('open', true);
+    fixture.detectChanges();
+    const fileInput = fixture.nativeElement.querySelector('#file') as HTMLInputElement;
+    const file = new File([new Blob(['x'.repeat(5 * 1024)])], 'notes.pdf', {
+      type: 'application/pdf',
+    });
+    Object.defineProperty(fileInput, 'files', { value: [file] });
+    fileInput.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.file-info').textContent.trim()).toBe(
+      'notes.pdf (5 KB)',
+    );
   });
 
   it('emits completed on upload success', async () => {

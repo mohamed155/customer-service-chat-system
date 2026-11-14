@@ -1,8 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { IndexStatus } from '../../../core/api/knowledge.models';
+import { LocaleNumberPipe } from '../../../core/i18n/format';
+import { indexHintKey, indexKey } from './knowledge-labels';
 
 @Component({
   selector: 'app-index-status-badge',
+  providers: [provideTranslocoScope('knowledge-base')],
+  imports: [LocaleNumberPipe, TranslocoPipe],
   host: { '[class]': 'hostClass()' },
   templateUrl: './index-status-badge.component.html',
   styles: [
@@ -17,7 +22,6 @@ import { IndexStatus } from '../../../core/api/knowledge.models';
         font-size: var(--app-font-xs);
         font-weight: 600;
         line-height: 1;
-        text-transform: capitalize;
         white-space: nowrap;
         cursor: default;
       }
@@ -75,11 +79,11 @@ export class IndexStatusBadgeComponent {
     () => this.indexStatus().status === 'pending' || this.indexStatus().status === 'indexing',
   );
 
-  protected readonly label = computed(() =>
-    this.indexStatus()
-      .status.replaceAll('_', ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase()),
-  );
+  /** The catalog key of the status's name; a status this app has no name for shows as sent. */
+  protected readonly labelKey = computed(() => indexKey(this.indexStatus().status));
+
+  /** The catalog key of what a failed or unreadable item needs the person to know. */
+  protected readonly hintKey = computed(() => indexHintKey(this.indexStatus().status));
 
   protected readonly chunkCount = computed(() => {
     const st = this.indexStatus();

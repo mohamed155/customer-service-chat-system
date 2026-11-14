@@ -1,11 +1,13 @@
 <app-dialog-shell [open]="true" ariaLabelledby="category-manager-title" (dismiss)="closed.emit()">
-  <h3 id="category-manager-title">Manage categories</h3>
+  <h3 id="category-manager-title">{{ 'knowledge-base.categories.title' | transloco }}</h3>
 
   @if (store.saving()) {
-    <app-inline-alert>Saving…</app-inline-alert>
+    <app-inline-alert>{{ 'knowledge-base.categories.saving' | transloco }}</app-inline-alert>
   }
   @if (store.error(); as err) {
-    <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+    <app-inline-alert tone="error" [requestId]="err.requestId">{{
+      errorKey(err) | transloco
+    }}</app-inline-alert>
   }
 
   <div class="cat-list">
@@ -14,37 +16,51 @@
         @if (editingId() === cat.id) {
           <div class="inline-edit">
             <input
-              aria-label="Category name"
+              [attr.aria-label]="'knowledge-base.categories.nameLabel' | transloco"
               type="text"
               [ngModel]="editName()"
               (ngModelChange)="editName.set($event)"
               (keydown.enter)="saveRename(cat.id)"
               (keydown.escape)="cancelEdit()"
             />
-            <app-button variant="primary" size="sm" (pressed)="saveRename(cat.id)">Save</app-button>
-            <app-button size="sm" (pressed)="cancelEdit()">Cancel</app-button>
+            <app-button variant="primary" size="sm" (pressed)="saveRename(cat.id)">{{
+              'knowledge-base.categories.save' | transloco
+            }}</app-button>
+            <app-button size="sm" (pressed)="cancelEdit()">{{
+              'common.cancel' | transloco
+            }}</app-button>
           </div>
         } @else if (deletingId() === cat.id) {
           <div class="delete-confirm">
-            <span>Delete "{{ cat.name }}"?</span>
+            <span>{{
+              'knowledge-base.categories.deleteConfirm' | transloco: { name: cat.name }
+            }}</span>
             <p class="uncategorized-note">
-              Affected items become uncategorized rather than deleted.
+              {{ 'knowledge-base.categories.deleteNote' | transloco }}
             </p>
             <div class="confirm-actions">
-              <app-button variant="primary" size="sm" (pressed)="confirmDelete(cat.id)"
-                >Delete</app-button
-              >
-              <app-button size="sm" (pressed)="cancelDelete()">Cancel</app-button>
+              <app-button variant="primary" size="sm" (pressed)="confirmDelete(cat.id)">{{
+                'knowledge-base.categories.delete' | transloco
+              }}</app-button>
+              <app-button size="sm" (pressed)="cancelDelete()">{{
+                'common.cancel' | transloco
+              }}</app-button>
             </div>
           </div>
         } @else {
-          <span class="cat-name">{{ cat.name }} ({{ cat.itemCount }})</span>
+          <span class="cat-name">{{
+            'knowledge-base.categories.row' | transloco: { name: cat.name, count: cat.itemCount }
+          }}</span>
           @if (canManage()) {
             <div class="cat-actions">
-              <app-icon-button icon="@tui.edit" label="Rename category" (click)="startEdit(cat)" />
+              <app-icon-button
+                icon="@tui.edit"
+                [label]="'knowledge-base.categories.rename' | transloco"
+                (click)="startEdit(cat)"
+              />
               <app-icon-button
                 icon="@tui.trash"
-                label="Delete category"
+                [label]="'knowledge-base.categories.deleteLabel' | transloco"
                 (click)="startDelete(cat.id)"
               />
             </div>
@@ -52,16 +68,16 @@
         }
       </div>
     } @empty {
-      <p class="empty-text">No categories yet.</p>
+      <p class="empty-text">{{ 'knowledge-base.categories.empty' | transloco }}</p>
     }
   </div>
 
   @if (showAddForm()) {
     <div class="add-form">
-      <app-form-field label="New category name">
+      <app-form-field [label]="'knowledge-base.categories.newName' | transloco">
         <input
           type="text"
-          aria-label="New category name"
+          [attr.aria-label]="'knowledge-base.categories.newName' | transloco"
           [ngModel]="addName()"
           (ngModelChange)="addName.set($event)"
           (keydown.enter)="saveAdd()"
@@ -69,20 +85,22 @@
         />
       </app-form-field>
       <div class="add-actions">
-        <app-button variant="primary" size="sm" (pressed)="saveAdd()">Add</app-button>
-        <app-button size="sm" (pressed)="cancelAdd()">Cancel</app-button>
+        <app-button variant="primary" size="sm" (pressed)="saveAdd()">{{
+          'knowledge-base.categories.add' | transloco
+        }}</app-button>
+        <app-button size="sm" (pressed)="cancelAdd()">{{ 'common.cancel' | transloco }}</app-button>
       </div>
     </div>
   } @else if (canManage()) {
     <div class="add-btn-row">
       <app-button variant="primary" (pressed)="showAddForm.set(true)">
         <tui-icon icon="@tui.plus" />
-        Add category
+        {{ 'knowledge-base.categories.addCategory' | transloco }}
       </app-button>
     </div>
   }
 
   <div class="footer-actions">
-    <app-button (pressed)="closed.emit()">Close</app-button>
+    <app-button (pressed)="closed.emit()">{{ 'common.close' | transloco }}</app-button>
   </div>
 </app-dialog-shell>

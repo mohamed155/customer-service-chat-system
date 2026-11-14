@@ -209,12 +209,23 @@ describe('ArticleDetailComponent', () => {
 
     btnClick(fixture, 'Publish');
 
-    errSubject.error({ message: 'Cannot publish without body', code: 'ERR', status: 422 });
+    errSubject.error({
+      message: 'Cannot publish without body',
+      code: 'unprocessable',
+      status: 422,
+      requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+    });
     fixture.detectChanges();
 
     await vi.waitFor(() => {
       fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).toContain('Cannot publish without body');
+      expect(fixture.nativeElement.textContent).toContain(
+        'Add content before you publish this article.',
+      );
+      expect(fixture.nativeElement.textContent).not.toContain('Cannot publish without body');
+      expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+        '3c4d5e6f',
+      );
     });
   });
 

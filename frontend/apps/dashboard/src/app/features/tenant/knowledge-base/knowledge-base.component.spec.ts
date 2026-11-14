@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { provideTaiga } from '@taiga-ui/core';
 import { provideMockStore } from '@ngrx/store/testing';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { APP_CONFIG } from '../../../core/config/app-config';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { KnowledgeCategory } from '../../../core/api/knowledge.models';
@@ -100,6 +100,47 @@ describe('KnowledgeBaseComponent', () => {
     await vi.waitFor(() => {
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).toContain('Returns policy');
+    });
+  });
+
+  it('names status, type, date and tag count from the catalog', async () => {
+    mockApi.listItems.mockReturnValue(of(mockResponse));
+    const fixture = await createFixture();
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('Published');
+      expect(text).toContain('Draft');
+      expect(text).toContain('FAQ');
+      expect(text).toContain('Updated Jul 10, 2026');
+      expect(text).toContain('1 tag');
+      expect(text).not.toContain('1 tags');
+      expect(text).toContain('Indexed');
+    });
+  });
+
+  it('words a failed load by its code with the request reference, never the API text', async () => {
+    mockApi.listItems.mockReturnValue(
+      throwError(() => ({
+        code: 'internal_error',
+        message: 'Failed to list items',
+        status: 500,
+        requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+      })),
+    );
+    const fixture = await createFixture();
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('The service is temporarily unavailable. Please try again.');
+      expect(text).not.toContain('Failed to list items');
+      expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+        '3c4d5e6f',
+      );
     });
   });
 

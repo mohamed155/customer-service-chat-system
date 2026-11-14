@@ -1,16 +1,18 @@
 <app-dialog-shell [open]="open()" (dismiss)="onDismiss()" ariaLabelledby="upload-title">
   <div class="upload-dialog">
-    <h2 id="upload-title" class="dialog-title">Upload document</h2>
+    <h2 id="upload-title" class="dialog-title">{{ 'knowledge-base.upload.title' | transloco }}</h2>
 
     @if (error(); as err) {
-      <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+      <app-inline-alert tone="error" [requestId]="err.requestId">{{
+        errorKey(err) | transloco
+      }}</app-inline-alert>
     }
 
     @if (validationError(); as verr) {
-      <app-inline-alert tone="error">{{ verr }}</app-inline-alert>
+      <app-inline-alert tone="error">{{ verr.key | transloco: verr.params }}</app-inline-alert>
     }
 
-    <app-form-field label="File" for="file">
+    <app-form-field [label]="'knowledge-base.upload.file' | transloco" for="file">
       <input
         id="file"
         type="file"
@@ -21,21 +23,26 @@
     </app-form-field>
 
     @if (selectedFile(); as file) {
-      <div class="file-info">{{ file.name }} ({{ (file.size / 1024).toFixed(0) }} KB)</div>
+      <div class="file-info">
+        {{
+          'knowledge-base.upload.fileInfo'
+            | transloco: { name: file.name, size: kilobytes(file.size) }
+        }}
+      </div>
     }
 
-    <app-form-field label="Title" for="title">
+    <app-form-field [label]="'knowledge-base.upload.titleLabel' | transloco" for="title">
       <input
         id="title"
         type="text"
         [ngModel]="title()"
         (ngModelChange)="title.set($event); titleSource.set('manual')"
-        placeholder="Document title"
+        [placeholder]="'knowledge-base.upload.titlePlaceholder' | transloco"
         [disabled]="uploading()"
       />
     </app-form-field>
 
-    <app-form-field label="Publish">
+    <app-form-field [label]="'knowledge-base.upload.publish' | transloco">
       <div class="radio-group">
         <label class="radio">
           <input
@@ -45,7 +52,7 @@
             [(ngModel)]="publishImmediately"
             [disabled]="uploading()"
           />
-          Save as draft
+          {{ 'knowledge-base.upload.asDraft' | transloco }}
         </label>
         <label class="radio">
           <input
@@ -55,14 +62,14 @@
             [(ngModel)]="publishImmediately"
             [disabled]="uploading()"
           />
-          Publish immediately
+          {{ 'knowledge-base.upload.publishNow' | transloco }}
         </label>
       </div>
     </app-form-field>
 
     <div class="actions">
       <button type="button" class="btn-cancel" [disabled]="uploading()" (click)="onDismiss()">
-        Cancel
+        {{ 'common.cancel' | transloco }}
       </button>
       <button
         type="button"
@@ -70,11 +77,10 @@
         [disabled]="uploading() || !selectedFile() || !title().trim()"
         (click)="upload()"
       >
-        @if (uploading()) {
-          Uploading…
-        } @else {
-          Upload
-        }
+        {{
+          (uploading() ? 'knowledge-base.upload.uploading' : 'knowledge-base.upload.submit')
+            | transloco
+        }}
       </button>
     </div>
   </div>

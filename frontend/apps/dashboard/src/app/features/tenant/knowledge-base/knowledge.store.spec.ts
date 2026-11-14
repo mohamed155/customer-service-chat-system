@@ -269,7 +269,7 @@ describe('KnowledgeStore', () => {
     setSubject.error(error);
 
     expect(store.saving()).toBe(false);
-    expect(store.error()).toBe('Cannot archive');
+    expect(store.error()).toEqual(error);
   });
 
   it('handles error on loadList', () => {
@@ -287,7 +287,7 @@ describe('KnowledgeStore', () => {
     listSubject.error(error);
 
     expect(store.loading()).toBe(false);
-    expect(store.error()).toBe('Network error');
+    expect(store.error()).toEqual(error);
   });
 
   it('creates category via createCategory and refreshes list', () => {
@@ -320,7 +320,7 @@ describe('KnowledgeStore', () => {
     catSubject.error(error);
 
     expect(store.saving()).toBe(false);
-    expect(store.error()).toBe('Duplicate name');
+    expect(store.error()).toEqual(error);
   });
 
   it('renames category via renameCategory and refreshes', () => {
@@ -388,7 +388,7 @@ describe('KnowledgeStore', () => {
       reindexSubject.error(error);
 
       expect(store.saving()).toBe(false);
-      expect(store.error()).toBe('Reindex failed');
+      expect(store.error()).toEqual(error);
     });
   });
 
