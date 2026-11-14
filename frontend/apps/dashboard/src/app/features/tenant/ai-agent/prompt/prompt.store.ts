@@ -9,6 +9,8 @@ import {
   PromptVersionDetail,
   PromptVersionListItem,
 } from '../../../../core/api/ai-agent.models';
+import { toApiError } from '../../../../core/errors/api-error';
+import { agentFieldErrors } from '../ai-agent-errors';
 import { PromptApiService } from './prompt-api.service';
 import { withTenantScope } from '../../../../core/state/tenant-scope';
 
@@ -19,7 +21,7 @@ interface PromptState {
   dirty: boolean;
   loading: boolean;
   saving: boolean;
-  error: string | null;
+  error: ApiError | null;
   conflict: boolean;
   fieldErrors: Record<string, string[]> | null;
   noOpNotice: boolean;
@@ -68,7 +70,7 @@ export const PromptStore = signalStore(
               }),
             ),
             catchError((err) => {
-              patchState(store, { loading: false, error: (err as ApiError).message });
+              patchState(store, { loading: false, error: toApiError(err) });
               return EMPTY;
             }),
           ),
@@ -123,19 +125,14 @@ export const PromptStore = signalStore(
             });
           }
         },
-        error: (err: ApiError) => {
-          if (err.status === 409) {
-            patchState(store, { saving: false, conflict: true, error: err.message });
-          } else if (err.status === 422 && err.details) {
-            const fieldErrors: Record<string, string[]> = {};
-            for (const d of err.details) {
-              if (d.field) {
-                (fieldErrors[d.field] ??= []).push(d.message);
-              }
-            }
-            patchState(store, { saving: false, fieldErrors });
+        error: (err: unknown) => {
+          const error = toApiError(err);
+          if (error.status === 409) {
+            patchState(store, { saving: false, conflict: true });
+          } else if (error.status === 422 && error.details) {
+            patchState(store, { saving: false, fieldErrors: agentFieldErrors(error.details) });
           } else {
-            patchState(store, { saving: false, error: err.message });
+            patchState(store, { saving: false, error });
           }
         },
       });
@@ -162,8 +159,8 @@ export const PromptStore = signalStore(
             historyLoading: false,
           });
         },
-        error: (err: ApiError) => {
-          patchState(store, { historyLoading: false, error: err.message });
+        error: (err: unknown) => {
+          patchState(store, { historyLoading: false, error: toApiError(err) });
         },
       });
     },
@@ -172,8 +169,8 @@ export const PromptStore = signalStore(
         next: (res) => {
           patchState(store, { selectedVersion: res.data });
         },
-        error: (err: ApiError) => {
-          patchState(store, { error: err.message });
+        error: (err: unknown) => {
+          patchState(store, { error: toApiError(err) });
         },
       });
     },
@@ -212,19 +209,14 @@ export const PromptStore = signalStore(
             patchState(store, { saving: false, noOpNotice: true });
           }
         },
-        error: (err: ApiError) => {
-          if (err.status === 409) {
-            patchState(store, { saving: false, conflict: true, error: err.message });
-          } else if (err.status === 422 && err.details) {
-            const fieldErrors: Record<string, string[]> = {};
-            for (const d of err.details) {
-              if (d.field) {
-                (fieldErrors[d.field] ??= []).push(d.message);
-              }
-            }
-            patchState(store, { saving: false, fieldErrors });
+        error: (err: unknown) => {
+          const error = toApiError(err);
+          if (error.status === 409) {
+            patchState(store, { saving: false, conflict: true });
+          } else if (error.status === 422 && error.details) {
+            patchState(store, { saving: false, fieldErrors: agentFieldErrors(error.details) });
           } else {
-            patchState(store, { saving: false, error: err.message });
+            patchState(store, { saving: false, error });
           }
         },
       });

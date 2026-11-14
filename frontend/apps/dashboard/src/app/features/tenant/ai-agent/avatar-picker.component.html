@@ -1,5 +1,5 @@
 <div class="avatar-picker">
-  <span class="label">Avatar</span>
+  <span class="label">{{ 'ai-agent.avatar.label' | transloco }}</span>
 
   <div class="preset-grid">
     @for (preset of presets(); track preset) {
@@ -9,12 +9,14 @@
         [class.selected]="isPresetSelected(preset)"
         (click)="value.set({ kind: 'preset', preset })"
       >
-        {{ preset }}
+        {{ presetKey(preset) ? (presetKey(preset)! | transloco) : preset }}
       </button>
     }
   </div>
 
-  <app-button variant="secondary" (pressed)="fileInput.click()"> Upload Image </app-button>
+  <app-button variant="secondary" (pressed)="fileInput.click()">
+    {{ 'ai-agent.avatar.upload' | transloco }}
+  </app-button>
   <input
     #fileInput
     type="file"
@@ -24,6 +26,6 @@
   />
 
   @if (uploadError(); as err) {
-    <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+    <app-inline-alert tone="error">{{ err.key | transloco: err.params }}</app-inline-alert>
   }
 </div>

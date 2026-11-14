@@ -36,6 +36,39 @@ describe('prompt-lang', () => {
     }
   });
 
+  describe('validatePrompt messages', () => {
+    it('gives a catalog key and the values its text needs, never English text', () => {
+      expect(validatePrompt('', catalogNames)).toEqual([
+        { field: 'content', code: 'required', key: 'ai-agent.prompt.issue.required' },
+      ]);
+      expect(validatePrompt('Hi {{business_hours}} {{bad name}} {{', catalogNames)).toEqual([
+        {
+          field: 'content',
+          code: 'unknown_variable',
+          key: 'ai-agent.prompt.issue.unknownVariable',
+          params: { name: 'business_hours', offset: 3 },
+        },
+        {
+          field: 'content',
+          code: 'malformed_placeholder',
+          key: 'ai-agent.prompt.issue.invalidPlaceholder',
+          params: { name: 'bad name', offset: 22 },
+        },
+        {
+          field: 'content',
+          code: 'malformed_placeholder',
+          key: 'ai-agent.prompt.issue.unclosed',
+          params: { offset: 35 },
+        },
+      ]);
+      const [tooLong] = validatePrompt('x'.repeat(8001), catalogNames);
+      expect(tooLong).toMatchObject({
+        key: 'ai-agent.prompt.issue.tooLong',
+        params: { max: 8000 },
+      });
+    });
+  });
+
   describe('renderPreview', () => {
     it('substitutes known variables with samples', () => {
       const result = renderPreview('Hello {{agent_name}} from {{tenant_name}}', {

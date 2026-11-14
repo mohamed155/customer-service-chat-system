@@ -164,7 +164,7 @@ describe('PromptStore', () => {
 
     expect(store.saving()).toBe(false);
     expect(store.conflict()).toBe(true);
-    expect(store.error()).toBe('Version conflict');
+    expect(store.error()).toBeNull();
   });
 
   it('handles 422 validation errors on save', () => {
@@ -187,7 +187,7 @@ describe('PromptStore', () => {
 
     expect(store.saving()).toBe(false);
     expect(store.fieldErrors()).toEqual({
-      content: ['Content exceeds maximum length'],
+      content: ['ai-agent.fieldErrors.tooLong'],
     });
   });
 
@@ -205,7 +205,7 @@ describe('PromptStore', () => {
     saveSubject.error(error);
 
     expect(store.saving()).toBe(false);
-    expect(store.error()).toBe('Internal error');
+    expect(store.error()).toEqual(error);
   });
 
   it('dismissConflict clears conflict state', () => {

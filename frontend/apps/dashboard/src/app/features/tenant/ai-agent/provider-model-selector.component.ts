@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, model } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 export interface ProviderOption {
   id: string;
@@ -17,7 +18,8 @@ export interface ProviderModelValue {
 @Component({
   selector: 'app-provider-model-selector',
   standalone: true,
-  imports: [FormsModule, InlineAlertComponent],
+  providers: [provideTranslocoScope('ai-agent')],
+  imports: [FormsModule, InlineAlertComponent, TranslocoPipe],
   templateUrl: './provider-model-selector.component.html',
   styles: [
     `

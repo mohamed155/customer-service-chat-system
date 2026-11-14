@@ -7,6 +7,12 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { LocaleDatePipe } from '../../../core/i18n/format';
+import { channelLabelKey } from '../../../core/i18n/labels';
+import { marker } from '../../../core/i18n/marker';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 import { AvatarPickerComponent, AvatarValue } from './avatar-picker.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
@@ -24,6 +30,7 @@ import { RulesEditorComponent, EscalationRuleEdit } from './rules-editor.compone
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
 import { ToneSelectorComponent } from './tone-selector.component';
 import { AiAgentStore, AiAgentTab } from './ai-agent.store';
+import { ApiError } from '../../../core/api/api.models';
 
 @Component({
   selector: 'app-ai-agent',
@@ -31,9 +38,11 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
     AvatarPickerComponent,
     DashboardCardComponent,
     EmptyStateComponent,
+    ErrorReferenceComponent,
     FormsModule,
     InlineAlertComponent,
     LoadingStateComponent,
+    LocaleDatePipe,
     PageContainerComponent,
     PageHeaderComponent,
     ProviderModelSelectorComponent,
@@ -41,8 +50,9 @@ import { AiAgentStore, AiAgentTab } from './ai-agent.store';
     RulesEditorComponent,
     SectionHeaderComponent,
     ToneSelectorComponent,
+    TranslocoPipe,
   ],
-  providers: [AiAgentStore],
+  providers: [AiAgentStore, provideTranslocoScope('ai-agent')],
   templateUrl: './ai-agent.component.html',
   styles: [
     `
@@ -227,10 +237,10 @@ export class AiAgentComponent {
   readonly store = inject(AiAgentStore);
   protected readonly APP_PATHS = APP_PATHS;
 
-  protected readonly tabs: readonly { id: AiAgentTab; label: string }[] = [
-    { id: 'behavior', label: 'Behavior' },
-    { id: 'prompt', label: 'Prompt' },
-    { id: 'escalation', label: 'Escalation' },
+  protected readonly tabs: readonly { id: AiAgentTab; key: string }[] = [
+    { id: 'behavior', key: marker('ai-agent.tabs.behavior') },
+    { id: 'prompt', key: marker('ai-agent.tabs.prompt') },
+    { id: 'escalation', key: marker('ai-agent.tabs.escalation') },
   ];
 
   protected readonly agentName = signal('');
@@ -243,6 +253,11 @@ export class AiAgentComponent {
     providerId: null,
     model: null,
   });
+
+  /** The channels the agent can use, each with the catalog key of its name (none: shown as sent). */
+  protected readonly channels = computed(() =>
+    (this.store.options()?.channels ?? []).map((id) => ({ id, key: channelLabelKey(id) })),
+  );
 
   protected readonly agentProviders = computed(() =>
     (this.store.options()?.providers ?? []).map((p) => ({
@@ -299,6 +314,10 @@ export class AiAgentComponent {
     this.agentEnabledChannels.update((list) =>
       list.includes(channel) ? list.filter((c) => c !== channel) : [...list, channel],
     );
+  }
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
   }
 
   protected fieldError(field: string): string[] | null {

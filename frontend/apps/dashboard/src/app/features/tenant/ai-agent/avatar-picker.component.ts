@@ -1,13 +1,29 @@
 import { ChangeDetectionStrategy, Component, input, model, signal } from '@angular/core';
+import { marker } from '../../../core/i18n/marker';
+import { ownValue } from '../../../core/i18n/own-value';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 export type AvatarValue = { kind: 'preset'; preset: string } | { kind: 'upload' } | null;
+
+const PRESET_KEYS: Readonly<Record<string, string>> = {
+  spark: marker('ai-agent.avatar.presets.spark'),
+  orbit: marker('ai-agent.avatar.presets.orbit'),
+  beacon: marker('ai-agent.avatar.presets.beacon'),
+  nova: marker('ai-agent.avatar.presets.nova'),
+  pulse: marker('ai-agent.avatar.presets.pulse'),
+  atlas: marker('ai-agent.avatar.presets.atlas'),
+};
+
+/** The largest image the avatar may be, in KB. */
+const MAX_AVATAR_KB = 256;
 
 @Component({
   selector: 'app-avatar-picker',
   standalone: true,
-  imports: [ButtonComponent, InlineAlertComponent],
+  providers: [provideTranslocoScope('ai-agent')],
+  imports: [ButtonComponent, InlineAlertComponent, TranslocoPipe],
   templateUrl: './avatar-picker.component.html',
   styles: [
     `
@@ -54,7 +70,12 @@ export type AvatarValue = { kind: 'preset'; preset: string } | { kind: 'upload' 
 export class AvatarPickerComponent {
   readonly presets = input<string[]>([]);
   readonly value = model<AvatarValue>(null);
-  readonly uploadError = signal<string | null>(null);
+  readonly uploadError = signal<{ key: string; params?: Record<string, unknown> } | null>(null);
+
+  /** The catalog key of a preset's name; a preset this app has no name for shows as sent. */
+  protected presetKey(preset: string): string | null {
+    return ownValue(PRESET_KEYS, preset) ?? null;
+  }
 
   protected isPresetSelected(preset: string): boolean {
     const v = this.value();
@@ -66,8 +87,11 @@ export class AvatarPickerComponent {
     const file = input.files?.[0];
     if (!file) return;
 
-    if (file.size > 256 * 1024) {
-      this.uploadError.set('Image must be smaller than 256 KB');
+    if (file.size > MAX_AVATAR_KB * 1024) {
+      this.uploadError.set({
+        key: marker('ai-agent.avatar.tooLarge'),
+        params: { max: MAX_AVATAR_KB },
+      });
       input.value = '';
       return;
     }

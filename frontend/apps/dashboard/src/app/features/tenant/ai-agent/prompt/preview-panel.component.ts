@@ -1,8 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { PromptVariable } from '../../../../core/api/ai-agent.models';
 import { renderPreview } from './prompt-lang';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
+  providers: [provideTranslocoScope('ai-agent')],
+  imports: [TranslocoPipe],
   selector: 'app-preview-panel',
   standalone: true,
   templateUrl: './preview-panel.component.html',

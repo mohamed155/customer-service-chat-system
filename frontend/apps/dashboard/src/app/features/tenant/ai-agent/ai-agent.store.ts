@@ -15,6 +15,8 @@ import {
   AgentConfigResponse,
   AgentOptionsResponse,
 } from '../../../core/api/ai-agent.models';
+import { toApiError } from '../../../core/errors/api-error';
+import { agentFieldErrors } from './ai-agent-errors';
 import { AiAgentApiService } from './ai-agent-api.service';
 import { withTenantScope } from '../../../core/state/tenant-scope';
 
@@ -23,7 +25,7 @@ interface AiAgentState {
   options: AgentOptionsResponse | null;
   loading: boolean;
   saving: boolean;
-  error: string | null;
+  error: ApiError | null;
   conflict: boolean;
   fieldErrors: Record<string, string[]> | null;
   activeTab: 'behavior' | 'prompt' | 'escalation';
@@ -71,7 +73,7 @@ export const AiAgentStore = signalStore(
               }),
             ),
             catchError((err) => {
-              patchState(store, { loading: false, error: (err as ApiError).message });
+              patchState(store, { loading: false, error: toApiError(err) });
               return EMPTY;
             }),
           ),
@@ -82,19 +84,14 @@ export const AiAgentStore = signalStore(
       patchState(store, { saving: true, error: null, conflict: false, fieldErrors: null });
       api.saveAgent(data).subscribe({
         next: (res) => patchState(store, { config: res.data, saving: false }),
-        error: (err: ApiError) => {
-          if (err.status === 409) {
-            patchState(store, { saving: false, conflict: true, error: err.message });
-          } else if (err.status === 422 && err.details) {
-            const fieldErrors: Record<string, string[]> = {};
-            for (const d of err.details) {
-              if (d.field) {
-                (fieldErrors[d.field] ??= []).push(d.message);
-              }
-            }
-            patchState(store, { saving: false, fieldErrors });
+        error: (err: unknown) => {
+          const error = toApiError(err);
+          if (error.status === 409) {
+            patchState(store, { saving: false, conflict: true });
+          } else if (error.status === 422 && error.details) {
+            patchState(store, { saving: false, fieldErrors: agentFieldErrors(error.details) });
           } else {
-            patchState(store, { saving: false, error: err.message });
+            patchState(store, { saving: false, error });
           }
         },
       });

@@ -1,46 +1,50 @@
 <section class="section">
-  <h3 class="heading">Business Rules</h3>
-  <p class="subtitle">Guidelines the AI follows when responding</p>
+  <h3 class="heading">{{ 'ai-agent.rules.business.title' | transloco }}</h3>
+  <p class="subtitle">{{ 'ai-agent.rules.business.subtitle' | transloco }}</p>
 
   <div class="rule-list">
     @for (rule of businessRules(); track $index; let i = $index) {
       <div class="rule-row">
         <input [ngModel]="rule" (ngModelChange)="updateBusinessRule(i, $event)" />
         <app-button variant="danger" size="sm" (pressed)="removeBusinessRule(i)">
-          Remove
+          {{ 'ai-agent.rules.remove' | transloco }}
         </app-button>
       </div>
     }
   </div>
 
-  <app-button variant="ghost" size="sm" (pressed)="addBusinessRule()"> + Add rule </app-button>
+  <app-button variant="ghost" size="sm" (pressed)="addBusinessRule()">
+    {{ 'ai-agent.rules.business.add' | transloco }}
+  </app-button>
 </section>
 
 <section class="section">
-  <h3 class="heading">Escalation Rules</h3>
-  <p class="subtitle">When and how to transfer to a human agent</p>
+  <h3 class="heading">{{ 'ai-agent.rules.escalation.title' | transloco }}</h3>
+  <p class="subtitle">{{ 'ai-agent.rules.escalation.subtitle' | transloco }}</p>
 
   <div class="rule-list">
     @for (rule of escalationRules(); track $index; let i = $index) {
       <fieldset class="escalation-rule">
         <legend>
-          Escalation {{ i + 1 }}
+          {{ 'ai-agent.rules.escalation.item' | transloco: { n: i + 1 } }}
           <app-button variant="danger" size="sm" (pressed)="removeEscalationRule(i)">
-            Remove
+            {{ 'ai-agent.rules.remove' | transloco }}
           </app-button>
         </legend>
 
         @for (ref of rule.brokenSkillRefs ?? []; track ref) {
-          <app-inline-alert tone="error"> Unknown skill reference: {{ ref }} </app-inline-alert>
+          <app-inline-alert tone="error">{{
+            'ai-agent.rules.escalation.unknownSkill' | transloco: { ref }
+          }}</app-inline-alert>
         }
 
         <label class="field">
-          Name
+          {{ 'ai-agent.rules.escalation.name' | transloco }}
           <input [ngModel]="rule.name" (ngModelChange)="updateEscalationName(i, $event)" />
         </label>
 
         <fieldset class="radio-group">
-          <legend>Trigger</legend>
+          <legend>{{ 'ai-agent.rules.escalation.trigger' | transloco }}</legend>
           <label class="radio">
             <input
               type="radio"
@@ -49,7 +53,7 @@
               [checked]="rule.trigger === 'human_request'"
               (change)="updateEscalationTrigger(i, 'human_request')"
             />
-            Human request
+            {{ 'ai-agent.rules.escalation.humanRequest' | transloco }}
           </label>
           <label class="radio">
             <input
@@ -59,12 +63,12 @@
               [checked]="rule.trigger === 'topic_keywords'"
               (change)="updateEscalationTrigger(i, 'topic_keywords')"
             />
-            Topic keywords
+            {{ 'ai-agent.rules.escalation.topicKeywords' | transloco }}
           </label>
         </fieldset>
 
         <label class="field">
-          Keywords (comma separated)
+          {{ 'ai-agent.rules.escalation.keywords' | transloco }}
           <input
             [ngModel]="rule.keywords.join(', ')"
             (ngModelChange)="updateEscalationKeywords(i, $event)"
@@ -72,7 +76,7 @@
         </label>
 
         <label class="field">
-          Required Skill IDs (comma separated)
+          {{ 'ai-agent.rules.escalation.skillIds' | transloco }}
           <input
             [ngModel]="rule.requiredSkillIds.join(', ')"
             (ngModelChange)="updateEscalationSkills(i, $event)"
@@ -83,6 +87,6 @@
   </div>
 
   <app-button variant="ghost" size="sm" (pressed)="addEscalationRule()">
-    + Add escalation rule
+    {{ 'ai-agent.rules.escalation.add' | transloco }}
   </app-button>
 </section>

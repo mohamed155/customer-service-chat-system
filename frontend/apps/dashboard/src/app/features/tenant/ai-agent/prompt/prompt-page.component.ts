@@ -22,6 +22,9 @@ import { VersionHistoryDrawerComponent } from './version-history-drawer.componen
 import { VariablesPanelComponent } from './variables-panel.component';
 import { PreviewPanelComponent } from './preview-panel.component';
 import { validatePrompt } from './prompt-lang';
+import { ApiError } from '../../../../core/api/api.models';
+import { errorMessageKey } from '../../../../core/errors/error-message';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-prompt-page',
@@ -39,8 +42,9 @@ import { validatePrompt } from './prompt-lang';
     RouterLink,
     VariablesPanelComponent,
     VersionHistoryDrawerComponent,
+    TranslocoPipe,
   ],
-  providers: [PromptStore],
+  providers: [provideTranslocoScope('ai-agent'), PromptStore],
   templateUrl: './prompt-page.component.html',
   styles: [
     `
@@ -194,6 +198,10 @@ export class PromptPageComponent {
     return all;
   });
   private readonly textareaRef = viewChild<ElementRef<HTMLTextAreaElement>>('promptTextarea');
+
+  protected errorKey(error: ApiError): string {
+    return errorMessageKey(error);
+  }
 
   protected fieldError(field: string): string[] | null {
     return this.store.fieldErrors()?.[field] ?? null;

@@ -1,18 +1,24 @@
 <app-page-container>
-  <app-page-header title="AI Agent" [description]="'Configure how your assistant behaves'" />
+  <app-page-header
+    [title]="'ai-agent.page.title' | transloco"
+    [description]="'ai-agent.page.description' | transloco"
+  />
 
   @if (store.loading() && !store.config()) {
     <app-loading-state />
-  } @else if (store.error() && !store.config()) {
+  } @else if (!store.config() && store.error(); as error) {
     <app-empty-state
       icon="@tui.alert-circle"
-      title="Something went wrong"
-      description="We couldn't load this page. Please try again."
+      [title]="'ai-agent.page.errorTitle' | transloco"
+      [description]="errorKey(error) | transloco"
     >
-      <button type="button" (click)="store.load()">Try again</button>
+      <button type="button" (click)="store.load()">{{ 'ai-agent.page.retry' | transloco }}</button>
+      @if (error.requestId; as id) {
+        <app-error-reference [requestId]="id" />
+      }
     </app-empty-state>
   } @else {
-    <div class="tabs" role="tablist" aria-label="AI Agent sections">
+    <div class="tabs" role="tablist" [attr.aria-label]="'ai-agent.page.tabsLabel' | transloco">
       @for (tab of tabs; track tab.id) {
         <button
           type="button"
@@ -21,7 +27,7 @@
           [class.active]="store.activeTab() === tab.id"
           (click)="store.setTab(tab.id)"
         >
-          {{ tab.label }}
+          {{ tab.key | transloco }}
         </button>
       }
     </div>
@@ -29,21 +35,22 @@
     @if (store.hasConflict()) {
       <div class="conflict-banner">
         <app-inline-alert tone="error">
-          Updated since loaded. Please
+          {{ 'ai-agent.conflict.message' | transloco }}
           <button type="button" class="link-btn" (click)="store.load(); store.dismissConflict()">
-            reload
+            {{ 'common.reload' | transloco }}
           </button>
-          before saving.
         </app-inline-alert>
       </div>
     }
 
     @if (!store.isConfigured()) {
-      <app-inline-alert tone="info">Not yet configured — showing defaults</app-inline-alert>
+      <app-inline-alert tone="info">{{
+        'ai-agent.notice.notConfigured' | transloco
+      }}</app-inline-alert>
     }
 
     @if ((store.config()?.agent?.enabledChannels?.length ?? 0) === 0) {
-      <app-inline-alert tone="info">Agent inactive — no channels enabled</app-inline-alert>
+      <app-inline-alert tone="info">{{ 'ai-agent.notice.inactive' | transloco }}</app-inline-alert>
     }
 
     @switch (store.activeTab()) {
@@ -52,20 +59,20 @@
           <app-dashboard-card>
             <app-section-header
               card-header
-              title="Agent profile"
-              subtitle="Identity, tone, and avatar"
+              [title]="'ai-agent.profile.title' | transloco"
+              [subtitle]="'ai-agent.profile.subtitle' | transloco"
             />
             <label class="field-label">
-              Name
+              {{ 'ai-agent.profile.name' | transloco }}
               <input
                 [ngModel]="agentName()"
                 (ngModelChange)="agentName.set($event)"
-                placeholder="Agent name"
+                [placeholder]="'ai-agent.profile.namePlaceholder' | transloco"
               />
             </label>
             @if (fieldError('name'); as errors) {
               @for (err of errors; track err) {
-                <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+                <app-inline-alert tone="error">{{ err | transloco }}</app-inline-alert>
               }
             }
             <app-avatar-picker
@@ -77,8 +84,8 @@
           <app-dashboard-card>
             <app-section-header
               card-header
-              title="Provider & Model"
-              subtitle="Select the AI provider and model"
+              [title]="'ai-agent.provider.title' | transloco"
+              [subtitle]="'ai-agent.provider.subtitle' | transloco"
             />
             <app-provider-model-selector
               [providers]="agentProviders()"
@@ -87,7 +94,7 @@
             />
             @if (fieldError('providerSelection'); as errors) {
               @for (err of errors; track err) {
-                <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+                <app-inline-alert tone="error">{{ err | transloco }}</app-inline-alert>
               }
             }
           </app-dashboard-card>
@@ -97,18 +104,18 @@
           <app-dashboard-card>
             <app-section-header
               card-header
-              title="Channels"
-              subtitle="Enable channels for this agent"
+              [title]="'ai-agent.channels.title' | transloco"
+              [subtitle]="'ai-agent.channels.subtitle' | transloco"
             />
             <div class="channel-list">
-              @for (ch of store.options()?.channels ?? []; track ch) {
+              @for (ch of channels(); track ch.id) {
                 <label class="channel-toggle">
                   <input
                     type="checkbox"
-                    [checked]="agentEnabledChannels().includes(ch)"
-                    (change)="toggleChannel(ch)"
+                    [checked]="agentEnabledChannels().includes(ch.id)"
+                    (change)="toggleChannel(ch.id)"
                   />
-                  {{ ch }}
+                  {{ ch.key ? (ch.key | transloco) : ch.id }}
                 </label>
               }
             </div>
@@ -119,34 +126,38 @@
         <app-dashboard-card>
           <app-section-header
             card-header
-            title="System prompt"
-            subtitle="The base instruction given to the AI for every conversation"
+            [title]="'ai-agent.promptTab.title' | transloco"
+            [subtitle]="'ai-agent.promptTab.subtitle' | transloco"
           />
           @if (store.config()?.agent?.activePrompt; as active) {
             <div class="prompt-summary">
               <div class="prompt-meta">
-                <span class="meta-label">Version</span>
-                <span class="meta-value">v{{ active.version }}</span>
+                <span class="meta-label">{{ 'ai-agent.promptTab.version' | transloco }}</span>
+                <span class="meta-value">{{
+                  'ai-agent.promptTab.versionShort' | transloco: { n: active.version }
+                }}</span>
               </div>
               @if (active.updatedAt) {
                 <div class="prompt-meta">
-                  <span class="meta-label">Updated</span>
-                  <span class="meta-value">{{ active.updatedAt }}</span>
+                  <span class="meta-label">{{ 'ai-agent.promptTab.updated' | transloco }}</span>
+                  <span class="meta-value">{{ active.updatedAt | localeDate: 'dateTime' }}</span>
                 </div>
               }
               @if (active.updatedBy) {
                 <div class="prompt-meta">
-                  <span class="meta-label">By</span>
+                  <span class="meta-label">{{ 'ai-agent.promptTab.by' | transloco }}</span>
                   <span class="meta-value">{{ active.updatedBy }}</span>
                 </div>
               }
               <div class="prompt-excerpt">{{ active.excerpt }}</div>
             </div>
           } @else {
-            <p class="prompt-unset">No prompt set — using system default.</p>
+            <p class="prompt-unset">{{ 'ai-agent.promptTab.unset' | transloco }}</p>
           }
           <div class="prompt-actions">
-            <a class="manage-link" [routerLink]="APP_PATHS.tenant.aiAgentPrompt"> Manage prompt </a>
+            <a class="manage-link" [routerLink]="APP_PATHS.tenant.aiAgentPrompt">
+              {{ 'ai-agent.promptTab.manage' | transloco }}
+            </a>
           </div>
         </app-dashboard-card>
       }
@@ -154,8 +165,8 @@
         <app-dashboard-card>
           <app-section-header
             card-header
-            title="Escalation rules"
-            subtitle="Define when and how conversations escalate to humans"
+            [title]="'ai-agent.escalationTab.title' | transloco"
+            [subtitle]="'ai-agent.escalationTab.subtitle' | transloco"
           />
           <app-rules-editor
             [(businessRules)]="agentBusinessRules"
@@ -164,12 +175,12 @@
           />
           @if (fieldError('businessRules'); as errors) {
             @for (err of errors; track err) {
-              <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+              <app-inline-alert tone="error">{{ err | transloco }}</app-inline-alert>
             }
           }
           @if (fieldError('escalationRules'); as errors) {
             @for (err of errors; track err) {
-              <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+              <app-inline-alert tone="error">{{ err | transloco }}</app-inline-alert>
             }
           }
         </app-dashboard-card>
@@ -178,15 +189,17 @@
 
     <div class="actions-bar">
       @if (store.saving()) {
-        <span class="saving-indicator">Saving…</span>
+        <span class="saving-indicator">{{ 'ai-agent.page.saving' | transloco }}</span>
       }
       <button type="button" class="save-btn" [disabled]="store.saving()" (click)="save()">
-        Save
+        {{ 'ai-agent.page.save' | transloco }}
       </button>
     </div>
 
-    @if (store.error() && store.config()) {
-      <app-inline-alert tone="error">{{ store.error() }}</app-inline-alert>
+    @if (store.config() && store.error(); as error) {
+      <app-inline-alert tone="error" [requestId]="error.requestId">{{
+        errorKey(error) | transloco
+      }}</app-inline-alert>
     }
   }
 </app-page-container>

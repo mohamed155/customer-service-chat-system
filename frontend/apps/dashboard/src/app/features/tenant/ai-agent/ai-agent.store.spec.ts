@@ -172,7 +172,8 @@ describe('AiAgentStore', () => {
 
     expect(store.saving()).toBe(false);
     expect(store.conflict()).toBe(true);
-    expect(store.error()).toBe('Version conflict');
+    // The conflict has its own banner; there is no second message for it.
+    expect(store.error()).toBeNull();
   });
 
   it('handles 422 validation errors on save', () => {
@@ -208,10 +209,75 @@ describe('AiAgentStore', () => {
     saveSubject.error(error);
 
     expect(store.saving()).toBe(false);
+    // Each field's error is the text for its code, not the backend's message.
     expect(store.fieldErrors()).toEqual({
-      name: ['Name is required'],
-      tone: ['Invalid tone'],
+      name: ['errors.fieldRequired'],
+      tone: ['errors.fieldInvalid'],
     });
+  });
+
+  it('shows a nested field error with its form field, once, by its code', () => {
+    mockApi.getAgent.mockReturnValue(new Subject());
+    mockApi.getOptions.mockReturnValue(new Subject());
+    const store = configureStore();
+    TestBed.flushEffects();
+    const saveSubject = new Subject<{ data: AgentConfigResponse }>();
+    mockApi.saveAgent.mockReturnValue(saveSubject);
+
+    store.save({
+      name: 'Helix',
+      avatar: { kind: 'preset', preset: 'spark' },
+      tone: 'professional',
+      businessRules: [],
+      escalationRules: [],
+      enabledChannels: [],
+    });
+    saveSubject.error({
+      code: 'validation_failed',
+      message: 'raw backend text',
+      status: 422,
+      details: [
+        { field: 'businessRules[0]', code: 'invalid_length', message: 'raw one' },
+        { field: 'businessRules[3]', code: 'invalid_length', message: 'raw two' },
+        { field: 'providerSelection.model', code: 'invalid_value', message: 'raw three' },
+        { field: 'escalationRules[1].keywords', code: 'too_many', message: 'raw four' },
+        { field: 'name', code: 'something_new', message: 'raw five' },
+      ],
+    });
+
+    expect(store.fieldErrors()).toEqual({
+      businessRules: ['ai-agent.fieldErrors.length'],
+      providerSelection: ['errors.fieldInvalid'],
+      escalationRules: ['ai-agent.fieldErrors.tooMany'],
+      name: ['errors.fieldInvalid'],
+    });
+  });
+
+  it('keeps the ApiError of a failed save, with its request reference', () => {
+    mockApi.getAgent.mockReturnValue(new Subject());
+    mockApi.getOptions.mockReturnValue(new Subject());
+    const store = configureStore();
+    TestBed.flushEffects();
+    const saveSubject = new Subject<{ data: AgentConfigResponse }>();
+    mockApi.saveAgent.mockReturnValue(saveSubject);
+
+    store.save({
+      name: 'Helix',
+      avatar: { kind: 'preset', preset: 'spark' },
+      tone: 'professional',
+      businessRules: [],
+      escalationRules: [],
+      enabledChannels: [],
+    });
+    const error: ApiError = {
+      code: 'internal_error',
+      message: 'Failed to save',
+      status: 500,
+      requestId: 'req_1',
+    };
+    saveSubject.error(error);
+
+    expect(store.error()).toEqual(error);
   });
 
   it('switches active tab via setTab()', () => {

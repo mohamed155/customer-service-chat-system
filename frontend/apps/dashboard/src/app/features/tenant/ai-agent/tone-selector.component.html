@@ -1,4 +1,8 @@
 <div class="tone-selector">
-  <span class="label">Response Tone</span>
-  <app-choice-group [options]="options()" [(value)]="value" ariaLabel="Response tone" />
+  <span class="label">{{ 'ai-agent.tone.label' | transloco }}</span>
+  <app-choice-group
+    [options]="options()"
+    [(value)]="value"
+    [ariaLabel]="'ai-agent.tone.ariaLabel' | transloco"
+  />
 </div>
