@@ -109,8 +109,10 @@ export class SignupComponent {
     }
 
     if (error.apiError.status === 422) {
+      // The fields say what to fix; the banner under them carries the reference of the call.
       this.applyFieldErrors(error.apiError);
-      this.errorKey.set(null);
+      this.errorKey.set(error.messageKey);
+      this.errorRequestId.set(error.apiError.requestId ?? null);
       return;
     }
 
