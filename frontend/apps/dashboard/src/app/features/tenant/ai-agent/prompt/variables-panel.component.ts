@@ -1,7 +1,10 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { PromptVariable } from '../../../../core/api/ai-agent.models';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
+  providers: [provideTranslocoScope('ai-agent')],
+  imports: [TranslocoPipe],
   selector: 'app-variables-panel',
   standalone: true,
   templateUrl: './variables-panel.component.html',

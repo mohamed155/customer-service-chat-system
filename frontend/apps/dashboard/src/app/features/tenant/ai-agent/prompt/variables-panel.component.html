@@ -1,6 +1,6 @@
 <div class="variables-panel">
-  <h3 class="panel-title">Available Variables</h3>
-  <p class="panel-hint">Click a variable to insert it at the cursor position.</p>
+  <h3 class="panel-title">{{ 'ai-agent.variables.title' | transloco }}</h3>
+  <p class="panel-hint">{{ 'ai-agent.variables.hint' | transloco }}</p>
   <div class="variable-list">
     @for (v of variables(); track v.name) {
       <button

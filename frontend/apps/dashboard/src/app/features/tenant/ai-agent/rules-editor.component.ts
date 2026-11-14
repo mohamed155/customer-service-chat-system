@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
 import { FormsModule } from '@angular/forms';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 export interface EscalationRuleEdit {
   id?: string;
@@ -15,7 +16,8 @@ export interface EscalationRuleEdit {
 @Component({
   selector: 'app-rules-editor',
   standalone: true,
-  imports: [FormsModule, ButtonComponent, InlineAlertComponent],
+  providers: [provideTranslocoScope('ai-agent')],
+  imports: [FormsModule, ButtonComponent, InlineAlertComponent, TranslocoPipe],
   templateUrl: './rules-editor.component.html',
   styles: [
     `

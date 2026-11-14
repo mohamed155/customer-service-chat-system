@@ -1,27 +1,32 @@
 <app-page-container>
   <app-page-header
-    title="System Prompt"
-    [description]="'Manage the base instruction given to the AI for every conversation'"
+    [title]="'ai-agent.prompt.title' | transloco"
+    [description]="'ai-agent.prompt.description' | transloco"
   >
-    <a class="back-link" [routerLink]="APP_PATHS.tenant.aiAgent"> &larr; Back to AI Agent </a>
+    <a class="back-link" [routerLink]="APP_PATHS.tenant.aiAgent">
+      {{ 'ai-agent.prompt.back' | transloco }}
+    </a>
   </app-page-header>
 
   @if (store.loading() && !store.bootstrap()) {
     <app-loading-state />
-  } @else if (store.error() && !store.bootstrap()) {
+  } @else if (!store.bootstrap() && store.error(); as error) {
     <div class="error-state">
-      <app-inline-alert tone="error">{{ store.error() }}</app-inline-alert>
-      <button type="button" class="retry-btn" (click)="store.load()">Retry</button>
+      <app-inline-alert tone="error" [requestId]="error.requestId">{{
+        errorKey(error) | transloco
+      }}</app-inline-alert>
+      <button type="button" class="retry-btn" (click)="store.load()">
+        {{ 'ai-agent.prompt.retry' | transloco }}
+      </button>
     </div>
   } @else {
     @if (store.conflict()) {
       <div class="conflict-banner">
         <app-inline-alert tone="error">
-          Updated since loaded. Please
+          {{ 'ai-agent.conflict.message' | transloco }}
           <button type="button" class="link-btn" (click)="store.load(); store.dismissConflict()">
-            reload
+            {{ 'common.reload' | transloco }}
           </button>
-          before saving.
         </app-inline-alert>
       </div>
     }
@@ -29,16 +34,16 @@
     @if (store.noOpNotice()) {
       <div class="notice-banner">
         <app-inline-alert tone="info">
-          No changes detected — content is identical to the active version.
+          {{ 'ai-agent.prompt.noChange' | transloco }}
           <button type="button" class="link-btn" (click)="store.dismissNoOpNotice()">
-            Dismiss
+            {{ 'common.dismiss' | transloco }}
           </button>
         </app-inline-alert>
       </div>
     }
 
     <app-dashboard-card>
-      <app-form-field label="Prompt content">
+      <app-form-field [label]="'ai-agent.prompt.content' | transloco">
         <textarea
           #promptTextarea
           class="prompt-textarea"
@@ -49,13 +54,17 @@
           rows="12"
         ></textarea>
         <div class="counter">
-          {{ store.editorContent().length }} /
-          {{ maxContentLength() }}
+          {{
+            'ai-agent.prompt.counter'
+              | transloco: { length: store.editorContent().length, max: maxContentLength() }
+          }}
         </div>
         @if (visibleIssues(); as issues) {
           <div class="validation-issues">
             @for (issue of issues; track $index) {
-              <app-inline-alert tone="error">{{ issue.message }}</app-inline-alert>
+              <app-inline-alert tone="error">{{
+                issue.key | transloco: issue.params
+              }}</app-inline-alert>
             }
           </div>
         }
@@ -77,13 +86,13 @@
     </app-dashboard-card>
 
     <app-dashboard-card>
-      <app-form-field label="Change note">
+      <app-form-field [label]="'ai-agent.prompt.changeNote' | transloco">
         <input
           class="change-note-input"
           [ngModel]="store.changeNote()"
           (ngModelChange)="store.setChangeNote($event)"
           [maxLength]="maxChangeNoteLength()"
-          placeholder="Brief description of the change (optional)"
+          [placeholder]="'ai-agent.prompt.changeNotePlaceholder' | transloco"
         />
       </app-form-field>
     </app-dashboard-card>
@@ -94,7 +103,7 @@
         size="sm"
         (pressed)="versionHistoryOpen.set(true); store.loadHistory()"
       >
-        Version History
+        {{ 'ai-agent.prompt.history' | transloco }}
       </app-button>
     </div>
 
@@ -107,13 +116,13 @@
 
     @if (fieldError('content'); as errors) {
       @for (err of errors; track err) {
-        <app-inline-alert tone="error">{{ err }}</app-inline-alert>
+        <app-inline-alert tone="error">{{ err | transloco }}</app-inline-alert>
       }
     }
 
     <div class="actions-bar">
       @if (store.saving()) {
-        <span class="saving-indicator">Saving…</span>
+        <span class="saving-indicator">{{ 'ai-agent.prompt.saving' | transloco }}</span>
       }
       <button
         type="button"
@@ -121,12 +130,14 @@
         [disabled]="!store.dirty() || clientIssues().length > 0 || store.saving()"
         (click)="store.save()"
       >
-        Save
+        {{ 'ai-agent.prompt.save' | transloco }}
       </button>
     </div>
 
-    @if (store.error() && store.bootstrap()) {
-      <app-inline-alert tone="error">{{ store.error() }}</app-inline-alert>
+    @if (store.bootstrap() && store.error(); as error) {
+      <app-inline-alert tone="error" [requestId]="error.requestId">{{
+        errorKey(error) | transloco
+      }}</app-inline-alert>
     }
   }
 </app-page-container>

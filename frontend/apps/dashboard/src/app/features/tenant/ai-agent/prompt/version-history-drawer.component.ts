@@ -7,18 +7,25 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { LocaleDatePipe } from '../../../../core/i18n/format';
 import { ButtonComponent } from '../../../../shared/components/button/button.component';
 import { DialogShellComponent } from '../../../../shared/components/dialog-shell/dialog-shell.component';
 import { InlineAlertComponent } from '../../../../shared/components/inline-alert/inline-alert.component';
 import { PromptStore } from './prompt.store';
 import { diffLines } from './prompt-lang';
+import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 
 @Component({
   selector: 'app-version-history-drawer',
   standalone: true,
-  imports: [ButtonComponent, DialogShellComponent, InlineAlertComponent],
-  providers: [DatePipe],
+  imports: [
+    ButtonComponent,
+    DialogShellComponent,
+    InlineAlertComponent,
+    LocaleDatePipe,
+    TranslocoPipe,
+  ],
+  providers: [provideTranslocoScope('ai-agent')],
   templateUrl: './version-history-drawer.component.html',
   styles: [
     `
@@ -237,7 +244,6 @@ import { diffLines } from './prompt-lang';
 })
 export class VersionHistoryDrawerComponent {
   protected readonly store = inject(PromptStore);
-  protected readonly datePipe = inject(DatePipe);
 
   readonly open = input(false);
   readonly closed = output<void>();

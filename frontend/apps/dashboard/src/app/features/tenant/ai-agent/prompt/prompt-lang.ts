@@ -1,3 +1,5 @@
+import { marker } from '../../../../core/i18n/marker';
+
 export interface PlaceholderSpan {
   start: number;
   end: number;
@@ -8,7 +10,9 @@ export interface PlaceholderSpan {
 export interface ValidationIssue {
   field: string;
   code: 'required' | 'too_long' | 'malformed_placeholder' | 'unknown_variable';
-  message: string;
+  /** Catalog key of what is wrong, and the values its text needs. */
+  key: string;
+  params?: Record<string, unknown>;
 }
 
 export interface PreviewResult {
@@ -89,14 +93,19 @@ export function validatePrompt(content: string, catalogNames: string[]): Validat
 
   const trimmed = content.trim();
   if ([...trimmed].length === 0) {
-    issues.push({ field: 'content', code: 'required', message: 'prompt content is required' });
+    issues.push({
+      field: 'content',
+      code: 'required',
+      key: marker('ai-agent.prompt.issue.required'),
+    });
   }
 
   if ([...content].length > MAX_CONTENT_LENGTH) {
     issues.push({
       field: 'content',
       code: 'too_long',
-      message: `prompt content must not exceed ${MAX_CONTENT_LENGTH} characters`,
+      key: marker('ai-agent.prompt.issue.tooLong'),
+      params: { max: MAX_CONTENT_LENGTH },
     });
   }
 
@@ -119,7 +128,8 @@ export function validatePrompt(content: string, catalogNames: string[]): Validat
         issues.push({
           field: 'content',
           code: 'malformed_placeholder',
-          message: `stray closing braces at offset ${i}`,
+          key: marker('ai-agent.prompt.issue.strayClose'),
+          params: { offset: i },
         });
         i += 2;
         continue;
@@ -130,19 +140,22 @@ export function validatePrompt(content: string, catalogNames: string[]): Validat
           issues.push({
             field: 'content',
             code: 'malformed_placeholder',
-            message: `empty placeholder at offset ${placeholderStart}`,
+            key: marker('ai-agent.prompt.issue.emptyPlaceholder'),
+            params: { offset: placeholderStart },
           });
         } else if (!isValidVariableName(name)) {
           issues.push({
             field: 'content',
             code: 'malformed_placeholder',
-            message: `invalid placeholder '${name}' at offset ${placeholderStart}`,
+            key: marker('ai-agent.prompt.issue.invalidPlaceholder'),
+            params: { name, offset: placeholderStart },
           });
         } else if (!catalogNames.includes(name)) {
           issues.push({
             field: 'content',
             code: 'unknown_variable',
-            message: `unknown variable '${name}' at offset ${placeholderStart}`,
+            key: marker('ai-agent.prompt.issue.unknownVariable'),
+            params: { name, offset: placeholderStart },
           });
         }
         inPlaceholder = false;
@@ -153,7 +166,8 @@ export function validatePrompt(content: string, catalogNames: string[]): Validat
         issues.push({
           field: 'content',
           code: 'malformed_placeholder',
-          message: `unclosed placeholder at offset ${placeholderStart}`,
+          key: marker('ai-agent.prompt.issue.unclosed'),
+          params: { offset: placeholderStart },
         });
         inPlaceholder = true;
         placeholderStart = i;
@@ -170,7 +184,8 @@ export function validatePrompt(content: string, catalogNames: string[]): Validat
     issues.push({
       field: 'content',
       code: 'malformed_placeholder',
-      message: `unclosed placeholder at offset ${placeholderStart}`,
+      key: marker('ai-agent.prompt.issue.unclosed'),
+      params: { offset: placeholderStart },
     });
   }
 

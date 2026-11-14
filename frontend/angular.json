@@ -80,8 +80,8 @@
                 {
                   "type": "bundle",
                   "name": "ai-agent-component",
-                  "maximumWarning": "31kb",
-                  "maximumError": "33kb"
+                  "maximumWarning": "35kb",
+                  "maximumError": "37kb"
                 },
                 {
                   "type": "bundle",

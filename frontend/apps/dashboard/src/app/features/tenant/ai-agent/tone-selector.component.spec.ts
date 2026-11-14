@@ -23,6 +23,13 @@ describe('ToneSelectorComponent', () => {
     expect(buttons[2].textContent?.trim()).toBe('Playful');
   });
 
+  it('shows the catalog name of a tone the API offers', () => {
+    const fixture = createComponent(['professional', 'empathetic']);
+    const buttons = fixture.nativeElement.querySelectorAll('button');
+    expect(buttons[0].textContent?.trim()).toBe('Professional');
+    expect(buttons[1].textContent?.trim()).toBe('Empathetic');
+  });
+
   it('selects a tone on click', () => {
     const fixture = createComponent(['calm', 'warm']);
     const buttons = fixture.nativeElement.querySelectorAll('button');

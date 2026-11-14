@@ -1,0 +1,158 @@
+{
+  "page": {
+    "title": "AI Agent",
+    "description": "Configure how your assistant behaves",
+    "errorTitle": "Something went wrong",
+    "retry": "Try again",
+    "tabsLabel": "AI Agent sections",
+    "save": "Save",
+    "saving": "Saving…"
+  },
+  "tabs": {
+    "behavior": "Behavior",
+    "prompt": "Prompt",
+    "escalation": "Escalation"
+  },
+  "conflict": {
+    "message": "This was updated since you loaded it. Reload to see the latest version before saving."
+  },
+  "notice": {
+    "notConfigured": "Not yet configured — showing defaults",
+    "inactive": "Agent inactive — no channels enabled"
+  },
+  "profile": {
+    "title": "Agent profile",
+    "subtitle": "Identity, tone, and avatar",
+    "name": "Name",
+    "namePlaceholder": "Agent name"
+  },
+  "provider": {
+    "title": "Provider & Model",
+    "subtitle": "Select the AI provider and model",
+    "label": "AI Provider",
+    "model": "Model",
+    "platformDefault": "Follow platform default",
+    "stale": "This provider selection may be stale — the credential status may have changed."
+  },
+  "channels": {
+    "title": "Channels",
+    "subtitle": "Enable channels for this agent"
+  },
+  "avatar": {
+    "label": "Avatar",
+    "upload": "Upload Image",
+    "tooLarge": "Image must be smaller than {max} KB",
+    "presets": {
+      "spark": "Spark",
+      "orbit": "Orbit",
+      "beacon": "Beacon",
+      "nova": "Nova",
+      "pulse": "Pulse",
+      "atlas": "Atlas"
+    }
+  },
+  "tone": {
+    "label": "Response Tone",
+    "ariaLabel": "Response tone",
+    "professional": "Professional",
+    "friendly": "Friendly",
+    "casual": "Casual",
+    "formal": "Formal",
+    "empathetic": "Empathetic"
+  },
+  "rules": {
+    "business": {
+      "title": "Business Rules",
+      "subtitle": "Guidelines the AI follows when responding",
+      "add": "+ Add rule"
+    },
+    "escalation": {
+      "title": "Escalation Rules",
+      "subtitle": "When and how to transfer to a human agent",
+      "add": "+ Add escalation rule",
+      "item": "Escalation {n}",
+      "unknownSkill": "Unknown skill reference: {ref}",
+      "name": "Name",
+      "trigger": "Trigger",
+      "humanRequest": "Human request",
+      "topicKeywords": "Topic keywords",
+      "keywords": "Keywords (comma separated)",
+      "skillIds": "Required Skill IDs (comma separated)"
+    },
+    "remove": "Remove"
+  },
+  "escalationTab": {
+    "title": "Escalation rules",
+    "subtitle": "Define when and how conversations escalate to humans"
+  },
+  "promptTab": {
+    "title": "System prompt",
+    "subtitle": "The base instruction given to the AI for every conversation",
+    "version": "Version",
+    "versionShort": "v{n}",
+    "updated": "Updated",
+    "by": "By",
+    "unset": "No prompt set — using system default.",
+    "manage": "Manage prompt"
+  },
+  "prompt": {
+    "title": "System Prompt",
+    "description": "Manage the base instruction given to the AI for every conversation",
+    "back": "← Back to AI Agent",
+    "retry": "Retry",
+    "noChange": "No changes detected — content is identical to the active version.",
+    "content": "Prompt content",
+    "counter": "{length, number} / {max, number}",
+    "changeNote": "Change note",
+    "changeNotePlaceholder": "Brief description of the change (optional)",
+    "history": "Version History",
+    "save": "Save",
+    "saving": "Saving…",
+    "issue": {
+      "required": "Prompt content is required.",
+      "tooLong": "Prompt content must not exceed {max, number} characters.",
+      "strayClose": "Stray closing braces at position {offset}.",
+      "emptyPlaceholder": "Empty placeholder at position {offset}.",
+      "invalidPlaceholder": "Invalid placeholder “{name}” at position {offset}.",
+      "unknownVariable": "Unknown variable “{name}” at position {offset}.",
+      "unclosed": "Unclosed placeholder at position {offset}."
+    }
+  },
+  "variables": {
+    "title": "Available Variables",
+    "hint": "Click a variable to insert it at the cursor position."
+  },
+  "preview": {
+    "title": "Preview",
+    "empty": "Preview will appear here as you type.",
+    "malformed": "Malformed placeholder at position {start}",
+    "unknown": "Unknown placeholder at position {start}"
+  },
+  "history": {
+    "title": "Version History",
+    "loading": "Loading…",
+    "back": "← Back to list",
+    "version": "Version {n}",
+    "active": "Active",
+    "restoredFrom": "Restored from v{n}",
+    "changes": "Changes from active",
+    "added": "added",
+    "removed": "removed",
+    "restoring": "Restoring…",
+    "confirm": "Restore version {n} as the active prompt?",
+    "confirmRestore": "Confirm Restore",
+    "currentlyActive": "Currently Active",
+    "restore": "Restore This Version",
+    "empty": "No version history available.",
+    "loadMore": "Load more"
+  },
+  "fieldErrors": {
+    "length": "This value is too short or too long.",
+    "tooLong": "This value is too long.",
+    "tooMany": "There are too many items.",
+    "duplicate": "This contains a duplicate.",
+    "mustBeEmpty": "This must be empty.",
+    "malformedPlaceholder": "The prompt has a placeholder that is not written correctly.",
+    "unknownVariable": "The prompt uses a variable that does not exist."
+  }
+}

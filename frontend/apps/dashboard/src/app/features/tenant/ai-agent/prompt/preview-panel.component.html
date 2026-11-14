@@ -1,8 +1,8 @@
 <div class="preview-panel">
-  <h3 class="panel-title">Preview</h3>
+  <h3 class="panel-title">{{ 'ai-agent.preview.title' | transloco }}</h3>
   <div class="preview-content">
     @if (preview().text.length === 0) {
-      <span class="placeholder-text">Preview will appear here as you type.</span>
+      <span class="placeholder-text">{{ 'ai-agent.preview.empty' | transloco }}</span>
     } @else {
       <span class="preview-text">{{ preview().text }}</span>
     }
@@ -11,8 +11,12 @@
     <div class="error-spans">
       @for (span of preview().errorSpans; track $index) {
         <span class="error-chip">
-          {{ span.reason === 'malformed' ? 'Malformed' : 'Unknown' }} placeholder at position
-          {{ span.start }}
+          {{
+            (span.reason === 'malformed'
+              ? 'ai-agent.preview.malformed'
+              : 'ai-agent.preview.unknown'
+            ) | transloco: { start: span.start }
+          }}
         </span>
       }
     </div>

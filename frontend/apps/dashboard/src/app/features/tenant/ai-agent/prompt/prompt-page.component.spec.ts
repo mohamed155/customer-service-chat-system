@@ -2,7 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { provideTaiga } from '@taiga-ui/core';
-import { Subject, of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { PromptBootstrapResponse } from '../../../../core/api/ai-agent.models';
 import { PromptApiService } from './prompt-api.service';
 import { PromptPageComponent } from './prompt-page.component';
@@ -67,6 +67,38 @@ describe('PromptPageComponent', () => {
     });
   });
 
+  it('words a load failure by its code and shows the request reference', () => {
+    mockApi.getPrompt.mockReturnValue(
+      throwError(() => ({
+        code: 'internal_error',
+        message: 'Failed to load prompt data',
+        status: 500,
+        requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+      })),
+    );
+    const fixture = createFixture();
+    TestBed.flushEffects();
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('The service is temporarily unavailable. Please try again.');
+    expect(text).not.toContain('Failed to load prompt data');
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+      '3c4d5e6f',
+    );
+  });
+
+  it('counts the characters with the number format of the language', async () => {
+    mockApi.getPrompt.mockReturnValue(of({ data: mockBootstrap }));
+    const fixture = createFixture();
+    TestBed.flushEffects();
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      expect(fixture.nativeElement.querySelector('.counter').textContent.trim()).toBe('23 / 8,000');
+    });
+  });
+
   it('renders save button', async () => {
     mockApi.getPrompt.mockReturnValue(of({ data: mockBootstrap }));
     const fixture = createFixture();
@@ -127,7 +159,8 @@ describe('PromptPageComponent', () => {
     fixture.detectChanges();
     const banner = fixture.nativeElement.querySelector('.conflict-banner');
     expect(banner).toBeTruthy();
-    expect(banner.textContent).toContain('reload');
+    expect(banner.textContent).toContain('updated since you loaded it');
+    expect(banner.textContent).toContain('Reload');
   });
 
   it('shows no-op notice when save returns created: false', async () => {
@@ -193,7 +226,7 @@ describe('PromptPageComponent', () => {
     await vi.waitFor(() => {
       const issues = fixture.nativeElement.querySelectorAll('.validation-issues app-inline-alert');
       expect(issues.length).toBeGreaterThan(0);
-      expect((issues[0] as HTMLElement).textContent).toContain('unknown variable');
+      expect((issues[0] as HTMLElement).textContent).toContain('Unknown variable “business_hours”');
     });
   });
 

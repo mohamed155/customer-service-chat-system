@@ -96,6 +96,91 @@ describe('AiAgentComponent', () => {
     expect(emptyState.textContent).toContain('Something went wrong');
   });
 
+  it('words a load failure by its code and shows the request reference, never the backend text', () => {
+    const failure = {
+      code: 'internal_error',
+      message: 'pg: connection refused',
+      status: 500,
+      requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+    };
+    mockApi.getAgent.mockReturnValue(throwError(() => failure));
+    mockApi.getOptions.mockReturnValue(throwError(() => failure));
+
+    const fixture = createFixture();
+    TestBed.flushEffects();
+    fixture.detectChanges();
+
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('The service is temporarily unavailable. Please try again.');
+    expect(text).not.toContain('pg: connection refused');
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+      '3c4d5e6f',
+    );
+  });
+
+  it('names the channels from the catalog and shows one it has no name for as sent', async () => {
+    mockApi.getAgent.mockReturnValue(of({ data: defaultConfig }));
+    mockApi.getOptions.mockReturnValue(
+      of({ data: { ...defaultOptions, channels: ['web_chat', 'carrier_pigeon'] } }),
+    );
+
+    const fixture = createFixture();
+    TestBed.flushEffects();
+    fixture.detectChanges();
+
+    await vi.waitFor(() => {
+      const labels = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('.channel-toggle'),
+      ).map((l) => l.textContent?.trim());
+      expect(labels).toEqual(['Web chat', 'carrier_pigeon']);
+    });
+  });
+
+  it('shows a failed save by its code with the reference, and a field error by its code', async () => {
+    mockApi.getAgent.mockReturnValue(of({ data: defaultConfig }));
+    mockApi.getOptions.mockReturnValue(of({ data: defaultOptions }));
+    const fixture = createFixture();
+    TestBed.flushEffects();
+    fixture.detectChanges();
+    await vi.waitFor(() => expect(fixture.nativeElement.textContent).toContain('Behavior'));
+    const save = () =>
+      (
+        Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(
+          (b) => b.textContent?.trim() === 'Save',
+        ) as HTMLButtonElement
+      ).click();
+
+    mockApi.saveAgent.mockReturnValue(
+      throwError(() => ({
+        code: 'validation_failed',
+        message: 'name must be 1-80 characters',
+        status: 422,
+        details: [{ field: 'name', code: 'required', message: 'name must be 1-80 characters' }],
+      })),
+    );
+    save();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('This field is required.');
+    expect(fixture.nativeElement.textContent).not.toContain('name must be 1-80 characters');
+
+    mockApi.saveAgent.mockReturnValue(
+      throwError(() => ({
+        code: 'internal_error',
+        message: 'Failed to save agent',
+        status: 500,
+        requestId: 'req_0197f2b4-53a1-7cc3-9d2e-1a2b3c4d5e6f',
+      })),
+    );
+    save();
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('The service is temporarily unavailable. Please try again.');
+    expect(text).not.toContain('Failed to save agent');
+    expect(fixture.nativeElement.querySelector('[data-testid="reference"]')?.textContent).toBe(
+      '3c4d5e6f',
+    );
+  });
+
   it('renders the form with config data when loaded', async () => {
     mockApi.getAgent.mockReturnValue(of({ data: defaultConfig }));
     mockApi.getOptions.mockReturnValue(of({ data: defaultOptions }));

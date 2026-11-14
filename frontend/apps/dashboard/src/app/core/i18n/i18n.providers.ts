@@ -29,6 +29,8 @@ export function i18nConfig(overrides: Partial<TranslocoConfig> = {}): TranslocoC
     fallbackLang: DEFAULT_LOCALE,
     reRenderOnLangChange: true,
     missingHandler: { useFallbackTranslation: true },
+    // A scope is written as its name (`ai-agent.page.title`), not in camel case (`aiAgent`).
+    scopes: { autoPrefixKeys: true, keepCasing: true },
     ...overrides,
   });
 }
