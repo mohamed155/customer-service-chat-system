@@ -82,12 +82,15 @@ curl -i -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/j
   -H 'Origin: http://localhost:4200' -H 'X-Requested-With: XMLHttpRequest' \
   -d '{"email":"a@b.c","password":"x"}'   # expect 503
 curl -i -X POST localhost:8080/api/v1/widget/v1/sessions -H 'Content-Type: application/json' \
+  -H 'Origin: https://<allowed-domain>' \
   -d '{"widgetId":"<widget-id>"}'       # expect served (a real id: 201; an unknown id: 404)
 docker compose -f infra/docker-compose.yml start redis
 ```
 
 **Expected**: login fails closed with `503` and `Retry-After: 30`; widget traffic continues under a
 local budget. Both emit a `WARN` and increment `rate_limit_degraded_total`.
+
+The `Origin` must match one of the widget's allowed domains (a widget with none allows any origin).
 
 **Known gap (found walking this guide, MOH-139)**: login does fail closed and carries `Retry-After: 30`,
 but answers `429` (`rate_limited`, "Too many login attempts") instead of `503`. The contract
@@ -238,7 +241,7 @@ docker compose -f infra/docker-compose.yml --profile observability exec promethe
 ```
 
 **Expected**: all five rule groups valid — error rate, latency, `dependency_health`, backup
-staleness, and frontend errors (MOH-168). Then stop a dependency (`docker compose stop redis`) and confirm the
+staleness, and frontend errors (MOH-168). Then stop a dependency (`docker compose -f infra/docker-compose.yml stop redis`) and confirm the
 `dependency_up` alert transitions to firing in the Prometheus UI and reaches the configured
 Alertmanager receiver. An alert rule that fires into an unconfigured receiver does not
 satisfy FR-021's "notify an on-call recipient".
