@@ -67,7 +67,7 @@ PORT=8081 cargo run -p server &
 for i in $(seq 1 30); do
   P=$([ $((i % 2)) -eq 0 ] && echo 8080 || echo 8081)
   curl -s -o /dev/null -w "%{http_code} " -X POST localhost:$P/api/v1/widget/v1/sessions \
-    -H 'Content-Type: application/json' -d '{"widget_id":"<seeded-id>"}'
+    -H 'Content-Type: application/json' -d '{"widgetId":"<widget-id>"}'
 done; echo
 ```
 
@@ -78,22 +78,35 @@ successes means the limiter is still per-process and FR-003 is not met.
 
 ```bash
 docker compose -f infra/docker-compose.yml stop redis
-curl -i -X POST localhost:8080/api/v1/auth/login -d '{"email":"a@b.c","password":"x"}'   # expect 503
-curl -i -X POST localhost:8080/api/v1/widget/v1/sessions -d '{"widget_id":"<id>"}'       # expect served
+curl -i -X POST localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
+  -H 'Origin: http://localhost:4200' -H 'X-Requested-With: XMLHttpRequest' \
+  -d '{"email":"a@b.c","password":"x"}'   # expect 503
+curl -i -X POST localhost:8080/api/v1/widget/v1/sessions -H 'Content-Type: application/json' \
+  -H 'Origin: https://<allowed-domain>' \
+  -d '{"widgetId":"<widget-id>"}'       # expect served (a real id: 201; an unknown id: 404)
 docker compose -f infra/docker-compose.yml start redis
 ```
 
-**Expected**: login fails closed with `503`; widget traffic continues under a local budget.
-Both emit a `WARN` and increment `rate_limit_degraded_total`.
+**Expected**: login fails closed with `503` and `Retry-After: 30`; widget traffic continues under a
+local budget. Both emit a `WARN` and increment `rate_limit_degraded_total`.
+
+The `Origin` must match one of the widget's allowed domains (a widget with none allows any origin).
+
+**Known gap (found walking this guide, MOH-139)**: login does fail closed and carries `Retry-After: 30`,
+but answers `429` (`rate_limited`, "Too many login attempts") instead of `503`. The contract
+(`contracts/rate-limit-responses.md`) says `503`; no test covers this path.
 
 ### Headers (FR-009 – FR-013, SC-003)
 
 ```bash
-curl -sI localhost:8080/api/v1/health | grep -iE 'x-content-type|referrer|strict-transport|x-frame'
-curl -sI localhost:8080/api/v1/widget/v1/config?widget_id=<id> | grep -iE 'x-frame|content-security'
+curl -si localhost:8080/api/v1/me | grep -iE 'x-content-type|referrer|strict-transport|x-frame|content-security'
+curl -si "localhost:8080/api/v1/widget/v1/config?widget_id=<widget-id>" | grep -iE 'x-frame|content-security'
 ```
 
-**Expected**: the API response carries `X-Frame-Options: DENY`. The **widget JSON response
+**Expected**: the API response carries `X-Frame-Options: DENY` and the enforced
+`Content-Security-Policy` (MOH-38, with Trusted Types since MOH-170). `/health` carries only the base
+headers (`X-Content-Type-Options`, `Referrer-Policy`); use an `/api/v1` route for the framing
+headers. With `APP_HSTS_MAX_AGE=0` there is no `Strict-Transport-Security`. The **widget JSON response
 must not carry `X-Frame-Options` at all**, and must carry only the Scope A headers — **no
 `frame-ancestors`**. Framing directives govern documents being embedded, not JSON fetched
 by script inside an already-framed page, so a per-instance allowlist on this response would
@@ -155,8 +168,10 @@ mutable tags.
 ```bash
 ./ops/deploy.sh <git-sha> --dry-run   # inspect the plan first
 ./ops/deploy.sh <git-sha>
-curl -s https://staging.<host>/api/v1/health
-curl -s https://staging.<host>/api/v1/ready | jq .
+# On the staging host (the same check deploy.sh polls). Through Caddy, /health and /ready are not
+# the backend's: only /api/*, /ws and /widget/v1 are proxied to it.
+curl -s localhost:8080/health
+curl -s localhost:8080/ready | jq .
 ```
 
 **Expected**: deploy completes in under 30 minutes (SC-004); `/ready` reports every
@@ -225,8 +240,8 @@ docker compose -f infra/docker-compose.yml --profile observability exec promethe
   promtool check rules /etc/prometheus/prometheus-alerts.yml
 ```
 
-**Expected**: all four rule groups valid — error rate, latency, `dependency_up`, and backup
-staleness. Then stop a dependency (`docker compose stop redis`) and confirm the
+**Expected**: all five rule groups valid — error rate, latency, `dependency_health`, backup
+staleness, and frontend errors (MOH-168). Then stop a dependency (`docker compose -f infra/docker-compose.yml stop redis`) and confirm the
 `dependency_up` alert transitions to firing in the Prometheus UI and reaches the configured
 Alertmanager receiver. An alert rule that fires into an unconfigured receiver does not
 satisfy FR-021's "notify an on-call recipient".
