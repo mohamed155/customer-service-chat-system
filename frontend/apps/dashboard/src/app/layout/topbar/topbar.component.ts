@@ -116,7 +116,7 @@ import { marker } from '../../core/i18n/marker';
         border: 1px solid var(--app-border);
         border-radius: var(--app-radius-lg);
         background: var(--app-panel);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        box-shadow: var(--app-shadow-lg);
         z-index: 100;
         overflow: hidden;
       }

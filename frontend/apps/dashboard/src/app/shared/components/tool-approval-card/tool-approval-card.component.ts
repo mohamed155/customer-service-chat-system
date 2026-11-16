@@ -49,7 +49,7 @@ import { marker } from '../../../core/i18n/marker';
       }
       .status-badge.active {
         background: var(--app-amber-soft);
-        color: #000;
+        color: var(--app-text);
       }
       .status-badge.settled {
         background: var(--app-panel);
@@ -74,7 +74,7 @@ import { marker } from '../../../core/i18n/marker';
         margin: 0;
         padding: var(--app-space-2);
         border: 1px solid var(--app-border);
-        border-radius: var(--app-radius);
+        border-radius: var(--app-radius-md);
         background: var(--app-panel);
         color: var(--app-text-2);
         font-size: var(--app-font-xs);
@@ -101,7 +101,7 @@ import { marker } from '../../../core/i18n/marker';
         height: 34px;
         padding: 0 var(--app-space-4);
         border: none;
-        border-radius: var(--app-radius);
+        border-radius: var(--app-radius-md);
         font-size: var(--app-font-sm);
         font-weight: 600;
         cursor: pointer;
@@ -112,7 +112,7 @@ import { marker } from '../../../core/i18n/marker';
       }
       .btn-approve {
         background: var(--app-green);
-        color: #000;
+        color: var(--app-green-ink);
       }
       .btn-approve:hover:not(:disabled) {
         opacity: 0.85;
@@ -126,7 +126,7 @@ import { marker } from '../../../core/i18n/marker';
       }
       .resolved-state {
         padding: var(--app-space-2) var(--app-space-3);
-        border-radius: var(--app-radius);
+        border-radius: var(--app-radius-md);
         background: var(--app-panel);
       }
       .resolved-text {

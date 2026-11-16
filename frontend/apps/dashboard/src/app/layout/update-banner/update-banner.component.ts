@@ -19,12 +19,12 @@ import { TranslocoPipe } from '@jsverse/transloco';
         gap: var(--app-space-3, 12px);
         max-width: min(32rem, calc(100vw - 2 * var(--app-space-4, 16px)));
         padding: var(--app-space-3, 12px) var(--app-space-4, 16px);
-        border: 1px solid var(--app-border, #d0d5dd);
+        border: 1px solid var(--app-border);
         border-radius: var(--app-radius-md, 8px);
-        background: var(--app-panel, #fff);
-        color: var(--app-text, #101828);
+        background: var(--app-panel);
+        color: var(--app-text);
         font-size: var(--app-font-sm, 14px);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+        box-shadow: var(--app-shadow-lg);
       }
       .update-banner span {
         flex: 1;
@@ -32,13 +32,13 @@ import { TranslocoPipe } from '@jsverse/transloco';
       button {
         border: 0;
         background: transparent;
-        color: var(--app-accent, #175cd3);
+        color: var(--app-accent);
         cursor: pointer;
         font: inherit;
         font-weight: 700;
       }
       button:focus-visible {
-        outline: 3px solid var(--app-accent-soft, #84adff);
+        outline: 3px solid var(--app-accent-soft);
         outline-offset: 2px;
       }
     `,

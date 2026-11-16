@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { WidgetInstance } from '../../../core/api/widget.models';
+import { DEFAULT_WIDGET_COLOR } from './widget-defaults';
 
 @Component({
   selector: 'app-widget-preview',
@@ -25,16 +26,16 @@ import { WidgetInstance } from '../../../core/api/widget.models';
         position: relative;
       }
       .preview-phone {
-        --wgt-surface: #ffffff;
-        --wgt-text: #1a1a2e;
-        --wgt-text-muted: #8e8ea0;
-        --wgt-border: #e2e2ea;
-        --wgt-bubble-visitor: #0066ff;
-        --wgt-bubble-assistant: #f0f0f5;
+        --wgt-surface: var(--app-wgt-light-surface);
+        --wgt-text: var(--app-wgt-light-text);
+        --wgt-text-muted: var(--app-wgt-light-text-muted);
+        --wgt-border: var(--app-wgt-light-border);
+        --wgt-bubble-visitor: var(--app-wgt-bubble-visitor);
+        --wgt-bubble-assistant: var(--app-wgt-light-bubble-assistant);
         --wgt-radius: 12px;
         --wgt-space: 8px;
         --wgt-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        --wgt-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+        --wgt-shadow: var(--app-wgt-shadow);
         width: 340px;
         height: 480px;
         border-radius: 16px;
@@ -48,11 +49,11 @@ import { WidgetInstance } from '../../../core/api/widget.models';
         color: var(--wgt-text);
       }
       .preview-phone[data-wgt-theme='dark'] {
-        --wgt-surface: #1a1a2e;
-        --wgt-text: #e2e2ea;
-        --wgt-text-muted: #8e8ea0;
-        --wgt-border: #2a2a3e;
-        --wgt-bubble-assistant: #2a2a3e;
+        --wgt-surface: var(--app-wgt-dark-surface);
+        --wgt-text: var(--app-wgt-dark-text);
+        --wgt-text-muted: var(--app-wgt-light-text-muted);
+        --wgt-border: var(--app-wgt-dark-border);
+        --wgt-bubble-assistant: var(--app-wgt-dark-bubble-assistant);
       }
       .wgt-launcher {
         position: absolute;
@@ -67,7 +68,7 @@ import { WidgetInstance } from '../../../core/api/widget.models';
         cursor: pointer;
         box-shadow: var(--wgt-shadow);
         z-index: 10;
-        color: white;
+        color: var(--app-wgt-on-primary);
       }
       .wgt-window {
         display: flex;
@@ -79,7 +80,7 @@ import { WidgetInstance } from '../../../core/api/widget.models';
         align-items: center;
         justify-content: space-between;
         padding: 14px 16px;
-        color: white;
+        color: var(--app-wgt-on-primary);
       }
       .wgt-header-name {
         font-weight: 600;
@@ -88,7 +89,7 @@ import { WidgetInstance } from '../../../core/api/widget.models';
       .wgt-close {
         background: none;
         border: none;
-        color: rgba(255, 255, 255, 0.85);
+        color: var(--app-wgt-on-primary-muted);
         font-size: 22px;
         cursor: pointer;
         line-height: 1;
@@ -143,7 +144,7 @@ import { WidgetInstance } from '../../../core/api/widget.models';
         display: grid;
         place-items: center;
         background: var(--wgt-primary);
-        color: white;
+        color: var(--app-wgt-on-primary);
         cursor: pointer;
         flex-shrink: 0;
         opacity: 0.5;
@@ -157,4 +158,9 @@ export class WidgetPreviewComponent {
   protected readonly closeGlyph = '\u00d7';
 
   readonly formState = input<Partial<WidgetInstance>>({});
+
+  /** The widget's brand color: the one the tenant chose, else the default a new widget starts with. */
+  protected readonly brandColor = computed(
+    () => this.formState().primaryColor || DEFAULT_WIDGET_COLOR,
+  );
 }

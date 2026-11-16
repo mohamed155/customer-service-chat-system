@@ -102,16 +102,16 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         font-size: var(--app-font-xs);
         padding: 1px var(--app-space-2);
         border-radius: var(--app-radius-sm);
-        background: var(--app-green-soft, #d4edda);
-        color: var(--app-green, #155724);
+        background: var(--app-green-soft);
+        color: var(--app-green);
         font-weight: 600;
       }
       .restored-badge {
         font-size: var(--app-font-xs);
         padding: 1px var(--app-space-2);
         border-radius: var(--app-radius-sm);
-        background: var(--app-blue-soft, #d1ecf1);
-        color: var(--app-blue, #0c5460);
+        background: var(--app-accent-soft);
+        color: var(--app-accent-strong);
         font-weight: 600;
       }
       .version-row-meta {
@@ -174,7 +174,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
       .detail-content {
         margin: 0;
         padding: var(--app-space-3);
-        background: var(--app-bg, #f8f9fa);
+        background: var(--app-bg);
         border: 1px solid var(--app-border);
         border-radius: var(--app-radius-md);
         font-family: monospace;
@@ -205,10 +205,10 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         white-space: pre-wrap;
       }
       .diff-added {
-        background: #d4edda;
+        background: var(--app-green-soft);
       }
       .diff-removed {
-        background: #f8d7da;
+        background: var(--app-red-soft);
       }
       .diff-prefix {
         flex-shrink: 0;

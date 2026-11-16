@@ -1,13 +1,13 @@
 <div class="preview-container">
   <div
     class="preview-phone"
-    [style.--wgt-primary]="formState().primaryColor || '#0066FF'"
+    [style.--wgt-primary]="brandColor()"
     [attr.data-wgt-theme]="formState().theme || 'light'"
   >
     @if (formState().enabled !== false) {
       <button
         class="wgt-launcher"
-        [style.background]="formState().primaryColor || '#0066FF'"
+        [style.background]="brandColor()"
         [style.bottom-right]="formState().position === 'bottom-left' ? undefined : '20px'"
         [style.bottom-left]="formState().position === 'bottom-left' ? '20px' : undefined"
         [attr.aria-label]="'integrations.widgets.preview.launcher' | transloco"
@@ -17,7 +17,7 @@
           height="24"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="white"
+          stroke="currentColor"
           stroke-width="2"
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -27,7 +27,7 @@
       </button>
     }
     <div class="wgt-window">
-      <div class="wgt-header" [style.background]="formState().primaryColor || '#0066FF'">
+      <div class="wgt-header" [style.background]="brandColor()">
         <span class="wgt-header-name">{{
           formState().displayName ||
             formState().name ||

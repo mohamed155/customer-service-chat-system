@@ -48,8 +48,8 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         display: inline-block;
         padding: var(--app-space-1) var(--app-space-2);
         border-radius: var(--app-radius-sm);
-        background: var(--app-danger-soft, rgba(220, 38, 38, 0.1));
-        color: var(--app-danger, #dc2626);
+        background: var(--app-red-soft);
+        color: var(--app-red);
         font-size: var(--app-font-xs);
       }
     `,

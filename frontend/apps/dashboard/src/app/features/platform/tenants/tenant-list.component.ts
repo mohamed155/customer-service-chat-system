@@ -68,7 +68,7 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
         border: 0;
         border-radius: var(--app-radius-md);
         background: var(--app-accent);
-        color: var(--app-accent-on, white);
+        color: var(--app-accent-ink);
         text-decoration: none;
         font-weight: 600;
         font-size: var(--app-font-sm);
@@ -86,7 +86,7 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
         border: 0;
         border-radius: var(--app-radius-md);
         background: var(--app-accent);
-        color: var(--app-accent-on, white);
+        color: var(--app-accent-ink);
         font: inherit;
         font-weight: 600;
         cursor: pointer;
@@ -146,10 +146,10 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
       .load-more-error {
         margin-bottom: var(--app-space-2);
         padding: var(--app-space-2) var(--app-space-3);
-        background: var(--app-red-bg, #fef3f2);
-        border: 1px solid var(--app-red, #d92d20);
+        background: var(--app-red-soft);
+        border: 1px solid var(--app-red);
         border-radius: var(--app-radius-md);
-        color: var(--app-red, #d92d20);
+        color: var(--app-red);
         font-size: var(--app-font-sm);
         font-weight: 500;
       }

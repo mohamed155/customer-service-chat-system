@@ -39,6 +39,7 @@
 - Helix visual system: `--app-*` tokens rewritten to the Helix palette/layout (sidebar 248/68px, topbar 60px, content max 1320px); light/dark values live in `design-system/theme/themes.css`, theme-independent values in `design-system/tokens/tokens.css`. Old `--app-color-*` names are gone. Reference design: `Helix Admin.html` at repo root (compare only — never copy markup/assets/fonts from it).
 - Theme toggle cycles light → dark → system. Topbar search and "New" are purely visual (no handlers) until later specs.
 - Pages read real tenant-scoped APIs through a store (`withTenantScope`); a section a person may not see is never requested (gate by permission, not role), and each section has its own loading, error and empty state. Fixtures in `shared/fixtures/` are test data: only spec files may import them (`local/feature-boundaries` fails a production file that does). Chart components in `shared/components/` are hand-built inline SVG — no chart library.
+- Colors are design tokens only: write `var(--app-…)`, never a hex, `rgb()`, a color name or a `var(--x, #fff)` fallback outside `design-system/`. `pnpm lint:colors` fails CI on a new one and on a token not defined in both themes. Token reference: `docs/architecture/design-tokens.md`.
 - Taiga UI components are wrapped inside project components in `shared/components/` and `layout/` — no raw Taiga styling in feature pages.
 
 ## Switching workspace (MOH-61, ADR-003 section 2)

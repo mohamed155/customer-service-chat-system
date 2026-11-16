@@ -28,7 +28,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
       button.primary {
         border-color: transparent;
         background: var(--app-accent);
-        color: var(--app-accent-on, white);
+        color: var(--app-accent-ink);
       }
       button.danger {
         background: transparent;

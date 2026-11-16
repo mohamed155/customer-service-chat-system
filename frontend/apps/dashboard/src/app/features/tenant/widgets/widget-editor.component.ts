@@ -7,6 +7,7 @@ import { marker } from '../../../core/i18n/marker';
 import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
 import { WidgetInstance } from '../../../core/api/widget.models';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
+import { DEFAULT_WIDGET_COLOR } from './widget-defaults';
 
 /** What a field says is wrong: a catalog key and the values its text needs. */
 interface FieldMessage {
@@ -26,7 +27,7 @@ interface ValidationErrors {
 const MAX_NAME = 80;
 const MAX_WELCOME = 500;
 const MAX_DOMAINS = 20;
-const COLOR_EXAMPLE = '#0066FF';
+const COLOR_EXAMPLE = DEFAULT_WIDGET_COLOR;
 
 /** The widget API refuses a field with a `422`; the form already marks the field. */
 const EDITOR_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.invalid') };
@@ -152,15 +153,15 @@ const EDITOR_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.inv
         cursor: pointer;
       }
       .field-error {
-        color: var(--app-red, #e53935);
+        color: var(--app-red);
         font-size: var(--app-font-xs);
       }
       .error-banner {
         padding: var(--app-space-3);
-        background: rgba(229, 57, 53, 0.1);
-        border: 1px solid var(--app-red, #e53935);
+        background: var(--app-red-soft);
+        border: 1px solid var(--app-red);
         border-radius: var(--app-radius-md);
-        color: var(--app-red, #e53935);
+        color: var(--app-red);
         font-size: var(--app-font-sm);
       }
       .domains-list {
@@ -189,7 +190,7 @@ const EDITOR_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.inv
         padding: 0;
       }
       .domain-remove:hover {
-        color: var(--app-red, #e53935);
+        color: var(--app-red);
       }
       .domain-add-row {
         display: flex;
@@ -242,6 +243,7 @@ export class WidgetEditorComponent {
   /** An example of what to type: a value, not a sentence, so it is the same in every language. */
   protected readonly domainExample = 'example.com';
   protected readonly colorExample = COLOR_EXAMPLE;
+  protected readonly defaultColor = DEFAULT_WIDGET_COLOR;
 
   private readonly hexColorRe = /^#[0-9a-fA-F]{6}$/;
 

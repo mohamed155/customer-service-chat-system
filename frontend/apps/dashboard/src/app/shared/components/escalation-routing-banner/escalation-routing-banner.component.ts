@@ -24,8 +24,8 @@ const ROUTING_REASON_KEYS: Readonly<Record<string, string>> = {
         gap: 12px;
         padding: 8px 16px;
         border-radius: var(--app-radius-md);
-        background: var(--app-warning-bg, #fff3cd);
-        border: 1px solid var(--app-warning-border, #ffc107);
+        background: var(--app-amber-soft);
+        border: 1px solid var(--app-amber);
         font-size: var(--app-font-sm);
       }
       .label {

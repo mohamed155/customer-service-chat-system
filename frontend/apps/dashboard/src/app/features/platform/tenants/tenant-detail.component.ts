@@ -91,14 +91,14 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
         border: 0;
         border-radius: var(--app-radius-md);
         background: var(--app-accent);
-        color: var(--app-accent-on, white);
+        color: var(--app-accent-ink);
         font: inherit;
         font-size: var(--app-font-sm);
         font-weight: 600;
         cursor: pointer;
       }
       .action-button.danger {
-        background: var(--app-red, #d92d20);
+        background: var(--app-red);
       }
       .action-button:disabled {
         opacity: 0.5;
@@ -143,7 +143,7 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
         border: 0;
         border-radius: var(--app-radius-md);
         background: var(--app-accent);
-        color: var(--app-accent-on, white);
+        color: var(--app-accent-ink);
         font: inherit;
         font-weight: 600;
         cursor: pointer;
@@ -158,10 +158,10 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
       .action-error {
         margin-top: var(--app-space-3);
         padding: var(--app-space-2) var(--app-space-3);
-        background: var(--app-red-bg, #fef3f2);
-        border: 1px solid var(--app-red, #d92d20);
+        background: var(--app-red-soft);
+        border: 1px solid var(--app-red);
         border-radius: var(--app-radius-md);
-        color: var(--app-red, #d92d20);
+        color: var(--app-red);
         font-size: var(--app-font-sm);
         font-weight: 500;
       }
@@ -169,7 +169,7 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
         position: fixed;
         inset: 0;
         z-index: 999;
-        background: rgba(0, 0, 0, 0.4);
+        background: var(--app-scrim);
       }
       .dialog {
         position: fixed;
@@ -183,7 +183,7 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
         padding: var(--app-space-5);
         max-width: 440px;
         width: 90%;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        box-shadow: var(--app-shadow-lg);
       }
       .dialog h2 {
         margin: 0 0 var(--app-space-2);
@@ -218,10 +218,10 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
       .dialog-confirm {
         border: 0;
         background: var(--app-accent);
-        color: var(--app-accent-on, white);
+        color: var(--app-accent-ink);
       }
       .dialog-confirm.danger {
-        background: var(--app-red, #d92d20);
+        background: var(--app-red);
       }
       .dialog-confirm:focus-visible,
       .dialog-cancel:focus-visible {

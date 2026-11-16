@@ -41,7 +41,7 @@ function stateClass(state: string): string {
         outline-offset: -3px;
       }
       .state-unread {
-        background: var(--app-accent-soft, #eef2ff);
+        background: var(--app-accent-soft);
       }
       .state-resolved {
         opacity: 0.6;

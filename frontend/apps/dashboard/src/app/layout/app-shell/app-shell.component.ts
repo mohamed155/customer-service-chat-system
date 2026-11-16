@@ -53,7 +53,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
         position: fixed;
         inset: 0;
         z-index: 199;
-        background: rgba(0, 0, 0, 0.4);
+        background: var(--app-scrim);
       }
       .workspace {
         min-width: 0;
@@ -67,14 +67,14 @@ import { TranslocoPipe } from '@jsverse/transloco';
         gap: var(--app-space-2);
         margin: var(--app-space-3) var(--app-page-padding-x) 0;
         padding: var(--app-space-3);
-        border: 1px solid var(--app-danger, #d92d20);
+        border: 1px solid var(--app-red);
         border-radius: var(--app-radius-md);
-        background: color-mix(in srgb, var(--app-danger, #d92d20) 10%, var(--app-panel));
+        background: var(--app-red-soft);
         color: var(--app-text);
         font-size: var(--app-font-sm);
       }
       .tenant-error-banner tui-icon {
-        color: var(--app-danger, #d92d20);
+        color: var(--app-red);
         flex: 0 0 auto;
       }
       .tenant-error-banner span {

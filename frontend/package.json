@@ -18,6 +18,8 @@
     "prepare": "node tools/install-git-hooks.mjs || echo lefthook install skipped",
     "lint:i18n": "node tools/check-i18n.mjs",
     "test:i18n-check": "node --test tools/check-i18n.test.mjs",
+    "lint:colors": "node tools/check-colors.mjs",
+    "test:colors-check": "node --test tools/check-colors.test.mjs",
     "lint:tenant-scope": "node tools/check-tenant-scope.mjs",
     "lint:api-types": "node tools/check-generated-api-types.mjs",
     "test:tenant-scope-check": "node --test tools/check-tenant-scope.test.mjs",
