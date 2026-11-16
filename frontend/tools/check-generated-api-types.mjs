@@ -27,6 +27,8 @@ export const EXEMPT = {
     'the wrapper itself: its methods are generic over the type the caller names',
   [`${appDir}/core/api/customers-api.service.ts`]:
     'the customers API, moved here from the features because two use it (MOH-62); it moves to the generated types with MOH-145',
+  [`${appDir}/core/api/analytics-api.service.ts`]:
+    'the analytics API, moved here from the analytics feature because it and the overview both use it (MOH-70); it moves to the generated types with MOH-151',
 };
 
 const CALL = /\b(?:api|http)\s*\.\s*(?:get|post|put|patch|delete)\s*</g;

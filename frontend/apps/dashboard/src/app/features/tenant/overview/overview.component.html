@@ -1,86 +1,180 @@
 <app-page-container>
   <app-page-header [title]="'insights.overview.title' | transloco" />
-  @if (page.loading()) {
-    <app-loading-state />
-  } @else if (hasError()) {
-    <app-empty-state
-      icon="@tui.alert-circle"
-      [title]="'insights.overview.errorTitle' | transloco"
-      [description]="'errors.generic' | transloco"
-    >
-      <button type="button" (click)="retry()">{{ 'insights.overview.retry' | transloco }}</button>
-    </app-empty-state>
-  } @else if (hasData()) {
-    <div class="overview">
-      @if (!alertDismissed()) {
-        <app-escalation-banner
-          [title]="pageData()!.alert.title"
-          [description]="pageData()!.alert.description"
-          (dismissed)="alertDismissed.set(true)"
-        />
-      }
-
-      <section class="metrics" [attr.aria-label]="'insights.overview.metricsLabel' | transloco">
-        @for (metric of pageData()!.metrics; track metric.id) {
-          <app-metric-card [metric]="metric" />
-        }
-      </section>
-
-      <section class="dashboard-grid">
-        <app-dashboard-card>
-          <app-section-header
-            card-header
-            [title]="'insights.overview.trendsTitle' | transloco"
-            [subtitle]="'insights.overview.trendsSubtitle' | transloco"
-          />
-          <app-overview-trend-chart [series]="pageData()!.trendSeries" />
-        </app-dashboard-card>
-
-        <app-dashboard-card>
-          <app-section-header
-            card-header
-            [title]="'insights.overview.mixTitle' | transloco"
-            [subtitle]="'insights.overview.mixSubtitle' | transloco"
-          />
-          <app-overview-channel-breakdown [breakdown]="pageData()!.breakdown" />
-        </app-dashboard-card>
-      </section>
-
-      <app-dashboard-card>
-        <app-section-header
-          card-header
-          [title]="'insights.overview.activityTitle' | transloco"
-          [subtitle]="'insights.overview.activitySubtitle' | transloco"
-        />
-        <div class="activity">
-          @for (conversation of pageData()!.recentConversations; track conversation.id) {
-            <article>
-              <app-avatar [initials]="customerInitials(conversation)" size="md" />
-              <div class="activity-copy">
-                <strong>{{ customerName(conversation) }}</strong>
-                <span>{{ conversation.snippet }}</span>
-                <div>
-                  <app-channel-badge [channel]="conversation.channel" />
-                  <app-status-badge
-                    [status]="conversation.status"
-                    [text]="statusName(conversation.status)"
-                    [tone]="statusTone(conversation.status)"
-                  />
-                </div>
-              </div>
-              <time [attr.datetime]="conversation.updatedAt">{{
-                conversation.updatedAt | relativeTime
-              }}</time>
-            </article>
-          }
-        </div>
-      </app-dashboard-card>
-    </div>
-  } @else {
+  @if (!store.canViewAnalytics() && !store.canViewConversations()) {
     <app-empty-state
       icon="@tui.layout-dashboard"
-      [title]="'insights.overview.emptyTitle' | transloco"
-      [description]="'insights.overview.emptyDescription' | transloco"
+      [title]="'insights.overview.noAccessTitle' | transloco"
+      [description]="'insights.overview.noAccessDescription' | transloco"
     />
+  } @else {
+    <div class="overview">
+      @if (store.canViewAnalytics()) {
+        <section class="metrics" [attr.aria-label]="'insights.overview.metricsLabel' | transloco">
+          @switch (store.summary().status) {
+            @case ('ready') {
+              @for (metric of metrics(); track metric.id) {
+                <app-metric-card [metric]="metric" />
+              }
+            }
+            @case ('error') {
+              <app-empty-state
+                icon="@tui.alert-circle"
+                [title]="'insights.overview.errorTitle' | transloco"
+                [description]="errorKey(store.summary().error!) | transloco"
+              >
+                <button type="button" (click)="store.retrySummary()">
+                  {{ 'insights.overview.retry' | transloco }}
+                </button>
+                @if (store.summary().error?.requestId; as id) {
+                  <app-error-reference [requestId]="id" />
+                }
+              </app-empty-state>
+            }
+            @default {
+              <app-loading-state />
+            }
+          }
+        </section>
+
+        <section class="dashboard-grid">
+          <app-dashboard-card>
+            <app-section-header
+              card-header
+              [title]="'insights.overview.trendsTitle' | transloco"
+              [subtitle]="'insights.overview.trendsSubtitle' | transloco: { days: days }"
+            />
+            @switch (store.timeseries().status) {
+              @case ('ready') {
+                @if (store.trendEmpty()) {
+                  <app-empty-state
+                    icon="@tui.chart-line"
+                    [title]="'insights.overview.trendEmptyTitle' | transloco"
+                    [description]="'insights.overview.trendEmptyDescription' | transloco"
+                  />
+                } @else {
+                  <app-trend-chart [series]="volumeSeries()" [labels]="chartLabels()" />
+                }
+              }
+              @case ('error') {
+                <app-empty-state
+                  icon="@tui.alert-circle"
+                  [title]="'insights.overview.errorTitle' | transloco"
+                  [description]="errorKey(store.timeseries().error!) | transloco"
+                >
+                  <button type="button" (click)="store.retryTimeseries()">
+                    {{ 'insights.overview.retry' | transloco }}
+                  </button>
+                  @if (store.timeseries().error?.requestId; as id) {
+                    <app-error-reference [requestId]="id" />
+                  }
+                </app-empty-state>
+              }
+              @default {
+                <app-loading-state />
+              }
+            }
+          </app-dashboard-card>
+
+          <app-dashboard-card>
+            <app-section-header
+              card-header
+              [title]="'insights.overview.mixTitle' | transloco"
+              [subtitle]="'insights.overview.mixSubtitle' | transloco"
+            />
+            @switch (store.summary().status) {
+              @case ('ready') {
+                @if (store.channelsEmpty()) {
+                  <app-empty-state
+                    icon="@tui.chart-line"
+                    [title]="'insights.overview.mixEmptyTitle' | transloco"
+                    [description]="'insights.overview.mixEmptyDescription' | transloco"
+                  />
+                } @else {
+                  <app-breakdown-bars [items]="breakdownItems()" />
+                }
+              }
+              @case ('error') {
+                <app-empty-state
+                  icon="@tui.alert-circle"
+                  [title]="'insights.overview.errorTitle' | transloco"
+                  [description]="errorKey(store.summary().error!) | transloco"
+                >
+                  <button type="button" (click)="store.retrySummary()">
+                    {{ 'insights.overview.retry' | transloco }}
+                  </button>
+                </app-empty-state>
+              }
+              @default {
+                <app-loading-state />
+              }
+            }
+          </app-dashboard-card>
+        </section>
+      }
+
+      @if (store.canViewConversations()) {
+        <app-dashboard-card>
+          <app-section-header
+            card-header
+            [title]="'insights.overview.activityTitle' | transloco"
+            [subtitle]="'insights.overview.activitySubtitle' | transloco"
+          />
+          @switch (store.recent().status) {
+            @case ('ready') {
+              @if (store.recent().data!.length === 0) {
+                <app-empty-state
+                  icon="@tui.message-square"
+                  [title]="'insights.overview.activityEmptyTitle' | transloco"
+                  [description]="'insights.overview.activityEmptyDescription' | transloco"
+                />
+              } @else {
+                <div class="activity">
+                  @for (conversation of store.recent().data!; track conversation.id) {
+                    <a [routerLink]="conversationLink(conversation)">
+                      <app-avatar [initials]="customerInitials(conversation)" size="md" />
+                      <div class="activity-copy">
+                        <strong>{{ conversation.customer.displayName }}</strong>
+                        <span class="preview">{{
+                          conversation.lastMessage?.preview ??
+                            ('insights.overview.noMessages' | transloco)
+                        }}</span>
+                        <div class="badges">
+                          <app-channel-badge [channel]="channelBadge(conversation.channel)" />
+                          <app-status-badge
+                            [status]="conversation.status"
+                            [text]="statusName(conversation.status)"
+                            [tone]="statusTone(conversation.status)"
+                          />
+                        </div>
+                      </div>
+                      <time [attr.datetime]="conversation.lastActivityAt">{{
+                        conversation.lastActivityAt | relativeTime
+                      }}</time>
+                    </a>
+                  }
+                </div>
+              }
+            }
+            @case ('error') {
+              <app-empty-state
+                icon="@tui.alert-circle"
+                [title]="'insights.overview.errorTitle' | transloco"
+                [description]="errorKey(store.recent().error!) | transloco"
+              >
+                <button type="button" (click)="store.retryRecent()">
+                  {{ 'insights.overview.retry' | transloco }}
+                </button>
+                @if (store.recent().error?.requestId; as id) {
+                  <app-error-reference [requestId]="id" />
+                }
+              </app-empty-state>
+            }
+            @default {
+              <app-loading-state />
+            }
+          }
+        </app-dashboard-card>
+      }
+    </div>
   }
 </app-page-container>

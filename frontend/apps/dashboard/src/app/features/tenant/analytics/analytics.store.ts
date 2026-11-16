@@ -6,7 +6,7 @@ import { catchError, map, of } from 'rxjs';
 import { ApiError } from '../../../core/api/api.models';
 import { toApiError } from '../../../core/errors/api-error';
 import { AnalyticsSummary, AnalyticsTimeseries } from '../../../core/api/tenant-api.models';
-import { AnalyticsApiService } from './analytics-api.service';
+import { AnalyticsApiService } from '../../../core/api/analytics-api.service';
 import { withTenantScope } from '../../../core/state/tenant-scope';
 
 export interface AnalyticsState {

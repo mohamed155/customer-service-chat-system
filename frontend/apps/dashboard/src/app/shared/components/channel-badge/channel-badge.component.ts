@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { TuiIcon } from '@taiga-ui/core';
-import { Channel as FixtureChannel } from '../../fixtures/fixture.models';
+import { Channel } from '../../models/domain.models';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { marker } from '../../../core/i18n/marker';
 import { ownValue } from '../../../core/i18n/own-value';
 
 export type ChannelBadgeChannel =
-  FixtureChannel | 'email' | 'phone' | 'web_chat' | 'whatsapp' | 'telegram' | 'widget';
+  Channel | 'email' | 'phone' | 'web_chat' | 'whatsapp' | 'telegram' | 'widget';
 
 const CHANNEL_LABELS: Record<ChannelBadgeChannel, string> = {
   web: marker('channels.web'),

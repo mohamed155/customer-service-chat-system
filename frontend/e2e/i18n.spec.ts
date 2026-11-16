@@ -31,6 +31,9 @@ async function mockApi(page: Page) {
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
     if (path === '/me') return json(route, identity);
+    if (path === '/tenant/conversations') {
+      return json(route, { data: [], pagination: { next_cursor: null, has_more: false } });
+    }
     return json(route, { items: [], nextCursor: null });
   });
 }
@@ -90,7 +93,7 @@ test.describe('languages', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
     // The overview is an area with its own scope: German has no file for it, which is not a
     // failure. The area shows its English, the rest of the page stays German.
-    await expect(page.getByText('Conversation trends')).toBeVisible();
+    await expect(page.getByText('Recent activity')).toBeVisible();
     expect(asked).toEqual(['/i18n/shared/de.json', '/i18n/insights/de.json']);
   });
 

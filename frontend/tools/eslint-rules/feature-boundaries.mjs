@@ -7,6 +7,8 @@
 //    the area's features together, so it may import its own area's features and nothing else.
 // 2. Presentational code (`shared/` and `core/ui/`) may not import a store, an API service or a
 //    facade: it gets its data through inputs and reports through outputs.
+// 3. Production code does not import `shared/fixtures/` (MOH-70). Fixtures are test data: specs may
+//    use them, and nothing that ships may depend on them.
 //
 // The rule resolves relative imports to real paths, so `../customers/x` is seen for what it is.
 // (`core/` and `shared/` importing `features/` stays in `no-restricted-imports`.)
@@ -45,6 +47,8 @@ function isStoreLike(segments) {
   );
 }
 
+const isFixture = (segments) => segments?.[0] === 'shared' && segments?.[1] === 'fixtures';
+
 const isPresentational = (segments) =>
   segments?.[0] === 'shared' || (segments?.[0] === 'core' && segments?.[1] === 'ui');
 
@@ -58,6 +62,8 @@ export const featureBoundaries = {
         '{{from}} imports {{to}}. A feature may not import another feature: move what both need to shared/ or core/.',
       areaRoute:
         '{{from}} (the area route file) may only import its own area’s features, not {{to}}.',
+      fixtures:
+        '{{from}} imports {{to}}. Fixtures are test data: only spec files may import shared/fixtures.',
       presentational:
         'Presentational code ({{from}}) may not import a store, API service or facade ({{to}}). Pass data in through inputs and report through outputs.',
     },
@@ -91,6 +97,14 @@ export const featureBoundaries = {
             });
           }
         }
+      }
+
+      if (!isSpec && isFixture(target) && !isFixture(here)) {
+        context.report({
+          node,
+          messageId: 'fixtures',
+          data: { from: here.slice(0, 2).join('/'), to: target.join('/') },
+        });
       }
 
       if (!isSpec && isPresentational(here) && isStoreLike(target)) {

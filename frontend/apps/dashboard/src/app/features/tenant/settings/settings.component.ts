@@ -1,60 +1,52 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
-import { LocaleDatePipe, LocaleNumberPipe } from '../../../core/i18n/format';
-import { roleNameKey } from '../../../core/i18n/labels';
-import { LocaleService } from '../../../core/i18n/locale.service';
+import { HasPermissionDirective } from '../../../core/authz/has-permission.directive';
 import { marker } from '../../../core/i18n/marker';
-import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
-import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
-import { PAGE_ROUTE, RoutedPageStore } from '../../../core/routed-page/routed-page.store';
+import { APP_PATHS } from '../../../core/router/app-paths';
+import { appUiActions, selectThemeMode, ThemeMode } from '../../../core/state/app-ui.feature';
+import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
-import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
-import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
-import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
-import { appUiActions, ThemeMode } from '../../../core/state/app-ui.feature';
-import { SettingsStore, SettingsTab } from './settings.store';
 
+/**
+ * What the settings page really has: the dashboard's own theme (kept in this browser), the
+ * workspace you are in, and the way to the pages where workspace settings live. The workspace
+ * has no profile, API key or session API yet, so none of those is shown.
+ */
 @Component({
   selector: 'app-settings',
   imports: [
-    AvatarComponent,
     DashboardCardComponent,
-    DataTableComponent,
-    EmptyStateComponent,
-    LoadingStateComponent,
-    LocaleDatePipe,
-    LocaleNumberPipe,
+    HasPermissionDirective,
     PageContainerComponent,
     PageHeaderComponent,
+    RouterLink,
     SectionHeaderComponent,
-    StatusBadgeComponent,
     TranslocoPipe,
   ],
-  providers: [
-    SettingsStore,
-    RoutedPageStore,
-    { provide: PAGE_ROUTE, useValue: 'settings' },
-    provideTranslocoScope('settings'),
-  ],
+  providers: [provideTranslocoScope('settings')],
   templateUrl: './settings.component.html',
   styles: [
     `
-      .tabs,
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--app-space-4);
+      }
       .segmented {
         display: flex;
         gap: var(--app-space-1);
-        margin-bottom: var(--app-space-5);
         padding: 4px;
         border: 1px solid var(--app-border);
         border-radius: var(--app-radius-lg);
         background: var(--app-panel);
         width: fit-content;
       }
-      button {
+      .segmented button {
         height: 34px;
         padding: 0 var(--app-space-3);
         border: 0;
@@ -64,85 +56,41 @@ import { SettingsStore, SettingsTab } from './settings.store';
         font-weight: 650;
         cursor: pointer;
       }
-      button.active,
-      .segmented button:hover {
+      .segmented button:hover,
+      .segmented button.active {
         background: var(--app-accent-soft);
         color: var(--app-accent-strong);
       }
-      .grid {
+      dl {
         display: grid;
-        gap: var(--app-space-4);
+        grid-template-columns: auto 1fr;
+        gap: var(--app-space-2) var(--app-space-4);
+        margin: 0;
       }
-      .two {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+      dt {
+        color: var(--app-text-3);
       }
-      label {
+      dd {
+        margin: 0;
+        color: var(--app-text);
+      }
+      ul {
         display: grid;
-        gap: 6px;
-        margin-bottom: var(--app-space-3);
-        color: var(--app-text-2);
-        font-size: var(--app-font-sm);
+        gap: var(--app-space-2);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      li a {
+        color: var(--app-accent-strong);
         font-weight: 650;
       }
-      input {
-        height: 38px;
-        border: 1px solid var(--app-border);
-        border-radius: var(--app-radius-md);
-        background: var(--app-panel-2);
-        color: var(--app-text);
-        padding: 0 var(--app-space-3);
-        font: inherit;
-      }
-      .mono {
-        font-family: var(--app-font-mono);
-      }
-      .check,
-      .switch {
-        display: flex;
-        align-items: center;
-        gap: var(--app-space-2);
-      }
-      .check input,
-      .switch input {
-        width: auto;
-        height: auto;
-      }
-      .person {
-        display: flex;
-        align-items: center;
-        gap: var(--app-space-3);
-      }
-      small {
+      li small {
         display: block;
         color: var(--app-text-3);
       }
-      .usage {
-        display: grid;
-        gap: 7px;
-        margin-bottom: var(--app-space-4);
-      }
-      .usage span {
-        color: var(--app-text-2);
-      }
-      .usage div {
-        height: 8px;
-        overflow: hidden;
-        border-radius: 999px;
-        background: var(--app-panel-3);
-      }
-      .usage i {
-        display: block;
-        height: 100%;
-        background: var(--app-accent);
-      }
-      .current {
-        margin-left: 8px;
-        color: var(--app-green);
-        font-size: var(--app-font-xs);
-        font-weight: 700;
-      }
       @media (max-width: 900px) {
-        .two {
+        .grid {
           grid-template-columns: 1fr;
         }
       }
@@ -151,50 +99,21 @@ import { SettingsStore, SettingsTab } from './settings.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class SettingsComponent {
-  protected readonly page = inject(RoutedPageStore);
-  protected readonly hasData = computed(() => this.page.data() !== undefined);
-  protected readonly hasError = computed(() => this.page.error() !== null);
-  private readonly globalStore = inject(Store);
-  protected readonly store = inject(SettingsStore);
-  private readonly locale = inject(LocaleService);
-  protected readonly roleNameKey = roleNameKey;
+  private readonly store = inject(Store);
+  protected readonly tenant = this.store.selectSignal(selectActiveTenant);
+  protected readonly themeMode = this.store.selectSignal(selectThemeMode);
+
   protected readonly themeModes: readonly { id: ThemeMode; key: string }[] = [
     { id: 'light', key: marker('settings.theme.light') },
     { id: 'dark', key: marker('settings.theme.dark') },
     { id: 'system', key: marker('settings.theme.system') },
   ];
-  protected readonly tabs: readonly { id: SettingsTab; key: string }[] = [
-    { id: 'general', key: marker('settings.tabs.general') },
-    { id: 'team', key: marker('settings.tabs.team') },
-    { id: 'billing', key: marker('settings.tabs.billing') },
-    { id: 'api-keys', key: marker('settings.tabs.apiKeys') },
-    { id: 'security', key: marker('settings.tabs.security') },
-  ];
 
-  protected readonly pageData = computed(() => {
-    const data = this.page.data();
-    if (data?.page === 'settings') return data.data;
-    return undefined;
-  });
-
-  /** The name from the catalog, or the data's own word for a value this app has no name for. */
-  protected nameOf(key: string | null, fallback: string): string {
-    return key ? this.locale.translate(key) : fallback;
-  }
-
-  protected memberStatusKey(status: string): string | null {
-    return status === 'active'
-      ? marker('status.active')
-      : status === 'invited'
-        ? marker('settings.team.invited')
-        : null;
-  }
+  protected readonly teamLink = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.team}`;
+  protected readonly billingLink = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.billing}`;
+  protected readonly toolsLink = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.settingsTools}`;
 
   protected setTheme(themeMode: ThemeMode): void {
-    this.globalStore.dispatch(appUiActions.themeModeChanged({ themeMode }));
-  }
-
-  protected retry(): void {
-    this.page.retry();
+    this.store.dispatch(appUiActions.themeModeChanged({ themeMode }));
   }
 }

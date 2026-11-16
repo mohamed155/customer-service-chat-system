@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { AnalyticsSummary } from '../../../core/api/tenant-api.models';
-import { AnalyticsApiService } from './analytics-api.service';
+import { AnalyticsApiService } from '../../../core/api/analytics-api.service';
 import { AnalyticsStore } from './analytics.store';
 
 const MOCK_SUMMARY: AnalyticsSummary = {
