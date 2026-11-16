@@ -194,6 +194,9 @@ export class PlatformNavComponent {
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    // Escape is heard on the whole page: only an open menu has anything to close, and a closed
+    // one must not pull focus away from whatever the key was pressed in.
+    if (!this.open()) return;
     this.close();
   }
 }

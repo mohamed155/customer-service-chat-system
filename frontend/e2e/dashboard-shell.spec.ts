@@ -124,6 +124,39 @@ test.describe('dashboard shell', () => {
     );
   });
 
+  test('switches tenant with the keyboard alone and puts focus back on the trigger', async ({
+    page,
+  }) => {
+    await mockApi(page, identities.platform);
+    await page.goto('/tenant/select');
+    const trigger = page.getByRole('button', { name: 'Switch tenant' });
+
+    // Open with the arrow key; the search field takes focus and names the highlighted option.
+    await trigger.focus();
+    await page.keyboard.press('ArrowDown');
+    const search = page.getByRole('combobox');
+    await expect(search).toBeFocused();
+    await expect(page.getByRole('listbox')).toBeVisible();
+    await expect(search).toHaveAttribute('aria-activedescendant', /.+/);
+
+    // Escape closes the list and gives focus back.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('listbox')).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+
+    // Open again, pick with Enter.
+    await page.keyboard.press('Enter');
+    await expect(search).toBeFocused();
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Enter');
+
+    await expect(trigger).toContainText('Acme Support');
+    await expect(trigger).toBeFocused();
+    await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toContainText(
+      'Overview',
+    );
+  });
+
   test('updates breadcrumbs through real navigation', async ({ page }) => {
     await mockApi(page, identities.tenant);
     await page.goto('/tenant/overview');
