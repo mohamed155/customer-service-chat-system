@@ -119,6 +119,16 @@ test('a declaration split over lines is still checked, and reported on the value
   assert.match(problems[0], /x\.component\.ts:3: hard-coded color white/);
 });
 
+test('a color name inside parentheses that run over lines is found on its own line', () => {
+  const problems = run('a {\n  color: var(--app-red,\n    white);\n}');
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /x\.component\.ts:3: hard-coded color white/);
+  assert.deepEqual(
+    run('a {\n  color: var(--app-red,\n    white /* color-lint-ignore: x */);\n}'),
+    [],
+  );
+});
+
 test('a color name in a marked multi-line declaration is skipped on the marked line', () => {
   assert.deepEqual(run('a {\n  color:\n    white; /* color-lint-ignore: a value */\n}'), []);
 });

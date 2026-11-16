@@ -106,6 +106,19 @@ function literalIn(line) {
   return null;
 }
 
+/** The value of a declaration that starts at `start`: up to `;`, `}` or a line end outside parentheses. */
+function valueOf(source, start) {
+  let depth = 0;
+  let end = start;
+  for (; end < source.length; end += 1) {
+    const ch = source[end];
+    if (ch === '(') depth += 1;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    else if (depth === 0 && (ch === ';' || ch === '}' || ch === '\n')) break;
+  }
+  return source.slice(start, end);
+}
+
 /**
  * Every literal in `source` with its 1-based line: the per-line ones, and the color names that
  * are the value of a color property (found over the whole text, so a property and its value on
@@ -135,14 +148,21 @@ function literalsIn(source) {
     return low + 1;
   };
   for (const m of source.matchAll(COLOR_PROPERTY)) {
+    const valueStart = m.indices[2][0];
+    const text = valueOf(source, valueStart);
     // A name beside a token (`var(--x, white)`) is a fallback and counts; the token alone does not.
-    const value = m[2]
+    const value = text
       .replace(/var\(\s*--[\w-]+\s*\)/g, ' ')
       .replace(/var\(\s*--[\w-]+\s*,/g, ' ')
       .replace(/color-mix\(/g, ' ')
       .toLowerCase();
     const named = value.split(/[^a-z-]+/).find((word) => NAMES.has(word));
-    if (named) found.push({ line: lineOf(m.indices[2][0]), literal: named });
+    if (named) {
+      // The line of the name itself, which is not always the line the value starts on.
+      const at =
+        valueStart + text.toLowerCase().search(new RegExp(`(?<![a-z-])${named}(?![a-z-])`));
+      found.push({ line: lineOf(at), literal: named });
+    }
   }
   return found;
 }
