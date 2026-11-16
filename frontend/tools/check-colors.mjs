@@ -159,17 +159,18 @@ function literalsIn(source) {
     const valueStart = m.indices[2][0];
     const text = valueOf(source, valueStart);
     // A name beside a token (`var(--x, white)`) is a fallback and counts; the token alone does not.
+    // The pieces that are blanked keep their length, so a name is found where it really is.
+    const blank = (match) => ' '.repeat(match.length);
     const value = text
-      .replace(/var\(\s*--[\w-]+\s*\)/g, ' ')
-      .replace(/var\(\s*--[\w-]+\s*,/g, ' ')
-      .replace(/color-mix\(/g, ' ')
+      .replace(/var\(\s*--[\w-]+\s*\)/g, blank)
+      .replace(/var\(\s*--[\w-]+\s*,/g, blank)
+      .replace(/color-mix\(/g, blank)
       .toLowerCase();
-    const named = value.split(/[^a-z-]+/).find((word) => NAMES.has(word));
-    if (named) {
-      // The line of the name itself, which is not always the line the value starts on.
-      const at =
-        valueStart + text.toLowerCase().search(new RegExp(`(?<![a-z-])${named}(?![a-z-])`));
-      found.push({ line: lineOf(at), literal: named });
+    // Every name, each on its own line: a marker on one line does not cover another.
+    for (const word of value.matchAll(/[a-z-]+/g)) {
+      if (NAMES.has(word[0])) {
+        found.push({ line: lineOf(valueStart + word.index), literal: word[0] });
+      }
     }
   }
   return found;

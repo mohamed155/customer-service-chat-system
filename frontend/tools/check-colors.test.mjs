@@ -139,6 +139,18 @@ test('a value that goes on over the next line is checked, and the next declarati
   assert.deepEqual(run("const s = { color: theme,\n  label: 'green' };"), []);
 });
 
+test('every color name in a declaration is checked, each against the marker on its own line', () => {
+  const css =
+    'a {\n  box-shadow: 0 0 1px white, /* color-lint-ignore: example */\n    0 0 2px black;\n}';
+  const problems = run(css);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /x\.component\.ts:3: hard-coded color black/);
+  assert.equal(
+    run('a { border: 1px solid white; box-shadow: 0 0 1px black, 0 0 2px red; }').length,
+    3,
+  );
+});
+
 test('a color name in a marked multi-line declaration is skipped on the marked line', () => {
   assert.deepEqual(run('a {\n  color:\n    white; /* color-lint-ignore: a value */\n}'), []);
 });
