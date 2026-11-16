@@ -71,7 +71,8 @@ describe('TenantContextService', () => {
       expect(dispatchSpy).not.toHaveBeenCalled();
     });
 
-    it('cancels the request when it is unsubscribed', () => {
+    it('cancels the request when it is unsubscribed, and says so to the store', () => {
+      const dispatchSpy = vi.spyOn(store, 'dispatch');
       const pending = new Subject<{ data: TenantSummary }>();
       api.post.mockReturnValue(pending);
 
@@ -80,6 +81,25 @@ describe('TenantContextService', () => {
       subscription.unsubscribe();
 
       expect(pending.observed).toBe(false);
+      expect(dispatchSpy).toHaveBeenCalledWith(tenantContextActions.switchTenantCancelled());
+    });
+
+    it('does not report a cancel after an answer', () => {
+      const dispatchSpy = vi.spyOn(store, 'dispatch');
+      api.post.mockReturnValue(of({ data: fakeTenant }));
+
+      service.select$('t-1').subscribe();
+
+      expect(dispatchSpy).not.toHaveBeenCalledWith(tenantContextActions.switchTenantCancelled());
+    });
+
+    it('does not report a cancel after a failure', () => {
+      const dispatchSpy = vi.spyOn(store, 'dispatch');
+      api.post.mockReturnValue(throwError(() => new Error('down')));
+
+      service.select$('t-1').subscribe({ error: () => undefined });
+
+      expect(dispatchSpy).not.toHaveBeenCalledWith(tenantContextActions.switchTenantCancelled());
     });
 
     it('emits the tenant and dispatches the same actions as select()', () => {

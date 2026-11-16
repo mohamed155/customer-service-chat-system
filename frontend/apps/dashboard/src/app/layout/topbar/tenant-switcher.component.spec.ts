@@ -395,6 +395,22 @@ describe('TenantSwitcherComponent', () => {
       expect(first.observed).toBe(false);
       expect(second.observed).toBe(true);
     });
+
+    it('abandons a switch still on its way when the list is closed, so it cannot fail unseen', async () => {
+      const { fixture, api, store } = await setup();
+      const dispatch = vi.spyOn(store, 'dispatch');
+      const pending = new Subject<{ data: TenantSummary }>();
+      api.post.mockReturnValue(pending);
+      await openList(fixture);
+
+      options(fixture)[0].click();
+      expect(pending.observed).toBe(true);
+      press(fixture, search(fixture), 'Escape');
+
+      expect(pending.observed).toBe(false);
+      expect(dispatch).toHaveBeenCalledWith(tenantContextActions.switchTenantCancelled());
+      expect(el(fixture).querySelector('[role="alert"]')).toBeNull();
+    });
   });
 
   describe('loading', () => {

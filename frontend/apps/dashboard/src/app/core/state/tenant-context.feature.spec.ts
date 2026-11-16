@@ -95,6 +95,13 @@ describe('TenantContext feature', () => {
     expect(state.status).toBe('error');
   });
 
+  it('handles switchTenantCancelled: back to idle, the active tenant untouched', () => {
+    const start = { activeTenant: mockTenant, status: 'switching' as const };
+    const state = tenantContextFeature.reducer(start, tenantContextActions.switchTenantCancelled());
+    expect(state.status).toBe('idle');
+    expect(state.activeTenant).toEqual(mockTenant);
+  });
+
   it('selects expected slices', () => {
     const root = {
       tenantContext: {

@@ -50,7 +50,7 @@
         role="listbox"
         [id]="listId"
         [attr.aria-label]="'tenantSwitcher.label' | transloco"
-        [attr.aria-busy]="loading()"
+        [attr.aria-busy]="loading() || null"
       >
         @for (tenant of filteredTenants(); track tenant.id) {
           <div

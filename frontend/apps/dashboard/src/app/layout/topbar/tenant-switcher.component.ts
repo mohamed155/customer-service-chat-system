@@ -255,7 +255,7 @@ export class TenantSwitcherComponent {
     ),
   );
 
-  /** Switches to the picked tenant; picking another replaces a switch still in flight. */
+  /** Switches to the picked tenant; picking another, or closing the list, abandons a switch still in flight. */
   private readonly choose = rxMethod<TenantSummary>(
     pipe(
       switchMap((tenant) => {
@@ -268,6 +268,8 @@ export class TenantSwitcherComponent {
             this.switchFailed.set(true);
             return EMPTY;
           }),
+          // Closing the list abandons a switch still on its way: it must not fail unseen.
+          takeUntil(this.closed$),
         );
       }),
     ),
