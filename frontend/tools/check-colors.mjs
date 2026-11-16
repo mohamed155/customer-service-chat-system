@@ -42,7 +42,10 @@ const NAMES = new Set(
   ).split(' '),
 );
 const COLOR_PROPERTY =
-  /(?:^|[;{\s"'])(color|background(?:-color)?|border(?:-[a-z]+)*|outline(?:-color)?|fill|stroke|text-decoration-color|caret-color|accent-color|box-shadow|text-shadow)\s*:\s*([^;}\n]*)/g;
+  /(?:^|[;{\s"'])(color|background(?:-color)?|border(?:-[a-z]+)*|outline(?:-color)?|fill|stroke|text-decoration-color|caret-color|accent-color|box-shadow|text-shadow)\s*:\s*([^;}\n]*)/dg;
+// What looks like a hex color but is a link target or an SVG reference: `href="#abc"`, `url(#abc)`.
+const NOT_A_COLOR =
+  /(?:\b(?:xlink:)?href|\brouterLink|\bfragment)\s*=\s*(?:"[^"]*"|'[^']*')|url\(\s*['"]?#[^)]*\)/g;
 const COLOR_ATTRIBUTE = /\b(?:fill|stroke|color|bgcolor)="([a-z]+)"/g;
 const TOKEN_USE = /var\(\s*(--app-[a-z0-9-]+)/g;
 const TOKEN_DEFINITION = /(--app-[a-z0-9-]+)\s*:/g;
@@ -90,14 +93,48 @@ export function readTokens(files) {
   return { fixed, themed, problems };
 }
 
-/** The literal in one line of code, or `null`. */
+/** The hex, color function or color-name attribute in one line of code, or `null`. */
 function literalIn(line) {
-  const text = line.replace(/var\(\s*--[a-z0-9-]+\s*\)/g, '');
+  const text = line.replace(/var\(\s*--[a-z0-9-]+\s*\)/g, '').replace(NOT_A_COLOR, ' ');
   const hex = text.match(HEX);
   if (hex) return hex[0];
   const fn = text.match(FUNCTIONS);
   if (fn) return `${fn[0]}…)`;
-  for (const m of text.matchAll(COLOR_PROPERTY)) {
+  for (const m of text.matchAll(COLOR_ATTRIBUTE)) {
+    if (NAMES.has(m[1])) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Every literal in `source` with its 1-based line: the per-line ones, and the color names that
+ * are the value of a color property (found over the whole text, so a property and its value on
+ * two lines are still one declaration).
+ */
+function literalsIn(source) {
+  const lines = source.split('\n');
+  const found = [];
+  lines.forEach((line, index) => {
+    const literal = literalIn(line);
+    if (literal) found.push({ line: index + 1, literal });
+  });
+  const lineStarts = [];
+  let offset = 0;
+  for (const line of lines) {
+    lineStarts.push(offset);
+    offset += line.length + 1;
+  }
+  const lineOf = (position) => {
+    let low = 0;
+    let high = lineStarts.length - 1;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (lineStarts[mid] <= position) low = mid;
+      else high = mid - 1;
+    }
+    return low + 1;
+  };
+  for (const m of source.matchAll(COLOR_PROPERTY)) {
     // A name beside a token (`var(--x, white)`) is a fallback and counts; the token alone does not.
     const value = m[2]
       .replace(/var\(\s*--[\w-]+\s*\)/g, ' ')
@@ -105,12 +142,9 @@ function literalIn(line) {
       .replace(/color-mix\(/g, ' ')
       .toLowerCase();
     const named = value.split(/[^a-z-]+/).find((word) => NAMES.has(word));
-    if (named) return named;
+    if (named) found.push({ line: lineOf(m.indices[2][0]), literal: named });
   }
-  for (const m of text.matchAll(COLOR_ATTRIBUTE)) {
-    if (NAMES.has(m[1])) return m[1];
-  }
-  return null;
+  return found;
 }
 
 /**
@@ -129,10 +163,6 @@ export function check(files, designFiles, exempt = EXEMPT) {
       !f.path.includes('/shared/fixtures/') &&
       /\.(ts|html|css|scss)$/.test(f.path),
   );
-  // A custom property a component sets itself (`--app-x: …` in its own styles) is defined there.
-  const local = new Set();
-  for (const { source } of scanned) for (const name of definitions(source)) local.add(name);
-
   const seen = new Set(scanned.map((f) => f.path));
   for (const path of Object.keys(exempt)) {
     if (!seen.has(path))
@@ -140,21 +170,26 @@ export function check(files, designFiles, exempt = EXEMPT) {
   }
   for (const { path, source } of scanned) {
     if (path in exempt) continue;
-    source.split('\n').forEach((line, index) => {
+    const lines = source.split('\n');
+    // A custom property a component sets itself (`--app-x: …` in its own styles) is defined for
+    // that component only.
+    const local = definitions(source);
+    const reported = new Set();
+    for (const { line, literal } of literalsIn(source)) {
+      if (MARKER.test(lines[line - 1]) || reported.has(`${line}:${literal}`)) continue;
+      reported.add(`${line}:${literal}`);
+      problems.push(
+        `${path}:${line}: hard-coded color ${literal}. Use a design token (var(--app-…), see ` +
+          `docs/architecture/design-tokens.md), add one to design-system/ if none fits, or ` +
+          `mark the line "color-lint-ignore: <why>" if it is a value, not a dashboard color.`,
+      );
+    }
+    lines.forEach((line, index) => {
       if (MARKER.test(line)) return;
-      const where = `${path}:${index + 1}`;
-      const literal = literalIn(line);
-      if (literal) {
-        problems.push(
-          `${where}: hard-coded color ${literal}. Use a design token (var(--app-…), see ` +
-            `docs/architecture/design-tokens.md), add one to design-system/ if none fits, or ` +
-            `mark the line "color-lint-ignore: <why>" if it is a value, not a dashboard color.`,
-        );
-      }
       for (const m of line.matchAll(TOKEN_USE)) {
         if (!known.has(m[1]) && !local.has(m[1])) {
           problems.push(
-            `${where}: ${m[1]} is not defined in the design system (light and dark). ` +
+            `${path}:${index + 1}: ${m[1]} is not defined in the design system (light and dark). ` +
               `Use an existing token or add it to design-system/theme/themes.css.`,
           );
         }

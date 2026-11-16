@@ -111,7 +111,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         padding: 1px var(--app-space-2);
         border-radius: var(--app-radius-sm);
         background: var(--app-accent-soft);
-        color: var(--app-accent-strong);
+        color: var(--app-text);
         font-weight: 600;
       }
       .version-row-meta {

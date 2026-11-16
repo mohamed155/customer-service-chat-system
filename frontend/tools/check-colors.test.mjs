@@ -97,6 +97,42 @@ test('a custom property a component sets for itself counts as defined', () => {
   assert.deepEqual(run('a { --app-local: 1px; margin: var(--app-local); }'), []);
 });
 
+test('a custom property one component sets does not define it for another', () => {
+  const problems = check(
+    [
+      ...exemptFiles(),
+      {
+        path: `${src}/app/a/a.component.ts`,
+        source: 'a { --app-local: 1px; margin: var(--app-local); }',
+      },
+      { path: `${src}/app/b/b.component.ts`, source: 'b { margin: var(--app-local); }' },
+    ],
+    design,
+  );
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /b\.component\.ts:1: --app-local is not defined/);
+});
+
+test('a declaration split over lines is still checked, and reported on the value line', () => {
+  const problems = run('a {\n  color:\n    white;\n  background:\n    var(--app-red);\n}');
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /x\.component\.ts:3: hard-coded color white/);
+});
+
+test('a color name in a marked multi-line declaration is skipped on the marked line', () => {
+  assert.deepEqual(run('a {\n  color:\n    white; /* color-lint-ignore: a value */\n}'), []);
+});
+
+test('a link target or an SVG reference that looks like a hex color is not a color', () => {
+  const html = (source) => run(source, `${src}/app/x/x.component.html`);
+  assert.deepEqual(html('<a href="#abc">Section</a>'), []);
+  assert.deepEqual(html('<a [routerLink]=\'x\' fragment="#add">Go</a>'), []);
+  assert.deepEqual(html('<rect fill="url(#fade)"></rect>'), []);
+  assert.deepEqual(run('a { fill: url(#bad); }'), []);
+  // while a real color next to it is still found
+  assert.equal(html('<a href="#abc" style="color: #abc">Section</a>').length, 1);
+});
+
 test('the design system itself may hold literals', () => {
   assert.deepEqual(check(component('a {}'), design), []);
 });
