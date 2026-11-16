@@ -1,12 +1,23 @@
 use axum::extract::{MatchedPath, Request};
 use axum::middleware::Next;
 use axum::response::Response;
-use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
+use metrics_exporter_prometheus::{Matcher, PrometheusBuilder, PrometheusHandle};
 use std::sync::LazyLock;
 use std::time::Instant;
 
+/// Upper bounds (seconds) of the request-duration buckets. They bracket the 300 ms API budget
+/// and the 0.5 s `HighLatency` threshold, so `histogram_quantile` has data on both sides.
+const REQUEST_DURATION_BUCKETS: [f64; 11] = [
+    0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+];
+
 static PROMETHEUS_HANDLE: LazyLock<PrometheusHandle> = LazyLock::new(|| {
     PrometheusBuilder::new()
+        .set_buckets_for_metric(
+            Matcher::Full("http_request_duration_seconds".to_owned()),
+            &REQUEST_DURATION_BUCKETS,
+        )
+        .expect("request duration buckets are valid")
         .install_recorder()
         .expect("failed to install prometheus recorder")
 });
@@ -128,4 +139,36 @@ pub fn spawn_dependency_updater(checks: Vec<Arc<dyn HealthCheck>>) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The latency alert (`HighLatency`) and the dashboard use `histogram_quantile` over
+    /// `http_request_duration_seconds_bucket`. An exporter left on its default renders a summary
+    /// (quantiles, no buckets), so the alert could never fire and the panels stayed empty.
+    #[test]
+    fn request_duration_is_exposed_as_a_histogram() {
+        init();
+        metrics::histogram!(
+            "http_request_duration_seconds",
+            "method" => "GET",
+            "route" => "/histogram-test",
+        )
+        .record(0.12);
+
+        let body = prometheus_handle().render();
+
+        assert!(
+            body.contains("http_request_duration_seconds_bucket{method=\"GET\",route=\"/histogram-test\",le=\"0.25\"} 1"),
+            "request duration must have `_bucket` series, got:\n{body}"
+        );
+        assert!(
+            !body.contains(
+                "http_request_duration_seconds{method=\"GET\",route=\"/histogram-test\",quantile"
+            ),
+            "request duration must not be a summary"
+        );
+    }
 }
