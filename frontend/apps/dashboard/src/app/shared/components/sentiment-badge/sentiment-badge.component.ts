@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { Sentiment } from '../../fixtures/fixture.models';
+import { Sentiment } from '../../models/domain.models';
 
 @Component({
   selector: 'app-sentiment-badge',

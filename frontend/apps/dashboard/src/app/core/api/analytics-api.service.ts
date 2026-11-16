@@ -1,8 +1,8 @@
 import { HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
-import { ApiResponse } from '../../../core/api/api.models';
-import { ApiService } from '../../../core/api/api.service';
+import { ApiResponse } from './api.models';
+import { ApiService } from './api.service';
 import {
   AnalyticsSummary,
   analyticsSummaryFromWire,
@@ -10,7 +10,7 @@ import {
   AnalyticsTimeseries,
   analyticsTimeseriesFromWire,
   AnalyticsTimeseriesWire,
-} from '../../../core/api/tenant-api.models';
+} from './tenant-api.models';
 
 @Injectable({ providedIn: 'root' })
 export class AnalyticsApiService {

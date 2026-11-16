@@ -59,9 +59,9 @@ describe('application routes', () => {
   });
 
   it.each([
-    ['/', 'Total conversations'],
+    ['/', 'Conversation trends'],
     ['/platform/overview-placeholder', 'Platform overview'],
-    ['/tenant/overview', 'Total conversations'],
+    ['/tenant/overview', 'Conversation trends'],
     ['/nope', 'Page not found'],
   ])('renders protected route %s for authenticated users', async (url, expected) => {
     const harness = await RouterTestingHarness.create();

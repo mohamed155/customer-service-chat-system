@@ -2,8 +2,6 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { ApiError } from '../../../core/api/api.models';
 import { errorMessageKey } from '../../../core/errors/error-message';
-import { formatNumber } from '../../../core/i18n/format';
-import { channelLabelKey } from '../../../core/i18n/labels';
 import { LocaleService } from '../../../core/i18n/locale.service';
 import { marker } from '../../../core/i18n/marker';
 import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
@@ -28,6 +26,10 @@ import {
   TrendSeries,
 } from '../../../shared/components/trend-chart/trend-chart.component';
 import { BreakdownBarsComponent } from '../../../shared/components/breakdown-bars/breakdown-bars.component';
+import {
+  analyticsChannelName,
+  analyticsMetricCards,
+} from '../../../shared/utils/analytics-presentation';
 import { AnalyticsStore } from './analytics.store';
 
 @Component({
@@ -102,11 +104,8 @@ export class AnalyticsComponent {
     { value: 'custom', label: this.text(marker('insights.analytics.custom')) },
   ]);
 
-  /** The name of a channel: the widget has a name of its own here, the rest are shared. */
   private channelName(channel: string): string {
-    if (channel === 'widget') return this.text(marker('insights.analytics.websiteWidget'));
-    const key = channelLabelKey(channel);
-    return key ? this.text(key) : channel;
+    return analyticsChannelName(this.locale, channel);
   }
 
   protected readonly channelOptions = computed<SelectFilterOption[]>(() => [
@@ -143,91 +142,13 @@ export class AnalyticsComponent {
     this.store.setCustomRange(this.store.from(), to);
   }
 
-  private number(value: number, options?: Intl.NumberFormatOptions): string {
-    return formatNumber(value, this.locale.formatLocale(), options);
-  }
-
-  private percent(value: number | null): string {
-    if (value == null) return this.text(marker('insights.analytics.none'));
-    return this.number(value, {
-      style: 'percent',
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    });
-  }
-
-  private seconds(totalSeconds: number | null): string {
-    if (totalSeconds == null) return this.text(marker('insights.analytics.none'));
-    if (totalSeconds < 60) {
-      return this.text(marker('insights.analytics.seconds'), {
-        seconds: Math.round(totalSeconds),
-      });
-    }
-    return this.text(marker('insights.analytics.minutesSeconds'), {
-      minutes: Math.floor(totalSeconds / 60),
-      seconds: Math.round(totalSeconds % 60),
-    });
-  }
-
-  private satisfaction(avg: number | null, count: number): string {
-    if (avg == null) return this.text(marker('insights.analytics.none'));
-    return this.text(marker('insights.analytics.satisfactionValue'), {
-      avg: this.number(avg, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
-      count,
-    });
-  }
-
   protected errorKey(error: ApiError): string {
     return errorMessageKey(error);
   }
 
   protected readonly metricCards = computed<MetricCardData[]>(() => {
     const s = this.store.summary();
-    if (!s) return [];
-    return [
-      {
-        id: 'conversations',
-        label: this.text(marker('insights.analytics.conversations')),
-        value: this.number(s.conversationVolume),
-        icon: '@tui.message-square',
-      },
-      {
-        id: 'ai-resolution-rate',
-        label: this.text(marker('insights.analytics.aiResolutionRate')),
-        value: this.percent(s.aiResolutionRate),
-        icon: '@tui.bot',
-      },
-      {
-        id: 'handoffs',
-        label: this.text(marker('insights.analytics.handoffs')),
-        value: this.percent(s.handoffRate),
-        icon: '@tui.user-round',
-      },
-      {
-        id: 'avg-first-response',
-        label: this.text(marker('insights.analytics.avgFirstResponse')),
-        value: this.seconds(s.avgFirstResponseSeconds),
-        icon: '@tui.timer',
-      },
-      {
-        id: 'avg-response',
-        label: this.text(marker('insights.analytics.avgResponse')),
-        value: this.seconds(s.avgResponseSeconds),
-        icon: '@tui.clock',
-      },
-      {
-        id: 'satisfaction',
-        label: this.text(marker('insights.analytics.satisfaction')),
-        value: this.satisfaction(s.satisfactionAvg, s.satisfactionCount),
-        icon: '@tui.star',
-      },
-      {
-        id: 'tokens',
-        label: this.text(marker('insights.analytics.tokens')),
-        value: this.number(s.totalTokens),
-        icon: '@tui.zap',
-      },
-    ];
+    return s ? analyticsMetricCards(s, this.locale) : [];
   });
 
   protected readonly chartLabels = computed(() => {

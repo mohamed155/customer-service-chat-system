@@ -17,8 +17,6 @@ const platform = `${appDir}/features/platform`;
 
 /** Stores that hold no workspace data, with the reason. */
 export const EXEMPT = {
-  [`${appDir}/features/tenant/settings/settings.store.ts`]:
-    'holds only which settings tab is open (UI state), no workspace data',
   [`${appDir}/layout/app-shell/layout.store.ts`]:
     'sidebar and drawer state (UI), no workspace data',
   [`${platform}/tenants/tenants.store.ts`]:

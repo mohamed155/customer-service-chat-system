@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
 import { of, throwError } from 'rxjs';
 import { AnalyticsSummary, AnalyticsTimeseries } from '../../../core/api/tenant-api.models';
-import { AnalyticsApiService } from './analytics-api.service';
+import { AnalyticsApiService } from '../../../core/api/analytics-api.service';
 import { AnalyticsStore } from './analytics.store';
 import { AnalyticsComponent } from './analytics.component';
 

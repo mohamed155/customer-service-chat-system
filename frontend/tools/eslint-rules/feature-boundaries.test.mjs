@@ -47,10 +47,40 @@ ruleTester.run('feature-boundaries', featureBoundaries, {
       filename: `${app}/shared/components/table/table.component.spec.ts`,
       code: "import { s } from '../../../core/notifications/notifications.store';",
     },
+    // a spec may use fixtures, from anywhere
+    {
+      filename: `${app}/shared/components/audit-log-table/audit-log-table.component.spec.ts`,
+      code: "import { a } from '../../fixtures/audit.fixtures';",
+    },
+    {
+      filename: `${app}/features/tenant/audit-logs/audit-logs.store.spec.ts`,
+      code: "import { a } from '../../../shared/fixtures/audit.fixtures';",
+    },
     // outside the dashboard app: not checked
     { filename: '/work/frontend/apps/widget/src/main.ts', code: "import { x } from '../../a/b';" },
   ],
   invalid: [
+    // production code must not depend on fixtures (MOH-70), by any relative path
+    {
+      filename: `${app}/shared/components/channel-badge/channel-badge.component.ts`,
+      code: "import { Channel } from '../../fixtures/fixture.models';",
+      errors: [{ messageId: 'fixtures' }],
+    },
+    {
+      filename: `${app}/features/tenant/overview/overview.component.ts`,
+      code: "import { a } from '../../../shared/fixtures/analytics.fixtures';",
+      errors: [{ messageId: 'fixtures' }],
+    },
+    {
+      filename: `${app}/core/routed-page/routed-page-data.service.ts`,
+      code: "import { a } from '../../shared/fixtures/audit.fixtures';",
+      errors: [{ messageId: 'fixtures' }],
+    },
+    {
+      filename: `${app}/layout/topbar/topbar.component.ts`,
+      code: "export const x = () => import('../../shared/fixtures/notification.fixtures');",
+      errors: [{ messageId: 'fixtures' }],
+    },
     {
       filename: `${app}/features/tenant/team/team-list.component.ts`,
       code: "import { x } from '../conversations/conversations.store';",

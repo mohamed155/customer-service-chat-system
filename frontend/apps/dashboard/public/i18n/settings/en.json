@@ -1,66 +1,30 @@
 {
   "page": {
     "title": "Settings",
-    "description": "Workspace preferences and security",
-    "errorTitle": "Something went wrong",
-    "retry": "Try again",
-    "tabsLabel": "Settings sections",
-    "emptyTitle": "Default settings apply",
-    "emptyDescription": "Customize your workspace preferences and configurations."
-  },
-  "tabs": {
-    "general": "General",
-    "team": "Team",
-    "billing": "Billing",
-    "apiKeys": "API Keys",
-    "security": "Security"
+    "description": "How the dashboard looks and where workspace settings live"
   },
   "theme": {
+    "title": "Theme",
+    "subtitle": "Kept in this browser; it does not change for your teammates",
     "light": "Light",
     "dark": "Dark",
     "system": "System"
   },
-  "general": {
-    "profileTitle": "Workspace profile",
-    "profileSubtitle": "Static workspace preferences",
+  "workspace": {
+    "title": "Workspace",
+    "subtitle": "The workspace you are working in",
     "name": "Name",
-    "domain": "Domain",
-    "timezone": "Timezone",
-    "defaultLanguage": "Default language",
-    "themeTitle": "Theme preference",
-    "themeSubtitle": "Uses the global app UI action",
-    "emailNotifications": "Email notifications",
-    "aiAlerts": "AI quality alerts"
+    "slug": "Identifier"
   },
-  "team": {
-    "member": "Member",
-    "role": "Role",
-    "status": "Status",
-    "invited": "Invited"
-  },
-  "billing": {
-    "usageTitle": "Usage",
-    "usageSubtitle": "Current plan limits",
-    "usageLine": "{used, number} / {limit, number} {unit}",
-    "invoice": "Invoice",
-    "amount": "Amount",
-    "status": "Status",
-    "paid": "Paid",
-    "due": "Due"
-  },
-  "apiKeys": {
-    "title": "API keys",
-    "subtitle": "Masked fixture value only",
-    "created": "Created {date}"
-  },
-  "security": {
-    "title": "Two-factor authentication",
-    "subtitle": "Visual switch",
-    "enabled": "Enabled",
-    "device": "Device",
-    "location": "Location",
-    "lastActive": "Last active",
-    "current": "Current"
+  "manage": {
+    "title": "Workspace settings",
+    "subtitle": "These live on their own pages",
+    "team": "Team",
+    "teamHint": "Members, roles and invitations",
+    "billing": "Billing",
+    "billingHint": "Plan, usage and invoices",
+    "tools": "AI tools",
+    "toolsHint": "Which tools the AI agent may use"
   },
   "tools": {
     "title": "AI Tool Settings",
