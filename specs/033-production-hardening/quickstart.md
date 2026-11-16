@@ -224,12 +224,15 @@ that container stdout alone does not satisfy:
 docker compose -f infra/docker-compose.yml --profile observability up -d
 ```
 
-1. **Logs** — in Grafana, query Loki with `{container="backend"} | json | request_id="$RID"`.
+1. **Logs** — in Grafana, query Loki with `{container="backend"} | json | fields_request_id="$RID"`
+   (or just `{container="backend"} |= "$RID"`). The backend nests the id under `fields`, so after
+   `| json` the key is `fields_request_id`; `request_id="$RID"` matches nothing.
    The stream selector stays bounded (`container`, `level`); the identifier is a line filter
    over the parsed JSON, **not a label**. A `{request_id="…"}` selector would mean promtail
    is creating one Loki stream per request — see T104.
 2. **Traces** — click the derived field on that log line; it links to the trace.
-3. **Errors** — search the same identifier in Sentry.
+3. **Errors** — search the same identifier in Sentry as the tag `request_id:$RID` (it is on every
+   server error, with `status`, `tenant_id`, `release` and `environment`).
 
 **Expected**: all three resolve to the same request, in under 5 minutes of operator effort.
 
@@ -309,8 +312,22 @@ git commit -am 'deliberate break' && git push
 checking nothing, which is the current defect: `ci.yml` runs no migrations and omits
 `REQUIRE_DB_TESTS`, so DB-backed tests self-skip while reporting success.
 
-**Executed-count floor (FR-035)**: drop `REQUIRE_DB_TESTS`. **Expected**: the count falls
-below the committed floor and the build fails rather than passing with fewer tests.
+**Silent-skip guard (FR-035)**: run one DB test file with no database and without
+`REQUIRE_DB_TESTS`:
+
+```bash
+env -u REQUIRE_DB_TESTS DATABASE_URL=postgres://nobody:x@localhost:1/none \
+  cargo nextest run -p server --test widget_conversation_flow
+```
+
+**Expected**: the tests report as passed (they skip themselves), so the executed count does **not**
+fall. That is why CI sets `REQUIRE_DB_TESTS=1`: with it, the same run fails with
+"REQUIRE_DB_TESTS=1 but DATABASE_URL is unreachable".
+
+**Executed-count floor (FR-035)**: delete enough tests that fewer than the floor still run (a
+renamed test file still runs, so a rename proves nothing), then run the CI step.
+**Expected**: the count falls below the committed floor (`baseline-test-count.txt`) and the build fails
+rather than passing with fewer tests.
 
 **Determinism (SC-009)**: re-run the same SHA three times; all three verdicts identical,
 with `rust-toolchain.toml` pinning the toolchain.
@@ -346,7 +363,7 @@ comm -23 /tmp/code-vars.txt /tmp/doc-vars.txt
 cd backend && cargo fmt --check && cargo clippy --workspace -- -D warnings \
   && REQUIRE_DB_TESTS=1 cargo nextest run --workspace
 cd ../frontend && pnpm lint && pnpm format:check \
-  && pnpm exec ng test dashboard --watch=false --browsers=ChromeHeadless \
+  && pnpm exec ng test dashboard --watch=false \
   && pnpm test:e2e
 ./ops/verify-backup.sh
 K6_BASE_URL=https://staging.<host> k6 run loadtest/dashboard-read.js

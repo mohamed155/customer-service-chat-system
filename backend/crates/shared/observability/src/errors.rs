@@ -1,7 +1,10 @@
-use sentry::protocol::{Event, Map};
+use sentry::protocol::{Context, Event, Map, Value};
 use std::sync::OnceLock;
 
 static SENTRY_GUARD: OnceLock<sentry::ClientInitGuard> = OnceLock::new();
+
+/// The context `sentry-tracing` puts a tracing event's fields in.
+const TRACING_FIELDS_CONTEXT: &str = "Rust Tracing Fields";
 
 /// Initialise Sentry error capture.
 ///
@@ -29,6 +32,10 @@ pub fn flush(timeout: std::time::Duration) {
     }
 }
 
+/// Producers of a server error must give `tracing::error!` a message. `sentry-tracing` copies an
+/// `error` field into `Event.message` when an event has none (the `#[instrument(err)]` form), and
+/// this scrubber does not clear the message, so free text there would leave the process. No producer
+/// does this today (no `#[instrument(err)]`, and every `error!` call has a message).
 fn scrub_event(mut event: Event<'static>) -> Event<'static> {
     if let Some(ref mut request) = event.request {
         request.data = None;
@@ -70,6 +77,19 @@ fn scrub_event(mut event: Event<'static>) -> Event<'static> {
         .extra
         .retain(|k, _| RETAINED_EXTRA.contains(&k.as_str()));
 
+    // `sentry-tracing` keeps the fields of a `tracing::error!` event in this context. Keep the
+    // allowlisted ones as tags (searchable in Sentry) before every context is dropped.
+    if let Some(Context::Other(fields)) = event.contexts.get(TRACING_FIELDS_CONTEXT) {
+        let kept: Vec<(String, String)> = fields
+            .iter()
+            .filter(|(key, _)| RETAINED_EXTRA.contains(&key.as_str()))
+            .map(|(key, value)| (key.clone(), tag_value(value)))
+            .collect();
+        for (key, value) in kept {
+            event.tags.insert(key, value);
+        }
+    }
+
     event
         .tags
         .retain(|k, _| RETAINED_EXTRA.contains(&k.as_str()));
@@ -77,6 +97,14 @@ fn scrub_event(mut event: Event<'static>) -> Event<'static> {
     event.server_name = None;
 
     event
+}
+
+/// A JSON field value as a tag: strings without their quotes, anything else as JSON text.
+fn tag_value(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.clone(),
+        other => other.to_string(),
+    }
 }
 
 fn is_sensitive_header(name: &str) -> bool {
@@ -97,7 +125,7 @@ fn is_sensitive_header(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sentry::protocol::{Request, User};
+    use sentry::protocol::{Context, Request, User};
 
     fn make_event(headers: Map<String, String>) -> Event<'static> {
         Event {
@@ -149,6 +177,48 @@ mod tests {
         assert_eq!(
             request.headers.get("X-Tenant-ID").map(|s| s.as_str()),
             Some("[REDACTED]")
+        );
+    }
+
+    /// `sentry-tracing` stores the fields of a `tracing::error!` event in the "Rust Tracing
+    /// Fields" context, not in `extra`. The scrubber used to clear every context, so the
+    /// request id of every captured server error was lost (spec 033 FR-017).
+    #[test]
+    fn scrubber_keeps_allowlisted_tracing_fields_as_tags() {
+        let mut fields = Map::new();
+        fields.insert("request_id".into(), "req-abc".into());
+        fields.insert("tenant_id".into(), "none".into());
+        fields.insert("status".into(), 500.into());
+        fields.insert(
+            "error".into(),
+            "password=hunter2 for jane@example.com".into(),
+        );
+        fields.insert("context".into(), "login lookup".into());
+        let mut event = make_event(Map::new());
+        event
+            .contexts
+            .insert("Rust Tracing Fields".into(), Context::Other(fields));
+
+        let scrubbed = scrub_event(event);
+
+        assert_eq!(
+            scrubbed.tags.get("request_id").map(String::as_str),
+            Some("req-abc"),
+            "request_id must reach Sentry so an error can be matched to a request"
+        );
+        assert_eq!(scrubbed.tags.get("status").map(String::as_str), Some("500"));
+        assert_eq!(
+            scrubbed.tags.get("tenant_id").map(String::as_str),
+            Some("none")
+        );
+        assert!(
+            scrubbed.tags.get("error").is_none() && scrubbed.tags.get("context").is_none(),
+            "fields outside the allowlist must not be kept"
+        );
+        assert!(scrubbed.contexts.is_empty(), "no context may be sent");
+        assert!(
+            !format!("{scrubbed:?}").contains("hunter2"),
+            "the free-text error must not leave the process"
         );
     }
 
