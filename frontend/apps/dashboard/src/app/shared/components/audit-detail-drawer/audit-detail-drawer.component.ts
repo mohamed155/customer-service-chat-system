@@ -67,7 +67,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
       }
       .badge {
         display: inline-block;
-        margin-left: var(--app-space-1);
+        margin-inline-start: var(--app-space-1);
         font-size: var(--app-font-xs);
         padding: 1px var(--app-space-2);
         border-radius: var(--app-radius-sm);

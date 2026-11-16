@@ -73,7 +73,7 @@ let nextId = 0;
       .dropdown {
         position: absolute;
         top: calc(100% + 4px);
-        right: 0;
+        inset-inline-end: 0;
         width: 280px;
         background: var(--app-panel);
         border: 1px solid var(--app-border);
@@ -120,7 +120,7 @@ let nextId = 0;
         background: transparent;
         color: var(--app-text);
         cursor: pointer;
-        text-align: left;
+        text-align: start;
         font: inherit;
       }
       .option:hover {

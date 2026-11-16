@@ -95,7 +95,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         gap: var(--app-space-2);
       }
       .remove-btn {
-        margin-left: auto;
+        margin-inline-start: auto;
         border: 0;
         background: transparent;
         color: var(--app-text-2);

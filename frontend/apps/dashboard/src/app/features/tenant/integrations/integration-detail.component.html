@@ -1,5 +1,7 @@
 <app-page-container>
-  <a class="back" [routerLink]="backLink()">{{ 'integrations.detail.back' | transloco }}</a>
+  <a class="back app-arrow-back" [routerLink]="backLink()">{{
+    'integrations.detail.back' | transloco
+  }}</a>
   <app-page-header [title]="title()" [description]="description()" />
   @if (loading() && !detail()) {
     <app-loading-state />

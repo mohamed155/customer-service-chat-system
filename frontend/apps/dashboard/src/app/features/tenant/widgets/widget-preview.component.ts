@@ -58,7 +58,7 @@ import { DEFAULT_WIDGET_COLOR } from './widget-defaults';
       .wgt-launcher {
         position: absolute;
         bottom: 20px;
-        right: 20px;
+        right: 20px; /* rtl-lint-ignore: the widget's corner is a tenant setting, not the reading direction */
         width: 56px;
         height: 56px;
         border-radius: 50%;
@@ -113,7 +113,7 @@ import { DEFAULT_WIDGET_COLOR } from './widget-defaults';
         align-self: flex-start;
         background: var(--wgt-bubble-assistant);
         color: var(--wgt-text);
-        border-bottom-left-radius: 4px;
+        border-end-start-radius: 4px;
       }
       .wgt-composer {
         display: flex;

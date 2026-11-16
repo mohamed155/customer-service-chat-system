@@ -1,4 +1,10 @@
-import { baseLanguage, candidateLocales, formattingLocale, parseLocale } from './locale';
+import {
+  baseLanguage,
+  candidateLocales,
+  formattingLocale,
+  parseLocale,
+  textDirection,
+} from './locale';
 
 describe('locale helpers', () => {
   it('accepts well-formed language tags and canonicalises them', () => {
@@ -60,5 +66,22 @@ describe('locale helpers', () => {
     expect(formattingLocale('de', 'de-AT', ['de-DE'])).toBe('de-AT');
     expect(formattingLocale('de', null, ['fr-FR'])).toBe('de');
     expect(formattingLocale('en', null, [])).toBe('en');
+  });
+
+  it('runs right to left for the right-to-left languages and left to right for the rest', () => {
+    for (const tag of ['ar', 'ar-EG', 'he', 'fa', 'ur', 'ps', 'sd', 'ug', 'yi', 'dv', 'ckb']) {
+      expect(textDirection(tag), tag).toBe('rtl');
+    }
+    for (const tag of ['en', 'en-GB', 'de', 'fr-CA', 'es', 'zh-Hant', 'ja', 'ko', 'hi', 'tr']) {
+      expect(textDirection(tag), tag).toBe('ltr');
+    }
+  });
+
+  it('lets the script of a tag decide before the language does', () => {
+    expect(textDirection('ku-Arab')).toBe('rtl');
+    expect(textDirection('ku-Latn')).toBe('ltr');
+    expect(textDirection('pa-Arab')).toBe('rtl');
+    expect(textDirection('az-Latn')).toBe('ltr');
+    expect(textDirection('uz-Arab')).toBe('rtl');
   });
 });

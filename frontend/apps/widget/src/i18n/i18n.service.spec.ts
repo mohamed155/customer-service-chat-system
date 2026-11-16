@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import englishFile from '../../public/i18n/en.json';
-import { I18n } from './i18n.service';
+import { I18n, textDirection } from './i18n.service';
 import { EN, MessageKey } from './messages';
 
 const jsonResponse = (body: unknown, status = 200): Response =>
@@ -114,6 +114,41 @@ describe('I18n', () => {
       await i18n.use('de');
       await i18n.use('en');
       expect(i18n.t('chat.close')).toBe('Close chat');
+    });
+  });
+
+  describe('direction', () => {
+    afterEach(() => {
+      document.documentElement.removeAttribute('dir');
+      document.documentElement.lang = 'en';
+    });
+
+    it('mirrors the document for a right-to-left language and puts it back for English', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ 'chat.close': 'إغلاق الدردشة' }));
+      await i18n.use('ar');
+      expect(document.documentElement.dir).toBe('rtl');
+      expect(document.documentElement.lang).toBe('ar');
+
+      await i18n.use('en');
+      expect(document.documentElement.dir).toBe('ltr');
+      expect(document.documentElement.lang).toBe('en');
+    });
+
+    it('stays left to right when a language cannot be loaded', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({}, 404));
+      await i18n.use('ar');
+      expect(document.documentElement.dir).toBe('ltr');
+    });
+
+    it('knows which languages run right to left', () => {
+      for (const tag of ['ar', 'ar-EG', 'he', 'fa', 'ur', 'ps', 'sd', 'ug', 'yi', 'dv', 'ckb']) {
+        expect(textDirection(tag), tag).toBe('rtl');
+      }
+      for (const tag of ['en', 'en-GB', 'de', 'fr-CA', 'es', 'zh-Hant', 'ja', 'hi']) {
+        expect(textDirection(tag), tag).toBe('ltr');
+      }
+      expect(textDirection('ku-Arab')).toBe('rtl');
+      expect(textDirection('ku-Latn')).toBe('ltr');
     });
   });
 

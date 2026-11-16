@@ -48,6 +48,10 @@ jobs:
         run: pnpm lint:colors
       - name: The color check works
         run: pnpm test:colors-check
+      - name: Styles use logical properties, so the layout mirrors right to left (MOH-73)
+        run: pnpm lint:rtl
+      - name: The right-to-left check works
+        run: pnpm test:rtl-check
       - name: Every workspace store resets on a workspace change (MOH-61)
         run: pnpm lint:tenant-scope
       - name: The tenant-scope check works

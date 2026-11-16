@@ -1,5 +1,7 @@
 <app-page-container>
-  <a [routerLink]="backLink" class="back-link">{{ 'customers.profile.back' | transloco }}</a>
+  <a [routerLink]="backLink" class="back-link app-arrow-back">{{
+    'customers.profile.back' | transloco
+  }}</a>
 
   <app-page-header
     [title]="headerTitle()"

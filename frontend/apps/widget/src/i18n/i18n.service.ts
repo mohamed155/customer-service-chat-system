@@ -52,6 +52,10 @@ export class I18n {
     this.rules = safeRules(locale);
     this.active.set(catalog);
     this.localeSignal.set(locale);
+    // The widget mirrors for a right-to-left language the way the dashboard does (MOH-73): the
+    // layout uses logical properties, so the document's direction is all it needs.
+    document.documentElement.lang = locale;
+    document.documentElement.dir = textDirection(locale);
   }
 
   private plural(forms: Exclude<Entry, string>, count: string | number | undefined): string {
@@ -59,6 +63,51 @@ export class I18n {
     const category = Number.isFinite(n) ? this.rules.select(n) : 'other';
     return forms[category] ?? forms.other;
   }
+}
+
+/** The scripts that are written from right to left. */
+const RTL_SCRIPTS = new Set([
+  'Arab',
+  'Hebr',
+  'Thaa',
+  'Syrc',
+  'Nkoo',
+  'Adlm',
+  'Rohg',
+  'Mand',
+  'Samr',
+]);
+
+/** Languages whose usual script is right to left, for a browser that cannot work the script out. */
+const RTL_LANGUAGES = new Set([
+  'ar',
+  'he',
+  'iw',
+  'fa',
+  'ur',
+  'ps',
+  'sd',
+  'ug',
+  'yi',
+  'dv',
+  'ckb',
+  'ks',
+]);
+
+/**
+ * The direction text runs in a language: `rtl` for Arabic, Hebrew, Persian, Urdu and the other
+ * right-to-left languages, else `ltr`. The script of the tag decides first (`ku-Arab` is right to
+ * left), then the language. The dashboard has the same function (`core/i18n/locale.ts`): the two
+ * apps share no code, so the two copies are tested the same way.
+ */
+export function textDirection(tag: string): 'ltr' | 'rtl' {
+  try {
+    const script = new Intl.Locale(tag).maximize().script;
+    if (script) return RTL_SCRIPTS.has(script) ? 'rtl' : 'ltr';
+  } catch {
+    // An old browser without Intl.Locale, or a tag it cannot read: go by the language.
+  }
+  return RTL_LANGUAGES.has(tag.split('-')[0].toLowerCase()) ? 'rtl' : 'ltr';
 }
 
 /** `pt_br`, `PT-BR` and ` pt-BR ` are all `pt-BR`; anything that is not a locale tag is `null`. */

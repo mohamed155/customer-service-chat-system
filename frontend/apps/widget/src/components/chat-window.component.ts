@@ -138,7 +138,7 @@ import { I18n } from '../i18n/i18n.service';
         background: var(--wgt-bubble-assistant);
         color: var(--wgt-text);
         align-self: flex-start;
-        border-bottom-left-radius: 4px;
+        border-end-start-radius: 4px;
       }
       .window__error {
         padding: 12px;

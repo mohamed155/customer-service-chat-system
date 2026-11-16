@@ -135,7 +135,7 @@ type TimelineItem = { kind: 'message'; message: Message } | { kind: 'tool'; tool
       .delivery-status {
         display: inline-flex;
         align-items: center;
-        margin-left: var(--app-space-2);
+        margin-inline-start: var(--app-space-2);
         font-size: var(--app-font-xs);
         color: var(--app-text-3);
       }

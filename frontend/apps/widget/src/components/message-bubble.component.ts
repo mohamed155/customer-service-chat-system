@@ -34,19 +34,19 @@ import { WidgetMessage } from '../core/models';
         background: var(--wgt-bubble-visitor);
         color: #fff;
         align-self: flex-end;
-        border-bottom-right-radius: 4px;
+        border-end-end-radius: 4px;
       }
       .bubble--assistant {
         background: var(--wgt-bubble-assistant);
         color: var(--wgt-text);
         align-self: flex-start;
-        border-bottom-left-radius: 4px;
+        border-end-start-radius: 4px;
       }
       .bubble--agent {
         background: var(--wgt-bubble-assistant);
         color: var(--wgt-text);
         align-self: flex-start;
-        border-bottom-left-radius: 4px;
+        border-end-start-radius: 4px;
       }
       .bubble--system {
         background: transparent;

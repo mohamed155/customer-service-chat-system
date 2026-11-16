@@ -89,7 +89,7 @@ import { I18n } from '../i18n/i18n.service';
       .composer__counter {
         font-size: 11px;
         color: var(--wgt-muted-text);
-        text-align: right;
+        text-align: end;
         padding-top: 2px;
       }
       .composer__counter--warn {

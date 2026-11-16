@@ -26,7 +26,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
       :host ::ng-deep td {
         padding: 12px 14px;
         border-bottom: 1px solid var(--app-border);
-        text-align: left;
+        text-align: start;
         font-size: var(--app-font-sm);
       }
       :host ::ng-deep th {

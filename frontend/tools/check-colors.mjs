@@ -32,7 +32,7 @@ export const EXEMPT = {
     'the loading skeleton shown before the app and its stylesheet load: no tokens exist yet',
 };
 
-const MARKER = /color-lint-ignore:\s*\S/;
+const MARKER = /color-lint-ignore:\s*[^\s*/]/;
 const FUNCTIONS = /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(/;
 const HEX = /(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/;
 const NAMES = new Set(

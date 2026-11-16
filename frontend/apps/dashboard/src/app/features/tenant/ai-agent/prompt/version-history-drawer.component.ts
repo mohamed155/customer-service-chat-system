@@ -72,7 +72,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
       .version-row {
         display: block;
         width: 100%;
-        text-align: left;
+        text-align: start;
         padding: var(--app-space-3);
         border: 1px solid var(--app-border);
         border-radius: var(--app-radius-md);
@@ -155,7 +155,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         font: inherit;
         font-size: var(--app-font-sm);
         padding: 0;
-        text-align: left;
+        text-align: start;
       }
       .back-btn:hover {
         text-decoration: underline;

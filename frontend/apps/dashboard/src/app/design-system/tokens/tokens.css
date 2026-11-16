@@ -69,9 +69,17 @@
   --app-wgt-on-primary-muted: rgba(255, 255, 255, 0.85);
   --app-wgt-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
 
+  /* The sign of the inline direction: 1 left to right, -1 right to left (set below). It lets a
+     transform slide or centre something along the inline axis, which logical properties cannot. */
+  --app-dir-sign: 1;
+
   /* Breakpoints */
   --app-bp-sm: 640px;
   --app-bp-md: 768px;
   --app-bp-lg: 1024px;
   --app-bp-xl: 1280px;
+}
+
+:root[dir='rtl'] {
+  --app-dir-sign: -1;
 }

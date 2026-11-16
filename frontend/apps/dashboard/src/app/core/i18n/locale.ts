@@ -70,3 +70,47 @@ export function formattingLocale(
   }
   return active;
 }
+
+/** The scripts that are written from right to left. */
+const RTL_SCRIPTS = new Set([
+  'Arab',
+  'Hebr',
+  'Thaa',
+  'Syrc',
+  'Nkoo',
+  'Adlm',
+  'Rohg',
+  'Mand',
+  'Samr',
+]);
+
+/** Languages whose usual script is right to left, for a browser that cannot work the script out. */
+const RTL_LANGUAGES = new Set([
+  'ar',
+  'he',
+  'iw',
+  'fa',
+  'ur',
+  'ps',
+  'sd',
+  'ug',
+  'yi',
+  'dv',
+  'ckb',
+  'ks',
+]);
+
+/**
+ * The direction text runs in a language (MOH-73): `rtl` for Arabic, Hebrew, Persian, Urdu and the
+ * other right-to-left languages, `ltr` for everything else. The script decides when the tag has
+ * one (`ku-Arab` is right to left, `ku-Latn` is not), then the language's usual script.
+ */
+export function textDirection(tag: string): 'ltr' | 'rtl' {
+  try {
+    const script = new Intl.Locale(tag).maximize().script;
+    if (script) return RTL_SCRIPTS.has(script) ? 'rtl' : 'ltr';
+  } catch {
+    // An old browser without Intl.Locale, or a tag it cannot read: go by the language.
+  }
+  return RTL_LANGUAGES.has(baseLanguage(tag)) ? 'rtl' : 'ltr';
+}

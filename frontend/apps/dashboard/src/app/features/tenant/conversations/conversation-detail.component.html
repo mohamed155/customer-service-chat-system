@@ -17,8 +17,8 @@
   <section class="detail-shell">
     <header class="detail-header">
       <div class="header-left">
-        <button type="button" class="back-btn" (click)="goBack()">
-          &larr; {{ 'conversations.detail.back' | transloco }}
+        <button type="button" class="back-btn app-arrow-back" (click)="goBack()">
+          {{ 'conversations.detail.back' | transloco }}
         </button>
         <app-avatar [initials]="customerInitials(conv)" size="md" />
         <div class="header-copy">

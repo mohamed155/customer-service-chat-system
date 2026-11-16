@@ -21,7 +21,8 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
       .skill-chip {
         display: inline-block;
         padding: 2px 8px;
-        margin: 1px 4px 1px 0;
+        margin-block: 1px;
+        margin-inline: 0 4px;
         border-radius: 999px;
         background: var(--app-panel-2);
         color: var(--app-text-2);

@@ -40,7 +40,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
       .badge {
         position: absolute;
         top: -4px;
-        right: -4px;
+        inset-inline-end: -4px;
         min-width: 16px;
         height: 16px;
         padding: 0 4px;

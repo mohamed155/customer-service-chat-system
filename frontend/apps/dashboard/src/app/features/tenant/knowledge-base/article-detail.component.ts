@@ -130,7 +130,7 @@ const DETAIL_ERRORS: ErrorKeyOverrides = {
       .body ::ng-deep ul,
       .body ::ng-deep ol {
         margin: 0 0 1em;
-        padding-left: 1.5em;
+        padding-inline-start: 1.5em;
       }
       .body ::ng-deep a {
         color: var(--app-accent-strong);

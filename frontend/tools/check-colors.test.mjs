@@ -182,6 +182,7 @@ test('specs, fixtures and generated code are not scanned', () => {
 test('a line marked color-lint-ignore with a reason passes; one without does not', () => {
   assert.deepEqual(run("const c = '#0066FF'; // color-lint-ignore: a tenant's stored setting"), []);
   assert.equal(run("const c = '#0066FF'; // color-lint-ignore:").length, 1);
+  assert.equal(run('a { color: #fff; /* color-lint-ignore: */ }').length, 1);
   assert.equal(run("const c = '#0066FF';").length, 1);
 });
 

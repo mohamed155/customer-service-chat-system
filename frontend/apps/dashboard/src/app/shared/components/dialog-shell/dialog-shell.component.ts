@@ -33,12 +33,12 @@ import { TranslocoPipe } from '@jsverse/transloco';
       .dialog {
         position: fixed;
         top: 50%;
-        left: 50%;
+        inset-inline-start: 50%;
         z-index: 100;
         width: min(440px, calc(100vw - 2rem));
         max-height: min(90dvh, 52rem);
         overflow: auto;
-        transform: translate(-50%, -50%);
+        transform: translate(calc(-50% * var(--app-dir-sign)), -50%);
         padding: var(--app-space-5);
         border: 1px solid var(--app-border);
         border-radius: var(--app-radius-lg);
@@ -50,13 +50,13 @@ import { TranslocoPipe } from '@jsverse/transloco';
         outline-offset: 2px;
       }
       .dialog--drawer {
-        inset: 0 0 0 auto;
+        inset-block: 0;
+        inset-inline: auto 0;
         width: min(560px, 100vw);
         max-height: 100dvh;
         border-radius: 0;
         transform: none;
         top: 0;
-        left: auto;
       }
     `,
   ],

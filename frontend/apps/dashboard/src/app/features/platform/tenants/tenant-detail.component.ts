@@ -174,8 +174,8 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
       .dialog {
         position: fixed;
         top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
+        inset-inline-start: 50%;
+        transform: translate(calc(-50% * var(--app-dir-sign)), -50%);
         z-index: 1000;
         background: var(--app-panel);
         border: 1px solid var(--app-border);

@@ -156,7 +156,7 @@ const ERROR_KEYS: ErrorKeyOverrides = {
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        margin-right: var(--app-space-1);
+        margin-inline-end: var(--app-space-1);
       }
       .participant-chip {
         display: inline-flex;

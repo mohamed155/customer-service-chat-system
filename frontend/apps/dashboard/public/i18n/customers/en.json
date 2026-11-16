@@ -21,7 +21,7 @@
     "loadMore": "Load more"
   },
   "profile": {
-    "back": "← Back to customers",
+    "back": "Back to customers",
     "description": "Contact, identifiers, metadata, and conversation history",
     "edit": "Edit",
     "loading": "Loading customer...",

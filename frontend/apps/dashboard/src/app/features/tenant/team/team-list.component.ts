@@ -111,7 +111,7 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
         display: flex;
         gap: 4px;
         flex-wrap: wrap;
-        margin-left: auto;
+        margin-inline-start: auto;
       }
       .skill-chip {
         display: inline-block;
@@ -136,7 +136,7 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
         padding: var(--app-space-3);
       }
       app-button[toolbar-end] {
-        margin-left: auto;
+        margin-inline-start: auto;
       }
       caption {
         position: absolute;

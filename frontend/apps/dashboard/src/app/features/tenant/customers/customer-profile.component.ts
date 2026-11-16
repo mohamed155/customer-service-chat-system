@@ -195,7 +195,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         background: var(--app-panel-2);
       }
       .conversation-row time {
-        margin-left: auto;
+        margin-inline-start: auto;
         color: var(--app-text-3);
         font-size: var(--app-font-xs);
       }
