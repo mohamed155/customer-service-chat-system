@@ -491,7 +491,7 @@
     "mobile_sdk": "Mobile SDK",
     "email": "Email",
     "phone": "Phone",
-    "widget": "Widget"
+    "widget": "Website widget"
   },
   "satisfaction": {
     "rated": "Rated {rating} out of 5"

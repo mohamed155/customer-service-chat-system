@@ -130,6 +130,17 @@ describe('OverviewComponent', () => {
     expect(element.querySelector('app-escalation-banner')).toBeFalsy();
   });
 
+  it('names the widget channel the same in the mix and on a conversation', async () => {
+    recentConversations.mockReturnValue(of({ data: [{ ...CONVERSATION, channel: 'widget' }] }));
+    const element = await settled(mount(['analytics.view', 'conversations.view']));
+
+    const names = Array.from(element.querySelectorAll('app-channel-badge')).map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(names).toContain('Website widget');
+    expect(element.querySelector('app-breakdown-bars')?.textContent).toContain('Website widget');
+  });
+
   it('links each recent conversation to its detail page', async () => {
     const element = await settled(mount(['conversations.view']));
 
