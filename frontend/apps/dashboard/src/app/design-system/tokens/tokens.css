@@ -52,6 +52,23 @@
   --app-chart-1: #0284c7;
   --app-chart-2: #d97706;
 
+  /* The widget preview (tenant widgets page) mirrors the embedded widget's own palette, which is
+     fixed and does not follow the dashboard theme: the widget has a light and a dark look of its
+     own, picked per widget. */
+  --app-wgt-light-surface: #ffffff;
+  --app-wgt-light-text: #1a1a2e;
+  --app-wgt-light-text-muted: #8e8ea0;
+  --app-wgt-light-border: #e2e2ea;
+  --app-wgt-light-bubble-assistant: #f0f0f5;
+  --app-wgt-dark-surface: #1a1a2e;
+  --app-wgt-dark-text: #e2e2ea;
+  --app-wgt-dark-border: #2a2a3e;
+  --app-wgt-dark-bubble-assistant: #2a2a3e;
+  --app-wgt-bubble-visitor: #0066ff;
+  --app-wgt-on-primary: #ffffff;
+  --app-wgt-on-primary-muted: rgba(255, 255, 255, 0.85);
+  --app-wgt-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+
   /* Breakpoints */
   --app-bp-sm: 640px;
   --app-bp-md: 768px;

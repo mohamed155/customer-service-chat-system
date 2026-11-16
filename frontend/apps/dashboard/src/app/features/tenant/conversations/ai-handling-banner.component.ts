@@ -14,8 +14,8 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         padding: var(--app-space-3) var(--app-space-4);
         margin: 0 var(--app-space-4) var(--app-space-3);
         border-radius: var(--app-radius-md);
-        background: var(--app-warning-bg, #fff3cd);
-        border: 1px solid var(--app-warning-border, #ffc107);
+        background: var(--app-amber-soft);
+        border: 1px solid var(--app-amber);
       }
       .ai-handling-banner p {
         margin: 0 0 var(--app-space-2);

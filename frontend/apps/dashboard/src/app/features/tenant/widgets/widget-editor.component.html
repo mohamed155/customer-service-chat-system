@@ -55,7 +55,7 @@
           <input
             id="wgt-primary-color"
             type="color"
-            [ngModel]="form().primaryColor || '#0066FF'"
+            [ngModel]="form().primaryColor || defaultColor"
             (ngModelChange)="onChange('primaryColor', $event)"
           />
           <input

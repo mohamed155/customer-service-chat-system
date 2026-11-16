@@ -138,7 +138,7 @@ function serverFieldKey(field: string, code: string): string {
         border: 0;
         border-radius: var(--app-radius-md);
         background: var(--app-accent);
-        color: var(--app-accent-on, white);
+        color: var(--app-accent-ink);
         font: inherit;
         font-weight: 600;
         cursor: pointer;
@@ -157,7 +157,7 @@ function serverFieldKey(field: string, code: string): string {
         border: 0;
         border-radius: var(--app-radius-md);
         background: var(--app-accent);
-        color: var(--app-accent-on, white);
+        color: var(--app-accent-ink);
         font: inherit;
         font-weight: 600;
         cursor: pointer;

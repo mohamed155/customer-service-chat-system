@@ -56,7 +56,7 @@ import { TuiIcon } from '@taiga-ui/core';
         padding: 0 6px;
         border-radius: 999px;
         background: var(--app-red);
-        color: white;
+        color: var(--app-red-ink);
         font-size: 10px;
         font-weight: 700;
       }

@@ -63,9 +63,9 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         padding: 8px 16px;
         margin-bottom: 12px;
         border-radius: var(--app-radius-md);
-        background: var(--app-danger-bg, #fee2e2);
-        border: 1px solid var(--app-danger, #dc2626);
-        color: var(--app-danger, #dc2626);
+        background: var(--app-red-soft);
+        border: 1px solid var(--app-red);
+        color: var(--app-red);
         font-size: var(--app-font-sm);
         font-weight: 600;
       }

@@ -25,7 +25,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
         inset: 0;
         z-index: 99;
         border: 0;
-        background: rgba(0, 0, 0, 0.4);
+        background: var(--app-scrim);
       }
       .dialog-backdrop:disabled {
         cursor: default;
@@ -43,7 +43,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
         border: 1px solid var(--app-border);
         border-radius: var(--app-radius-lg);
         background: var(--app-panel);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        box-shadow: var(--app-shadow-lg);
       }
       .dialog:focus-visible {
         outline: 3px solid var(--app-accent-soft);

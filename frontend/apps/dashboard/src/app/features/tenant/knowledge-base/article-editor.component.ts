@@ -56,7 +56,7 @@ import { KnowledgeStore } from './knowledge.store';
       }
       .editor-error {
         margin: 0;
-        color: var(--app-danger);
+        color: var(--app-red);
         font-size: var(--app-font-sm);
       }
       .editor-label {

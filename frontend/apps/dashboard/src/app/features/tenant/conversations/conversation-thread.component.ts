@@ -118,7 +118,7 @@ type TimelineItem = { kind: 'message'; message: Message } | { kind: 'tool'; tool
         padding: 0 6px;
         border-radius: 999px;
         background: var(--app-amber);
-        color: #000;
+        color: var(--app-amber-ink);
         font-size: 10px;
         font-weight: 700;
         text-transform: uppercase;

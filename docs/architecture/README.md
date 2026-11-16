@@ -5,6 +5,7 @@ How the platform is built and why.
 | Document | What it covers |
 | -- | -- |
 | [System architecture](system-architecture.md) | Quality priorities, architectural style, the module map, code organization, tenancy, security, data, realtime, AI runtime, scalability and reliability |
+| [Design tokens](design-tokens.md) | The dashboard's color rule, the token to use for each job, how to add one, and the `pnpm lint:colors` check |
 | [Module README template](module-readme-template.md) | What every backend module's `README.md` states: responsibility, public interface, owned tables, events, permissions |
 
 Decisions behind the architecture are recorded in the [ADRs](../adr/README.md). The

@@ -137,12 +137,12 @@ const TOOL_ERRORS: ErrorKeyOverrides = { 422: marker('settings.tools.dialog.inva
       }
       .btn--primary {
         background: var(--app-accent);
-        color: var(--app-white, #fff);
+        color: var(--app-accent-ink);
         border-color: var(--app-accent);
       }
       .btn--danger {
         background: var(--app-red);
-        color: var(--app-white, #fff);
+        color: var(--app-red-ink);
         border-color: var(--app-red);
       }
       .btn--sm {

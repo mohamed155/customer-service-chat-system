@@ -18,6 +18,7 @@ import { copyToClipboard } from '../../../shared/utils/clipboard';
 import { WidgetPreviewComponent } from './widget-preview.component';
 import { WidgetEditorComponent } from './widget-editor.component';
 import { WidgetsStore } from './widgets.store';
+import { DEFAULT_WIDGET_COLOR } from './widget-defaults';
 
 /** The widget API refuses a field with a `422`; the editor already marks the field. */
 const WIDGET_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.invalid') };
@@ -117,11 +118,11 @@ const WIDGET_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.inv
         color: var(--app-accent-strong);
       }
       .action-link.danger {
-        color: var(--app-red, #e53935);
+        color: var(--app-red);
       }
       .action-link.danger:hover {
-        background: rgba(229, 57, 53, 0.1);
-        color: var(--app-red, #e53935);
+        background: var(--app-red-soft);
+        color: var(--app-red);
       }
       .detail-col {
         display: grid;
@@ -181,7 +182,7 @@ const WIDGET_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.inv
       .modal-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.4);
+        background: var(--app-scrim);
         display: grid;
         place-items: center;
         z-index: 1000;
@@ -192,7 +193,7 @@ const WIDGET_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.inv
         padding: var(--app-space-6);
         background: var(--app-panel);
         border-radius: var(--app-radius-xl);
-        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+        box-shadow: var(--app-shadow-lg);
       }
       .modal h3 {
         margin: 0 0 var(--app-space-2);
@@ -236,7 +237,7 @@ export class WidgetsComponent {
     this.store.updateFormState({
       name: '',
       displayName: '',
-      primaryColor: '#0066FF',
+      primaryColor: DEFAULT_WIDGET_COLOR,
       welcomeMessage: '',
       position: 'bottom-right',
       theme: 'light',
