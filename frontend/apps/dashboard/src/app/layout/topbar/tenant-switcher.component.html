@@ -2,8 +2,11 @@
   <button
     type="button"
     class="trigger"
+    #trigger
     (click)="toggle()"
+    (keydown)="onTriggerKeydown($event)"
     [attr.aria-expanded]="open()"
+    [attr.aria-controls]="open() ? listId : null"
     aria-haspopup="listbox"
     [attr.aria-label]="'tenantSwitcher.label' | transloco"
   >
@@ -13,34 +16,64 @@
   </button>
 
   @if (open()) {
-    <div class="dropdown" role="listbox">
+    <div class="dropdown">
       <label class="search-label">
         <tui-icon icon="@tui.search" class="search-icon" />
         <input
           class="search-input"
           type="search"
           #searchInput
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded="true"
+          [attr.aria-controls]="listId"
+          [attr.aria-activedescendant]="highlightedId()"
+          [attr.aria-label]="'tenantSwitcher.search' | transloco"
           [placeholder]="'tenantSwitcher.search' | transloco"
-          [(ngModel)]="query"
+          [ngModel]="query()"
+          (ngModelChange)="onQueryChange($event)"
+          (keydown)="onSearchKeydown($event)"
         />
       </label>
-      <div class="list">
+      @if (loadFailed()) {
+        <div class="error" role="alert">
+          <span>{{ 'tenantSwitcher.loadFailed' | transloco }}</span>
+          <button type="button" (click)="retry()">{{ 'tenantSwitcher.retry' | transloco }}</button>
+        </div>
+      }
+      @if (switchFailed()) {
+        <div class="error" role="alert">{{ 'tenantSwitcher.switchFailed' | transloco }}</div>
+      }
+      <div
+        class="list"
+        #list
+        role="listbox"
+        [id]="listId"
+        [attr.aria-label]="'tenantSwitcher.label' | transloco"
+        [attr.aria-busy]="loading() || null"
+      >
         @for (tenant of filteredTenants(); track tenant.id) {
-          <button
-            type="button"
+          <div
             class="option"
             role="option"
+            [id]="optionId(tenant)"
             [class.active]="tenant.id === activeTenant()?.id"
+            [class.highlighted]="optionId(tenant) === highlightedId()"
             [attr.aria-selected]="tenant.id === activeTenant()?.id"
+            tabindex="-1"
             (click)="select(tenant)"
+            (keydown.enter)="select(tenant)"
           >
             <span class="option-name">{{ tenant.name }}</span>
             <span class="option-slug">{{ tenant.slug }}</span>
-          </button>
-        } @empty {
-          <div class="empty">{{ 'tenantSwitcher.empty' | transloco }}</div>
+          </div>
         }
       </div>
+      @if (filteredTenants().length === 0 && !loadFailed()) {
+        <div class="empty" role="status">
+          {{ (loading() ? 'tenantSwitcher.loading' : 'tenantSwitcher.empty') | transloco }}
+        </div>
+      }
     </div>
   }
 </div>

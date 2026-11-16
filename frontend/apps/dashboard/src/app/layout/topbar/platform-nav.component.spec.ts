@@ -141,4 +141,17 @@ describe('PlatformNavComponent', () => {
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).querySelector('.dropdown')).toBeNull();
   });
+
+  it('does not take focus on an Escape pressed elsewhere while its menu is closed', async () => {
+    const { fixture } = await setup(true);
+    const other = document.createElement('input');
+    document.body.appendChild(other);
+    other.focus();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+
+    expect(document.activeElement).toBe(other);
+    other.remove();
+  });
 });

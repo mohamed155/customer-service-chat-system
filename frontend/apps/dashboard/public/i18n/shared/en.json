@@ -63,7 +63,11 @@
     "label": "Switch tenant",
     "select": "Select tenant...",
     "search": "Search tenants...",
-    "empty": "No tenants found"
+    "empty": "No tenants found",
+    "loading": "Loading tenants...",
+    "loadFailed": "The tenants could not be loaded.",
+    "retry": "Try again",
+    "switchFailed": "Could not switch tenant. Try again."
   },
   "topbar": {
     "toggleSidebar": "Toggle sidebar",

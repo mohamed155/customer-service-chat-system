@@ -50,6 +50,8 @@ export const tenantContextActions = createActionGroup({
     'Switch Tenant Requested': props<{ tenantId: string }>(),
     'Switch Tenant Succeeded': props<{ tenant: TenantSummary }>(),
     'Switch Tenant Failed': emptyProps(),
+    /** The switch was abandoned (the person closed the picker or chose again) before it answered. */
+    'Switch Tenant Cancelled': emptyProps(),
   },
 });
 
@@ -79,6 +81,10 @@ export const tenantContextFeature = createFeature({
     on(tenantContextActions.switchTenantFailed, (state) => ({
       ...state,
       status: 'error' as const,
+    })),
+    on(tenantContextActions.switchTenantCancelled, (state) => ({
+      ...state,
+      status: 'idle' as const,
     })),
   ),
 });

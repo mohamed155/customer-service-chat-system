@@ -1,6 +1,15 @@
 import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { firstValueFrom } from 'rxjs';
+import {
+  catchError,
+  finalize,
+  defer,
+  firstValueFrom,
+  map,
+  Observable,
+  tap,
+  throwError,
+} from 'rxjs';
 import { ApiService } from '../api/api.service';
 import type { components } from '../api/generated/api';
 import { TenantSummary, tenantSummaryFromWire } from '../api/tenant-api.models';
@@ -18,22 +27,41 @@ export class TenantContextService {
   readonly activeTenant = this.store.selectSignal(selectActiveTenant);
   readonly status = this.store.selectSignal(selectStatus);
 
-  async select(tenantId: string): Promise<TenantSummary> {
-    this.store.dispatch(tenantContextActions.switchTenantRequested({ tenantId }));
-    try {
-      const response = await firstValueFrom(
-        this.api.post<components['schemas']['TenantSummary']>(
+  /**
+   * Switches to a workspace. Cold: nothing is sent until it is subscribed to, and unsubscribing
+   * cancels the request. The store is told when it starts, succeeds and fails.
+   */
+  select$(tenantId: string): Observable<TenantSummary> {
+    return defer(() => {
+      let answered = false;
+      this.store.dispatch(tenantContextActions.switchTenantRequested({ tenantId }));
+      return this.api
+        .post<components['schemas']['TenantSummary']>(
           `/platform/tenants/${tenantId}/switch`,
           undefined,
-        ),
-      );
-      const tenant = tenantSummaryFromWire(response.data);
-      this.store.dispatch(tenantContextActions.switchTenantSucceeded({ tenant }));
-      return tenant;
-    } catch {
-      this.store.dispatch(tenantContextActions.switchTenantFailed());
-      throw new Error('Failed to switch tenant');
-    }
+        )
+        .pipe(
+          map((response) => tenantSummaryFromWire(response.data)),
+          tap((tenant) => {
+            answered = true;
+            this.store.dispatch(tenantContextActions.switchTenantSucceeded({ tenant }));
+          }),
+          catchError(() => {
+            answered = true;
+            this.store.dispatch(tenantContextActions.switchTenantFailed());
+            return throwError(() => new Error('Failed to switch tenant'));
+          }),
+          // Unsubscribed before an answer: the store must not stay on "switching".
+          finalize(() => {
+            if (!answered) this.store.dispatch(tenantContextActions.switchTenantCancelled());
+          }),
+        );
+    });
+  }
+
+  /** The same switch as a Promise, for the callers that are not reactive. */
+  select(tenantId: string): Promise<TenantSummary> {
+    return firstValueFrom(this.select$(tenantId));
   }
 
   clear(): void {
