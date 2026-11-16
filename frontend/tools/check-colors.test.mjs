@@ -129,6 +129,16 @@ test('a color name inside parentheses that run over lines is found on its own li
   );
 });
 
+test('a value that goes on over the next line is checked, and the next declaration is not mistaken for it', () => {
+  const problems = run('a {\n  border: 1px solid\n    white;\n}');
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /x\.component\.ts:3: hard-coded color white/);
+  assert.equal(run('a {\n  box-shadow: 0 0 1px var(--app-red),\n    0 0 2px white;\n}').length, 1);
+  // a color property whose value ends at the line is not extended into the next declaration
+  assert.deepEqual(run('a {\n  color: var(--app-red)\n  margin: 0 white-space;\n}'), []);
+  assert.deepEqual(run("const s = { color: theme,\n  label: 'green' };"), []);
+});
+
 test('a color name in a marked multi-line declaration is skipped on the marked line', () => {
   assert.deepEqual(run('a {\n  color:\n    white; /* color-lint-ignore: a value */\n}'), []);
 });

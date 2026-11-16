@@ -106,7 +106,11 @@ function literalIn(line) {
   return null;
 }
 
-/** The value of a declaration that starts at `start`: up to `;`, `}` or a line end outside parentheses. */
+/**
+ * The value of a declaration that starts at `start`: up to `;` or `}`. It runs on over a line end
+ * (inside parentheses, or when the next line goes on with the value: `border: 1px solid` then
+ * `white;`) and stops where the next line starts a new declaration (`prop:`) or closes the block.
+ */
 function valueOf(source, start) {
   let depth = 0;
   let end = start;
@@ -114,7 +118,11 @@ function valueOf(source, start) {
     const ch = source[end];
     if (ch === '(') depth += 1;
     else if (ch === ')') depth = Math.max(0, depth - 1);
-    else if (depth === 0 && (ch === ';' || ch === '}' || ch === '\n')) break;
+    else if (depth === 0 && (ch === ';' || ch === '}')) break;
+    else if (depth === 0 && ch === '\n') {
+      const next = source.slice(end + 1).match(/^\s*(\S[^\n]*)?/)?.[1] ?? '';
+      if (next === '' || /^(?:[a-z-]+\s*:|[}\]`'"])/i.test(next)) break;
+    }
   }
   return source.slice(start, end);
 }
