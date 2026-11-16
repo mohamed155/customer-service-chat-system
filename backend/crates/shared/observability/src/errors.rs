@@ -32,6 +32,10 @@ pub fn flush(timeout: std::time::Duration) {
     }
 }
 
+/// Producers of a server error must give `tracing::error!` a message. `sentry-tracing` copies an
+/// `error` field into `Event.message` when an event has none (the `#[instrument(err)]` form), and
+/// this scrubber does not clear the message, so free text there would leave the process. No producer
+/// does this today (no `#[instrument(err)]`, and every `error!` call has a message).
 fn scrub_event(mut event: Event<'static>) -> Event<'static> {
     if let Some(ref mut request) = event.request {
         request.data = None;

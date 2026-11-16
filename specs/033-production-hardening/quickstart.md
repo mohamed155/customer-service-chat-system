@@ -324,7 +324,8 @@ env -u REQUIRE_DB_TESTS DATABASE_URL=postgres://nobody:x@localhost:1/none \
 fall. That is why CI sets `REQUIRE_DB_TESTS=1`: with it, the same run fails with
 "REQUIRE_DB_TESTS=1 but DATABASE_URL is unreachable".
 
-**Executed-count floor (FR-035)**: delete or rename a test file and run the CI step.
+**Executed-count floor (FR-035)**: delete enough tests that fewer than the floor still run (a
+renamed test file still runs, so a rename proves nothing), then run the CI step.
 **Expected**: the count falls below the committed floor (`baseline-test-count.txt`) and the build fails
 rather than passing with fewer tests.
 
