@@ -1,0 +1,365 @@
+{
+  "_about": "Module boundary rules (ADR-001 amendment, MOH-79). Checked by tools/check-module-boundaries.mjs; the generated view is docs/architecture/module-dependencies.md.",
+  "eventConsumers": [
+    "analytics",
+    "audit",
+    "notifications"
+  ],
+  "flatModules": [
+    "ai",
+    "analytics",
+    "audit",
+    "authz",
+    "billing",
+    "conversations",
+    "customers",
+    "email",
+    "escalations",
+    "feedback",
+    "flags",
+    "identity",
+    "integrations",
+    "knowledge",
+    "notifications",
+    "platform",
+    "prompts",
+    "rbac",
+    "tenancy",
+    "tools",
+    "users",
+    "whatsapp",
+    "widgets"
+  ],
+  "sharedTables": [
+    "outbox_events",
+    "secret_keks"
+  ],
+  "exceptions": [
+    {
+      "rule": "event-consumer-called",
+      "from": "ai",
+      "to": "notifications",
+      "reason": "ai calls notifications::emit directly to raise tool-approval and failed-response notifications; ADR-001 would have notifications consume the AI turn events instead."
+    }
+  ],
+  "readModels": {
+    "analytics": {
+      "tables": [
+        "conversations",
+        "messages",
+        "escalations",
+        "ai_generations",
+        "ai_usage_records",
+        "conversation_feedback"
+      ],
+      "reason": "Aggregates are computed over the operational tables at query time; they are read-only (analytics owns no table) until an event-built read model is worth its cost."
+    }
+  },
+  "modules": {
+    "ai": {
+      "dependsOn": [
+        "authz",
+        "billing",
+        "conversations",
+        "escalations",
+        "identity",
+        "knowledge",
+        "notifications",
+        "tenancy",
+        "tools"
+      ],
+      "tables": [
+        "ai_configurations",
+        "ai_credentials",
+        "ai_usage_records",
+        "ai_generations",
+        "agent_configurations",
+        "agent_prompts",
+        "agent_prompt_versions",
+        "agent_avatar_uploads"
+      ]
+    },
+    "analytics": {
+      "dependsOn": [
+        "tenancy"
+      ],
+      "tables": []
+    },
+    "audit": {
+      "dependsOn": [
+        "identity",
+        "tenancy"
+      ],
+      "tables": [
+        "audit_logs"
+      ]
+    },
+    "authz": {
+      "dependsOn": [
+        "identity"
+      ],
+      "tables": []
+    },
+    "billing": {
+      "dependsOn": [
+        "identity",
+        "tenancy"
+      ],
+      "tables": [
+        "billing_plans",
+        "tenant_subscriptions"
+      ]
+    },
+    "conversations": {
+      "dependsOn": [
+        "customers",
+        "identity",
+        "integrations",
+        "tenancy"
+      ],
+      "tables": [
+        "conversations",
+        "messages",
+        "message_citations",
+        "message_attachments"
+      ]
+    },
+    "customers": {
+      "dependsOn": [
+        "authz",
+        "identity",
+        "tenancy"
+      ],
+      "tables": [
+        "customers",
+        "customer_channel_identifiers"
+      ]
+    },
+    "email": {
+      "dependsOn": [],
+      "tables": []
+    },
+    "escalations": {
+      "dependsOn": [
+        "conversations",
+        "identity",
+        "tenancy",
+        "tools"
+      ],
+      "tables": [
+        "escalations",
+        "agent_availability",
+        "skills",
+        "agent_skills"
+      ]
+    },
+    "feedback": {
+      "dependsOn": [
+        "tenancy",
+        "widgets"
+      ],
+      "tables": [
+        "conversation_feedback"
+      ]
+    },
+    "flags": {
+      "dependsOn": [],
+      "tables": []
+    },
+    "identity": {
+      "dependsOn": [],
+      "tables": [
+        "users",
+        "mfa_factors",
+        "mfa_recovery_codes",
+        "revoked_sessions"
+      ]
+    },
+    "integrations": {
+      "dependsOn": [
+        "identity",
+        "tenancy"
+      ],
+      "tables": [
+        "integration_catalog",
+        "integration_connections",
+        "integration_events",
+        "integration_secrets",
+        "integration_webhook_deliveries"
+      ]
+    },
+    "knowledge": {
+      "dependsOn": [
+        "authz",
+        "identity",
+        "tenancy"
+      ],
+      "tables": [
+        "knowledge_categories",
+        "knowledge_chunks",
+        "knowledge_documents",
+        "knowledge_index_state",
+        "knowledge_item_tags",
+        "knowledge_items"
+      ]
+    },
+    "notifications": {
+      "dependsOn": [
+        "authz",
+        "escalations",
+        "identity",
+        "tenancy"
+      ],
+      "tables": [
+        "notifications"
+      ]
+    },
+    "platform": {
+      "dependsOn": [],
+      "tables": []
+    },
+    "prompts": {
+      "dependsOn": [],
+      "tables": []
+    },
+    "rbac": {
+      "dependsOn": [],
+      "tables": []
+    },
+    "tenancy": {
+      "dependsOn": [
+        "authz",
+        "email",
+        "identity"
+      ],
+      "tables": [
+        "tenants",
+        "tenant_memberships",
+        "tenant_invitations",
+        "tenant_rate_limit_overrides"
+      ]
+    },
+    "tools": {
+      "dependsOn": [
+        "conversations",
+        "customers",
+        "identity",
+        "tenancy"
+      ],
+      "tables": [
+        "tenant_tools",
+        "tenant_tool_policies",
+        "tool_requests"
+      ]
+    },
+    "users": {
+      "dependsOn": [],
+      "tables": []
+    },
+    "whatsapp": {
+      "dependsOn": [
+        "conversations",
+        "customers",
+        "integrations",
+        "tenancy"
+      ],
+      "tables": [
+        "whatsapp_message_meta"
+      ]
+    },
+    "widgets": {
+      "dependsOn": [
+        "conversations",
+        "customers",
+        "escalations",
+        "identity",
+        "tenancy"
+      ],
+      "tables": [
+        "widget_instances",
+        "widget_sessions"
+      ]
+    }
+  },
+  "crossModuleSql": {
+    "ai": {
+      "skills": 1,
+      "tool_requests": 1,
+      "conversations": 1
+    },
+    "billing": {
+      "ai_usage_records": 1,
+      "conversations": 1,
+      "tenants": 1
+    },
+    "tenancy": {
+      "audit_logs": 2,
+      "users": 12
+    },
+    "conversations": {
+      "tenant_memberships": 12,
+      "customers": 6,
+      "users": 7,
+      "widget_instances": 2,
+      "conversation_feedback": 2,
+      "knowledge_items": 1,
+      "whatsapp_message_meta": 1
+    },
+    "customers": {
+      "conversations": 1
+    },
+    "integrations": {
+      "tenants": 2,
+      "tenant_memberships": 1
+    },
+    "escalations": {
+      "tenant_memberships": 8,
+      "conversations": 3,
+      "customers": 1
+    },
+    "tools": {
+      "audit_logs": 4,
+      "tenant_memberships": 4,
+      "users": 1
+    },
+    "notifications": {
+      "tenant_memberships": 5,
+      "conversations": 1,
+      "users": 1
+    },
+    "audit": {
+      "users": 1
+    },
+    "feedback": {
+      "conversations": 2,
+      "agent_configurations": 1,
+      "ai_generations": 1
+    },
+    "widgets": {
+      "conversations": 4
+    },
+    "platform": {
+      "tenants": 1
+    },
+    "whatsapp": {
+      "conversations": 5,
+      "messages": 4,
+      "message_attachments": 7,
+      "customer_channel_identifiers": 2,
+      "integration_connections": 1
+    },
+    "server": {
+      "tenant_memberships": 2,
+      "users": 3,
+      "tenant_rate_limit_overrides": 1,
+      "audit_logs": 2,
+      "revoked_sessions": 1,
+      "tenants": 1,
+      "ai_credentials": 3,
+      "integration_secrets": 3,
+      "integration_connections": 4,
+      "integration_catalog": 2,
+      "tenant_tools": 3
+    }
+  }
+}

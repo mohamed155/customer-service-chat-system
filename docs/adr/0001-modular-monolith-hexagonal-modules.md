@@ -1,11 +1,11 @@
 # ADR-001: Modular monolith with hexagonal modules, and when to extract a service
 
-- **Status:** Accepted (MOH-15)
-- **Date:** 2026-11-07
+- **Status:** Accepted (MOH-15); amended by [Amendment 1](#amendment-1-layering-for-new-and-changed-modules-moh-79) (MOH-79)
+- **Date:** 2026-11-07 (amended 2026-11-17)
 - **Deciders:** Platform engineering
 - **Related:** [System architecture §2–4 and §21](../architecture/system-architecture.md#2-architectural-style),
   constitution Principle IV, ADR-002 (backend stack), ADR-007 (async processing), ADR-010
-  (gateway deployment unit), ADR-015 (monorepo layout)
+  (gateway deployment unit), ADR-015 (monorepo layout), [Module dependencies](../architecture/module-dependencies.md) (generated)
 
 ## Context
 
@@ -133,8 +133,106 @@ this ADR.
 
 | # | Gap | Where | Follow-up |
 | -- | -- | -- | -- |
-| M1 | Modules are **flat** (`model.rs`, `queries.rs`, `routes.rs`), with SQL, DTOs and business rules mixed. No module has `domain/`, `application/` or `infrastructure/` layers or port traits. | `backend/crates/modules/*/src` | Introduce the layers module by module, starting with `conversations` and `escalations`. Each refactor is its own spec with tests. |
-| M2 | **Cross-module table access.** About 30 SQL references outside the `conversations` crate (a few in tests) read, join or update the `conversations` table directly, in `ai`, `analytics`, `billing`, `customers`, `escalations`, `feedback`, `notifications`, `platform`, `whatsapp` and `widgets`. | `backend/crates/modules/*` | Route writes through the `conversations` facade. Replace reads with facade queries or event-built read models (`analytics` first). Add the table-ownership CI check once the count reaches zero. |
-| M3 | **Wide module coupling.** For example `ai` depends directly on nine other module crates (`authz`, `billing`, `identity`, `conversations`, `escalations`, `knowledge`, `notifications`, `tenancy`, `tools`). | `backend/crates/modules/ai/Cargo.toml` | Depend on ports owned by `ai` and implemented in the composition root, per §3 ("`ai_runtime` depends on interfaces"). |
+| M1 | Modules are **flat** (`model.rs`, `queries.rs`, `routes.rs`), with SQL, DTOs and business rules mixed. No module has `domain/`, `application/` or `infrastructure/` layers or port traits. | `backend/crates/modules/*/src` | Amendment 1: new modules are layered from the first commit and every changed module moves the changed code into layers; `conversations` is layered first (MOH-192). The check below lists the flat modules, and the list may only shrink. |
+| M2 | **Cross-module table access.** About 30 SQL references outside the `conversations` crate (a few in tests) read, join or update the `conversations` table directly, in `ai`, `analytics`, `billing`, `customers`, `escalations`, `feedback`, `notifications`, `platform`, `whatsapp` and `widgets`. | `backend/crates/modules/*` | Amendment 1: the table-ownership check exists now as a ratchet (137 SQL references to another module's table across the crates, listed in the generated module-dependencies document; the count may only fall). `analytics` is an accepted read-only exception. `identity` and `tenancy` directory facades retire the largest group (MOH-193), then `whatsapp`'s writes to `conversations` (MOH-194). |
+| M3 | **Wide module coupling.** For example `ai` depends directly on nine other module crates (`authz`, `billing`, `identity`, `conversations`, `escalations`, `knowledge`, `notifications`, `tenancy`, `tools`). | `backend/crates/modules/ai/Cargo.toml` | Depend on ports owned by `ai` and implemented in the composition root, per §3 ("`ai_runtime` depends on interfaces"). `ai -> notifications` is a named exception until then (MOH-195). |
 | M4 | ~~**One binary, one process.**~~ **Resolved (MOH-37) for run modes.** The `server` binary has four run modes selected with `APP_RUN_MODE` (`api`, `gateway`, `worker`, `all`) over one composition root (`server::router`). `worker` runs every outbox worker and sweeper (`spawn_workers` in `main.rs`) and serves only `/health`, `/ready` and `/metrics`; `api` and `gateway` start none; `all` is the default for local development and the e2e job. An unknown value stops the process. | `backend/crates/server/src/run_mode.rs`, `backend/crates/server/src/main.rs`, `backend/crates/server/src/router.rs`, `backend/crates/server/tests/run_modes.rs` | Done for the code. **Not yet safe to deploy split:** realtime fan-out and presence are in-process (ADR-009 RT1), and a `scheduler` mode is not split out (the sweepers run in `worker`). |
-| M5 | No CI check for forbidden dependency edges. | `.github/workflows/backend.yml` | Add the check (e.g. a `cargo metadata` script or `cargo-deny` bans) after M1 for each module. |
+| M5 | ~~No CI check for forbidden dependency edges.~~ **Resolved (MOH-79):** `backend/tools/check-module-boundaries.mjs` runs in the Backend workflow (module edges, cycles, layering and import direction, table ownership, generated document). `cargo-deny` for licences and duplicates is separate (MOH-84). | `backend/tools/check-module-boundaries.mjs`, `backend/tools/module-boundaries.json`, `.github/workflows/backend.yml` | Done. |
+
+## Amendment 1: layering for new and changed modules (MOH-79)
+
+**Date:** 2026-11-17. **Decision:** adopt the hexagonal layering of section 3 for **new and changed
+modules**, with an incremental plan, rather than amend Principle IV down to what the flat modules
+do today. The four layers stay the target of every module; the rules below say when a module has to
+get there and how CI holds the line meanwhile.
+
+### Context
+
+The first audit after this ADR (MOH-79) measured the code against it with `cargo metadata`, the
+source tree and the migrations. The generated result is
+[Module dependencies](../architecture/module-dependencies.md). In short:
+
+- **No module has layers.** All 23 module crates (four of them one-line placeholders, MOH-80)
+  are flat: `model.rs`, `queries.rs`, `routes.rs`. SQL and HTTP types sit next to business rules.
+- **The crate graph is acyclic** (Cargo refuses a cycle in normal dependencies) but wide: `ai`
+  depends on nine other modules, `tenancy` is used by fourteen, `identity` by thirteen.
+- **One edge runs against section 2.3:** `ai -> notifications` (a producer calling an event
+  consumer).
+- **Table ownership is broken in 137 places.** ADR-001 estimated 30 references to the
+  `conversations` table (29 remain, across `conversations`, `messages` and `message_attachments`).
+  The real picture is wider: 14 modules and the server read or write other modules' tables,
+  mostly lookups of `users` (identity), `tenant_memberships` and `tenants` (tenancy) in joins (62
+  of the 137), then `conversations`, `messages` and `message_attachments` (reached by
+  `whatsapp`, `widgets`, `escalations`), and `audit_logs` (written directly by `tenancy`, `tools`
+  and the server).
+- **`analytics`** reads `conversations`, `messages`, `escalations`, `ai_generations`,
+  `ai_usage_records` and `conversation_feedback` directly (the issue listed four). It writes
+  nothing and owns no table.
+
+### Decision
+
+1. **New modules are layered from the first commit.** A module crate that is not on the flat
+   list has `domain/`, `application/`, `infrastructure/` and `api/` under `src/`. CI fails
+   otherwise.
+2. **A changed module moves the changed code into layers.** A PR that adds or rewrites a use case
+   in a flat module creates the layers in that module and puts the new business rules in `domain/`
+   and `application/`, the SQL in `infrastructure/` and the routes in `api/`. It does not move
+   untouched code. A module with all four layers leaves the flat list in the same PR (CI fails if
+   it stays on it), and the list may only shrink. Files still at the root of `src/` are not
+   checked until they move. Review enforces "changed"; there is no way to detect it mechanically.
+3. **Inside the layers the rules are checked:** `domain/` names no framework or vendor SDK
+   (`sqlx`, `axum`, `redis`, `reqwest`, `hyper`, `tower`, `lettre`, `aws_sdk_s3`, `actix_*`) and
+   imports no outer layer; `application/` imports neither `infrastructure/` nor `api/`, nor
+   `axum`; `infrastructure/` does not import `api/`.
+4. **Module edges are an allow-list.** Every module -> module dependency is listed in
+   `backend/tools/module-boundaries.json`. A new edge fails CI until someone adds it and explains
+   it; an edge that disappears must be removed from the list. Shared and adapter crates never
+   depend on a module or on `server`; modules never depend on `server`; no module depends on an
+   event consumer (`analytics`, `audit`, `notifications`) except through a named exception.
+   The crate graph (normal, build and dev edges) has no cycle.
+5. **Table ownership stays the rule, enforced as a ratchet.** Every table created by a migration
+   has one owner in the same file (`outbox_events` and `secret_keks` are shared infrastructure).
+   SQL that names another module's table is counted per crate and table; the count may not grow,
+   and must be lowered when a refactor shrinks it, so progress is kept. The follow-ups below retire
+   the largest groups. When the count reaches zero the ratchet becomes the plain rule.
+6. **Accepted exception: `analytics` is a read-only read model.** It may read the six tables
+   listed in `readModels.analytics` and write nothing. The reason is cost: its aggregates run over
+   the operational tables at query time, and an event-built copy would duplicate those tables
+   before any query is slow. CI fails if `analytics` writes any table or reads one that is not on
+   the list. Revisit when an analytics query is shown to hurt the operational workload (a measured
+   p95 on the conversation paths, or a lock or load incident), or when an owner's schema change
+   breaks analytics twice; then move that table behind an event-built read model.
+7. **Accepted exception: `ai -> notifications`.** `ai` calls `notifications::emit` directly for
+   tool-approval and failed-response notifications. It is recorded in the config with its reason
+   and is retired by MOH-195 (notifications consume the AI turn events).
+
+### Alternatives considered
+
+| Option | Why not |
+| -- | -- |
+| **Accept flat modules and amend Principle IV** to the rules worth keeping | Cheapest, and the boundary checks above would hold either way. Rejected because it gives up the property the ADR was written for: business rules testable without a database, and vendors replaceable without touching them. |
+| **Refactor every module now** | A rewrite of 22 crates with no product change, in a codebase whose specs are still moving. The incremental rule gets the same end state at the pace of the changes that need it. |
+| **Keep the rules and enforce nothing** | The state that produced the gap: the rules drifted for lack of a check. |
+
+### Consequences
+
+- New work costs more boilerplate (ports, adapters, DTO mapping) than a flat file, and flat and
+  layered code coexist for a long time. The flat list and the SQL ratchet make the remaining debt
+  visible and shrinking.
+- Cross-module SQL stops growing the day this lands. Moving a query behind a facade is a
+  mechanical change with a number that goes down.
+- `docs/architecture/module-dependencies.md` is generated from the same data, so the module map
+  cannot drift from the code unnoticed.
+- Layering "changed" modules is a review rule. The PR checklist carries it.
+
+### Follow-ups (Linear)
+
+- MOH-192: layer the `conversations` module (the most changed and most reached into).
+- MOH-193: `identity` and `tenancy` directory facades; retire the cross-module reads of `users`,
+  `tenant_memberships` and `tenants`.
+- MOH-194: route `whatsapp`, `widgets` and `escalations` access to `conversations`, `messages`,
+  `message_attachments` and `customers` through the owners' facades.
+- MOH-195: `ai` depends on ports it owns (M3) and `notifications` consume AI events (removes the
+  `ai -> notifications` exception).
+- MOH-196: write audit records through the `audit` module's public interface (`tenancy`, `tools`
+  and the server write `audit_logs` directly).

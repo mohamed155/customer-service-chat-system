@@ -1,9 +1,12 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 2.0.2 → 2.0.3 (PATCH — compliance-gap status for the frontend only; no principle changes)
+Version change: 2.0.3 → 2.1.0 (MINOR — Principle IV: how and when the layering applies, and what CI enforces; MOH-79)
 
-Modified principles: none
+Modified principles:
+  - IV. Modular Monolith With Enforced Boundaries: new and changed modules MUST be layered; flat modules
+    are listed and migrate incrementally; boundaries are CI-checked; table ownership is a ratchet with
+    named read-model exceptions (ADR-001 amendment 1)
 Added sections: none
 Removed sections: none
 
@@ -118,12 +121,20 @@ Cross-tenant data exposure is the single worst failure this product can have.
 ### IV. Modular Monolith With Enforced Boundaries
 
 - The backend is a single deployable Rust codebase organized as bounded-context modules.
-- Each module owns its data. Modules MUST NOT read or write another module's tables.
+- Each module owns its data. Modules MUST NOT read or write another module's tables. Existing
+  violations are counted by CI and may only decrease; a read-only read model that is named, with its
+  tables and reason, in `backend/tools/module-boundaries.json` is the one accepted exception.
 - Cross-module interaction happens only through the other module's public application interface
   or through domain events. Circular dependencies are forbidden and MUST be enforced by the
   crate graph.
 - Inside a module, dependencies point inward: `api → application → domain`, with
   `infrastructure` implementing ports declared by `application`/`domain` (hexagonal architecture).
+  New modules MUST be layered from the first commit, and a change to a flat module MUST put the new
+  or rewritten code in layers; untouched flat code migrates when it is next changed (ADR-001,
+  amendment 1).
+- CI checks the module edges, cycles, the layers' import direction and table ownership
+  (`backend/tools/check-module-boundaries.mjs`); an edge or an exception is added on purpose, in the
+  same PR, with its reason.
 - Domain code MUST NOT depend on Axum, SQLx, Redis, or any vendor SDK.
 - Extracting a module into a separate service requires a measured reason (load, isolation,
   deployment cadence) documented in an ADR.
@@ -279,4 +290,4 @@ Adding or replacing a technology in this table requires an ADR and a constitutio
 - Compliance is reviewed at the end of each phase; recurring violations trigger an amendment or a
   corrective spec.
 
-**Version**: 2.0.3 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-11-14
+**Version**: 2.1.0 | **Ratified**: 2026-07-03 | **Last Amended**: 2026-11-17

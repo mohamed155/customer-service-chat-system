@@ -33,7 +33,7 @@ ADR with **ADR-NNN**. Its §22 holds the Phase 0 backlog, which this index track
 
 | ADR | Decision | Status |
 |---|---|---|
-| [ADR-001](0001-modular-monolith-hexagonal-modules.md) | Modular monolith with hexagonal modules | Accepted |
+| [ADR-001](0001-modular-monolith-hexagonal-modules.md) | Modular monolith with hexagonal modules (amended by MOH-79: layering for new and changed modules, CI-checked boundaries) | Accepted |
 | [ADR-002](0002-rust-backend-stack.md) | Rust/Axum/SQLx backend stack | Accepted |
 | [ADR-003](0003-frontend-state-ownership.md) | Angular 22 + NgRx Store/SignalStore state ownership | Accepted |
 | [ADR-004](0004-multi-tenancy-rls-cells.md) | Multi-tenancy: shared schema + RLS + composite FKs + cell mapping | Accepted |

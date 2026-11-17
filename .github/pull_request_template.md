@@ -20,6 +20,7 @@ Tick each item, or write `N/A` with a one-line reason.
 
 ### Correctness and contracts (Principles VIII, X)
 
+- [ ] **Module boundaries kept**: no new cross-module dependency, table access or SQL on another module's table (or the edge is added to `backend/tools/module-boundaries.json` with its reason); new and changed backend modules use `domain/`, `application/`, `infrastructure/`, `api/` (Principle IV)
 - [ ] **Input validated** at the boundary (HTTP, webhooks, files, channel messages, LLM output); untrusted input is never trusted
 - [ ] **Errors mapped** to typed errors and returned as RFC 9457 Problem Details with no internals leaked; no `unwrap`/`expect`/`panic!` in request or job paths
 - [ ] Migrations (if any) are backward compatible (expand → migrate → contract); retryable writes are idempotent

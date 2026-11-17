@@ -109,6 +109,9 @@ Rules:
   are never called synchronously by producers.
 - `ai_runtime` depends on **interfaces** (ports) for knowledge retrieval and tool execution, not on
   their implementations.
+- The module crates as built, their edges, the tables each owns and the accepted exceptions are in
+  [Module dependencies](module-dependencies.md), generated from the code and checked in CI (ADR-001,
+  amendment 1).
 
 ---
 
@@ -145,8 +148,11 @@ backend/
 
 - Module crates expose only their facade (`pub use application::Facade`) and event types; internal
   modules are `pub(crate)`. The crate graph enforces "no cross-module internals" at compile time.
-- `cargo-deny` enforces license and duplicate-dependency policy; a CI check rejects forbidden
-  dependency edges (e.g. `domain` depending on `sqlx`).
+- `cargo-deny` enforces license and duplicate-dependency policy; a CI check
+  (`backend/tools/check-module-boundaries.mjs`, MOH-79) rejects forbidden dependency edges, layer
+  imports that point outward (e.g. `domain` depending on `sqlx`) and growth in cross-module SQL.
+  New and changed modules use the layout above; the modules still flat are listed in the check's
+  config until they migrate.
 
 ### 4.2 Frontend (Angular)
 
