@@ -84,4 +84,37 @@ describe('locale helpers', () => {
     expect(textDirection('az-Latn')).toBe('ltr');
     expect(textDirection('uz-Arab')).toBe('rtl');
   });
+
+  it('goes by the language when the script cannot be worked out', () => {
+    // A browser without Intl.Locale support, or one that gives no script for the tag.
+    vi.stubGlobal(
+      'Intl',
+      Object.assign(Object.create(Intl), {
+        Locale: class {
+          maximize() {
+            return { script: undefined };
+          }
+        },
+      }),
+    );
+    expect(textDirection('ar')).toBe('rtl');
+    expect(textDirection('de')).toBe('ltr');
+    vi.stubGlobal(
+      'Intl',
+      Object.assign(Object.create(Intl), {
+        Locale: class {
+          constructor() {
+            throw new RangeError('no Intl.Locale');
+          }
+        },
+      }),
+    );
+    expect(textDirection('he-IL')).toBe('rtl');
+    expect(textDirection('fr')).toBe('ltr');
+    vi.unstubAllGlobals();
+  });
+
+  it('treats a tag it cannot read as left to right', () => {
+    expect(textDirection('not a tag!')).toBe('ltr');
+  });
 });
