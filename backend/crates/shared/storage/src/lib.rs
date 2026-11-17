@@ -201,6 +201,38 @@ impl ObjectStorage for InMemoryStorage {
     }
 }
 
+/// Readiness of object storage (`/ready`, MOH-81). With S3 configured it asks the bucket (a
+/// `HeadBucket`, inside the readiness timeout); a process that was given S3 settings but fell back
+/// to memory because the client could not be created is not ready, since it would lose every upload
+/// on restart. Without S3 settings the in-memory store is the intended backend and always ready.
+pub struct StorageHealthCheck {
+    storage: std::sync::Arc<dyn ObjectStorage>,
+    backend: StorageBackend,
+}
+
+impl StorageHealthCheck {
+    pub fn new(storage: std::sync::Arc<dyn ObjectStorage>, backend: StorageBackend) -> Self {
+        Self { storage, backend }
+    }
+}
+
+#[async_trait::async_trait]
+impl observability::health::HealthCheck for StorageHealthCheck {
+    fn name(&self) -> &'static str {
+        "storage"
+    }
+
+    async fn check(&self) -> Result<(), String> {
+        if self.backend.s3_configured && self.backend.kind != StorageKind::S3 {
+            return Err("object storage is configured but fell back to memory".to_owned());
+        }
+        self.storage
+            .probe()
+            .await
+            .map_err(|e| format!("storage error: {e}"))
+    }
+}
+
 pub async fn select_storage(
     s3: Option<&config::S3Config>,
     timeouts: config::HttpTimeouts,
@@ -294,5 +326,68 @@ mod tests {
         let (_store, backend) = select_storage(None, timeouts).await;
         assert_eq!(backend.kind, StorageKind::InMemory);
         assert!(!backend.s3_configured);
+    }
+
+    struct Probe(Result<(), ()>);
+
+    #[async_trait::async_trait]
+    impl ObjectStorage for Probe {
+        async fn put(&self, _: &str, _: &str, _: Vec<u8>) -> Result<(), StorageError> {
+            Ok(())
+        }
+        async fn get(&self, _: &str) -> Result<(Vec<u8>, String), StorageError> {
+            Err(StorageError::NotFound)
+        }
+        async fn delete(&self, _: &str) -> Result<(), StorageError> {
+            Ok(())
+        }
+        async fn probe(&self) -> Result<(), StorageError> {
+            self.0
+                .map_err(|_| StorageError::Other("bucket unreachable".into()))
+        }
+    }
+
+    fn readiness_of(
+        probe: Result<(), ()>,
+        kind: StorageKind,
+        s3_configured: bool,
+    ) -> Result<(), String> {
+        use observability::health::HealthCheck;
+        let check = StorageHealthCheck::new(
+            std::sync::Arc::new(Probe(probe)),
+            StorageBackend {
+                kind,
+                s3_configured,
+            },
+        );
+        block_on(check.check())
+    }
+
+    fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(f)
+    }
+
+    #[test]
+    fn storage_is_ready_when_the_bucket_answers_or_memory_is_intended() {
+        assert!(readiness_of(Ok(()), StorageKind::S3, true).is_ok());
+        assert!(readiness_of(Ok(()), StorageKind::InMemory, false).is_ok());
+    }
+
+    #[test]
+    fn storage_is_not_ready_when_the_bucket_does_not_answer() {
+        let err = readiness_of(Err(()), StorageKind::S3, true).unwrap_err();
+        assert!(err.contains("bucket unreachable"), "{err}");
+    }
+
+    #[test]
+    fn storage_configured_but_fallen_back_to_memory_is_not_ready() {
+        // The in-memory probe always succeeds, so the check has to look at how the backend was
+        // chosen, not only at the probe.
+        let err = readiness_of(Ok(()), StorageKind::InMemory, true).unwrap_err();
+        assert!(err.contains("fell back to memory"), "{err}");
     }
 }

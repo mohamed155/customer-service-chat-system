@@ -3269,6 +3269,7 @@ dependencies = [
  "async-trait",
  "axum",
  "config",
+ "futures",
  "metrics",
  "metrics-exporter-prometheus",
  "opentelemetry",
@@ -4852,6 +4853,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-s3",
  "config",
+ "observability",
  "tokio",
  "tracing",
 ]

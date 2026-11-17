@@ -165,7 +165,7 @@ async fn ready_db_failing_returns_503() {
     let body: HealthReport = serde_json::from_slice(&collect_body(response).await).unwrap();
     assert_eq!(body.status, HealthStatus::NotReady);
     assert_eq!(body.checks[1].status, CheckStatus::Error);
-    assert_eq!(body.checks[1].error.as_deref(), Some("fail"));
+    assert_eq!(body.checks[1].error.as_deref(), Some("unavailable"));
 }
 
 #[tokio::test]
@@ -186,4 +186,138 @@ async fn ready_timeout_returns_503_with_timed_out() {
     assert_eq!(body.status, HealthStatus::NotReady);
     assert_eq!(body.checks[0].status, CheckStatus::Error);
     assert_eq!(body.checks[0].error.as_deref(), Some("timed out"));
+}
+
+async fn get(app: axum::Router, uri: &str) -> (StatusCode, serde_json::Value, String) {
+    let response = app
+        .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = collect_body(response).await;
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or_default(),
+        text,
+    )
+}
+
+/// A check whose error carries what a driver puts in one: a host, a port, a user.
+struct LeakyCheck;
+#[async_trait::async_trait]
+impl HealthCheck for LeakyCheck {
+    fn name(&self) -> &'static str {
+        "database"
+    }
+    async fn check(&self) -> Result<(), String> {
+        Err("database error: connect to 10.1.2.3:5432 as app_runtime: password rejected".into())
+    }
+}
+
+#[tokio::test]
+async fn ready_names_the_failing_dependency_and_keeps_the_internal_error_to_itself() {
+    let state = make_state(vec![Arc::new(OkCheck), Arc::new(LeakyCheck)]);
+    let (status, body, text) = get(router::app(state), "/ready").await;
+
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body["status"], "not_ready");
+    assert_eq!(body["checks"][1]["name"], "database");
+    assert_eq!(body["checks"][1]["status"], "error");
+    assert_eq!(body["checks"][1]["error"], "unavailable");
+    for leaked in ["10.1.2.3", "5432", "app_runtime", "password"] {
+        assert!(!text.contains(leaked), "/ready exposed '{leaked}': {text}");
+    }
+}
+
+/// MOH-81: with Redis down, `/ready` is 503 and says the cache is the problem, while `/health`
+/// (liveness, no dependencies) stays 200. Nothing listens on the port, as when Redis is stopped.
+#[tokio::test]
+async fn ready_is_503_when_redis_is_down_and_health_stays_200() {
+    let closed_port = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+    let redis = cache::Cache::new(&format!("redis://127.0.0.1:{closed_port}")).unwrap();
+    let state = make_state(vec![
+        Arc::new(OkCheck),
+        Arc::new(cache::RedisHealthCheck::new(redis)),
+    ]);
+    let app = router::app(state);
+
+    let (status, body, text) = get(app.clone(), "/ready").await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body["status"], "not_ready");
+    assert_eq!(body["checks"][0]["status"], "ok");
+    assert_eq!(body["checks"][1]["name"], "cache");
+    assert_eq!(body["checks"][1]["status"], "error");
+    assert!(
+        !text.contains("127.0.0.1") && !text.contains(&closed_port.to_string()),
+        "/ready exposed the Redis address: {text}"
+    );
+
+    let (status, body, _) = get(app, "/health").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["status"], "ok");
+}
+
+#[tokio::test]
+async fn ready_fails_while_the_process_is_shutting_down_and_health_stays_200() {
+    let draining = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let state = make_state(vec![
+        Arc::new(OkCheck),
+        Arc::new(observability::health::DrainingCheck::new(draining.clone())),
+    ]);
+    let app = router::app(state);
+
+    let (status, _, _) = get(app.clone(), "/ready").await;
+    assert_eq!(status, StatusCode::OK, "ready while running");
+
+    draining.store(true, std::sync::atomic::Ordering::SeqCst);
+    let (status, body, _) = get(app.clone(), "/ready").await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        body["checks"][0]["status"], "ok",
+        "the dependencies are still reported"
+    );
+    assert_eq!(body["checks"][1]["name"], "shutdown");
+    assert_eq!(body["checks"][1]["error"], "shutting down");
+
+    let (status, _, _) = get(app, "/health").await;
+    assert_eq!(status, StatusCode::OK, "liveness does not follow readiness");
+}
+
+#[tokio::test]
+async fn ready_includes_object_storage() {
+    use storage::{InMemoryStorage, ObjectStorage, StorageBackend, StorageKind};
+    let in_memory: Arc<dyn ObjectStorage> = Arc::new(InMemoryStorage::default());
+
+    // Intended in-memory storage is ready.
+    let ok = storage::StorageHealthCheck::new(
+        in_memory.clone(),
+        StorageBackend {
+            kind: StorageKind::InMemory,
+            s3_configured: false,
+        },
+    );
+    let (status, body, _) = get(router::app(make_state(vec![Arc::new(ok)])), "/ready").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["checks"][0]["name"], "storage");
+
+    // S3 configured but the client could not be created: not ready.
+    let fallen_back = storage::StorageHealthCheck::new(
+        in_memory,
+        StorageBackend {
+            kind: StorageKind::InMemory,
+            s3_configured: true,
+        },
+    );
+    let (status, body, _) = get(
+        router::app(make_state(vec![Arc::new(fallen_back)])),
+        "/ready",
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body["checks"][0]["name"], "storage");
+    assert_eq!(body["checks"][0]["error"], "unavailable");
 }

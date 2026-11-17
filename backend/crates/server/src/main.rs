@@ -38,6 +38,10 @@ async fn main() {
     if std::env::args().nth(1).as_deref() == Some("migrate") {
         std::process::exit(migrate().await);
     }
+    // The container health check: asks this server's own `/ready`, reads no secrets (MOH-81).
+    if std::env::args().nth(1).as_deref() == Some("healthcheck") {
+        std::process::exit(server::healthcheck::run());
+    }
     if std::env::args().nth(1).as_deref() == Some("secrets") {
         let args: Vec<String> = std::env::args().skip(2).collect();
         std::process::exit(secrets_command(&args).await);
@@ -101,12 +105,29 @@ async fn main() {
     use cache::RedisHealthCheck;
     use db::PgHealthCheck;
 
-    let health_checks: Vec<Arc<dyn observability::health::HealthCheck>> = vec![
+    // Object storage is chosen here, before the state, so that readiness can ask it too.
+    let (storage, storage_backend) =
+        storage::select_storage(config.s3.as_ref(), config.outbound_http.storage).await;
+
+    // What `/ready` checks: the three dependencies a request needs (PostgreSQL, Redis, object
+    // storage), each inside `READY_PROBE_TIMEOUT_MS` (MOH-81).
+    let mut health_checks: Vec<Arc<dyn observability::health::HealthCheck>> = vec![
         Arc::new(PgHealthCheck::new(db.clone())),
         Arc::new(RedisHealthCheck::new((*cache).clone())),
+        Arc::new(storage::StorageHealthCheck::new(
+            storage.clone(),
+            storage_backend,
+        )),
     ];
 
     observability::metrics::spawn_dependency_updater(health_checks.clone());
+
+    // Set when the process is told to stop; fails readiness first, before the server drains. Not
+    // part of the `dependency_up` metric above: it is not a dependency.
+    let draining = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    health_checks.push(Arc::new(observability::health::DrainingCheck::new(
+        draining.clone(),
+    )));
 
     if mode != RunMode::Gateway {
         let pool = db.clone();
@@ -145,8 +166,6 @@ async fn main() {
         budget_resolver,
     };
 
-    let (storage, _storage_backend) =
-        storage::select_storage(state.config.s3.as_ref(), state.config.outbound_http.storage).await;
     let email_sender = router::configured_email_sender(&state.config);
     let app = router::app_for_mode(state.clone(), mode, email_sender.clone(), storage.clone());
 
@@ -156,6 +175,7 @@ async fn main() {
         JoinSet::new()
     };
 
+    let drain_delay = server::shutdown::readiness_drain_delay(state.config.shutdown_grace_seconds);
     let address = format!("{}:{}", state.config.bind_address, state.config.port);
     let listener = TcpListener::bind(&address)
         .await
@@ -163,7 +183,7 @@ async fn main() {
     tracing::info!(%address, "server listening");
 
     tokio::select! {
-        result = axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(shutdown_signal()) => {
+        result = axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(shutdown_signal(draining, drain_delay)) => {
             result.expect("server failed");
         }
         // Pending forever when this mode runs no workers (the set is empty).
@@ -385,7 +405,10 @@ fn spawn_workers(
     workers
 }
 
-async fn shutdown_signal() {
+/// Resolves when the process is told to stop. Readiness fails first and the server keeps
+/// accepting for `drain_delay` so a load balancer can notice; only then does the graceful drain of
+/// requests in flight begin (`server::shutdown`).
+async fn shutdown_signal(draining: Arc<std::sync::atomic::AtomicBool>, drain_delay: Duration) {
     let ctrl_c = async {
         tokio::signal::ctrl_c()
             .await
@@ -408,7 +431,9 @@ async fn shutdown_signal() {
         _ = sigterm => {},
     }
 
-    tracing::info!("shutdown signal received, starting graceful shutdown");
+    tracing::info!("shutdown signal received");
+    server::shutdown::drain_readiness(&draining, drain_delay).await;
+    tracing::info!("starting graceful shutdown");
 }
 
 /// `server migrate`: applies the embedded migrations as the schema owner and returns the process
