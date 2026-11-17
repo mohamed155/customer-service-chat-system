@@ -163,6 +163,7 @@ test('a styles array that is not a list of CSS strings is not CSS', () => {
     ts('const c = { styles: [`a { margin-left: 4px; }`, `b { color: red; }`] };').length,
     1,
   );
+  assert.deepEqual(ts("const layout = { styles: [{ property: 'margin-left' }] };"), []);
 });
 
 test('a marker on the value line of a declaration covers it, and the report names its first line', () => {

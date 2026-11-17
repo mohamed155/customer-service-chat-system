@@ -95,25 +95,28 @@ function withoutComments(source) {
 
 /**
  * What is CSS in a file: all of a stylesheet or template, but in a `.ts` file only the inline
- * `styles: [...]`, and only the strings in it (everything else is blanked, the lines kept).
+ * `styles: [...]`, and only the strings that are directly in it, not in an object inside it (everything else is blanked, the lines kept).
  */
 function styleText(path, source) {
   if (!path.endsWith('.ts')) return source;
   const out = blank(source).split('');
   for (const start of source.matchAll(/\bstyles\s*:\s*\[/g)) {
     let depth = 1;
+    let braces = 0;
     let quote = null;
     let end = start.index + start[0].length;
     for (; end < source.length && depth > 0; end += 1) {
       const ch = source[end];
       if (quote) {
         if (ch === '\\') {
-          out[end] = ch;
+          if (braces === 0) out[end] = ch;
           end += 1;
-          out[end] = source[end] ?? ' ';
+          if (braces === 0) out[end] = source[end] ?? ' ';
         } else if (ch === quote) quote = null;
-        else out[end] = ch;
+        else if (braces === 0) out[end] = ch;
       } else if (ch === '`' || ch === "'" || ch === '"') quote = ch;
+      else if (ch === '{') braces += 1;
+      else if (ch === '}') braces -= 1;
       else if (ch === '[') depth += 1;
       else if (ch === ']') depth -= 1;
     }
