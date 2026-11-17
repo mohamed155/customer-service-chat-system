@@ -34,7 +34,7 @@ export interface BreakdownBarItem {
       .value {
         color: var(--app-text-2);
         font-size: var(--app-font-xs);
-        text-align: right;
+        text-align: end;
         white-space: nowrap;
       }
       .bar-track {

@@ -35,9 +35,10 @@ import { TranslocoPipe } from '@jsverse/transloco';
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      /* U+203A is a mirrored character: the browser draws it as ‹ in a right-to-left page. */
       li + li::before {
         content: '›';
-        margin-right: var(--app-space-2);
+        margin-inline-end: var(--app-space-2);
         color: var(--app-text-2);
       }
       a {

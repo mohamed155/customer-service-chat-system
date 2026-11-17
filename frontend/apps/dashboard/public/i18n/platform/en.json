@@ -17,7 +17,7 @@
     "zeroTitle": "No data yet",
     "zeroDescription": "Platform figures will appear once tenants, conversations, and AI usage are recorded.",
     "range": "Range: {from} – {to} · Generated at {generated}",
-    "systemHealth": "System Health →",
+    "systemHealth": "System Health",
     "tenants": "Total Tenants",
     "tenantsSub": "{active, number} active · {suspended, number} suspended · {created, number} created in range",
     "conversations": "Active Conversations",
@@ -161,7 +161,7 @@
   "tenantDetail": {
     "title": "Tenant details",
     "description": "View this organization's record",
-    "back": "← Back to tenants",
+    "back": "Back to tenants",
     "edit": "Edit",
     "deactivate": "Deactivate",
     "reactivate": "Reactivate",

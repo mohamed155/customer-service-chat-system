@@ -29,3 +29,29 @@ button,
 a {
   font: inherit;
 }
+
+/* Right to left (MOH-73). A directional icon (an arrow that points the way something goes: send,
+   sign out) is mirrored when the page runs right to left. Vertical chevrons are not. */
+:root[dir='rtl'] .app-flip-rtl {
+  transform: scaleX(-1);
+}
+
+/* The arrow in front of a "back" link and behind a "forward" link. It is drawn here, not typed
+   into the message, so the text can be translated without it and the arrow follows the direction. */
+.app-arrow-back::before {
+  content: '←' / '';
+  margin-inline-end: 0.35em;
+}
+
+:root[dir='rtl'] .app-arrow-back::before {
+  content: '→' / '';
+}
+
+.app-arrow-forward::after {
+  content: '→' / '';
+  margin-inline-start: 0.35em;
+}
+
+:root[dir='rtl'] .app-arrow-forward::after {
+  content: '←' / '';
+}

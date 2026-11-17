@@ -19,7 +19,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
         width: var(--app-sidebar-expanded-width);
         height: 100dvh;
         background: var(--app-sidebar);
-        border-right: 1px solid var(--app-border);
+        border-inline-end: 1px solid var(--app-border);
         transition: width var(--app-transition-base);
       }
       :host.collapsed {

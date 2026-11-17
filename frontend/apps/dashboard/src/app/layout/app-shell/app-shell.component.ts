@@ -40,10 +40,10 @@ import { TranslocoPipe } from '@jsverse/transloco';
         display: block;
         position: fixed;
         top: 0;
-        left: 0;
+        inset-inline-start: 0;
         bottom: 0;
         z-index: 200;
-        transform: translateX(-100%);
+        transform: translateX(calc(-100% * var(--app-dir-sign)));
         transition: transform var(--app-transition-base);
       }
       .sidebar-wrapper.drawer.open {

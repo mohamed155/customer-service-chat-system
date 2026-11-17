@@ -209,7 +209,7 @@ const DETAIL_ERRORS: ErrorKeyOverrides = {
         font-size: var(--app-font-sm);
       }
       .event-time {
-        margin-left: auto;
+        margin-inline-start: auto;
         color: var(--app-text-3);
         font-size: var(--app-font-xs);
         white-space: nowrap;

@@ -38,7 +38,7 @@ const RECOVERY_PATTERN = /^[A-Za-z0-9\s-]{10,16}$/;
         align-items: center;
       }
       .link {
-        margin-right: auto;
+        margin-inline-end: auto;
         border: 0;
         background: none;
         color: var(--app-accent);

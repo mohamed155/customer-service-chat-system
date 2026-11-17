@@ -134,7 +134,7 @@ import { I18n } from '../i18n/i18n.service';
       }
       .char-counter {
         display: block;
-        text-align: right;
+        text-align: end;
         font-size: 11px;
         color: var(--wgt-muted, #999);
         margin-top: 2px;

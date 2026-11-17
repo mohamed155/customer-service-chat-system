@@ -22,10 +22,10 @@ import { ChangeDetectionStrategy, Component, computed, input, model } from '@ang
         padding: var(--app-space-3) 0;
         background: var(--app-panel-3);
         color: var(--app-text-3);
-        text-align: right;
+        text-align: end;
       }
       .gutter span {
-        padding-right: var(--app-space-3);
+        padding-inline-end: var(--app-space-3);
         font-size: var(--app-font-xs);
         line-height: 22px;
       }

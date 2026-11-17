@@ -19,7 +19,7 @@
     "error": "Error"
   },
   "detail": {
-    "back": "← Back to integrations",
+    "back": "Back to integrations",
     "loading": "Loading…",
     "configuration": "Configuration",
     "secretPlaceholder": "Leave blank to keep current value",

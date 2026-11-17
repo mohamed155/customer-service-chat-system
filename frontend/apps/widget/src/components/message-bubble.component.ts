@@ -21,6 +21,12 @@ import { WidgetMessage } from '../core/models';
   `,
   styles: [
     `
+      /* The host is the flex item of the message list; the bubble in it takes its side with
+         align-self, which needs the host to be a flex container too. */
+      :host {
+        display: flex;
+        flex-direction: column;
+      }
       .bubble {
         max-width: 80%;
         padding: 10px 14px;
@@ -34,19 +40,19 @@ import { WidgetMessage } from '../core/models';
         background: var(--wgt-bubble-visitor);
         color: #fff;
         align-self: flex-end;
-        border-bottom-right-radius: 4px;
+        border-end-end-radius: 4px;
       }
       .bubble--assistant {
         background: var(--wgt-bubble-assistant);
         color: var(--wgt-text);
         align-self: flex-start;
-        border-bottom-left-radius: 4px;
+        border-end-start-radius: 4px;
       }
       .bubble--agent {
         background: var(--wgt-bubble-assistant);
         color: var(--wgt-text);
         align-self: flex-start;
-        border-bottom-left-radius: 4px;
+        border-end-start-radius: 4px;
       }
       .bubble--system {
         background: transparent;

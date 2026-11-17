@@ -1,0 +1,213 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { check, readFiles } from './check-rtl.mjs';
+
+const dash = 'apps/dashboard/src/app/x/x.component.ts';
+// In a `.ts` file only the inline styles are CSS, so the snippets are put in a `styles: [...]`.
+const run = (source, path = dash) =>
+  check([
+    { path, source: path.endsWith('.ts') ? `const c = { styles: [\`${source}\`] };` : source },
+  ]);
+
+test('logical properties pass', () => {
+  assert.deepEqual(
+    run(
+      'a { margin-inline-start: 4px; padding-inline: 0 8px; inset-inline-end: 0; text-align: start; ' +
+        'border-inline-end: 1px solid; border-start-start-radius: 4px; float: inline-start; }',
+    ),
+    [],
+  );
+});
+
+test('physical margin, padding and border properties are reported', () => {
+  for (const css of [
+    'margin-left: 4px',
+    'margin-right: auto',
+    'padding-left: 1em',
+    'padding-right: 0',
+    'border-left: 1px solid x',
+    'border-right: 0',
+    'border-left-color: x',
+    'border-right-width: 2px',
+    'scroll-margin-left: 4px',
+    'scroll-padding-right: 4px',
+  ]) {
+    assert.equal(run(`a { ${css}; }`).length, 1, css);
+  }
+});
+
+test('physical corners are reported, logical corners are not', () => {
+  for (const corner of ['top-left', 'top-right', 'bottom-left', 'bottom-right']) {
+    assert.equal(run(`a { border-${corner}-radius: 4px; }`).length, 1, corner);
+  }
+  assert.deepEqual(run('a { border-end-end-radius: 4px; border-radius: 4px; }'), []);
+});
+
+test('left and right as a position, and text-align, float and clear, are reported', () => {
+  assert.equal(run('a { left: 0; }').length, 1);
+  assert.equal(run('a { position: fixed; right: -4px; }').length, 1);
+  assert.equal(run('a { text-align: left; }').length, 1);
+  assert.equal(run('a { text-align: right; }').length, 1);
+  assert.equal(run('a { float: right; }').length, 1);
+  assert.equal(run('a { clear: left; }').length, 1);
+  assert.deepEqual(run('a { text-align: center; float: none; top: 0; bottom: 0; }'), []);
+});
+
+test('words that are not properties are left alone: prose, comments and other names', () => {
+  assert.deepEqual(run('/** The text runs from right to left. */\nconst a = 1;'), []);
+  assert.deepEqual(run('// the request never left: no answer\nconst a = 1;'), []);
+  assert.deepEqual(run('a { margin: 0; --left-pad: 1px; background: var(--app-left); }'), []);
+});
+
+test('a four-value shorthand with different left and right is reported', () => {
+  assert.equal(run('a { margin: 1px 4px 1px 0; }').length, 1);
+  assert.equal(run('a { padding: 0 8px 0 4px; }').length, 1);
+  assert.equal(run('a { inset: auto 16px 16px auto; }').length, 1);
+  assert.equal(run('a { inset: 0 0 0 auto; }').length, 1);
+  assert.equal(run('a { border-radius: 4px 0 0 4px; }').length, 1);
+});
+
+test('symmetric shorthands pass', () => {
+  assert.deepEqual(
+    run(
+      'a { margin: 0; padding: 4px 8px; margin: 1px 4px 2px; padding: 1px 2px 3px 2px; border-radius: 4px 4px 0 0; }',
+    ),
+    [],
+  );
+});
+
+test('translateX is reported unless it is scaled by the direction sign or is zero', () => {
+  assert.equal(run('a { transform: translateX(-100%); }').length, 1);
+  assert.deepEqual(run('a { transform: translateX(calc(-100% * var(--app-dir-sign))); }'), []);
+  assert.deepEqual(run('a { transform: translateX(0); }'), []);
+});
+
+test('left and right in a position, an origin or a gradient are reported', () => {
+  assert.equal(run('a { background-position: right 4px center; }').length, 1);
+  assert.equal(run('a { transform-origin: left; }').length, 1);
+  assert.equal(run('a { background: linear-gradient(to right, a, b); }').length, 1);
+  assert.deepEqual(run('a { background-position: center; transform-origin: center; }'), []);
+});
+
+test('a line marked rtl-lint-ignore with a reason passes; one without does not', () => {
+  assert.deepEqual(
+    run('a { right: 20px; /* rtl-lint-ignore: the corner is a tenant setting */ }'),
+    [],
+  );
+  assert.equal(run('a { right: 20px; /* rtl-lint-ignore: */ }').length, 1);
+  assert.equal(run('a { right: 20px; }').length, 1);
+});
+
+test('the report names the file, the line and the fix', () => {
+  const [problem] = run('a {\n  margin-left: 4px;\n}');
+  assert.match(problem, /x\.component\.ts:2: margin-left/);
+  assert.match(problem, /margin-inline-start/);
+});
+
+test('templates and stylesheets are scanned too, and so is the widget', () => {
+  assert.equal(
+    run('<p style="margin-left: 4px">x</p>', 'apps/dashboard/src/app/x/x.component.html').length,
+    1,
+  );
+  assert.equal(run('a { padding-right: 2px; }', 'apps/dashboard/src/styles.css').length, 1);
+  assert.equal(
+    run('a { text-align: right; }', 'apps/widget/src/components/x.component.ts').length,
+    1,
+  );
+});
+
+test('specs, fixtures, generated code and other apps are not scanned', () => {
+  for (const path of [
+    'apps/dashboard/src/app/x/x.spec.ts',
+    'apps/dashboard/src/app/shared/fixtures/a.fixtures.ts',
+    'apps/dashboard/src/app/core/api/generated/api.ts',
+    'libs/ui/src/x.ts',
+  ]) {
+    assert.deepEqual(run('a { margin-left: 4px; }', path), [], path);
+  }
+});
+
+test('only the inline styles of a .ts file are CSS: an object with left and right is not', () => {
+  const ts = (source) => check([{ path: dash, source }]);
+  assert.deepEqual(ts('const bounds = { left: 0, right: 10, marginLeft: 4 };'), []);
+  assert.deepEqual(ts("const side = 'margin-left'; const rule = { textAlign: 'right' };"), []);
+  assert.equal(ts('@Component({ styles: [`a { margin-left: 4px; }`] }) class X {}').length, 1);
+  assert.equal(ts("@Component({ styles: ['a { margin-left: 4px; }'] }) class X {}").length, 1);
+  // a `]` inside a selector does not end the block early
+  assert.equal(
+    ts(
+      "@Component({ styles: [`a[data-x='1'] { margin: 0; } b { padding-right: 2px; }`] }) class X {}",
+    ).length,
+    1,
+  );
+});
+
+test('a // inside a string is text, not a comment that hides the rest of the line', () => {
+  assert.equal(run('a::before { content: " // "; margin-left: 4px; }').length, 1);
+  assert.equal(run("a::before { content: ' // '; margin-left: 4px; }").length, 1);
+  assert.deepEqual(run('a { margin: 0; } // margin-left: 4px'), []);
+});
+
+test('every shorthand on a line is checked', () => {
+  const problems = run('a { margin: 0; padding: 0 8px 0 4px; }');
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /padding with four different values/);
+  assert.equal(run('a { margin: 1px 2px 1px 0; padding: 0 8px 0 4px; }').length, 2);
+});
+
+test('a styles array that is not a list of CSS strings is not CSS', () => {
+  const ts = (source) => check([{ path: dash, source }]);
+  assert.deepEqual(ts('const layout = { styles: [{ left: 0, right: 10 }] };'), []);
+  assert.deepEqual(ts("const layout = { styles: [{ side: 'left', margin: [1, 2] }] };"), []);
+  assert.equal(
+    ts('const c = { styles: [`a { margin-left: 4px; }`, `b { color: red; }`] };').length,
+    1,
+  );
+  assert.deepEqual(ts("const layout = { styles: [{ property: 'margin-left' }] };"), []);
+});
+
+test('a marker on the value line of a declaration covers it, and the report names its first line', () => {
+  assert.deepEqual(run('a {\n  margin-left:\n    4px; /* rtl-lint-ignore: intentional */\n}'), []);
+  const problems = run('a {\n  transform:\n    rotate(1deg)\n    translateX(-100%);\n}');
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /x\.component\.ts:2: translateX/);
+});
+
+test('a shorthand in an HTML style attribute ends at the closing quote', () => {
+  const html = 'apps/dashboard/src/app/x/x.component.html';
+  assert.deepEqual(run('<p style="margin: 0 4px 0 4px">text</p>', html), []);
+  assert.equal(run('<p style="padding: 0 8px 0 4px">text</p>', html).length, 1);
+  assert.deepEqual(run('<p style="margin: 1px 2px 3px 2px"></p><p>2px</p>', html), []);
+});
+
+test('translateX is judged call by call', () => {
+  assert.equal(
+    run(
+      'a { transform: translateX(-100%); } b { transform: translateX(calc(-100% * var(--app-dir-sign))); }',
+    ).length,
+    1,
+  );
+  assert.equal(run('a { transform: translateX(-100%) translateX(0); }').length, 1);
+});
+
+test('a declaration over several lines is one declaration, reported on its first line', () => {
+  const problems = run('a {\n  text-align:\n    right;\n}');
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /x\.component\.ts:2: text-align: right/);
+  assert.equal(run('a {\n  margin:\n    1px 2px\n    1px 0;\n}').length, 1);
+  // a marker on any line of the declaration covers it
+  assert.deepEqual(run('a {\n  text-align:\n    right; /* rtl-lint-ignore: a value */\n}'), []);
+});
+
+test('an empty ignore marker in an HTML comment does not count as a reason', () => {
+  const html = 'apps/dashboard/src/app/x/x.component.html';
+  assert.equal(run('<p style="margin-left: 4px"></p> <!-- rtl-lint-ignore: -->', html).length, 1);
+  assert.deepEqual(
+    run('<p style="margin-left: 4px"></p> <!-- rtl-lint-ignore: a value -->', html),
+    [],
+  );
+});
+
+test('the dashboard and the widget as they are pass', () => {
+  assert.deepEqual(check(readFiles()), []);
+});

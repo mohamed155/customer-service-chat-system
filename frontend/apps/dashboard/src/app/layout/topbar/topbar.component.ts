@@ -74,7 +74,7 @@ import { marker } from '../../core/i18n/marker';
       }
       .tools {
         min-width: 0;
-        margin-left: auto;
+        margin-inline-start: auto;
         display: flex;
         align-items: center;
         gap: var(--app-space-2);
@@ -110,7 +110,7 @@ import { marker } from '../../core/i18n/marker';
       .notification-dropdown {
         position: absolute;
         top: calc(100% + 4px);
-        right: 0;
+        inset-inline-end: 0;
         width: 380px;
         max-height: 480px;
         border: 1px solid var(--app-border);

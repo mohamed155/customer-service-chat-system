@@ -12,6 +12,7 @@ import {
   formattingLocale,
   baseLanguage,
   parseLocale,
+  textDirection,
 } from './locale';
 
 /**
@@ -37,7 +38,11 @@ export class LocaleService {
   private readonly formatting = signal(DEFAULT_LOCALE);
   private readonly taiga = signal<TuiLanguage>(TUI_ENGLISH_LANGUAGE);
 
+  /** `rtl` for a right-to-left language: the document and Taiga UI (which follows `[dir]`) mirror. */
+  private readonly writing = signal<'ltr' | 'rtl'>('ltr');
+
   readonly locale = this.active.asReadonly();
+  readonly direction = this.writing.asReadonly();
   readonly formatLocale = this.formatting.asReadonly();
   readonly taigaLanguage = this.taiga.asReadonly();
 
@@ -106,6 +111,8 @@ export class LocaleService {
     this.active.set(locale);
     this.formatting.set(formattingLocale(locale, requested, this.browserLanguages()));
     this.document.documentElement.lang = locale;
+    this.writing.set(textDirection(locale));
+    this.document.documentElement.dir = this.writing();
     await this.loadTaiga(locale);
     return true;
   }

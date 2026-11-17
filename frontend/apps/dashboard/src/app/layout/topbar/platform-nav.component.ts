@@ -90,7 +90,7 @@ const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
       .dropdown {
         position: absolute;
         top: calc(100% + 4px);
-        right: 0;
+        inset-inline-end: 0;
         min-width: 200px;
         background: var(--app-panel);
         border: 1px solid var(--app-border);
@@ -109,7 +109,7 @@ const PLATFORM_DESTINATIONS: readonly PlatformDestination[] = [
         background: transparent;
         color: var(--app-text);
         cursor: pointer;
-        text-align: left;
+        text-align: start;
         font: inherit;
         white-space: nowrap;
       }

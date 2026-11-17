@@ -83,7 +83,7 @@ import { AiProvidersStore } from './ai-providers.store';
       }
       .categories ul {
         margin: var(--app-space-1) 0 0;
-        padding-left: var(--app-space-4);
+        padding-inline-start: var(--app-space-4);
       }
       .failures h3 {
         margin: 0 0 var(--app-space-2);

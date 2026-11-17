@@ -12,7 +12,9 @@ import { TranslocoPipe } from '@jsverse/transloco';
     `
       .update-banner {
         position: fixed;
-        inset: auto var(--app-space-4, 16px) var(--app-space-4, 16px) auto;
+        inset: auto;
+        inset-block-end: var(--app-space-4, 16px);
+        inset-inline-end: var(--app-space-4, 16px);
         z-index: 1000;
         display: flex;
         align-items: center;

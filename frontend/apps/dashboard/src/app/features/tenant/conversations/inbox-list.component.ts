@@ -38,7 +38,7 @@ const FILTER_LABEL_KEYS: Readonly<Record<string, string>> = {
         display: grid;
         grid-template-rows: auto 1fr;
         min-height: 0;
-        border-right: 1px solid var(--app-border);
+        border-inline-end: 1px solid var(--app-border);
         background: var(--app-panel);
       }
       .filters {
@@ -80,7 +80,7 @@ const FILTER_LABEL_KEYS: Readonly<Record<string, string>> = {
         border-radius: var(--app-radius-lg);
         background: transparent;
         color: inherit;
-        text-align: left;
+        text-align: start;
         cursor: pointer;
       }
       .item:hover,
@@ -150,7 +150,7 @@ const FILTER_LABEL_KEYS: Readonly<Record<string, string>> = {
       }
       @media (max-width: 768px) {
         :host {
-          border-right: 0;
+          border-inline-end: 0;
           border-bottom: 1px solid var(--app-border);
         }
       }

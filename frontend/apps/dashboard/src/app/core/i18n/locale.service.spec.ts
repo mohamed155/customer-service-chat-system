@@ -15,6 +15,7 @@ const CATALOGS: Record<string, Record<string, unknown>> = {
   'fr-CA': { hello: 'Allô' },
   fr: { hello: 'Bonjour' },
   tlh: { hello: 'nuqneH' },
+  ar: { hello: 'مرحبا' },
 };
 
 class StubCatalogs {
@@ -134,6 +135,35 @@ describe('LocaleService', () => {
     expect(locale.locale()).toBe('tlh');
     expect(transloco.translate('hello')).toBe('nuqneH');
     expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('tlh');
+  });
+
+  it('writes the direction of the language on the document: ltr for English, rtl for Arabic', async () => {
+    const { locale, doc } = setup();
+    await locale.init();
+    expect(doc.documentElement.dir).toBe('ltr');
+    expect(locale.direction()).toBe('ltr');
+
+    expect(await locale.setLocale('ar')).toBe(true);
+    expect(doc.documentElement.dir).toBe('rtl');
+    expect(locale.direction()).toBe('rtl');
+    expect(doc.documentElement.lang).toBe('ar');
+
+    expect(await locale.setLocale('tlh')).toBe(true);
+    expect(doc.documentElement.dir).toBe('ltr');
+    expect(locale.direction()).toBe('ltr');
+  });
+
+  it('starts right to left when the stored choice is a right-to-left language', async () => {
+    const { locale, doc } = setup('ar');
+    await locale.init();
+    expect(doc.documentElement.dir).toBe('rtl');
+  });
+
+  it('a failed switch leaves the direction alone', async () => {
+    const { locale, doc } = setup('ar');
+    await locale.init();
+    expect(await locale.setLocale('xx')).toBe(false);
+    expect(doc.documentElement.dir).toBe('rtl');
   });
 
   it('translate() follows a language change in a computed value', async () => {

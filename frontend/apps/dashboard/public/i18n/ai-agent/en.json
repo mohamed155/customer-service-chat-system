@@ -98,7 +98,7 @@
   "prompt": {
     "title": "System Prompt",
     "description": "Manage the base instruction given to the AI for every conversation",
-    "back": "← Back to AI Agent",
+    "back": "Back to AI Agent",
     "retry": "Retry",
     "noChange": "No changes detected — content is identical to the active version.",
     "content": "Prompt content",
@@ -131,7 +131,7 @@
   "history": {
     "title": "Version History",
     "loading": "Loading…",
-    "back": "← Back to list",
+    "back": "Back to list",
     "version": "Version {n}",
     "active": "Active",
     "restoredFrom": "Restored from v{n}",
