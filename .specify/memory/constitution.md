@@ -6,7 +6,7 @@ Version change: 2.0.3 → 2.1.0 (MINOR — Principle IV: how and when the layeri
 Modified principles:
   - IV. Modular Monolith With Enforced Boundaries: new and changed modules MUST be layered; flat modules
     are listed and migrate incrementally; boundaries are CI-checked; table ownership is a ratchet with
-    named read-model exceptions (ADR-001 amendment 1)
+    named read-model exceptions (ADR-017)
 Added sections: none
 Removed sections: none
 
@@ -130,8 +130,7 @@ Cross-tenant data exposure is the single worst failure this product can have.
 - Inside a module, dependencies point inward: `api → application → domain`, with
   `infrastructure` implementing ports declared by `application`/`domain` (hexagonal architecture).
   New modules MUST be layered from the first commit, and a change to a flat module MUST put the new
-  or rewritten code in layers; untouched flat code migrates when it is next changed (ADR-001,
-  amendment 1).
+  or rewritten code in layers; untouched flat code migrates when it is next changed (ADR-017).
 - CI checks the module edges, cycles, the layers' import direction and table ownership
   (`backend/tools/check-module-boundaries.mjs`); an edge or an exception is added on purpose, in the
   same PR, with its reason.

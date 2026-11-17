@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   analyze,
   crossModuleCounts,
+  layersReached,
   migrationTables,
   renderDoc,
   sqlReferences,
@@ -198,6 +199,14 @@ test('a module may use its own tables freely', () => {
   assert.deepEqual(crossModuleCounts({ ...f }).actual, {});
 });
 
+test('migrationTables applies create and drop in order, so a table dropped and created again is live', () => {
+  assert.deepEqual(
+    migrationTables(['CREATE TABLE orders (id int);', 'DROP TABLE orders;', 'CREATE TABLE orders (id uuid);']),
+    ['orders'],
+  );
+  assert.deepEqual(migrationTables(['DROP TABLE IF EXISTS gone;', 'CREATE TABLE gone (id int);']), ['gone']);
+});
+
 test('migrationTables drops tables that a later migration drops', () => {
   assert.deepEqual(
     migrationTables([
@@ -215,14 +224,117 @@ test('sqlReferences reads and writes, case-insensitively and across lines', () =
   );
   assert.deepEqual(
     refs.map((r) => `${r.table}:${r.write}`).sort(),
-    ['customers:false', 'orders:false', 'orders:false', 'orders:true'],
+    ['customers:false', 'orders:false', 'orders:true'],
   );
+});
+
+test('a write statement is one write, not a read and a write', () => {
+  const refs = sqlReferences(
+    [{ text: 'UPDATE orders SET a = 1; INSERT INTO orders VALUES (1); DELETE FROM orders;' }],
+    ['orders'],
+  );
+  assert.deepEqual(refs.map((r) => r.write), [true, true, true]);
+});
+
+test('sqlReferences sees quoted and schema-qualified names, and TRUNCATE as a write', () => {
+  const refs = sqlReferences(
+    [
+      {
+        text: [
+          'SELECT * FROM public."orders"',
+          'SELECT * FROM "public"."orders"',
+          'SELECT * FROM "orders"',
+          'SELECT * FROM public.orders',
+          'TRUNCATE TABLE orders',
+          'TRUNCATE ONLY public."orders"',
+          'truncate orders',
+        ].join(';\n'),
+      },
+    ],
+    ['orders'],
+  );
+  assert.deepEqual(
+    refs.map((r) => r.write),
+    [false, false, false, false, true, true, true],
+  );
+});
+
+test('a read model may not truncate, and a shared table is writable by no read model', () => {
+  const truncate = fixture();
+  truncate.sources.reports = [{ path: 'queries.rs', text: 'TRUNCATE TABLE orders' }];
+  has(analyze(truncate), 'reports is a read model and writes orders');
+
+  const shared = fixture();
+  shared.sources.reports = [
+    { path: 'queries.rs', text: 'SELECT * FROM outbox_events; DELETE FROM outbox_events' },
+  ];
+  const problems = analyze(shared);
+  has(problems, 'reports is a read model and writes outbox_events');
+  assert.equal(problems.filter((p) => p.includes('reads outbox_events')).length, 0);
+
+  const everyone = fixture();
+  everyone.sources.customers = [{ path: 'queries.rs', text: 'INSERT INTO outbox_events VALUES (1)' }];
+  assert.deepEqual(analyze(everyone), []);
 });
 
 test('stripComments removes line, doc and block comments but keeps a URL in a string', () => {
   const text = stripComments('let a = 1; // c\n/// doc\n/* b\nc */ let url = "http://x";');
   assert.ok(!text.includes('doc') && !text.includes('// c') && !/\bb\b/.test(text));
   assert.ok(text.includes('http://x'));
+});
+
+test('stripComments keeps a // or /* inside a string, a raw string and a char literal', () => {
+  const sql = `sqlx::query("SELECT 'a // b' FROM orders") // trailing`;
+  const out = stripComments(sql);
+  assert.ok(out.includes(`'a // b' FROM orders`));
+  assert.ok(!out.includes('trailing'));
+
+  const raw = stripComments('let q = r#"SELECT "x" // y FROM orders"#; // gone');
+  assert.ok(raw.includes('// y FROM orders') && !raw.includes('gone'));
+
+  const chars = stripComments(`let q = '"'; let lt: &'a str = x; /* c */ let z = "// keep";`);
+  assert.ok(chars.includes('"// keep"') && !chars.includes('/* c */'));
+
+  const nested = stripComments('a /* one /* two */ still comment */ b');
+  assert.ok(nested.includes('a ') && nested.includes(' b') && !nested.includes('still'));
+});
+
+test('layersReached resolves crate, self and super paths and grouped imports', () => {
+  const reach = (path, text) => [...layersReached(path, text)].sort();
+  assert.deepEqual(reach('domain.rs', 'use super::infrastructure::Repo;'), ['infrastructure']);
+  assert.deepEqual(reach('domain/mod.rs', 'use super::api::Dto;'), ['api']);
+  assert.deepEqual(reach('domain/order.rs', 'use super::super::api::Dto;'), ['api']);
+  assert.deepEqual(reach('domain/order.rs', 'use crate::{infrastructure::Repo};'), ['infrastructure']);
+  assert.deepEqual(
+    reach('domain/order.rs', 'use crate::{api::Dto, domain::Order, application::{a, b}};'),
+    ['api', 'application', 'domain'],
+  );
+  assert.deepEqual(reach('domain.rs', 'use super::{api::Dto, order::Order};'), ['api']);
+  assert.deepEqual(reach('domain.rs', 'let x = crate::infrastructure::Repo::new();'), ['infrastructure']);
+  // `super` in a nested file is the layer itself, so a sibling module that shares a layer's name is not the layer.
+  assert.deepEqual(reach('domain/order.rs', 'use super::infrastructure::Repo;'), []);
+  assert.deepEqual(reach('domain/order.rs', 'use super::Order; use self::money::Money;'), []);
+});
+
+test('an outward import written with super or in a group fails the layer check', () => {
+  const f = fixture();
+  f.sources.orders = [
+    { path: 'domain.rs', text: 'use super::infrastructure::Repo;' },
+    { path: 'application/place.rs', text: 'use crate::{infrastructure::Repo, domain::Order};' },
+    { path: 'application/ok.rs', text: 'use crate::{domain::Order}; use super::place::Place;' },
+  ];
+  const problems = analyze(f);
+  has(problems, 'orders/src/domain.rs: domain imports crate::infrastructure');
+  has(problems, 'orders/src/application/place.rs: application imports crate::infrastructure');
+  assert.equal(problems.filter((p) => p.includes('ok.rs')).length, 0);
+});
+
+test('a // inside an SQL string does not hide a cross-module table from the count', () => {
+  const f = fixture();
+  f.sources.customers = [
+    { path: 'queries.rs', text: `sqlx::query("SELECT 'a // b' FROM orders") // note` },
+  ];
+  has(analyze(f), 'customers names orders (owned by orders) 1 times in SQL, up from 0');
 });
 
 test('the generated document lists modules, layouts, edges, exceptions and the SQL total', () => {

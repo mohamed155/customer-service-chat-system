@@ -1,5 +1,5 @@
 {
-  "_about": "Module boundary rules (ADR-001 amendment, MOH-79). Checked by tools/check-module-boundaries.mjs; the generated view is docs/architecture/module-dependencies.md.",
+  "_about": "Module boundary rules (ADR-017, which amends ADR-001). Checked by tools/check-module-boundaries.mjs; the generated view is docs/architecture/module-dependencies.md.",
   "eventConsumers": [
     "analytics",
     "audit",
@@ -293,8 +293,8 @@
       "tenants": 1
     },
     "tenancy": {
-      "audit_logs": 2,
-      "users": 12
+      "audit_logs": 1,
+      "users": 10
     },
     "conversations": {
       "tenant_memberships": 12,
@@ -309,7 +309,7 @@
       "conversations": 1
     },
     "integrations": {
-      "tenants": 2,
+      "tenants": 1,
       "tenant_memberships": 1
     },
     "escalations": {
@@ -318,7 +318,7 @@
       "customers": 1
     },
     "tools": {
-      "audit_logs": 4,
+      "audit_logs": 2,
       "tenant_memberships": 4,
       "users": 1
     },
@@ -342,9 +342,9 @@
       "tenants": 1
     },
     "whatsapp": {
-      "conversations": 5,
-      "messages": 4,
-      "message_attachments": 7,
+      "conversations": 3,
+      "messages": 3,
+      "message_attachments": 4,
       "customer_channel_identifiers": 2,
       "integration_connections": 1
     },
@@ -352,14 +352,14 @@
       "tenant_memberships": 2,
       "users": 3,
       "tenant_rate_limit_overrides": 1,
-      "audit_logs": 2,
+      "audit_logs": 1,
       "revoked_sessions": 1,
       "tenants": 1,
-      "ai_credentials": 3,
-      "integration_secrets": 3,
-      "integration_connections": 4,
+      "ai_credentials": 2,
+      "integration_secrets": 2,
+      "integration_connections": 3,
       "integration_catalog": 2,
-      "tenant_tools": 3
+      "tenant_tools": 2
     }
   }
 }

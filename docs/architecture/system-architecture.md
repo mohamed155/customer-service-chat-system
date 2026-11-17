@@ -110,8 +110,7 @@ Rules:
 - `ai_runtime` depends on **interfaces** (ports) for knowledge retrieval and tool execution, not on
   their implementations.
 - The module crates as built, their edges, the tables each owns and the accepted exceptions are in
-  [Module dependencies](module-dependencies.md), generated from the code and checked in CI (ADR-001,
-  amendment 1).
+  [Module dependencies](module-dependencies.md), generated from the code and checked in CI ([ADR-017](../adr/0017-module-layering-and-ci-checked-boundaries.md)).
 
 ---
 

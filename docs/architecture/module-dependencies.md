@@ -4,8 +4,9 @@
      backend/tools/module-boundaries.json. Do not edit by hand: CI fails when this file is stale. -->
 
 The module crates of the backend, what each depends on, and the tables each owns. It documents
-the rules of [ADR-001](../adr/0001-modular-monolith-hexagonal-modules.md) (amended by MOH-79) as
-they hold in the code today, and CI checks them (`backend/tools/check-module-boundaries.mjs`,
+the rules of [ADR-001](../adr/0001-modular-monolith-hexagonal-modules.md) as amended by
+[ADR-017](../adr/0017-module-layering-and-ci-checked-boundaries.md), as they hold in the code
+today, and CI checks them (`backend/tools/check-module-boundaries.mjs`,
 the `module-boundaries` step of the Backend workflow). To change a rule or accept an edge, edit
 `backend/tools/module-boundaries.json` in the same PR and say why.
 
@@ -145,32 +146,32 @@ Counts of SQL references to a table another module owns, per crate. They may onl
 | `feedback` | `ai_generations` | `ai` | 1 |
 | `feedback` | `conversations` | `conversations` | 2 |
 | `integrations` | `tenant_memberships` | `tenancy` | 1 |
-| `integrations` | `tenants` | `tenancy` | 2 |
+| `integrations` | `tenants` | `tenancy` | 1 |
 | `notifications` | `conversations` | `conversations` | 1 |
 | `notifications` | `tenant_memberships` | `tenancy` | 5 |
 | `notifications` | `users` | `identity` | 1 |
 | `platform` | `tenants` | `tenancy` | 1 |
-| `server` | `ai_credentials` | `ai` | 3 |
-| `server` | `audit_logs` | `audit` | 2 |
+| `server` | `ai_credentials` | `ai` | 2 |
+| `server` | `audit_logs` | `audit` | 1 |
 | `server` | `integration_catalog` | `integrations` | 2 |
-| `server` | `integration_connections` | `integrations` | 4 |
-| `server` | `integration_secrets` | `integrations` | 3 |
+| `server` | `integration_connections` | `integrations` | 3 |
+| `server` | `integration_secrets` | `integrations` | 2 |
 | `server` | `revoked_sessions` | `identity` | 1 |
 | `server` | `tenant_memberships` | `tenancy` | 2 |
 | `server` | `tenant_rate_limit_overrides` | `tenancy` | 1 |
-| `server` | `tenant_tools` | `tools` | 3 |
+| `server` | `tenant_tools` | `tools` | 2 |
 | `server` | `tenants` | `tenancy` | 1 |
 | `server` | `users` | `identity` | 3 |
-| `tenancy` | `audit_logs` | `audit` | 2 |
-| `tenancy` | `users` | `identity` | 12 |
-| `tools` | `audit_logs` | `audit` | 4 |
+| `tenancy` | `audit_logs` | `audit` | 1 |
+| `tenancy` | `users` | `identity` | 10 |
+| `tools` | `audit_logs` | `audit` | 2 |
 | `tools` | `tenant_memberships` | `tenancy` | 4 |
 | `tools` | `users` | `identity` | 1 |
-| `whatsapp` | `conversations` | `conversations` | 5 |
+| `whatsapp` | `conversations` | `conversations` | 3 |
 | `whatsapp` | `customer_channel_identifiers` | `customers` | 2 |
 | `whatsapp` | `integration_connections` | `integrations` | 1 |
-| `whatsapp` | `message_attachments` | `conversations` | 7 |
-| `whatsapp` | `messages` | `conversations` | 4 |
+| `whatsapp` | `message_attachments` | `conversations` | 4 |
+| `whatsapp` | `messages` | `conversations` | 3 |
 | `widgets` | `conversations` | `conversations` | 4 |
 
-Total: 137.
+Total: 120.

@@ -33,7 +33,7 @@ ADR with **ADR-NNN**. Its §22 holds the Phase 0 backlog, which this index track
 
 | ADR | Decision | Status |
 |---|---|---|
-| [ADR-001](0001-modular-monolith-hexagonal-modules.md) | Modular monolith with hexagonal modules (amended by MOH-79: layering for new and changed modules, CI-checked boundaries) | Accepted |
+| [ADR-001](0001-modular-monolith-hexagonal-modules.md) | Modular monolith with hexagonal modules | Accepted |
 | [ADR-002](0002-rust-backend-stack.md) | Rust/Axum/SQLx backend stack | Accepted |
 | [ADR-003](0003-frontend-state-ownership.md) | Angular 22 + NgRx Store/SignalStore state ownership | Accepted |
 | [ADR-004](0004-multi-tenancy-rls-cells.md) | Multi-tenancy: shared schema + RLS + composite FKs + cell mapping | Accepted |
@@ -49,5 +49,6 @@ ADR with **ADR-NNN**. Its §22 holds the Phase 0 backlog, which this index track
 | [ADR-014](0014-envelope-encryption-tenant-secrets.md) | Envelope encryption for tenant secrets | Accepted |
 | [ADR-015](0015-monorepo-layout-tooling.md) | Monorepo layout and tooling | Accepted |
 | [ADR-016](0016-internationalization.md) | Internationalization: runtime message catalogs | Accepted |
+| [ADR-017](0017-module-layering-and-ci-checked-boundaries.md) | Layering for new and changed modules, and CI-checked module boundaries (refines ADR-001) | Accepted |
 
 Related: the [v1 STRIDE threat model](../security/threat-model.md) maps each module's threats to controls and to the ADR gaps above.
