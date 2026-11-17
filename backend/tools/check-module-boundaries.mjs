@@ -169,20 +169,39 @@ function findCycle(nodes, edges) {
 
 /**
  * SQL references from `sources` to `tables`: each statement that names one is a read
- * (`FROM`, `JOIN`, `INTO`) or a write (`INSERT INTO`, `UPDATE`, `DELETE FROM`, `TRUNCATE`).
- * A schema qualifier and quotes around either part are accepted.
+ * (`FROM`, `JOIN`, `INTO`) or a write (`INSERT INTO`, `UPDATE`, `DELETE FROM`, `TRUNCATE`, which
+ * may name several tables). A schema qualifier and quotes around either part are accepted.
  */
 export function sqlReferences(sources, tables) {
   if (tables.length === 0) return [];
   const names = [...tables].sort((a, b) => b.length - a.length).join('|');
   const statement = new RegExp(
-    `\\b(insert\\s+into|update|delete\\s+from|truncate(?:\\s+table)?(?:\\s+only)?|from|join|into)\\s+(?:"?public"?\\.)?"?(${names})\\b`,
+    `\\b(insert\\s+into|update|delete\\s+from|from|join|into)\\s+(?:"?public"?\\.)?"?(${names})\\b`,
     'gi',
   );
+  // `TRUNCATE [TABLE] [ONLY] a, b *` names several tables; every one of them is written.
+  const ident = String.raw`(?:"[^"\n]+"|\w+)`;
+  const target = String.raw`(?:only\s+)?(?:${ident}\s*\.\s*)?${ident}(?:\s*\*)?`;
+  const truncate = new RegExp(
+    String.raw`\btruncate(?:\s+table)?\s+(${target}(?:\s*,\s*${target})*)`,
+    'gi',
+  );
+  const wanted = new Set(tables);
   const found = [];
   for (const { text } of sources) {
-    for (const m of stripComments(text).matchAll(statement)) {
-      found.push({ table: m[2].toLowerCase(), write: /^(insert|update|delete|truncate)/i.test(m[1]) });
+    const clean = stripComments(text);
+    for (const m of clean.matchAll(statement)) {
+      found.push({ table: m[2].toLowerCase(), write: /^(insert|update|delete)/i.test(m[1]) });
+    }
+    for (const m of clean.matchAll(truncate)) {
+      for (const one of m[1].split(',')) {
+        const name = one
+          .replace(/^\s*only\s+/i, '')
+          .replace(/[*"\s]/g, '')
+          .replace(/^public\./i, '')
+          .toLowerCase();
+        if (wanted.has(name)) found.push({ table: name, write: true });
+      }
     }
   }
   return found;

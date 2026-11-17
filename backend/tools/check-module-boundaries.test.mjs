@@ -259,6 +259,31 @@ test('sqlReferences sees quoted and schema-qualified names, and TRUNCATE as a wr
   );
 });
 
+test('TRUNCATE writes every table it names, not only the first', () => {
+  const refs = sqlReferences(
+    [
+      {
+        text: [
+          'TRUNCATE TABLE scratch, orders',
+          'TRUNCATE orders, customers RESTART IDENTITY CASCADE',
+          'truncate only public."orders" *, "customers"',
+          'sqlx::query("TRUNCATE TABLE scratch, customers")',
+          'TRUNCATE TABLE scratch',
+        ].join(';\n'),
+      },
+    ],
+    ['orders', 'customers'],
+  );
+  assert.deepEqual(
+    refs.map((r) => `${r.table}:${r.write}`),
+    ['orders:true', 'orders:true', 'customers:true', 'orders:true', 'customers:true', 'customers:true'],
+  );
+
+  const f = fixture();
+  f.sources.reports = [{ path: 'queries.rs', text: 'TRUNCATE TABLE scratch, orders' }];
+  has(analyze(f), 'reports is a read model and writes orders');
+});
+
 test('a read model may not truncate, and a shared table is writable by no read model', () => {
   const truncate = fixture();
   truncate.sources.reports = [{ path: 'queries.rs', text: 'TRUNCATE TABLE orders' }];
