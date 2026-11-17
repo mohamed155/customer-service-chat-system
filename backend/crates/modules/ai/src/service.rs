@@ -1413,12 +1413,13 @@ impl AiService {
         self.0.vault.as_deref()
     }
 
-    /// The same vault, shared (for code that outlives the borrow, such as tool execution).
-    /// The client tenant tools are called with (see [`AiServiceInner::tools_http`]).
+    /// The client tenant tools are called with: `APP_HTTP_TOOLS_*` timeouts, no redirects (MOH-82).
+    /// Clones share one connection pool.
     pub fn tools_http(&self) -> reqwest::Client {
         self.0.tools_http.clone()
     }
 
+    /// The same vault, shared (for code that outlives the borrow, such as tool execution).
     pub fn shared_vault(&self) -> Option<Arc<secrets::Vault>> {
         self.0.vault.clone()
     }
