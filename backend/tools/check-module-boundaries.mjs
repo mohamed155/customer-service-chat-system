@@ -189,7 +189,8 @@ export function sqlReferences(sources, tables) {
   const wanted = new Set(tables);
   const found = [];
   for (const { text } of sources) {
-    const clean = stripComments(text);
+    // In a normal Rust string a quoted identifier is written \"orders\"; read it as "orders".
+    const clean = stripComments(text).replace(/\\"/g, '"');
     for (const m of clean.matchAll(statement)) {
       found.push({ table: m[2].toLowerCase(), write: /^(insert|update|delete)/i.test(m[1]) });
     }

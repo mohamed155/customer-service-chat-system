@@ -284,6 +284,21 @@ test('TRUNCATE writes every table it names, not only the first', () => {
   has(analyze(f), 'reports is a read model and writes orders');
 });
 
+test('a quoted identifier inside a normal Rust string (\\"orders\\") is seen in every statement form', () => {
+  const rust = String.raw`sqlx::query("TRUNCATE TABLE scratch, \"orders\"");
+sqlx::query("SELECT 1 FROM public.\"orders\" JOIN \"customers\" c ON true");
+sqlx::query("INSERT INTO \"public\".\"orders\" VALUES (1)");`;
+  const refs = sqlReferences([{ text: rust }], ['orders', 'customers']);
+  assert.deepEqual(
+    refs.map((r) => `${r.table}:${r.write}`).sort(),
+    ['customers:false', 'orders:false', 'orders:true', 'orders:true'],
+  );
+
+  const f = fixture();
+  f.sources.reports = [{ path: 'queries.rs', text: String.raw`sqlx::query("TRUNCATE TABLE scratch, \"orders\"");` }];
+  has(analyze(f), 'reports is a read model and writes orders');
+});
+
 test('a read model may not truncate, and a shared table is writable by no read model', () => {
   const truncate = fixture();
   truncate.sources.reports = [{ path: 'queries.rs', text: 'TRUNCATE TABLE orders' }];
