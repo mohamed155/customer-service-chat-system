@@ -17,6 +17,14 @@ services:
         condition: service_healthy
     ports:
       - "8080:8080"
+    # Healthy while /ready answers 200 (PostgreSQL, Redis, object storage; failing from the moment
+    # a stop is requested). The image has no curl, so the binary asks itself. MOH-81.
+    healthcheck:
+      test: ["CMD", "server", "healthcheck"]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 20s
 
   dashboard:
     image: ${IMAGE_BASE:-ghcr.io/mohamed155/customer-service-chat-system}-dashboard:${APP_RELEASE_SHA:?APP_RELEASE_SHA must be set}
@@ -41,9 +49,12 @@ services:
     environment:
       APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN must be set}
     depends_on:
-      - backend
-      - dashboard
-      - widget
+      backend:
+        condition: service_healthy
+      dashboard:
+        condition: service_started
+      widget:
+        condition: service_started
 
 volumes:
   caddy_data:

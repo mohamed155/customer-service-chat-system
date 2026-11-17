@@ -9,5 +9,8 @@ RUN useradd --system --uid 10001 app
 COPY --from=builder /app/backend/target/release/server /usr/local/bin/server
 USER app
 EXPOSE 8080
+# Healthy only while /ready answers 200: PostgreSQL, Redis and object storage reachable, and the
+# process not shutting down (MOH-81). The image has no curl; the binary probes itself.
+HEALTHCHECK --interval=10s --timeout=6s --start-period=20s --retries=6 CMD ["server", "healthcheck"]
 ENTRYPOINT ["server"]
 

@@ -83,8 +83,8 @@ openssl rand -base64 32
 | `LOG_FORMAT` | Log output format: `json` or `pretty`. In `production`/`staging` environments the default is `json`; in `development`/`test` it is `pretty`. | environment-dependent | no |
 | `DB_MAX_CONNECTIONS` | Maximum database connection pool size | `10` | no |
 | `DB_ACQUIRE_TIMEOUT_MS` | Milliseconds to wait for a database connection from the pool before timing out | `3000` | no |
-| `READY_PROBE_TIMEOUT_MS` | Milliseconds to wait for each dependency during the `/ready` probe | `2000` | no |
-| `SHUTDOWN_GRACE_SECONDS` | Seconds to wait for in-flight requests to complete on shutdown | `10` | no |
+| `READY_PROBE_TIMEOUT_MS` | Milliseconds to wait for each dependency (database, Redis, object storage) during the `/ready` probe | `2000` | no |
+| `SHUTDOWN_GRACE_SECONDS` | The shutdown period the platform allows. When the stop signal arrives `/ready` fails at once and the server keeps accepting for half of this value (at most 5 s) so a load balancer can stop routing to it; then it drains the requests in flight. It does not cap the drain: keep the orchestrator's own stop timeout above it. `0` means no delay. | `10` | no |
 | `AUTH_SESSION_TTL_SECONDS` | JWT session expiry in seconds | `28800` (8 hours) | no |
 | `SMTP_URL` | SMTP connection string (e.g. `smtp://user:pass@smtp.example.com:587`). Unset disables email sending. | — | yes |
 | `SMTP_FROM` | `From` address for outgoing emails. | — | no |

@@ -941,6 +941,7 @@
       "CheckResult": {
         "properties": {
           "error": {
+            "description": "A short reason code (`unavailable`, `timed out`, `shutting down`), never the raw error.",
             "type": [
               "string",
               "null"

@@ -179,7 +179,7 @@ The first build takes several minutes. The API listens on `http://localhost:8080
 
 ```bash
 curl http://localhost:8080/health   # liveness
-curl http://localhost:8080/ready    # readiness: database and Redis reachable
+curl http://localhost:8080/ready    # readiness: database, Redis and object storage reachable (503 otherwise)
 ```
 
 ### 5. Start the dashboard

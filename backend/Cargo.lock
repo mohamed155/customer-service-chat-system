@@ -4852,6 +4852,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-s3",
  "config",
+ "observability",
  "tokio",
  "tracing",
 ]

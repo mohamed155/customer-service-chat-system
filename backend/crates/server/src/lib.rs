@@ -28,6 +28,7 @@
 
 pub mod client_errors;
 pub mod handlers;
+pub mod healthcheck;
 pub mod internal_error;
 pub mod mfa_admin;
 pub mod openapi;
@@ -37,4 +38,5 @@ pub mod router;
 pub mod run_mode;
 pub mod secret_maintenance;
 pub mod security_headers;
+pub mod shutdown;
 pub mod state;

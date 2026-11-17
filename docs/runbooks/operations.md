@@ -558,3 +558,63 @@ backend release that had no errors an hour ago and now has ten or more in 10 min
 - **The maps package is missing, or anyone can pull it**: the package is created by the first
   release after MOH-168. Its visibility must be **private** (GitHub, Packages, package settings);
   a public package would publish the source of every build.
+
+---
+
+## 10. The Backend Says It Is Not Ready
+
+`/health` is liveness: it answers `200` while the process runs and asks nothing else. `/ready` is
+readiness (MOH-81): it checks **PostgreSQL** (`database`), **Redis** (`cache`) and **object storage**
+(`storage`), each inside `READY_PROBE_TIMEOUT_MS`, and answers `503` when any fails. A load
+balancer, `ops/deploy.sh` and the container health check (`server healthcheck`, which asks
+`/ready` from inside the container) all use it, so an instance that lost a dependency is taken out
+of rotation instead of serving errors.
+
+The body names each dependency and a reason, and nothing else, because anyone who can reach the
+port can read it:
+
+```json
+{"status": "not_ready", "checks": [
+  {"name": "database", "status": "ok"},
+  {"name": "cache", "status": "error", "error": "unavailable"},
+  {"name": "storage", "status": "ok"},
+  {"name": "shutdown", "status": "ok"}]}
+```
+
+`error` is `unavailable` (the check failed), `timed out` (it did not answer in time) or
+`shutting down` (the `shutdown` check, below).
+
+### Steps
+
+1. Read which check is `error` in the body of `curl -s http://localhost:8080/ready`.
+2. Find the cause in the backend log: every failure is logged with the check's name and the real
+   error, `readiness check failed` (or `readiness check timed out`), at `warn`.
+   In Loki: `{container=~".*backend.*"} |= "readiness check"`.
+3. Fix the dependency (start Redis, restore the database connection, check the S3 endpoint and
+   credentials). The instance becomes ready again on its own at the next probe.
+
+### Things to know
+
+- **`storage` fails although S3 is configured and reachable**: the process could not create its S3
+  client at startup and fell back to in-memory storage (it logs `failed to create S3 storage`).
+  In-memory storage loses every upload on restart, so readiness fails on purpose. Fix the S3
+  settings and restart.
+- **Shutdown order:** when the process gets SIGTERM it fails readiness first (`shutdown` becomes
+  `error`, reason `shutting down`), keeps accepting requests for half of `SHUTDOWN_GRACE_SECONDS`
+  (at most 5 seconds) so the load balancer can stop routing to it, and only then drains the
+  requests in flight. Set the orchestrator's stop timeout above the grace period.
+- **A container that stays `unhealthy`**: `docker inspect --format '{{json .State.Health}}' <container>`
+  shows the last probe output, for example `healthcheck: ... answered 'HTTP/1.1 503 ...'`; then
+  follow the steps above.
+
+### Expected outcome
+
+- `/ready` answers `200` and every check is `ok`; `docker compose ps` shows the backend `healthy`.
+
+### When it fails
+
+- **`/ready` itself does not answer** (connection refused or no answer): the process is down or
+  hung, which is a liveness problem, not a dependency problem; check `/health` and the process log.
+- **All checks are `ok` but the deploy script still rolls back**: `ops/deploy.sh` polls `/ready`
+  for `TIMEOUT` seconds (120, a constant near the top of the script) and a slow start can exceed
+  it. Raise the constant in a reviewed change; do not skip the gate.
