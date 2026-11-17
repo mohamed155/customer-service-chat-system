@@ -154,4 +154,77 @@ describe('PlatformNavComponent', () => {
     expect(document.activeElement).toBe(other);
     other.remove();
   });
+  describe('focus', () => {
+    function open(fixture: { nativeElement: unknown; detectChanges(): void }) {
+      const host = fixture.nativeElement as HTMLElement;
+      const trigger = host.querySelector('.trigger') as HTMLElement;
+      trigger.click();
+      fixture.detectChanges();
+      return { host, trigger };
+    }
+
+    it('moves focus to the first menu item whenever it opens', async () => {
+      const { fixture } = await setup(true);
+      const { host, trigger } = open(fixture);
+      await fixture.whenStable();
+      const options = Array.from(host.querySelectorAll<HTMLElement>('.option'));
+      expect(options.length).toBeGreaterThan(1);
+      expect(document.activeElement).toBe(options[0]);
+
+      // Closed with the trigger, then opened again: the first item takes focus again.
+      trigger.click();
+      fixture.detectChanges();
+      expect(document.activeElement).toBe(trigger);
+      trigger.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(host.querySelector('.option'));
+    });
+
+    it('puts focus back on the trigger after Escape', async () => {
+      const { fixture } = await setup(true);
+      const { trigger } = open(fixture);
+      await fixture.whenStable();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      fixture.detectChanges();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it('puts focus back on the trigger after a selection', async () => {
+      const { fixture } = await setup(true);
+      const { host, trigger } = open(fixture);
+      await fixture.whenStable();
+
+      host.querySelector<HTMLElement>('.option')!.click();
+      fixture.detectChanges();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it('puts focus back on the trigger when a click outside focused nothing', async () => {
+      const { fixture } = await setup(true);
+      const { trigger } = open(fixture);
+      await fixture.whenStable();
+      (document.activeElement as HTMLElement).blur();
+
+      document.body.click();
+      fixture.detectChanges();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it('leaves focus where a click outside put it', async () => {
+      const { fixture } = await setup(true);
+      open(fixture);
+      await fixture.whenStable();
+      const other = document.createElement('input');
+      document.body.appendChild(other);
+      other.focus();
+
+      other.click();
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('.dropdown')).toBeNull();
+      expect(document.activeElement).toBe(other);
+      other.remove();
+    });
+  });
 });

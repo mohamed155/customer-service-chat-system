@@ -301,6 +301,36 @@ test.describe('dashboard shell', () => {
     await expect(page).toHaveURL(/\/platform\/tenants$/);
   });
 
+  test('moves focus into the platform menu and gives it back to the trigger', async ({ page }) => {
+    await mockApi(page, identities.platform);
+    await page.goto('/tenant/select');
+    const trigger = page.getByRole('button', { name: 'Platform' });
+    const items = page.getByRole('menuitem');
+
+    // Opening puts focus on the first item.
+    await trigger.click();
+    await expect(items.first()).toBeFocused();
+
+    // Escape closes it and focus is back on the trigger; opening again starts at the first item.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(items.first()).toBeFocused();
+
+    // A click on something else keeps focus where the click put it.
+    await page.getByRole('button', { name: 'Switch tenant' }).click();
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(page.getByPlaceholder('Search tenants...')).toBeFocused();
+    await page.keyboard.press('Escape');
+
+    // Choosing an item with the keyboard navigates.
+    await trigger.click();
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/platform\/tenants$/);
+  });
+
   test('logs out successfully and redirects to sign-in', async ({ page }) => {
     await mockApi(page, identities.tenant);
     await page.goto('/tenant/overview');
