@@ -53,8 +53,10 @@ pub fn read_timeout(ready_probe_ms: Option<&str>) -> Duration {
 }
 
 /// Ask `address` for `/ready`. `Ok` only for a `200`. Every address the name resolves to is tried
-/// in turn (`localhost` can resolve to `::1` first while the server listens on IPv4 only). The
-/// whole probe, connecting and reading, takes at most `budget`.
+/// in turn (`localhost` can resolve to `::1` first while the server listens on IPv4 only).
+/// Connecting and reading are bounded by `budget`. Name resolution is not: the address is normally
+/// a literal (`127.0.0.1`, the bind address), and a host name is resolved by the system resolver
+/// with its own timeouts. Docker's health-check `timeout` bounds the run inside a container.
 pub fn probe(address: &str, budget: Duration) -> Result<(), String> {
     let targets: Vec<SocketAddr> = address
         .to_socket_addrs()
