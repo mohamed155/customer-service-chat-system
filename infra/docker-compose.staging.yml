@@ -18,7 +18,10 @@ services:
     ports:
       - "8080:8080"
     # Healthy while /ready answers 200 (PostgreSQL, Redis, object storage; failing from the moment
-    # a stop is requested). The image has no curl, so the binary asks itself. MOH-81.
+    # a stop is requested). The image has no curl, so the binary asks itself (MOH-81). This reports
+    # state (`docker compose ps`, `docker inspect`); nothing waits on it: ops/deploy.sh gates and
+    # rolls back on /ready itself, and a `service_healthy` dependency would make `up -d` fail
+    # before that rollback.
     healthcheck:
       test: ["CMD", "server", "healthcheck"]
       interval: 10s
@@ -49,12 +52,9 @@ services:
     environment:
       APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN must be set}
     depends_on:
-      backend:
-        condition: service_healthy
-      dashboard:
-        condition: service_started
-      widget:
-        condition: service_started
+      - backend
+      - dashboard
+      - widget
 
 volumes:
   caddy_data:

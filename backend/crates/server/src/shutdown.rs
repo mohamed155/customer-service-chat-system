@@ -15,7 +15,7 @@ pub const MAX_READINESS_DRAIN_DELAY: Duration = Duration::from_secs(5);
 /// How long to keep serving after readiness fails: half of `SHUTDOWN_GRACE_SECONDS`, at most
 /// [`MAX_READINESS_DRAIN_DELAY`]. `SHUTDOWN_GRACE_SECONDS=0` (the test setting) means no delay.
 pub fn readiness_drain_delay(grace_seconds: u64) -> Duration {
-    Duration::from_secs(grace_seconds / 2).min(MAX_READINESS_DRAIN_DELAY)
+    (Duration::from_secs(grace_seconds) / 2).min(MAX_READINESS_DRAIN_DELAY)
 }
 
 /// Fail readiness now, then keep serving for `delay` before the caller starts draining.
@@ -38,7 +38,8 @@ mod tests {
     #[test]
     fn the_delay_is_half_the_grace_period_capped_at_five_seconds() {
         assert_eq!(readiness_drain_delay(0), Duration::ZERO);
-        assert_eq!(readiness_drain_delay(1), Duration::ZERO);
+        assert_eq!(readiness_drain_delay(1), Duration::from_millis(500));
+        assert_eq!(readiness_drain_delay(3), Duration::from_millis(1500));
         assert_eq!(readiness_drain_delay(4), Duration::from_secs(2));
         assert_eq!(readiness_drain_delay(10), Duration::from_secs(5));
         assert_eq!(readiness_drain_delay(300), MAX_READINESS_DRAIN_DELAY);

@@ -3269,6 +3269,7 @@ dependencies = [
  "async-trait",
  "axum",
  "config",
+ "futures",
  "metrics",
  "metrics-exporter-prometheus",
  "opentelemetry",

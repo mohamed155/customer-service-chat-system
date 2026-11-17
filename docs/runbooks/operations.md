@@ -565,10 +565,16 @@ backend release that had no errors an hour ago and now has ten or more in 10 min
 
 `/health` is liveness: it answers `200` while the process runs and asks nothing else. `/ready` is
 readiness (MOH-81): it checks **PostgreSQL** (`database`), **Redis** (`cache`) and **object storage**
-(`storage`), each inside `READY_PROBE_TIMEOUT_MS`, and answers `503` when any fails. A load
-balancer, `ops/deploy.sh` and the container health check (`server healthcheck`, which asks
-`/ready` from inside the container) all use it, so an instance that lost a dependency is taken out
-of rotation instead of serving errors.
+(`storage`) at once, each inside `READY_PROBE_TIMEOUT_MS`, and answers `503` when any fails.
+Three things read it:
+
+- `ops/deploy.sh` waits for `200` before it considers a release up, and rolls back otherwise.
+- The container health check (`server healthcheck`, which asks `/ready` from inside the container)
+  makes `docker compose ps` show the backend `healthy` or `unhealthy`. In the supplied Compose
+  files this only reports state: nothing waits on it and nothing removes an unhealthy backend from
+  Caddy, which has a single backend and no readiness checks of its own.
+- A readiness-aware load balancer or orchestrator in front of several instances, which is what
+  takes an instance out of rotation (and what the shutdown order below is for).
 
 The body names each dependency and a reason, and nothing else, because anyone who can reach the
 port can read it:
@@ -595,10 +601,11 @@ port can read it:
 
 ### Things to know
 
-- **`storage` fails although S3 is configured and reachable**: the process could not create its S3
-  client at startup and fell back to in-memory storage (it logs `failed to create S3 storage`).
-  In-memory storage loses every upload on restart, so readiness fails on purpose. Fix the S3
-  settings and restart.
+- **`storage` fails although S3 is configured and reachable**: either the process could not create
+  its S3 client at startup and fell back to in-memory storage (it logs `failed to create S3
+  storage`; in-memory storage loses every upload on restart, so readiness fails on purpose; fix the
+  S3 settings and restart), or the credentials lack `s3:ListBucket`, which the `HeadBucket` probe
+  needs (`docs/configuration.md`, S3 section).
 - **Shutdown order:** when the process gets SIGTERM it fails readiness first (`shutdown` becomes
   `error`, reason `shutting down`), keeps accepting requests for half of `SHUTDOWN_GRACE_SECONDS`
   (at most 5 seconds) so the load balancer can stop routing to it, and only then drains the

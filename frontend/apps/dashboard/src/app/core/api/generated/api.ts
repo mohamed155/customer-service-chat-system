@@ -2363,6 +2363,7 @@ export interface components {
       identifier: string;
     };
     CheckResult: {
+      /** @description A short reason code (`unavailable`, `timed out`, `shutting down`), never the raw error. */
       error?: string | null;
       name: string;
       status: components['schemas']['CheckStatus'];

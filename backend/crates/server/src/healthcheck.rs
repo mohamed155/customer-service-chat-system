@@ -6,7 +6,8 @@
 //! PostgreSQL, Redis and object storage answer and the process is not shutting down, not merely
 //! while it is running.
 //!
-//! It reads only `PORT` and `BIND_ADDRESS` (the listener's own settings) and none of the secrets,
+//! It reads only `PORT`, `BIND_ADDRESS` and `READY_PROBE_TIMEOUT_MS` (the listener's and the
+//! readiness probe's own settings) and none of the secrets,
 //! so it works with the environment the container already has. It makes one plain HTTP/1.1 request
 //! over a TCP socket with short timeouts and needs no HTTP client.
 
@@ -15,7 +16,12 @@ use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
-const READ_TIMEOUT: Duration = Duration::from_secs(5);
+/// What `/ready` is given on top of its own probe budget (`READY_PROBE_TIMEOUT_MS`): connecting,
+/// serving and answering. The checks run at once, so the budget is one probe timeout, not one per
+/// dependency.
+const READ_MARGIN: Duration = Duration::from_secs(3);
+/// `READY_PROBE_TIMEOUT_MS` when it is not set (the server's default).
+const DEFAULT_READY_PROBE_MS: u64 = 2_000;
 /// The report is a few hundred bytes; anything much bigger is not our server.
 const MAX_RESPONSE_BYTES: u64 = 64 * 1024;
 
@@ -36,18 +42,46 @@ pub fn probe_address(port: Option<&str>, bind_address: Option<&str>) -> Result<S
     Ok(format!("{host}:{port}"))
 }
 
-/// Ask `address` for `/ready`. `Ok` only for a `200`.
-pub fn probe(address: &str) -> Result<(), String> {
-    let target: SocketAddr = address
+/// How long to wait for the answer: the server's readiness budget plus a margin. An unset or
+/// unreadable `READY_PROBE_TIMEOUT_MS` means the server's own default.
+pub fn read_timeout(ready_probe_ms: Option<&str>) -> Duration {
+    let ms = ready_probe_ms
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|ms| *ms > 0)
+        .unwrap_or(DEFAULT_READY_PROBE_MS);
+    Duration::from_millis(ms) + READ_MARGIN
+}
+
+/// Ask `address` for `/ready`. `Ok` only for a `200`. Every address the name resolves to is tried
+/// in turn (`localhost` can resolve to `::1` first while the server listens on IPv4 only).
+pub fn probe(address: &str, read_timeout: Duration) -> Result<(), String> {
+    let targets: Vec<SocketAddr> = address
         .to_socket_addrs()
         .map_err(|e| format!("cannot resolve {address}: {e}"))?
-        .next()
-        .ok_or_else(|| format!("no address for {address}"))?;
-    let mut stream = TcpStream::connect_timeout(&target, CONNECT_TIMEOUT)
-        .map_err(|e| format!("cannot connect to {address}: {e}"))?;
+        .collect();
+    probe_any(address, &targets, read_timeout)
+}
+
+/// [`probe`] over already resolved addresses: the first that accepts a connection is asked.
+pub fn probe_any(
+    address: &str,
+    targets: &[SocketAddr],
+    read_timeout: Duration,
+) -> Result<(), String> {
+    let mut last_error = format!("no address for {address}");
+    for target in targets {
+        match TcpStream::connect_timeout(target, CONNECT_TIMEOUT) {
+            Ok(stream) => return ask(address, stream, read_timeout),
+            Err(e) => last_error = format!("cannot connect to {target}: {e}"),
+        }
+    }
+    Err(last_error)
+}
+
+fn ask(address: &str, mut stream: TcpStream, read_timeout: Duration) -> Result<(), String> {
     stream
-        .set_read_timeout(Some(READ_TIMEOUT))
-        .and_then(|_| stream.set_write_timeout(Some(READ_TIMEOUT)))
+        .set_read_timeout(Some(read_timeout))
+        .and_then(|_| stream.set_write_timeout(Some(read_timeout)))
         .map_err(|e| format!("cannot set timeouts: {e}"))?;
     stream
         .write_all(b"GET /ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
@@ -79,7 +113,8 @@ pub fn run() -> i32 {
             return 1;
         }
     };
-    match probe(&address) {
+    let timeout = read_timeout(std::env::var("READY_PROBE_TIMEOUT_MS").ok().as_deref());
+    match probe(&address, timeout) {
         Ok(()) => 0,
         Err(e) => {
             eprintln!("healthcheck: {e}");
@@ -117,20 +152,20 @@ mod tests {
     #[test]
     fn a_200_is_healthy() {
         let address = serve_once(Some("HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\n{}"));
-        assert_eq!(probe(&address), Ok(()));
+        assert_eq!(probe(&address, Duration::from_secs(2)), Ok(()));
     }
 
     #[test]
     fn a_503_is_not_healthy_and_says_so() {
         let address = serve_once(Some("HTTP/1.1 503 Service Unavailable\r\n\r\n{}"));
-        let err = probe(&address).unwrap_err();
+        let err = probe(&address, Duration::from_secs(2)).unwrap_err();
         assert!(err.contains("503"), "{err}");
     }
 
     #[test]
     fn something_that_is_not_http_is_not_healthy() {
         let address = serve_once(Some("not http at all"));
-        assert!(probe(&address).is_err());
+        assert!(probe(&address, Duration::from_secs(2)).is_err());
     }
 
     #[test]
@@ -140,8 +175,40 @@ mod tests {
             .local_addr()
             .unwrap()
             .to_string(); // the listener is dropped: the port is closed
-        let err = probe(&address).unwrap_err();
+        let err = probe(&address, Duration::from_secs(2)).unwrap_err();
         assert!(err.contains("cannot connect"), "{err}");
+    }
+
+    #[test]
+    fn the_next_address_is_tried_when_the_first_refuses() {
+        let closed: SocketAddr = {
+            let l = TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap()
+        };
+        let live = serve_once(Some("HTTP/1.1 200 OK\r\n\r\n{}"));
+        let live_addr: SocketAddr = live.parse().unwrap();
+        assert_eq!(
+            probe_any("localhost", &[closed, live_addr], Duration::from_secs(2)),
+            Ok(())
+        );
+        let err = probe_any("localhost", &[closed], Duration::from_secs(2)).unwrap_err();
+        assert!(err.contains("cannot connect"), "{err}");
+        assert!(probe_any("localhost", &[], Duration::from_secs(2))
+            .unwrap_err()
+            .contains("no address"));
+    }
+
+    #[test]
+    fn the_read_timeout_is_the_readiness_budget_plus_a_margin() {
+        assert_eq!(read_timeout(None), Duration::from_secs(5));
+        assert_eq!(read_timeout(Some("2000")), Duration::from_secs(5));
+        assert_eq!(read_timeout(Some(" 10000 ")), Duration::from_secs(13));
+        assert_eq!(
+            read_timeout(Some("soon")),
+            Duration::from_secs(5),
+            "unreadable: the default"
+        );
+        assert_eq!(read_timeout(Some("0")), Duration::from_secs(5));
     }
 
     #[test]

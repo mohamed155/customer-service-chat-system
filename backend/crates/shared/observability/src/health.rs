@@ -87,16 +87,18 @@ impl IntoResponse for HealthReport {
     }
 }
 
-/// Run every check, each with its own `probe_timeout`, and report the result. The report carries
+/// Run every check at once, each with its own `probe_timeout`, and report the result in the order
+/// given. The report carries
 /// the name and a status per dependency and, for a failure, a short reason code. The error text a
 /// check returns is logged with the check's name and not returned: `/ready` is reachable by
 /// whoever can reach the port, and a driver message can name a host, a port or a user.
 pub async fn readiness(checks: Vec<Arc<dyn HealthCheck>>, probe_timeout: Duration) -> HealthReport {
-    let mut results = Vec::with_capacity(checks.len());
-    for check in &checks {
+    // Concurrently, so the whole report takes about one `probe_timeout`, not one per dependency:
+    // callers (the container health check, a load balancer) budget for that.
+    let results = futures::future::join_all(checks.iter().map(|check| async move {
         let result = tokio::time::timeout(probe_timeout, check.check()).await;
         let name = check.name().to_owned();
-        let cr = match result {
+        match result {
             Ok(Ok(())) => CheckResult {
                 name,
                 status: CheckStatus::Ok,
@@ -123,9 +125,9 @@ pub async fn readiness(checks: Vec<Arc<dyn HealthCheck>>, probe_timeout: Duratio
                     error: Some(REASON_TIMED_OUT.to_owned()),
                 }
             }
-        };
-        results.push(cr);
-    }
+        }
+    }))
+    .await;
     let all_ok = results.iter().all(|r| r.status == CheckStatus::Ok);
     HealthReport {
         status: if all_ok {
@@ -228,5 +230,57 @@ mod tests {
         );
         assert_eq!(after.checks[1].name, "shutdown");
         assert_eq!(after.checks[1].error.as_deref(), Some(REASON_SHUTTING_DOWN));
+    }
+
+    struct Slow(&'static str);
+    #[async_trait::async_trait]
+    impl HealthCheck for Slow {
+        fn name(&self) -> &'static str {
+            self.0
+        }
+        async fn check(&self) -> Result<(), String> {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            Ok(())
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn checks_run_at_once_so_the_report_takes_one_timeout_not_three() {
+        let checks: Vec<Arc<dyn HealthCheck>> = vec![
+            Arc::new(Slow("a")),
+            Arc::new(Slow("b")),
+            Arc::new(Slow("c")),
+        ];
+        let started = tokio::time::Instant::now();
+        let report = readiness(checks, Duration::from_secs(2)).await;
+        assert_eq!(report.status, HealthStatus::Ready);
+        assert_eq!(started.elapsed(), Duration::from_millis(300), "not 900 ms");
+        let names: Vec<_> = report.checks.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["a", "b", "c"],
+            "results keep the order of the checks"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_hung_check_costs_one_timeout_for_the_whole_report() {
+        struct Hung;
+        #[async_trait::async_trait]
+        impl HealthCheck for Hung {
+            fn name(&self) -> &'static str {
+                "hung"
+            }
+            async fn check(&self) -> Result<(), String> {
+                std::future::pending().await
+            }
+        }
+        let checks: Vec<Arc<dyn HealthCheck>> =
+            vec![Arc::new(Hung), Arc::new(Hung), Arc::new(Slow("ok"))];
+        let started = tokio::time::Instant::now();
+        let report = readiness(checks, Duration::from_secs(2)).await;
+        assert_eq!(started.elapsed(), Duration::from_secs(2));
+        assert_eq!(report.checks[0].error.as_deref(), Some(REASON_TIMED_OUT));
+        assert_eq!(report.checks[2].status, CheckStatus::Ok);
     }
 }
