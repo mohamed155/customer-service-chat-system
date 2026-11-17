@@ -15,9 +15,12 @@
 //   - `left` or `right` in `background-position`, `transform-origin`, `object-position` and in a
 //     gradient direction (`to right`).
 //
-// A line that must stay physical says why on the line: `rtl-lint-ignore: <why>` (a corner the
-// tenant picks for the chat widget, a value centred on both sides). Specs, fixtures and generated
-// code are not scanned.
+// The whole declaration is read, so a property and its value on two lines are one declaration. In
+// a `.ts` file only the inline `styles: [...]` are read (an object `{ left: 0 }` is not CSS).
+//
+// A declaration that must stay physical says why on its line: `rtl-lint-ignore: <why>` (a corner
+// the tenant picks for the chat widget, a value centred on both sides). Specs, fixtures and
+// generated code are not scanned.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -25,31 +28,34 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const roots = ['apps/dashboard/src', 'apps/widget/src'];
 
-const MARKER = /rtl-lint-ignore:\s*[^\s*/]/;
+const MARKER = /rtl-lint-ignore:\s*[^\s*/-]/;
 
 /** One rule: a pattern, and what to use instead. */
 const RULES = [
   {
-    pattern: /\b(?:margin|padding|scroll-margin|scroll-padding)-(?:left|right)\b/,
+    pattern: /\b(?:margin|padding|scroll-margin|scroll-padding)-(?:left|right)\b/g,
     use: 'margin-inline-start/-end (padding-, scroll-margin-, scroll-padding- likewise)',
   },
-  { pattern: /\bborder-(?:left|right)(?:-[a-z]+)?\b(?!-radius)/, use: 'border-inline-start/-end' },
+  { pattern: /\bborder-(?:left|right)(?:-[a-z]+)?\b(?!-radius)/g, use: 'border-inline-start/-end' },
   {
-    pattern: /\bborder-(?:top|bottom)-(?:left|right)-radius\b/,
+    pattern: /\bborder-(?:top|bottom)-(?:left|right)-radius\b/g,
     use: 'border-start-start-radius, border-start-end-radius, border-end-start-radius, border-end-end-radius',
   },
   {
-    pattern: /(?:^|[\s;{"'])(?:left|right)\s*:\s*[^\s;{}]/,
+    pattern: /(?<![\w.#-])(?:left|right)\s*:\s*[^\s;{}]/g,
     use: 'inset-inline-start / inset-inline-end',
   },
-  { pattern: /\b(?:float|clear)\s*:\s*(?:left|right)\b/, use: 'inline-start / inline-end' },
-  { pattern: /\btext-align\s*:\s*(?:left|right)\b/, use: 'text-align: start / end' },
+  { pattern: /\b(?:float|clear)\s*:\s*(?:left|right)\b/g, use: 'inline-start / inline-end' },
+  { pattern: /\btext-align\s*:\s*(?:left|right)\b/g, use: 'text-align: start / end' },
   {
     pattern:
-      /\b(?:background-position|transform-origin|object-position)\s*:[^;]*\b(?:left|right)\b/,
+      /\b(?:background-position|transform-origin|object-position)\s*:[^;{}]*\b(?:left|right)\b/g,
     use: 'a position that does not name a side (center), or a logical value set per direction',
   },
-  { pattern: /\bto\s+(?:left|right)\b/, use: 'a gradient that does not run along the inline axis' },
+  {
+    pattern: /\bto\s+(?:left|right)\b/g,
+    use: 'a gradient that does not run along the inline axis',
+  },
 ];
 
 /** The values of a CSS shorthand, split on spaces outside parentheses. */
@@ -71,45 +77,102 @@ function values(text) {
   return out;
 }
 
-/** A four-value shorthand whose left and right (or whose corners across) differ, or `null`. */
-function asymmetricShorthand(line) {
-  const m = line.match(/\b(margin|padding|inset|border-radius)\s*:\s*([^;{}]+)/);
-  if (!m) return null;
-  const parts = values(m[2].replace(/\s*!important\s*$/, '').replace(/\/.*$/, ''));
-  if (parts.length !== 4) return null;
-  const [a, b, c, d] = parts;
-  const differs = m[1] === 'border-radius' ? a !== b || d !== c : b !== d;
-  return differs ? m[1] : null;
-}
+/** `text` with every character but the line ends replaced by a space: the lines stay where they are. */
+const blank = (text) => text.replace(/[^\n]/g, ' ');
 
-/** `source` without its comments (their lines kept), so prose such as "right to left" is not read as CSS. */
+/**
+ * `source` without its comments (their lines kept), so prose such as "right to left" is not read as
+ * CSS. A `//` inside a quoted string (`content: ' // '`) is text, not a comment.
+ */
 function withoutComments(source) {
   return source
-    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
-    .replace(/<!--[\s\S]*?-->/g, (comment) => comment.replace(/[^\n]/g, ' '))
-    .replace(/(^|\s)\/\/.*$/gm, '$1');
+    .replace(/\/\*[\s\S]*?\*\//g, blank)
+    .replace(/<!--[\s\S]*?-->/g, blank)
+    .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|(^|[\s`])\/\/.*$/gm, (match, before) =>
+      before === undefined ? match : `${before}${blank(match.slice(before.length))}`,
+    );
 }
 
-/** What the line does that is tied to the screen's left or right, or `null`. */
-function physical(line) {
+/**
+ * What is CSS in a file: all of a stylesheet or template, but in a `.ts` file only the inline
+ * `styles: [...]` (everything else is blanked, the lines kept).
+ */
+function styleText(path, source) {
+  if (!path.endsWith('.ts')) return source;
+  const out = blank(source).split('');
+  for (const start of source.matchAll(/\bstyles\s*:\s*\[/g)) {
+    let depth = 1;
+    let quote = null;
+    let end = start.index + start[0].length;
+    for (; end < source.length && depth > 0; end += 1) {
+      const ch = source[end];
+      if (quote) {
+        if (ch === '\\') end += 1;
+        else if (ch === quote) quote = null;
+      } else if (ch === '`' || ch === "'" || ch === '"') quote = ch;
+      else if (ch === '[') depth += 1;
+      else if (ch === ']') depth -= 1;
+    }
+    for (let i = start.index; i < end; i += 1) out[i] = source[i];
+  }
+  return out.join('');
+}
+
+/** The text of the balanced parentheses that open at `open`, without them. */
+function argumentsAt(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i += 1) {
+    if (text[i] === '(') depth += 1;
+    if (text[i] === ')') {
+      depth -= 1;
+      if (depth === 0) return text.slice(open + 1, i);
+    }
+  }
+  return text.slice(open + 1);
+}
+
+/**
+ * Every physical style in `css` (comment-free): `{ index, length, found, use }`. Each shorthand and
+ * each `translateX` is judged by itself.
+ */
+function physicalIn(css) {
+  const hits = [];
   for (const { pattern, use } of RULES) {
-    const hit = line.match(pattern);
-    if (hit) return { found: hit[0].trim(), use };
+    for (const m of css.matchAll(pattern)) {
+      hits.push({
+        index: m.index,
+        length: m[0].length,
+        found: m[0].trim().replace(/\s+/g, ' '),
+        use,
+      });
+    }
   }
-  if (/\btranslateX\((?!\s*0\s*\))/.test(line) && !/var\(--app-dir-sign\)/.test(line)) {
-    return {
-      found: 'translateX(…)',
-      use: 'calc(<distance> * var(--app-dir-sign)), or a logical property',
-    };
+  for (const m of css.matchAll(/\btranslateX\(/g)) {
+    const argument = argumentsAt(css, m.index + m[0].length - 1);
+    if (argument.trim() !== '0' && !/var\(--app-dir-sign\)/.test(argument)) {
+      hits.push({
+        index: m.index,
+        length: m[0].length + argument.length,
+        found: 'translateX(…)',
+        use: 'calc(<distance> * var(--app-dir-sign)), or a logical property',
+      });
+    }
   }
-  const shorthand = asymmetricShorthand(line);
-  if (shorthand) {
-    return {
-      found: `${shorthand} with four different values`,
-      use: `the logical form (${shorthand}-inline-start/-end, or ${shorthand}-block/-inline)`,
-    };
+  for (const m of css.matchAll(/\b(margin|padding|inset|border-radius)\s*:\s*([^;{}]+)/g)) {
+    const parts = values(m[2].replace(/\s*!important\s*$/, '').replace(/\/.*$/, ''));
+    if (parts.length !== 4) continue;
+    const [a, b, c, d] = parts;
+    const differs = m[1] === 'border-radius' ? a !== b || d !== c : b !== d;
+    if (differs) {
+      hits.push({
+        index: m.index,
+        length: m[0].length,
+        found: `${m[1]} with four different values`,
+        use: `the logical form (${m[1]}-inline-start/-end, or ${m[1]}-block/-inline)`,
+      });
+    }
   }
-  return null;
+  return hits;
 }
 
 /**
@@ -127,19 +190,34 @@ export function check(files) {
   );
   for (const { path, source } of scanned) {
     const original = source.split('\n');
-    withoutComments(source)
-      .split('\n')
-      .forEach((line, index) => {
-        if (MARKER.test(original[index])) return;
-        const hit = physical(line);
-        if (hit) {
-          problems.push(
-            `${path}:${index + 1}: ${hit.found} is tied to the screen's left or right and does not ` +
-              `mirror in a right-to-left language. Use ${hit.use}, or mark the line ` +
-              `"rtl-lint-ignore: <why>" if it must stay physical. See docs/architecture/right-to-left.md.`,
-          );
-        }
-      });
+    const css = withoutComments(styleText(path, source));
+    const lineStarts = [];
+    let offset = 0;
+    for (const line of css.split('\n')) {
+      lineStarts.push(offset);
+      offset += line.length + 1;
+    }
+    const lineOf = (position) => {
+      let low = 0;
+      let high = lineStarts.length - 1;
+      while (low < high) {
+        const mid = Math.ceil((low + high) / 2);
+        if (lineStarts[mid] <= position) low = mid;
+        else high = mid - 1;
+      }
+      return low;
+    };
+    for (const hit of physicalIn(css)) {
+      const first = lineOf(hit.index);
+      const last = lineOf(hit.index + Math.max(hit.length - 1, 0));
+      // A marker on any line of the declaration covers it.
+      if (original.slice(first, last + 1).some((line) => MARKER.test(line))) continue;
+      problems.push(
+        `${path}:${first + 1}: ${hit.found} is tied to the screen's left or right and does not ` +
+          `mirror in a right-to-left language. Use ${hit.use}, or mark the line ` +
+          `"rtl-lint-ignore: <why>" if it must stay physical. See docs/architecture/right-to-left.md.`,
+      );
+    }
   }
   return problems;
 }

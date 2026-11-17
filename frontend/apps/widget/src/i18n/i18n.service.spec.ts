@@ -177,6 +177,9 @@ describe('I18n', () => {
       );
       expect(textDirection('he-IL')).toBe('rtl');
       expect(textDirection('fr')).toBe('ltr');
+      // The script written in the tag decides before the language's usual one does.
+      expect(textDirection('ku-Arab')).toBe('rtl');
+      expect(textDirection('ar-Latn')).toBe('ltr');
     });
 
     it('treats a tag it cannot read as left to right', () => {

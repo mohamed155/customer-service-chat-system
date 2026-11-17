@@ -3,7 +3,11 @@ import { test } from 'node:test';
 import { check, readFiles } from './check-rtl.mjs';
 
 const dash = 'apps/dashboard/src/app/x/x.component.ts';
-const run = (source, path = dash) => check([{ path, source }]);
+// In a `.ts` file only the inline styles are CSS, so the snippets are put in a `styles: [...]`.
+const run = (source, path = dash) =>
+  check([
+    { path, source: path.endsWith('.ts') ? `const c = { styles: [\`${source}\`] };` : source },
+  ]);
 
 test('logical properties pass', () => {
   assert.deepEqual(
@@ -121,6 +125,62 @@ test('specs, fixtures, generated code and other apps are not scanned', () => {
   ]) {
     assert.deepEqual(run('a { margin-left: 4px; }', path), [], path);
   }
+});
+
+test('only the inline styles of a .ts file are CSS: an object with left and right is not', () => {
+  const ts = (source) => check([{ path: dash, source }]);
+  assert.deepEqual(ts('const bounds = { left: 0, right: 10, marginLeft: 4 };'), []);
+  assert.deepEqual(ts("const side = 'margin-left'; const rule = { textAlign: 'right' };"), []);
+  assert.equal(ts('@Component({ styles: [`a { margin-left: 4px; }`] }) class X {}').length, 1);
+  assert.equal(ts("@Component({ styles: ['a { margin-left: 4px; }'] }) class X {}").length, 1);
+  // a `]` inside a selector does not end the block early
+  assert.equal(
+    ts(
+      "@Component({ styles: [`a[data-x='1'] { margin: 0; } b { padding-right: 2px; }`] }) class X {}",
+    ).length,
+    1,
+  );
+});
+
+test('a // inside a string is text, not a comment that hides the rest of the line', () => {
+  assert.equal(run('a::before { content: " // "; margin-left: 4px; }').length, 1);
+  assert.equal(run("a::before { content: ' // '; margin-left: 4px; }").length, 1);
+  assert.deepEqual(run('a { margin: 0; } // margin-left: 4px'), []);
+});
+
+test('every shorthand on a line is checked', () => {
+  const problems = run('a { margin: 0; padding: 0 8px 0 4px; }');
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /padding with four different values/);
+  assert.equal(run('a { margin: 1px 2px 1px 0; padding: 0 8px 0 4px; }').length, 2);
+});
+
+test('translateX is judged call by call', () => {
+  assert.equal(
+    run(
+      'a { transform: translateX(-100%); } b { transform: translateX(calc(-100% * var(--app-dir-sign))); }',
+    ).length,
+    1,
+  );
+  assert.equal(run('a { transform: translateX(-100%) translateX(0); }').length, 1);
+});
+
+test('a declaration over several lines is one declaration, reported on its first line', () => {
+  const problems = run('a {\n  text-align:\n    right;\n}');
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /x\.component\.ts:2: text-align: right/);
+  assert.equal(run('a {\n  margin:\n    1px 2px\n    1px 0;\n}').length, 1);
+  // a marker on any line of the declaration covers it
+  assert.deepEqual(run('a {\n  text-align:\n    right; /* rtl-lint-ignore: a value */\n}'), []);
+});
+
+test('an empty ignore marker in an HTML comment does not count as a reason', () => {
+  const html = 'apps/dashboard/src/app/x/x.component.html';
+  assert.equal(run('<p style="margin-left: 4px"></p> <!-- rtl-lint-ignore: -->', html).length, 1);
+  assert.deepEqual(
+    run('<p style="margin-left: 4px"></p> <!-- rtl-lint-ignore: a value -->', html),
+    [],
+  );
 });
 
 test('the dashboard and the widget as they are pass', () => {

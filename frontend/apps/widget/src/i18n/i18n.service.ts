@@ -107,6 +107,16 @@ export function textDirection(tag: string): 'ltr' | 'rtl' {
   } catch {
     // An old browser without Intl.Locale, or a tag it cannot read: go by the language.
   }
+  // The script written in the tag (`ku-Arab`, `ar-Latn`) counts before the language's usual one.
+  const written = tag
+    .split('-')
+    .slice(1)
+    .find((part) => /^[A-Za-z]{4}$/.test(part));
+  if (written) {
+    return RTL_SCRIPTS.has(written[0].toUpperCase() + written.slice(1).toLowerCase())
+      ? 'rtl'
+      : 'ltr';
+  }
   return RTL_LANGUAGES.has(tag.split('-')[0].toLowerCase()) ? 'rtl' : 'ltr';
 }
 

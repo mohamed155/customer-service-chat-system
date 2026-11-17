@@ -226,10 +226,18 @@ test.describe('the chat widget', () => {
         const frame = page.frameLocator('iframe[title="Chat widget"]');
         await expect(frame.locator('html')).toHaveAttribute('dir', rtl ? 'rtl' : 'ltr');
 
-        // The greeting is the assistant's side; the visitor's own message takes the other.
+        const frameBox = await box(frame.locator('html'));
+        // How far a box is from the left and from the right edge of the widget.
+        const fromLeft = (b: { x: number }) => b.x - frameBox.x;
+        const fromRight = (b: { x: number; width: number }) =>
+          frameBox.x + frameBox.width - (b.x + b.width);
+        const near = 40;
+
+        // The greeting is the assistant's side: the start of the line.
         const greeting = frame.locator('.window__welcome .bubble--assistant');
         await expect(greeting).toBeVisible();
         const greetingBox = await box(greeting);
+        expect(rtl ? fromRight(greetingBox) : fromLeft(greetingBox)).toBeLessThan(near);
 
         await frame.locator('textarea').fill('Hello');
         await frame.locator('textarea').press('Enter');
@@ -237,9 +245,8 @@ test.describe('the chat widget', () => {
         await expect(visitor).toBeVisible();
         const visitorBox = await box(visitor);
 
-        // The visitor's side is the end of the line: right in English, left in Arabic.
-        const centre = (b: { x: number; width: number }) => b.x + b.width / 2;
-        expect(centre(visitorBox) > centre(greetingBox)).toBe(!rtl);
+        // The visitor's own message is the end of the line: right in English, left in Arabic.
+        expect(rtl ? fromLeft(visitorBox) : fromRight(visitorBox)).toBeLessThan(near);
         await evidence(page, testInfo, `widget-${locale}`);
       });
     });

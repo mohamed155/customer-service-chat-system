@@ -21,6 +21,12 @@ import { WidgetMessage } from '../core/models';
   `,
   styles: [
     `
+      /* The host is the flex item of the message list; the bubble in it takes its side with
+         align-self, which needs the host to be a flex container too. */
+      :host {
+        display: flex;
+        flex-direction: column;
+      }
       .bubble {
         max-width: 80%;
         padding: 10px 14px;
