@@ -56,6 +56,10 @@ pub struct RegistryConfig {
     /// Circuit breaker and bulkhead settings applied to every provider (MOH-40). Each provider
     /// gets its own guard, so one provider's outage or slowness never affects another.
     pub resilience_policy: Policy,
+    /// Timeouts, redirect policy and user agent of the one HTTP client every provider shares
+    /// (MOH-82). The request timeout covers the whole call, so it must be as long as a reply can
+    /// stream.
+    pub http: outbound::HttpSettings,
 }
 
 impl RegistryConfig {
@@ -65,6 +69,7 @@ impl RegistryConfig {
             anthropic_base_url: None,
             gemini_base_url: None,
             resilience_policy: Policy::default(),
+            http: outbound::HttpSettings::from_millis(10_000, 60_000),
         }
     }
 }
@@ -105,12 +110,16 @@ fn embed_guard_name(provider: &str) -> String {
 }
 
 impl Registry {
+    /// For tests and fixtures: panics if the HTTP client cannot be built. A service starts with
+    /// [`Registry::try_new`] and reports the error.
+    #[allow(clippy::expect_used)] // tests and fixtures only; the settings are valid defaults
     pub fn new(cfg: RegistryConfig) -> Self {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(60))
-            .connect_timeout(std::time::Duration::from_secs(10))
-            .build()
-            .expect("reqwest Client::build");
+        Self::try_new(cfg).expect("the default provider HTTP client builds")
+    }
+
+    /// Build the registry and its shared HTTP client (see [`RegistryConfig::http`]).
+    pub fn try_new(cfg: RegistryConfig) -> Result<Self, outbound::BuildError> {
+        let client = outbound::build(&cfg.http)?;
 
         let openai_base_url = cfg
             .openai_base_url
@@ -171,14 +180,14 @@ impl Registry {
             ),
         ]);
 
-        Self {
+        Ok(Self {
             client,
             providers,
             overrides: HashMap::new(),
             embedding_providers,
             hub: hub.clone(),
             policy,
-        }
+        })
     }
 
     pub fn provider(&self, kind: ProviderKind) -> &dyn ChatProvider {

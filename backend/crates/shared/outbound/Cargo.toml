@@ -1,0 +1,11 @@
+[package]
+name = "outbound"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+reqwest.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "net", "io-util"] }
+wiremock.workspace = true

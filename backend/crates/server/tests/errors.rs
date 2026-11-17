@@ -55,6 +55,7 @@ fn test_state_with_rate_limit(rate_limit_enabled: bool) -> AppState {
         ai_gemini_base_url: None,
         s3: None,
         trusted_proxy: false,
+        outbound_http: config::OutboundHttpConfig::default(),
         rate_limit_enabled,
         rate_limit_login_max: 10,
         rate_limit_login_window_secs: 60,

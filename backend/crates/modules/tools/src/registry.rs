@@ -9,6 +9,9 @@ pub struct ToolExecutionCtx {
     pub pool: sqlx::PgPool,
     /// Keys to open tool credentials; `None` when none are configured.
     pub vault: Option<std::sync::Arc<secrets::Vault>>,
+    /// Client for tenant-registered tool endpoints, from `outbound::build` with the
+    /// `APP_HTTP_TOOLS_*` timeouts and no redirects (MOH-82).
+    pub http: reqwest::Client,
 }
 
 #[async_trait::async_trait]

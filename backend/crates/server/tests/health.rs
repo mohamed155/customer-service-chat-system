@@ -90,6 +90,7 @@ fn make_state(checks: Vec<Arc<dyn HealthCheck>>) -> AppState {
         ai_gemini_base_url: None,
         s3: None,
         trusted_proxy: false,
+        outbound_http: config::OutboundHttpConfig::default(),
     };
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     AppState {

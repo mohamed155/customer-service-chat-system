@@ -630,11 +630,11 @@ mod tests {
 
     async fn test_client() -> (reqwest::Client, MockServer) {
         let mock_server = MockServer::start().await;
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
-            .connect_timeout(Duration::from_secs(2))
-            .build()
-            .unwrap();
+        let client = outbound::build(&outbound::HttpSettings::new(
+            Duration::from_secs(2),
+            Duration::from_secs(5),
+        ))
+        .unwrap();
         (client, mock_server)
     }
 

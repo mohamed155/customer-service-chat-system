@@ -7,6 +7,8 @@ edition.workspace = true
 secrets = { path = "../../shared/secrets" }
 db = { path = "../../shared/db" }
 ai-providers = { path = "../../ai-providers" }
+outbound = { path = "../../shared/outbound" }
+reqwest.workspace = true
 resilience = { path = "../../shared/resilience" }
 aes-gcm.workspace = true
 async-trait.workspace = true

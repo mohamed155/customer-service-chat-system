@@ -63,6 +63,9 @@ struct AiServiceInner {
     pool: PgPool,
     registry: ai_providers::Registry,
     vault: Option<Arc<secrets::Vault>>,
+    /// Client for tenant-registered tool endpoints (MOH-82): `APP_HTTP_TOOLS_*` timeouts, no
+    /// redirects.
+    tools_http: reqwest::Client,
 }
 
 #[doc(hidden)]
@@ -237,16 +240,26 @@ impl AiService {
             config.secrets_root_key_previous.as_deref(),
         )?;
         let vault = vault.has_keys().then(|| Arc::new(vault));
+        let ai_http = config.outbound_http.ai;
         let registry_config = ai_providers::RegistryConfig {
             openai_base_url: config.ai_openai_base_url.clone(),
             anthropic_base_url: config.ai_anthropic_base_url.clone(),
             gemini_base_url: config.ai_gemini_base_url.clone(),
+            http: outbound::HttpSettings::from_millis(ai_http.connect_ms, ai_http.request_ms),
             ..ai_providers::RegistryConfig::new()
         };
+        let tools_http = config.outbound_http.tools;
+        let tools_http = outbound::build(&outbound::HttpSettings::from_millis(
+            tools_http.connect_ms,
+            tools_http.request_ms,
+        ))
+        .map_err(|e| format!("tools HTTP client: {e}"))?;
         Ok(Self(Arc::new(AiServiceInner {
             pool,
-            registry: ai_providers::Registry::new(registry_config),
+            registry: ai_providers::Registry::try_new(registry_config)
+                .map_err(|e| format!("AI providers HTTP client: {e}"))?,
             vault,
+            tools_http,
         })))
     }
 
@@ -1398,6 +1411,12 @@ impl AiService {
     /// The keys for sealing and opening provider credentials; `None` when none are configured.
     pub fn vault(&self) -> Option<&secrets::Vault> {
         self.0.vault.as_deref()
+    }
+
+    /// The client tenant tools are called with: `APP_HTTP_TOOLS_*` timeouts, no redirects (MOH-82).
+    /// Clones share one connection pool.
+    pub fn tools_http(&self) -> reqwest::Client {
+        self.0.tools_http.clone()
     }
 
     /// The same vault, shared (for code that outlives the borrow, such as tool execution).

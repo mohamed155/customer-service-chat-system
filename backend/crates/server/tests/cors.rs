@@ -54,6 +54,7 @@ fn state_with_origins(origins: Vec<&'static str>) -> AppState {
         ai_gemini_base_url: None,
         s3: None,
         trusted_proxy: false,
+        outbound_http: config::OutboundHttpConfig::default(),
     };
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     AppState {

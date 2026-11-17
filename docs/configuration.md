@@ -103,6 +103,29 @@ openssl rand -base64 32
 | `APP_TRACE_SAMPLE_RATIO` | Read by the backend but **no longer applied at the SDK** — every span is now exported so that FR-020's "an errored request's trace is always retained" can hold. The retention rate for non-errored traces is set by `OTEL_TAIL_SAMPLE_PERCENTAGE` on the collector. | `1.0` | no |
 | `APP_TRUSTED_PROXY` | Must be `true` in staging/production (traffic arrives through Caddy which overwrites `X-Forwarded-For`). Must stay `false` in local development (nothing sanitises the header). Defaults to `false`. | `false` | no |
 
+### Outbound HTTP timeouts (per integration)
+
+Every HTTP client the backend uses to call another system is built by the `outbound` crate with a
+connect timeout, a total request timeout (the whole exchange, body included), no redirects unless
+the integration needs them, and a `customer-service-platform/<version>` user agent. The timeouts
+are set per integration. Each value is a whole number of milliseconds between `1` and `600000`, and
+the connect timeout may not exceed the request timeout; the process refuses to start otherwise.
+
+| Variable | Description | Default | Secret |
+| -- | -- | -- | -- |
+| `APP_HTTP_WHATSAPP_CONNECT_TIMEOUT_MS` | WhatsApp Graph API and media downloads: time to connect | `5000` | no |
+| `APP_HTTP_WHATSAPP_REQUEST_TIMEOUT_MS` | WhatsApp: time for the whole call. Follows up to three redirects (Meta's media CDN). | `15000` | no |
+| `APP_HTTP_AI_CONNECT_TIMEOUT_MS` | AI providers (OpenAI, Anthropic, Gemini): time to connect | `10000` | no |
+| `APP_HTTP_AI_REQUEST_TIMEOUT_MS` | AI providers: time for the whole call, a streamed reply included | `60000` | no |
+| `APP_HTTP_TOOLS_CONNECT_TIMEOUT_MS` | Tenant-registered tool endpoints: time to connect | `5000` | no |
+| `APP_HTTP_TOOLS_REQUEST_TIMEOUT_MS` | Tenant-registered tool endpoints: time for the whole call. Never follows a redirect. | `15000` | no |
+| `APP_HTTP_STORAGE_CONNECT_TIMEOUT_MS` | S3-compatible storage: time to connect | `5000` | no |
+| `APP_HTTP_STORAGE_REQUEST_TIMEOUT_MS` | S3-compatible storage: time for one operation | `30000` | no |
+
+A call that hits its timeout fails like any other transport error, so it counts toward that
+integration's circuit breaker (`resilience`). Not covered by these settings, and left at their
+vendor defaults: SMTP (`lettre`), the OTLP exporter and the Sentry transport.
+
 ---
 
 ## Optional (no default)

@@ -57,6 +57,7 @@ fn test_config(environment: Environment) -> config::AppConfig {
         sentry_dsn: None,
         release_sha: None,
         trusted_proxy: false,
+        outbound_http: config::OutboundHttpConfig::default(),
     }
 }
 
@@ -955,6 +956,7 @@ async fn tool_execution_emits_audit_row() {
         conversation_id,
         pool: pool.clone(),
         vault: None,
+        http: outbound::build(&outbound::HttpSettings::default()).unwrap(),
     };
 
     let resolved = tools::policy::ResolvedTool {
@@ -1037,6 +1039,7 @@ async fn failed_tool_execution_emits_audit_row() {
         conversation_id,
         pool: pool.clone(),
         vault: None,
+        http: outbound::build(&outbound::HttpSettings::default()).unwrap(),
     };
 
     let resolved = tools::policy::ResolvedTool {

@@ -45,8 +45,15 @@ pub struct S3Storage {
 }
 
 impl S3Storage {
-    pub async fn new(cfg: &config::S3Config) -> Result<Self, StorageError> {
+    /// An S3 client with a connect timeout and a total timeout per operation, from `timeouts`
+    /// (`APP_HTTP_STORAGE_*`, MOH-82); the AWS SDK sets none of its own for a whole operation.
+    pub async fn new(
+        cfg: &config::S3Config,
+        timeouts: config::HttpTimeouts,
+    ) -> Result<Self, StorageError> {
+        use aws_config::timeout::TimeoutConfig;
         use aws_sdk_s3::config::{Credentials, Region};
+        use std::time::Duration;
 
         let creds = Credentials::new(
             &cfg.access_key_id,
@@ -60,6 +67,12 @@ impl S3Storage {
             .endpoint_url(&cfg.endpoint)
             .region(Region::new(cfg.region.clone()))
             .credentials_provider(creds)
+            .timeout_config(
+                TimeoutConfig::builder()
+                    .connect_timeout(Duration::from_millis(timeouts.connect_ms))
+                    .operation_timeout(Duration::from_millis(timeouts.request_ms))
+                    .build(),
+            )
             .load()
             .await;
 
@@ -190,9 +203,10 @@ impl ObjectStorage for InMemoryStorage {
 
 pub async fn select_storage(
     s3: Option<&config::S3Config>,
+    timeouts: config::HttpTimeouts,
 ) -> (std::sync::Arc<dyn ObjectStorage>, StorageBackend) {
     if let Some(s3_config) = s3 {
-        match S3Storage::new(s3_config).await {
+        match S3Storage::new(s3_config, timeouts).await {
             Ok(s) => (
                 std::sync::Arc::new(s),
                 StorageBackend {
@@ -273,7 +287,11 @@ mod tests {
 
     #[tokio::test]
     async fn select_storage_no_s3_returns_in_memory() {
-        let (_store, backend) = select_storage(None).await;
+        let timeouts = config::HttpTimeouts {
+            connect_ms: 1_000,
+            request_ms: 5_000,
+        };
+        let (_store, backend) = select_storage(None, timeouts).await;
         assert_eq!(backend.kind, StorageKind::InMemory);
         assert!(!backend.s3_configured);
     }

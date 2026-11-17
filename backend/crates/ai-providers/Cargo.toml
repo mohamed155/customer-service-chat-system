@@ -10,6 +10,7 @@ async-trait.workspace = true
 base64.workspace = true
 bytes = "1"
 futures.workspace = true
+outbound = { path = "../shared/outbound" }
 reqwest.workspace = true
 resilience = { path = "../shared/resilience" }
 serde.workspace = true

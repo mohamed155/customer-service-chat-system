@@ -54,6 +54,7 @@ fn test_config() -> config::AppConfig {
         sentry_dsn: None,
         release_sha: None,
         trusted_proxy: false,
+        outbound_http: config::OutboundHttpConfig::default(),
     }
 }
 
@@ -364,6 +365,7 @@ mod tests {
             tenant_id,
             conversation_id: Uuid::new_v4(),
             pool: pool.clone(),
+            http: outbound::build(&outbound::HttpSettings::default()).unwrap(),
             vault: Some(std::sync::Arc::new(secrets::Vault::new(
                 Some(
                     ai_providers::crypto::MasterKey::from_base64(

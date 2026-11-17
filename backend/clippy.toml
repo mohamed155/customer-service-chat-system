@@ -1,0 +1,10 @@
+# Principle XI (MOH-82): every outbound HTTP client comes from the `outbound` crate, so every one
+# has a connect timeout, a request timeout, a redirect policy and a user agent. `cargo clippy
+# --workspace -- -D warnings` (CI) fails on these in non-test code; the `outbound` crate carries the
+# one allowed call.
+disallowed-methods = [
+  { path = "reqwest::Client::new", reason = "build clients with outbound::build, which sets timeouts, redirects and a user agent (MOH-82)" },
+  { path = "reqwest::Client::builder", reason = "build clients with outbound::build, which sets timeouts, redirects and a user agent (MOH-82)" },
+  { path = "reqwest::ClientBuilder::new", reason = "build clients with outbound::build, which sets timeouts, redirects and a user agent (MOH-82)" },
+  { path = "reqwest::get", reason = "reqwest::get uses a client with no timeout; use a client from outbound::build (MOH-82)" },
+]
