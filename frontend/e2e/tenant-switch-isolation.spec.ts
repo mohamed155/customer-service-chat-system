@@ -87,10 +87,18 @@ function gate() {
   return { opened, release };
 }
 
+interface Modes {
+  /** Tenants whose conversation list comes back empty. */
+  readonly empty?: readonly string[];
+  /** Tenants whose conversation list fails with a 500 once it is let through. */
+  readonly fail?: readonly string[];
+}
+
 async function installApi(
   page: Page,
   held: Partial<Record<string, Promise<void>>>,
   seen: { tenant: string | undefined }[],
+  modes: Modes = {},
 ) {
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url());
@@ -105,7 +113,16 @@ async function installApi(
       const tenant = route.request().headers()['x-tenant-id'];
       seen.push({ tenant });
       await held[tenant ?? '']; // the response is held until the test opens the gate
-      const data = CONVERSATIONS[tenant ?? ''] ?? [];
+      if (modes.fail?.includes(tenant ?? '')) {
+        return route
+          .fulfill({
+            status: 500,
+            contentType: 'application/problem+json',
+            body: JSON.stringify({ type: 'about:blank', title: 'Server error', status: 500 }),
+          })
+          .catch(() => undefined);
+      }
+      const data = modes.empty?.includes(tenant ?? '') ? [] : (CONVERSATIONS[tenant ?? ''] ?? []);
       return json(route, { data, pagination: { next_cursor: null, has_more: false } }).catch(
         () => undefined, // the request was cancelled while it was held
       );
@@ -179,6 +196,50 @@ test.describe('switching workspace in place', () => {
     await expect(page.getByText('Alma Acme')).toHaveCount(0);
     await expect(page.getByText('Bella Northwind')).toBeVisible();
   });
+  test('workspace B with nothing to show gets its empty state, not workspace A', async ({
+    page,
+  }) => {
+    const seen: { tenant: string | undefined }[] = [];
+    const bGate = gate();
+    await installApi(page, { [tenantB.id]: bGate.opened }, seen, { empty: [tenantB.id] });
+
+    await page.goto('/tenant/conversations');
+    await expect(page.getByText('Alma Acme')).toBeVisible();
+
+    const switched = page.waitForResponse((r) => r.url().includes('/switch'));
+    await switchToNorthwind(page);
+    await switched;
+    await expect(page.getByText('Alma Acme')).toHaveCount(0);
+    await expect(page.locator('app-loading-state')).toBeVisible();
+
+    bGate.release();
+    await expect(page.locator('app-empty-state')).toBeVisible();
+    await expect(page.locator('app-loading-state')).toHaveCount(0);
+    await expect(page.getByText('Alma Acme')).toHaveCount(0);
+  });
+
+  test('a failure still on its way for workspace A never reaches workspace B', async ({ page }) => {
+    const seen: { tenant: string | undefined }[] = [];
+    const aGate = gate();
+    await installApi(page, { [tenantA.id]: aGate.opened }, seen, { fail: [tenantA.id] });
+
+    await page.goto('/tenant/conversations');
+    await expect.poll(() => seen.length).toBe(1); // A's list is in flight and held
+
+    const switched = page.waitForResponse((r) => r.url().includes('/switch'));
+    await switchToNorthwind(page);
+    await switched;
+    await expect(page.getByText('Bella Northwind')).toBeVisible();
+
+    aGate.release(); // A's request fails late
+    await page.waitForTimeout(300);
+
+    // B keeps its list: no error state, nothing of A.
+    await expect(page.getByText('Bella Northwind')).toBeVisible();
+    await expect(page.locator('app-empty-state')).toHaveCount(0);
+    await expect(page.getByText('Alma Acme')).toHaveCount(0);
+  });
+
   test('a page that never reloaded on its own (escalation queue) is emptied and refilled', async ({
     page,
   }) => {
