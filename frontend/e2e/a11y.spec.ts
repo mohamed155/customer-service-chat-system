@@ -374,17 +374,22 @@ interface Paint {
   readonly ratio: number;
   readonly fg: string;
   readonly bg: string;
+  /** The border's width in px; 0 for a text measurement. */
+  readonly width: number;
 }
 
+type Edge = 'top' | 'right' | 'bottom' | 'left';
+
 /**
- * The contrast between the text colour of the first element matching `selector` and the colour
- * it really sits on: every background above it, blended from the page down.
+ * The contrast between the text colour (or, with `edge`, the colour of that border) of the first
+ * element matching `selector` and the colour it really sits on: every background above it,
+ * blended from the page down.
  */
-async function paint(page: Page, selector: string): Promise<Paint> {
+async function paint(page: Page, selector: string, edge?: Edge): Promise<Paint> {
   return page
     .locator(selector)
     .first()
-    .evaluate((el) => {
+    .evaluate((el, side) => {
       const rgba = (colour: string): [number, number, number, number] => {
         const ctx = document.createElement('canvas').getContext('2d')!;
         ctx.clearRect(0, 0, 1, 1);
@@ -402,7 +407,11 @@ async function paint(page: Page, selector: string): Promise<Paint> {
         const [r, g, b, a] = rgba(layer);
         base = [r * a + base[0] * (1 - a), g * a + base[1] * (1 - a), b * a + base[2] * (1 - a)];
       }
-      const [fr, fg, fb, fa] = rgba(getComputedStyle(el).color);
+      const style = getComputedStyle(el);
+      const [fr, fg, fb, fa] = rgba(
+        side ? style.getPropertyValue(`border-${side}-color`) : style.color,
+      );
+      const width = side ? parseFloat(style.getPropertyValue(`border-${side}-width`)) : 0;
       const text: [number, number, number] = [
         fr * fa + base[0] * (1 - fa),
         fg * fa + base[1] * (1 - fa),
@@ -418,8 +427,8 @@ async function paint(page: Page, selector: string): Promise<Paint> {
       const [hi, lo] = [luminance(text), luminance(base)].sort((x, y) => y - x);
       const hex = (c: [number, number, number]) =>
         c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
-      return { ratio: (hi + 0.05) / (lo + 0.05), fg: hex(text), bg: hex(base) };
-    });
+      return { ratio: (hi + 0.05) / (lo + 0.05), fg: hex(text), bg: hex(base), width };
+    }, edge);
 }
 
 const STATES = [
@@ -429,6 +438,8 @@ const STATES = [
     url: '/tenant/conversations',
     wait: 'app-loading-state',
     texts: ['app-loading-state p'],
+    // The spinner's ring: its accent arc is the only thing that shows the page is working.
+    borders: [{ selector: 'app-loading-state span', edge: 'top' as Edge, minRatio: 3 }],
   },
   {
     name: 'empty',
@@ -436,6 +447,8 @@ const STATES = [
     url: '/tenant/conversations',
     wait: 'app-empty-state',
     texts: ['app-empty-state h2', 'app-empty-state p'],
+    // The empty state is drawn without a border; its legibility is its text.
+    borders: [],
   },
   {
     name: 'page container',
@@ -445,6 +458,11 @@ const STATES = [
     texts: [
       'app-page-container h1',
       'app-page-container app-dashboard-card h3, app-page-container app-dashboard-card p',
+    ],
+    // A card's outline is a quiet divider, not a control: it has to be drawn and be a different
+    // colour from the panel it encloses, in each theme.
+    borders: [
+      { selector: 'app-page-container app-dashboard-card', edge: 'top' as Edge, minRatio: 1.05 },
     ],
   },
 ];
@@ -459,13 +477,26 @@ for (const state of STATES) {
         await page.goto(state.url);
         await expect(page.locator(state.wait).first()).toBeVisible();
         for (const selector of state.texts) {
-          if ((await page.locator(selector).count()) === 0) continue;
+          // A selector that no longer matches must fail, not drop out of the measurement.
+          await expect(page.locator(selector).first()).toBeVisible();
           const result = await paint(page, selector);
           expect(
             result.ratio,
             `${selector}: #${result.fg} on #${result.bg}`,
           ).toBeGreaterThanOrEqual(4.5);
           seen[`${theme}:${selector}`] = `${result.fg}/${result.bg}`;
+        }
+        for (const { selector, edge, minRatio } of state.borders) {
+          await expect(page.locator(selector).first()).toBeVisible();
+          const border = await paint(page, selector, edge);
+          expect(border.width, `${selector} ${edge} border width`).toBeGreaterThan(0);
+          expect(border.fg, `${selector} ${edge} border is drawn in the surface colour`).not.toBe(
+            border.bg,
+          );
+          expect(
+            border.ratio,
+            `${selector} ${edge} border: #${border.fg} on #${border.bg}`,
+          ).toBeGreaterThanOrEqual(minRatio);
         }
         expect(Object.keys(seen).some((k) => k.startsWith(`${theme}:`))).toBe(true);
       });
@@ -479,17 +510,33 @@ for (const state of STATES) {
       await expect(page.locator(state.wait).first()).toBeVisible();
       const selector = state.texts.find(Boolean)!;
       const dark = await paint(page, selector);
+      const darkBorders = await Promise.all(
+        state.borders.map((b) => paint(page, b.selector, b.edge)),
+      );
 
       await page.emulateMedia({ colorScheme: 'light' });
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
       await expect(page.locator(state.wait).first()).toBeVisible();
       const light = await paint(page, selector);
+      const lightBorders = await Promise.all(
+        state.borders.map((b) => paint(page, b.selector, b.edge)),
+      );
 
       // The same element, still on screen, changed its colours with the theme and stayed legible.
       expect(light.bg).not.toBe(dark.bg);
       expect(light.fg).not.toBe(dark.fg);
       expect(light.ratio).toBeGreaterThanOrEqual(4.5);
       expect(dark.ratio).toBeGreaterThanOrEqual(4.5);
+      // ...and so did its border, which stayed drawn and visible against what it sits on.
+      state.borders.forEach((b, i) => {
+        expect(lightBorders[i].fg, `${b.selector} border colour follows the theme`).not.toBe(
+          darkBorders[i].fg,
+        );
+        for (const border of [lightBorders[i], darkBorders[i]]) {
+          expect(border.width).toBeGreaterThan(0);
+          expect(border.ratio).toBeGreaterThanOrEqual(b.minRatio);
+        }
+      });
     });
   });
 }
