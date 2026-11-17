@@ -158,7 +158,7 @@ function physicalIn(css) {
       });
     }
   }
-  for (const m of css.matchAll(/\b(margin|padding|inset|border-radius)\s*:\s*([^;{}]+)/g)) {
+  for (const m of css.matchAll(/\b(margin|padding|inset|border-radius)\s*:\s*([^;{}"'`<>]+)/g)) {
     const parts = values(m[2].replace(/\s*!important\s*$/, '').replace(/\/.*$/, ''));
     if (parts.length !== 4) continue;
     const [a, b, c, d] = parts;

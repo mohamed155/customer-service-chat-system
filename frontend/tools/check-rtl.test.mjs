@@ -155,6 +155,13 @@ test('every shorthand on a line is checked', () => {
   assert.equal(run('a { margin: 1px 2px 1px 0; padding: 0 8px 0 4px; }').length, 2);
 });
 
+test('a shorthand in an HTML style attribute ends at the closing quote', () => {
+  const html = 'apps/dashboard/src/app/x/x.component.html';
+  assert.deepEqual(run('<p style="margin: 0 4px 0 4px">text</p>', html), []);
+  assert.equal(run('<p style="padding: 0 8px 0 4px">text</p>', html).length, 1);
+  assert.deepEqual(run('<p style="margin: 1px 2px 3px 2px"></p><p>2px</p>', html), []);
+});
+
 test('translateX is judged call by call', () => {
   assert.equal(
     run(
