@@ -13,7 +13,7 @@
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 /// What `/ready` is given on top of its own probe budget (`READY_PROBE_TIMEOUT_MS`): connecting,
@@ -42,7 +42,7 @@ pub fn probe_address(port: Option<&str>, bind_address: Option<&str>) -> Result<S
     Ok(format!("{host}:{port}"))
 }
 
-/// How long to wait for the answer: the server's readiness budget plus a margin. An unset or
+/// How long the whole probe may take: the server's readiness budget plus a margin. An unset or
 /// unreadable `READY_PROBE_TIMEOUT_MS` means the server's own default.
 pub fn read_timeout(ready_probe_ms: Option<&str>) -> Duration {
     let ms = ready_probe_ms
@@ -53,25 +53,36 @@ pub fn read_timeout(ready_probe_ms: Option<&str>) -> Duration {
 }
 
 /// Ask `address` for `/ready`. `Ok` only for a `200`. Every address the name resolves to is tried
-/// in turn (`localhost` can resolve to `::1` first while the server listens on IPv4 only).
-pub fn probe(address: &str, read_timeout: Duration) -> Result<(), String> {
+/// in turn (`localhost` can resolve to `::1` first while the server listens on IPv4 only). The
+/// whole probe, connecting and reading, takes at most `budget`.
+pub fn probe(address: &str, budget: Duration) -> Result<(), String> {
     let targets: Vec<SocketAddr> = address
         .to_socket_addrs()
         .map_err(|e| format!("cannot resolve {address}: {e}"))?
         .collect();
-    probe_any(address, &targets, read_timeout)
+    probe_any(address, &targets, budget)
 }
 
-/// [`probe`] over already resolved addresses: the first that accepts a connection is asked.
-pub fn probe_any(
-    address: &str,
-    targets: &[SocketAddr],
-    read_timeout: Duration,
-) -> Result<(), String> {
+/// [`probe`] over already resolved addresses: the first that accepts a connection is asked. All
+/// connection attempts share one connect allowance ([`CONNECT_TIMEOUT`], within `budget`), so
+/// several unreachable addresses cannot add up past it; the read gets what is left of `budget`.
+pub fn probe_any(address: &str, targets: &[SocketAddr], budget: Duration) -> Result<(), String> {
+    let started = Instant::now();
+    let connect_until = started + CONNECT_TIMEOUT.min(budget);
     let mut last_error = format!("no address for {address}");
     for target in targets {
-        match TcpStream::connect_timeout(target, CONNECT_TIMEOUT) {
-            Ok(stream) => return ask(address, stream, read_timeout),
+        let remaining = connect_until.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            last_error = format!("no connection to {address} within {CONNECT_TIMEOUT:?}");
+            break;
+        }
+        match TcpStream::connect_timeout(target, remaining) {
+            Ok(stream) => {
+                let left = budget
+                    .saturating_sub(started.elapsed())
+                    .max(Duration::from_millis(1));
+                return ask(address, stream, left);
+            }
             Err(e) => last_error = format!("cannot connect to {target}: {e}"),
         }
     }
@@ -196,6 +207,47 @@ mod tests {
         assert!(probe_any("localhost", &[], Duration::from_secs(2))
             .unwrap_err()
             .contains("no address"));
+    }
+
+    #[test]
+    fn a_silent_server_is_given_up_on_within_the_budget() {
+        // Accepts and reads the request but never answers.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap().to_string();
+        std::thread::spawn(move || {
+            let Ok((mut socket, _)) = listener.accept() else {
+                return;
+            };
+            let mut buf = [0u8; 1024];
+            let _ = socket.read(&mut buf);
+            std::thread::sleep(Duration::from_secs(10));
+        });
+        let started = Instant::now();
+        let err = probe(&address, Duration::from_millis(600)).unwrap_err();
+        assert!(err.contains("no answer"), "{err}");
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "took {:?}",
+            started.elapsed()
+        );
+    }
+
+    #[test]
+    fn attempts_on_several_refusing_addresses_share_one_connect_allowance() {
+        let closed = |_| -> SocketAddr {
+            let l = TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap()
+        };
+        let targets: Vec<SocketAddr> = (0..3).map(closed).collect();
+        let started = Instant::now();
+        assert!(probe_any("localhost", &targets, Duration::from_secs(5)).is_err());
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "refusals are immediate"
+        );
+        // With no budget left nothing is attempted and the error says so.
+        let err = probe_any("localhost", &targets, Duration::ZERO).unwrap_err();
+        assert!(err.contains("no connection"), "{err}");
     }
 
     #[test]
