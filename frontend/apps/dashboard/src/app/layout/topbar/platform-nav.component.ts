@@ -3,6 +3,7 @@ import {
   Component,
   ElementRef,
   HostListener,
+  Injector,
   afterNextRender,
   computed,
   inject,
@@ -124,23 +125,19 @@ export class PlatformNavComponent {
   private readonly permissions = inject(PermissionsService);
   private readonly router = inject(Router);
   private readonly elementRef = inject(ElementRef);
+  private readonly injector = inject(Injector);
 
   protected readonly open = signal(false);
   protected readonly destinations = computed(() =>
     PLATFORM_DESTINATIONS.filter((d) => this.permissions.has(d.permission)),
   );
 
-  constructor() {
-    afterNextRender(() => {
-      if (this.open()) {
-        this.focusFirstOption();
-      }
-    });
-  }
-
   toggle(): void {
     this.open.update((v) => !v);
-    if (!this.open()) {
+    if (this.open()) {
+      // The items exist once the menu has rendered; the first one takes focus every time it opens.
+      afterNextRender(() => this.focusFirstOption(), { injector: this.injector });
+    } else {
       this.focusTrigger();
     }
   }
@@ -188,7 +185,11 @@ export class PlatformNavComponent {
   onDocumentClick(event: MouseEvent): void {
     if (!this.open()) return;
     if (!this.elementRef.nativeElement.contains(event.target)) {
-      this.close();
+      // The click already moved focus to what it hit. Only a click that landed on nothing
+      // focusable leaves focus on the page body, and then the trigger gets it back.
+      const active = document.activeElement;
+      this.open.set(false);
+      if (!active || active === document.body) this.focusTrigger();
     }
   }
 
