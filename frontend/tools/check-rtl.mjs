@@ -95,7 +95,7 @@ function withoutComments(source) {
 
 /**
  * What is CSS in a file: all of a stylesheet or template, but in a `.ts` file only the inline
- * `styles: [...]` (everything else is blanked, the lines kept).
+ * `styles: [...]`, and only the strings in it (everything else is blanked, the lines kept).
  */
 function styleText(path, source) {
   if (!path.endsWith('.ts')) return source;
@@ -107,13 +107,16 @@ function styleText(path, source) {
     for (; end < source.length && depth > 0; end += 1) {
       const ch = source[end];
       if (quote) {
-        if (ch === '\\') end += 1;
-        else if (ch === quote) quote = null;
+        if (ch === '\\') {
+          out[end] = ch;
+          end += 1;
+          out[end] = source[end] ?? ' ';
+        } else if (ch === quote) quote = null;
+        else out[end] = ch;
       } else if (ch === '`' || ch === "'" || ch === '"') quote = ch;
       else if (ch === '[') depth += 1;
       else if (ch === ']') depth -= 1;
     }
-    for (let i = start.index; i < end; i += 1) out[i] = source[i];
   }
   return out.join('');
 }
@@ -208,8 +211,17 @@ export function check(files) {
       return low;
     };
     for (const hit of physicalIn(css)) {
-      const first = lineOf(hit.index);
-      const last = lineOf(hit.index + Math.max(hit.length - 1, 0));
+      // The whole declaration: from after the previous `;`, `{` or `}` to the next `;` or `}`.
+      const before = Math.max(
+        css.lastIndexOf(';', hit.index),
+        css.lastIndexOf('{', hit.index),
+        css.lastIndexOf('}', hit.index),
+      );
+      const start = before + 1 + (css.slice(before + 1).match(/^\s*/)?.[0].length ?? 0);
+      const after = css.slice(hit.index + hit.length).search(/[;}]/);
+      const end = after < 0 ? css.length : hit.index + hit.length + after;
+      const first = lineOf(Math.min(start, hit.index));
+      const last = lineOf(Math.max(end - 1, hit.index));
       // A marker on any line of the declaration covers it.
       if (original.slice(first, last + 1).some((line) => MARKER.test(line))) continue;
       problems.push(

@@ -155,6 +155,23 @@ test('every shorthand on a line is checked', () => {
   assert.equal(run('a { margin: 1px 2px 1px 0; padding: 0 8px 0 4px; }').length, 2);
 });
 
+test('a styles array that is not a list of CSS strings is not CSS', () => {
+  const ts = (source) => check([{ path: dash, source }]);
+  assert.deepEqual(ts('const layout = { styles: [{ left: 0, right: 10 }] };'), []);
+  assert.deepEqual(ts("const layout = { styles: [{ side: 'left', margin: [1, 2] }] };"), []);
+  assert.equal(
+    ts('const c = { styles: [`a { margin-left: 4px; }`, `b { color: red; }`] };').length,
+    1,
+  );
+});
+
+test('a marker on the value line of a declaration covers it, and the report names its first line', () => {
+  assert.deepEqual(run('a {\n  margin-left:\n    4px; /* rtl-lint-ignore: intentional */\n}'), []);
+  const problems = run('a {\n  transform:\n    rotate(1deg)\n    translateX(-100%);\n}');
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /x\.component\.ts:2: translateX/);
+});
+
 test('a shorthand in an HTML style attribute ends at the closing quote', () => {
   const html = 'apps/dashboard/src/app/x/x.component.html';
   assert.deepEqual(run('<p style="margin: 0 4px 0 4px">text</p>', html), []);
