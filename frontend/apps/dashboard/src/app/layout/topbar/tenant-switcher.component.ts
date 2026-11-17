@@ -128,7 +128,7 @@ let nextId = 0;
       }
       .option.active {
         background: var(--app-accent-soft);
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
       }
       .option.highlighted {
         outline: 2px solid var(--app-accent);
@@ -154,7 +154,7 @@ let nextId = 0;
         padding: var(--app-space-2) var(--app-space-3);
         border-bottom: 1px solid var(--app-border);
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-sm);
       }
       .error button {

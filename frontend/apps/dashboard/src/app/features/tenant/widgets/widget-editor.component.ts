@@ -153,7 +153,7 @@ const EDITOR_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.inv
         cursor: pointer;
       }
       .field-error {
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-xs);
       }
       .error-banner {
@@ -161,7 +161,7 @@ const EDITOR_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.inv
         background: var(--app-red-soft);
         border: 1px solid var(--app-red);
         border-radius: var(--app-radius-md);
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-sm);
       }
       .domains-list {
@@ -190,7 +190,7 @@ const EDITOR_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.inv
         padding: 0;
       }
       .domain-remove:hover {
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .domain-add-row {
         display: flex;

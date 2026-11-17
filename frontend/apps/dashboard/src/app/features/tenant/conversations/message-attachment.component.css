@@ -103,7 +103,7 @@
 }
 
 .attach-failed {
-  color: var(--app-red);
+  color: var(--app-red-text);
 }
 
 .attach-icon {

@@ -57,7 +57,9 @@
     "allChannels": "All channels",
     "allAssignees": "All assignees",
     "me": "Me",
-    "escalated": "Escalated"
+    "escalated": "Escalated",
+    "channelLabel": "Filter by channel",
+    "assigneeLabel": "Filter by assignee"
   },
   "channels": {
     "email": "Email",

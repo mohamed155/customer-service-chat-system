@@ -100,7 +100,7 @@ const TOOL_ERRORS: ErrorKeyOverrides = { 422: marker('settings.tools.dialog.inva
       .hint {
         margin: var(--app-space-2) 0 0;
         font-size: var(--app-font-xs);
-        color: var(--app-amber);
+        color: var(--app-amber-text);
         font-weight: 600;
       }
       .tenant-header {

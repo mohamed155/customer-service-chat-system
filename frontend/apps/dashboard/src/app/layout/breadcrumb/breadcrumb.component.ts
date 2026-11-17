@@ -42,7 +42,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
         color: var(--app-text-2);
       }
       a {
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
         text-decoration: none;
       }
       a:hover {

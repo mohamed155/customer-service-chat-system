@@ -585,26 +585,18 @@ test.describe('Conversation Core', () => {
       await page.waitForTimeout(300);
     }
 
-    const channelFilter = page.getByRole('combobox', { name: /channel/i });
-    if (await channelFilter.isVisible()) {
-      await channelFilter.selectOption('phone');
-      await page.waitForTimeout(300);
+    // The inbox channel filter has a name of its own ("Filter by channel"), so it is told apart from
+    // the channel field of the new-conversation dialog.
+    const channelFilter = page.getByRole('combobox', { name: 'Filter by channel' });
+    await expect(channelFilter).toBeVisible();
+    await channelFilter.selectOption('phone');
 
-      const emptyState = page.getByText(/no (conversations|results)/i);
-      if (await emptyState.isVisible().catch(() => false)) {
-        await expect(emptyState).toBeVisible();
+    // No conversation is on the phone: the empty state says so and offers the way back.
+    await expect(page.getByText('No conversations match')).toBeVisible();
+    await page.getByRole('button', { name: 'Show all conversations' }).click();
 
-        const resetButton = page.getByRole('button', { name: /reset|clear/i });
-        if (await resetButton.isVisible().catch(() => false)) {
-          await resetButton.click();
-        } else {
-          await channelFilter.selectOption('');
-          await channelFilter.selectOption('web_chat');
-        }
-        await page.waitForTimeout(300);
-        await expect(page.getByText('open', { exact: false }).first()).toBeVisible();
-      }
-    }
+    await expect(page.locator('app-inbox-list .item').first()).toBeVisible();
+    await expect(channelFilter).toHaveValue('');
   });
 
   test('Load-older timeline stability', async ({ page }) => {
@@ -684,10 +676,10 @@ test.describe('Conversation Core', () => {
     await expect(firstOption).toBeVisible();
     await firstOption.click();
 
-    const channelSelect = page.getByRole('combobox', { name: /channel/i });
-    if (await channelSelect.isVisible().catch(() => false)) {
-      await channelSelect.selectOption('email');
-    }
+    // The dialog's own channel field (the inbox behind it has a filter of the same kind).
+    const channelSelect = dialog.getByRole('combobox', { name: 'Channel' });
+    await expect(channelSelect).toBeVisible();
+    await channelSelect.selectOption('email');
 
     const messageField = dialog.getByRole('textbox', { name: 'First message' });
     if (await messageField.isVisible().catch(() => false)) {

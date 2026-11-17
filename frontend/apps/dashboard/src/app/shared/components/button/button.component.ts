@@ -32,7 +32,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
       }
       button.danger {
         background: transparent;
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       button.ghost {
         background: transparent;

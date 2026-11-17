@@ -52,7 +52,7 @@ const CHANNEL_ICONS: Partial<Record<ChannelBadgeChannel, string>> = {
       tui-icon {
         width: 14px;
         height: 14px;
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
       }
     `,
   ],

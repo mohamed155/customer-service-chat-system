@@ -8,7 +8,10 @@
     [attr.aria-expanded]="open()"
     [attr.aria-controls]="open() ? listId : null"
     aria-haspopup="listbox"
-    [attr.aria-label]="'tenantSwitcher.label' | transloco"
+    [attr.aria-label]="
+      'tenantSwitcher.labelWithName'
+        | transloco: { name: activeTenant()?.name ?? ('tenantSwitcher.select' | transloco) }
+    "
   >
     <tui-icon icon="@tui.building" />
     <span class="name">{{ activeTenant()?.name ?? ('tenantSwitcher.select' | transloco) }}</span>

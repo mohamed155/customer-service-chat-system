@@ -59,7 +59,7 @@ import { SystemHealthStore } from './system-health.store';
       .reason {
         margin: 0;
         font-size: var(--app-font-sm);
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .meta {
         margin: 0;

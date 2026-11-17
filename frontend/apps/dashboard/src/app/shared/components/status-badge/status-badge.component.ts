@@ -22,15 +22,15 @@ export type BadgeTone = 'green' | 'amber' | 'red' | 'accent' | 'neutral';
       }
       :host(.green) {
         background: var(--app-green-soft);
-        color: var(--app-green);
+        color: var(--app-green-text);
       }
       :host(.amber) {
         background: var(--app-amber-soft);
-        color: var(--app-amber);
+        color: var(--app-amber-text);
       }
       :host(.red) {
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       :host(.accent) {
         background: var(--app-accent-soft);

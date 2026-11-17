@@ -49,7 +49,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         padding: var(--app-space-1) var(--app-space-2);
         border-radius: var(--app-radius-sm);
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-xs);
       }
     `,

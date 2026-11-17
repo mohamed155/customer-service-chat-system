@@ -105,7 +105,7 @@ function stateClass(state: string): string {
         border: none;
         border-top: 1px solid var(--app-border);
         background: var(--app-panel);
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
         font-size: var(--app-font-sm);
         font-weight: 600;
         cursor: pointer;

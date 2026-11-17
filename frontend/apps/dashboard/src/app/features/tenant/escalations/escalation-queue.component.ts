@@ -66,7 +66,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         border-radius: var(--app-radius-md);
         background: var(--app-red-soft);
         border: 1px solid var(--app-red);
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-sm);
         font-weight: 600;
       }

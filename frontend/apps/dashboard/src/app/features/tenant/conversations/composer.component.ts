@@ -64,7 +64,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         border-color: var(--app-accent);
       }
       .field-error {
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-xs);
         font-weight: 600;
       }

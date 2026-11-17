@@ -18,22 +18,22 @@ import { marker } from '../../../core/i18n/marker';
         font-size: var(--app-font-sm);
       }
       .healthy {
-        color: var(--app-green);
+        color: var(--app-green-text);
       }
       .degraded {
-        color: var(--app-amber);
+        color: var(--app-amber-text);
       }
       .unhealthy {
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .healthy tui-icon {
-        color: var(--app-green);
+        color: var(--app-green-text);
       }
       .degraded tui-icon {
-        color: var(--app-amber);
+        color: var(--app-amber-text);
       }
       .unhealthy tui-icon {
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
     `,
   ],

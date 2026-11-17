@@ -19,7 +19,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
         height: 24px;
         border-radius: 999px;
         border: 3px solid var(--app-border);
-        border-top-color: var(--app-accent);
+        border-top-color: var(--app-accent-strong);
         animation: spin 800ms linear infinite;
       }
       p {

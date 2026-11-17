@@ -19,7 +19,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
       }
       :host(.low) {
         background: var(--app-amber-soft);
-        color: var(--app-amber);
+        color: var(--app-amber-text);
       }
     `,
   ],

@@ -6,9 +6,11 @@
     (click)="toggle()"
     [attr.aria-expanded]="open()"
     aria-haspopup="menu"
-    [attr.aria-label]="'userMenu.label' | transloco"
   >
-    <app-avatar [initials]="initials()" size="sm" />
+    <!-- The name comes from this text, not an aria-label: the initials in the avatar are visible
+         text, and a name that leaves out the visible text fails WCAG 2.5.3. -->
+    <span class="sr-only">{{ 'userMenu.label' | transloco }}</span>
+    <app-avatar aria-hidden="true" [initials]="initials()" size="sm" />
     <tui-icon icon="@tui.chevron-down" [style.rotate]="open() ? '180deg' : '0deg'" />
   </button>
 

@@ -106,6 +106,9 @@
                 <a
                   class="detail-link"
                   [routerLink]="APP_PATHS.tenant.knowledgeBaseDetail(article.id)"
+                  [attr.aria-label]="
+                    'knowledge-base.page.viewArticle' | transloco: { title: article.title }
+                  "
                 >
                   <tui-icon icon="@tui.eye" />
                 </a>

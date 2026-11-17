@@ -67,7 +67,8 @@
     "loading": "Loading tenants...",
     "loadFailed": "The tenants could not be loaded.",
     "retry": "Try again",
-    "switchFailed": "Could not switch tenant. Try again."
+    "switchFailed": "Could not switch tenant. Try again.",
+    "labelWithName": "Switch tenant: {name}"
   },
   "topbar": {
     "toggleSidebar": "Toggle sidebar",

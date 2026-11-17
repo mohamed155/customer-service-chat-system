@@ -74,7 +74,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
         font-size: var(--app-font-sm);
       }
       .tenant-error-banner tui-icon {
-        color: var(--app-red);
+        color: var(--app-red-text);
         flex: 0 0 auto;
       }
       .tenant-error-banner span {
@@ -83,7 +83,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
       .tenant-error-banner button {
         border: 0;
         background: transparent;
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
         cursor: pointer;
         font: inherit;
         font-weight: 700;

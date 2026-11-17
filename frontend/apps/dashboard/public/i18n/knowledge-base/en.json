@@ -26,7 +26,8 @@
     "noMatchTitle": "No articles match",
     "noMatchDescription": "Adjust the search or category filter to show knowledge sources.",
     "emptyTitle": "No articles yet",
-    "emptyDescription": "Create your first knowledge article to train the AI assistant."
+    "emptyDescription": "Create your first knowledge article to train the AI assistant.",
+    "viewArticle": "View {title}"
   },
   "status": {
     "draft": "Draft",

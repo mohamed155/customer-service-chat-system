@@ -31,6 +31,7 @@
     <div class="filter-bar">
       <select
         class="filter-select"
+        [attr.aria-label]="'conversations.filters.channelLabel' | transloco"
         [value]="store.filters().channel ?? ''"
         (change)="onChannelChange($event)"
       >
@@ -43,6 +44,7 @@
       </select>
       <select
         class="filter-select"
+        [attr.aria-label]="'conversations.filters.assigneeLabel' | transloco"
         [value]="store.filters().assignee ?? ''"
         (change)="onAssigneeChange($event)"
       >

@@ -25,7 +25,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
         place-items: center;
         border-radius: var(--app-radius-md);
         background: var(--app-panel);
-        color: var(--app-amber);
+        color: var(--app-amber-text);
       }
       .copy {
         flex: 1;

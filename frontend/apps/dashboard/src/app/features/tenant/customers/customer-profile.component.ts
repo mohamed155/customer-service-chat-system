@@ -72,7 +72,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         font-weight: 600;
       }
       .back-link:hover {
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
       }
       .profile-grid {
         display: grid;

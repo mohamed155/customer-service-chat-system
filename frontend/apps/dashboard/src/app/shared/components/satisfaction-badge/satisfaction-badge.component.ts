@@ -22,15 +22,15 @@ import { LocaleService } from '../../../core/i18n/locale.service';
       }
       :host(.green) {
         background: var(--app-green-soft);
-        color: var(--app-green);
+        color: var(--app-green-text);
       }
       :host(.amber) {
         background: var(--app-amber-soft);
-        color: var(--app-amber);
+        color: var(--app-amber-text);
       }
       :host(.red) {
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
     `,
   ],

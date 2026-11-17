@@ -93,7 +93,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
       }
       .delete-btn:hover {
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .empty {
         color: var(--app-text-3);
