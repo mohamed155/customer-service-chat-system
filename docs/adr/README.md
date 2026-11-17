@@ -49,5 +49,6 @@ ADR with **ADR-NNN**. Its §22 holds the Phase 0 backlog, which this index track
 | [ADR-014](0014-envelope-encryption-tenant-secrets.md) | Envelope encryption for tenant secrets | Accepted |
 | [ADR-015](0015-monorepo-layout-tooling.md) | Monorepo layout and tooling | Accepted |
 | [ADR-016](0016-internationalization.md) | Internationalization: runtime message catalogs | Accepted |
+| [ADR-017](0017-module-layering-and-ci-checked-boundaries.md) | Layering for new and changed modules, and CI-checked module boundaries (refines ADR-001) | Accepted |
 
 Related: the [v1 STRIDE threat model](../security/threat-model.md) maps each module's threats to controls and to the ADR gaps above.

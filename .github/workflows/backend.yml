@@ -43,6 +43,10 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with: { workspaces: backend }
       - run: cargo fmt --check
+      - name: Module boundaries (constitution IV, ADR-017)
+        run: |
+          node --test tools/check-module-boundaries.test.mjs
+          node tools/check-module-boundaries.mjs
       - run: cargo clippy --workspace -- -D warnings
       - name: Create database extensions and roles
         # The service container does not run infra/postgres/init, so run the same scripts here.

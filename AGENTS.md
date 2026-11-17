@@ -80,6 +80,8 @@ cargo clippy --workspace -- -D warnings
 cargo run -p server -- migrate   # as app_owner: needs MIGRATION_DATABASE_URL
 REQUIRE_DB_TESTS=1 cargo nextest run --workspace   # or cargo test; needs the services up
 cargo audit                      # install once: cargo install cargo-audit
+node tools/check-module-boundaries.mjs   # module edges, layers, table ownership; --write-doc refreshes docs/architecture/module-dependencies.md
+node --test tools/check-module-boundaries.test.mjs
 cargo run -p server              # API on :8080, /health and /ready
 ```
 
