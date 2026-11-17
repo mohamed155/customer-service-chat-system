@@ -132,6 +132,11 @@ mod tests {
     use super::*;
     use crate::api::MockWhatsAppApi;
 
+    /// A client with the settings the server would use, but short timeouts for the tests.
+    fn test_client() -> reqwest::Client {
+        outbound::build(&outbound::HttpSettings::from_millis(200, 300)).unwrap()
+    }
+
     fn policy() -> Policy {
         Policy {
             failure_threshold: 3,
@@ -234,6 +239,7 @@ mod tests {
     async fn a_tenants_unusable_token_cannot_open_the_shared_circuit() {
         let hub = Hub::new();
         let real = Arc::new(crate::api::GraphWhatsAppApi::with_base_url(
+            test_client(),
             "http://127.0.0.1:9", // never reached: the request can't be built
         ));
         let api = GuardedWhatsAppApi::new(real, &hub, policy());
@@ -261,7 +267,10 @@ mod tests {
             .mount(&mock)
             .await;
         let hub = Hub::new();
-        let real = Arc::new(crate::api::GraphWhatsAppApi::with_base_url(mock.uri()));
+        let real = Arc::new(crate::api::GraphWhatsAppApi::with_base_url(
+            test_client(),
+            mock.uri(),
+        ));
         let api = GuardedWhatsAppApi::new(real, &hub, policy());
 
         for _ in 0..3 {
@@ -282,6 +291,50 @@ mod tests {
             assert!(matches!(err, SendError::Transient(_)), "{err:?}");
         }
         assert_eq!(hub.get(MEDIA_GUARD).unwrap().snapshot().state, State::Open);
+    }
+
+    // MOH-82: an upstream that never answers must fail within the request timeout, as a transient
+    // error, so that it counts toward the breaker; a breaker only opens on errors, never on a hang.
+    // Real time, for the same reason as the test above.
+    #[tokio::test]
+    async fn a_hanging_graph_api_times_out_and_opens_the_circuit() {
+        use std::time::Instant;
+        use wiremock::{matchers::method, Mock, MockServer, ResponseTemplate};
+
+        let mock = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(30)))
+            .mount(&mock)
+            .await;
+        let hub = Hub::new();
+        let real = Arc::new(crate::api::GraphWhatsAppApi::with_base_url(
+            test_client(),
+            mock.uri(),
+        ));
+        let api = GuardedWhatsAppApi::new(real, &hub, policy());
+
+        let started = Instant::now();
+        for _ in 0..3 {
+            let err = send(&api).await.unwrap_err();
+            assert!(matches!(err, SendError::Transient(_)), "{err:?}");
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "three hung calls took {:?}",
+            started.elapsed()
+        );
+        assert_eq!(
+            graph_state(&hub),
+            State::Open,
+            "the timeouts opened the circuit"
+        );
+
+        // Open: the next call is refused at once and never reaches the upstream.
+        let before = mock.received_requests().await.unwrap().len();
+        let started = Instant::now();
+        assert!(matches!(send(&api).await, Err(SendError::Refused(_))));
+        assert!(started.elapsed() < Duration::from_millis(100));
+        assert_eq!(mock.received_requests().await.unwrap().len(), before);
     }
 
     #[tokio::test(start_paused = true)]

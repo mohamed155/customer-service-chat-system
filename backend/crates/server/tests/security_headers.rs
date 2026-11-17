@@ -58,6 +58,7 @@ fn make_state_with(hsts_max_age: u64, adjust: impl FnOnce(&mut config::AppConfig
         ai_gemini_base_url: None,
         s3: None,
         trusted_proxy: false,
+        outbound_http: config::OutboundHttpConfig::default(),
     };
     adjust(&mut cfg);
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();

@@ -69,6 +69,7 @@ fn make_state() -> AppState {
         secrets_root_key_previous: None,
         auth_mfa_required: false,
         trusted_proxy: false,
+        outbound_http: config::OutboundHttpConfig::default(),
     };
     let ai = ai::AiService::from_config(pool.clone(), &cfg).unwrap();
     AppState {

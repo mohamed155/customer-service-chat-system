@@ -87,6 +87,92 @@ fn validate_origin(s: &str) -> Result<(), ConfigError> {
     Ok(())
 }
 
+/// Longest connect or request timeout accepted for an outbound HTTP client, in milliseconds.
+pub const MAX_HTTP_TIMEOUT_MS: u64 = 600_000;
+
+/// Connect and total request timeouts of one integration's outbound HTTP client, in milliseconds
+/// (MOH-82, Principle XI).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HttpTimeouts {
+    pub connect_ms: u64,
+    pub request_ms: u64,
+}
+
+/// Outbound HTTP timeouts per integration. Each reads
+/// `APP_HTTP_<NAME>_CONNECT_TIMEOUT_MS` and `APP_HTTP_<NAME>_REQUEST_TIMEOUT_MS`; both must be
+/// between 1 and [`MAX_HTTP_TIMEOUT_MS`], and the connect timeout may not exceed the request
+/// timeout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OutboundHttpConfig {
+    /// WhatsApp Graph API (`WHATSAPP`): 5 s to connect, 15 s in all.
+    pub whatsapp: HttpTimeouts,
+    /// AI providers (`AI`): 10 s to connect, 60 s in all (a reply can stream for a while).
+    pub ai: HttpTimeouts,
+    /// Tenant-registered tool endpoints (`TOOLS`): 5 s to connect, 15 s in all.
+    pub tools: HttpTimeouts,
+    /// S3-compatible object storage (`STORAGE`): 5 s to connect, 30 s in all.
+    pub storage: HttpTimeouts,
+}
+
+/// The defaults documented on each field, for a process that reads no environment (tests).
+impl Default for OutboundHttpConfig {
+    fn default() -> Self {
+        let t = |connect_ms, request_ms| HttpTimeouts {
+            connect_ms,
+            request_ms,
+        };
+        Self {
+            whatsapp: t(5_000, 15_000),
+            ai: t(10_000, 60_000),
+            tools: t(5_000, 15_000),
+            storage: t(5_000, 30_000),
+        }
+    }
+}
+
+impl OutboundHttpConfig {
+    fn from_env() -> Result<Self, ConfigError> {
+        let d = Self::default();
+        Ok(Self {
+            whatsapp: http_timeouts("WHATSAPP", d.whatsapp)?,
+            ai: http_timeouts("AI", d.ai)?,
+            tools: http_timeouts("TOOLS", d.tools)?,
+            storage: http_timeouts("STORAGE", d.storage)?,
+        })
+    }
+}
+
+fn http_timeouts(name: &str, default: HttpTimeouts) -> Result<HttpTimeouts, ConfigError> {
+    let read = |suffix: &str, default: u64| -> Result<(String, u64), ConfigError> {
+        let key = format!("APP_HTTP_{name}_{suffix}_TIMEOUT_MS");
+        let value = match env::var(&key) {
+            Ok(raw) => raw.trim().parse::<u64>().map_err(|_| {
+                ConfigError(format!(
+                    "{key} must be a whole number of milliseconds, got '{raw}'"
+                ))
+            })?,
+            Err(_) => default,
+        };
+        if value == 0 || value > MAX_HTTP_TIMEOUT_MS {
+            return Err(ConfigError(format!(
+                "{key} must be between 1 and {MAX_HTTP_TIMEOUT_MS} milliseconds, got {value}"
+            )));
+        }
+        Ok((key, value))
+    };
+    let (connect_key, connect_ms) = read("CONNECT", default.connect_ms)?;
+    let (request_key, request_ms) = read("REQUEST", default.request_ms)?;
+    if connect_ms > request_ms {
+        return Err(ConfigError(format!(
+            "{connect_key} ({connect_ms}) must not exceed {request_key} ({request_ms})"
+        )));
+    }
+    Ok(HttpTimeouts {
+        connect_ms,
+        request_ms,
+    })
+}
+
 #[derive(Clone, PartialEq)]
 pub struct AppConfig {
     pub database_url: String,
@@ -140,6 +226,8 @@ pub struct AppConfig {
     pub sentry_dsn: Option<String>,
     pub release_sha: Option<String>,
     pub trusted_proxy: bool,
+    /// Timeouts of the outbound HTTP clients, per integration (MOH-82).
+    pub outbound_http: OutboundHttpConfig,
 }
 
 impl fmt::Debug for AppConfig {
@@ -196,6 +284,7 @@ impl fmt::Debug for AppConfig {
             .field("sentry_dsn", &self.sentry_dsn)
             .field("release_sha", &self.release_sha)
             .field("trusted_proxy", &self.trusted_proxy)
+            .field("outbound_http", &self.outbound_http)
             .finish()
     }
 }
@@ -312,6 +401,8 @@ impl AppConfig {
             .unwrap_or_else(|_| "2000".into())
             .parse()
             .map_err(|_| ConfigError("READY_PROBE_TIMEOUT_MS must be a valid u64".into()))?;
+
+        let outbound_http = OutboundHttpConfig::from_env()?;
 
         let shutdown_grace_seconds = env::var("SHUTDOWN_GRACE_SECONDS")
             .unwrap_or_else(|_| "10".into())
@@ -551,6 +642,7 @@ impl AppConfig {
             sentry_dsn,
             release_sha,
             trusted_proxy,
+            outbound_http,
         })
     }
 }
@@ -633,6 +725,14 @@ mod tests {
                 "APP_SENTRY_DSN",
                 "APP_RELEASE_SHA",
                 "APP_TRUSTED_PROXY",
+                "APP_HTTP_WHATSAPP_CONNECT_TIMEOUT_MS",
+                "APP_HTTP_WHATSAPP_REQUEST_TIMEOUT_MS",
+                "APP_HTTP_AI_CONNECT_TIMEOUT_MS",
+                "APP_HTTP_AI_REQUEST_TIMEOUT_MS",
+                "APP_HTTP_TOOLS_CONNECT_TIMEOUT_MS",
+                "APP_HTTP_TOOLS_REQUEST_TIMEOUT_MS",
+                "APP_HTTP_STORAGE_CONNECT_TIMEOUT_MS",
+                "APP_HTTP_STORAGE_REQUEST_TIMEOUT_MS",
             ] {
                 env::remove_var(key);
             }
@@ -687,6 +787,14 @@ mod tests {
                 "APP_SENTRY_DSN",
                 "APP_RELEASE_SHA",
                 "APP_TRUSTED_PROXY",
+                "APP_HTTP_WHATSAPP_CONNECT_TIMEOUT_MS",
+                "APP_HTTP_WHATSAPP_REQUEST_TIMEOUT_MS",
+                "APP_HTTP_AI_CONNECT_TIMEOUT_MS",
+                "APP_HTTP_AI_REQUEST_TIMEOUT_MS",
+                "APP_HTTP_TOOLS_CONNECT_TIMEOUT_MS",
+                "APP_HTTP_TOOLS_REQUEST_TIMEOUT_MS",
+                "APP_HTTP_STORAGE_CONNECT_TIMEOUT_MS",
+                "APP_HTTP_STORAGE_REQUEST_TIMEOUT_MS",
             ] {
                 env::remove_var(key);
             }
@@ -1176,5 +1284,144 @@ mod tests {
             config.ai_key_encryption_key.is_none(),
             "the AI key was kept"
         );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn outbound_http_timeouts_have_safe_defaults() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+        ]);
+        let http = AppConfig::from_env().unwrap().outbound_http;
+        assert_eq!(
+            http.whatsapp,
+            HttpTimeouts {
+                connect_ms: 5_000,
+                request_ms: 15_000
+            }
+        );
+        assert_eq!(
+            http.ai,
+            HttpTimeouts {
+                connect_ms: 10_000,
+                request_ms: 60_000
+            }
+        );
+        assert_eq!(
+            http.tools,
+            HttpTimeouts {
+                connect_ms: 5_000,
+                request_ms: 15_000
+            }
+        );
+        assert_eq!(
+            http.storage,
+            HttpTimeouts {
+                connect_ms: 5_000,
+                request_ms: 30_000
+            }
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn outbound_http_timeouts_are_set_per_integration() {
+        let _g = EnvGuard::setup(&[
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+            ("APP_HTTP_WHATSAPP_CONNECT_TIMEOUT_MS", "1500"),
+            ("APP_HTTP_WHATSAPP_REQUEST_TIMEOUT_MS", "8000"),
+            ("APP_HTTP_TOOLS_REQUEST_TIMEOUT_MS", "20000"),
+        ]);
+        let http = AppConfig::from_env().unwrap().outbound_http;
+        assert_eq!(
+            http.whatsapp,
+            HttpTimeouts {
+                connect_ms: 1_500,
+                request_ms: 8_000
+            }
+        );
+        assert_eq!(
+            http.tools,
+            HttpTimeouts {
+                connect_ms: 5_000,
+                request_ms: 20_000
+            }
+        );
+        assert_eq!(
+            http.ai,
+            HttpTimeouts {
+                connect_ms: 10_000,
+                request_ms: 60_000
+            }
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn outbound_http_timeouts_that_make_no_sense_are_refused() {
+        let base = [
+            ("DATABASE_URL", "postgres://localhost:5432/test"),
+            ("REDIS_URL", "redis://localhost:6379"),
+            ("APP_ENVIRONMENT", "development"),
+            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
+            (
+                "APP_AI_KEY_ENCRYPTION_KEY",
+                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+            ),
+        ];
+        let cases: [(&str, &str, &str); 5] = [
+            (
+                "APP_HTTP_AI_REQUEST_TIMEOUT_MS",
+                "0",
+                "between 1 and 600000",
+            ),
+            (
+                "APP_HTTP_AI_REQUEST_TIMEOUT_MS",
+                "600001",
+                "between 1 and 600000",
+            ),
+            (
+                "APP_HTTP_TOOLS_CONNECT_TIMEOUT_MS",
+                "soon",
+                "whole number of milliseconds",
+            ),
+            (
+                "APP_HTTP_STORAGE_CONNECT_TIMEOUT_MS",
+                "60000",
+                "must not exceed APP_HTTP_STORAGE_REQUEST_TIMEOUT_MS",
+            ),
+            (
+                "APP_HTTP_WHATSAPP_CONNECT_TIMEOUT_MS",
+                "-5",
+                "whole number of milliseconds",
+            ),
+        ];
+        for (key, value, why) in cases {
+            let mut vars = base.to_vec();
+            vars.push((key, value));
+            let _g = EnvGuard::setup(&vars);
+            let err = AppConfig::from_env().unwrap_err().to_string();
+            assert!(
+                err.contains(key) && err.contains(why),
+                "{key}={value}: {err}"
+            );
+        }
     }
 }

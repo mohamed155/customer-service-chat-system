@@ -615,7 +615,10 @@ mod tests {
     }
 
     fn test_adapter(mock_server: &MockServer) -> AnthropicAdapter {
-        AnthropicAdapter::new(reqwest::Client::new(), mock_server.uri())
+        AnthropicAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock_server.uri(),
+        )
     }
 
     fn success_body() -> serde_json::Value {

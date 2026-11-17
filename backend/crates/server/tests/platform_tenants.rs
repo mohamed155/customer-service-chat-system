@@ -73,6 +73,7 @@ pub fn test_config() -> config::AppConfig {
         sentry_dsn: None,
         release_sha: None,
         trusted_proxy: false,
+        outbound_http: config::OutboundHttpConfig::default(),
     }
 }
 

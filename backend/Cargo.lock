@@ -251,7 +251,9 @@ dependencies = [
  "kernel",
  "knowledge",
  "notifications",
+ "outbound",
  "rand 0.10.3",
+ "reqwest",
  "resilience",
  "secrets",
  "serde",
@@ -276,6 +278,7 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "futures",
+ "outbound",
  "reqwest",
  "resilience",
  "secrets",
@@ -3389,6 +3392,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "outbound"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "tokio",
+ "wiremock",
+]
+
+[[package]]
 name = "outref"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4458,6 +4470,7 @@ dependencies = [
  "knowledge",
  "notifications",
  "observability",
+ "outbound",
  "platform",
  "rand 0.10.3",
  "regex",
@@ -5186,6 +5199,7 @@ dependencies = [
  "db",
  "identity",
  "kernel",
+ "outbound",
  "reqwest",
  "secrets",
  "serde",
@@ -5814,6 +5828,7 @@ dependencies = [
  "http-body-util",
  "integrations",
  "kernel",
+ "outbound",
  "rand 0.10.3",
  "reqwest",
  "resilience",

@@ -1319,10 +1319,11 @@ fn api_routes(
         // with "Cannot start a runtime from within a runtime". Run the async selection on
         // a dedicated thread with its own runtime instead.
         let s3 = state.config.s3.clone();
+        let storage_timeouts = state.config.outbound_http.storage;
         std::thread::spawn(move || {
             tokio::runtime::Runtime::new()
                 .expect("failed to build storage-selection runtime")
-                .block_on(storage::select_storage(s3.as_ref()))
+                .block_on(storage::select_storage(s3.as_ref(), storage_timeouts))
         })
         .join()
         .expect("storage-selection thread panicked")
@@ -1690,6 +1691,7 @@ mod tests {
             sentry_dsn: None,
             release_sha: None,
             trusted_proxy: false,
+            outbound_http: config::OutboundHttpConfig::default(),
         };
         assert!(docs_surface_enabled(&config));
         config.environment = Environment::Test;

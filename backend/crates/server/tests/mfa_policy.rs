@@ -65,6 +65,7 @@ fn test_config() -> config::AppConfig {
         ai_gemini_base_url: None,
         s3: None,
         trusted_proxy: false,
+        outbound_http: config::OutboundHttpConfig::default(),
     }
 }
 

@@ -812,6 +812,7 @@ pub async fn run_generation(
                                 conversation_id,
                                 pool: pool.clone(),
                                 vault: ai.shared_vault(),
+                                http: ai.tools_http(),
                             };
                             let outcome = tools::executor::execute(
                                 &exec_ctx,
@@ -1506,6 +1507,7 @@ pub async fn run_followup_generation(
             conversation_id,
             pool: pool.clone(),
             vault: ai.shared_vault(),
+            http: ai.tools_http(),
         };
         let outcome_result = tools::executor::execute(
             &exec_ctx,

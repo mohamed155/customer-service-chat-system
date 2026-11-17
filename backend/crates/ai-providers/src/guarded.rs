@@ -408,7 +408,7 @@ mod tests {
         use crate::{anthropic::AnthropicAdapter, gemini::GeminiAdapter, openai::OpenAiAdapter};
 
         let mock = MockServer::start().await; // answers 404 to anything that does reach it
-        let client = reqwest::Client::new();
+        let client = outbound::build(&outbound::HttpSettings::default()).unwrap();
         let adapters: Vec<(&str, Arc<dyn ChatProvider>)> = vec![
             (
                 "openai",

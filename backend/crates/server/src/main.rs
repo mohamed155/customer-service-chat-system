@@ -145,7 +145,8 @@ async fn main() {
         budget_resolver,
     };
 
-    let (storage, _storage_backend) = storage::select_storage(state.config.s3.as_ref()).await;
+    let (storage, _storage_backend) =
+        storage::select_storage(state.config.s3.as_ref(), state.config.outbound_http.storage).await;
     let email_sender = router::configured_email_sender(&state.config);
     let app = router::app_for_mode(state.clone(), mode, email_sender.clone(), storage.clone());
 
@@ -298,12 +299,22 @@ fn spawn_workers(
         state.escalations.clone(),
     ));
 
+    // The WhatsApp client has a connect and a request timeout (APP_HTTP_WHATSAPP_*, MOH-82). It
+    // follows up to three redirects: Meta's media downloads can be redirected to its CDN.
+    let whatsapp_http = {
+        let t = state.config.outbound_http.whatsapp;
+        outbound::build(
+            &outbound::HttpSettings::from_millis(t.connect_ms, t.request_ms)
+                .with_redirects(outbound::Redirects::Limited(3)),
+        )
+        .expect("WhatsApp HTTP client init")
+    };
     // WhatsApp channel workers (spec 029)
     // Behind a circuit breaker and bulkhead (MOH-40); its state is shown with the AI providers'
     // in the platform health view.
     let whatsapp_api: Arc<dyn whatsapp::api::WhatsAppApi> =
         Arc::new(whatsapp::guarded::GuardedWhatsAppApi::new(
-            Arc::new(whatsapp::api::GraphWhatsAppApi::new()),
+            Arc::new(whatsapp::api::GraphWhatsAppApi::new(whatsapp_http)),
             &state.ai.resilience(),
             whatsapp::guarded::default_policy(),
         ));

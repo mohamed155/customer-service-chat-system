@@ -34,6 +34,7 @@ tracing.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+outbound = { path = "../../shared/outbound" }
 wiremock.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 http-body-util.workspace = true

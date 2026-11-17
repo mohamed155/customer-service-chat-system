@@ -1,7 +1,6 @@
 use std::net::IpAddr;
 use std::time::Duration;
 
-use reqwest::Client;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -11,7 +10,6 @@ use crate::registry::{catalog, ToolExecutionCtx};
 
 pub const MAX_TOOL_CALLS_PER_GENERATION: u8 = 5;
 pub const BUILTIN_TIMEOUT_SECS: u64 = 10;
-pub const TENANT_TIMEOUT_SECS: u64 = 15;
 pub const MAX_RESPONSE_BYTES: u64 = 1_048_576; // 1 MiB
 
 #[derive(Debug, Clone, PartialEq)]
@@ -195,14 +193,10 @@ async fn execute_tenant_endpoint(
         "request_id": tool_request_id,
     });
 
-    // 3. Build reqwest client and POST
-    let client = Client::builder()
-        .timeout(Duration::from_secs(TENANT_TIMEOUT_SECS))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|e| format!("failed to build HTTP client: {e}"))?;
-
-    let mut req = client.post(url).json(&body);
+    // 3. POST with the shared tools client: it has the connect and request timeouts from
+    // `APP_HTTP_TOOLS_*`, never follows a redirect (the URL passed the SSRF guard at registration;
+    // a redirect would skip it) and cuts a body that streams too slowly (MOH-82).
+    let mut req = ctx.http.post(url).json(&body);
 
     // 4. Unseal credential into Authorization header
     if let Some(stored) = &credential {
@@ -221,14 +215,15 @@ async fn execute_tenant_endpoint(
         req = req.header("Authorization", format!("Bearer {}", secret.expose()));
     }
 
-    // 5. Send with outer timeout
-    let mut response = tokio::time::timeout(Duration::from_secs(TENANT_TIMEOUT_SECS), req.send())
-        .await
-        .map_err(|_| "tenant tool request timed out".to_string())?
-        .map_err(|e| {
+    // 5. Send
+    let mut response = req.send().await.map_err(|e| {
+        if e.is_timeout() {
+            "tenant tool request timed out".to_string()
+        } else {
             // Never log the credential
             format!("tenant tool request failed: {e}")
-        })?;
+        }
+    })?;
 
     // 6. Check status and cap response body
     let status = response.status();
@@ -442,6 +437,7 @@ mod tests {
             conversation_id: uuid::Uuid::nil(),
             pool,
             vault: None,
+            http: outbound::build(&outbound::HttpSettings::default()).unwrap(),
         };
         // Pool is lazy and won't connect — tool isn't in the catalog anyway
         let result = execute(&ctx, &tool, json!({}), Uuid::nil()).await;

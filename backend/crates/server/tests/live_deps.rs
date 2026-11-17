@@ -65,6 +65,7 @@ async fn live_readiness_with_real_deps() {
         ai_gemini_base_url: None,
         s3: None,
         trusted_proxy: false,
+        outbound_http: config::OutboundHttpConfig::default(),
         rate_limit_enabled: true,
         rate_limit_login_max: 10,
         rate_limit_login_window_secs: 60,

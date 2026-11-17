@@ -415,6 +415,10 @@ Implemented as a **pipeline of stages** (Chain of Responsibility), each stage a 
   and `timeout` errors count; a bad key or a rate limit never opens the circuit. An open circuit
   sends the turn to the next provider in the chain, and with none left to the existing fallback
   message and human escalation.
+  *Implemented (MOH-82):* the provider HTTP client comes from `crates/shared/outbound`, with the
+  connect and request timeouts of `APP_HTTP_AI_*`; every other outbound client (WhatsApp, tenant
+  tools, S3) is built the same way, and clippy rejects a bare `reqwest::Client::new`. See
+  [Configuration](../configuration.md#outbound-http-timeouts-per-integration).
 - **Model router** (Strategy): choose model by task — cheap fast model for classification/routing/
   summaries, stronger model for answers.
 - Prompt caching used where the provider supports it (static system prompt + rules first in the

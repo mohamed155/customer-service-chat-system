@@ -80,24 +80,18 @@ pub struct GraphWhatsAppApi {
 }
 
 impl GraphWhatsAppApi {
-    pub fn new() -> Self {
-        Self {
-            http: reqwest::Client::new(),
-            base_url: "https://graph.facebook.com/v23.0".to_string(),
-        }
+    /// The Graph API at `graph.facebook.com`, called with `http`: a client built by
+    /// `outbound::build`, so every call has a connect and a request timeout (MOH-82). A call that
+    /// hangs fails as [`SendError::Transient`] and counts against the circuit breaker.
+    pub fn new(http: reqwest::Client) -> Self {
+        Self::with_base_url(http, "https://graph.facebook.com/v23.0")
     }
 
-    pub fn with_base_url(base_url: impl Into<String>) -> Self {
+    pub fn with_base_url(http: reqwest::Client, base_url: impl Into<String>) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http,
             base_url: base_url.into(),
         }
-    }
-}
-
-impl Default for GraphWhatsAppApi {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
