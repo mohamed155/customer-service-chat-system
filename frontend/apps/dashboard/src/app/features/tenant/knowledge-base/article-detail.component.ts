@@ -71,7 +71,7 @@ const DETAIL_ERRORS: ErrorKeyOverrides = {
       }
       .action-btn.danger {
         border-color: var(--app-red);
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .action-btn.danger:hover {
         background: var(--app-red-soft);

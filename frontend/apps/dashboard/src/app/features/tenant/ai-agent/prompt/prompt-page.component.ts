@@ -49,7 +49,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
   styles: [
     `
       .back-link {
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
         text-decoration: none;
         font-size: var(--app-font-sm);
       }

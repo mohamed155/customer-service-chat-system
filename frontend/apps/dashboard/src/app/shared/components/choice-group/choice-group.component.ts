@@ -34,7 +34,7 @@ export interface ChoiceGroupOption {
         background: var(--app-accent-soft);
       }
       button.selected {
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
       }
       button:focus-visible {
         outline: 3px solid var(--app-accent-soft);

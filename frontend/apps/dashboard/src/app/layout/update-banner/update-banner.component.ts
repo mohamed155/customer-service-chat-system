@@ -34,7 +34,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
       button {
         border: 0;
         background: transparent;
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
         cursor: pointer;
         font: inherit;
         font-weight: 700;

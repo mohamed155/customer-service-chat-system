@@ -65,12 +65,12 @@
 
 .status-success {
   background: var(--app-green-soft);
-  color: var(--app-green);
+  color: var(--app-green-text);
 }
 
 .status-error {
   background: var(--app-red-soft);
-  color: var(--app-red);
+  color: var(--app-red-text);
 }
 
 .status-info {
@@ -119,7 +119,7 @@
 
 .error-detail {
   margin: 0;
-  color: var(--app-red);
+  color: var(--app-red-text);
   font-size: var(--app-font-xs);
   line-height: 1.4;
 }

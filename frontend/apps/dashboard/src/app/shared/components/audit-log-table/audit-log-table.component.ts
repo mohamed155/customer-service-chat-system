@@ -51,7 +51,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
         padding: 1px var(--app-space-2);
         border-radius: var(--app-radius-sm);
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-weight: 600;
       }
       .category-label {

@@ -140,10 +140,10 @@ type TimelineItem = { kind: 'message'; message: Message } | { kind: 'tool'; tool
         color: var(--app-text-3);
       }
       .status-read {
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
       }
       .failed-icon {
-        color: var(--app-red);
+        color: var(--app-red-text);
         cursor: help;
       }
       .empty-timeline {

@@ -88,7 +88,7 @@ import { marker } from '../../../core/i18n/marker';
         gap: var(--app-space-2);
       }
       .countdown {
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-xs);
         font-family: var(--app-font-mono, monospace);
         font-weight: 600;
@@ -134,10 +134,10 @@ import { marker } from '../../../core/i18n/marker';
         font-weight: 600;
       }
       .resolved-text.approved {
-        color: var(--app-green);
+        color: var(--app-green-text);
       }
       .resolved-text.denied {
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .resolved-text.expired {
         color: var(--app-text-3);
@@ -146,14 +146,14 @@ import { marker } from '../../../core/i18n/marker';
         color: var(--app-text-3);
       }
       .resolved-text.succeeded {
-        color: var(--app-green);
+        color: var(--app-green-text);
       }
       .resolved-text.failed {
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .error-detail {
         margin: 0;
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-xs);
         line-height: 1.4;
       }

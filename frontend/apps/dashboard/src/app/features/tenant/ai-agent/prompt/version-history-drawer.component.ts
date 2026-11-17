@@ -103,7 +103,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
         padding: 1px var(--app-space-2);
         border-radius: var(--app-radius-sm);
         background: var(--app-green-soft);
-        color: var(--app-green);
+        color: var(--app-green-text);
         font-weight: 600;
       }
       .restored-badge {
@@ -150,7 +150,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
       .back-btn {
         background: none;
         border: none;
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
         cursor: pointer;
         font: inherit;
         font-size: var(--app-font-sm);

@@ -73,7 +73,7 @@ import { PlatformOverviewStore } from './platform-overview.store';
       }
       .link {
         font-size: var(--app-font-sm);
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
         text-decoration: none;
       }
       .link:hover {

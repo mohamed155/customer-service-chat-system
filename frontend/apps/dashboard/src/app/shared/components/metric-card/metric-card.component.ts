@@ -49,11 +49,11 @@ export interface MetricCardData {
       }
       .positive {
         background: var(--app-green-soft);
-        color: var(--app-green);
+        color: var(--app-green-text);
       }
       .negative {
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       p {
         margin: 0 0 6px;

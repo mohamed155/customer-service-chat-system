@@ -26,19 +26,21 @@ The token files:
 | Page and card backgrounds | `--app-bg`, `--app-panel`, `--app-panel-2`, `--app-panel-3`, `--app-sidebar` |
 | Hover fill | `--app-fill-hover` |
 | Borders | `--app-border`, `--app-border-strong` |
-| Text | `--app-text` (body), `--app-text-2` (secondary), `--app-text-3` (hints) |
-| Brand and links | `--app-accent`, `--app-accent-strong` (text on a light surface), `--app-accent-soft` (tinted background), `--app-accent-ink` (text on a solid accent) |
-| Success | `--app-green`, `--app-green-soft`, `--app-green-ink` |
-| Warning | `--app-amber`, `--app-amber-soft`, `--app-amber-ink` |
-| Error and danger | `--app-red`, `--app-red-soft`, `--app-red-ink` |
+| Text | `--app-text` (body), `--app-text-2` (secondary), `--app-text-3` (hints; at least 4.5:1 on every panel in both themes) |
+| Brand and links | `--app-accent` (a fill, a border, a focus ring: never text), `--app-accent-strong` (accent as text or a link), `--app-accent-soft` (tinted background), `--app-accent-ink` (text on a solid accent) |
+| Success | `--app-green` (fill), `--app-green-soft` (tint), `--app-green-ink` (text on the fill), `--app-green-text` (text) |
+| Warning | `--app-amber` (fill), `--app-amber-soft` (tint), `--app-amber-ink` (text on the fill), `--app-amber-text` (text) |
+| Error and danger | `--app-red` (fill), `--app-red-soft` (tint), `--app-red-ink` (text on the fill), `--app-red-text` (text) |
 | A dimmed page behind a dialog | `--app-scrim` |
 | Elevation | `--app-shadow` (card), `--app-shadow-lg` (menu, dialog) |
 | Chart series | `--app-chart-1`, `--app-chart-2` |
 
-Solid and soft: a *solid* color (`--app-red`) is a filled background, and the text on it is its `ink`
-(`--app-red-ink`, which is dark in the dark theme where the solid is light). A *soft* color
-(`--app-red-soft`) is a tint over a panel, and the text on it is the plain color or `--app-text`.
-Never put a fixed `#fff` or `#000` on a themed color: it is right in one theme only.
+Solid, soft and text: a *solid* color (`--app-red`) is a filled background, and the text on it is its
+`ink` (`--app-red-ink`). A *soft* color (`--app-red-soft`) is a tint over a panel. Text in a status
+color, on a panel or on a soft tint, is its `text` token (`--app-red-text`), which is darker than the
+fill in the light theme: the fill itself is too light to read as text (WCAG 2.2 AA asks for 4.5:1).
+Never put a fixed `#fff` or `#000` on a themed color, and never use the fill or `--app-accent` as a
+text color: it is right in one theme only, or in none.
 
 Spacing, radius, type and motion tokens (`--app-space-*`, `--app-radius-*`, `--app-font-*`,
 `--app-transition-*`) are in `tokens.css`.

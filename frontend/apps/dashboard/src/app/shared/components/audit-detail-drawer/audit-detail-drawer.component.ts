@@ -79,7 +79,7 @@ import { TranslocoPipe } from '@jsverse/transloco';
       }
       .badge-deleted {
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .meta-heading {
         margin: var(--app-space-4) 0 var(--app-space-2);

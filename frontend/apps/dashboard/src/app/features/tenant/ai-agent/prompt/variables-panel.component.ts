@@ -50,7 +50,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
       }
       .var-name {
         font-family: monospace;
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
         font-weight: 600;
       }
       .var-sample {

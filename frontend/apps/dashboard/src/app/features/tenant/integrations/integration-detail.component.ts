@@ -137,7 +137,7 @@ const DETAIL_ERRORS: ErrorKeyOverrides = {
         flex-wrap: wrap;
       }
       .form-error {
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-sm);
         margin: 0;
       }

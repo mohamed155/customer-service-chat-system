@@ -19,7 +19,7 @@ import { Sentiment } from '../../models/domain.models';
       }
       :host(.positive) {
         background: var(--app-green-soft);
-        color: var(--app-green);
+        color: var(--app-green-text);
       }
       :host(.neutral) {
         background: var(--app-panel-2);
@@ -27,7 +27,7 @@ import { Sentiment } from '../../models/domain.models';
       }
       :host(.angry) {
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
     `,
   ],

@@ -106,7 +106,7 @@ function serverFieldKey(field: string, code: string): string {
         font-size: var(--app-font-xs);
       }
       .error {
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-xs);
       }
       .form-error {
@@ -114,7 +114,7 @@ function serverFieldKey(field: string, code: string): string {
         border: 1px solid var(--app-red);
         border-radius: var(--app-radius-md);
         background: color-mix(in srgb, var(--app-red) 10%, var(--app-panel));
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-sm);
       }
       .actions {

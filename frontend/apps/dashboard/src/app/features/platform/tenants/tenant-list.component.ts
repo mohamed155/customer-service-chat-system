@@ -108,7 +108,7 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
         font-weight: 500;
       }
       .name-link:hover {
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
         text-decoration: underline;
       }
       .name-link:focus-visible {
@@ -149,7 +149,7 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
         background: var(--app-red-soft);
         border: 1px solid var(--app-red);
         border-radius: var(--app-radius-md);
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-size: var(--app-font-sm);
         font-weight: 500;
       }

@@ -15,16 +15,16 @@
 
 .badge.high {
   background: var(--app-green-soft);
-  color: var(--app-green);
+  color: var(--app-green-text);
 }
 
 .badge.medium {
   background: var(--app-amber-soft);
-  color: var(--app-amber);
+  color: var(--app-amber-text);
 }
 
 .badge.low {
   background: var(--app-red-soft);
-  color: var(--app-red);
+  color: var(--app-red-text);
   font-weight: 700;
 }

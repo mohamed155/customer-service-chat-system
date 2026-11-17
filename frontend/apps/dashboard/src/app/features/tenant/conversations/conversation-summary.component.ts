@@ -51,7 +51,7 @@ import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
       .summary-error {
         margin: var(--app-space-2) 0 0;
         font-size: var(--app-font-sm);
-        color: var(--app-red);
+        color: var(--app-red-text);
         font-weight: 600;
       }
     `,

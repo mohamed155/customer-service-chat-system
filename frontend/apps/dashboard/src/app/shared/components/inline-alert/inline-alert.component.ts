@@ -13,13 +13,13 @@ import { ErrorReferenceComponent } from '../error-reference/error-reference.comp
         font-weight: 600;
       }
       .error {
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .info {
         color: var(--app-text-2);
       }
       .warning {
-        color: var(--app-amber);
+        color: var(--app-amber-text);
       }
     `,
   ],

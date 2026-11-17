@@ -31,7 +31,7 @@ import { indexHintKey, indexKey } from './knowledge-labels';
       }
       :host(.pending) {
         background: var(--app-amber-soft);
-        color: var(--app-amber);
+        color: var(--app-amber-text);
       }
       :host(.indexing) {
         background: var(--app-accent-soft);
@@ -39,11 +39,11 @@ import { indexHintKey, indexKey } from './knowledge-labels';
       }
       :host(.indexed) {
         background: var(--app-green-soft);
-        color: var(--app-green);
+        color: var(--app-green-text);
       }
       :host(.failed) {
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       :host(.not_indexable) {
         background: var(--app-panel-2);

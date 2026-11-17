@@ -118,11 +118,11 @@ const WIDGET_ERRORS: ErrorKeyOverrides = { 422: marker('integrations.widgets.inv
         color: var(--app-accent-strong);
       }
       .action-link.danger {
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .action-link.danger:hover {
         background: var(--app-red-soft);
-        color: var(--app-red);
+        color: var(--app-red-text);
       }
       .detail-col {
         display: grid;

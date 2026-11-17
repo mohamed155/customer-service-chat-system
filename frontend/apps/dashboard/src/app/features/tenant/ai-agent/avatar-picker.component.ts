@@ -61,7 +61,7 @@ const MAX_AVATAR_KB = 256;
       .preset-btn.selected {
         border-color: var(--app-accent);
         background: var(--app-accent-soft);
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
       }
     `,
   ],

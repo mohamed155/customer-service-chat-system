@@ -41,7 +41,7 @@ const RECOVERY_PATTERN = /^[A-Za-z0-9\s-]{10,16}$/;
         margin-inline-end: auto;
         border: 0;
         background: none;
-        color: var(--app-accent);
+        color: var(--app-accent-strong);
         cursor: pointer;
         font: inherit;
         padding: 0;
