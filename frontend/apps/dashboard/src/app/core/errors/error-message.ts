@@ -26,6 +26,7 @@ export const ERROR_CODE_KEYS: Readonly<Record<string, string>> = {
   unprocessable: marker('errors.requestFailed'),
   rate_limited: marker('errors.tooManyRequests'),
   internal_error: marker('errors.unavailable'),
+  service_unavailable: marker('errors.unavailable'),
   // From the invitation endpoint (tenancy `invitations.rs`)
   membership_disabled: marker('errors.membershipDisabled'),
   // From the two-step verification endpoints (identity `step_up.rs`)

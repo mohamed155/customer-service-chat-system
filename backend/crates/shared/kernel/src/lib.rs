@@ -178,19 +178,25 @@ impl ApiError {
     }
 
     pub fn rate_limited(message: impl Into<String>, retry_after: Duration) -> Self {
-        Self {
-            status: StatusCode::TOO_MANY_REQUESTS,
-            envelope: ErrorEnvelope {
-                error: ErrorBody {
-                    code: "rate_limited".to_owned(),
-                    message: message.into(),
-                    details: Vec::new(),
-                    request_id: String::new(),
-                },
-            },
-            retry_after: Some(u32::try_from(retry_after.as_secs()).unwrap_or(u32::MAX)),
-            internal: None,
-        }
+        Self::new_with_code(StatusCode::TOO_MANY_REQUESTS, "rate_limited", message)
+            .with_retry_after(retry_after)
+    }
+
+    /// HTTP 503 with code `service_unavailable` and a `Retry-After`: a dependency the request
+    /// needs is down, and the client has done nothing wrong. The message is a fixed sentence
+    /// chosen by the caller; it never carries the dependency's own error.
+    pub fn service_unavailable(message: impl Into<String>, retry_after: Duration) -> Self {
+        Self::new_with_code(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "service_unavailable",
+            message,
+        )
+        .with_retry_after(retry_after)
+    }
+
+    fn with_retry_after(mut self, retry_after: Duration) -> Self {
+        self.retry_after = Some(u32::try_from(retry_after.as_secs()).unwrap_or(u32::MAX));
+        self
     }
 
     /// HTTP 500 with code `internal_error`. The client always gets
@@ -556,6 +562,33 @@ mod tests {
         assert_eq!(err.status, StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(err.envelope.error.code, "rate_limited");
         assert_eq!(err.retry_after, Some(30));
+    }
+
+    #[test]
+    fn service_unavailable_has_503_and_correct_code() {
+        let err = ApiError::service_unavailable("try later", Duration::from_secs(30));
+        assert_eq!(err.status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(err.envelope.error.code, "service_unavailable");
+        assert_eq!(err.envelope.error.message, "try later");
+        assert_eq!(err.retry_after, Some(30));
+    }
+
+    #[tokio::test]
+    async fn service_unavailable_response_carries_retry_after_and_no_internal_detail() {
+        let response =
+            ApiError::service_unavailable("try later", Duration::from_secs(30)).into_response();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::RETRY_AFTER)
+                .and_then(|v| v.to_str().ok()),
+            Some("30")
+        );
+        assert!(
+            response.extensions().get::<InternalErrorDetail>().is_none(),
+            "a 503 built here is not an internal error and must not be logged as one"
+        );
     }
 
     #[test]

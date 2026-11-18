@@ -61,7 +61,7 @@ async fn get_redis_url() -> Option<String> {
     Some(url)
 }
 
-fn test_config(redis_url: &str) -> config::AppConfig {
+fn test_config_with_fail_mode(redis_url: &str, fail_mode: &str) -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: redis_url.into(),
@@ -84,7 +84,7 @@ fn test_config(redis_url: &str) -> config::AppConfig {
         rate_limit_login_max: 10,
         rate_limit_login_window_secs: 60,
         rate_limit_max_override: 10000,
-        rate_limit_fail_mode: "auth_closed".into(),
+        rate_limit_fail_mode: fail_mode.into(),
         security_headers_enabled: false,
         csp_policy: String::new(),
         csp_report_only: false,
@@ -108,7 +108,11 @@ fn test_config(redis_url: &str) -> config::AppConfig {
 }
 
 fn make_state(pool: sqlx::PgPool, redis_url: &str) -> AppState {
-    let cfg = test_config(redis_url);
+    make_state_with_fail_mode(pool, redis_url, "auth_closed")
+}
+
+fn make_state_with_fail_mode(pool: sqlx::PgPool, redis_url: &str, fail_mode: &str) -> AppState {
+    let cfg = test_config_with_fail_mode(redis_url, fail_mode);
     AppState {
         config: Arc::new(cfg.clone()),
         db: pool.clone(),
@@ -234,4 +238,100 @@ async fn login_rate_limit_prevents_enumeration() {
         existing_statuses, non_existing_statuses,
         "status sequences for existing and non-existing accounts must match"
     );
+}
+
+/// An address nothing listens on, so every Redis command fails to connect: the counter store is
+/// down. The tests below need the database but no Redis.
+const DEAD_REDIS: &str = "redis://127.0.0.1:1";
+
+async fn error_body(response: axum::response::Response) -> serde_json::Value {
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    serde_json::from_slice(&bytes).expect("the body is JSON")
+}
+
+/// `contracts/rate-limit-responses.md`, store-unavailable behaviour: with the counter store
+/// down, sign-in fails closed with `503` and `Retry-After: 30`, not `429`. The answer must also be
+/// the same for an account that exists and one that does not, whatever the password.
+#[tokio::test]
+async fn login_answers_503_with_retry_after_while_redis_is_down() {
+    let Some(pool) = get_pool().await else { return };
+    db::testing::migrate().await;
+
+    let existing = unique_email();
+    seed_user(&pool, &existing).await;
+    let unknown = unique_email();
+
+    let app = router::app(make_state(pool, DEAD_REDIS));
+
+    // Even the correct password is refused: fail closed means nobody gets in unthrottled.
+    let known_account = app
+        .clone()
+        .oneshot(login_request(&existing, "RealPass1!"))
+        .await
+        .unwrap();
+    let unknown_account = app
+        .clone()
+        .oneshot(login_request(&unknown, "wrong-password"))
+        .await
+        .unwrap();
+
+    for response in [&known_account, &unknown_account] {
+        assert_eq!(response.status(), 503, "an outage is not a 429");
+        assert_eq!(
+            response
+                .headers()
+                .get("retry-after")
+                .and_then(|v| v.to_str().ok()),
+            Some("30")
+        );
+    }
+    assert_eq!(
+        known_account.headers().get("content-type"),
+        unknown_account.headers().get("content-type")
+    );
+
+    let mut known_body = error_body(known_account).await;
+    let mut unknown_body = error_body(unknown_account).await;
+    assert_eq!(known_body["error"]["code"], "service_unavailable");
+    assert_eq!(
+        known_body["error"]["message"],
+        "Sign-in is temporarily unavailable"
+    );
+    // The request ID differs per request; everything else must be identical.
+    known_body["error"]["request_id"] = serde_json::Value::Null;
+    unknown_body["error"]["request_id"] = serde_json::Value::Null;
+    assert_eq!(
+        known_body, unknown_body,
+        "the refusal must not reveal which accounts exist"
+    );
+}
+
+/// `APP_RATE_LIMIT_FAIL_MODE=open` is the operator's choice to keep sign-in working through a
+/// Redis outage: requests proceed under the process's own counter.
+#[tokio::test]
+async fn login_in_open_mode_is_not_refused_while_redis_is_down() {
+    let Some(pool) = get_pool().await else { return };
+    db::testing::migrate().await;
+
+    let existing = unique_email();
+    seed_user(&pool, &existing).await;
+    let unknown = unique_email();
+
+    let app = router::app(make_state_with_fail_mode(pool, DEAD_REDIS, "open"));
+
+    let valid = app
+        .clone()
+        .oneshot(login_request(&existing, "RealPass1!"))
+        .await
+        .unwrap();
+    assert_eq!(valid.status(), 200, "valid credentials sign in");
+
+    let invalid = app
+        .clone()
+        .oneshot(login_request(&unknown, "wrong-password"))
+        .await
+        .unwrap();
+    assert_eq!(invalid.status(), 401, "bad credentials are still 401");
 }

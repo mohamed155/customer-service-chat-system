@@ -16,6 +16,8 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+# `io-util` for the test proxy that delays the connection to Redis.
+tokio = { workspace = true, features = ["io-util"] }
 uuid.workspace = true
 
 [lints]

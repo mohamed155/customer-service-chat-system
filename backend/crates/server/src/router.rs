@@ -265,6 +265,7 @@ async fn authentication_middleware(request: Request, next: middleware::Next) -> 
         (status = 202, description = "The password was right and the user has two-factor authentication: no session yet. Sets a short-lived `app_mfa_pending` cookie; complete the sign-in with `POST /auth/mfa/verify`.", body = identity::mfa_routes::MfaRequiredResponse),
         (status = 400, description = "Validation failed (missing email or password).", body = kernel::ErrorEnvelope),
         (status = 401, description = "Invalid email or password.", body = kernel::ErrorEnvelope),
+        (status = 503, description = "Sign-in is unavailable: the rate-limit store cannot be reached and sign-in fails closed (`APP_RATE_LIMIT_FAIL_MODE=auth_closed`, the default). The same answer for every account. Try again after the `Retry-After` interval.", body = kernel::ErrorEnvelope, headers(("Retry-After" = u32, description = "Seconds to wait before trying again."))),
         (status = 500, description = "Internal server error.", body = kernel::ErrorEnvelope),
     ),
     security(()),

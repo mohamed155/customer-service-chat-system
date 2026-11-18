@@ -72,6 +72,13 @@ pub enum Decision {
     Refused {
         retry_after: Duration,
     },
+    /// The counter store cannot be reached and this scope refuses instead of counting on its
+    /// own: sign-in, when the fail mode is `auth_closed`. The caller answers `503`, not `429`:
+    /// the client has not used up a budget, and the same request can succeed once the store is
+    /// back.
+    Unavailable {
+        retry_after: Duration,
+    },
     Degraded {
         local_decision: Box<Decision>,
     },

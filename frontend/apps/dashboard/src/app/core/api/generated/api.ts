@@ -4061,6 +4061,17 @@ export interface operations {
           'application/json': components['schemas']['ErrorEnvelope'];
         };
       };
+      /** @description Sign-in is unavailable: the rate-limit store cannot be reached and sign-in fails closed (`APP_RATE_LIMIT_FAIL_MODE=auth_closed`, the default). The same answer for every account. Try again after the `Retry-After` interval. */
+      503: {
+        headers: {
+          /** @description Seconds to wait before trying again. */
+          'Retry-After'?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+        };
+      };
     };
   };
   auth_logout: {

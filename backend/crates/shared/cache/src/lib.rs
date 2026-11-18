@@ -43,6 +43,13 @@ impl Cache {
         })
     }
 
+    /// The connection if it has been made, without starting an attempt. The limiter's own task
+    /// makes the attempt; a request that only wants to know reads it here, so that giving up
+    /// never cancels the connecting.
+    fn connected(&self) -> Option<&ConnectionManager> {
+        self.manager.get()
+    }
+
     async fn manager(&self) -> Result<&ConnectionManager, String> {
         self.manager
             .get_or_try_init(|| async {

@@ -92,9 +92,12 @@ local budget. Both emit a `WARN` and increment `rate_limit_degraded_total`.
 
 The `Origin` must match one of the widget's allowed domains (a widget with none allows any origin).
 
-**Known gap (found walking this guide, MOH-139)**: login does fail closed and carries `Retry-After: 30`,
-but answers `429` (`rate_limited`, "Too many login attempts") instead of `503`. The contract
-(`contracts/rate-limit-responses.md`) says `503`; no test covers this path.
+**Checked (MOH-139)**: the `503` is covered by `login_answers_503_with_retry_after_while_redis_is_down` in
+`backend/crates/server/tests/rate_limit_login.rs` (the real router, Redis pointed at a closed port): the
+body is `service_unavailable`, the same for an account that exists and one that does not, and a correct
+password is refused too. With `APP_RATE_LIMIT_FAIL_MODE=open` sign-in proceeds under the local counter
+(`login_in_open_mode_is_not_refused_while_redis_is_down`). The answer comes back in about half a second:
+the limiter waits at most 500 ms for the store before it treats it as down.
 
 ### Headers (FR-009 – FR-013, SC-003)
 

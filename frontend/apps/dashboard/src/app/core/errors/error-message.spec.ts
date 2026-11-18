@@ -67,7 +67,13 @@ describe('errorMessageKey', () => {
   });
 
   it('also lists the codes the browser makes up, and the two the kernel builds by hand', () => {
-    for (const code of ['network_error', 'timeout', 'rate_limited', 'internal_error']) {
+    for (const code of [
+      'network_error',
+      'timeout',
+      'rate_limited',
+      'internal_error',
+      'service_unavailable',
+    ]) {
       expect(ERROR_CODE_KEYS, code).toHaveProperty(code);
     }
   });
@@ -98,6 +104,12 @@ describe('errorMessageKey', () => {
     expect(errorMessageKey(error('some_new_code', 503))).toBe('errors.unavailable');
     expect(errorMessageKey(error('some_new_code', 0))).toBe('errors.generic');
     expect(errorMessageKey(error('unknown_error', 502))).toBe('errors.unavailable');
+  });
+
+  it('shows the unavailable text for service_unavailable, which sign-in answers with 503 when the rate-limit store is down', () => {
+    expect(errorMessageKey(error('service_unavailable', 503))).toBe('errors.unavailable');
+    // The code decides, not the status: it is not read as a too-many-attempts refusal.
+    expect(errorMessageKey(error('service_unavailable', 503))).not.toBe('errors.tooManyRequests');
   });
 
   it('lets a screen word its own code or status, the code first', () => {
