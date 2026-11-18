@@ -136,6 +136,16 @@ pub struct MemberRow {
     pub joined_at: chrono::DateTime<chrono::Utc>,
 }
 
+/// A membership as stored: the person's name and email come from `identity` afterwards.
+#[derive(Debug, sqlx::FromRow)]
+struct RosterRow {
+    id: Uuid,
+    user_id: Uuid,
+    role: String,
+    status: String,
+    joined_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// Execute the list-members query inside a transaction, returning rows
 /// (over-fetched by one) and a `has_more` flag.
 ///
@@ -153,13 +163,31 @@ pub async fn list_members_rows_in_tx(
         vec!["tm.tenant_id = $1".into(), "tm.deleted_at IS NULL".into()];
     let mut next_bind: usize = 2;
 
-    if let Some(q) = q {
-        if !q.is_empty() {
-            where_clauses.push(format!(
-                "(u.display_name ILIKE ${next_bind} OR u.email ILIKE ${next_bind})"
-            ));
-            next_bind += 1;
+    // The search matches a person's name or email, which `identity` owns. Ask it which of this
+    // tenant's own members match (it never lists users on its own), then page over the roster.
+    let matching_users: Option<Vec<Uuid>> = match q {
+        Some(q) if !q.is_empty() => {
+            let candidates: Vec<Uuid> = sqlx::query_scalar(
+                "SELECT user_id FROM tenant_memberships \
+                 WHERE tenant_id = $1 AND deleted_at IS NULL",
+            )
+            .bind(tenant_id)
+            .fetch_all(&mut **tx)
+            .await?;
+            Some(
+                identity::directory::matching_name_or_email(
+                    &mut **tx,
+                    &candidates,
+                    &format!("%{q}%"),
+                )
+                .await?,
+            )
         }
+        _ => None,
+    };
+    if matching_users.is_some() {
+        where_clauses.push(format!("tm.user_id = ANY(${next_bind})"));
+        next_bind += 1;
     }
 
     if status.is_some() {
@@ -183,20 +211,16 @@ pub async fn list_members_rows_in_tx(
     );
 
     let sql = format!(
-        "SELECT tm.id, tm.user_id, u.display_name, u.email, tm.role, tm.status, \
-                tm.created_at AS joined_at \
+        "SELECT tm.id, tm.user_id, tm.role, tm.status, tm.created_at AS joined_at \
          FROM tenant_memberships tm \
-         JOIN users u ON u.id = tm.user_id \
          WHERE {where_sql} {order_limit}"
     );
 
-    let mut query = sqlx::query_as::<_, MemberRow>(sqlx::AssertSqlSafe(sql));
+    let mut query = sqlx::query_as::<_, RosterRow>(sqlx::AssertSqlSafe(sql));
     query = query.bind(tenant_id);
 
-    if let Some(q) = q {
-        if !q.is_empty() {
-            query = query.bind(format!("%{q}%"));
-        }
+    if let Some(users) = matching_users {
+        query = query.bind(users);
     }
 
     if let Some(status) = status {
@@ -219,7 +243,25 @@ pub async fn list_members_rows_in_tx(
     let rows = query.fetch_all(&mut **tx).await?;
 
     let has_more = rows.len() > limit as usize;
-    Ok((rows.into_iter().take(limit as usize).collect(), has_more))
+    let page: Vec<RosterRow> = rows.into_iter().take(limit as usize).collect();
+    let user_ids: Vec<Uuid> = page.iter().map(|row| row.user_id).collect();
+    let profiles = identity::directory::profiles(&mut **tx, &user_ids).await?;
+    let members = page
+        .into_iter()
+        .filter_map(|row| {
+            let profile = profiles.get(&row.user_id)?;
+            Some(MemberRow {
+                id: row.id,
+                user_id: row.user_id,
+                display_name: profile.display_name.clone(),
+                email: profile.email.clone(),
+                role: row.role,
+                status: row.status,
+                joined_at: row.joined_at,
+            })
+        })
+        .collect();
+    Ok((members, has_more))
 }
 
 #[utoipa::path(
@@ -650,26 +692,44 @@ pub async fn update_member(
         Ok(u) => u,
         Err(r) => return r,
     };
-    let updated = sqlx::query_as::<
-        _,
-        (
+    type Updated = (
+        Uuid,
+        Uuid,
+        String,
+        String,
+        String,
+        String,
+        chrono::DateTime<chrono::Utc>,
+    );
+    let updated: Result<Updated, sqlx::Error> = async {
+        let (id, user_id, role, status, joined_at): (
             Uuid,
             Uuid,
-            String,
-            String,
             String,
             String,
             chrono::DateTime<chrono::Utc>,
-        ),
-    >(
-        "SELECT tm.id, tm.user_id, u.display_name, u.email, tm.role, tm.status, tm.created_at \
-          FROM tenant_memberships tm \
-          JOIN users u ON u.id = tm.user_id \
-          WHERE tm.id = $1 AND tm.tenant_id = $2 AND tm.deleted_at IS NULL",
-    )
-    .bind(membership_id)
-    .bind(ctx.tenant_id)
-    .fetch_one(uow.conn())
+        ) = sqlx::query_as(
+            "SELECT id, user_id, role, status, created_at FROM tenant_memberships \
+             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
+        )
+        .bind(membership_id)
+        .bind(ctx.tenant_id)
+        .fetch_one(uow.conn())
+        .await?;
+        let profile = identity::directory::profiles(uow.conn(), &[user_id])
+            .await?
+            .remove(&user_id)
+            .ok_or(sqlx::Error::RowNotFound)?;
+        Ok((
+            id,
+            user_id,
+            profile.display_name,
+            profile.email,
+            role,
+            status,
+            joined_at,
+        ))
+    }
     .await;
     if let Err(r) = ctx.commit(uow).await {
         return r;

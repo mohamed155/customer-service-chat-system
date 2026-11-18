@@ -59,16 +59,21 @@ pub async fn active_membership_exists_in_tx(
     tenant_id: Uuid,
     membership_id: Uuid,
 ) -> sqlx::Result<bool> {
-    sqlx::query_scalar(
-        "SELECT EXISTS( \
-         SELECT 1 FROM tenant_memberships \
-         WHERE id = $1 AND tenant_id = $2 AND status = 'active' AND deleted_at IS NULL \
-         )",
-    )
-    .bind(membership_id)
-    .bind(tenant_id)
-    .fetch_one(&mut **tx)
-    .await
+    tenancy::directory::is_active_member(&mut **tx, tenant_id, membership_id).await
+}
+
+/// The profiles of the memberships in `ids` (duplicates and absent IDs are fine), from the
+/// `tenancy` directory: who an assignee, a sender or a logger is belongs to `tenancy` and
+/// `identity`, not to this module's SQL.
+async fn member_profiles_of(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    ids: impl IntoIterator<Item = Uuid>,
+) -> sqlx::Result<HashMap<Uuid, tenancy::directory::MemberProfile>> {
+    let mut ids: Vec<Uuid> = ids.into_iter().collect();
+    ids.sort_unstable();
+    ids.dedup();
+    tenancy::directory::member_profiles(tx, tenant_id, &ids).await
 }
 
 /// Fetch all participants for a conversation: the owning customer plus every
@@ -90,24 +95,28 @@ pub async fn participants_in_tx(
     .fetch_optional(&mut **tx)
     .await?;
 
-    let agent_participants = sqlx::query_as::<_, (Uuid, Uuid, String, bool)>(
-        "SELECT DISTINCT u.id, m.id AS membership_id, u.display_name, m.status = 'active' AS active \
-         FROM ( \
-             SELECT DISTINCT sender_membership_id AS membership_id \
-             FROM messages \
-             WHERE tenant_id = $1 AND conversation_id = $2 AND sender_membership_id IS NOT NULL \
-             UNION \
-             SELECT DISTINCT logged_by_membership_id AS membership_id \
-             FROM messages \
-             WHERE tenant_id = $1 AND conversation_id = $2 AND logged_by_membership_id IS NOT NULL \
-         ) ms \
-         JOIN tenant_memberships m ON m.id = ms.membership_id AND m.tenant_id = $1 AND m.deleted_at IS NULL \
-         JOIN users u ON u.id = m.user_id",
+    // Every membership that sent or logged a message; who they are comes from the `tenancy`
+    // directory.
+    let membership_ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT DISTINCT sender_membership_id AS membership_id \
+         FROM messages \
+         WHERE tenant_id = $1 AND conversation_id = $2 AND sender_membership_id IS NOT NULL \
+         UNION \
+         SELECT DISTINCT logged_by_membership_id AS membership_id \
+         FROM messages \
+         WHERE tenant_id = $1 AND conversation_id = $2 AND logged_by_membership_id IS NOT NULL",
     )
     .bind(tenant_id)
     .bind(conversation_id)
     .fetch_all(&mut **tx)
     .await?;
+    let mut agent_participants: Vec<(Uuid, Uuid, String, bool)> =
+        tenancy::directory::member_profiles(tx, tenant_id, &membership_ids)
+            .await?
+            .into_values()
+            .map(|p| (p.user_id, p.membership_id, p.display_name, p.active))
+            .collect();
+    agent_participants.sort_by_key(|(user_id, membership_id, _, _)| (*user_id, *membership_id));
 
     let customer = customer_participant.map(|(id, display_name)| Participant {
         participant_type: "customer".into(),
@@ -196,7 +205,10 @@ pub struct InboxRow {
     pub channel: String,
     pub status: String,
     pub assigned_membership_id: Option<Uuid>,
+    /// Filled from the `tenancy` directory after the query (`attach_assignees`).
+    #[sqlx(skip)]
     pub assignee_display_name: Option<String>,
+    #[sqlx(skip)]
     pub assignee_active: Option<bool>,
     pub last_message_kind: Option<String>,
     pub last_message_preview: Option<String>,
@@ -222,7 +234,10 @@ pub struct DetailRow {
     pub channel: String,
     pub status: String,
     pub assigned_membership_id: Option<Uuid>,
+    /// Filled from the `tenancy` directory after the query.
+    #[sqlx(skip)]
     pub assignee_display_name: Option<String>,
+    #[sqlx(skip)]
     pub assignee_active: bool,
     pub last_message_kind: Option<String>,
     pub last_message_preview: Option<String>,
@@ -252,13 +267,21 @@ pub struct TimelineRow {
     pub seq: i64,
     pub customer_id: Option<Uuid>,
     pub customer_display_name: Option<String>,
-    pub agent_user_id: Option<Uuid>,
     pub sender_membership_id: Option<Uuid>,
-    pub agent_display_name: Option<String>,
-    pub agent_active: Option<bool>,
     pub logged_by_membership_id: Option<Uuid>,
+    /// The sender's and the logger's user and name, filled from the `tenancy` directory after the
+    /// query (`attach_timeline_people`).
+    #[sqlx(skip)]
+    pub agent_user_id: Option<Uuid>,
+    #[sqlx(skip)]
+    pub agent_display_name: Option<String>,
+    #[sqlx(skip)]
+    pub agent_active: Option<bool>,
+    #[sqlx(skip)]
     pub logged_by_user_id: Option<Uuid>,
+    #[sqlx(skip)]
     pub logged_by_display_name: Option<String>,
+    #[sqlx(skip)]
     pub logged_by_active: Option<bool>,
     pub ai_confidence_score: Option<f32>,
 }
@@ -301,8 +324,6 @@ pub async fn inbox_query(
         "SELECT c.id, c.customer_id, \
                 cu.display_name AS customer_display_name, \
                 c.channel, c.status, c.assigned_membership_id, \
-                mu.display_name AS assignee_display_name, \
-                (tm.status = 'active') AS assignee_active, \
                 preview.kind AS last_message_kind, \
                 LEFT(preview.body, 140) AS last_message_preview, \
                 c.last_activity_at, c.created_at, \
@@ -313,9 +334,6 @@ pub async fn inbox_query(
          FROM conversations c \
          JOIN customers cu \
            ON cu.id = c.customer_id AND cu.tenant_id = c.tenant_id AND cu.deleted_at IS NULL \
-         LEFT JOIN tenant_memberships tm \
-           ON tm.id = c.assigned_membership_id AND tm.tenant_id = c.tenant_id AND tm.deleted_at IS NULL \
-         LEFT JOIN users mu ON mu.id = tm.user_id \
          LEFT JOIN widget_instances wi \
            ON wi.id = c.widget_instance_id AND wi.deleted_at IS NULL \
          LEFT JOIN conversation_feedback f \
@@ -427,7 +445,18 @@ pub async fn inbox_query(
 
     let rows = query.fetch_all(&mut **tx).await?;
     let has_more = rows.len() > limit as usize;
-    let data: Vec<InboxRow> = rows.into_iter().take(limit as usize).collect();
+    let mut data: Vec<InboxRow> = rows.into_iter().take(limit as usize).collect();
+    let assignee_ids: Vec<Uuid> = data
+        .iter()
+        .filter_map(|row| row.assigned_membership_id)
+        .collect();
+    let people = member_profiles_of(tx, tenant_id, assignee_ids).await?;
+    for row in &mut data {
+        if let Some(profile) = row.assigned_membership_id.and_then(|id| people.get(&id)) {
+            row.assignee_display_name = Some(profile.display_name.clone());
+            row.assignee_active = Some(profile.active);
+        }
+    }
 
     Ok((data, has_more))
 }
@@ -514,8 +543,6 @@ pub async fn detail_query_in_tx(
         "SELECT cv.id, cv.customer_id, \
                 c.display_name AS customer_display_name, \
                 cv.channel, cv.status, cv.assigned_membership_id, \
-                mu.display_name AS assignee_display_name, \
-                COALESCE(tm.status = 'active', false) AS assignee_active, \
                 preview.kind AS last_message_kind, \
                 LEFT(preview.body, 140) AS last_message_preview, \
                 cv.last_activity_at, cv.created_at, \
@@ -528,9 +555,6 @@ pub async fn detail_query_in_tx(
           FROM conversations cv \
           JOIN customers c \
             ON c.id = cv.customer_id AND c.tenant_id = cv.tenant_id AND c.deleted_at IS NULL \
-          LEFT JOIN tenant_memberships tm \
-            ON tm.id = cv.assigned_membership_id AND tm.tenant_id = cv.tenant_id AND tm.deleted_at IS NULL \
-          LEFT JOIN users mu ON mu.id = tm.user_id \
           LEFT JOIN widget_instances wi \
             ON wi.id = cv.widget_instance_id AND wi.deleted_at IS NULL \
           LEFT JOIN conversation_feedback f \
@@ -548,7 +572,12 @@ pub async fn detail_query_in_tx(
     .fetch_optional(&mut **tx)
     .await?;
 
-    let Some(row) = row else { return Ok(None) };
+    let Some(mut row) = row else { return Ok(None) };
+    let people = member_profiles_of(tx, tenant_id, row.assigned_membership_id).await?;
+    if let Some(profile) = row.assigned_membership_id.and_then(|id| people.get(&id)) {
+        row.assignee_display_name = Some(profile.display_name.clone());
+        row.assignee_active = profile.active;
+    }
 
     let participants = participants_in_tx(tx, tenant_id, id).await?;
 
@@ -626,25 +655,14 @@ pub async fn timeline_query_in_tx(
     let mut sql = String::from(
         "SELECT m.id, m.kind, m.body, m.created_at, m.seq, \
                 c.id AS customer_id, c.display_name AS customer_display_name, \
-                u.id AS agent_user_id, m.sender_membership_id, \
-                COALESCE(u.display_name, '') AS agent_display_name, \
-                COALESCE(tm.status = 'active', false) AS agent_active, \
+                m.sender_membership_id, \
                 m.logged_by_membership_id, \
-                lbu.id AS logged_by_user_id, \
-                COALESCE(lbu.display_name, '') AS logged_by_display_name, \
-                COALESCE(lbtm.status = 'active', false) AS logged_by_active, \
                 m.ai_confidence_score \
          FROM messages m \
          JOIN conversations cv \
            ON cv.id = m.conversation_id AND cv.tenant_id = m.tenant_id \
          JOIN customers c \
            ON c.id = cv.customer_id AND c.tenant_id = cv.tenant_id \
-         LEFT JOIN tenant_memberships tm \
-           ON tm.id = m.sender_membership_id AND tm.tenant_id = m.tenant_id AND tm.deleted_at IS NULL \
-         LEFT JOIN users u ON u.id = tm.user_id \
-         LEFT JOIN tenant_memberships lbtm \
-           ON lbtm.id = m.logged_by_membership_id AND lbtm.tenant_id = m.tenant_id AND lbtm.deleted_at IS NULL \
-         LEFT JOIN users lbu ON lbu.id = lbtm.user_id \
          WHERE m.tenant_id = $1 AND m.conversation_id = $2",
     );
 
@@ -673,7 +691,26 @@ pub async fn timeline_query_in_tx(
 
     query = query.bind(limit + 1);
 
-    let rows = query.fetch_all(&mut **tx).await?;
+    let mut rows = query.fetch_all(&mut **tx).await?;
+    // The sender's and the logger's names come from the `tenancy` directory. A sender who is no
+    // longer a member keeps an empty name and shows as inactive, as before.
+    let mut member_ids: Vec<Uuid> = Vec::with_capacity(rows.len() * 2);
+    for row in &rows {
+        member_ids.extend(row.sender_membership_id);
+        member_ids.extend(row.logged_by_membership_id);
+    }
+    let people = member_profiles_of(tx, tenant_id, member_ids).await?;
+    for row in &mut rows {
+        let sender = row.sender_membership_id.and_then(|id| people.get(&id));
+        row.agent_user_id = sender.map(|p| p.user_id);
+        row.agent_display_name = Some(sender.map(|p| p.display_name.clone()).unwrap_or_default());
+        row.agent_active = Some(sender.is_some_and(|p| p.active));
+        let logger = row.logged_by_membership_id.and_then(|id| people.get(&id));
+        row.logged_by_user_id = logger.map(|p| p.user_id);
+        row.logged_by_display_name =
+            Some(logger.map(|p| p.display_name.clone()).unwrap_or_default());
+        row.logged_by_active = Some(logger.is_some_and(|p| p.active));
+    }
     let has_more = rows.len() > limit as usize;
     let next_cursor = has_more.then(|| {
         let last = &rows[limit as usize - 1];
@@ -847,16 +884,11 @@ pub async fn add_message_in_tx(
             active: None,
         },
         _ => {
-            let agent_info = sqlx::query_as::<_, (Uuid, String, bool)>(
-                "SELECT u.id, u.display_name, tm.status = 'active' AS active \
-                 FROM tenant_memberships tm \
-                 JOIN users u ON u.id = tm.user_id \
-                 WHERE tm.id = $1 AND tm.tenant_id = $2",
-            )
-            .bind(sender_membership_id)
-            .bind(tenant_id)
-            .fetch_optional(&mut **tx)
-            .await?;
+            let agent_info = member_profiles_of(tx, tenant_id, sender_membership_id)
+                .await?
+                .into_values()
+                .next()
+                .map(|p| (p.user_id, p.display_name, p.active));
 
             match agent_info {
                 Some((user_id, display_name, active)) => Participant {
@@ -880,16 +912,9 @@ pub async fn add_message_in_tx(
     let logged_by = if kind_enum == MessageKind::Customer {
         match logged_by_membership_id {
             Some(mid) => {
-                match sqlx::query_as::<_, (String, bool)>(
-                    "SELECT u.display_name, tm.status = 'active' AS active \
-                     FROM tenant_memberships tm \
-                     JOIN users u ON u.id = tm.user_id \
-                     WHERE tm.id = $1 AND tm.tenant_id = $2",
-                )
-                .bind(mid)
-                .bind(tenant_id)
-                .fetch_optional(&mut **tx)
-                .await
+                match member_profiles_of(tx, tenant_id, [mid])
+                    .await
+                    .map(|mut people| people.remove(&mid).map(|p| (p.display_name, p.active)))
                 {
                     Ok(Some((display_name, active))) => Some(Assignee {
                         membership_id: mid,
@@ -1002,15 +1027,11 @@ pub async fn assign_in_tx(
     if origin != "escalations" {
         if let Some(assigned_mid) = assigned_membership_id {
             let actor_mid: Option<Uuid> = match actor_user_id {
-                Some(uid) => sqlx::query_scalar(
-                    "SELECT id FROM tenant_memberships \
-                     WHERE tenant_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
-                )
-                .bind(tenant_id)
-                .bind(uid)
-                .fetch_optional(&mut **tx)
-                .await
-                .unwrap_or(None),
+                Some(uid) => {
+                    tenancy::directory::active_membership_id_of_user(&mut **tx, tenant_id, uid)
+                        .await
+                        .unwrap_or(None)
+                }
                 None => None,
             };
 

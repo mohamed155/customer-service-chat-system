@@ -207,7 +207,9 @@
       ]
     },
     "platform": {
-      "dependsOn": [],
+      "dependsOn": [
+        "tenancy"
+      ],
       "tables": []
     },
     "tenancy": {
@@ -269,17 +271,13 @@
     },
     "billing": {
       "ai_usage_records": 1,
-      "conversations": 1,
-      "tenants": 1
+      "conversations": 1
     },
     "tenancy": {
-      "audit_logs": 1,
-      "users": 10
+      "audit_logs": 1
     },
     "conversations": {
-      "tenant_memberships": 12,
       "customers": 6,
-      "users": 7,
       "widget_instances": 2,
       "conversation_feedback": 2,
       "knowledge_items": 1,
@@ -288,27 +286,15 @@
     "customers": {
       "conversations": 1
     },
-    "integrations": {
-      "tenants": 1,
-      "tenant_memberships": 1
-    },
     "escalations": {
-      "tenant_memberships": 8,
       "conversations": 3,
       "customers": 1
     },
     "tools": {
-      "audit_logs": 2,
-      "tenant_memberships": 4,
-      "users": 1
+      "audit_logs": 2
     },
     "notifications": {
-      "tenant_memberships": 5,
-      "conversations": 1,
-      "users": 1
-    },
-    "audit": {
-      "users": 1
+      "conversations": 1
     },
     "feedback": {
       "conversations": 2,
@@ -318,9 +304,6 @@
     "widgets": {
       "conversations": 4
     },
-    "platform": {
-      "tenants": 1
-    },
     "whatsapp": {
       "conversations": 3,
       "messages": 3,
@@ -329,12 +312,9 @@
       "integration_connections": 1
     },
     "server": {
-      "tenant_memberships": 2,
-      "users": 3,
       "tenant_rate_limit_overrides": 1,
       "audit_logs": 1,
       "revoked_sessions": 1,
-      "tenants": 1,
       "ai_credentials": 2,
       "integration_secrets": 2,
       "integration_connections": 3,

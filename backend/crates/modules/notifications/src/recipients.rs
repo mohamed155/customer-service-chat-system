@@ -1,6 +1,6 @@
 use crate::model::NotificationKind;
 use authz::{tenant_role_permissions, Permission, TenantRole};
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 fn roles_with_conversations_manage() -> Vec<String> {
@@ -54,18 +54,16 @@ async fn resolve_target(
 ) -> Result<Vec<Uuid>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let result: Result<Vec<Uuid>, sqlx::Error> = async {
-        let rows = sqlx::query(
-            "SELECT id FROM tenant_memberships \
-         WHERE id = $1 AND tenant_id = $2 AND status = 'active' AND deleted_at IS NULL \
-         AND ($3::uuid IS NULL OR id IS DISTINCT FROM $3)",
+        tenancy::directory::active_member_ids(
+            uow.conn(),
+            tenant_id,
+            tenancy::directory::ActiveMembers {
+                or_id: Some(target_membership_id),
+                exclude: actor_membership_id,
+                ..Default::default()
+            },
         )
-        .bind(target_membership_id)
-        .bind(tenant_id)
-        .bind(actor_membership_id)
-        .fetch_all(uow.conn())
-        .await?;
-
-        Ok(rows.into_iter().map(|r| r.get("id")).collect())
+        .await
     }
     .await;
     if result.is_ok() {
@@ -86,18 +84,17 @@ async fn resolve_role_based(
             return Ok(Vec::new());
         }
 
-        let rows = sqlx::query(
-            "SELECT id FROM tenant_memberships \
-         WHERE tenant_id = $1 AND role = ANY($2) AND status = 'active' AND deleted_at IS NULL \
-         AND ($3::uuid IS NULL OR id IS DISTINCT FROM $3)",
+        let roles: Vec<&str> = roles.iter().map(String::as_str).collect();
+        tenancy::directory::active_member_ids(
+            uow.conn(),
+            tenant_id,
+            tenancy::directory::ActiveMembers {
+                roles: Some(&roles),
+                exclude: actor_membership_id,
+                ..Default::default()
+            },
         )
-        .bind(tenant_id)
-        .bind(roles)
-        .bind(actor_membership_id)
-        .fetch_all(uow.conn())
-        .await?;
-
-        Ok(rows.into_iter().map(|r| r.get("id")).collect())
+        .await
     }
     .await;
     if result.is_ok() {
@@ -114,20 +111,26 @@ async fn resolve_ai_failed(
 ) -> Result<Vec<Uuid>, sqlx::Error> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let result: Result<Vec<Uuid>, sqlx::Error> = async {
-    let rows = sqlx::query(
-        "SELECT tm.id FROM tenant_memberships tm \
-         WHERE tm.tenant_id = $1 AND tm.status = 'active' AND tm.deleted_at IS NULL \
-         AND ($3::uuid IS NULL OR tm.id IS DISTINCT FROM $3) \
-         AND (tm.role IN ('owner', 'admin') \
-              OR tm.id = (SELECT assigned_membership_id FROM conversations WHERE id = $2 AND assigned_membership_id IS NOT NULL))",
-    )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .bind(actor_membership_id)
-    .fetch_all(uow.conn())
-    .await?;
-
-    Ok(rows.into_iter().map(|r| r.get("id")).collect())
+        // The owners and admins, and whoever the conversation is assigned to.
+        let assigned: Option<Uuid> = sqlx::query_scalar(
+            "SELECT assigned_membership_id FROM conversations WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(conversation_id)
+        .bind(tenant_id)
+        .fetch_optional(uow.conn())
+        .await?
+        .flatten();
+        tenancy::directory::active_member_ids(
+            uow.conn(),
+            tenant_id,
+            tenancy::directory::ActiveMembers {
+                roles: Some(&["owner", "admin"]),
+                or_id: assigned,
+                exclude: actor_membership_id,
+                ..Default::default()
+            },
+        )
+        .await
     }
     .await;
     if result.is_ok() {

@@ -6,21 +6,11 @@ pub async fn tenant_counts(
     from_ts: DateTime<Utc>,
     to_ts: DateTime<Utc>,
 ) -> sqlx::Result<(i64, i64, i64, i64)> {
-    sqlx::query_as(
-        "SELECT COUNT(*)::bigint,
-                COUNT(*) FILTER (WHERE status = 'active')::bigint,
-                COUNT(*) FILTER (WHERE status = 'suspended')::bigint,
-                COUNT(*) FILTER (WHERE created_at >= $1 AND created_at < $2)::bigint
-         FROM tenants WHERE deleted_at IS NULL",
-    )
-    .bind(from_ts)
-    .bind(to_ts)
-    .fetch_one(pool)
-    .await
+    // `tenants` is owned by `tenancy`, has no `tenant_id` and is never under Row-Level Security.
+    tenancy::directory::tenant_counts(pool, from_ts, to_ts).await
 }
 
-// The tenant counts above read `tenants`, which has no `tenant_id` and is never under Row-Level
-// Security. Everything below reads tenant-owned tables across tenants, so each goes through an
+// Everything below reads tenant-owned tables across tenants, so each goes through an
 // audited function in the `xtenant` schema.
 
 pub async fn active_conversation_count(pool: &PgPool) -> sqlx::Result<i64> {

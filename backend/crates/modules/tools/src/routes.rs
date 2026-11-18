@@ -174,11 +174,8 @@ pub async fn tool_activity(
                     tr.status, tr.approval_required, tr.expires_at, tr.chain_index, \
                     tr.started_at, tr.finished_at, tr.result, tr.error, \
                     tr.created_at, tr.decided_by_membership_id, tr.decided_at, \
-                    u.display_name AS decided_by_display_name \
-                    FROM tool_requests tr \
-                    LEFT JOIN tenant_memberships tm \
-                      ON tr.decided_by_membership_id = tm.id AND tm.deleted_at IS NULL \
-                    LEFT JOIN users u ON tm.user_id = u.id";
+                    NULL::text AS decided_by_display_name \
+                    FROM tool_requests tr";
 
     let mut uow = match ctx.unit_of_work(&pool).await {
         Ok(u) => u,
@@ -215,6 +212,28 @@ pub async fn tool_activity(
             .fetch_all(uow.conn())
             .await
         }
+    };
+    // Who decided a request is a name `identity` owns: resolve the page's deciders in one go.
+    let result = match result {
+        Ok(mut rows) => {
+            let deciders: Vec<Uuid> = rows
+                .iter()
+                .filter_map(|row| row.decided_by_membership_id)
+                .collect();
+            match tenancy::directory::member_profiles(uow.conn(), ctx.tenant_id, &deciders).await {
+                Ok(profiles) => {
+                    for row in &mut rows {
+                        row.decided_by_display_name = row
+                            .decided_by_membership_id
+                            .and_then(|id| profiles.get(&id))
+                            .map(|profile| profile.display_name.clone());
+                    }
+                    Ok(rows)
+                }
+                Err(e) => Err(e),
+            }
+        }
+        Err(e) => Err(e),
     };
     drop(uow);
 
@@ -270,13 +289,11 @@ pub async fn decide_tool_request(
         Ok(u) => u,
         Err(r) => return r,
     };
-    let membership_id = match sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM tenant_memberships \
-         WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    let membership_id = match tenancy::directory::membership_id_of_user(
+        uow.conn(),
+        ctx.tenant_id,
+        principal.user_id,
     )
-    .bind(ctx.tenant_id)
-    .bind(principal.user_id)
-    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => mid,
@@ -412,15 +429,7 @@ async fn resolve_membership(
                 .into_response());
         }
     };
-    match sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM tenant_memberships \
-         WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .bind(user_id)
-    .fetch_optional(uow.conn())
-    .await
-    {
+    match tenancy::directory::membership_id_of_user(uow.conn(), tenant_id, user_id).await {
         Ok(Some(mid)) => Ok(mid),
         Ok(None) => Err(ApiError::not_found("Membership not found in this tenant")
             .with_request_id(request_id)

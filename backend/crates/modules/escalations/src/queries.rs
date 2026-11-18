@@ -109,35 +109,49 @@ pub async fn select_candidate_in_tx(
     required_skill_ids: &[Uuid],
     present_ids: &[Uuid],
 ) -> sqlx::Result<Option<Candidate>> {
+    // Who may take an escalation (an active member with a role that handles conversations, among
+    // those present) is `tenancy`'s to say. This statement then ranks those members by skill match
+    // and current load from this module's own tables.
+    let eligible = tenancy::directory::active_member_ids(
+        &mut **tx,
+        tenant_id,
+        tenancy::directory::ActiveMembers {
+            roles: Some(&["owner", "admin", "manager", "agent"]),
+            among: Some(present_ids),
+            ..Default::default()
+        },
+    )
+    .await?;
+    if eligible.is_empty() {
+        return Ok(None);
+    }
     let candidate = sqlx::query_as::<_, Candidate>(
-        "SELECT tm.id AS membership_id, \
+        "SELECT aa.membership_id AS membership_id, \
                 COALESCE(m.match_count, 0) AS match_count, \
                 COALESCE(m.matched_ids, '{}') AS matched_ids, \
                 COALESCE(l.load_count, 0) AS load_count \
-         FROM tenant_memberships tm \
-         JOIN agent_availability aa ON aa.tenant_id = tm.tenant_id AND aa.membership_id = tm.id \
+         FROM agent_availability aa \
          LEFT JOIN LATERAL ( \
              SELECT COUNT(*) AS match_count, array_agg(ask.skill_id) AS matched_ids \
              FROM agent_skills ask \
-             WHERE ask.tenant_id = tm.tenant_id AND ask.membership_id = tm.id \
+             WHERE ask.tenant_id = aa.tenant_id AND ask.membership_id = aa.membership_id \
                AND ask.skill_id = ANY($3) \
          ) m ON true \
          LEFT JOIN LATERAL ( \
              SELECT COUNT(*) AS load_count FROM conversations c \
-             WHERE c.tenant_id = tm.tenant_id AND c.assigned_membership_id = tm.id \
+             WHERE c.tenant_id = aa.tenant_id AND c.assigned_membership_id = aa.membership_id \
                AND c.status IN ('open','pending') AND c.deleted_at IS NULL \
          ) l ON true \
-         WHERE tm.tenant_id = $1 AND tm.status = 'active' AND tm.deleted_at IS NULL \
-           AND tm.role IN ('owner','admin','manager','agent') \
+         WHERE aa.tenant_id = $1 \
            AND aa.state = 'available' \
-           AND tm.id = ANY($4) \
-         ORDER BY match_count DESC, load_count ASC, tm.id ASC \
+           AND aa.membership_id = ANY($4) \
+         ORDER BY match_count DESC, load_count ASC, aa.membership_id ASC \
          LIMIT 1",
     )
     .bind(tenant_id)
     .bind(required_skill_ids)
     .bind(required_skill_ids)
-    .bind(present_ids)
+    .bind(&eligible)
     .fetch_optional(&mut **tx)
     .await?;
     Ok(candidate)
@@ -344,13 +358,8 @@ pub async fn set_member_skills_in_tx(
     if !skill_ids.is_empty() && !skill_ids_exist_in_tenant_in_tx(tx, tenant_id, skill_ids).await? {
         return Err(sqlx::Error::Protocol("Unknown skill id in set".into()));
     }
-    let role: Option<String> = sqlx::query_scalar(
-        "SELECT role FROM tenant_memberships WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .bind(membership_id)
-    .fetch_optional(&mut **tx)
-    .await?;
+    let role: Option<String> =
+        tenancy::directory::membership_role(&mut **tx, tenant_id, membership_id).await?;
     match role.as_deref() {
         Some("owner" | "admin" | "manager" | "agent") => {}
         _ => {

@@ -398,13 +398,8 @@ async fn mfa_verify(
     };
 
     type UserRow = (uuid::Uuid, String, String, Option<String>);
-    let row: Result<Option<UserRow>, sqlx::Error> = sqlx::query_as(
-        "SELECT id, email, display_name, platform_role FROM users \
-             WHERE id = $1 AND deleted_at IS NULL",
-    )
-    .bind(challenge.sub)
-    .fetch_optional(&pool)
-    .await;
+    let row: Result<Option<UserRow>, sqlx::Error> =
+        identity::directory::principal_row(&pool, challenge.sub).await;
     let principal = match row {
         Ok(Some((id, email, display_name, role))) => {
             match identity::principal_from_row(id, email, display_name, role) {

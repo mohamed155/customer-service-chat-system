@@ -58,18 +58,11 @@ pub async fn reset_member_mfa(
         Ok(tx) => tx,
         Err(e) => return internal(e),
     };
-    let target: Option<Uuid> = match sqlx::query_scalar(
-        "SELECT user_id FROM tenant_memberships \
-         WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
-    )
-    .bind(member_id)
-    .bind(ctx.tenant_id)
-    .fetch_optional(tx.conn())
-    .await
-    {
-        Ok(v) => v,
-        Err(e) => return internal(e),
-    };
+    let target: Option<Uuid> =
+        match tenancy::directory::membership_user_id(tx.conn(), ctx.tenant_id, member_id).await {
+            Ok(v) => v,
+            Err(e) => return internal(e),
+        };
     drop(tx);
     let Some(target) = target else {
         return ApiError::not_found("Member not found")
@@ -95,10 +88,7 @@ pub async fn reset_member_mfa(
         Err(e) => return internal(e),
     };
     let platform_staff: Result<bool, sqlx::Error> =
-        sqlx::query_scalar("SELECT platform_role IS NOT NULL FROM users WHERE id = $1")
-            .bind(target)
-            .fetch_one(&pool)
-            .await;
+        identity::directory::is_platform_staff(&pool, target).await;
     let platform_staff = match platform_staff {
         Ok(v) => v,
         Err(e) => return internal(e),
@@ -157,12 +147,7 @@ pub async fn reset_user_mfa(
         )
         .into_response();
     }
-    let exists: Result<bool, sqlx::Error> = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL)",
-    )
-    .bind(user_id)
-    .fetch_one(&pool)
-    .await;
+    let exists: Result<bool, sqlx::Error> = identity::directory::user_exists(&pool, user_id).await;
     match exists {
         Ok(true) => {}
         Ok(false) => return ApiError::not_found("User not found").into_response(),

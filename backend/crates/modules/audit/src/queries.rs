@@ -84,9 +84,9 @@ pub async fn list_entries(
     let mut builder = sqlx::QueryBuilder::new(
         "SELECT a.id, a.action, a.actor_user_id, a.resource_type, a.resource_id, \
                 a.tenant_id, a.details, a.created_at, \
-                u.display_name, u.email, u.platform_role, u.deleted_at \
+                NULL::text AS display_name, NULL::text AS email, \
+                NULL::text AS platform_role, NULL::timestamptz AS deleted_at \
          FROM audit_logs a \
-         LEFT JOIN users u ON u.id = a.actor_user_id \
          WHERE a.tenant_id = ",
     );
     builder.push_bind(tenant_id);
@@ -135,7 +135,20 @@ pub async fn list_entries(
         .await?;
 
     let _has_more = rows.len() > limit as usize;
-    let data: Vec<AuditRow> = rows.into_iter().take(limit as usize).collect();
+    let mut data: Vec<AuditRow> = rows.into_iter().take(limit as usize).collect();
+
+    // Who did it is a person `identity` owns: the actor columns above are empty placeholders and
+    // are filled from its directory, for the whole page in one query.
+    let actors: Vec<Uuid> = data.iter().filter_map(|row| row.actor_user_id).collect();
+    let profiles = identity::directory::profiles(uow.conn(), &actors).await?;
+    for row in &mut data {
+        if let Some(profile) = row.actor_user_id.and_then(|id| profiles.get(&id)) {
+            row.display_name = Some(profile.display_name.clone());
+            row.email = Some(profile.email.clone());
+            row.platform_role = profile.platform_role.clone();
+            row.deleted_at = profile.deleted_at;
+        }
+    }
 
     Ok(data)
 }

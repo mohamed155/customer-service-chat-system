@@ -350,13 +350,7 @@ pub async fn put_subscription(
         .into_response();
     }
 
-    let tenant_exists = match sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM tenants WHERE id = $1 AND deleted_at IS NULL)",
-    )
-    .bind(tenant_id)
-    .fetch_one(&pool)
-    .await
-    {
+    let tenant_exists = match tenancy::directory::tenant_exists(&pool, tenant_id).await {
         Ok(exists) => exists,
         Err(e) => {
             return ApiError::internal_error_from("Database query failed", &e).into_response();
