@@ -34,7 +34,7 @@ argon2 = "0.6"
 axum-extra = { version = "0.12", features = ["cookie"] }
 futures = "0.3"
 http-body-util = "0.1"
-jsonwebtoken = { version = "11", features = ["aws_lc_rs"] }
+jsonwebtoken = { version = "12", features = ["aws_lc_rs"] }
 rand = "0.10"
 serial_test = "4"
 hex = "0.4"
