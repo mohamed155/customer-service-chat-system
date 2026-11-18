@@ -341,22 +341,21 @@ pub async fn create_invitation(
         Ok(u) => u,
         Err(r) => return r,
     };
-    let existing_member: Option<(String,)> =
-        match identity::directory::user_id_by_email(uow.conn(), &email)
-            .await
-            .unwrap_or(None)
-        {
-            Some(user_id) => sqlx::query_as(
-                "SELECT status FROM tenant_memberships \
-                 WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
-            )
-            .bind(ctx.tenant_id)
-            .bind(user_id)
-            .fetch_optional(uow.conn())
-            .await
-            .unwrap_or(None),
-            None => None,
-        };
+    // Every account with this email counts, not just one: a deleted account and a live one can
+    // share an address, and the member may be either.
+    let user_ids = identity::directory::user_ids_by_email(uow.conn(), &email)
+        .await
+        .unwrap_or_default();
+    let existing_member: Option<(String,)> = sqlx::query_as(
+        "SELECT status FROM tenant_memberships \
+         WHERE tenant_id = $1 AND user_id = ANY($2) AND deleted_at IS NULL \
+         ORDER BY created_at LIMIT 1",
+    )
+    .bind(ctx.tenant_id)
+    .bind(&user_ids)
+    .fetch_optional(uow.conn())
+    .await
+    .unwrap_or(None);
     if let Err(r) = ctx.commit(uow).await {
         return r;
     }

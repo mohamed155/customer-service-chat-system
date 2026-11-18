@@ -134,6 +134,33 @@ pub struct ActiveMembers<'a> {
     pub exclude: Option<Uuid>,
 }
 
+/// Takes a share lock on the membership when it is still an active one with one of `roles`, and
+/// says whether it is. A status or role change locks the same row `FOR UPDATE`, so once this
+/// returns `true` the member cannot be disabled, deleted or demoted until the caller's
+/// transaction ends. It is how a caller that picked a member with [`active_member_ids`] makes sure
+/// the pick still holds when it writes (an assignment, say). Lock one member at a time: locking
+/// several in a different order from a roster change could deadlock.
+pub async fn lock_active_member<'e>(
+    executor: impl PgExecutor<'e>,
+    tenant_id: Uuid,
+    membership_id: Uuid,
+    roles: &[&str],
+) -> sqlx::Result<bool> {
+    let roles: Vec<String> = roles.iter().map(|r| (*r).to_owned()).collect();
+    let locked: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM tenant_memberships \
+         WHERE id = $1 AND tenant_id = $2 AND role = ANY($3) \
+           AND status = 'active' AND deleted_at IS NULL \
+         FOR SHARE",
+    )
+    .bind(membership_id)
+    .bind(tenant_id)
+    .bind(roles)
+    .fetch_optional(executor)
+    .await?;
+    Ok(locked.is_some())
+}
+
 /// The IDs of the tenant's active members that match `pick`, in ID order.
 pub async fn active_member_ids<'e>(
     executor: impl PgExecutor<'e>,

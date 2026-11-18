@@ -112,6 +112,19 @@ pub async fn user_id_by_email<'e>(
         .await
 }
 
+/// The IDs of every account with `email`, deleted ones included: the unique index covers only live
+/// accounts, so a deleted account and a live one can share an address. A caller asking "is this
+/// person already a member" has to look at all of them.
+pub async fn user_ids_by_email<'e>(
+    executor: impl PgExecutor<'e>,
+    email: &str,
+) -> sqlx::Result<Vec<Uuid>> {
+    sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
+        .bind(email)
+        .fetch_all(executor)
+        .await
+}
+
 /// Whether an account is registered with `email`.
 pub async fn email_is_registered<'e>(
     executor: impl PgExecutor<'e>,

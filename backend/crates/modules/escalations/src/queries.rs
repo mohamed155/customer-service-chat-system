@@ -103,6 +103,9 @@ pub struct Candidate {
     pub load_count: i64,
 }
 
+/// The roles whose members can take an escalation.
+const ASSIGNABLE_ROLES: [&str; 4] = ["owner", "admin", "manager", "agent"];
+
 pub async fn select_candidate_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
@@ -112,21 +115,26 @@ pub async fn select_candidate_in_tx(
     // Who may take an escalation (an active member with a role that handles conversations, among
     // those present) is `tenancy`'s to say. This statement then ranks those members by skill match
     // and current load from this module's own tables.
-    let eligible = tenancy::directory::active_member_ids(
+    let mut eligible = tenancy::directory::active_member_ids(
         &mut **tx,
         tenant_id,
         tenancy::directory::ActiveMembers {
-            roles: Some(&["owner", "admin", "manager", "agent"]),
+            roles: Some(&ASSIGNABLE_ROLES),
             among: Some(present_ids),
             ..Default::default()
         },
     )
     .await?;
-    if eligible.is_empty() {
-        return Ok(None);
-    }
-    let candidate = sqlx::query_as::<_, Candidate>(
-        "SELECT aa.membership_id AS membership_id, \
+    // The eligibility read and the ranking are separate statements, so a member could be disabled
+    // or demoted between them and the assignment. Share-lock the one we pick: a roster change
+    // takes the same row `FOR UPDATE`, so it waits until this transaction has written the
+    // assignment. If the pick no longer qualifies, drop it and rank the rest.
+    loop {
+        if eligible.is_empty() {
+            return Ok(None);
+        }
+        let candidate = sqlx::query_as::<_, Candidate>(
+            "SELECT aa.membership_id AS membership_id, \
                 COALESCE(m.match_count, 0) AS match_count, \
                 COALESCE(m.matched_ids, '{}') AS matched_ids, \
                 COALESCE(l.load_count, 0) AS load_count \
@@ -147,14 +155,28 @@ pub async fn select_candidate_in_tx(
            AND aa.membership_id = ANY($4) \
          ORDER BY match_count DESC, load_count ASC, aa.membership_id ASC \
          LIMIT 1",
-    )
-    .bind(tenant_id)
-    .bind(required_skill_ids)
-    .bind(required_skill_ids)
-    .bind(&eligible)
-    .fetch_optional(&mut **tx)
-    .await?;
-    Ok(candidate)
+        )
+        .bind(tenant_id)
+        .bind(required_skill_ids)
+        .bind(required_skill_ids)
+        .bind(&eligible)
+        .fetch_optional(&mut **tx)
+        .await?;
+        let Some(candidate) = candidate else {
+            return Ok(None);
+        };
+        if tenancy::directory::lock_active_member(
+            &mut **tx,
+            tenant_id,
+            candidate.membership_id,
+            &ASSIGNABLE_ROLES,
+        )
+        .await?
+        {
+            return Ok(Some(candidate));
+        }
+        eligible.retain(|id| *id != candidate.membership_id);
+    }
 }
 
 pub async fn take_tenant_routing_lock_in_tx(

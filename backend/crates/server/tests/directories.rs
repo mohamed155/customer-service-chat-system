@@ -414,3 +414,92 @@ async fn tenant_questions_see_only_live_tenants() {
     .unwrap();
     assert!(total >= 2 && active >= 2 && created >= 2 && suspended >= 0);
 }
+
+#[tokio::test]
+async fn locking_a_pick_holds_only_for_an_active_member_of_this_tenant_with_a_role_that_fits() {
+    let Some((pool, w)) = world().await else {
+        return;
+    };
+    let mut uow = db::UnitOfWork::begin_for_tenant(&pool, w.tenant_a)
+        .await
+        .unwrap();
+    let conn = uow.conn();
+    let roles = ["owner", "agent"];
+
+    assert!(
+        directory::lock_active_member(&mut *conn, w.tenant_a, w.agent_a.membership_id, &roles)
+            .await
+            .unwrap()
+    );
+    // A role the caller does not accept, a disabled member, a deleted one, another tenant's
+    // member and an unknown ID all fail the recheck.
+    assert!(!directory::lock_active_member(
+        &mut *conn,
+        w.tenant_a,
+        w.agent_a.membership_id,
+        &["owner"]
+    )
+    .await
+    .unwrap());
+    for membership in [
+        w.disabled_a.membership_id,
+        w.gone_a.membership_id,
+        w.owner_b.membership_id,
+        Uuid::new_v4(),
+    ] {
+        assert!(
+            !directory::lock_active_member(&mut *conn, w.tenant_a, membership, &roles)
+                .await
+                .unwrap(),
+            "{membership} passed the recheck"
+        );
+    }
+    // Naming tenant B for tenant B's own member from tenant A's Unit of Work is still no.
+    assert!(!directory::lock_active_member(
+        &mut *conn,
+        w.tenant_b,
+        w.owner_b.membership_id,
+        &roles
+    )
+    .await
+    .unwrap());
+}
+
+#[tokio::test]
+async fn every_account_with_an_email_is_returned_deleted_ones_included() {
+    let Some((pool, _w)) = world().await else {
+        return;
+    };
+    let seed = db::testing::seed_pool();
+    let tag = Uuid::new_v4().simple().to_string();
+    let email = format!("twice-{tag}@directories.test");
+    let insert = |email: String| {
+        let seed = seed.clone();
+        async move {
+            sqlx::query_scalar::<_, Uuid>(
+                "INSERT INTO users (email, display_name, password_hash) \
+                 VALUES ($1, 'Twice', $2) RETURNING id",
+            )
+            .bind(email)
+            .bind(ARGON2_SHAPED)
+            .fetch_one(&seed)
+            .await
+            .unwrap()
+        }
+    };
+    let old = insert(email.clone()).await;
+    sqlx::query("UPDATE users SET deleted_at = now() WHERE id = $1")
+        .bind(old)
+        .execute(&seed)
+        .await
+        .unwrap();
+    let live = insert(email.clone()).await;
+
+    let mut ids = identity::directory::user_ids_by_email(&pool, &email)
+        .await
+        .unwrap();
+    ids.sort();
+    let mut expected = vec![old, live];
+    expected.sort();
+    assert_eq!(ids, expected);
+}
