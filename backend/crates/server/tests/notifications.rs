@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -167,7 +168,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -180,7 +181,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
 }
 
 async fn seed_membership_with_status(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     user_id: Uuid,
     role: &str,
@@ -198,8 +199,9 @@ async fn seed_membership_with_status(
     .unwrap()
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn seed_notification(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     recipient_membership_id: Uuid,
     kind: &str,
@@ -236,7 +238,7 @@ struct SeededMembership {
     membership_id: Uuid,
 }
 
-async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
+async fn seed_customer(_pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name) VALUES ($1, $2) RETURNING id",
     )
@@ -247,7 +249,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
     .unwrap()
 }
 
-async fn seed_conversation(pool: &sqlx::PgPool, tenant_id: Uuid, customer_id: Uuid) -> Uuid {
+async fn seed_conversation(_pool: &sqlx::PgPool, tenant_id: Uuid, customer_id: Uuid) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO conversations (tenant_id, customer_id, channel, status, last_activity_at) \
          VALUES ($1, $2, 'web_chat', 'open', now()) RETURNING id",
@@ -1772,7 +1774,7 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
     let old_mem_id = seed_membership(&pool, tenant_id, user_id, "agent").await;
 
     // Seed an unread notification for the active membership
-    let nid = seed_notification(
+    let _nid = seed_notification(
         &pool,
         tenant_id,
         old_mem_id,

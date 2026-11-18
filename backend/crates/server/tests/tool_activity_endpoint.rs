@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 #[path = "support/tool_fixtures.rs"]
 mod tool_fixtures;
 use std::sync::Arc;
@@ -5,7 +6,6 @@ use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use http_body_util::BodyExt;
 use server::router;
 use server::state::AppState;
 use tower::ServiceExt;
@@ -88,7 +88,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE ai_generations, ai_usage_records, ai_credentials, ai_configurations, \
@@ -125,7 +125,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -158,7 +158,7 @@ async fn tool_activity_endpoint_returns_succeeded_tool() {
 
     let tenant_a = seed_tenant(&pool).await;
     let user_a = seed_user(&pool, "t028a@test.com").await;
-    let membership_a = seed_membership(&pool, tenant_a, user_a, "admin").await;
+    let _membership_a = seed_membership(&pool, tenant_a, user_a, "admin").await;
 
     let tenant_b = seed_tenant(&pool).await;
     let user_b = seed_user(&pool, "t028b@test.com").await;

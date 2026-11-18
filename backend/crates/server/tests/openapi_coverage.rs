@@ -21,6 +21,7 @@
 //!    co-registration macro and stay on the plain `.route()` passthrough —
 //!    they register in the live `Router` only and never in the documented
 //!    `OpenApi`.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use server::router::documented_openapi;
 use std::collections::BTreeSet;

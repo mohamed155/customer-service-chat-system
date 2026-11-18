@@ -11,6 +11,7 @@
 //! new group (MOH-48, MOH-49, ...) cannot be merged without being covered.
 //!
 //! Needs the role split (`MIGRATION_DATABASE_URL`); skips without it unless `REQUIRE_DB_TESTS=1`.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use db::testing::isolation::{assert_isolated, forced_rls_tables, Probe};
 use sqlx::PgPool;
 use uuid::Uuid;

@@ -27,6 +27,9 @@ use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
 
+// A process that cannot load its configuration, bind its port or install its signal handlers
+// reports the error and stops: this is startup, not a request path (MOH-83).
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 #[tokio::main]
 async fn main() {
     // No-op if `.env` is absent; never overrides vars already set in the environment.
@@ -204,6 +207,9 @@ async fn main() {
 
 /// Starts every background worker and sweeper and returns the set, so `main` can stop the process
 /// when one of them ends. Only the `worker` and `all` modes call this.
+// Builds the WhatsApp HTTP client while the workers start: invalid timeout settings were already
+// refused by the configuration, so a failure here stops the process at startup (MOH-83).
+#[allow(clippy::expect_used)]
 fn spawn_workers(
     state: &AppState,
     storage: Arc<dyn storage::ObjectStorage>,
@@ -408,6 +414,9 @@ fn spawn_workers(
 /// Resolves when the process is told to stop. Readiness fails first and the server keeps
 /// accepting for `drain_delay` so a load balancer can notice; only then does the graceful drain of
 /// requests in flight begin (`server::shutdown`).
+// Installing the signal handlers happens once, at startup; without them the process could not be
+// stopped gracefully, so it fails here instead.
+#[allow(clippy::expect_used)]
 async fn shutdown_signal(draining: Arc<std::sync::atomic::AtomicBool>, drain_delay: Duration) {
     let ctrl_c = async {
         tokio::signal::ctrl_c()

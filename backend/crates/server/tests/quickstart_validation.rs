@@ -77,6 +77,7 @@
 //!
 //! For now, a smoke-test ensures the module compiles and basic DB
 //! connectivity works.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use std::time::Duration;
 

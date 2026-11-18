@@ -175,7 +175,14 @@ pub async fn put_tenant_config(
     }
 
     let fallbacks_vec = payload.fallbacks.clone().unwrap_or_default();
-    let fallbacks_json = serde_json::to_value(&fallbacks_vec).unwrap();
+    let fallbacks_json = match serde_json::to_value(&fallbacks_vec) {
+        Ok(v) => v,
+        Err(e) => {
+            return ApiError::internal_error_from("fallbacks do not serialize", e)
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
     let capture = payload.capture_content.unwrap_or(false);
 
     let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
@@ -514,7 +521,12 @@ pub async fn put_platform_config(
     }
 
     let fallbacks_vec = payload.fallbacks.clone().unwrap_or_default();
-    let fallbacks_json = serde_json::to_value(&fallbacks_vec).unwrap();
+    let fallbacks_json = match serde_json::to_value(&fallbacks_vec) {
+        Ok(v) => v,
+        Err(e) => {
+            return ApiError::internal_error_from("fallbacks do not serialize", e).into_response();
+        }
+    };
 
     let updated_at = chrono::Utc::now();
     let details = json!({

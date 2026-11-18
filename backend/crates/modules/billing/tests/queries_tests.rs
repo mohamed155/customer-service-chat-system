@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use chrono::{DateTime, Datelike, TimeZone, Utc};
 use serial_test::serial;
 use uuid::Uuid;

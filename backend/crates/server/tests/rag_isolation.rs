@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::time::Duration;
 
 use sqlx::PgPool;
@@ -29,7 +30,7 @@ async fn get_pool() -> Option<PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &PgPool) {
+async fn setup(_pool: &PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE knowledge_index_state, knowledge_chunks, knowledge_item_tags, \
@@ -60,7 +61,7 @@ fn make_vec(val: f32) -> String {
 
 /// Insert a knowledge_item with given status and one chunk, returning (item_id, chunk_id).
 async fn seed_item_with_chunk(
-    pool: &PgPool,
+    _pool: &PgPool,
     tenant_id: Uuid,
     status: &str,
     title: &str,

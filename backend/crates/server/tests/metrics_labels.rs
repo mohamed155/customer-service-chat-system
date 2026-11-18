@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use axum::body::Body;
 use axum::http::Request;
 use http_body_util::BodyExt;

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -59,7 +60,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE \
@@ -100,6 +101,7 @@ struct SenderFixture {
     connection_id: Uuid,
     conversation_id: Uuid,
     message_id: Uuid,
+    #[allow(dead_code)]
     customer_id: Uuid,
     token: String,
     app_secret: String,
@@ -299,6 +301,7 @@ async fn setup_sender_fixture(
     }
 }
 
+#[allow(dead_code)]
 async fn response_bytes(resp: Response) -> Vec<u8> {
     resp.into_body()
         .collect()
@@ -745,7 +748,7 @@ async fn status_webhook_does_not_downgrade_read_to_delivered() {
     let signature = sign_body(&fixture.app_secret, &raw_body);
 
     let req = Request::builder()
-        .uri(&format!("/integrations/whatsapp/webhook/{}", fixture.token))
+        .uri(format!("/integrations/whatsapp/webhook/{}", fixture.token))
         .method(Method::POST)
         .header("x-hub-signature-256", &signature)
         .header("content-type", "application/json")
@@ -775,7 +778,7 @@ async fn status_webhook_does_not_downgrade_read_to_delivered() {
     let signature2 = sign_body(&fixture.app_secret, &raw_body2);
 
     let req2 = Request::builder()
-        .uri(&format!("/integrations/whatsapp/webhook/{}", fixture.token))
+        .uri(format!("/integrations/whatsapp/webhook/{}", fixture.token))
         .method(Method::POST)
         .header("x-hub-signature-256", &signature2)
         .header("content-type", "application/json")

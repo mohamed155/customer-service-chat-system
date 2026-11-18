@@ -8,6 +8,7 @@
 //!
 //! They need the role split (`MIGRATION_DATABASE_URL`) and skip without it unless
 //! `REQUIRE_DB_TESTS=1`.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use sqlx::{PgConnection, Postgres, Transaction};
 use uuid::Uuid;
 

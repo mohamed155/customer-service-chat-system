@@ -1,9 +1,9 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::Request;
-use axum::http::StatusCode;
 use serde_json::json;
 use server::router;
 use server::state::AppState;
@@ -134,7 +134,7 @@ async fn seed_tenant(pool: &sqlx::PgPool, status: Option<&str>) -> Uuid {
     .expect("seed tenant")
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) \
          VALUES ($1, $2, $3) RETURNING id",
@@ -252,10 +252,10 @@ mod tests {
         );
 
         // Step 4: PUT /tenant/tools/{id} — update
-        let mut res = send_request(
+        let res = send_request(
             pool.clone(),
             Request::builder()
-                .uri(&format!("/api/v1/tenant/tools/{tool_id}"))
+                .uri(format!("/api/v1/tenant/tools/{tool_id}"))
                 .method("PUT")
                 .header("X-Dev-User-Id", user_id.to_string())
                 .header("X-Tenant-ID", tenant_id.to_string())
@@ -273,10 +273,10 @@ mod tests {
         assert_eq!(res.status(), 200, "update should succeed");
 
         // Step 5: DELETE /tenant/tools/{id} — soft delete
-        let mut res = send_request(
+        let res = send_request(
             pool.clone(),
             Request::builder()
-                .uri(&format!("/api/v1/tenant/tools/{tool_id}"))
+                .uri(format!("/api/v1/tenant/tools/{tool_id}"))
                 .method("DELETE")
                 .header("X-Dev-User-Id", user_id.to_string())
                 .header("X-Tenant-ID", tenant_id.to_string())
@@ -317,7 +317,7 @@ mod tests {
         seed_membership(&pool, tenant_id, user_id, "manager").await;
 
         // POST should be 403
-        let mut res = send_request(
+        let res = send_request(
             pool.clone(),
             Request::builder()
                 .uri("/api/v1/tenant/tools")

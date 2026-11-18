@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -32,7 +33,7 @@ async fn get_pool() -> Option<PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &PgPool) {
+async fn setup(_pool: &PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE message_citations, knowledge_index_state, knowledge_chunks, \
@@ -65,7 +66,7 @@ async fn seed_user(pool: &PgPool, email: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> Uuid {
+async fn seed_membership(_pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role, status) \
          VALUES ($1, $2, 'admin', 'active') RETURNING id",
@@ -77,7 +78,7 @@ async fn seed_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> Uuid 
     .unwrap()
 }
 
-async fn seed_customer(pool: &PgPool, tenant_id: Uuid) -> Uuid {
+async fn seed_customer(_pool: &PgPool, tenant_id: Uuid) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name) VALUES ($1, $2) RETURNING id",
     )
@@ -88,7 +89,7 @@ async fn seed_customer(pool: &PgPool, tenant_id: Uuid) -> Uuid {
     .unwrap()
 }
 
-async fn seed_conversation(pool: &PgPool, tenant_id: Uuid, customer_id: Uuid) -> Uuid {
+async fn seed_conversation(_pool: &PgPool, tenant_id: Uuid, customer_id: Uuid) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO conversations (tenant_id, customer_id, channel, status, last_activity_at) \
          VALUES ($1, $2, 'web_chat', 'open', now()) RETURNING id",
@@ -102,7 +103,7 @@ async fn seed_conversation(pool: &PgPool, tenant_id: Uuid, customer_id: Uuid) ->
 
 #[allow(clippy::too_many_arguments)]
 async fn seed_message(
-    pool: &PgPool,
+    _pool: &PgPool,
     tenant_id: Uuid,
     conversation_id: Uuid,
     kind: &str,
@@ -125,7 +126,7 @@ async fn seed_message(
     .unwrap()
 }
 
-async fn seed_knowledge_item(pool: &PgPool, tenant_id: Uuid, title: &str) -> Uuid {
+async fn seed_knowledge_item(_pool: &PgPool, tenant_id: Uuid, title: &str) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, body, status, source, created_by_display) \
          VALUES ($1, 'article', $2, 'body content', 'published', 'authored', 'Test User') RETURNING id",
@@ -139,7 +140,7 @@ async fn seed_knowledge_item(pool: &PgPool, tenant_id: Uuid, title: &str) -> Uui
 
 #[allow(clippy::too_many_arguments)]
 async fn seed_citation(
-    pool: &PgPool,
+    _pool: &PgPool,
     tenant_id: Uuid,
     message_id: Uuid,
     knowledge_item_id: Uuid,

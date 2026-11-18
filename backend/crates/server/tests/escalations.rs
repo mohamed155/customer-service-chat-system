@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -98,7 +99,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE escalations, agent_availability, agent_skills, skills, \
@@ -239,7 +240,7 @@ impl Drop for PresenceGuard {
 
 /// The reconnect drain in `/tenant/events` runs in a spawned task, so wait
 /// (briefly) for the queue to settle at the expected number of entries.
-async fn wait_for_queued_count(pool: &sqlx::PgPool, tenant_id: Uuid, expected: i64) {
+async fn wait_for_queued_count(_pool: &sqlx::PgPool, tenant_id: Uuid, expected: i64) {
     for _ in 0..50 {
         let queued: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM escalations WHERE tenant_id = $1 AND status = 'queued'",
@@ -334,7 +335,7 @@ async fn seed_member(
 }
 
 async fn seed_customer(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     name: &str,
     email: Option<&str>,
@@ -354,7 +355,7 @@ async fn seed_customer(
 }
 
 async fn seed_conversation(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     customer_id: Uuid,
     channel: &str,
@@ -376,7 +377,7 @@ async fn seed_conversation(
     .unwrap()
 }
 
-async fn seed_skill(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
+async fn seed_skill(_pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
     sqlx::query_scalar("INSERT INTO skills (tenant_id, name) VALUES ($1, $2) RETURNING id")
         .bind(tenant_id)
         .bind(name)
@@ -386,7 +387,7 @@ async fn seed_skill(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
 }
 
 async fn seed_agent_skill(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     membership_id: Uuid,
     skill_id: Uuid,
@@ -403,7 +404,12 @@ async fn seed_agent_skill(
     .unwrap();
 }
 
-async fn seed_availability(pool: &sqlx::PgPool, tenant_id: Uuid, membership_id: Uuid, state: &str) {
+async fn seed_availability(
+    _pool: &sqlx::PgPool,
+    tenant_id: Uuid,
+    membership_id: Uuid,
+    state: &str,
+) {
     sqlx::query(
         "INSERT INTO agent_availability (tenant_id, membership_id, state) \
          VALUES ($1, $2, $3) \
@@ -547,7 +553,7 @@ async fn process_outbox(state: &AppState) {
     }
 }
 
-async fn fetch_audit_count(pool: &sqlx::PgPool, action: &str, resource_id: Uuid) -> i64 {
+async fn fetch_audit_count(_pool: &sqlx::PgPool, action: &str, resource_id: Uuid) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE action = $1 AND resource_id = $2")
         .bind(action)
         .bind(resource_id.to_string())

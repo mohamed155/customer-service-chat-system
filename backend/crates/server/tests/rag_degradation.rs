@@ -13,6 +13,7 @@
 //!
 //! Each test also asserts that no `ai_usage_records` are written when the
 //! error occurs before any provider call.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use std::time::Duration;
 
@@ -99,7 +100,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE ai_usage_records, ai_credentials, ai_configurations, \
@@ -124,7 +125,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
 }
 
 async fn seed_platform_ai_config(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     provider: &str,
     model: &str,
     embedding_model: Option<&str>,
@@ -142,7 +143,7 @@ async fn seed_platform_ai_config(
 }
 
 async fn seed_platform_credential(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     provider: &str,
     api_key: &str,
     master: &MasterKey,
@@ -174,7 +175,7 @@ fn ai_context(tenant_id: Uuid) -> ai::AiCallContext {
     }
 }
 
-async fn assert_no_usage_records(pool: &sqlx::PgPool, tenant_id: Uuid) {
+async fn assert_no_usage_records(_pool: &sqlx::PgPool, tenant_id: Uuid) {
     let count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM ai_usage_records WHERE tenant_id = $1")
             .bind(tenant_id)

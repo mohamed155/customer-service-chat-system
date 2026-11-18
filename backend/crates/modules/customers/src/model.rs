@@ -569,8 +569,9 @@ fn is_valid_email(value: &str) -> bool {
     {
         return false;
     }
-    let first = local.chars().next().expect("non-empty");
-    let last = local.chars().last().expect("non-empty");
+    let (Some(first), Some(last)) = (local.chars().next(), local.chars().last()) else {
+        return false;
+    };
     if !(first.is_alphanumeric() || first == '"') || !(last.is_alphanumeric() || last == '"') {
         return false;
     }

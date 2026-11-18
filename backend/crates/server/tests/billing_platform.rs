@@ -1,4 +1,5 @@
-// Platform billing plan + subscription integration tests (spec 031 / T045).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+                                                                   // Platform billing plan + subscription integration tests (spec 031 / T045).
 
 use std::sync::Arc;
 use std::time::Duration;

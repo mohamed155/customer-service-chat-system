@@ -144,14 +144,6 @@ pub fn redact(_sensitive_value: &str) -> &'static str {
     "[REDACTED]"
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn sensitive_values_are_redacted() {
-        assert_eq!(super::redact("secret"), "[REDACTED]");
-    }
-}
-
 /// Sentry tracing layers: `ERROR` events become Sentry error events, `WARN`
 /// events are kept as breadcrumbs, and `INFO`+ spans are recorded.
 fn sentry_layers<S>() -> impl tracing_subscriber::Layer<S>
@@ -168,4 +160,12 @@ where
                 .with_filter(filter_fn(|md| *md.level() == tracing::Level::WARN)),
         )
         .and_then(sentry_tracing::SpanLayer::new().with_filter(LevelFilter::INFO))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn sensitive_values_are_redacted() {
+        assert_eq!(super::redact("secret"), "[REDACTED]");
+    }
 }

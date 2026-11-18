@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 #[path = "support/tool_fixtures.rs"]
 mod tool_fixtures;
 use std::sync::Arc;
@@ -89,7 +90,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE ai_generations, ai_usage_records, ai_credentials, ai_configurations, \
@@ -126,7 +127,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -158,7 +159,7 @@ async fn tool_decide_endpoint() {
 
     let tenant_id = seed_tenant(&pool).await;
     let user_admin = seed_user(&pool, "t046-admin@test.com").await;
-    let membership_admin = seed_membership(&pool, tenant_id, user_admin, "admin").await;
+    let _membership_admin = seed_membership(&pool, tenant_id, user_admin, "admin").await;
 
     let user_viewer = seed_user(&pool, "t046-viewer@test.com").await;
     seed_membership(&pool, tenant_id, user_viewer, "viewer").await;
@@ -235,7 +236,7 @@ async fn tool_decide_endpoint() {
 
     // ── Second decide (approve again) — expect 409 ───────────────────────────
     let body2 = serde_json::to_vec(&json!({"decision": "approve"})).unwrap();
-    let mut resp2 = app
+    let resp2 = app
         .clone()
         .oneshot(
             Request::builder()
@@ -274,7 +275,7 @@ async fn tool_decide_endpoint() {
     .unwrap();
 
     let body3 = serde_json::to_vec(&json!({"decision": "deny"})).unwrap();
-    let mut resp3 = app
+    let resp3 = app
         .clone()
         .oneshot(
             Request::builder()

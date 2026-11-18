@@ -422,9 +422,9 @@ fn openai_sse_to_events(
         let events: Vec<Result<StreamEvent, ProviderError>> = match frame_result {
             Ok(frame) => {
                 if frame.data.trim() == "[DONE]" {
-                    let usage = recorded_usage.lock().unwrap().take().unwrap_or_default();
-                    let model = response_model.lock().unwrap().take().unwrap_or(req_model);
-                    let fin = finish.lock().unwrap().clone();
+                    let usage = crate::lock(&recorded_usage).take().unwrap_or_default();
+                    let model = crate::lock(&response_model).take().unwrap_or(req_model);
+                    let fin = crate::lock(&finish).clone();
                     vec![Ok(StreamEvent::Done {
                         usage,
                         model,
@@ -458,9 +458,7 @@ fn openai_sse_to_events(
                                             if let Some(id) =
                                                 tc_delta["id"].as_str()
                                             {
-                                                tool_call_accs
-                                                    .lock()
-                                                    .unwrap()
+                                                crate::lock(&tool_call_accs)
                                                     .entry(idx)
                                                     .or_insert_with(|| {
                                                         ToolCallAccumulator::default()
@@ -471,9 +469,7 @@ fn openai_sse_to_events(
                                                 ["name"]
                                                 .as_str()
                                             {
-                                                tool_call_accs
-                                                    .lock()
-                                                    .unwrap()
+                                                crate::lock(&tool_call_accs)
                                                     .entry(idx)
                                                     .or_insert_with(|| {
                                                         ToolCallAccumulator::default()
@@ -484,9 +480,7 @@ fn openai_sse_to_events(
                                                 ["arguments"]
                                                 .as_str()
                                             {
-                                                tool_call_accs
-                                                    .lock()
-                                                    .unwrap()
+                                                crate::lock(&tool_call_accs)
                                                     .entry(idx)
                                                     .or_insert_with(|| {
                                                         ToolCallAccumulator::default()
@@ -498,7 +492,7 @@ fn openai_sse_to_events(
                                     }
                                 }
                                 if let Some(fr) = choice["finish_reason"].as_str() {
-                                    *finish.lock().unwrap() = match fr {
+                                    *crate::lock(&finish) = match fr {
                                         "stop" => FinishReason::Stop,
                                         "length" => FinishReason::Length,
                                         "tool_calls" => FinishReason::ToolUse,
@@ -506,7 +500,7 @@ fn openai_sse_to_events(
                                     };
                                     if fr == "tool_calls" {
                                         let accs = std::mem::take(
-                                            &mut *tool_call_accs.lock().unwrap(),
+                                            &mut *crate::lock(&tool_call_accs),
                                         );
                                         for (_key, acc) in
                                             accs.into_iter()
@@ -551,11 +545,11 @@ fn openai_sse_to_events(
                             let output = json["usage"]["completion_tokens"]
                                 .as_u64()
                                 .map(|v| v as u32);
-                            *recorded_usage.lock().unwrap() =
+                            *crate::lock(&recorded_usage) =
                                 Some(TokenUsage { input, output });
                         }
                         if let Some(model) = json["model"].as_str() {
-                            *response_model.lock().unwrap() = Some(model.to_string());
+                            *crate::lock(&response_model) = Some(model.to_string());
                         }
                         result
                     }
@@ -1102,10 +1096,7 @@ mod tests {
 
         let sse_body = format!(
             "data: {}\n\ndata: {}\n\ndata: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
-            frame1.to_string(),
-            frame2.to_string(),
-            frame3.to_string(),
-            frame4.to_string(),
+            frame1, frame2, frame3, frame4,
         );
 
         Mock::given(method("POST"))

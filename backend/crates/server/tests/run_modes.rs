@@ -1,5 +1,6 @@
 //! Run modes (MOH-37, ADR-010): which routes each mode mounts. A public request must not reach an
 //! internal endpoint by path, and the two route sets must never overlap.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};

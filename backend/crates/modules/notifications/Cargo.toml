@@ -23,3 +23,6 @@ authz = { path = "../authz" }
 identity = { path = "../identity" }
 tenancy = { path = "../tenancy" }
 escalations = { path = "../escalations" }
+
+[lints]
+workspace = true

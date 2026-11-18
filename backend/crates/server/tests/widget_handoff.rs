@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::time::Duration;
 
 use sha2::Digest;
@@ -29,7 +30,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     // Widget rate-limit buckets are keyed by client IP, which is the same
     // ("unknown") for every test request; reset them so tests don't share budget.
@@ -61,7 +62,7 @@ async fn seed_tenant(pool: &sqlx::PgPool, name: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_widget_instance(pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &str) -> Uuid {
+async fn seed_widget_instance(_pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO widget_instances \
          (tenant_id, public_id, name, display_name, enabled, allowed_domains) \
@@ -76,7 +77,7 @@ async fn seed_widget_instance(pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &
     .unwrap()
 }
 
-async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, display_name: &str) -> Uuid {
+async fn seed_customer(_pool: &sqlx::PgPool, tenant_id: Uuid, display_name: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name, email, phone) \
          VALUES ($1, $2, '', '') RETURNING id",
@@ -89,7 +90,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, display_name: &str)
 }
 
 async fn seed_widget_session(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     instance_id: Uuid,
     customer_id: Uuid,
@@ -110,7 +111,7 @@ async fn seed_widget_session(
 }
 
 async fn seed_conversation(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     customer_id: Uuid,
     status: &str,
@@ -145,7 +146,7 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role, status) \
          VALUES ($1, $2, $3, 'active') RETURNING id",

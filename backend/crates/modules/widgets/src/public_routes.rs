@@ -258,14 +258,13 @@ pub async fn get_conversation(
         Err(e) => return e.into_response(),
     };
 
-    if session.customer_id.is_none() {
+    let Some(customer_id) = session.customer_id else {
         return (
             StatusCode::OK,
             Json(WidgetConversationResponse { data: None }),
         )
             .into_response();
-    }
-    let customer_id = session.customer_id.unwrap();
+    };
 
     let mut uow = match db::UnitOfWork::begin_for_tenant(&pool, session.tenant_id).await {
         Ok(u) => u,

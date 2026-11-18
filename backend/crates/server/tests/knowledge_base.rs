@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -98,7 +99,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE knowledge_item_tags, knowledge_documents, knowledge_items, knowledge_categories, \
@@ -129,7 +130,7 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str, _role: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
     sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
         .bind(tenant_id)
         .bind(user_id)
@@ -139,7 +140,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .unwrap();
 }
 
-async fn seed_item(pool: &sqlx::PgPool, tenant_id: Uuid, title: &str, user_id: Uuid) -> Uuid {
+async fn seed_item(_pool: &sqlx::PgPool, tenant_id: Uuid, title: &str, user_id: Uuid) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, body, source, created_by_user_id, created_by_display) \
          VALUES ($1, 'article', $2, 'body', 'authored', $3, 'Test User') RETURNING id",
@@ -271,7 +272,7 @@ async fn send_with_storage(
         .expect("request should complete")
 }
 
-async fn seed_document(pool: &sqlx::PgPool, tenant_id: Uuid, title: &str, user_id: Uuid) -> Uuid {
+async fn seed_document(_pool: &sqlx::PgPool, tenant_id: Uuid, title: &str, user_id: Uuid) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, body, source, created_by_user_id, created_by_display) \
          VALUES ($1, 'document', $2, NULL, 'uploaded', $3, 'Test User') RETURNING id",

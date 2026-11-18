@@ -11,3 +11,6 @@ config = { path = "../config" }
 observability = { path = "../observability" }
 tokio.workspace = true
 tracing.workspace = true
+
+[lints]
+workspace = true

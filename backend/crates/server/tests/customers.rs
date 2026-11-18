@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -98,7 +99,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE customer_channel_identifiers, customers, conversations, outbox_events, \
@@ -242,7 +243,7 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> Uuid {
 }
 
 async fn seed_customer(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     name: &str,
     email: Option<&str>,
@@ -261,7 +262,7 @@ async fn seed_customer(
 }
 
 async fn seed_identifier(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     customer_id: Uuid,
     channel: &str,
@@ -281,7 +282,7 @@ async fn seed_identifier(
 }
 
 async fn seed_conversation(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     customer_id: Uuid,
     channel: &str,
@@ -1241,7 +1242,7 @@ async fn get_profile_and_history_for_unknown_customer_return_404_not_found_ident
 // ---------------------------------------------------------------------------
 
 async fn seed_membership(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     user_id: Uuid,
     role: &str,
@@ -1284,7 +1285,7 @@ fn json_request(
         .unwrap()
 }
 
-async fn count_customers(pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
+async fn count_customers(_pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM customers WHERE tenant_id = $1 AND deleted_at IS NULL")
         .bind(tenant_id)
         .fetch_one(&db::testing::seed_pool())
@@ -1292,7 +1293,7 @@ async fn count_customers(pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
         .unwrap()
 }
 
-async fn count_identifiers(pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
+async fn count_identifiers(_pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM customer_channel_identifiers WHERE tenant_id = $1")
         .bind(tenant_id)
         .fetch_one(&db::testing::seed_pool())
@@ -1300,7 +1301,7 @@ async fn count_identifiers(pool: &sqlx::PgPool, tenant_id: Uuid) -> i64 {
         .unwrap()
 }
 
-async fn count_audit_logs_for_action(pool: &sqlx::PgPool, action: &str) -> i64 {
+async fn count_audit_logs_for_action(_pool: &sqlx::PgPool, action: &str) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs WHERE action = $1")
         .bind(action)
         .fetch_one(&db::testing::seed_pool())
@@ -1309,7 +1310,7 @@ async fn count_audit_logs_for_action(pool: &sqlx::PgPool, action: &str) -> i64 {
 }
 
 async fn count_audit_logs_for_resource(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     action: &str,
     resource_id: Uuid,
 ) -> i64 {
@@ -1322,7 +1323,7 @@ async fn count_audit_logs_for_resource(
 }
 
 async fn fetch_audit_row_for_resource(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     action: &str,
     resource_id: Uuid,
 ) -> (Option<Uuid>, Uuid, String, String, serde_json::Value) {

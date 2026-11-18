@@ -3,6 +3,7 @@
 //! Covers the re-encryption job for every kind of secret, re-wrapping after a key rotation,
 //! crypto-shredding when a tenant is deleted, that the earlier single-key rows still open, and
 //! the credential routes sealing new secrets under envelope encryption.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -357,6 +358,7 @@ async fn webhook_token(id: Uuid) -> StoredSecret {
 }
 
 async fn tool_secret(id: Uuid) -> StoredSecret {
+    #[allow(clippy::type_complexity)] // a one-off query row
     let (text, dek, kek, ver, alg): (
         String,
         Option<Vec<u8>>,

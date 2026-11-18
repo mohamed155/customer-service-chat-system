@@ -8,6 +8,7 @@
 //! 2. No migration after `0075` gives a column `DEFAULT gen_random_uuid()` (or `uuid_generate_v4()`).
 //! 3. Against a migrated database: no column default is a random v4 any more, and the default that
 //!    replaced it produces version 7 values that sort by creation time, for the runtime role.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use regex::Regex;
 use std::fs;

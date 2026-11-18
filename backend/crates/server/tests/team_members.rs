@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -234,7 +235,7 @@ async fn assert_validation_error(response: Response, expected_fields: &[(&str, &
 }
 
 async fn assert_audit_event(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     action: &str,
     actor_user_id: Uuid,
     tenant_id: Uuid,
@@ -277,7 +278,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
 }
 
 async fn seed_membership(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     user_id: Uuid,
     role: &str,
@@ -637,7 +638,7 @@ async fn seed_invitation(
 }
 
 async fn seed_invitation_with_token(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     email: &str,
     role: &str,

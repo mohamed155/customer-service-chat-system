@@ -1,6 +1,7 @@
 //! The backend connects as `app_runtime`, a role Row-Level Security applies to (ADR-004 §3 and
 //! §7, MOH-45). A superuser, a role with BYPASSRLS or a table owner would ignore every policy,
 //! so these tests fail if `DATABASE_URL` points at any of them.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::time::Duration;
 
 fn require_db_tests() -> bool {

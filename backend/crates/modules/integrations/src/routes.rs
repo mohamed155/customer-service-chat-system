@@ -24,7 +24,12 @@ use secrets::Vault;
 
 pub const FIELD_WEBHOOK_TOKEN: &str = "__webhook_token";
 
-fn build_event_response(rows: &[queries::EventRow], limit: i64) -> IntegrationEventListResponse {
+/// The page of events as the API returns it. A stored event type or rejection reason this code
+/// does not know (a value added to the database without the code) is an error, not a panic.
+fn build_event_response(
+    rows: &[queries::EventRow],
+    limit: i64,
+) -> Result<IntegrationEventListResponse, String> {
     let has_more = rows.len() > limit as usize;
     let rows = if has_more {
         &rows[..limit as usize]
@@ -33,43 +38,49 @@ fn build_event_response(rows: &[queries::EventRow], limit: i64) -> IntegrationEv
     };
     let data: Vec<IntegrationEventDto> = rows
         .iter()
-        .map(|row| IntegrationEventDto {
-            id: row.id,
-            event_type: match row.event_type.as_str() {
+        .map(|row| {
+            let event_type = match row.event_type.as_str() {
                 "connected" => model::EventType::Connected,
                 "config_updated" => model::EventType::ConfigUpdated,
                 "secret_rotated" => model::EventType::SecretRotated,
                 "disconnected" => model::EventType::Disconnected,
                 "delivery_accepted" => model::EventType::DeliveryAccepted,
                 "delivery_rejected" => model::EventType::DeliveryRejected,
-                other => panic!("unexpected event_type in DB: {other}"),
-            },
-            outcome: row.outcome.clone(),
-            reason: row.reason.as_deref().map(|r| match r {
-                "invalid_signature" => model::RejectionReason::InvalidSignature,
-                "inactive_connection" => model::RejectionReason::InactiveConnection,
-                "payload_too_large" => model::RejectionReason::PayloadTooLarge,
-                "rate_limited" => model::RejectionReason::RateLimited,
-                "malformed_payload" => model::RejectionReason::MalformedPayload,
-                other => panic!("unexpected rejection reason in DB: {other}"),
-            }),
-            actor_membership_id: row.actor_membership_id,
-            created_at: row.created_at,
+                other => return Err(format!("unexpected event_type in DB: {other}")),
+            };
+            let reason = row
+                .reason
+                .as_deref()
+                .map(|r| match r {
+                    "invalid_signature" => Ok(model::RejectionReason::InvalidSignature),
+                    "inactive_connection" => Ok(model::RejectionReason::InactiveConnection),
+                    "payload_too_large" => Ok(model::RejectionReason::PayloadTooLarge),
+                    "rate_limited" => Ok(model::RejectionReason::RateLimited),
+                    "malformed_payload" => Ok(model::RejectionReason::MalformedPayload),
+                    other => Err(format!("unexpected rejection reason in DB: {other}")),
+                })
+                .transpose()?;
+            Ok(IntegrationEventDto {
+                id: row.id,
+                event_type,
+                outcome: row.outcome.clone(),
+                reason,
+                actor_membership_id: row.actor_membership_id,
+                created_at: row.created_at,
+            })
         })
-        .collect();
-    let next_cursor = has_more.then(|| {
-        let last = rows
-            .last()
-            .expect("rows must be non-empty when has_more is true");
-        queries::encode_cursor(last.created_at, last.id)
-    });
-    IntegrationEventListResponse {
+        .collect::<Result<_, String>>()?;
+    let next_cursor = rows
+        .last()
+        .filter(|_| has_more)
+        .map(|last| queries::encode_cursor(last.created_at, last.id));
+    Ok(IntegrationEventListResponse {
         data,
         pagination: PaginationInfo {
             next_cursor,
             has_more,
         },
-    }
+    })
 }
 
 async fn active_membership_id(
@@ -731,8 +742,15 @@ pub async fn list_integration_events(
         }
     };
 
-    let response = build_event_response(&rows, limit);
-    (StatusCode::OK, Json(response)).into_response()
+    match build_event_response(&rows, limit) {
+        Ok(response) => (StatusCode::OK, Json(response)).into_response(),
+        Err(e) => {
+            tracing::error!(%e, "list_integration_events: unreadable stored event");
+            ApiError::internal_error("Failed to load integration events")
+                .with_request_id(&ctx.request_id)
+                .into_response()
+        }
+    }
 }
 
 #[utoipa::path(

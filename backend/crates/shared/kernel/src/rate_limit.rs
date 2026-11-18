@@ -92,7 +92,10 @@ pub trait TenantRateLimit: Send + Sync {
 impl RateLimiter for InMemoryRateLimitStore {
     async fn check(&self, scope: Scope, identifier: &str, budget: Budget) -> Decision {
         let key = format!("{}/{}", scope.as_str(), identifier);
-        let mut buckets = self.buckets.lock().unwrap();
+        let mut buckets = self
+            .buckets
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let now = Instant::now();
 
         // Expire each bucket by its own window, not by the window of this call.

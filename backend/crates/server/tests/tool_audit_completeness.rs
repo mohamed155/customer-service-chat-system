@@ -7,17 +7,19 @@
 //! - `denied` (via approval::decide)
 //! - `expired` (via approval::sweep_expired)
 //! - `cancelled` (via approval::cancel_pending_for_conversation)
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 #[path = "support/tool_fixtures.rs"]
 mod tool_fixtures;
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[allow(dead_code)]
 const TEST_ENV: config::Environment = config::Environment::Test;
 
+#[allow(dead_code)]
 fn test_config() -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
@@ -114,7 +116,7 @@ async fn seed_minimal(pool: &PgPool) -> (Uuid, Uuid, Uuid) {
 
 /// Insert a raw tool_requests row, return its id.
 async fn insert_request(
-    pool: &PgPool,
+    _pool: &PgPool,
     tenant_id: Uuid,
     conversation_id: Uuid,
     generation_id: Uuid,
@@ -166,7 +168,7 @@ async fn insert_request(
 }
 
 /// Fetch a tool_request row and return its JSON representation.
-async fn fetch_json(pool: &PgPool, id: Uuid) -> serde_json::Value {
+async fn fetch_json(_pool: &PgPool, id: Uuid) -> serde_json::Value {
     let row: serde_json::Value = sqlx::query_scalar(
         "SELECT row_to_json(t) FROM ( \
          SELECT id, status, started_at, finished_at, result, error, \

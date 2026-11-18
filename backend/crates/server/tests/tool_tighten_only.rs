@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -133,7 +134,7 @@ async fn seed_tenant(pool: &sqlx::PgPool, status: Option<&str>) -> Uuid {
     .expect("seed tenant")
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) \
          VALUES ($1, $2, $3) RETURNING id",
@@ -176,7 +177,7 @@ mod tests {
         // Attempting to set require_approval=false must have no effect.
 
         // First, enable it with require_approval=false
-        let mut res = send_request(
+        let res = send_request(
             pool.clone(),
             Request::builder()
                 .uri("/api/v1/tenant/tools/builtin/update_customer_contact/policy")

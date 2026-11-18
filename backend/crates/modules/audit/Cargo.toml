@@ -17,3 +17,6 @@ tenancy = { path = "../tenancy" }
 tracing.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
+
+[lints]
+workspace = true

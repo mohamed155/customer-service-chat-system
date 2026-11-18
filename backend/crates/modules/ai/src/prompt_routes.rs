@@ -228,7 +228,7 @@ pub async fn put_prompt(
     if let Err(issues) = prompt_validate::validate_prompt(&payload.content) {
         let details: Vec<serde_json::Value> = issues
             .iter()
-            .map(|i| serde_json::to_value(i).unwrap())
+            .map(|i| serde_json::to_value(i).unwrap_or_default())
             .collect();
         return ApiError::unprocessable_entity("Validation failed")
             .with_details(details)
@@ -240,7 +240,7 @@ pub async fn put_prompt(
         if let Err(issues) = prompt_validate::validate_change_note(note) {
             let details: Vec<serde_json::Value> = issues
                 .iter()
-                .map(|i| serde_json::to_value(i).unwrap())
+                .map(|i| serde_json::to_value(i).unwrap_or_default())
                 .collect();
             return ApiError::unprocessable_entity("Validation failed")
                 .with_details(details)
@@ -529,7 +529,7 @@ pub async fn restore_prompt_version(
     if let Err(issues) = prompt_validate::validate_prompt(&source_row.content) {
         let details: Vec<serde_json::Value> = issues
             .iter()
-            .map(|i| serde_json::to_value(i).unwrap())
+            .map(|i| serde_json::to_value(i).unwrap_or_default())
             .collect();
         return ApiError::unprocessable_entity("Validation failed")
             .with_details(details)

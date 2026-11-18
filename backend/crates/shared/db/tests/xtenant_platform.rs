@@ -4,6 +4,7 @@
 //! tables the function touches, drops to `app_runtime` and calls the function. A direct read of
 //! those tables returns nothing; the function still does its job and writes its audit row.
 //! Nothing is committed.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use sqlx::{PgConnection, Postgres, Transaction};
 use uuid::Uuid;
 

@@ -1,4 +1,5 @@
-// Analytics API integration tests (spec 025).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+                                                                   // Analytics API integration tests (spec 025).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -103,7 +104,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 }
 
 #[allow(dead_code)]
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query("DELETE FROM escalations")
         .execute(&db::testing::seed_pool())
@@ -147,7 +148,7 @@ async fn seed_tenant(pool: &sqlx::PgPool, name: &str) -> Uuid {
 }
 
 #[allow(dead_code)]
-async fn seed_widget_instance(pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &str) -> Uuid {
+async fn seed_widget_instance(_pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO widget_instances \
          (tenant_id, public_id, name, display_name, enabled, allowed_domains) \

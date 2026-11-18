@@ -13,6 +13,9 @@ use tracing_subscriber::Registry;
 /// `_sample_ratio` is retained in the signature only for backward
 /// compatibility; callers that relied on it to reduce SDK export volume
 /// should remove the argument once the deployment pipeline is updated.
+// Called once from `init_observability` at process start: an exporter that cannot be built means
+// tracing cannot be configured, and the process reports it and stops rather than run blind.
+#[allow(clippy::expect_used)]
 pub fn build_layer(endpoint: &str, _sample_ratio: f64) -> OpenTelemetryLayer<Registry, SdkTracer> {
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()

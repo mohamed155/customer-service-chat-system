@@ -69,3 +69,6 @@ tracing-subscriber.workspace = true
 uuid.workspace = true
 regex.workspace = true
 wiremock.workspace = true
+
+[lints]
+workspace = true

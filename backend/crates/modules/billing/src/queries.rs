@@ -4,6 +4,10 @@ use uuid::Uuid;
 
 use crate::model;
 
+/// The calendar month `now` falls in, as `[start, end)` in UTC.
+// The dates are the 1st of a month at midnight, always valid. Only a year beyond chrono's range
+// (262142) could make `from_ymd_opt` return `None`, and `now` itself is already inside it.
+#[allow(clippy::unwrap_used)]
 pub fn current_period(now: DateTime<Utc>) -> (DateTime<Utc>, DateTime<Utc>) {
     let start = NaiveDate::from_ymd_opt(now.year(), now.month(), 1)
         .unwrap()

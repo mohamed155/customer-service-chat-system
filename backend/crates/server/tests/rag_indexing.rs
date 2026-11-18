@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -38,7 +39,7 @@ async fn get_pool() -> Option<PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &PgPool) {
+async fn setup(_pool: &PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE knowledge_chunks, knowledge_index_state, knowledge_item_tags, \
@@ -61,7 +62,7 @@ async fn seed_tenant(pool: &PgPool) -> Uuid {
         .unwrap()
 }
 
-async fn seed_item(pool: &PgPool, tenant_id: Uuid) -> Uuid {
+async fn seed_item(_pool: &PgPool, tenant_id: Uuid) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, body, source, created_by_display) \
          VALUES ($1, 'article', 'RAG Indexing Test', 'body content for indexing', 'authored', 'Test User') RETURNING id",
@@ -74,7 +75,7 @@ async fn seed_item(pool: &PgPool, tenant_id: Uuid) -> Uuid {
 
 /// Assert that exactly one `knowledge.index_requested` outbox event exists
 /// for the given item and tenant, and return its id.
-async fn assert_index_requested_outbox(pool: &PgPool, tenant_id: Uuid, item_id: Uuid) -> Uuid {
+async fn assert_index_requested_outbox(_pool: &PgPool, tenant_id: Uuid, item_id: Uuid) -> Uuid {
     let row: (Uuid,) = sqlx::query_as(
         "SELECT id FROM outbox_events \
          WHERE tenant_id = $1::text AND aggregate_id = $2::text AND event_type = 'knowledge.index_requested' \
@@ -89,7 +90,7 @@ async fn assert_index_requested_outbox(pool: &PgPool, tenant_id: Uuid, item_id: 
 }
 
 /// Seed fake chunks into `knowledge_chunks` to simulate an indexed state.
-async fn seed_chunks(pool: &PgPool, tenant_id: Uuid, item_id: Uuid, count: i32) {
+async fn seed_chunks(_pool: &PgPool, tenant_id: Uuid, item_id: Uuid, count: i32) {
     for ordinal in 0..count {
         sqlx::query(
             "INSERT INTO knowledge_chunks (tenant_id, item_id, ordinal, content, embedding, content_hash) \
@@ -106,7 +107,7 @@ async fn seed_chunks(pool: &PgPool, tenant_id: Uuid, item_id: Uuid, count: i32) 
     }
 }
 
-async fn count_chunks(pool: &PgPool, item_id: Uuid) -> i64 {
+async fn count_chunks(_pool: &PgPool, item_id: Uuid) -> i64 {
     sqlx::query_scalar("SELECT COUNT(*) FROM knowledge_chunks WHERE item_id = $1")
         .bind(item_id)
         .fetch_one(&db::testing::seed_pool())
@@ -548,7 +549,7 @@ async fn seed_user(pool: &PgPool, email: &str, _role: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
+async fn seed_membership(_pool: &PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
     sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
         .bind(tenant_id)
         .bind(user_id)

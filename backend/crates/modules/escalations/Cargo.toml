@@ -22,3 +22,6 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 tracing.workspace = true
 uuid.workspace = true
 utoipa.workspace = true
+
+[lints]
+workspace = true

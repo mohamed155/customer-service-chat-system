@@ -1,4 +1,5 @@
-// Billing overview integration tests (spec 031).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+                                                                   // Billing overview integration tests (spec 031).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -127,7 +128,7 @@ async fn seed_tenant(pool: &sqlx::PgPool, name: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, display_name: &str) -> Uuid {
+async fn seed_customer(_pool: &sqlx::PgPool, tenant_id: Uuid, display_name: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name) VALUES ($1, $2) RETURNING id",
     )
@@ -172,7 +173,7 @@ fn authenticated_request(uri: &str, user_id: Uuid, tenant_id: Uuid) -> Request<B
         .unwrap()
 }
 
-async fn subscribe(pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid) {
+async fn subscribe(_pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid) {
     sqlx::query("INSERT INTO tenant_subscriptions (tenant_id, plan_id) VALUES ($1, $2)")
         .bind(tenant_id)
         .bind(plan_id)

@@ -1,8 +1,8 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 #[path = "support/openai_mock.rs"]
 mod openai_mock;
 #[path = "support/tool_fixtures.rs"]
 mod tool_fixtures;
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,7 +10,7 @@ use ai::agent_responder::process_agent_responder_once;
 use ai::crypto::{self, MasterKey};
 use server::state::AppState;
 use uuid::Uuid;
-use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
+use wiremock::{Mock, MockServer};
 
 const TEST_ENV: config::Environment = config::Environment::Test;
 
@@ -101,7 +101,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE ai_generations, ai_usage_records, ai_credentials, ai_configurations, \
@@ -136,7 +136,7 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -148,7 +148,12 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
     .unwrap()
 }
 
-async fn seed_ai_config(pool: &sqlx::PgPool, tenant_id: Option<Uuid>, provider: &str, model: &str) {
+async fn seed_ai_config(
+    _pool: &sqlx::PgPool,
+    tenant_id: Option<Uuid>,
+    provider: &str,
+    model: &str,
+) {
     sqlx::query(
         "INSERT INTO ai_configurations (tenant_id, provider, model, fallbacks) \
          VALUES ($1, $2, $3, '[]'::jsonb)",
@@ -162,7 +167,7 @@ async fn seed_ai_config(pool: &sqlx::PgPool, tenant_id: Option<Uuid>, provider: 
 }
 
 async fn seed_ai_credential(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Option<Uuid>,
     provider: &str,
     api_key: &str,

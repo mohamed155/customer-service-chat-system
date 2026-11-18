@@ -6,6 +6,7 @@
 //! below is given tenant B and the id of a row that belongs to tenant A, and must find nothing,
 //! while the same call for tenant A finds it. Fixtures are created as the bypass role
 //! (`db::testing::seed_pool`); the functions under test run on the runtime pool.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use sqlx::PgPool;
 use uuid::Uuid;
 

@@ -30,3 +30,5 @@ uuid.workspace = true
 bytes.workspace = true
 http-body-util.workspace = true
 
+[lints]
+workspace = true

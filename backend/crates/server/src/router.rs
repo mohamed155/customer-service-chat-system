@@ -59,6 +59,8 @@ fn panic_handler(panic_info: Box<dyn std::any::Any + Send + 'static>) -> axum::r
     ApiError::internal_error_from("Handler panicked", payload).into_response()
 }
 
+// The route exists to prove the catch-panic layer turns a panic into a 500 (see `/test-panic`).
+#[allow(clippy::panic)]
 async fn test_panic_handler() -> Response {
     panic!("intentional panic for testing");
 }
@@ -1269,6 +1271,9 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
     router
 }
 
+// Runs once while the application is assembled at startup (and in tests): a Redis URL that does
+// not parse, or a runtime that cannot start, stops the process before it serves anything.
+#[allow(clippy::expect_used)]
 fn api_routes(
     state: &AppState,
     include_test_routes: bool,
