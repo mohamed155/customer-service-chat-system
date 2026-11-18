@@ -980,7 +980,7 @@ async fn an_expired_or_foreign_challenge_is_refused() {
             exp: past + 300,
             aud: "mfa_pending".into(),
         },
-        &jsonwebtoken::EncodingKey::from_secret(JWT_SECRET.as_bytes()),
+        &jsonwebtoken::EncodingKey::from_secret(JWT_SECRET.as_bytes()).unwrap(),
     )
     .unwrap();
     let r = send(

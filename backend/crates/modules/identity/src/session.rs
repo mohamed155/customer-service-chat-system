@@ -89,11 +89,8 @@ pub fn issue_session(
         amr: auth.amr,
         mfa_at: auth.mfa_at,
     };
-    let jwt = encode(
-        &Header::new(Algorithm::HS256),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )?;
+    let key = EncodingKey::from_secret(secret.as_bytes())?;
+    let jwt = encode(&Header::new(Algorithm::HS256), &claims, &key)?;
 
     Ok((jwt, jti, expires_at))
 }
@@ -104,12 +101,8 @@ pub fn validate_token(secret: &str, jwt: &str) -> Result<SessionClaims> {
     validation.reject_tokens_expiring_in_less_than = 1;
     validation.validate_exp = true;
 
-    decode::<SessionClaims>(
-        jwt,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )
-    .map(|token| token.claims)
+    let key = DecodingKey::from_secret(secret.as_bytes())?;
+    decode::<SessionClaims>(jwt, &key, &validation).map(|token| token.claims)
 }
 
 // ---------------------------------------------------------------------------
@@ -145,11 +138,8 @@ pub fn issue_pending(secret: &str, user_id: Uuid) -> Result<(String, PendingClai
         exp: (issued_at + Duration::seconds(PENDING_TTL_SECONDS as i64)).timestamp(),
         aud: PENDING_AUDIENCE.to_owned(),
     };
-    let jwt = encode(
-        &Header::new(Algorithm::HS256),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )?;
+    let key = EncodingKey::from_secret(secret.as_bytes())?;
+    let jwt = encode(&Header::new(Algorithm::HS256), &claims, &key)?;
     Ok((jwt, claims))
 }
 
@@ -159,12 +149,8 @@ pub fn validate_pending(secret: &str, jwt: &str) -> Result<PendingClaims> {
     validation.reject_tokens_expiring_in_less_than = 1;
     validation.validate_exp = true;
     validation.set_audience(&[PENDING_AUDIENCE]);
-    decode::<PendingClaims>(
-        jwt,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )
-    .map(|token| token.claims)
+    let key = DecodingKey::from_secret(secret.as_bytes())?;
+    decode::<PendingClaims>(jwt, &key, &validation).map(|token| token.claims)
 }
 
 pub fn build_pending_cookie(jwt: &str) -> String {
@@ -295,7 +281,7 @@ mod tests {
                 iat: now,
                 exp: now + 60,
             },
-            &EncodingKey::from_secret(SECRET.as_bytes()),
+            &EncodingKey::from_secret(SECRET.as_bytes()).unwrap(),
         )
         .unwrap();
         let claims = validate_token(SECRET, &jwt).unwrap();
@@ -318,6 +304,20 @@ mod tests {
         assert!(validate_pending(OTHER_SECRET, &challenge).is_err());
     }
 
+    /// An empty secret signs and verifies nothing: the gateway process runs with an empty
+    /// `auth_jwt_secret`, and a token "signed" with no key must never be accepted by anyone.
+    #[test]
+    fn an_empty_secret_issues_and_validates_nothing() {
+        let user = Uuid::new_v4();
+        assert!(issue_token("", 60, user).is_err());
+        assert!(issue_pending("", user).is_err());
+
+        let (session, _, _) = issue_token(SECRET, 60, user).unwrap();
+        let (challenge, _) = issue_pending(SECRET, user).unwrap();
+        assert!(validate_token("", &session).is_err());
+        assert!(validate_pending("", &challenge).is_err());
+    }
+
     #[test]
     fn an_expired_challenge_is_refused() {
         let past = Utc::now().timestamp() - 400;
@@ -331,7 +331,7 @@ mod tests {
         let jwt = encode(
             &Header::new(Algorithm::HS256),
             &claims,
-            &EncodingKey::from_secret(SECRET.as_bytes()),
+            &EncodingKey::from_secret(SECRET.as_bytes()).unwrap(),
         )
         .unwrap();
         assert!(validate_pending(SECRET, &jwt).is_err());
