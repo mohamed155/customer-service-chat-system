@@ -418,7 +418,7 @@ fn rules_with_ids(rules: &[EscalationRulePayload]) -> serde_json::Value {
         .iter()
         .cloned()
         .map(|mut r| {
-            r.id.get_or_insert_with(Uuid::new_v4);
+            r.id.get_or_insert_with(kernel::ids::new_id);
             r
         })
         .collect();
