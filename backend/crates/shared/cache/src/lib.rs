@@ -43,6 +43,12 @@ impl Cache {
         })
     }
 
+    /// Whether the connection has been made. The limiter uses it to start a connection attempt
+    /// only when there is none to wait on.
+    fn is_connected(&self) -> bool {
+        self.manager.initialized()
+    }
+
     async fn manager(&self) -> Result<&ConnectionManager, String> {
         self.manager
             .get_or_try_init(|| async {

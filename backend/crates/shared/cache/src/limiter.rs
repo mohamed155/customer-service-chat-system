@@ -1,9 +1,10 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use kernel::{Budget, Decision, InMemoryRateLimitStore, RateLimiter, Scope};
+use redis::aio::ConnectionManager;
 use sha2::{Digest, Sha256};
 use tracing::warn;
 
@@ -16,7 +17,8 @@ const FAIL_CLOSED_RETRY_AFTER: Duration = Duration::from_secs(30);
 /// How long a check waits to reach the counter store before it treats the store as down. The
 /// connection manager's own retries take about nine seconds to give up, and a sign-in would wait
 /// that long for its answer; this keeps an outage a fraction of a second slower than usual.
-/// It matches the 500 ms the manager already allows for each command.
+/// It matches the 500 ms the manager already allows for each command. It limits how long a check
+/// waits, not how long the connection attempt may take: see `RedisRateLimiter::connection`.
 const STORE_CONNECT_TIMEOUT: Duration = Duration::from_millis(500);
 
 fn hash_identifier(identifier: &str) -> String {
@@ -54,7 +56,13 @@ pub fn select_identifier(authenticated_identity: Option<&str>, source_address: &
 /// `InMemoryRateLimitStore` (fail-open for non-auth traffic). See `research.md` §2 and
 /// `contracts/rate-limit-responses.md` (store-unavailable behaviour).
 pub struct RedisRateLimiter {
-    cache: Cache,
+    // Behind an `Arc` because the task that connects shares it (see `connection`); a clone of
+    // `Cache` would carry a separate connection of its own.
+    cache: Arc<Cache>,
+    // Set while a task owned by this limiter is connecting.
+    connecting: Arc<AtomicBool>,
+    // How long a check waits for the connection; `STORE_CONNECT_TIMEOUT` outside the tests.
+    connect_wait: Duration,
     fallback: InMemoryRateLimitStore,
     degraded_total: AtomicU64,
     refused_total: AtomicU64,
@@ -64,7 +72,9 @@ pub struct RedisRateLimiter {
 impl RedisRateLimiter {
     pub fn new(cache: Cache, fail_mode: String) -> Self {
         Self {
-            cache,
+            cache: Arc::new(cache),
+            connecting: Arc::new(AtomicBool::new(false)),
+            connect_wait: STORE_CONNECT_TIMEOUT,
             fallback: InMemoryRateLimitStore::default(),
             degraded_total: AtomicU64::new(0),
             refused_total: AtomicU64::new(0),
@@ -78,6 +88,32 @@ impl RedisRateLimiter {
 
     pub fn refused_count(&self) -> u64 {
         self.refused_total.load(Ordering::Relaxed)
+    }
+
+    /// Reaches the counter store, waiting at most `connect_wait` ([`STORE_CONNECT_TIMEOUT`]).
+    ///
+    /// The connection attempt belongs to a task this limiter starts, not to the request. If it
+    /// belonged to the request, the request giving up would drop the attempt with it, and a store
+    /// that needs longer than the limit to answer would never finish connecting: sign-in would
+    /// stay refused although the store is up. Here the attempt carries on, and a later check
+    /// finds the connection ready. At most one such task runs at a time, and a request waits on
+    /// the same attempt instead of starting another.
+    async fn connection(&self) -> Result<ConnectionManager, String> {
+        if !self.cache.is_connected() && !self.connecting.swap(true, Ordering::AcqRel) {
+            let cache = Arc::clone(&self.cache);
+            let connecting = Arc::clone(&self.connecting);
+            tokio::spawn(async move {
+                // A failure reaches whoever waits on the same attempt; this task only keeps the
+                // attempt alive, so there is nothing to do with the result here.
+                let _ = cache.manager().await;
+                connecting.store(false, Ordering::Release);
+            });
+        }
+        match tokio::time::timeout(self.connect_wait, self.cache.manager()).await {
+            Ok(Ok(manager)) => Ok(manager.clone()),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(format!("no connection within {:?}", self.connect_wait)),
+        }
     }
 
     async fn degrade(&self, scope: Scope, identifier: &str, budget: Budget) -> Decision {
@@ -121,15 +157,10 @@ impl RateLimiter for RedisRateLimiter {
         let prev_key = format!("rl:{}:{}:{}", scope.as_str(), identifier, prev_epoch);
         let ttl = (window_secs * 2) as i64;
 
-        let mut conn = match tokio::time::timeout(STORE_CONNECT_TIMEOUT, self.cache.manager()).await
-        {
-            Ok(Ok(mgr)) => mgr.clone(),
-            Ok(Err(e)) => {
+        let mut conn = match self.connection().await {
+            Ok(manager) => manager,
+            Err(e) => {
                 warn!("RedisRateLimiter: connection error: {e}");
-                return self.degrade(scope, identifier, budget).await;
-            }
-            Err(_) => {
-                warn!("RedisRateLimiter: no connection within {STORE_CONNECT_TIMEOUT:?}");
                 return self.degrade(scope, identifier, budget).await;
             }
         };
@@ -156,13 +187,20 @@ impl RateLimiter for RedisRateLimiter {
             }
         };
 
-        let prev_count: u32 = match redis::cmd("GET")
-            .arg(&prev_key)
-            .query_async::<Option<u32>>(&mut conn)
-            .await
-        {
-            Ok(Some(n)) => n,
-            _ => 0,
+        // A failed read of the previous window is a store error, not an empty window: counting it
+        // as zero would let a sign-in through that the weighted count should refuse. `INCR` may
+        // already have committed, so it is not repeated.
+        let prev_count: u32 = match previous_window_count(
+            redis::cmd("GET")
+                .arg(&prev_key)
+                .query_async::<Option<u32>>(&mut conn)
+                .await,
+        ) {
+            Ok(n) => n,
+            Err(e) => {
+                warn!("RedisRateLimiter: previous-window read error: {e}");
+                return self.degrade(scope, identifier, budget).await;
+            }
         };
 
         let weighted = sliding_window_count(current_count, prev_count, elapsed, window_secs);
@@ -346,6 +384,12 @@ impl BudgetResolver {
 /// previous window that still overlaps the trailing `window_secs`. Right
 /// after a boundary the previous window counts in full, fading to nothing by
 /// the end of the current window — so a burst cannot reset at a boundary.
+/// The previous window's count from its `GET` reply: a missing key is an empty window (zero), and
+/// a failed read stays an error for the caller to treat as a store failure.
+fn previous_window_count<E>(reply: Result<Option<u32>, E>) -> Result<u32, E> {
+    reply.map(|count| count.unwrap_or(0))
+}
+
 fn sliding_window_count(current: i64, previous: u32, elapsed: u64, window_secs: u64) -> f64 {
     let overlap = 1.0 - (elapsed as f64 / window_secs as f64);
     current as f64 + previous as f64 * overlap
@@ -477,6 +521,86 @@ mod tests {
                 .await,
             Decision::Refused { .. }
         ));
+    }
+
+    #[test]
+    fn a_missing_previous_window_is_zero_and_a_failed_read_stays_an_error() {
+        assert_eq!(previous_window_count::<&str>(Ok(None)), Ok(0));
+        assert_eq!(previous_window_count::<&str>(Ok(Some(7))), Ok(7));
+        // Counting a failed read as zero would let a sign-in through that the weighted count
+        // should refuse.
+        assert_eq!(
+            previous_window_count(Err("connection reset")),
+            Err("connection reset")
+        );
+    }
+
+    /// Listens on a local port and forwards every connection to the real Redis, but holds back
+    /// the store's first reply by `delay`: a store that is slow to answer, not down. The redis
+    /// client allows 500 ms per reply and a second to connect, so `delay` must stay below that
+    /// for the connection to succeed at all. Returns the proxy's `redis://` URL.
+    async fn redis_that_answers_slowly(real_url: &str, delay: Duration) -> String {
+        let real_addr = real_url
+            .trim_start_matches("redis://")
+            .trim_end_matches('/')
+            .to_owned();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind a local port");
+        let url = format!("redis://{}", listener.local_addr().expect("local address"));
+        tokio::spawn(async move {
+            while let Ok((inbound, _)) = listener.accept().await {
+                let real_addr = real_addr.clone();
+                tokio::spawn(async move {
+                    let Ok(outbound) = tokio::net::TcpStream::connect(real_addr).await else {
+                        return;
+                    };
+                    let (mut from_client, mut to_client) = inbound.into_split();
+                    let (mut from_store, mut to_store) = outbound.into_split();
+                    tokio::spawn(async move {
+                        let _ = tokio::io::copy(&mut from_client, &mut to_store).await;
+                    });
+                    tokio::time::sleep(delay).await;
+                    let _ = tokio::io::copy(&mut from_store, &mut to_client).await;
+                });
+            }
+        });
+        url
+    }
+
+    /// A check gives up waiting after `connect_wait`, but the connection attempt must not be
+    /// abandoned with it. If it were, a store that needs longer than the wait to answer would
+    /// never finish connecting, and sign-in would stay refused while the store is up.
+    #[tokio::test]
+    async fn a_store_slower_than_the_wait_still_finishes_connecting_for_later_checks() {
+        if std::env::var("REQUIRE_DB_TESTS").as_deref() != Ok("1") {
+            return;
+        }
+        let real = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".into());
+        // The store answers after 300 ms; the check waits 100 ms.
+        let url = redis_that_answers_slowly(&real, Duration::from_millis(300)).await;
+        let mut limiter = RedisRateLimiter::new(
+            Cache::new(&url).expect("a well-formed URL"),
+            "auth_closed".into(),
+        );
+        limiter.connect_wait = Duration::from_millis(100);
+        let id = format!("slow-connect-{}", uuid::Uuid::new_v4());
+
+        // The first check gives up before the store has answered.
+        assert!(matches!(
+            limiter.check(Scope::Login, &id, small_budget()).await,
+            Decision::Unavailable { .. }
+        ));
+
+        // The attempt carried on. Given time to finish, the next check reaches the store.
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+        assert!(
+            matches!(
+                limiter.check(Scope::Login, &id, small_budget()).await,
+                Decision::Allowed { .. }
+            ),
+            "the connection attempt must survive the request that stopped waiting for it"
+        );
     }
 
     async fn require_redis() -> Option<RedisRateLimiter> {
