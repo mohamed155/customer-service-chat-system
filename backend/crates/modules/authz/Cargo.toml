@@ -1,5 +1,6 @@
 [package]
 name = "authz"
+publish.workspace = true
 version.workspace = true
 edition = "2024"
 

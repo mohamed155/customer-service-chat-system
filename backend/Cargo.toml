@@ -6,6 +6,8 @@ members = [
 exclude = ["crates/modules/telegram"]
 
 [workspace.package]
+# Nothing here is published to a registry; `cargo deny` treats the crates as private because of it.
+publish = false
 edition = "2021"
 version = "0.1.0"
 license = "UNLICENSED"

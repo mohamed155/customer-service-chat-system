@@ -1,5 +1,6 @@
 [package]
 name = "observability"
+publish.workspace = true
 version.workspace = true
 edition.workspace = true
 

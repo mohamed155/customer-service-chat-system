@@ -1,5 +1,6 @@
 [package]
 name = "conversations"
+publish.workspace = true
 version.workspace = true
 edition.workspace = true
 

@@ -1,5 +1,6 @@
 [package]
 name = "tools"
+publish.workspace = true
 version.workspace = true
 edition.workspace = true
 

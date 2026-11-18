@@ -80,6 +80,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo run -p server -- migrate   # as app_owner: needs MIGRATION_DATABASE_URL
 REQUIRE_DB_TESTS=1 cargo nextest run --workspace   # or cargo test; needs the services up
 cargo audit                      # install once: cargo install cargo-audit
+cargo deny check licenses bans sources   # licences, banned crates, sources (deny.toml); install once: cargo install cargo-deny --locked
 node tools/check-module-boundaries.mjs   # module edges, layers, table ownership; --write-doc refreshes docs/architecture/module-dependencies.md
 node --test tools/check-module-boundaries.test.mjs
 cargo run -p server              # API on :8080, /health and /ready
@@ -93,6 +94,7 @@ so a green run proves nothing. New migrations go in `backend/migrations/`.
 ```bash
 pnpm install --frozen-lockfile
 pnpm lint
+pnpm audit --prod --audit-level=high   # no high-severity advisory in production dependencies
 pnpm format:check
 pnpm exec ng build dashboard
 pnpm exec ng build widget
