@@ -304,7 +304,13 @@ enterprise, pool for everyone else).
 ### 7.1 PostgreSQL conventions
 
 - Primary keys: **UUIDv7** (time-ordered → good B-tree locality, sortable, no enumeration).
-- Every table: `created_at`, `updated_at`; aggregates: `version` for optimistic concurrency.
+- Every table has `created_at`, except a few such as `knowledge_item_tags` and `revoked_sessions`.
+  `updated_at` is not universal: immutable and append-only tables (`messages`, `ai_generations`,
+  `ai_usage_records`), join tables, and tables that keep their own state timestamps
+  (`outbox_events.processed_at`) go without it.
+- Concurrent updates to an aggregate use a `version` column (optimistic concurrency, for example
+  `agent_configurations`) or an explicit row lock (`SELECT ... FOR UPDATE`), as constitution
+  Principle X allows.
 - Soft delete only where business requires restore; otherwise hard delete + audit record.
 - Money as integer minor units + currency code.
 - Enums as `text` + `CHECK` constraints (easier to evolve than PG enums).
@@ -623,7 +629,10 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
 
 ## 15. Reliability
 
-- **Timeouts** on every I/O; request-level deadline propagated to downstream calls.
+- **Timeouts** on every outbound call: each HTTP client is built by the shared `outbound` crate with
+  connect and request timeouts ([configuration](../configuration.md)), and each readiness probe has
+  its own limit. A request-level deadline propagated to downstream calls is **not built**: the
+  server sets no overall deadline on an incoming request.
 - **Retries** only for idempotent operations, exponential backoff with full jitter, capped.
 - **Circuit breakers** for AI providers, channels, integrations; **bulkheads** (separate semaphores
   and pools) so AI slowness can't exhaust DB connections or HTTP workers. *Implemented for the AI
@@ -633,9 +642,16 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
   tools (the URL is the tenant's and the target set is unbounded; each turn is already capped by
   iterations and total time) and the SMTP invitation mail.
 - **Graceful degradation:** AI down → route to human queue with an honest customer message;
-  Redis down → bypass cache, use DB-backed rate limits with relaxed limits.
-- **Graceful shutdown:** stop accepting, drain in-flight requests and jobs, release leases.
-- **Health:** `/livez` (process alive), `/readyz` (DB, Redis, storage reachable).
+  Redis down → the cache is bypassed; rate limiting falls back to a counter in each instance's
+  memory for everything except login, and login attempts are refused (the default,
+  `APP_RATE_LIMIT_FAIL_MODE=auth_closed`) or let through (`open`). `rate_limit_degraded_total`
+  counts it.
+- **Graceful shutdown:** readiness fails first, the server keeps accepting for half the grace period
+  (at most 5 s) so a load balancer can stop routing to it, then drains in-flight requests. Background
+  workers are not drained: they stop with the process.
+- **Health:** `/health` (process alive, checks nothing else) and `/ready` (PostgreSQL, Redis and object
+  storage, each within `READY_PROBE_TIMEOUT_MS`; `503` with a reason per failed check, and the first to
+  fail on shutdown; see [operations runbook §10](../runbooks/operations.md#10-the-backend-says-it-is-not-ready)).
 - **SLOs:** API availability 99.9%, message ingest-to-persist p99 < 1 s; error budgets drive
   release pace.
 - **Backups:** PostgreSQL PITR (WAL archiving), daily snapshots, quarterly restore drills;
