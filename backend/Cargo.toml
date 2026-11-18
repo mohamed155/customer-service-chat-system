@@ -3,7 +3,6 @@ resolver = "2"
 members = [
   "crates/server", "crates/shared/*", "crates/modules/*", "crates/ai-providers"
 ]
-exclude = ["crates/modules/telegram"]
 
 [workspace.package]
 # Nothing here is published to a registry; `cargo deny` treats the crates as private because of it.

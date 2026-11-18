@@ -1,8 +1,0 @@
-[package]
-name = "flags"
-publish.workspace = true
-version.workspace = true
-edition.workspace = true
-
-[lints]
-workspace = true
