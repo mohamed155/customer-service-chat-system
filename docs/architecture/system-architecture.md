@@ -629,10 +629,12 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
 
 ## 15. Reliability
 
-- **Timeouts** on every outbound call: each HTTP client is built by the shared `outbound` crate with
-  connect and request timeouts ([configuration](../configuration.md)), and each readiness probe has
-  its own limit. A request-level deadline propagated to downstream calls is **not built**: the
-  server sets no overall deadline on an incoming request.
+- **Timeouts** on every outbound HTTP call: each HTTP client is built by the shared `outbound` crate
+  with connect and request timeouts, and the S3 client is configured with the same settings
+  ([configuration](../configuration.md)). Each readiness probe has its own limit, and waiting for a
+  database connection is bounded by `DB_ACQUIRE_TIMEOUT_MS`. **Not built:** a statement or lock
+  timeout, so a query can wait without limit once it has a connection, and a request-level deadline
+  propagated to downstream calls (the server sets no overall deadline on an incoming request).
 - **Retries** only for idempotent operations, exponential backoff with full jitter, capped.
 - **Circuit breakers** for AI providers, channels, integrations; **bulkheads** (separate semaphores
   and pools) so AI slowness can't exhaust DB connections or HTTP workers. *Implemented for the AI
@@ -643,9 +645,11 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
   iterations and total time) and the SMTP invitation mail.
 - **Graceful degradation:** AI down → route to human queue with an honest customer message;
   Redis down → the cache is bypassed; rate limiting falls back to a counter in each instance's
-  memory for everything except login, and login attempts are refused (the default,
-  `APP_RATE_LIMIT_FAIL_MODE=auth_closed`) or let through (`open`). `rate_limit_degraded_total`
-  counts it.
+  memory. Login attempts are refused (the default, `APP_RATE_LIMIT_FAIL_MODE=auth_closed`) or
+  limited by that same fallback counter (`open`). `rate_limit_degraded_total` counts it. `/ready`
+  checks Redis, so a load balancer that routes only to ready instances takes every instance out of
+  rotation during an outage and never reaches the fallback; the fallback serves deployments that do
+  not route on `/ready` (the supplied Compose files do not).
 - **Graceful shutdown:** readiness fails first, the server keeps accepting for half the grace period
   (at most 5 s) so a load balancer can stop routing to it, then drains in-flight requests. Background
   workers are not drained: they stop with the process.
