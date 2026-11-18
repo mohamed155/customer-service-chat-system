@@ -446,8 +446,10 @@ Implemented as a **pipeline of stages** (Chain of Responsibility), each stage a 
   sends the turn to the next provider in the chain, and with none left to the existing fallback
   message and human escalation.
   *Implemented (MOH-82):* the provider HTTP client comes from `crates/shared/outbound`, with the
-  connect and request timeouts of `APP_HTTP_AI_*`; every other outbound client (WhatsApp, tenant
-  tools, S3) is built the same way, and clippy rejects a bare `reqwest::Client::new`. See
+  connect and request timeouts of `APP_HTTP_AI_*`; every other outbound HTTP client (WhatsApp,
+  tenant tools) is built the same way, and clippy rejects a bare `reqwest::Client::new`. The S3
+  client is the exception: `storage` builds it with the AWS SDK (`aws_sdk_s3::Client::from_conf`),
+  not through `outbound`, and gives it the same connect and request timeouts. See
   [Configuration](../configuration.md#outbound-http-timeouts-per-integration).
 - **Model router** (Strategy): choose model by task — cheap fast model for classification/routing/
   summaries, stronger model for answers.
@@ -630,11 +632,12 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
 ## 15. Reliability
 
 - **Timeouts** on every outbound HTTP call: each HTTP client is built by the shared `outbound` crate
-  with connect and request timeouts, and the S3 client is configured with the same settings
-  ([configuration](../configuration.md)). Each readiness probe has its own limit, and waiting for a
-  database connection is bounded by `DB_ACQUIRE_TIMEOUT_MS`. **Not built:** a statement or lock
-  timeout, so a query can wait without limit once it has a connection, and a request-level deadline
-  propagated to downstream calls (the server sets no overall deadline on an incoming request).
+  with connect and request timeouts. The S3 client is not one of them: `storage` builds it directly
+  with the AWS SDK and gives it the same settings ([configuration](../configuration.md)). Each
+  readiness probe has its own limit, and waiting for a database connection is bounded by
+  `DB_ACQUIRE_TIMEOUT_MS`. **Not built:** a statement or lock timeout, so a query can wait without
+  limit once it has a connection, and a request-level deadline propagated to downstream calls (the
+  server sets no overall deadline on an incoming request).
 - **Retries** only for idempotent operations, exponential backoff with full jitter, capped.
 - **Circuit breakers** for AI providers, channels, integrations; **bulkheads** (separate semaphores
   and pools) so AI slowness can't exhaust DB connections or HTTP workers. *Implemented for the AI
