@@ -575,15 +575,15 @@ pub async fn detail_query_in_tx(
             name: row.widget_instance_name.unwrap_or_default(),
         });
 
-    let feedback = row
-        .feedback_rating
-        .map(|rating| crate::model::TenantFeedbackDto {
-            rating,
-            comment: row.feedback_comment,
-            submitted_at: row
-                .feedback_submitted_at
-                .expect("feedback_submitted_at must be present when feedback_rating is Some"),
-        });
+    // A rating without a submission time cannot be shown; the schema writes both together.
+    let feedback =
+        row.feedback_rating
+            .zip(row.feedback_submitted_at)
+            .map(|(rating, submitted_at)| crate::model::TenantFeedbackDto {
+                rating,
+                comment: row.feedback_comment,
+                submitted_at,
+            });
 
     Ok(Some(ConversationDetail {
         id: row.id,
@@ -1164,7 +1164,7 @@ pub async fn patch_conversation_in_tx(
     // 4. Fetch and return the updated detail
     let detail = detail_query_in_tx(tx, tenant_id, id)
         .await?
-        .expect("just-updated conversation must exist");
+        .ok_or(sqlx::Error::RowNotFound)?;
 
     Ok(detail)
 }
@@ -1268,7 +1268,7 @@ pub async fn create_conversation_in_tx(
     // 6. Return the full detail
     let detail = detail_query_in_tx(tx, tenant_id, conv_id)
         .await?
-        .expect("just-created conversation must exist");
+        .ok_or(sqlx::Error::RowNotFound)?;
 
     Ok(detail)
 }

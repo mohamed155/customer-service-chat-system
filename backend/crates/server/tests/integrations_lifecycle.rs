@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -172,7 +173,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
     sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
         .bind(tenant_id)
         .bind(user_id)
@@ -182,7 +183,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .unwrap();
 }
 
-async fn count_connection_rows(pool: &sqlx::PgPool, tenant_id: Uuid, catalog_id: Uuid) -> i64 {
+async fn count_connection_rows(_pool: &sqlx::PgPool, tenant_id: Uuid, catalog_id: Uuid) -> i64 {
     let row: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM integration_connections WHERE tenant_id = $1 AND catalog_id = $2",
     )
@@ -195,7 +196,7 @@ async fn count_connection_rows(pool: &sqlx::PgPool, tenant_id: Uuid, catalog_id:
 }
 
 async fn count_events_for_connection(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     connection_id: Uuid,
     event_type: &str,
 ) -> i64 {
@@ -211,7 +212,7 @@ async fn count_events_for_connection(
 }
 
 async fn count_audit_for_action(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     action: &str,
     resource_id: &str,

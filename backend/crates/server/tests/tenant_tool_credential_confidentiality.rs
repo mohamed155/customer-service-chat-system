@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -117,7 +118,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
         .expect("seed tenant")
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) \
          VALUES ($1, $2, $3) RETURNING id",
@@ -146,7 +147,7 @@ async fn body_json(res: &mut axum::response::Response) -> serde_json::Value {
 /// Seed a tenant-defined tool with a credential, returning its id.
 /// The credential value "sk-leaked-key-99999" must NEVER appear in any API response.
 async fn seed_tool_with_credential(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     membership_id: Uuid,
 ) -> Uuid {
@@ -299,7 +300,7 @@ mod tests {
         let mut res = send_request(
             pool.clone(),
             Request::builder()
-                .uri(&format!(
+                .uri(format!(
                     "/api/v1/tenant/conversations/{conversation_id}/tool-activity"
                 ))
                 .header("X-Dev-User-Id", user_id.to_string())

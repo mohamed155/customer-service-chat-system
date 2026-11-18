@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use billing::model::metric_usage;
 use billing::queries::current_period;
 use chrono::TimeZone;

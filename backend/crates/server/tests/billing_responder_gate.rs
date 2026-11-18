@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 #[path = "support/openai_mock.rs"]
 mod openai_mock;
 use std::sync::Arc;
@@ -12,7 +13,7 @@ use server::state::AppState;
 use tower::ServiceExt;
 use uuid::Uuid;
 use wiremock::matchers::{header as wm_header, method as wm_method, path as wm_path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{Mock, MockServer};
 
 const TEST_ENV: config::Environment = config::Environment::Test;
 
@@ -103,7 +104,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE ai_generations, ai_usage_records, ai_credentials, ai_configurations, \
@@ -138,7 +139,7 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
     sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
         .bind(tenant_id)
         .bind(user_id)
@@ -149,7 +150,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
 }
 
 async fn seed_ai_config(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Option<Uuid>,
     provider: &str,
     model: &str,
@@ -169,7 +170,7 @@ async fn seed_ai_config(
 }
 
 async fn seed_ai_credential(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Option<Uuid>,
     provider: &str,
     api_key: &str,
@@ -251,7 +252,7 @@ async fn create_plan(
     .unwrap()
 }
 
-async fn subscribe_tenant(pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid) {
+async fn subscribe_tenant(_pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid) {
     sqlx::query(
         "INSERT INTO tenant_subscriptions (tenant_id, plan_id, status) VALUES ($1, $2, 'active')",
     )
@@ -262,7 +263,7 @@ async fn subscribe_tenant(pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid) {
     .unwrap();
 }
 
-async fn insert_tokens(pool: &sqlx::PgPool, tenant_id: Uuid, input: i32, output: i32) {
+async fn insert_tokens(_pool: &sqlx::PgPool, tenant_id: Uuid, input: i32, output: i32) {
     sqlx::query(
         "INSERT INTO ai_usage_records \
          (tenant_id, provider, model, input_tokens, output_tokens, status, streamed, latency_ms) \
@@ -277,7 +278,7 @@ async fn insert_tokens(pool: &sqlx::PgPool, tenant_id: Uuid, input: i32, output:
 }
 
 async fn insert_agent_config(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     enabled_channels: &[&str],
     escalation_rules: serde_json::Value,

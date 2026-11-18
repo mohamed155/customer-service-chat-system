@@ -3,6 +3,7 @@
 //! `ApiError::internal_error` takes a `&'static str`, so `format!` doesn't compile. This test is
 //! the second guard: it fails if someone loosens that signature, or passes anything but a string
 //! literal as the step description of `internal_error` / `internal_error_from`.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use regex::Regex;
 use std::fs;

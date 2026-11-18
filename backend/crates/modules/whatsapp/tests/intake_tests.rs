@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -179,7 +180,7 @@ async fn response_bytes(resp: Response) -> Vec<u8> {
 // Setup helpers
 // ---------------------------------------------------------------------------
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE \
@@ -317,7 +318,7 @@ async fn signed_unknown_number_creates_customer_conversation_message_outbox() {
     let signature = sign_body(&conn.app_secret, &raw_body);
 
     let req = Request::builder()
-        .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
+        .uri(format!("/integrations/whatsapp/webhook/{}", conn.token))
         .method(Method::POST)
         .header("x-hub-signature-256", &signature)
         .header("content-type", "application/json")
@@ -412,7 +413,7 @@ async fn second_message_from_same_number_uses_same_conversation() {
         let raw_body = serde_json::to_vec(&payload).unwrap();
         let signature = sign_body(&conn.app_secret, &raw_body);
         let req = Request::builder()
-            .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
+            .uri(format!("/integrations/whatsapp/webhook/{}", conn.token))
             .method(Method::POST)
             .header("x-hub-signature-256", &signature)
             .header("content-type", "application/json")
@@ -429,7 +430,7 @@ async fn second_message_from_same_number_uses_same_conversation() {
         let raw_body = serde_json::to_vec(&payload).unwrap();
         let signature = sign_body(&conn.app_secret, &raw_body);
         let req = Request::builder()
-            .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
+            .uri(format!("/integrations/whatsapp/webhook/{}", conn.token))
             .method(Method::POST)
             .header("x-hub-signature-256", &signature)
             .header("content-type", "application/json")
@@ -488,7 +489,7 @@ async fn identical_redelivery_creates_nothing_new() {
         let raw_body = serde_json::to_vec(&payload).unwrap();
         let signature = sign_body(&conn.app_secret, &raw_body);
         let req = Request::builder()
-            .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
+            .uri(format!("/integrations/whatsapp/webhook/{}", conn.token))
             .method(Method::POST)
             .header("x-hub-signature-256", &signature)
             .header("content-type", "application/json")
@@ -513,7 +514,7 @@ async fn identical_redelivery_creates_nothing_new() {
         let raw_body = serde_json::to_vec(&payload).unwrap();
         let signature = sign_body(&conn.app_secret, &raw_body);
         let req = Request::builder()
-            .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
+            .uri(format!("/integrations/whatsapp/webhook/{}", conn.token))
             .method(Method::POST)
             .header("x-hub-signature-256", &signature)
             .header("content-type", "application/json")
@@ -577,7 +578,7 @@ async fn phone_identifier_attaches_without_new_customer_profile() {
     let raw_body = serde_json::to_vec(&payload).unwrap();
     let signature = sign_body(&conn.app_secret, &raw_body);
     let req = Request::builder()
-        .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
+        .uri(format!("/integrations/whatsapp/webhook/{}", conn.token))
         .method(Method::POST)
         .header("x-hub-signature-256", &signature)
         .header("content-type", "application/json")
@@ -643,7 +644,7 @@ async fn message_after_conversation_closed_opens_new_conversation() {
         let raw_body = serde_json::to_vec(&payload).unwrap();
         let signature = sign_body(&conn.app_secret, &raw_body);
         let req = Request::builder()
-            .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
+            .uri(format!("/integrations/whatsapp/webhook/{}", conn.token))
             .method(Method::POST)
             .header("x-hub-signature-256", &signature)
             .header("content-type", "application/json")
@@ -678,7 +679,7 @@ async fn message_after_conversation_closed_opens_new_conversation() {
         let raw_body = serde_json::to_vec(&payload).unwrap();
         let signature = sign_body(&conn.app_secret, &raw_body);
         let req = Request::builder()
-            .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
+            .uri(format!("/integrations/whatsapp/webhook/{}", conn.token))
             .method(Method::POST)
             .header("x-hub-signature-256", &signature)
             .header("content-type", "application/json")
@@ -744,7 +745,7 @@ async fn wrong_signature_returns_404_and_writes_nothing() {
     let bad_signature = "sha256=0000000000000000000000000000000000000000000000000000000000000000";
 
     let req = Request::builder()
-        .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
+        .uri(format!("/integrations/whatsapp/webhook/{}", conn.token))
         .method(Method::POST)
         .header("x-hub-signature-256", bad_signature)
         .header("content-type", "application/json")
@@ -797,7 +798,7 @@ async fn image_message_creates_pending_attachment() {
     let signature = sign_body(&conn.app_secret, &raw_body);
 
     let req = Request::builder()
-        .uri(&format!("/integrations/whatsapp/webhook/{}", conn.token))
+        .uri(format!("/integrations/whatsapp/webhook/{}", conn.token))
         .method(Method::POST)
         .header("x-hub-signature-256", &signature)
         .header("content-type", "application/json")

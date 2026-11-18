@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -98,7 +99,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE messages, customer_channel_identifiers, customers, conversations, \
@@ -226,7 +227,7 @@ async fn seed_member(
 }
 
 async fn seed_customer(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     name: &str,
     email: Option<&str>,
@@ -246,7 +247,7 @@ async fn seed_customer(
 }
 
 async fn seed_conversation(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     customer_id: Uuid,
     channel: &str,
@@ -1139,7 +1140,7 @@ async fn inbox_item_assignee_is_null_when_unassigned() {
 
 #[allow(clippy::too_many_arguments)]
 async fn seed_message(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     conversation_id: Uuid,
     kind: &str,
@@ -1226,7 +1227,7 @@ fn json_patch(uri: &str, user_id: Uuid, tenant_id: Uuid, body: serde_json::Value
         .unwrap()
 }
 
-async fn fetch_audit_count(pool: &sqlx::PgPool, action: &str, resource_id: Uuid) -> i64 {
+async fn fetch_audit_count(_pool: &sqlx::PgPool, action: &str, resource_id: Uuid) -> i64 {
     sqlx::query_scalar(
         "SELECT COUNT(*) FROM audit_logs \
          WHERE action = $1 AND resource_id = $2",

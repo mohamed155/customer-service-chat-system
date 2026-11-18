@@ -3,6 +3,9 @@ use axum::http::{HeaderName, HeaderValue};
 use config::AppConfig;
 use tower_http::set_header::SetResponseHeaderLayer;
 
+// Built once while the application is assembled, from a configuration that was already validated:
+// a header value that does not parse stops the process at startup, never a request.
+#[allow(clippy::expect_used)]
 pub fn scope_a_layers(config: &AppConfig) -> Vec<SetResponseHeaderLayer<HeaderValue>> {
     let mut layers = Vec::new();
 
@@ -27,6 +30,8 @@ pub fn scope_a_layers(config: &AppConfig) -> Vec<SetResponseHeaderLayer<HeaderVa
     layers
 }
 
+// Same as `scope_a_layers`: startup assembly from validated configuration.
+#[allow(clippy::expect_used)]
 pub fn scope_b_layers(config: &AppConfig) -> Vec<SetResponseHeaderLayer<HeaderValue>> {
     let mut layers = Vec::new();
 

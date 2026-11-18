@@ -8,3 +8,8 @@ disallowed-methods = [
   { path = "reqwest::ClientBuilder::new", reason = "build clients with outbound::build, which sets timeouts, redirects and a user agent (MOH-82)" },
   { path = "reqwest::get", reason = "reqwest::get uses a client with no timeout; use a client from outbound::build (MOH-82)" },
 ]
+
+# Test code may unwrap, expect and panic (MOH-83); production code may not (workspace lints).
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true

@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 /// Insert a customer trigger message and an `awaiting_tool_approval`
 /// generation for it; returns the generation id.
-pub async fn seed_generation(pool: &sqlx::PgPool, tenant_id: Uuid, conversation_id: Uuid) -> Uuid {
+pub async fn seed_generation(_pool: &sqlx::PgPool, tenant_id: Uuid, conversation_id: Uuid) -> Uuid {
     let trigger_message_id: Uuid = sqlx::query_scalar(
         "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
          VALUES ($1, $2, 'customer', 'Please update my contact details') RETURNING id",

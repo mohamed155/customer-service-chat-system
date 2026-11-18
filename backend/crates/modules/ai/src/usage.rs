@@ -230,10 +230,10 @@ pub async fn list(
         let has_more = rows.len() > limit as usize;
         let items: Vec<UsageListItem> = rows.into_iter().take(limit as usize).collect();
 
-        let next_cursor = has_more.then(|| {
-            let last = items.last().expect("page with more rows has a last item");
-            encode_cursor(last.created_at, last.id)
-        });
+        let next_cursor = items
+            .last()
+            .filter(|_| has_more)
+            .map(|last| encode_cursor(last.created_at, last.id));
 
         Ok(PaginatedResponse {
             data: items,

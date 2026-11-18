@@ -1,10 +1,10 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
-use config::Environment;
 use http_body_util::BodyExt;
 use serial_test::serial;
 use server::router;
@@ -100,7 +100,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query("DELETE FROM escalations")
         .execute(&db::testing::seed_pool())
@@ -194,7 +194,7 @@ async fn seed_user(pool: &sqlx::PgPool, platform_role: Option<&str>) -> Uuid {
     .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
     sqlx::query(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, 'admin')",
     )
@@ -205,7 +205,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
     .unwrap();
 }
 
-async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
+async fn seed_customer(_pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name) \
          VALUES ($1, $2) RETURNING id",
@@ -217,7 +217,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
     .unwrap()
 }
 
-async fn seed_conversation(pool: &sqlx::PgPool, tenant_id: Uuid, customer_id: Uuid, status: &str) {
+async fn seed_conversation(_pool: &sqlx::PgPool, tenant_id: Uuid, customer_id: Uuid, status: &str) {
     sqlx::query(
         "INSERT INTO conversations (tenant_id, customer_id, status, channel) VALUES ($1, $2, $3, 'web_chat')",
     )
@@ -230,7 +230,7 @@ async fn seed_conversation(pool: &sqlx::PgPool, tenant_id: Uuid, customer_id: Uu
 }
 
 async fn seed_ai_usage(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     status: &str,
     tokens_in: i64,

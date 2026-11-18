@@ -161,7 +161,9 @@ pub async fn authenticate_login(
 
     let principal =
         crate::principal_from_row(user.id, user.email, user.display_name, user.platform_role)
-            .expect("database user row always produces an authenticated principal");
+            .ok_or_else(|| {
+                LoginError::Internal("user row does not produce an authenticated principal".into())
+            })?;
 
     let (jwt, _, _) = session::issue_token(
         &config.auth_jwt_secret,

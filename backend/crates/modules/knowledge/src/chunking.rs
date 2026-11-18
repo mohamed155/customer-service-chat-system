@@ -236,6 +236,17 @@ fn tail_overlap(text: &str) -> String {
     tail.trim_start().to_string()
 }
 
+/// Source text for an authored article/FAQ: title plus body. A blank body
+/// means there is no content to index, so the result is empty (and
+/// [`chunk_text`] reports it as not indexable) rather than the title alone.
+pub fn authored_source_text(title: &str, body: &str) -> String {
+    if body.trim().is_empty() {
+        String::new()
+    } else {
+        format!("{title}\n\n{body}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -372,16 +383,5 @@ mod tests {
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], "First. ");
         assert_eq!(result[1], "Second.Third without space.");
-    }
-}
-
-/// Source text for an authored article/FAQ: title plus body. A blank body
-/// means there is no content to index, so the result is empty (and
-/// [`chunk_text`] reports it as not indexable) rather than the title alone.
-pub fn authored_source_text(title: &str, body: &str) -> String {
-    if body.trim().is_empty() {
-        String::new()
-    } else {
-        format!("{title}\n\n{body}")
     }
 }

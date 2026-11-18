@@ -11,6 +11,10 @@ const REQUEST_DURATION_BUCKETS: [f64; 11] = [
     0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
 ];
 
+// Runs once, when the first `/metrics` or recorder user asks for the handle at process start: a
+// recorder that cannot be installed (or constant buckets that are invalid) is a startup failure,
+// not a request-path one.
+#[allow(clippy::expect_used)]
 static PROMETHEUS_HANDLE: LazyLock<PrometheusHandle> = LazyLock::new(|| {
     PrometheusBuilder::new()
         .set_buckets_for_metric(

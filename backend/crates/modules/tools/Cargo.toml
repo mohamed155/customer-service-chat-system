@@ -29,3 +29,6 @@ uuid.workspace = true
 
 [dev-dependencies]
 outbound = { path = "../../shared/outbound" }
+
+[lints]
+workspace = true

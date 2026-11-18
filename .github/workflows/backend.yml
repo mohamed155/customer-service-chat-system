@@ -47,7 +47,9 @@ jobs:
         run: |
           node --test tools/check-module-boundaries.test.mjs
           node tools/check-module-boundaries.mjs
-      - run: cargo clippy --workspace -- -D warnings
+      # All targets, so test code is linted too; the workspace denies unwrap_used, expect_used and
+      # panic in production code (MOH-83), and clippy.toml allows them in tests.
+      - run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Create database extensions and roles
         # The service container does not run infra/postgres/init, so run the same scripts here.
         working-directory: .

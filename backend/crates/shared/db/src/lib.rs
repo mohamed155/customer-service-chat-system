@@ -31,6 +31,9 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::migrate::MigrateE
     sqlx::migrate!("../../../migrations").run(pool).await
 }
 
+// Called at process start (and by test setup) with the validated `DATABASE_URL`: a URL that does not
+// parse is a configuration error that stops the process, not a request-path failure.
+#[allow(clippy::expect_used)]
 pub fn lazy_pool(database_url: &str, max_connections: u32, acquire_timeout: Duration) -> PgPool {
     let connect_opts = PgConnectOptions::from_str(database_url).expect("invalid database URL");
     PgPoolOptions::new()

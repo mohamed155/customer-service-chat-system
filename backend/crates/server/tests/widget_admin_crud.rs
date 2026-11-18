@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -97,7 +98,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     // Widget rate-limit buckets are keyed by client IP, which is the same
     // ("unknown") for every test request; reset them so tests don't share budget.

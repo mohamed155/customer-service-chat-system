@@ -7,6 +7,10 @@
 //!
 //! Only for tests: nothing in the server calls this module.
 
+// Test support: its helpers panic with a message when the test environment is not set up (see each
+// `# Panics`), by design, and nothing outside tests calls it.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
 use std::time::Duration;
 
 use sqlx::PgPool;

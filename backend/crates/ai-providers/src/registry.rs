@@ -190,24 +190,21 @@ impl Registry {
         })
     }
 
-    pub fn provider(&self, kind: ProviderKind) -> &dyn ChatProvider {
-        for p in &self.providers {
-            if p.kind == kind {
-                let name = kind.as_str();
-                if let Some(override_provider) = self.overrides.get(name) {
-                    return override_provider.as_ref();
-                }
-                return p.provider.as_ref();
-            }
+    /// The provider of `kind` (its override when one is set); `None` when the registry holds no
+    /// provider of that kind, which cannot happen for a registry built by [`Registry::try_new`].
+    pub fn provider(&self, kind: ProviderKind) -> Option<&dyn ChatProvider> {
+        let registered = self.providers.iter().find(|p| p.kind == kind)?;
+        match self.overrides.get(kind.as_str()) {
+            Some(override_provider) => Some(override_provider.as_ref()),
+            None => Some(registered.provider.as_ref()),
         }
-        panic!("unknown provider kind: {:?}", kind);
     }
 
     pub fn resolve(&self, name: &str) -> Option<&dyn ChatProvider> {
         if let Some(override_provider) = self.overrides.get(name) {
             return Some(override_provider.as_ref());
         }
-        ProviderKind::from_str(name).map(|kind| self.provider(kind))
+        ProviderKind::from_str(name).and_then(|kind| self.provider(kind))
     }
 
     /// Replace a provider with a test double. The double gets the same circuit breaker and

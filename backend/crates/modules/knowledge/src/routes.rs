@@ -1686,12 +1686,20 @@ pub async fn download_file(
     let sanitized = validate::sanitize_filename(&doc.original_filename);
     let disposition = format!("attachment; filename=\"{}\"", sanitized);
 
-    Response::builder()
+    match Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, doc.content_type)
         .header(header::CONTENT_DISPOSITION, disposition)
         .body(axum::body::Body::from(data))
-        .unwrap()
+    {
+        Ok(response) => response,
+        Err(e) => {
+            tracing::error!(%e, "download_file: response could not be built");
+            ApiError::internal_error("Failed to download file")
+                .with_request_id(&ctx.request_id)
+                .into_response()
+        }
+    }
 }
 
 // ── T034: Category CRUD ────────────────────────────────────────────────────

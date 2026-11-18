@@ -42,10 +42,12 @@ impl MfaKeys {
         Ok(Self(vault))
     }
 
-    fn secret_box(&self) -> &SecretBox {
-        self.0
-            .secret_box()
-            .expect("checked when the keys were built")
+    /// The box that seals and opens TOTP secrets. `from_config` refuses a vault without a root
+    /// key, so this fails only for keys built some other way.
+    fn secret_box(&self) -> Result<&SecretBox, MfaError> {
+        self.0.secret_box().ok_or_else(|| {
+            MfaError::Internal("no root key is configured for sealing MFA secrets".into())
+        })
     }
 }
 
@@ -139,7 +141,7 @@ pub async fn begin_enrolment(
     }
     let secret = totp::generate_secret();
     let sealed: Sealed = keys
-        .secret_box()
+        .secret_box()?
         .seal(&kek_id(user_id), &aad(user_id), &secret)
         .await
         .map_err(|e| MfaError::Internal(e.to_string()))?;
@@ -243,7 +245,7 @@ async fn open_secret(
     user_id: Uuid,
     factor: &Factor,
 ) -> Result<zeroize::Zeroizing<Vec<u8>>, MfaError> {
-    keys.secret_box()
+    keys.secret_box()?
         .open(&aad(user_id), &factor.sealed)
         .await
         .map_err(|e| MfaError::Internal(e.to_string()))

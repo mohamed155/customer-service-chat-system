@@ -13,7 +13,9 @@ static LAST_REFUSAL: LazyLock<Mutex<HashMap<Uuid, Instant>>> =
 /// Deduplicates to at most one row per tenant per 60-second window.
 pub async fn record_refusal(pool: &PgPool, tenant_id: Uuid) {
     {
-        let mut cache = LAST_REFUSAL.lock().expect("rate_limit_audit lock poisoned");
+        let mut cache = LAST_REFUSAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(last) = cache.get(&tenant_id) {
             if last.elapsed() < std::time::Duration::from_secs(60) {
                 return;

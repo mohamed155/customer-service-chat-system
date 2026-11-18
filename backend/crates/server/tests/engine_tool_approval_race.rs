@@ -1,11 +1,14 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::time::Duration;
 #[path = "support/tool_fixtures.rs"]
 mod tool_fixtures;
 
 use uuid::Uuid;
 
+#[allow(dead_code)]
 const TEST_ENV: config::Environment = config::Environment::Test;
 
+#[allow(dead_code)]
 fn test_config() -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
@@ -79,7 +82,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE ai_generations, ai_usage_records, ai_credentials, ai_configurations, \
@@ -114,7 +117,7 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id",
     )

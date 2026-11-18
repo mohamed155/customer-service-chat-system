@@ -9,7 +9,7 @@ REST API for the AI Customer Service Platform — Rust / Axum 0.8 modular monoli
 | Build | `cargo build` |
 | Test (lib) | `cargo test --lib` |
 | Test (integration) | `cargo test --tests` |
-| Lint | `cargo clippy --workspace` |
+| Lint | `cargo clippy --workspace --all-targets -- -D warnings` |
 | Format check | `cargo fmt --check` |
 | Run | `cargo run -p server` |
 

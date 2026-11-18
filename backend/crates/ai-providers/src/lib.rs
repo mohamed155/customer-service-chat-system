@@ -61,3 +61,12 @@ pub mod registry;
 pub(crate) mod sse;
 pub use contract::*;
 pub use registry::*;
+
+/// Lock a mutex that guards plain accumulation state of one stream (token counts, the finish
+/// reason, partial tool calls). If another thread panicked while holding it the lock is poisoned
+/// but the data is still usable, so take it instead of panicking in a request path (MOH-83).
+pub(crate) fn lock<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}

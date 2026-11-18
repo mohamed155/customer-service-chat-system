@@ -1,5 +1,6 @@
 //! Multi-factor authentication (MOH-56), against real PostgreSQL: enrolment, the two-step sign-in,
 //! replay, lockout, recovery codes, the challenge cookie, rate limiting, audit and key shredding.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use std::sync::Arc;
 use std::time::Duration;

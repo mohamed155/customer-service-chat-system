@@ -11,6 +11,7 @@
 //!
 //! See `specs/016-backend-swagger-docs/spec.md` (FR-013, SC-003, FR-011,
 //! quickstart Scenario 7).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use serde_json::Value;
 use server::router::documented_openapi;

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use chrono::{Datelike, TimeZone, Utc};
 use serial_test::serial;
 use uuid::Uuid;
@@ -6,7 +7,7 @@ mod common;
 use common::*;
 
 async fn insert_tokens(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     input: i32,
     output: i32,
@@ -26,7 +27,7 @@ async fn insert_tokens(
     .unwrap();
 }
 
-async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
+async fn seed_customer(_pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name) VALUES ($1, $2) RETURNING id",
     )
@@ -38,7 +39,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid) -> Uuid {
 }
 
 async fn insert_conversation(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     customer_id: Uuid,
     at: chrono::DateTime<Utc>,

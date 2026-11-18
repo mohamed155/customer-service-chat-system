@@ -29,14 +29,14 @@ impl EventBus {
     {
         self.subscribers
             .lock()
-            .expect("event bus lock poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(Arc::new(subscriber));
     }
     pub fn publish(&self, event: &Event) {
         for subscriber in self
             .subscribers
             .lock()
-            .expect("event bus lock poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
         {
             subscriber(event);

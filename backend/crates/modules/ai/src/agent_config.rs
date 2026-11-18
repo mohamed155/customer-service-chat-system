@@ -411,6 +411,20 @@ pub async fn credential_resolves(pool: &PgPool, tenant_id: Uuid, provider: &str)
     .is_some()
 }
 
+/// Stored rules always carry an id: new rules (no `id` in the payload) get one
+/// at save time so reads can parse them as [`EscalationRule`].
+fn rules_with_ids(rules: &[EscalationRulePayload]) -> serde_json::Value {
+    let with_ids: Vec<EscalationRulePayload> = rules
+        .iter()
+        .cloned()
+        .map(|mut r| {
+            r.id.get_or_insert_with(Uuid::new_v4);
+            r
+        })
+        .collect();
+    serde_json::to_value(with_ids).unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -473,18 +487,4 @@ mod tests {
         let result = validate_payload(&payload);
         assert!(result.is_ok());
     }
-}
-
-/// Stored rules always carry an id: new rules (no `id` in the payload) get one
-/// at save time so reads can parse them as [`EscalationRule`].
-fn rules_with_ids(rules: &[EscalationRulePayload]) -> serde_json::Value {
-    let with_ids: Vec<EscalationRulePayload> = rules
-        .iter()
-        .cloned()
-        .map(|mut r| {
-            r.id.get_or_insert_with(Uuid::new_v4);
-            r
-        })
-        .collect();
-    serde_json::to_value(with_ids).unwrap_or_default()
 }

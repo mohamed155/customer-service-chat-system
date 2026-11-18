@@ -7,6 +7,7 @@
 //! (nothing is left in the schema) and expects the matching message.
 //!
 //! Needs the role split (`MIGRATION_DATABASE_URL`); skips without it unless `REQUIRE_DB_TESTS=1`.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use db::testing::isolation::{rls_rule_violations, GLOBAL_TABLES};
 
 fn can_run() -> bool {

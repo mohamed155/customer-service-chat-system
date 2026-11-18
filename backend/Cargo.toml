@@ -63,3 +63,11 @@ tracing-opentelemetry = "0.34"
 sentry = { version = "0.49", default-features = false, features = ["backtrace", "contexts", "debug-images", "logs", "metrics", "panic", "release-health", "reqwest", "rustls"] }
 sentry-tracing = "0.49"
 dotenvy = "0.15"
+
+# Principle VIII: no `unwrap`, `expect` or `panic!` in request and job paths (MOH-83). Test code is
+# allowed both through clippy.toml. A startup path that cannot continue keeps one with an
+# `#[allow(clippy::expect_used)]` and the reason on the line above.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"

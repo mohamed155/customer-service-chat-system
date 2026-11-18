@@ -27,3 +27,6 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time", "te
 
 [features]
 test-providers = []
+
+[lints]
+workspace = true

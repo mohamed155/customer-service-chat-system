@@ -143,15 +143,20 @@ pub async fn tenant_context_middleware(
             );
             (None, authz::PermissionSet::default())
         }
-        identity::PrincipalKind::Platform => {
-            let permissions = authz::staff_tenant_permissions(
-                principal
-                    .platform_role
-                    .expect("platform principal must carry a platform role"),
-                config.is_production,
-            );
-            (None, authz::PermissionSet::new(permissions.iter().copied()))
-        }
+        identity::PrincipalKind::Platform => match principal.platform_role {
+            Some(role) => {
+                let permissions = authz::staff_tenant_permissions(role, config.is_production);
+                (None, authz::PermissionSet::new(permissions.iter().copied()))
+            }
+            // A platform principal always carries its role; if one does not, grant nothing.
+            None => {
+                tracing::error!(
+                    user.id = %principal.user_id,
+                    "platform principal without a platform role; granting empty tenant permissions"
+                );
+                (None, authz::PermissionSet::default())
+            }
+        },
         identity::PrincipalKind::Tenant => {
             let Some(stored_role) =
                 authorize::fetch_membership_role(&config.pool, tenant_id, principal.user_id).await

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -41,7 +42,7 @@ async fn get_pool() -> Option<PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &PgPool) {
+async fn setup(_pool: &PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE knowledge_chunks, knowledge_index_state, knowledge_item_tags, \
@@ -73,7 +74,7 @@ async fn seed_user(pool: &PgPool, email: &str, _role: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
+async fn seed_membership(_pool: &PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
     sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
         .bind(tenant_id)
         .bind(user_id)
@@ -83,7 +84,7 @@ async fn seed_membership(pool: &PgPool, tenant_id: Uuid, user_id: Uuid, role: &s
         .unwrap();
 }
 
-async fn seed_item(pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> Uuid {
+async fn seed_item(_pool: &PgPool, tenant_id: Uuid, user_id: Uuid) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, body, source, created_by_user_id, created_by_display) \
          VALUES ($1, 'article', 'Reindex Test Item', 'body content', 'authored', $2, 'Test User') RETURNING id",
@@ -180,7 +181,7 @@ fn json_post(uri: &str, user_id: Uuid, tenant_id: Uuid, body: serde_json::Value)
 }
 
 /// Count unprocessed `knowledge.index_requested` outbox events for an item.
-async fn count_pending_outbox_events(pool: &PgPool, item_id: Uuid) -> i64 {
+async fn count_pending_outbox_events(_pool: &PgPool, item_id: Uuid) -> i64 {
     sqlx::query_scalar(
         "SELECT COUNT(*) FROM outbox_events \
          WHERE aggregate_id = $1::text \
@@ -194,7 +195,7 @@ async fn count_pending_outbox_events(pool: &PgPool, item_id: Uuid) -> i64 {
 }
 
 /// Set an item's status directly in the database.
-async fn set_item_status(pool: &PgPool, item_id: Uuid, status: &str) {
+async fn set_item_status(_pool: &PgPool, item_id: Uuid, status: &str) {
     sqlx::query("UPDATE knowledge_items SET status = $1 WHERE id = $2")
         .bind(status)
         .bind(item_id)
@@ -205,7 +206,7 @@ async fn set_item_status(pool: &PgPool, item_id: Uuid, status: &str) {
 
 /// Seed a document item + document record + storage content for T040.
 async fn seed_document_with_storage(
-    pool: &PgPool,
+    _pool: &PgPool,
     storage: &InMemoryStorage,
     tenant_id: Uuid,
     title: &str,

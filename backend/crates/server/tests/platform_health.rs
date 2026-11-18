@@ -1,10 +1,10 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
-use config::Environment;
 use http_body_util::BodyExt;
 use serial_test::serial;
 use server::router;
@@ -163,7 +163,7 @@ async fn seed_user(pool: &sqlx::PgPool, platform_role: Option<&str>) -> Uuid {
     .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
     sqlx::query(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, 'admin')",
     )
@@ -174,11 +174,11 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid) {
     .unwrap();
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
 }
 
-async fn seed_outbox_event(pool: &sqlx::PgPool, created_at_minutes_ago: i64, attempts: i32) {
+async fn seed_outbox_event(_pool: &sqlx::PgPool, created_at_minutes_ago: i64, attempts: i32) {
     let created = chrono::Utc::now() - chrono::Duration::minutes(created_at_minutes_ago);
     sqlx::query("INSERT INTO outbox_events (id, event_type, aggregate_type, aggregate_id, payload, created_at, attempts) VALUES ($1, 'test.event', 'test', '00000000-0000-0000-0000-000000000000', '{}', $2, $3)")
         .bind(Uuid::new_v4())

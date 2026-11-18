@@ -433,9 +433,9 @@ fn anthropic_sse_to_events(
                         match serde_json::from_str::<serde_json::Value>(&frame.data) {
                             Ok(json) => {
                                 if let Some(msg) = json.get("message") {
-                                    *input_tokens.lock().unwrap() =
+                                    *crate::lock(&input_tokens) =
                                         msg["usage"]["input_tokens"].as_u64().map(|v| v as u32);
-                                    *model.lock().unwrap() =
+                                    *crate::lock(&model) =
                                         msg["model"].as_str().map(|s| s.to_string());
                                 }
                                 vec![]
@@ -460,7 +460,7 @@ fn anthropic_sse_to_events(
                                         .as_str()
                                         .unwrap_or("")
                                         .to_string();
-                                    tc_accs.lock().unwrap().insert(
+                                    crate::lock(&tc_accs).insert(
                                         index,
                                         ToolCallAccum {
                                             id,
@@ -485,7 +485,7 @@ fn anthropic_sse_to_events(
                                 if delta_type == "input_json_delta" {
                                     let index = json["index"].as_i64().unwrap_or(0) as usize;
                                     if let Some(partial) = json["delta"]["partial_json"].as_str() {
-                                        let mut accs = tc_accs.lock().unwrap();
+                                        let mut accs = crate::lock(&tc_accs);
                                         if let Some(acc) = accs.get_mut(&index) {
                                             acc.arguments.push_str(partial);
                                         }
@@ -513,7 +513,7 @@ fn anthropic_sse_to_events(
                         match serde_json::from_str::<serde_json::Value>(&frame.data) {
                             Ok(json) => {
                                 let index = json["index"].as_i64().unwrap_or(0) as usize;
-                                let acc_opt = tc_accs.lock().unwrap().remove(&index);
+                                let acc_opt = crate::lock(&tc_accs).remove(&index);
                                 if let Some(acc) = acc_opt {
                                     let arguments = serde_json::from_str(&acc.arguments)
                                         .unwrap_or_else(|_| {
@@ -538,10 +538,10 @@ fn anthropic_sse_to_events(
                     "message_delta" => {
                         match serde_json::from_str::<serde_json::Value>(&frame.data) {
                             Ok(json) => {
-                                *output_tokens.lock().unwrap() =
+                                *crate::lock(&output_tokens) =
                                     json["usage"]["output_tokens"].as_u64().map(|v| v as u32);
                                 if let Some(stop) = json["delta"]["stop_reason"].as_str() {
-                                    *finish.lock().unwrap() = match stop {
+                                    *crate::lock(&finish) = match stop {
                                         "end_turn" => FinishReason::Stop,
                                         "max_tokens" => FinishReason::Length,
                                         "tool_use" => FinishReason::ToolUse,
@@ -558,10 +558,10 @@ fn anthropic_sse_to_events(
                         }
                     }
                     "message_stop" => {
-                        let it = input_tokens.lock().unwrap().take();
-                        let ot = output_tokens.lock().unwrap().take();
-                        let m = model.lock().unwrap().take().unwrap_or_default();
-                        let f = finish.lock().unwrap().clone();
+                        let it = crate::lock(&input_tokens).take();
+                        let ot = crate::lock(&output_tokens).take();
+                        let m = crate::lock(&model).take().unwrap_or_default();
+                        let f = crate::lock(&finish).clone();
                         vec![Ok(StreamEvent::Done {
                             usage: TokenUsage {
                                 input: it,

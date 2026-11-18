@@ -72,10 +72,9 @@ pub fn resolve_range(query: SummaryQuery, today: NaiveDate) -> Result<ResolvedRa
     Ok(ResolvedRange {
         from_date,
         to_date,
-        from_ts: from_date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
+        from_ts: from_date.and_time(chrono::NaiveTime::MIN).and_utc(),
         to_ts: (to_date + chrono::Duration::days(1))
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
+            .and_time(chrono::NaiveTime::MIN)
             .and_utc(),
     })
 }

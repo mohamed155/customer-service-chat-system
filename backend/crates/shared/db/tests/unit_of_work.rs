@@ -2,6 +2,7 @@
 //!
 //! The pool has ONE connection in the tests that check for leaks, so the "next user of the pooled
 //! connection" is guaranteed to be the same physical connection that just ran the transaction.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::time::Duration;
 
 use db::{TenantScoped, UnitOfWork};

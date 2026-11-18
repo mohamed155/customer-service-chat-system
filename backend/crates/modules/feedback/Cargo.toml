@@ -16,3 +16,6 @@ tracing.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 widgets = { path = "../widgets" }
+
+[lints]
+workspace = true

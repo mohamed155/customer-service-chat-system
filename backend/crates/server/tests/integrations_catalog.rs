@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -153,7 +154,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
     sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
         .bind(tenant_id)
         .bind(user_id)
@@ -441,7 +442,7 @@ fn authenticated_json_request_local(
         .unwrap()
 }
 
-async fn count_recent_invalid_signature_events(pool: &sqlx::PgPool, connection_id: Uuid) -> i64 {
+async fn count_recent_invalid_signature_events(_pool: &sqlx::PgPool, connection_id: Uuid) -> i64 {
     let row: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM integration_events \
          WHERE connection_id = $1 AND event_type = 'delivery_rejected' \

@@ -26,3 +26,6 @@ utoipa.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
+
+[lints]
+workspace = true

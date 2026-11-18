@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -50,7 +51,7 @@ async fn get_pool() -> Option<PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &PgPool) {
+async fn setup(_pool: &PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE \
@@ -154,7 +155,7 @@ async fn setup_whatsapp_connection(pool: &PgPool, mk: &Vault, tenant_id: Uuid) -
 }
 
 async fn seed_customer(
-    pool: &PgPool,
+    _pool: &PgPool,
     tenant_id: Uuid,
     display_name: &str,
     wa_identifier: &str,
@@ -185,7 +186,7 @@ async fn seed_customer(
 }
 
 async fn seed_conversation(
-    pool: &PgPool,
+    _pool: &PgPool,
     tenant_id: Uuid,
     customer_id: Uuid,
     channel: &str,

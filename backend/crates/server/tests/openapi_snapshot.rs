@@ -11,6 +11,7 @@
 //! UPDATE_OPENAPI=1 cargo test -p server --test openapi_snapshot
 //! (cd frontend && pnpm gen:api)
 //! ```
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use std::path::PathBuf;
 

@@ -1,3 +1,6 @@
+// Shared by several test crates, each of which uses a subset of these helpers.
+#![allow(dead_code)]
+
 use std::time::Duration;
 
 use uuid::Uuid;
@@ -25,7 +28,7 @@ pub async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-pub async fn setup(pool: &sqlx::PgPool) {
+pub async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE \
@@ -67,7 +70,7 @@ pub async fn create_plan(
     .unwrap()
 }
 
-pub async fn subscribe(pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid, status: &str) {
+pub async fn subscribe(_pool: &sqlx::PgPool, tenant_id: Uuid, plan_id: Uuid, status: &str) {
     sqlx::query(
         "INSERT INTO tenant_subscriptions (tenant_id, plan_id, status) VALUES ($1, $2, $3)",
     )

@@ -46,14 +46,14 @@ impl IdempotencyStore for InMemoryIdempotencyStore {
     fn get(&self, key: &str) -> Option<CachedResponse> {
         self.0
             .lock()
-            .expect("store lock poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(key)
             .cloned()
     }
     fn put(&self, key: String, response: CachedResponse) {
         self.0
             .lock()
-            .expect("store lock poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(key, response);
     }
 }

@@ -19,6 +19,8 @@ pub const SECRET_BYTES: usize = 20;
 type HmacSha1 = Hmac<Sha1>;
 
 /// The HOTP value of RFC 4226 for `counter`, as a number below `10^digits`.
+// HMAC accepts a key of any length, so `new_from_slice` cannot return `InvalidLength` here.
+#[allow(clippy::expect_used)]
 pub fn hotp(secret: &[u8], counter: u64, digits: u32) -> u32 {
     let mut mac =
         <HmacSha1 as KeyInit>::new_from_slice(secret).expect("HMAC accepts any key length");

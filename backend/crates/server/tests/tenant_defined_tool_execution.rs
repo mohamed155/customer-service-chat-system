@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -135,7 +136,7 @@ async fn seed_tenant(pool: &sqlx::PgPool, status: Option<&str>) -> Uuid {
     .expect("seed tenant")
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) \
          VALUES ($1, $2, $3) RETURNING id",
@@ -163,7 +164,7 @@ async fn body_json(res: &mut axum::response::Response) -> serde_json::Value {
 
 // Helper: seed tenant-defined tool in the DB with a credential sealed using the test key.
 async fn seed_tenant_tool(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     name: &str,
     endpoint_url: &str,

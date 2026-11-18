@@ -26,7 +26,7 @@ pub(crate) fn parse_audit_query(query: &model::AuditQuery) -> Result<ResolvedAud
                 ApiError::unprocessable_entity("Invalid 'from' date, expected YYYY-MM-DD")
                     .into_response()
             })?;
-            Some(d.and_hms_opt(0, 0, 0).unwrap().and_utc())
+            Some(d.and_time(chrono::NaiveTime::MIN).and_utc())
         }
         None => None,
     };
@@ -36,7 +36,7 @@ pub(crate) fn parse_audit_query(query: &model::AuditQuery) -> Result<ResolvedAud
                 ApiError::unprocessable_entity("Invalid 'to' date, expected YYYY-MM-DD")
                     .into_response()
             })?;
-            Some(d.and_hms_opt(23, 59, 59).unwrap().and_utc())
+            Some(d.and_time(chrono::NaiveTime::MIN).and_utc() + chrono::Duration::seconds(86_399))
         }
         None => None,
     };
@@ -103,12 +103,10 @@ fn build_response(rows: &[queries::AuditRow], limit: i64) -> model::AuditListRes
         rows
     };
     let entries: Vec<model::AuditEntryDto> = rows.iter().map(row_to_dto).collect();
-    let next_cursor = has_more.then(|| {
-        let last = rows
-            .last()
-            .expect("rows must be non-empty when has_more is true");
-        queries::encode_cursor(last.created_at, last.id)
-    });
+    let next_cursor = rows
+        .last()
+        .filter(|_| has_more)
+        .map(|last| queries::encode_cursor(last.created_at, last.id));
     model::AuditListResponse {
         data: entries,
         pagination: model::AuditPagination {

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -121,7 +122,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE \
@@ -274,6 +275,7 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str) -> Uuid {
 
 struct SeededMembership {
     user_id: Uuid,
+    #[allow(dead_code)]
     membership_id: Uuid,
 }
 
@@ -294,7 +296,7 @@ async fn seed_admin(pool: &sqlx::PgPool, tenant_id: Uuid, email: &str) -> Seeded
     }
 }
 
-async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
+async fn seed_customer(_pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name) \
          VALUES ($1, $2) RETURNING id",
@@ -307,7 +309,7 @@ async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid
 }
 
 async fn seed_conversation(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     customer_id: Uuid,
     channel: &str,
@@ -329,7 +331,7 @@ async fn seed_conversation(
 }
 
 async fn seed_customer_message(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     conversation_id: Uuid,
     body: &str,
@@ -348,8 +350,9 @@ async fn seed_customer_message(
     .unwrap()
 }
 
+#[allow(dead_code)]
 async fn seed_reply_message(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     conversation_id: Uuid,
     body: &str,

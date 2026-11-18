@@ -1,10 +1,10 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
-use config::Environment;
 use http_body_util::BodyExt;
 use serial_test::serial;
 use server::router;
@@ -155,7 +155,7 @@ async fn seed_user(pool: &sqlx::PgPool, platform_role: Option<&str>) -> Uuid {
     .unwrap()
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query("DELETE FROM escalations")
         .execute(&db::testing::seed_pool())
@@ -175,7 +175,7 @@ async fn setup(pool: &sqlx::PgPool) {
 }
 
 async fn seed_ai_call(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     provider: &str,
     status: &str,

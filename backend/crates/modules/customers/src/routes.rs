@@ -92,12 +92,11 @@ async fn build_identifier_conflict(
         }
     };
 
-    let mut detail = serde_json::to_value(ErrorDetail {
+    let mut detail = serde_json::Value::from(ErrorDetail {
         field: "identifiers".into(),
         code: "identifier_conflict".into(),
         message: format!("Channel `{channel}:{identifier}` is already held by `{existing_name}`"),
-    })
-    .expect("ErrorDetail is always serializable");
+    });
     if let Some(obj) = detail.as_object_mut() {
         obj.insert("channel".into(), json!(channel));
         obj.insert("identifier".into(), json!(identifier));
@@ -343,10 +342,10 @@ pub async fn list_customers(
             updated_at: row.get("updated_at"),
         })
         .collect();
-    let next_cursor = has_more.then(|| {
-        let item = data.last().expect("a page with more rows has a final item");
-        encode_cursor(item.created_at, item.id)
-    });
+    let next_cursor = data
+        .last()
+        .filter(|_| has_more)
+        .map(|item| encode_cursor(item.created_at, item.id));
 
     Json(PaginatedResponse {
         data,

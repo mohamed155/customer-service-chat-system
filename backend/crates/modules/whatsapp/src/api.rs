@@ -265,15 +265,24 @@ impl MockWhatsAppApi {
     }
 
     pub fn push_send_text(&self, result: Result<String, SendError>) {
-        self.send_text_responses.lock().unwrap().push(result);
+        self.send_text_responses
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(result);
     }
 
     pub fn push_media_url(&self, result: Result<MediaInfo, SendError>) {
-        self.media_url_responses.lock().unwrap().push(result);
+        self.media_url_responses
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(result);
     }
 
     pub fn push_download(&self, result: Result<Bytes, SendError>) {
-        self.download_responses.lock().unwrap().push(result);
+        self.download_responses
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(result);
     }
 }
 
@@ -288,7 +297,7 @@ impl WhatsAppApi for MockWhatsAppApi {
     ) -> Result<String, SendError> {
         self.send_text_responses
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .pop()
             .unwrap_or_else(|| {
                 Err(SendError::Other(
@@ -304,7 +313,7 @@ impl WhatsAppApi for MockWhatsAppApi {
     ) -> Result<MediaInfo, SendError> {
         self.media_url_responses
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .pop()
             .unwrap_or_else(|| {
                 Err(SendError::Other(
@@ -316,7 +325,7 @@ impl WhatsAppApi for MockWhatsAppApi {
     async fn download(&self, _access_token: &str, _url: &str) -> Result<Bytes, SendError> {
         self.download_responses
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .pop()
             .unwrap_or_else(|| {
                 Err(SendError::Other(

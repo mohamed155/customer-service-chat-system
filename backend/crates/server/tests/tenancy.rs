@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -148,7 +149,7 @@ pub async fn seed_tenant(pool: &sqlx::PgPool, status: Option<&str>) -> uuid::Uui
 
 /// Insert a tenant membership and return its id.
 pub async fn seed_membership(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: uuid::Uuid,
     user_id: uuid::Uuid,
     role: &str,

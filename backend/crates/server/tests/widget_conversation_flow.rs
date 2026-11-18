@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,7 +8,6 @@ use axum::response::Response;
 use http_body_util::BodyExt;
 use server::router;
 use server::state::AppState;
-use sha2::Digest;
 use tower::ServiceExt;
 use uuid::Uuid;
 
@@ -98,7 +98,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     // Widget rate-limit buckets are keyed by client IP, which is the same
     // ("unknown") for every test request; reset them so tests don't share budget.
@@ -142,7 +142,7 @@ async fn seed_tenant(pool: &sqlx::PgPool, name: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_widget_instance(pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &str) -> Uuid {
+async fn seed_widget_instance(_pool: &sqlx::PgPool, tenant_id: Uuid, public_id: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO widget_instances \
          (tenant_id, public_id, name, display_name, enabled, allowed_domains) \
@@ -174,6 +174,7 @@ async fn mint_session(pool: &sqlx::PgPool, public_id: &str) -> String {
     json["data"]["sessionToken"].as_str().unwrap().to_owned()
 }
 
+#[allow(dead_code)]
 fn authed_request(method: Method, path: &str, token: &str) -> Request<Body> {
     let mut builder = Request::builder().uri(path).method(method);
     if !token.is_empty() {

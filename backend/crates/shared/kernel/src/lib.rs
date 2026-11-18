@@ -53,7 +53,12 @@ pub struct ErrorDetail {
 
 impl From<ErrorDetail> for serde_json::Value {
     fn from(detail: ErrorDetail) -> Self {
-        serde_json::to_value(detail).expect("ErrorDetail is always serializable")
+        // Three strings: building the value by hand cannot fail, unlike `to_value`.
+        serde_json::json!({
+            "field": detail.field,
+            "code": detail.code,
+            "message": detail.message,
+        })
     }
 }
 

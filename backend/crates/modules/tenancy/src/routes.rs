@@ -171,8 +171,9 @@ pub(crate) fn is_valid_email(value: &str) -> bool {
         return false;
     }
     // First and last char must be alphanumeric or `"`
-    let first = local.chars().next().unwrap();
-    let last = local.chars().last().unwrap();
+    let (Some(first), Some(last)) = (local.chars().next(), local.chars().last()) else {
+        return false;
+    };
     if !(first.is_alphanumeric() || first == '"') || !(last.is_alphanumeric() || last == '"') {
         return false;
     }

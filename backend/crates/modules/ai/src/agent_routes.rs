@@ -412,7 +412,7 @@ pub async fn put_agent_config(
     if let Err(issues) = validate_payload(&payload) {
         let details: Vec<serde_json::Value> = issues
             .iter()
-            .map(|i| serde_json::to_value(i).unwrap())
+            .map(|i| serde_json::to_value(i).unwrap_or_default())
             .collect();
         return ApiError::unprocessable_entity("Validation failed")
             .with_details(details)

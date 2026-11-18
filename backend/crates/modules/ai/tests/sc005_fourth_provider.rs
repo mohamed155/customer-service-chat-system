@@ -1,10 +1,11 @@
-// SC-005 / FR-003: Adding a fourth provider must require zero changes in
-// modules/ai internals or any consuming module. This test drives the policy
-// seam (ai::run_attempts) directly with a fake provider registered via
-// Registry::with_override — no Postgres needed, no real provider code needed.
-//
-// If this test breaks or requires changes when adding a new provider, then
-// the abstraction is leaking and SC-005 has been violated.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+                                                                   // SC-005 / FR-003: Adding a fourth provider must require zero changes in
+                                                                   // modules/ai internals or any consuming module. This test drives the policy
+                                                                   // seam (ai::run_attempts) directly with a fake provider registered via
+                                                                   // Registry::with_override — no Postgres needed, no real provider code needed.
+                                                                   //
+                                                                   // If this test breaks or requires changes when adding a new provider, then
+                                                                   // the abstraction is leaking and SC-005 has been violated.
 
 use std::sync::Arc;
 

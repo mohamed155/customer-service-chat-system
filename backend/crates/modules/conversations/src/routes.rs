@@ -380,10 +380,10 @@ pub async fn list_conversations(
         data.push(conv);
     }
 
-    let next_cursor = has_more.then(|| {
-        let last = data.last().expect("page with more rows has a last item");
-        queries::encode_cursor(last.last_activity_at, last.id)
-    });
+    let next_cursor = data
+        .last()
+        .filter(|_| has_more)
+        .map(|last| queries::encode_cursor(last.last_activity_at, last.id));
 
     Json(PaginatedResponse {
         data,

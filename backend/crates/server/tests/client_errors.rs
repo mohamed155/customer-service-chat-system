@@ -1,5 +1,6 @@
 //! Browser error reports (MOH-168), against real PostgreSQL and Redis: who may send them, what
 //! is limited, what is logged and counted, and what is not.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use std::io::Write;
 use std::sync::{Arc, Mutex};

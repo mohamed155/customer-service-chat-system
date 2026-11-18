@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -313,7 +314,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) {
     sqlx::query("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3)")
         .bind(tenant_id)
         .bind(user_id)
@@ -324,7 +325,7 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
 }
 
 async fn seed_invitation(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Uuid,
     email: &str,
     invited_by: Uuid,
@@ -1954,7 +1955,7 @@ async fn no_role_user_is_denied_on_every_platform_tenant_endpoint() {
 // T072 — Customer routes respect the tenant role matrix
 // ---------------------------------------------------------------------------
 
-async fn seed_customer(pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
+async fn seed_customer(_pool: &sqlx::PgPool, tenant_id: Uuid, name: &str) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO customers (tenant_id, display_name, email) VALUES ($1, $2, $3) RETURNING id",
     )

@@ -1,5 +1,6 @@
 //! The second-factor policy (MOH-34), against real PostgreSQL: enforcement for every account,
 //! step-up for sensitive actions, recovery-code regeneration and resetting someone's factor.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -215,6 +216,7 @@ async fn secret_of(user: Uuid) -> Vec<u8> {
 }
 
 /// A user with a confirmed factor: returns the id, email, secret and the ten recovery codes.
+#[allow(dead_code)]
 async fn enrolled_user(app: &axum::Router) -> (Uuid, String, Vec<u8>, Vec<String>) {
     let (user, email) = seed_user().await;
     let begin = send(

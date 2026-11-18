@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::time::Duration;
 
 use chrono::SubsecRound;
@@ -137,7 +138,7 @@ async fn run_migrations_succeeds() {
 
 #[tokio::test]
 async fn run_migrations_idempotent() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -440,7 +441,7 @@ async fn seed_tenant(pool: &sqlx::PgPool) -> uuid::Uuid {
 }
 
 /// Insert a minimal customer for a tenant and return its id.
-async fn seed_customer(pool: &sqlx::PgPool, tenant_id: uuid::Uuid, name: &str) -> uuid::Uuid {
+async fn seed_customer(_pool: &sqlx::PgPool, tenant_id: uuid::Uuid, name: &str) -> uuid::Uuid {
     sqlx::query_scalar::<_, uuid::Uuid>(
         "INSERT INTO customers (tenant_id, display_name, email) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -615,7 +616,7 @@ async fn audit_logs_full_insert_accepted() {
 
 #[tokio::test]
 async fn audit_logs_platform_entry_tenant_null() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -637,7 +638,7 @@ async fn audit_logs_platform_entry_tenant_null() {
 
 #[tokio::test]
 async fn audit_logs_system_entry_actor_null() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -659,7 +660,7 @@ async fn audit_logs_system_entry_actor_null() {
 
 #[tokio::test]
 async fn audit_logs_details_defaults_to_empty_jsonb() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -768,7 +769,7 @@ async fn convention_memberships_bare_insert_receives_uuid_and_timestamps() {
 
 #[tokio::test]
 async fn convention_audit_logs_bare_insert_receives_uuid_and_timestamps() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -1104,7 +1105,7 @@ async fn cascade_audit_entries_survive_soft_delete() {
 
 #[tokio::test]
 async fn append_only_audit_update_rejected() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -1127,7 +1128,7 @@ async fn append_only_audit_update_rejected() {
 
 #[tokio::test]
 async fn append_only_audit_delete_rejected() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -1150,7 +1151,7 @@ async fn append_only_audit_delete_rejected() {
 
 #[tokio::test]
 async fn append_only_audit_row_count_unchanged_after_failed_update() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -1729,7 +1730,7 @@ async fn slug_change_writes_audit_entry() {
 
 #[tokio::test]
 async fn audit_entry_without_resource_rejected() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -2384,7 +2385,7 @@ async fn membership_insert_races_parent_soft_delete() {
 
 #[tokio::test]
 async fn actor_does_not_leak_across_pooled_transactions() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -2629,7 +2630,7 @@ async fn migration_0025_identifier_unique_index_exists() {
 
 #[tokio::test]
 async fn migration_0025_0026_foreign_keys_exist() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };
@@ -5505,7 +5506,7 @@ async fn migration_0045_agent_prompt_versions_delete_rejected() {
 
 #[tokio::test]
 async fn migration_0045_agent_configurations_no_system_prompt() {
-    let pool = match get_pool().await {
+    let _pool = match get_pool().await {
         Some(p) => p,
         None => return,
     };

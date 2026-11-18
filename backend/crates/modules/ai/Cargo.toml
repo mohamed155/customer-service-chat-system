@@ -43,3 +43,6 @@ utoipa.workspace = true
 ai-providers = { path = "../../ai-providers", features = ["test-providers"] }
 tokio = { workspace = true, features = ["test-util"] }
 wiremock.workspace = true
+
+[lints]
+workspace = true

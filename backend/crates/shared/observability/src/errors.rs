@@ -212,7 +212,7 @@ mod tests {
             Some("none")
         );
         assert!(
-            scrubbed.tags.get("error").is_none() && scrubbed.tags.get("context").is_none(),
+            !scrubbed.tags.contains_key("error") && !scrubbed.tags.contains_key("context"),
             "fields outside the allowlist must not be kept"
         );
         assert!(scrubbed.contexts.is_empty(), "no context may be sent");
@@ -238,7 +238,7 @@ mod tests {
             "allowlisted request_id must be retained"
         );
         assert!(
-            scrubbed.extra.get("password").is_none(),
+            !scrubbed.extra.contains_key("password"),
             "non-allowlisted password must be stripped"
         );
 

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 #[path = "support/openai_mock.rs"]
 mod openai_mock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -100,7 +101,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &sqlx::PgPool) {
+async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE ai_generations, ai_usage_records, ai_credentials, ai_configurations, \
@@ -135,7 +136,7 @@ async fn seed_user(pool: &sqlx::PgPool, email: &str) -> Uuid {
         .unwrap()
 }
 
-async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
+async fn seed_membership(_pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, role: &str) -> Uuid {
     sqlx::query_scalar("INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, $3) RETURNING id")
         .bind(tenant_id)
         .bind(user_id)
@@ -145,7 +146,12 @@ async fn seed_membership(pool: &sqlx::PgPool, tenant_id: Uuid, user_id: Uuid, ro
         .unwrap()
 }
 
-async fn seed_ai_config(pool: &sqlx::PgPool, tenant_id: Option<Uuid>, provider: &str, model: &str) {
+async fn seed_ai_config(
+    _pool: &sqlx::PgPool,
+    tenant_id: Option<Uuid>,
+    provider: &str,
+    model: &str,
+) {
     sqlx::query(
         "INSERT INTO ai_configurations (tenant_id, provider, model, fallbacks) \
          VALUES ($1, $2, $3, '[]'::jsonb)",
@@ -159,7 +165,7 @@ async fn seed_ai_config(pool: &sqlx::PgPool, tenant_id: Option<Uuid>, provider: 
 }
 
 async fn seed_ai_credential(
-    pool: &sqlx::PgPool,
+    _pool: &sqlx::PgPool,
     tenant_id: Option<Uuid>,
     provider: &str,
     api_key: &str,
@@ -404,6 +410,7 @@ async fn engine_tool_chain_executes_lookup_customer() {
     );
 
     // Assert exactly one tool_requests row with status='succeeded', builtin, chain_index=0
+    #[allow(clippy::type_complexity)] // a one-off query row
     let tool_rows: Vec<(
         String,
         String,

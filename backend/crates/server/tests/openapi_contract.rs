@@ -10,6 +10,7 @@
 //! router (`server::router::documented_openapi`), so the structural
 //! guarantee that every operation in the doc corresponds to a registered
 //! route is now built into how the doc is produced.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};

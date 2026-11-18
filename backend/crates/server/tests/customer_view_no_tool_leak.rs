@@ -4,6 +4,7 @@
 //! tool_requests, tool names, arguments, results, or errors. The endpoint
 //! used for reading messages (GET /tenant/conversations/{id}/messages) must
 //! return only conversation messages, never tool request data.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -123,7 +124,7 @@ async fn customer_view_contains_no_tool_request_data() {
     .await
     .expect("seed tenant");
 
-    let membership_id: Uuid = sqlx::query_scalar(
+    let _membership_id: Uuid = sqlx::query_scalar(
         "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, 'admin') RETURNING id",
     )
     .bind(tenant_id)
@@ -219,7 +220,7 @@ async fn customer_view_contains_no_tool_request_data() {
     let mut res = send_request(
         pool.clone(),
         Request::builder()
-            .uri(&format!(
+            .uri(format!(
                 "/api/v1/tenant/conversations/{conversation_id}/messages"
             ))
             .header("X-Dev-User-Id", user_id.to_string())

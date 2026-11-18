@@ -10,6 +10,7 @@
 //!
 //! They need the role split (`MIGRATION_DATABASE_URL`); like the rest of the DB tests they skip
 //! when it is missing and fail instead when `REQUIRE_DB_TESTS=1`.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use sqlx::{PgConnection, Postgres, Transaction};
 use uuid::Uuid;
 

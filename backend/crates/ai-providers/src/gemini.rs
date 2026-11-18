@@ -652,7 +652,7 @@ fn gemini_sse_to_events(
                     if let Some(usage) = json.get("usageMetadata") {
                         let input = usage["promptTokenCount"].as_u64().map(|v| v as u32);
                         let output = usage["candidatesTokenCount"].as_u64().map(|v| v as u32);
-                        *total_usage.lock().unwrap() = Some(TokenUsage { input, output });
+                        *crate::lock(&total_usage) = Some(TokenUsage { input, output });
                     }
 
                     let mut result = Vec::new();
@@ -688,7 +688,7 @@ fn gemini_sse_to_events(
                             if let Some(fr) = candidate["finishReason"].as_str() {
                                 if !fr.is_empty() {
                                     let usage =
-                                        total_usage.lock().unwrap().take().unwrap_or_default();
+                                        crate::lock(&total_usage).take().unwrap_or_default();
                                     result.push(Ok(StreamEvent::Done {
                                         usage,
                                         model,
@@ -703,7 +703,7 @@ fn gemini_sse_to_events(
                             }
                         }
                     } else {
-                        let usage = total_usage.lock().unwrap().take().unwrap_or_default();
+                        let usage = crate::lock(&total_usage).take().unwrap_or_default();
                         result.push(Ok(StreamEvent::Done {
                             usage,
                             model,
@@ -813,7 +813,10 @@ mod tests {
     #[tokio::test]
     async fn happy_path() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let response_body = make_response_body();
 
@@ -854,7 +857,10 @@ mod tests {
     #[tokio::test]
     async fn missing_usage_returns_none() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let response_body = serde_json::json!({
             "candidates": [{
@@ -882,7 +888,10 @@ mod tests {
     #[tokio::test]
     async fn unauthorized_returns_authentication() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let error_body = serde_json::json!({
             "error": {
@@ -907,7 +916,10 @@ mod tests {
     #[tokio::test]
     async fn rate_limited_returns_rate_limited() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let error_body = serde_json::json!({
             "error": {
@@ -932,7 +944,10 @@ mod tests {
     #[tokio::test]
     async fn server_error_returns_unavailable() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let error_body = serde_json::json!({
             "error": {
@@ -957,7 +972,10 @@ mod tests {
     #[tokio::test]
     async fn bad_request_returns_invalid_request() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let error_body = serde_json::json!({
             "error": {
@@ -982,7 +1000,10 @@ mod tests {
     #[tokio::test]
     async fn test_stream_sse() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let sse_body = "\
 data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello!\"}],\"role\":\"model\"}}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5}}
@@ -1031,7 +1052,10 @@ data: {\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptT
     #[tokio::test]
     async fn embed_happy_path() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let response_body = make_embed_response_body();
 
@@ -1064,7 +1088,10 @@ data: {\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptT
     #[tokio::test]
     async fn embed_multiple_inputs() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let response_body = serde_json::json!({
             "embeddings": [
@@ -1097,7 +1124,10 @@ data: {\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptT
     #[tokio::test]
     async fn embed_unauthorized_returns_authentication() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let error_body = serde_json::json!({
             "error": {
@@ -1122,7 +1152,10 @@ data: {\"candidates\":[{\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptT
     #[tokio::test]
     async fn test_stream_single_frame_with_text_and_finish() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let sse_body = "\
 data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello!\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5}}
@@ -1153,7 +1186,10 @@ data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello!\"}],\"role\":
     #[tokio::test]
     async fn test_tool_call_complete() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         Mock::given(method("POST"))
             .and(path("/v1beta/models/gemini-2.0-flash:generateContent"))
@@ -1223,7 +1259,10 @@ data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello!\"}],\"role\":
     #[tokio::test]
     async fn test_tool_call_stream() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let sse_body = "\
 data: {\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"location\":\"NYC\"}}}],\"role\":\"model\"},\"finishReason\":\"FUNCTION_CALL\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5}}
@@ -1267,7 +1306,10 @@ data: {\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"ge
     #[tokio::test]
     async fn test_empty_tools_omits_tools_key() {
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         let response_body = serde_json::json!({
             "candidates": [{
@@ -1312,7 +1354,10 @@ data: {\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"ge
         // Multiple functionCalls in one response; synthesized ids should be
         // stable and unique within one response.
         let mock = MockServer::start().await;
-        let adapter = GeminiAdapter::new(Client::new(), mock.uri());
+        let adapter = GeminiAdapter::new(
+            outbound::build(&outbound::HttpSettings::default()).unwrap(),
+            mock.uri(),
+        );
 
         Mock::given(method("POST"))
             .and(path("/v1beta/models/gemini-2.0-flash:generateContent"))

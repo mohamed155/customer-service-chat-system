@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -31,7 +32,7 @@ async fn get_pool() -> Option<PgPool> {
     Some(pool)
 }
 
-async fn setup(pool: &PgPool) {
+async fn setup(_pool: &PgPool) {
     db::testing::migrate().await;
     sqlx::query(
         "TRUNCATE TABLE knowledge_index_state, knowledge_chunks, knowledge_item_tags, \
@@ -54,7 +55,7 @@ async fn seed_tenant(pool: &PgPool) -> Uuid {
         .unwrap()
 }
 
-async fn seed_item(pool: &PgPool, tenant_id: Uuid) -> Uuid {
+async fn seed_item(_pool: &PgPool, tenant_id: Uuid) -> Uuid {
     sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO knowledge_items (tenant_id, item_type, title, body, source, created_by_display) \
          VALUES ($1, 'article', 'Index State Test', 'body', 'authored', 'Test User') RETURNING id",

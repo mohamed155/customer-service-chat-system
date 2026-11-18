@@ -26,3 +26,6 @@ tokio-stream = { workspace = true, features = ["sync"] }
 tracing.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
+
+[lints]
+workspace = true
