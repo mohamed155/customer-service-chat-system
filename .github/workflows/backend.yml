@@ -67,7 +67,7 @@ jobs:
       - run: cargo install sqlx-cli --no-default-features --features rustls,postgres
       - run: sqlx migrate run --database-url "$MIGRATION_DATABASE_URL"
       - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
-        with: { tool: cargo-nextest }
+        with: { tool: "cargo-nextest,cargo-deny@0.21.0" }
       - id: tests
         name: Run tests and verify count floor
         run: |
@@ -85,6 +85,10 @@ jobs:
           echo "OK: $COUNT tests run >= floor $FLOOR"
       - run: cargo install cargo-audit
       - run: cargo audit
+      # Licences, banned crates and crate sources (MOH-84): backend/deny.toml. Advisories stay with
+      # `cargo audit` above. A change to the policy is a change to deny.toml (SECURITY.md).
+      - name: Dependency policy (licences, bans, sources)
+        run: cargo deny check licenses bans sources
   secret-scan:
     permissions:
       contents: read

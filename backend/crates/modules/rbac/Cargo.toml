@@ -1,5 +1,6 @@
 [package]
 name = "rbac"
+publish.workspace = true
 version.workspace = true
 edition.workspace = true
 

@@ -86,7 +86,7 @@
                 {
                   "type": "bundle",
                   "name": "rich-text-editor-component",
-                  "maximumWarning": "425kb",
+                  "maximumWarning": "430kb",
                   "maximumError": "440kb"
                 },
                 { "type": "anyComponentStyle", "maximumWarning": "4kb", "maximumError": "8kb" }

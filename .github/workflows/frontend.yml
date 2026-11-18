@@ -22,6 +22,11 @@ jobs:
             cache-dependency-path: frontend/pnpm-lock.yaml,
           }
       - run: pnpm install --frozen-lockfile
+      # Production dependencies must have no advisory at high severity or above (MOH-84). A waiver
+      # is a GHSA in `auditConfig.ignoreGhsas` of pnpm-workspace.yaml, with its reason there and in
+      # SECURITY.md ("Dependency audit"). Moderate and low advisories are listed, not blocking.
+      - name: No high-severity advisory in production dependencies
+        run: pnpm audit --prod --audit-level=high
       # infra/Dockerfile.frontend installs from package.json + lockfile only, with no git checkout.
       # The release job (master only) builds that image, so reproduce its install on pull requests.
       - name: Install works without a git checkout (Docker image build)

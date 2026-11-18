@@ -1,0 +1,56 @@
+# Dependency policy for the backend (MOH-84, constitution Principle II). Checked in CI by
+#   cargo deny check licenses bans sources
+# Known vulnerabilities (advisories) are checked by `cargo audit`, which also runs in CI, so they
+# are not repeated here. The policy and how to change it: SECURITY.md, "Dependency policy".
+
+[graph]
+# Every platform, not only the CI runner's: a licence problem in a Windows-only crate is still ours.
+
+[licenses]
+# The only licences a dependency may be under. Permissive ones, plus MPL-2.0, which is copyleft
+# per file and does not reach this code as long as the crate itself is not modified. Anything else
+# (GPL, AGPL, LGPL-only, SSPL, a missing licence) fails until someone decides it, in a PR that adds
+# it here with the reason. A dependency under `A OR B` passes when either is allowed.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Zlib",
+  "0BSD",
+  "MIT-0",
+  "CC0-1.0",
+  "Unlicense",
+  "BSL-1.0",
+  "CDLA-Permissive-2.0",
+  "MPL-2.0",
+]
+confidence-threshold = 0.93
+
+[licenses.private]
+# This workspace's own crates are unpublished and carry `license = "UNLICENSED"`.
+ignore = true
+
+[bans]
+# Two versions of one crate are reported, not blocked: Cargo resolves them for good reasons and the
+# list is long. A new duplicate shows up in the CI log.
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = [
+  # TLS is rustls everywhere (sqlx, reqwest, tonic). A second TLS stack means a second set of
+  # certificates, a system library and a different security update path.
+  { crate = "openssl", reason = "TLS is rustls; do not add the OpenSSL bindings" },
+  { crate = "openssl-sys", reason = "TLS is rustls; do not add the OpenSSL bindings" },
+  { crate = "native-tls", reason = "TLS is rustls; do not add the platform TLS bindings" },
+]
+
+[sources]
+# Crates come from crates.io only: no unknown registry and no git dependency.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

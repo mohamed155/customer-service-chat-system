@@ -1,5 +1,6 @@
 [package]
 name = "prompts"
+publish.workspace = true
 version.workspace = true
 edition.workspace = true
 

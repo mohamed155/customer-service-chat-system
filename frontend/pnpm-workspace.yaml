@@ -5,3 +5,15 @@ packages:
 peerDependencyRules:
   allowedVersions:
     '@ngrx/*>@angular/core': ^22.0.0
+
+# Audit waivers (MOH-84). `pnpm audit --prod --audit-level=high` runs in CI; an advisory is listed
+# here only with the reason and the condition for removing it, and is reviewed in the same PR that
+# adds it (see SECURITY.md, "Dependency audit").
+auditConfig:
+  ignoreGhsas:
+    # picomatch <=4.0.7, ReDoS through repeated extglobs. No patched version exists yet. Reached
+    # only through @taiga-ui/cdk > @angular-devkit/core (its schematics tooling, used by `ng add`
+    # and `ng update`); it is not in the browser bundle (checked: 0 of 349 built files mention it)
+    # and matches only file paths of the developer's own project. Remove when picomatch > 4.0.7 is
+    # published and the lockfile has it.
+    - GHSA-fc5q-39xc-vjpf
