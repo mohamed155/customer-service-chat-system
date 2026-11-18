@@ -16,17 +16,13 @@
     "email",
     "escalations",
     "feedback",
-    "flags",
     "identity",
     "integrations",
     "knowledge",
     "notifications",
     "platform",
-    "prompts",
-    "rbac",
     "tenancy",
     "tools",
-    "users",
     "whatsapp",
     "widgets"
   ],
@@ -162,10 +158,6 @@
         "conversation_feedback"
       ]
     },
-    "flags": {
-      "dependsOn": [],
-      "tables": []
-    },
     "identity": {
       "dependsOn": [],
       "tables": [
@@ -218,14 +210,6 @@
       "dependsOn": [],
       "tables": []
     },
-    "prompts": {
-      "dependsOn": [],
-      "tables": []
-    },
-    "rbac": {
-      "dependsOn": [],
-      "tables": []
-    },
     "tenancy": {
       "dependsOn": [
         "authz",
@@ -251,10 +235,6 @@
         "tenant_tool_policies",
         "tool_requests"
       ]
-    },
-    "users": {
-      "dependsOn": [],
-      "tables": []
     },
     "whatsapp": {
       "dependsOn": [

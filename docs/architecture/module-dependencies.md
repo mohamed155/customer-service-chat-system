@@ -24,17 +24,13 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `email` | flat | – | `tenancy` | – |
 | `escalations` | flat | `conversations`, `identity`, `tenancy`, `tools` | `ai`, `notifications`, `widgets` | `agent_availability`, `agent_skills`, `escalations`, `skills` |
 | `feedback` | flat | `tenancy`, `widgets` | – | `conversation_feedback` |
-| `flags` | flat | – | – | – |
 | `identity` | flat | – | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `tenancy`, `tools`, `widgets` | `mfa_factors`, `mfa_recovery_codes`, `revoked_sessions`, `users` |
 | `integrations` | flat | `identity`, `tenancy` | `conversations`, `whatsapp` | `integration_catalog`, `integration_connections`, `integration_events`, `integration_secrets`, `integration_webhook_deliveries` |
 | `knowledge` | flat | `authz`, `identity`, `tenancy` | `ai` | `knowledge_categories`, `knowledge_chunks`, `knowledge_documents`, `knowledge_index_state`, `knowledge_item_tags`, `knowledge_items` |
 | `notifications` | flat | `authz`, `escalations`, `identity`, `tenancy` | `ai` | `notifications` |
 | `platform` | flat | – | – | – |
-| `prompts` | flat | – | – | – |
-| `rbac` | flat | – | – | – |
 | `tenancy` | flat | `authz`, `email`, `identity` | `ai`, `analytics`, `audit`, `billing`, `conversations`, `customers`, `escalations`, `feedback`, `integrations`, `knowledge`, `notifications`, `tools`, `whatsapp`, `widgets` | `tenant_invitations`, `tenant_memberships`, `tenant_rate_limit_overrides`, `tenants` |
 | `tools` | flat | `conversations`, `customers`, `identity`, `tenancy` | `ai`, `escalations` | `tenant_tool_policies`, `tenant_tools`, `tool_requests` |
-| `users` | flat | – | – | – |
 | `whatsapp` | flat | `conversations`, `customers`, `integrations`, `tenancy` | – | `whatsapp_message_meta` |
 | `widgets` | flat | `conversations`, `customers`, `escalations`, `identity`, `tenancy` | `feedback` | `widget_instances`, `widget_sessions` |
 

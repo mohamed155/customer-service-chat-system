@@ -112,6 +112,27 @@ Rules:
 - The module crates as built, their edges, the tables each owns and the accepted exceptions are in
   [Module dependencies](module-dependencies.md), generated from the code and checked in CI ([ADR-017](../adr/0017-module-layering-and-ci-checked-boundaries.md)).
 
+The contexts above are logical. In the code they map to these crates (`backend/crates/modules/*`
+unless noted). Where a context has no crate of its own, the table says where its code lives or that
+it is not built yet; the edges between the crates are in [Module dependencies](module-dependencies.md).
+
+| Context | Crate | Notes |
+| -- | -- | -- |
+| `identity` | `identity` | Users, credentials, sessions, MFA. There is no `users` crate. |
+| `tenancy` | `tenancy` | Tenants, memberships, invitations. Feature flags are not built (there is no `flags` crate). |
+| RBAC (cross-cutting) | `authz` | The permission catalogue, the role matrix and the route guards. There is no `rbac` crate. |
+| `customers` | `customers` | |
+| `conversations` | `conversations` | |
+| `routing` | `escalations` | Availability, skills, the escalation queue and assignment. |
+| `agent_config`, `prompts`, `ai_runtime` | `ai` | Agent configuration, prompt versions and the AI engine. There is no `prompts` crate. The provider adapters are in `crates/ai-providers`, which is not a module crate. |
+| `knowledge` | `knowledge` | |
+| `tools` | `tools` | |
+| `channels` | `whatsapp`, `widgets` | The WhatsApp channel and the web chat widget. The Telegram channel is not built (MOH-125). |
+| `integrations` | `integrations` | |
+| `feedback`, `analytics`, `notifications`, `billing`, `audit` | the same names | |
+| `platform_ops` | `platform` | Platform health and platform analytics. |
+| (transactional email) | `email` | The sender of invitation and notification email (SMTP, or a no-op); not a channel. |
+
 ---
 
 ## 4. Code organization
