@@ -9,6 +9,16 @@ use tracing::warn;
 
 use crate::Cache;
 
+/// What a sign-in refused because the counter store is down tells the client to wait
+/// (`contracts/rate-limit-responses.md`, store-unavailable behaviour).
+const FAIL_CLOSED_RETRY_AFTER: Duration = Duration::from_secs(30);
+
+/// How long a check waits to reach the counter store before it treats the store as down. The
+/// connection manager's own retries take about nine seconds to give up, and a sign-in would wait
+/// that long for its answer; this keeps an outage a fraction of a second slower than usual.
+/// It matches the 500 ms the manager already allows for each command.
+const STORE_CONNECT_TIMEOUT: Duration = Duration::from_millis(500);
+
 fn hash_identifier(identifier: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(identifier.as_bytes());
@@ -39,9 +49,10 @@ pub fn select_identifier(authenticated_identity: Option<&str>, source_address: &
 /// previous window's count for a weighted correction that smooths the
 /// boundary burst a naive fixed window allows.
 ///
-/// On Redis errors, `Scope::Login` returns `Decision::Refused` (fail-closed)
-/// while all other scopes degrade to an in-process `InMemoryRateLimitStore`
-/// (fail-open for non-auth traffic). See `research.md` §2.
+/// On Redis errors, `Scope::Login` returns `Decision::Unavailable` (fail-closed, answered
+/// `503`) unless the fail mode is `open`, and all other scopes degrade to an in-process
+/// `InMemoryRateLimitStore` (fail-open for non-auth traffic). See `research.md` §2 and
+/// `contracts/rate-limit-responses.md` (store-unavailable behaviour).
 pub struct RedisRateLimiter {
     cache: Cache,
     fallback: InMemoryRateLimitStore,
@@ -80,8 +91,8 @@ impl RedisRateLimiter {
         );
 
         match scope {
-            Scope::Login if self.fail_mode != "open" => Decision::Refused {
-                retry_after: Duration::from_secs(30),
+            Scope::Login if self.fail_mode != "open" => Decision::Unavailable {
+                retry_after: FAIL_CLOSED_RETRY_AFTER,
             },
             _ => RateLimiter::check(&self.fallback, scope, identifier, budget).await,
         }
@@ -110,10 +121,15 @@ impl RateLimiter for RedisRateLimiter {
         let prev_key = format!("rl:{}:{}:{}", scope.as_str(), identifier, prev_epoch);
         let ttl = (window_secs * 2) as i64;
 
-        let mut conn = match self.cache.manager().await {
-            Ok(mgr) => mgr.clone(),
-            Err(e) => {
+        let mut conn = match tokio::time::timeout(STORE_CONNECT_TIMEOUT, self.cache.manager()).await
+        {
+            Ok(Ok(mgr)) => mgr.clone(),
+            Ok(Err(e)) => {
                 warn!("RedisRateLimiter: connection error: {e}");
+                return self.degrade(scope, identifier, budget).await;
+            }
+            Err(_) => {
+                warn!("RedisRateLimiter: no connection within {STORE_CONNECT_TIMEOUT:?}");
                 return self.degrade(scope, identifier, budget).await;
             }
         };
@@ -378,6 +394,89 @@ mod tests {
         assert_eq!(id_a, "user-a");
         assert_eq!(id_b, "user-b");
         assert_ne!(id_a, id_b);
+    }
+
+    /// A limiter whose Redis is an address nothing listens on, so every check fails to connect.
+    /// It needs no running service, which is the point: these tests prove what happens when the
+    /// store is down.
+    fn limiter_with_redis_down(fail_mode: &str) -> RedisRateLimiter {
+        let cache = Cache::new("redis://127.0.0.1:1").expect("a well-formed Redis URL");
+        RedisRateLimiter::new(cache, fail_mode.into())
+    }
+
+    fn small_budget() -> Budget {
+        Budget {
+            max_requests: 2,
+            window: Duration::from_secs(60),
+        }
+    }
+
+    #[tokio::test]
+    async fn login_with_the_store_down_is_unavailable_in_auth_closed_mode() {
+        let limiter = limiter_with_redis_down("auth_closed");
+        match limiter
+            .check(Scope::Login, "a@example.com:10.0.0.1", small_budget())
+            .await
+        {
+            Decision::Unavailable { retry_after } => {
+                assert_eq!(retry_after, Duration::from_secs(30));
+            }
+            other => panic!("expected Unavailable, got {other:?}"),
+        }
+        assert_eq!(limiter.degraded_count(), 1);
+        assert_eq!(
+            limiter.refused_count(),
+            0,
+            "an outage is not a budget refusal"
+        );
+    }
+
+    #[tokio::test]
+    async fn any_fail_mode_other_than_open_fails_closed_for_login() {
+        // The documented values are `auth_closed` and `open`; a typo must not open the door.
+        let limiter = limiter_with_redis_down("pass_open");
+        assert!(matches!(
+            limiter
+                .check(Scope::Login, "a@example.com:10.0.0.1", small_budget())
+                .await,
+            Decision::Unavailable { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn login_with_the_store_down_counts_locally_in_open_mode() {
+        let limiter = limiter_with_redis_down("open");
+        let id = "a@example.com:10.0.0.1";
+        for _ in 0..2 {
+            assert!(matches!(
+                limiter.check(Scope::Login, id, small_budget()).await,
+                Decision::Allowed { .. }
+            ));
+        }
+        // The local counter still limits: `open` does not mean unlimited.
+        assert!(matches!(
+            limiter.check(Scope::Login, id, small_budget()).await,
+            Decision::Refused { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn other_scopes_count_locally_with_the_store_down() {
+        let limiter = limiter_with_redis_down("auth_closed");
+        for _ in 0..2 {
+            assert!(matches!(
+                limiter
+                    .check(Scope::Webhook, "conn-1", small_budget())
+                    .await,
+                Decision::Allowed { .. }
+            ));
+        }
+        assert!(matches!(
+            limiter
+                .check(Scope::Webhook, "conn-1", small_budget())
+                .await,
+            Decision::Refused { .. }
+        ));
     }
 
     async fn require_redis() -> Option<RedisRateLimiter> {

@@ -649,11 +649,13 @@ Capacity planning starts with a baseline load test (k6) per phase; budgets in th
   iterations and total time) and the SMTP invitation mail.
 - **Graceful degradation:** AI down → route to human queue with an honest customer message;
   Redis down → the cache is bypassed; rate limiting falls back to a counter in each instance's
-  memory. Login attempts are refused (the default, `APP_RATE_LIMIT_FAIL_MODE=auth_closed`) or
-  limited by that same fallback counter (`open`). `rate_limit_degraded_total` counts it. `/ready`
-  checks Redis, so a load balancer that routes only to ready instances takes every instance out of
-  rotation during an outage and never reaches the fallback; the fallback serves deployments that do
-  not route on `/ready` (the supplied Compose files do not).
+  memory. Login attempts are answered `503` with `Retry-After: 30` (the default,
+  `APP_RATE_LIMIT_FAIL_MODE=auth_closed`) or limited by that same fallback counter (`open`); the
+  limiter waits at most 500 ms for the store before it treats it as down, and
+  `rate_limit_degraded_total` counts it. `/ready` checks Redis, so a load balancer that routes only
+  to ready instances takes every instance out of rotation during an outage and never reaches the
+  fallback; the fallback serves deployments that do not route on `/ready` (the supplied Compose
+  files do not).
 - **Graceful shutdown:** readiness fails first, the server keeps accepting for half the grace period
   (at most 5 s) so a load balancer can stop routing to it, then drains in-flight requests. Background
   workers are not drained: they stop with the process.

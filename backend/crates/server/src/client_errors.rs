@@ -278,7 +278,9 @@ async fn counts_toward_alerts(
 /// read as "allowed" just because it is wrapped.
 fn refusal(decision: &Decision) -> Option<Duration> {
     match decision {
-        Decision::Refused { retry_after } => Some(*retry_after),
+        Decision::Refused { retry_after } | Decision::Unavailable { retry_after } => {
+            Some(*retry_after)
+        }
         Decision::Degraded { local_decision } => refusal(local_decision),
         Decision::Allowed { .. } => None,
     }

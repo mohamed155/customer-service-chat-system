@@ -94,7 +94,7 @@ pub async fn login_rate_limit(
 
     let identifier = format!("{}:{}", email, client_ip);
 
-    if let Decision::Refused { retry_after } = store
+    match store
         .check(
             Scope::Login,
             &identifier,
@@ -105,7 +105,20 @@ pub async fn login_rate_limit(
         )
         .await
     {
-        return ApiError::rate_limited("Too many login attempts", retry_after).into_response();
+        Decision::Refused { retry_after } => {
+            return ApiError::rate_limited("Too many login attempts", retry_after).into_response();
+        }
+        // The counter store is down and sign-in fails closed. A 503, not a 429: the client has
+        // not used up a budget. The answer is the same for every account and every address, so
+        // it reveals nothing about which accounts exist.
+        Decision::Unavailable { retry_after } => {
+            return ApiError::service_unavailable(
+                "Sign-in is temporarily unavailable",
+                retry_after,
+            )
+            .into_response();
+        }
+        Decision::Allowed { .. } | Decision::Degraded { .. } => {}
     }
 
     let request = Request::from_parts(parts, axum::body::Body::from(body_bytes));
