@@ -625,3 +625,69 @@ port can read it:
 - **All checks are `ok` but the deploy script still rolls back**: `ops/deploy.sh` polls `/ready`
   for `TIMEOUT` seconds (120, a constant near the top of the script) and a slow start can exceed
   it. Raise the constant in a reviewed change; do not skip the gate.
+
+## 11. Check the Size of the Large Append-Only Tables
+
+None of `messages`, `audit_logs`, `ai_generations`, `ai_usage_records` or `outbox_events` is
+partitioned, and [ADR-018](../adr/0018-partition-large-append-only-tables-on-measured-triggers.md)
+gives each a trigger that says when that changes. Nothing watches the numbers yet (MOH-202 adds the
+metrics and alerts), so this is the check until it does. Run it once a month, and before any
+capacity review.
+
+### Steps
+
+1. Connect to the database as the owner role (`just psql` locally) and run:
+
+   ```sql
+   SELECT relname AS table_name,
+          n_live_tup AS approx_rows,
+          pg_size_pretty(pg_total_relation_size(relid)) AS total_size
+   FROM pg_stat_user_tables
+   WHERE schemaname = 'public'
+     AND relname IN ('messages', 'audit_logs', 'ai_generations', 'ai_usage_records', 'outbox_events')
+   ORDER BY pg_total_relation_size(relid) DESC;
+   ```
+
+   `total_size` counts the heap, every index and TOAST. `approx_rows` is the statistics estimate;
+   it reads 0 on a table that autovacuum has not analysed yet.
+2. Compare each table with its threshold:
+
+   | Table | Look at | Threshold |
+   |---|---|---|
+   | `messages` | `total_size` | 100 GB |
+   | `ai_generations` | `total_size` | 50 GB |
+   | `ai_usage_records` | `total_size` | 50 GB (and see below if it grows faster than its row count) |
+   | `audit_logs` | `approx_rows` | 50 million |
+   | `outbox_events` | `approx_rows` | 100,000: it should be near zero, because processed rows are deleted |
+
+3. Note the date and the numbers in the capacity record. The volume model in ADR-018 rests on
+   assumptions; real numbers replace them.
+
+### Expected outcome
+
+- Every table is below its threshold. A table that is above one is a decision, not an incident:
+  follow "When a threshold is crossed".
+
+### When a threshold is crossed
+
+- **Do not partition from this runbook.** Follow ADR-018, decision 4, and rehearse it on a restore
+  of production first.
+- **For `messages`, `ai_generations` and `ai_usage_records`, count the ids that are not UUIDv7
+  before anything else.** Rows from before migration 0075 have random ids that no month range
+  holds (ADR-018, decision 3):
+
+  ```sql
+  SELECT count(*) FILTER (WHERE get_byte(uuid_send(id), 6) >> 4 <> 7) AS non_v7_ids,
+         count(*) AS total
+  FROM messages;
+  ```
+
+  It scans the table, so run it on a restored copy. A result other than 0 changes the method.
+- **`ai_usage_records` grows faster than its rows suggest**: a tenant has turned on content
+  capture (`request_content` and `response_content` make a row about 22 times larger, 4,875 bytes
+  against 219). Partitioning does not fix that; the content needs its own retention (MOH-142).
+- **`outbox_events` is above 100,000 rows**: workers are behind or dead letters are piling up. Look
+  at `dead_lettered_at IS NOT NULL` rows and the queue-depth metrics; it is not a partitioning
+  question while processed rows are deleted (ADR-007 Q3).
+- **A restore drill (section 3) takes longer than the 1 h RTO**: this is a trigger for all five
+  tables, whatever their size. Open ADR-018 decision 4 for the largest one first.
