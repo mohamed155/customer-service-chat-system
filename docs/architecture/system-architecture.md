@@ -308,8 +308,11 @@ enterprise, pool for everyone else).
 - Soft delete only where business requires restore; otherwise hard delete + audit record.
 - Money as integer minor units + currency code.
 - Enums as `text` + `CHECK` constraints (easier to evolve than PG enums).
-- Large append-only tables (`messages`, `audit_events`, `ai_turns`, `usage_events`) are
-  **range-partitioned by month**; old partitions detached/archived per retention policy.
+- Large append-only tables (`messages`, `audit_logs`, `ai_generations`, `ai_usage_records`,
+  `outbox_events`) are **not partitioned today**. Monthly range partitioning, with old partitions
+  detached or dropped per a retention rule, is the plan for each one except `outbox_events`, and
+  [ADR-018](../adr/0018-partition-large-append-only-tables-on-measured-triggers.md) gives the
+  measurable trigger, the conversion method and the isolation rules for every partition.
 - Connection pooling through the app pool (SQLx) and **PgBouncer in transaction mode** in
   production (compatible with `SET LOCAL`).
 - Read replicas for analytics and heavy reads when needed; writes always to primary.
@@ -500,7 +503,7 @@ Implemented as a **pipeline of stages** (Chain of Responsibility), each stage a 
 ### 10.7 Cost control
 
 - Per-tenant monthly token/cost budgets with soft (warn) and hard (degrade/escalate) limits.
-- Usage metered per turn into `usage_events`; aggregated for billing.
+- Usage is recorded per provider call in `ai_usage_records`; aggregated for billing.
 
 ---
 
@@ -605,7 +608,7 @@ if none  → enqueue in shared queue
 | API throughput | Stateless Axum instances behind a load balancer; horizontal autoscaling |
 | DB connections | PgBouncer transaction pooling; bounded pools per process |
 | Read load | Query-model tables/materialized views for inbox & analytics; read replicas later |
-| Write load | Partitioned append-only tables; batched inserts for usage/analytics events |
+| Write load | Append-only tables are partitioned when an [ADR-018](../adr/0018-partition-large-append-only-tables-on-measured-triggers.md) trigger fires; batched inserts for usage/analytics events |
 | Background load | Independent worker pool scaling on queue depth/age; per-queue concurrency |
 | AI latency | Streaming, model routing, prompt caching, retrieval caching |
 | Hot tenants | Per-tenant quotas, fair scheduling, cell migration for very large tenants |
