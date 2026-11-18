@@ -3,8 +3,8 @@
 - **Status:** Accepted
 - **Date:** 2026-11-18
 - **Deciders:** Platform engineering
-- **Related:** [System architecture §7.1, §14, §15](../architecture/system-architecture.md#71-postgresql-conventions)
-  (amended in the same PR), [ADR-004](0004-multi-tenancy-rls-cells.md) (row-level security),
+- **Related:** [System architecture §7.1, §10.7 and §14](../architecture/system-architecture.md#71-postgresql-conventions)
+  (amended in the same PR; §15 gives the RTO), [ADR-004](0004-multi-tenancy-rls-cells.md) (row-level security),
   [ADR-007](0007-postgres-queue-transactional-outbox.md) (Q3: processed rows are deleted),
   [ADR-013](0013-uuidv7-identifiers.md) (UUIDv7 identifiers),
   [Tenant Unit of Work](../security/tenant-unit-of-work.md),
@@ -93,8 +93,8 @@ PostgreSQL 16.15; the statements are in the description of the PR that introduce
 - **F2. Partitioning by `id` range keeps every key and foreign key unchanged.** `id` is a UUIDv7
   whose first 48 bits are a millisecond timestamp, so `RANGE (id)` with monthly bounds works with
   `PRIMARY KEY (id)`, `UNIQUE (tenant_id, id)`, a single-column foreign key and a composite one,
-  all created against the partitioned table. A row inserted now landed in the current month's
-  partition. Two conditions come with it, covered under "Preconditions" below.
+  all created against the partitioned table. A row inserted with the default id landed in the
+  partition of the month it was inserted in. Two conditions come with it, covered under "Preconditions" below.
 - **F3. A new partition is readable across tenants by the runtime role.** A partition created with
   `PARTITION OF` has row-level security off and no policy, and the default privileges of
   `app_owner` grant `arwd` on it to `app_runtime` and `app_platform`. With `app.tenant_id` set to
@@ -218,20 +218,20 @@ CREATE FUNCTION uuid_lower_bound(ts timestamptz) RETURNS uuid LANGUAGE sql IMMUT
 $$ SELECT (lpad(to_hex((extract(epoch FROM ts) * 1000)::bigint), 12, '0') || repeat('0', 20))::uuid $$;
 ```
 
-I verified the primary key, unique index and foreign keys of the legacy table are adopted by the
-`ATTACH`. I did not verify the same for its non-unique indexes (the timeline index): create the
-parent's indexes before the `ATTACH` and confirm in the rehearsal that the legacy ones are matched
-and not rebuilt.
+The spike verified that the `ATTACH` adopts the legacy table's primary key, unique index and
+foreign keys. It did not verify the same for the non-unique indexes (the timeline index): create
+the parent's indexes before the `ATTACH` and confirm in the rehearsal that the legacy ones are
+matched and not rebuilt.
 
 **5. Scheduler: a job in the server, not `pg_partman`.** The Postgres image
 (`pgvector/pgvector:0.8.6-pg16`) has neither `pg_partman` nor `pg_cron` among its available
 extensions. The architecture describes the scheduler as leader-elected, but the code has no leader
 election: a search of `backend/crates` for `leader` and for advisory locks finds nothing, and each
 instance runs its own sweepers. So the partition job must be written as the other sweepers are,
-**idempotent and safe to run on several instances at once**: it takes `pg_try_advisory_lock`,
+**idempotent and safe to run on several instances at once**: it calls `pg_try_advisory_lock`,
 creates partitions with `CREATE TABLE IF NOT EXISTS`, always keeps the next three months created,
-and alerts when its `DEFAULT` partition holds any row. I did not check whether `pg_partman` would
-apply the rules below to the partitions it creates; if it is ever adopted, that check comes first.
+and alerts when its `DEFAULT` partition holds any row. Whether `pg_partman` would apply the rules
+below to the partitions it creates was not checked; if it is ever adopted, that check comes first.
 
 **6. Rules for every partitioned table, from the first one.**
 
