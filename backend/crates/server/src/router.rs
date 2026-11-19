@@ -1427,7 +1427,8 @@ fn api_routes(
             .layer(from_fn_with_state(identity_config, principal_middleware));
     }
 
-    let (router, doc) = router.split_for_parts();
+    let (router, mut doc) = router.split_for_parts();
+    crate::openapi::describe_error_formats(&mut doc);
     (router, doc, whatsapp_store)
 }
 
@@ -1444,7 +1445,9 @@ pub fn documented_openapi(include_test_routes: bool) -> utoipa::openapi::OpenApi
     let router = router.merge(tenant_routes(include_test_routes));
     let router = router.merge(widget_routes());
     let router = router.merge(hooks_routes());
-    router.into_openapi()
+    let mut doc = router.into_openapi();
+    crate::openapi::describe_error_formats(&mut doc);
+    doc
 }
 
 /// The documented paths a run mode mounts under `/api/v1`, built from the same route sets as

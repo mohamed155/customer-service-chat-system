@@ -22,6 +22,9 @@ error, such as the ID of the thing in conflict, is under `details`. A `5xx` carr
 message: an empty `errors`, no `details`, no internal text. `Retry-After` is sent in both formats. Both
 formats vary on `Accept` (`Vary: accept`).
 
+`openapi.json` lists both media types on every documented error response, `application/problem+json`
+(`ProblemDetails`) first and the legacy `application/json` (`ErrorEnvelope`) marked deprecated.
+
 The backend counts every legacy-format answer in `error_envelope_legacy_total{route}` so the envelope
 can be removed when nobody receives it any more. It is removed only after the counter has shown no
 legacy answer for two weeks across a full release cycle (ADR-012, gap A2): widget builds already
