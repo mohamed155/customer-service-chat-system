@@ -36,6 +36,59 @@ struct NotificationResolvedPayload {
     resolved_by_membership_id: Option<Uuid>,
 }
 
+/// Events the AI engine publishes (`ai::outbox`, MOH-195). `notifications` reads them by name and
+/// shape, not through the `ai` crate: the event type and the keys are the contract, and a server
+/// test fails if the two sides drift.
+pub const AI_TOOL_APPROVAL_REQUESTED: &str = "ai.tool_approval_requested";
+pub const AI_RESPONSE_FAILED: &str = "ai.response_failed";
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ToolApprovalRequestedPayload {
+    tenant_id: Uuid,
+    tool_request_id: Uuid,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResponseFailedPayload {
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    failed_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// What a notification says for each AI event. The wording, the kind and the dedupe rule are
+/// `notifications`' to decide: `ai` only says what happened.
+fn notification_for_tool_approval(p: &ToolApprovalRequestedPayload) -> NotificationRequest {
+    NotificationRequest {
+        tenant_id: p.tenant_id,
+        kind: NotificationKind::ToolApprovalRequired,
+        subject_type: SubjectType::ToolRequest,
+        subject_id: p.tool_request_id,
+        actor_membership_id: None,
+        target_membership_id: None,
+        dedupe_key: crate::emit::dedupe_key_tool_approval(p.tool_request_id),
+        title: "Tool approval required".into(),
+        body: Some("A tool action requires your approval.".into()),
+    }
+}
+
+/// The dedupe key buckets by the time the failure happened (the event's own, so a redelivered
+/// event lands in the same bucket).
+fn notification_for_failed_response(p: &ResponseFailedPayload) -> NotificationRequest {
+    NotificationRequest {
+        tenant_id: p.tenant_id,
+        kind: NotificationKind::AiResponseFailed,
+        subject_type: SubjectType::Conversation,
+        subject_id: p.conversation_id,
+        actor_membership_id: None,
+        target_membership_id: None,
+        dedupe_key: crate::emit::dedupe_key_ai_failed(p.conversation_id, &p.failed_at),
+        title: "AI response failed".into(),
+        body: Some("The AI was unable to generate a response for this conversation.".into()),
+    }
+}
+
 fn parse_subject_type(s: &str) -> Result<SubjectType, sqlx::Error> {
     match s {
         "conversation" => Ok(SubjectType::Conversation),
@@ -76,6 +129,56 @@ fn broadcast_notification_cleared(
     presence.broadcast(tenant_id, event);
 }
 
+/// Creates the notification a request asks for, for each person who should get it, and tells their
+/// open dashboards the new unread count. Used for `notification.requested` and for the AI events.
+async fn fan_out_request(
+    pool: &PgPool,
+    presence: &Arc<presence::Runtime>,
+    request: NotificationRequest,
+) -> Result<(), sqlx::Error> {
+    let recipients = recipients::resolve(
+        pool,
+        request.tenant_id,
+        &request.kind,
+        request.subject_id,
+        request.actor_membership_id,
+        request.target_membership_id,
+    )
+    .await?;
+
+    if recipients.is_empty() {
+        debug!(
+            tenant_id = %request.tenant_id,
+            kind = ?request.kind,
+            subject_id = %request.subject_id,
+            "notification request: no recipients resolved"
+        );
+        return Ok(());
+    }
+
+    let inserted = queries::fan_out(pool, &request, &recipients).await?;
+
+    info!(
+        count = inserted.len(),
+        tenant_id = %request.tenant_id,
+        kind = ?request.kind,
+        subject_id = %request.subject_id,
+        "notification request: created notifications"
+    );
+
+    for (notification_id, membership_id) in inserted {
+        let count = queries::unread_count(pool, request.tenant_id, membership_id).await?;
+        broadcast_notification_created(
+            presence,
+            request.tenant_id,
+            membership_id,
+            notification_id,
+            count,
+        );
+    }
+    Ok(())
+}
+
 // ── Outbox consumer ─────────────────────────────────────────────────
 
 pub async fn process_notification_outbox_once(
@@ -87,7 +190,14 @@ pub async fn process_notification_outbox_once(
     // Across tenants, so it goes through the audited function `xtenant.outbox_claim`.
     let maybe_row =
         sqlx::query("SELECT id, tenant_id, event_type, payload FROM xtenant.outbox_claim($1, $2)")
-            .bind(&["notification.requested", "notification.resolved"][..])
+            .bind(
+                &[
+                    "notification.requested",
+                    "notification.resolved",
+                    AI_TOOL_APPROVAL_REQUESTED,
+                    AI_RESPONSE_FAILED,
+                ][..],
+            )
             .bind(claim_token)
             .fetch_optional(pool)
             .await?;
@@ -118,60 +228,33 @@ pub async fn process_notification_outbox_once(
             "notification.requested" => {
                 let req: NotificationRequestedPayload = serde_json::from_value(payload)
                     .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
-
-                let subj_type = parse_subject_type(&req.subject_type)?;
-                let recipients = recipients::resolve(
+                let subject_type = parse_subject_type(&req.subject_type)?;
+                fan_out_request(
                     pool,
-                    req.tenant_id,
-                    &req.kind,
-                    req.subject_id,
-                    req.actor_membership_id,
-                    req.target_membership_id,
+                    presence,
+                    NotificationRequest {
+                        tenant_id: req.tenant_id,
+                        kind: req.kind,
+                        subject_type,
+                        subject_id: req.subject_id,
+                        actor_membership_id: req.actor_membership_id,
+                        target_membership_id: req.target_membership_id,
+                        dedupe_key: req.dedupe_key,
+                        title: req.title,
+                        body: req.body,
+                    },
                 )
                 .await?;
-
-                if recipients.is_empty() {
-                    debug!(
-                        tenant_id = %req.tenant_id,
-                        kind = ?req.kind,
-                        subject_id = %req.subject_id,
-                        "notification.requested: no recipients resolved"
-                    );
-                    return Ok(());
-                }
-
-                let notification_req = NotificationRequest {
-                    tenant_id: req.tenant_id,
-                    kind: req.kind,
-                    subject_type: subj_type,
-                    subject_id: req.subject_id,
-                    actor_membership_id: req.actor_membership_id,
-                    target_membership_id: req.target_membership_id,
-                    dedupe_key: req.dedupe_key,
-                    title: req.title,
-                    body: req.body,
-                };
-
-                let inserted = queries::fan_out(pool, &notification_req, &recipients).await?;
-
-                info!(
-                    count = inserted.len(),
-                    tenant_id = %req.tenant_id,
-                    kind = ?notification_req.kind,
-                    subject_id = %req.subject_id,
-                    "notification.requested: created notifications"
-                );
-
-                for (notification_id, membership_id) in inserted {
-                    let count = queries::unread_count(pool, req.tenant_id, membership_id).await?;
-                    broadcast_notification_created(
-                        presence,
-                        req.tenant_id,
-                        membership_id,
-                        notification_id,
-                        count,
-                    );
-                }
+            }
+            AI_TOOL_APPROVAL_REQUESTED => {
+                let ev: ToolApprovalRequestedPayload = serde_json::from_value(payload)
+                    .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+                fan_out_request(pool, presence, notification_for_tool_approval(&ev)).await?;
+            }
+            AI_RESPONSE_FAILED => {
+                let ev: ResponseFailedPayload = serde_json::from_value(payload)
+                    .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+                fan_out_request(pool, presence, notification_for_failed_response(&ev)).await?;
             }
             "notification.resolved" => {
                 let ev: NotificationResolvedPayload = serde_json::from_value(payload)

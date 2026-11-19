@@ -25,6 +25,8 @@
 //! - RAG retrieval step: embed query → [`knowledge::retrieval::search`] →
 //!   inject context into the system prompt
 //! - Citation persistence ([`conversations::queries::insert_citations_in_tx`])
+//! - Events for other modules ([`outbox`]): `ai.tool_approval_requested` and `ai.response_failed`.
+//!   `notifications` consumes them; `ai` does not call it (MOH-195, ADR-017)
 //!
 //! # Public Interfaces
 //! - [`AiService`] — main entry point for consuming modules
@@ -33,6 +35,7 @@
 //! - [`routes`] — Axum router (mounted by the server)
 //! - [`agent_routes`] — agent configuration endpoints
 //! - [`prompt_routes`] — versioned prompt CRUD endpoints
+//! - [`outbox`] — the AI events published for other modules
 //! - [`prompt_store`] — prompt and version persistence
 //! - [`prompt_validate`] — prompt content validation
 //! - [`crypto`] — encrypt / decrypt / `MasterKey`
@@ -86,6 +89,7 @@ pub mod crypto;
 pub mod engine;
 pub mod generation_record;
 pub mod model;
+pub mod outbox;
 pub mod prompt_routes;
 pub mod prompt_store;
 pub mod prompt_validate;
