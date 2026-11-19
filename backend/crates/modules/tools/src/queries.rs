@@ -416,6 +416,26 @@ pub async fn insert_request_in_tx(
     .await
 }
 
+/// One tool request of a tenant, read in the caller's transaction; `None` when the tenant has no
+/// such request.
+pub async fn find_request_in_tx(
+    conn: &mut sqlx::PgConnection,
+    tenant_id: Uuid,
+    id: Uuid,
+) -> sqlx::Result<Option<ToolRequestFullRow>> {
+    sqlx::query_as(
+        "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
+         tool_source, tenant_tool_id, arguments, status, approval_required, \
+         expires_at, chain_index, started_at, finished_at, result, error, \
+         created_at, decided_by_membership_id, decided_at \
+         FROM tool_requests WHERE id = $1 AND tenant_id = $2",
+    )
+    .bind(id)
+    .bind(tenant_id)
+    .fetch_optional(conn)
+    .await
+}
+
 /// Transition a request from `pending` or `approved` to `executing`.
 /// Returns `false` if no row matched (race lost, wrong prior state).
 pub async fn mark_executing(pool: &sqlx::PgPool, id: Uuid, tenant_id: Uuid) -> sqlx::Result<bool> {

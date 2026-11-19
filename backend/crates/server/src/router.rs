@@ -1408,6 +1408,7 @@ fn api_routes(
         .layer(Extension(storage.clone()))
         .layer(Extension(state.config.clone()))
         .layer(Extension(state.escalations.clone()))
+        .layer(Extension(state.ai_ports()))
         .layer(Extension(state.ai.clone()))
         .layer(Extension(state.health_checks.clone()))
         .layer(Extension(state.ai.resilience()))

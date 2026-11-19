@@ -10,7 +10,10 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use ai::ports::{AiPorts, KnowledgeRetrieval, RetrievedChunk};
+use ai::ports::{
+    AiPorts, ExecutionOutcome, KnowledgeRetrieval, NewToolRequest, PendingToolRequest,
+    ResolvedTool, RetrievedChunk, ToolRequest, ToolRun, ToolRuntime, ToolSource, ValidationFailure,
+};
 
 use crate::state::AppState;
 
@@ -45,10 +48,209 @@ impl KnowledgeRetrieval for KnowledgeAdapter {
     }
 }
 
+/// `ai::ports::ToolRuntime` on top of the `tools` module. Each method forwards to the function of
+/// the same job and converts the types; it opens no transaction where the caller passes a
+/// connection.
+struct ToolsAdapter;
+
+fn source_from_tools(source: tools::model::ToolSource) -> ToolSource {
+    match source {
+        tools::model::ToolSource::Builtin => ToolSource::Builtin,
+        tools::model::ToolSource::Tenant => ToolSource::Tenant,
+    }
+}
+
+fn source_to_tools(source: &ToolSource) -> tools::model::ToolSource {
+    match source {
+        ToolSource::Builtin => tools::model::ToolSource::Builtin,
+        ToolSource::Tenant => tools::model::ToolSource::Tenant,
+    }
+}
+
+/// A stored `tool_source` value. Anything but `tenant` is a built-in, as the engine always read it.
+fn source_from_column(value: &str) -> ToolSource {
+    match value {
+        "tenant" => ToolSource::Tenant,
+        _ => ToolSource::Builtin,
+    }
+}
+
+fn tool_from_tools(tool: tools::policy::ResolvedTool) -> ResolvedTool {
+    ResolvedTool {
+        spec: tool.spec,
+        source: source_from_tools(tool.source),
+        approval_required: tool.approval_required,
+        tenant_tool_id: tool.tenant_tool_id,
+    }
+}
+
+fn tool_to_tools(tool: &ResolvedTool) -> tools::policy::ResolvedTool {
+    tools::policy::ResolvedTool {
+        spec: tool.spec.clone(),
+        source: source_to_tools(&tool.source),
+        approval_required: tool.approval_required,
+        tenant_tool_id: tool.tenant_tool_id,
+    }
+}
+
+fn new_request_to_tools(request: NewToolRequest) -> tools::queries::NewToolRequest {
+    tools::queries::NewToolRequest {
+        tenant_id: request.tenant_id,
+        conversation_id: request.conversation_id,
+        generation_id: request.generation_id,
+        tool_name: request.tool_name,
+        tool_source: request.tool_source,
+        tenant_tool_id: request.tenant_tool_id,
+        arguments: request.arguments,
+        status: request.status,
+        approval_required: request.approval_required,
+        expires_at: request.expires_at,
+        chain_index: request.chain_index,
+    }
+}
+
+#[async_trait]
+impl ToolRuntime for ToolsAdapter {
+    fn max_calls_per_generation(&self) -> u8 {
+        tools::executor::MAX_TOOL_CALLS_PER_GENERATION
+    }
+
+    async fn resolve_available(
+        &self,
+        pool: &PgPool,
+        tenant_id: Uuid,
+    ) -> sqlx::Result<Vec<ResolvedTool>> {
+        Ok(tools::policy::resolve_available_builtins(pool, tenant_id)
+            .await?
+            .into_iter()
+            .map(tool_from_tools)
+            .collect())
+    }
+
+    fn validate(
+        &self,
+        resolved: &[ResolvedTool],
+        name: &str,
+        arguments: &serde_json::Value,
+    ) -> Result<ResolvedTool, ValidationFailure> {
+        let resolved: Vec<tools::policy::ResolvedTool> =
+            resolved.iter().map(tool_to_tools).collect();
+        tools::executor::validate(&resolved, name, arguments)
+            .map(tool_from_tools)
+            .map_err(|failure| match failure {
+                tools::executor::ValidationFailure::UnknownOrDisabled => {
+                    ValidationFailure::UnknownOrDisabled
+                }
+                tools::executor::ValidationFailure::SchemaMismatch(detail) => {
+                    ValidationFailure::SchemaMismatch(detail)
+                }
+            })
+    }
+
+    async fn insert_request(&self, pool: &PgPool, request: NewToolRequest) -> sqlx::Result<Uuid> {
+        tools::queries::insert_request(pool, new_request_to_tools(request)).await
+    }
+
+    async fn insert_request_in_tx(
+        &self,
+        conn: &mut sqlx::PgConnection,
+        request: NewToolRequest,
+    ) -> sqlx::Result<Uuid> {
+        tools::queries::insert_request_in_tx(conn, new_request_to_tools(request)).await
+    }
+
+    async fn mark_executing(&self, pool: &PgPool, id: Uuid, tenant_id: Uuid) -> sqlx::Result<bool> {
+        tools::queries::mark_executing(pool, id, tenant_id).await
+    }
+
+    async fn mark_terminal(
+        &self,
+        pool: &PgPool,
+        id: Uuid,
+        tenant_id: Uuid,
+        status: &str,
+        result: Option<serde_json::Value>,
+        error: Option<String>,
+    ) -> sqlx::Result<bool> {
+        tools::queries::mark_terminal(pool, id, tenant_id, status, result, error).await
+    }
+
+    async fn execute(
+        &self,
+        run: &ToolRun,
+        tool: &ResolvedTool,
+        arguments: serde_json::Value,
+        tool_request_id: Uuid,
+    ) -> ExecutionOutcome {
+        let ctx = tools::registry::ToolExecutionCtx {
+            tenant_id: run.tenant_id,
+            conversation_id: run.conversation_id,
+            pool: run.pool.clone(),
+            vault: run.vault.clone(),
+            http: run.http.clone(),
+        };
+        match tools::executor::execute(&ctx, &tool_to_tools(tool), arguments, tool_request_id).await
+        {
+            tools::executor::ExecutionOutcome::Succeeded(value) => {
+                ExecutionOutcome::Succeeded(value)
+            }
+            tools::executor::ExecutionOutcome::Failed(error) => ExecutionOutcome::Failed(error),
+            tools::executor::ExecutionOutcome::TimedOut => ExecutionOutcome::TimedOut,
+        }
+    }
+
+    async fn find_request(
+        &self,
+        conn: &mut sqlx::PgConnection,
+        tenant_id: Uuid,
+        id: Uuid,
+    ) -> sqlx::Result<Option<ToolRequest>> {
+        Ok(tools::queries::find_request_in_tx(conn, tenant_id, id)
+            .await?
+            .map(|row| ToolRequest {
+                generation_id: row.generation_id,
+                tool_name: row.tool_name,
+                tool_source: source_from_column(&row.tool_source),
+                tenant_tool_id: row.tenant_tool_id,
+                arguments: row.arguments,
+            }))
+    }
+
+    async fn awaiting_approval(
+        &self,
+        pool: &PgPool,
+        tenant_id: Uuid,
+        conversation_id: Uuid,
+    ) -> sqlx::Result<Vec<PendingToolRequest>> {
+        Ok(tools::approval::fetch_awaiting_approval_for_conversation(
+            pool,
+            tenant_id,
+            conversation_id,
+        )
+        .await?
+        .into_iter()
+        .map(|row| PendingToolRequest {
+            id: row.id,
+            conversation_id: row.conversation_id,
+        })
+        .collect())
+    }
+
+    async fn cancel_pending(
+        &self,
+        conn: &mut sqlx::PgConnection,
+        tenant_id: Uuid,
+        conversation_id: Uuid,
+    ) -> sqlx::Result<Vec<Uuid>> {
+        tools::approval::cancel_pending_for_conversation(conn, tenant_id, conversation_id).await
+    }
+}
+
 /// The ports the AI engine runs on, wired to the modules behind them.
 pub fn ai_ports() -> AiPorts {
     AiPorts {
         knowledge: std::sync::Arc::new(KnowledgeAdapter),
+        tools: std::sync::Arc::new(ToolsAdapter),
     }
 }
 

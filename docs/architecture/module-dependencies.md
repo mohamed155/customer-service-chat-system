@@ -14,7 +14,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 
 | Module | Layout | Depends on (modules) | Used by (modules) | Tables owned |
 | -- | -- | -- | -- | -- |
-| `ai` | flat | `authz`, `billing`, `conversations`, `escalations`, `identity`, `tenancy`, `tools` | – | `agent_avatar_uploads`, `agent_configurations`, `agent_prompt_versions`, `agent_prompts`, `ai_configurations`, `ai_credentials`, `ai_generations`, `ai_usage_records` |
+| `ai` | flat | `authz`, `billing`, `conversations`, `escalations`, `identity`, `tenancy` | – | `agent_avatar_uploads`, `agent_configurations`, `agent_prompt_versions`, `agent_prompts`, `ai_configurations`, `ai_credentials`, `ai_generations`, `ai_usage_records` |
 | `analytics` | flat | `tenancy` | – | – |
 | `audit` | flat | `identity`, `tenancy` | – | `audit_logs` |
 | `authz` | flat | `identity` | `ai`, `customers`, `knowledge`, `notifications`, `tenancy` | – |
@@ -30,7 +30,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `notifications` | flat | `authz`, `escalations`, `identity`, `tenancy` | – | `notifications` |
 | `platform` | flat | `tenancy` | – | – |
 | `tenancy` | flat | `authz`, `email`, `identity` | `ai`, `analytics`, `audit`, `billing`, `conversations`, `customers`, `escalations`, `feedback`, `integrations`, `knowledge`, `notifications`, `platform`, `tools`, `whatsapp`, `widgets` | `tenant_invitations`, `tenant_memberships`, `tenant_rate_limit_overrides`, `tenants` |
-| `tools` | flat | `conversations`, `customers`, `identity`, `tenancy` | `ai`, `escalations` | `tenant_tool_policies`, `tenant_tools`, `tool_requests` |
+| `tools` | flat | `conversations`, `customers`, `identity`, `tenancy` | `escalations` | `tenant_tool_policies`, `tenant_tools`, `tool_requests` |
 | `whatsapp` | flat | `conversations`, `customers`, `integrations`, `tenancy` | – | `whatsapp_message_meta` |
 | `widgets` | flat | `conversations`, `customers`, `escalations`, `identity`, `tenancy` | `feedback` | `widget_instances`, `widget_sessions` |
 
@@ -46,7 +46,6 @@ flowchart LR
   ai --> escalations
   ai --> identity
   ai --> tenancy
-  ai --> tools
   analytics --> tenancy
   audit --> identity
   audit --> tenancy
@@ -119,7 +118,6 @@ Counts of SQL references to a table another module owns, per crate. They may onl
 | -- | -- | -- | -- |
 | `ai` | `conversations` | `conversations` | 1 |
 | `ai` | `skills` | `escalations` | 1 |
-| `ai` | `tool_requests` | `tools` | 1 |
 | `billing` | `ai_usage_records` | `ai` | 1 |
 | `billing` | `conversations` | `conversations` | 1 |
 | `conversations` | `conversation_feedback` | `feedback` | 2 |
@@ -144,4 +142,4 @@ Counts of SQL references to a table another module owns, per crate. They may onl
 | `tools` | `audit_logs` | `audit` | 2 |
 | `whatsapp` | `integration_connections` | `integrations` | 1 |
 
-Total: 41.
+Total: 40.

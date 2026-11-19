@@ -52,8 +52,7 @@
         "conversations",
         "escalations",
         "identity",
-        "tenancy",
-        "tools"
+        "tenancy"
       ],
       "tables": [
         "ai_configurations",
@@ -257,7 +256,6 @@
   "crossModuleSql": {
     "ai": {
       "skills": 1,
-      "tool_requests": 1,
       "conversations": 1
     },
     "billing": {

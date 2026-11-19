@@ -897,6 +897,7 @@ pub async fn set_conversation_ai_handling(
     ctx: TenantContext,
     Extension(principal): Extension<Principal>,
     Extension(presence): Extension<Arc<escalations::presence::Runtime>>,
+    Extension(ports): Extension<crate::ports::AiPorts>,
     Path(conversation_id): Path<Uuid>,
     ApiJson(payload): ApiJson<AiHandlingPayload>,
 ) -> Response {
@@ -1111,20 +1112,16 @@ pub async fn set_conversation_ai_handling(
             }
 
             // T034: Cancel any pending tool requests for this conversation
-            let pending_tools = tools::approval::fetch_awaiting_approval_for_conversation(
-                &pool,
-                ctx.tenant_id,
-                conversation_id,
-            )
-            .await
-            .unwrap_or_default();
-            let cancelled_ids = tools::approval::cancel_pending_for_conversation(
-                &mut tx,
-                ctx.tenant_id,
-                conversation_id,
-            )
-            .await
-            .unwrap_or_default();
+            let pending_tools = ports
+                .tools
+                .awaiting_approval(&pool, ctx.tenant_id, conversation_id)
+                .await
+                .unwrap_or_default();
+            let cancelled_ids = ports
+                .tools
+                .cancel_pending(&mut tx, ctx.tenant_id, conversation_id)
+                .await
+                .unwrap_or_default();
 
             let escalation = match escalations::routing::route_new_escalation_in_tx(
                 &mut tx,
