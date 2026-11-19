@@ -653,7 +653,12 @@ mod tests {
         limiter.check_timeout = Duration::from_secs(5);
         let started = std::time::Instant::now();
         let mut allowed = false;
+        let mut attempt = 0;
         while started.elapsed() < Duration::from_secs(30) {
+            // A fresh identifier each time: a retry that gives up after the store counted it
+            // must not use up the budget of the next one.
+            attempt += 1;
+            let id = format!("{id}-{attempt}");
             if matches!(
                 limiter.check(Scope::Login, &id, small_budget()).await,
                 Decision::Allowed { .. }

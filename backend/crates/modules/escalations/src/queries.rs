@@ -103,6 +103,46 @@ pub struct Candidate {
     pub load_count: i64,
 }
 
+/// The best of `eligible` for an escalation: most of the required skills matched, then the fewest
+/// open conversations, then the lowest ID. Only available members are considered. The ranking
+/// reads this module's own tables; who is eligible is decided before, by `tenancy`.
+async fn rank_candidate_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    required_skill_ids: &[Uuid],
+    eligible: &[Uuid],
+) -> sqlx::Result<Option<Candidate>> {
+    sqlx::query_as::<_, Candidate>(
+        "SELECT aa.membership_id AS membership_id, \
+                COALESCE(m.match_count, 0) AS match_count, \
+                COALESCE(m.matched_ids, '{}') AS matched_ids, \
+                COALESCE(l.load_count, 0) AS load_count \
+         FROM agent_availability aa \
+         LEFT JOIN LATERAL ( \
+             SELECT COUNT(*) AS match_count, array_agg(ask.skill_id) AS matched_ids \
+             FROM agent_skills ask \
+             WHERE ask.tenant_id = aa.tenant_id AND ask.membership_id = aa.membership_id \
+               AND ask.skill_id = ANY($3) \
+         ) m ON true \
+         LEFT JOIN LATERAL ( \
+             SELECT COUNT(*) AS load_count FROM conversations c \
+             WHERE c.tenant_id = aa.tenant_id AND c.assigned_membership_id = aa.membership_id \
+               AND c.status IN ('open','pending') AND c.deleted_at IS NULL \
+         ) l ON true \
+         WHERE aa.tenant_id = $1 \
+           AND aa.state = 'available' \
+           AND aa.membership_id = ANY($4) \
+         ORDER BY match_count DESC, load_count ASC, aa.membership_id ASC \
+         LIMIT 1",
+    )
+    .bind(tenant_id)
+    .bind(required_skill_ids)
+    .bind(required_skill_ids)
+    .bind(eligible)
+    .fetch_optional(&mut **tx)
+    .await
+}
+
 /// The roles whose members can take an escalation.
 const ASSIGNABLE_ROLES: [&str; 4] = ["owner", "admin", "manager", "agent"];
 
@@ -133,35 +173,7 @@ pub async fn select_candidate_in_tx(
         if eligible.is_empty() {
             return Ok(None);
         }
-        let candidate = sqlx::query_as::<_, Candidate>(
-            "SELECT aa.membership_id AS membership_id, \
-                COALESCE(m.match_count, 0) AS match_count, \
-                COALESCE(m.matched_ids, '{}') AS matched_ids, \
-                COALESCE(l.load_count, 0) AS load_count \
-         FROM agent_availability aa \
-         LEFT JOIN LATERAL ( \
-             SELECT COUNT(*) AS match_count, array_agg(ask.skill_id) AS matched_ids \
-             FROM agent_skills ask \
-             WHERE ask.tenant_id = aa.tenant_id AND ask.membership_id = aa.membership_id \
-               AND ask.skill_id = ANY($3) \
-         ) m ON true \
-         LEFT JOIN LATERAL ( \
-             SELECT COUNT(*) AS load_count FROM conversations c \
-             WHERE c.tenant_id = aa.tenant_id AND c.assigned_membership_id = aa.membership_id \
-               AND c.status IN ('open','pending') AND c.deleted_at IS NULL \
-         ) l ON true \
-         WHERE aa.tenant_id = $1 \
-           AND aa.state = 'available' \
-           AND aa.membership_id = ANY($4) \
-         ORDER BY match_count DESC, load_count ASC, aa.membership_id ASC \
-         LIMIT 1",
-        )
-        .bind(tenant_id)
-        .bind(required_skill_ids)
-        .bind(required_skill_ids)
-        .bind(&eligible)
-        .fetch_optional(&mut **tx)
-        .await?;
+        let candidate = rank_candidate_in_tx(tx, tenant_id, required_skill_ids, &eligible).await?;
         let Some(candidate) = candidate else {
             return Ok(None);
         };

@@ -503,3 +503,64 @@ async fn every_account_with_an_email_is_returned_deleted_ones_included() {
     expected.sort();
     assert_eq!(ids, expected);
 }
+
+/// The lock is the point of `lock_active_member`: while one transaction holds it, another cannot
+/// change that member's status or role until the first ends. Removing `FOR SHARE` would leave the
+/// predicate checks above green, so this uses two real connections.
+#[tokio::test]
+async fn a_locked_member_cannot_be_disabled_until_the_locking_transaction_ends() {
+    let Some((pool, w)) = world().await else {
+        return;
+    };
+    let seed = db::testing::seed_pool();
+    let target = add_member(&seed, w.tenant_a, "locked-agent", "agent", "active").await;
+
+    // Transaction one: the picked member is checked and locked, then the transaction stays open.
+    let mut holder = db::UnitOfWork::begin_for_tenant(&pool, w.tenant_a)
+        .await
+        .unwrap();
+    assert!(directory::lock_active_member(
+        holder.conn(),
+        w.tenant_a,
+        target.membership_id,
+        &["agent"]
+    )
+    .await
+    .unwrap());
+
+    // Transaction two, on another connection, tries to disable the member and gives up quickly.
+    let disable = |seed: PgPool| async move {
+        let mut tx = seed.begin().await.unwrap();
+        sqlx::query("SET LOCAL lock_timeout = '400ms'")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        let result = sqlx::query("UPDATE tenant_memberships SET status = 'disabled' WHERE id = $1")
+            .bind(target.membership_id)
+            .execute(&mut *tx)
+            .await;
+        (tx, result)
+    };
+    let (tx, blocked) = disable(seed.clone()).await;
+    match blocked {
+        Err(sqlx::Error::Database(e)) => assert_eq!(
+            e.code().as_deref(),
+            Some("55P03"),
+            "the update should have waited on the lock: {e}"
+        ),
+        other => panic!("disabling a locked member must wait, got {other:?}"),
+    }
+    drop(tx);
+
+    // Once the locking transaction ends, the change goes through.
+    holder.commit().await.unwrap();
+    let (tx, allowed) = disable(seed.clone()).await;
+    allowed.expect("the update must go through once the lock is released");
+    tx.commit().await.unwrap();
+    let status: String = sqlx::query_scalar("SELECT status FROM tenant_memberships WHERE id = $1")
+        .bind(target.membership_id)
+        .fetch_one(&seed)
+        .await
+        .unwrap();
+    assert_eq!(status, "disabled");
+}
