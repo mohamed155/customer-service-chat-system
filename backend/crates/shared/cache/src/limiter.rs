@@ -568,14 +568,24 @@ mod tests {
         );
     }
 
+    /// When the proxy lets the first reply of a connection through.
+    enum FirstReply {
+        /// After this long.
+        After(Duration),
+        /// When the test calls `notify_one` on this. Nothing about the first check's outcome then
+        /// depends on a timer, only on the test releasing it.
+        WhenReleased(Arc<tokio::sync::Notify>),
+    }
+
     /// A store that is slow to answer, not down: a local port that forwards every connection to
-    /// the real Redis, holding back the first reply by `first_reply` and each later one by
+    /// the real Redis, holding back the first reply as `first_reply` says and each later one by
     /// `later_reply`. The redis client allows 500 ms per reply and a second to connect, so a
-    /// delay must stay below that for the connection to succeed at all. Returns the proxy's
-    /// `redis://` URL and the number of connections it has accepted.
+    /// delay must stay below that for the connection to succeed at all (and a held reply must be
+    /// released within it). Returns the proxy's `redis://` URL and the number of connections it
+    /// has accepted.
     async fn redis_that_answers_slowly(
         real_url: &str,
-        first_reply: Duration,
+        first_reply: FirstReply,
         later_reply: Duration,
     ) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -589,10 +599,12 @@ mod tests {
         let url = format!("redis://{}", listener.local_addr().expect("local address"));
         let accepted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let counter = Arc::clone(&accepted);
+        let first_reply = Arc::new(first_reply);
         tokio::spawn(async move {
             while let Ok((inbound, _)) = listener.accept().await {
                 counter.fetch_add(1, Ordering::SeqCst);
                 let real_addr = real_addr.clone();
+                let first_reply = Arc::clone(&first_reply);
                 tokio::spawn(async move {
                     let Ok(outbound) = tokio::net::TcpStream::connect(real_addr).await else {
                         return;
@@ -608,7 +620,11 @@ mod tests {
                         if read == 0 {
                             break;
                         }
-                        tokio::time::sleep(if first { first_reply } else { later_reply }).await;
+                        match (&*first_reply, first) {
+                            (FirstReply::After(wait), true) => tokio::time::sleep(*wait).await,
+                            (FirstReply::WhenReleased(gate), true) => gate.notified().await,
+                            _ => tokio::time::sleep(later_reply).await,
+                        }
                         first = false;
                         if to_client.write_all(&buffer[..read]).await.is_err() {
                             break;
@@ -631,21 +647,30 @@ mod tests {
     #[tokio::test]
     async fn a_store_slower_than_the_deadline_still_finishes_connecting_for_later_checks() {
         let Some(real) = real_redis_url() else { return };
-        // The store's first reply comes after 300 ms; the check's deadline is 100 ms.
-        let (url, accepted) =
-            redis_that_answers_slowly(&real, Duration::from_millis(300), Duration::ZERO).await;
+        // The store holds its first reply until the test releases it, so the first check cannot
+        // be answered whatever the machine is doing (a fixed delay raced the redis client's own
+        // 500 ms reply limit on a loaded runner and the client reconnected: two connections).
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let (url, accepted) = redis_that_answers_slowly(
+            &real,
+            FirstReply::WhenReleased(Arc::clone(&gate)),
+            Duration::ZERO,
+        )
+        .await;
         let mut limiter = RedisRateLimiter::new(
             Cache::new(&url).expect("a well-formed URL"),
             "auth_closed".into(),
         );
-        limiter.check_timeout = Duration::from_millis(100);
+        limiter.check_timeout = Duration::from_millis(50);
         let id = format!("slow-connect-{}", uuid::Uuid::new_v4());
 
-        // The first check gives up before the store has answered.
+        // The first check gives up: the store has not answered and cannot until it is released.
         assert!(matches!(
             limiter.check(Scope::Login, &id, small_budget()).await,
             Decision::Unavailable { .. }
         ));
+        // The store answers now, well inside the client's own limit.
+        gate.notify_one();
 
         // The attempt carried on. Later checks get a roomy deadline (a loaded machine can be slow
         // to connect and to answer, and this test is about the attempt surviving, not about
@@ -689,8 +714,12 @@ mod tests {
         let Some(real) = real_redis_url() else { return };
         // Connecting is quick; the counter update and the previous-window read take 300 ms each,
         // so together they pass the 500 ms deadline although neither passes the client's own.
-        let (url, _) =
-            redis_that_answers_slowly(&real, Duration::ZERO, Duration::from_millis(300)).await;
+        let (url, _) = redis_that_answers_slowly(
+            &real,
+            FirstReply::After(Duration::ZERO),
+            Duration::from_millis(300),
+        )
+        .await;
         let limiter = RedisRateLimiter::new(
             Cache::new(&url).expect("a well-formed URL"),
             "auth_closed".into(),
