@@ -90,6 +90,7 @@ pub mod engine;
 pub mod generation_record;
 pub mod model;
 pub mod outbox;
+pub mod ports;
 pub mod prompt_routes;
 pub mod prompt_store;
 pub mod prompt_validate;

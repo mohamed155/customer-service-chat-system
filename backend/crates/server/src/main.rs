@@ -226,6 +226,7 @@ fn spawn_workers(
     let agent_responder_worker = tokio::spawn(ai::agent_responder::run_agent_responder_worker(
         state.db.clone(),
         state.ai.clone(),
+        state.ai_ports(),
         state.escalations.clone(),
     ));
     let widget_session_sweeper = {
@@ -317,7 +318,8 @@ fn spawn_workers(
     };
     let knowledge_indexer_worker = tokio::spawn(indexer::run_knowledge_indexer_worker(
         state.db.clone(),
-        Arc::new(state.ai.clone()) as Arc<dyn knowledge::indexer::Embedder>,
+        Arc::new(server::ai_ports::AiEmbedder(state.ai.clone()))
+            as Arc<dyn knowledge::indexer::Embedder>,
         storage.clone(),
     ));
     let notifications_worker = tokio::spawn(notifications::worker::run_notification_outbox_worker(

@@ -14,6 +14,7 @@
 //! - `rate_limit::ServerTenantRateLimit`
 //! - `security_headers::scope_a_layers`, `security_headers::scope_b_layers`
 //! - `state::AppState`
+//! - `ai_ports` — wires the ports `ai` declares to the modules that implement them
 //! - `openapi::ApiDoc`
 //! - `handlers` — composite handlers that cross module boundaries
 //!
@@ -26,6 +27,7 @@
 //! - Add new middleware layers in `build_app` or `api_routes`.
 //! - Add new route groups as `fn *_routes()` called from `api_routes`.
 
+pub mod ai_ports;
 pub mod client_errors;
 pub mod error_format;
 pub mod handlers;

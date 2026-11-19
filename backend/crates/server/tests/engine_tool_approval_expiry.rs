@@ -318,7 +318,9 @@ async fn engine_tool_approval_expiry() {
     // Drive the responder to run the follow-up generation
     let mut follow_up = false;
     for i in 0..20 {
-        match process_agent_responder_once(&pool, &state.ai, &state.escalations).await {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
+            .await
+        {
             Ok(true) => {
                 follow_up = true;
             }

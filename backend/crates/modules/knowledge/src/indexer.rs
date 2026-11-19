@@ -11,7 +11,8 @@ use crate::index_state::{self, IndexStatus};
 use crate::store;
 
 /// Embedding provider abstraction for the knowledge indexer.
-/// Implemented by the `ai` crate's `AiService`.
+/// Implemented by the server (`server::ai_ports::AiEmbedder`) on top of the `ai` service, so
+/// that `knowledge` and `ai` do not depend on each other.
 #[async_trait::async_trait]
 pub trait Embedder: Send + Sync {
     async fn embed(

@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::agent_config::{self, AgentConfigurationRow};
 use crate::agent_prompt;
 use crate::generation_record::{self, GenerationOutcome, GenerationRecord};
+use crate::ports::{AiPorts, RetrievedChunk};
 use crate::prompt_store;
 use crate::prompt_validate;
 use crate::{AiCallContext, AiCallError, AiInput, AiService};
@@ -31,7 +32,7 @@ pub struct BroadcastCtx {
 /// citation persistence.
 pub struct AssembledContext {
     pub input: AiInput,
-    pub retrieved_chunks: Vec<knowledge::retrieval::RetrievedChunk>,
+    pub retrieved_chunks: Vec<RetrievedChunk>,
     pub retrieval_degraded: bool,
 }
 
@@ -41,9 +42,11 @@ pub struct AssembledContext {
 ///
 /// This is deterministic per Principle IV: identical `row`, `history`,
 /// `channel`, and retrieved chunks produce byte-for-byte equal prompt text.
+#[allow(clippy::too_many_arguments)]
 pub async fn assemble_context(
     pool: &PgPool,
     ai: &AiService,
+    ports: &AiPorts,
     tenant_id: Uuid,
     conversation_id: Uuid,
     row: &AgentConfigurationRow,
@@ -103,7 +106,7 @@ pub async fn assemble_context(
         .join("\n");
 
     let mut degraded = false;
-    let mut retrieved_chunks: Vec<knowledge::retrieval::RetrievedChunk> = Vec::new();
+    let mut retrieved_chunks: Vec<RetrievedChunk> = Vec::new();
 
     if !query_string.is_empty() {
         let retrieval_start = Instant::now();
@@ -120,7 +123,9 @@ pub async fn assemble_context(
                     .into_iter()
                     .next()
                     .ok_or_else(|| AiCallError::Internal("empty embedding result".into()))?;
-                knowledge::retrieval::search(pool, tenant_id, &embedding, 5, 0.70)
+                ports
+                    .knowledge
+                    .search(pool, tenant_id, &embedding, 5, 0.70)
                     .await
                     .map_err(|e| AiCallError::Internal(e.to_string()))
             })
@@ -168,7 +173,7 @@ pub async fn assemble_context(
 pub fn assemble_prompt_input(
     system_message: String,
     history: Vec<(String, String)>,
-    retrieved_chunks: &[knowledge::retrieval::RetrievedChunk],
+    retrieved_chunks: &[RetrievedChunk],
 ) -> AiInput {
     let messages: Vec<ai_providers::Message> = history
         .into_iter()
@@ -498,6 +503,7 @@ pub async fn generate(
 pub async fn run_generation(
     pool: &PgPool,
     ai: &AiService,
+    ports: &AiPorts,
     presence: &Arc<escalations::presence::Runtime>,
     tenant_id: Uuid,
     conversation_id: Uuid,
@@ -527,6 +533,7 @@ pub async fn run_generation(
     let assembled = assemble_context(
         pool,
         ai,
+        ports,
         tenant_id,
         conversation_id,
         row,
@@ -1426,6 +1433,7 @@ pub async fn run_generation(
 pub async fn run_followup_generation(
     pool: &PgPool,
     ai: &AiService,
+    ports: &AiPorts,
     presence: &Arc<escalations::presence::Runtime>,
     tenant_id: Uuid,
     conversation_id: Uuid,
@@ -1581,6 +1589,7 @@ pub async fn run_followup_generation(
     let assembled = assemble_context(
         pool,
         ai,
+        ports,
         tenant_id,
         conversation_id,
         &row,
@@ -1759,7 +1768,7 @@ mod tests {
                 "It hasn't arrived yet and it's been two weeks.".into(),
             ),
         ];
-        let chunks = vec![knowledge::retrieval::RetrievedChunk {
+        let chunks = vec![RetrievedChunk {
             chunk_id: uuid::Uuid::nil(),
             item_id: uuid::Uuid::nil(),
             tenant_id: uuid::Uuid::nil(),
