@@ -4,6 +4,30 @@
 (`utoipa`, see `backend/crates/server/src/openapi.rs` and `router.rs`) and committed so that it can be
 reviewed, compared and used to generate clients. Never edit it by hand.
 
+## Errors
+
+An error answers in one of two formats, chosen by the request's `Accept` header
+([ADR-012](../adr/0012-api-conventions.md), gap A2). The legacy format is being replaced; new clients
+ask for the new one.
+
+| Request says | Response |
+| -- | -- |
+| `Accept: application/problem+json, application/json;q=0.5` (or any list that gives `application/problem+json` a quality above zero and at least that of `application/json`) | `application/problem+json`, an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) document |
+| no `Accept`, `application/json`, `*/*`, anything else | the legacy envelope `{ "error": { code, message, details, request_id } }`, with `Deprecation` and a `Link` header (`rel="deprecation"`) to the ADR |
+
+A problem document has `type` (`urn:problem:<code>`), `title`, `status`, `detail`, `instance` (the
+request path, without the query), `code` (the stable machine code; branch on this, never on `detail`),
+`request_id` (quote it to support) and `errors[]` of `{ field, code }`. Context that is not a field
+error, such as the ID of the thing in conflict, is under `details`. A `5xx` carries only its public
+message: an empty `errors`, no `details`, no internal text. `Retry-After` is sent in both formats. Both
+formats vary on `Accept` (`Vary: accept`).
+
+The backend counts every legacy-format answer in `error_envelope_legacy_total{route}` so the envelope
+can be removed when nobody receives it any more. It is removed only after the counter has shown no
+legacy answer for two weeks across a full release cycle (ADR-012, gap A2): widget builds already
+embedded on customers' pages are the slowest clients to update, and a shorter quiet period could
+break one that comes back later.
+
 ## What checks it
 
 | Check | Where | Fails when |

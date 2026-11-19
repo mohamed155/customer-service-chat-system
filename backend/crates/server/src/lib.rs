@@ -27,6 +27,7 @@
 //! - Add new route groups as `fn *_routes()` called from `api_routes`.
 
 pub mod client_errors;
+pub mod error_format;
 pub mod handlers;
 pub mod healthcheck;
 pub mod internal_error;

@@ -1570,6 +1570,11 @@ fn build_app(
         .layer(middleware::from_fn(
             crate::internal_error::internal_error_middleware,
         ))
+        // Outside `internal_error_middleware`, so it sees the finished response: problem+json for
+        // a client that asks for it, the deprecated legacy envelope for everyone else (ADR-012 A2).
+        .layer(middleware::from_fn(
+            crate::error_format::error_format_middleware,
+        ))
         .layer(middleware::from_fn(trace_middleware))
         .layer(middleware::from_fn(request_id_middleware))
         .layer(cors_layer(&config))

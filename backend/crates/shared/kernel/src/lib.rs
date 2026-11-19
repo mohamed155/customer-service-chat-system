@@ -23,7 +23,12 @@
 
 mod idempotency;
 pub mod ids;
+mod problem;
 pub mod rate_limit;
+pub use problem::{
+    prefers_problem_json, problem_title, problem_type, ErrorResponseParts, ProblemDetails,
+    ProblemFieldError, LEGACY_DEPRECATION, LEGACY_DEPRECATION_LINK, PROBLEM_JSON,
+};
 pub use rate_limit::{
     Budget, Decision, InMemoryRateLimitStore, RateLimiter, Scope, TenantRateLimit,
 };
@@ -262,7 +267,15 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
+        // The legacy body is rendered here; the parts are left for the server's
+        // `error_format_middleware`, which sees the request's `Accept` header and can turn the
+        // response into problem+json (ADR-012, gap A2).
+        let parts = ErrorResponseParts {
+            status: self.status,
+            envelope: self.envelope.clone(),
+        };
         let mut res = (self.status, Json(self.envelope)).into_response();
+        res.extensions_mut().insert(parts);
         if let Some(detail) = self.internal {
             res.extensions_mut().insert(*detail);
         }
