@@ -39,6 +39,11 @@ struct NotificationResolvedPayload {
 /// Events the AI engine publishes (`ai::outbox`, MOH-195). `notifications` reads them by name and
 /// shape, not through the `ai` crate: the event type and the keys are the contract, and a server
 /// test fails if the two sides drift.
+///
+/// These payload structs read only the keys a notification needs and ignore the rest (no
+/// `deny_unknown_fields`) on purpose. Events outlive the code that wrote them: a producer that adds
+/// a key must not make an older consumer reject every event until it is redeployed, and other
+/// consumers may read keys this one does not (`conversationId` on a tool approval).
 pub const AI_TOOL_APPROVAL_REQUESTED: &str = "ai.tool_approval_requested";
 pub const AI_RESPONSE_FAILED: &str = "ai.response_failed";
 

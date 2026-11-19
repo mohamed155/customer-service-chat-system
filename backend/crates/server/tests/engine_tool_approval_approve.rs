@@ -572,4 +572,15 @@ async fn engine_tool_approval_approve() {
         "expected at least 2 AI messages (interim + follow-up), got {}",
         ai_messages_after.len()
     );
+
+    // Leave nothing behind: the AI event this run published is `notifications`' to consume, and
+    // an event left in the shared outbox is the next test's worker call to claim first.
+    let presence = std::sync::Arc::new(escalations::presence::Runtime::new(
+        pool.clone(),
+        Duration::from_secs(45),
+    ));
+    while notifications::worker::process_notification_outbox_once(&pool, &presence)
+        .await
+        .unwrap()
+    {}
 }

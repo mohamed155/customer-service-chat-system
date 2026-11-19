@@ -697,8 +697,13 @@ pub async fn run_generation(
                                     trigger_message_id,
                                 )
                                 .await?;
-                                let req_id = tools::queries::insert_request(
-                                    pool,
+                                // The request and the event that tells people to approve it commit
+                                // together (`notifications` raises the notification from the event):
+                                // a request without its event would wait for an approver in silence.
+                                let mut approval_tx =
+                                    db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+                                let req_id = tools::queries::insert_request_in_tx(
+                                    approval_tx.conn(),
                                     tools::queries::NewToolRequest {
                                         tenant_id,
                                         conversation_id,
@@ -714,16 +719,14 @@ pub async fn run_generation(
                                     },
                                 )
                                 .await?;
-
-                                // T041: tell the modules that care that a person must approve this call
-                                // (`notifications` raises the notification from this event).
-                                crate::outbox::emit_tool_approval_requested(
-                                    pool,
+                                crate::outbox::emit_tool_approval_requested_in_tx(
+                                    approval_tx.conn(),
                                     tenant_id,
                                     req_id,
                                     conversation_id,
                                 )
-                                .await;
+                                .await?;
+                                approval_tx.commit().await?;
 
                                 // T018: broadcast created
                                 let created_ev = escalations::model::ToolRequestCreated {

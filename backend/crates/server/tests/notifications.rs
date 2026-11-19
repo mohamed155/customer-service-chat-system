@@ -1089,9 +1089,28 @@ async fn tool_decision_resolves_other_holders_notifications() {
 
 // ── MOH-195: `notifications` raises these from the AI's own events ────────
 
+/// Runs the notification worker until the outbox has nothing left for it. One call handles the
+/// oldest unclaimed event of the four types it reads, which may be an earlier test's leftover.
+async fn drain_notification_worker(
+    pool: &sqlx::PgPool,
+    presence: &Arc<escalations::presence::Runtime>,
+) {
+    for _ in 0..100 {
+        if !notifications::worker::process_notification_outbox_once(pool, presence)
+            .await
+            .unwrap()
+        {
+            return;
+        }
+    }
+    panic!("the notification outbox did not drain");
+}
+
 /// `ai` says what happened (`ai::outbox`) and `notifications` reads it by name and shape, without
 /// importing `ai`. If either side renames an event, nothing would be raised and no test of the
-/// other side would notice, so the names are pinned here, where both crates are visible.
+/// other side would notice, so the names are pinned here, where both crates are visible. The keys
+/// of each payload are pinned by the two end-to-end tests below: they publish with `ai::outbox`,
+/// run the real worker and check the notification it makes.
 #[test]
 fn the_ai_events_notifications_reads_are_the_ones_ai_publishes() {
     assert_eq!(
@@ -1117,19 +1136,24 @@ async fn an_ai_tool_approval_event_notifies_conversations_manage_holders() {
 
     let tool_request_id = Uuid::new_v4();
     let conversation_id = Uuid::new_v4();
-    ai::outbox::emit_tool_approval_requested(&pool, tenant_id, tool_request_id, conversation_id)
-        .await;
+    let mut uow = db::UnitOfWork::begin_for_tenant(&pool, tenant_id)
+        .await
+        .unwrap();
+    ai::outbox::emit_tool_approval_requested_in_tx(
+        uow.conn(),
+        tenant_id,
+        tool_request_id,
+        conversation_id,
+    )
+    .await
+    .unwrap();
+    uow.commit().await.unwrap();
 
     let presence = Arc::new(escalations::presence::Runtime::new(
         pool.clone(),
         Duration::from_secs(45),
     ));
-    assert!(
-        notifications::worker::process_notification_outbox_once(&pool, &presence)
-            .await
-            .unwrap(),
-        "expected the AI event to be processed"
-    );
+    drain_notification_worker(&pool, &presence).await;
 
     let rows: Vec<(String, String, String, String)> = sqlx::query_as(
         "SELECT tm.role, n.title, n.dedupe_key, n.subject_type \
@@ -1155,6 +1179,75 @@ async fn an_ai_tool_approval_event_notifies_conversations_manage_holders() {
         assert_eq!(dedupe_key, &dedupe_key_tool_approval(tool_request_id));
         assert_eq!(subject_type, "tool_request");
     }
+}
+
+/// The approval event is written in the caller's transaction (MOH-195), so it exists exactly when
+/// the transaction that wrote the tool request committed: a rollback takes it with it, and a request
+/// can never be committed without the event that tells people to approve it.
+#[tokio::test]
+async fn the_tool_approval_event_commits_and_rolls_back_with_its_transaction() {
+    let Some(pool) = get_pool().await else { return };
+    db::testing::migrate().await;
+    let tenant_id = seed_tenant(&pool).await;
+
+    let events = |tool_request_id: Uuid| async move {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM outbox_events \
+             WHERE tenant_id = $1::text AND event_type = 'ai.tool_approval_requested' \
+               AND aggregate_id = $2",
+        )
+        .bind(tenant_id)
+        .bind(tool_request_id.to_string())
+        .fetch_one(&db::testing::seed_pool())
+        .await
+        .unwrap()
+    };
+
+    let rolled_back = Uuid::new_v4();
+    let mut uow = db::UnitOfWork::begin_for_tenant(&pool, tenant_id)
+        .await
+        .unwrap();
+    ai::outbox::emit_tool_approval_requested_in_tx(
+        uow.conn(),
+        tenant_id,
+        rolled_back,
+        Uuid::new_v4(),
+    )
+    .await
+    .unwrap();
+    uow.rollback().await.unwrap();
+    assert_eq!(
+        events(rolled_back).await,
+        0,
+        "a rollback takes the event with it"
+    );
+
+    let committed = Uuid::new_v4();
+    let mut uow = db::UnitOfWork::begin_for_tenant(&pool, tenant_id)
+        .await
+        .unwrap();
+    ai::outbox::emit_tool_approval_requested_in_tx(
+        uow.conn(),
+        tenant_id,
+        committed,
+        Uuid::new_v4(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        events(committed).await,
+        0,
+        "nothing is visible before the commit"
+    );
+    uow.commit().await.unwrap();
+    assert_eq!(events(committed).await, 1);
+
+    // Leave nothing behind: an event left in the outbox is the next test's to claim first.
+    let presence = Arc::new(escalations::presence::Runtime::new(
+        pool.clone(),
+        Duration::from_secs(45),
+    ));
+    drain_notification_worker(&pool, &presence).await;
 }
 
 #[tokio::test]
@@ -1206,20 +1299,12 @@ async fn ai_response_failed_events_make_one_notification_per_time_bucket() {
     // is the failure's own time, so a late or repeated delivery cannot move it.
     for failed_at in [first, same_bucket, first] {
         ai::outbox::emit_response_failed(&pool, tenant_id, conversation_id, failed_at).await;
-        assert!(
-            notifications::worker::process_notification_outbox_once(&pool, &presence)
-                .await
-                .unwrap()
-        );
+        drain_notification_worker(&pool, &presence).await;
     }
     assert_eq!(count(db::testing::seed_pool()).await, 1);
 
     ai::outbox::emit_response_failed(&pool, tenant_id, conversation_id, later_bucket).await;
-    assert!(
-        notifications::worker::process_notification_outbox_once(&pool, &presence)
-            .await
-            .unwrap()
-    );
+    drain_notification_worker(&pool, &presence).await;
     assert_eq!(count(db::testing::seed_pool()).await, 2);
 
     let (title, body): (String, Option<String>) = sqlx::query_as(
