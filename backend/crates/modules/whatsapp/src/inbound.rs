@@ -82,30 +82,17 @@ pub async fn process_message(
     let customer_id =
         identity::resolve_customer_in_tx(&mut tx, tenant_id, &msg.from, profile_name).await?;
 
-    let conversation_id: Uuid =
-        match conversations::queries::find_open_conversation_in_tx(&mut tx, tenant_id, customer_id, "whatsapp")
-            .await?
-        {
-            Some(cid) => cid,
-            None => sqlx::query_scalar(
-                "INSERT INTO conversations (tenant_id, customer_id, channel, status, last_activity_at) \
-                 VALUES ($1, $2, 'whatsapp', 'open', now()) RETURNING id",
-            )
-            .bind(tenant_id)
-            .bind(customer_id)
-            .fetch_one(tx.conn())
-            .await?,
-        };
+    let conversation_id =
+        conversations::inbound::open_or_create_in_tx(&mut tx, tenant_id, customer_id, "whatsapp")
+            .await?;
 
     let body = extract_body(msg);
-    let message_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO messages (tenant_id, conversation_id, kind, body) \
-         VALUES ($1, $2, 'customer', $3) RETURNING id",
+    let message_id = conversations::inbound::append_customer_message_in_tx(
+        &mut tx,
+        tenant_id,
+        conversation_id,
+        &body,
     )
-    .bind(tenant_id)
-    .bind(conversation_id)
-    .bind(&body)
-    .fetch_one(tx.conn())
     .await?;
 
     if let Some((kind, media)) = extract_media(msg) {
@@ -132,11 +119,6 @@ pub async fn process_message(
     .bind(provider_ts)
     .execute(tx.conn())
     .await?;
-
-    sqlx::query("UPDATE conversations SET last_activity_at = now() WHERE id = $1")
-        .bind(conversation_id)
-        .execute(tx.conn())
-        .await?;
 
     conversations::outbox::emit_customer_message_in_tx(
         &mut tx,

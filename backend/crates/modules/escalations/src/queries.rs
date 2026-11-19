@@ -104,43 +104,52 @@ pub struct Candidate {
 }
 
 /// The best of `eligible` for an escalation: most of the required skills matched, then the fewest
-/// open conversations, then the lowest ID. Only available members are considered. The ranking
-/// reads this module's own tables; who is eligible is decided before, by `tenancy`.
+/// open conversations, then the lowest ID. Only available members are considered. Skills and
+/// availability are this module's own tables; how many conversations each member is carrying is
+/// `conversations`' to say, and who is eligible was decided before, by `tenancy`.
 async fn rank_candidate_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
     required_skill_ids: &[Uuid],
     eligible: &[Uuid],
 ) -> sqlx::Result<Option<Candidate>> {
-    sqlx::query_as::<_, Candidate>(
-        "SELECT aa.membership_id AS membership_id, \
-                COALESCE(m.match_count, 0) AS match_count, \
-                COALESCE(m.matched_ids, '{}') AS matched_ids, \
-                COALESCE(l.load_count, 0) AS load_count \
+    let available: Vec<(Uuid, i64, Vec<Uuid>)> = sqlx::query_as(
+        "SELECT aa.membership_id, \
+                COALESCE(m.match_count, 0), \
+                COALESCE(m.matched_ids, '{}') \
          FROM agent_availability aa \
          LEFT JOIN LATERAL ( \
              SELECT COUNT(*) AS match_count, array_agg(ask.skill_id) AS matched_ids \
              FROM agent_skills ask \
              WHERE ask.tenant_id = aa.tenant_id AND ask.membership_id = aa.membership_id \
-               AND ask.skill_id = ANY($3) \
+               AND ask.skill_id = ANY($2) \
          ) m ON true \
-         LEFT JOIN LATERAL ( \
-             SELECT COUNT(*) AS load_count FROM conversations c \
-             WHERE c.tenant_id = aa.tenant_id AND c.assigned_membership_id = aa.membership_id \
-               AND c.status IN ('open','pending') AND c.deleted_at IS NULL \
-         ) l ON true \
          WHERE aa.tenant_id = $1 \
            AND aa.state = 'available' \
-           AND aa.membership_id = ANY($4) \
-         ORDER BY match_count DESC, load_count ASC, aa.membership_id ASC \
-         LIMIT 1",
+           AND aa.membership_id = ANY($3)",
     )
     .bind(tenant_id)
     .bind(required_skill_ids)
-    .bind(required_skill_ids)
     .bind(eligible)
-    .fetch_optional(&mut **tx)
-    .await
+    .fetch_all(&mut **tx)
+    .await?;
+    let ids: Vec<Uuid> = available.iter().map(|(id, _, _)| *id).collect();
+    let loads = conversations::directory::open_load_by_member(tx, tenant_id, &ids).await?;
+    Ok(available
+        .into_iter()
+        .map(|(membership_id, match_count, matched_ids)| Candidate {
+            membership_id,
+            match_count,
+            matched_ids,
+            load_count: loads.get(&membership_id).copied().unwrap_or(0),
+        })
+        .min_by_key(|c| {
+            (
+                std::cmp::Reverse(c.match_count),
+                c.load_count,
+                c.membership_id,
+            )
+        }))
 }
 
 /// The roles whose members can take an escalation.
@@ -165,10 +174,11 @@ pub async fn select_candidate_in_tx(
         },
     )
     .await?;
-    // The eligibility read and the ranking are separate statements, so a member could be disabled
-    // or demoted between them and the assignment. Share-lock the one we pick: a roster change
-    // takes the same row `FOR UPDATE`, so it waits until this transaction has written the
-    // assignment. If the pick no longer qualifies, drop it and rank the rest.
+    // Eligibility, availability and load are read in separate statements, so a member could be
+    // disabled, demoted or set to away between them and the assignment. Share-lock the one we pick
+    // (their membership, and their availability row): a roster change or a presence change takes
+    // the same row `FOR UPDATE`, so it waits until this transaction has written the assignment.
+    // If the pick no longer qualifies, drop it and rank the rest.
     loop {
         if eligible.is_empty() {
             return Ok(None);
@@ -184,11 +194,32 @@ pub async fn select_candidate_in_tx(
             &ASSIGNABLE_ROLES,
         )
         .await?
+            && lock_available_in_tx(tx, tenant_id, candidate.membership_id).await?
         {
             return Ok(Some(candidate));
         }
         eligible.retain(|id| *id != candidate.membership_id);
     }
+}
+
+/// Takes a share lock on the member's availability row when they are still `available`, and says
+/// whether they are. A presence change updates the same row, so once this returns `true` the
+/// member cannot go away until the caller's transaction ends.
+pub async fn lock_available_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    membership_id: Uuid,
+) -> sqlx::Result<bool> {
+    let locked: Option<Uuid> = sqlx::query_scalar(
+        "SELECT membership_id FROM agent_availability \
+         WHERE tenant_id = $1 AND membership_id = $2 AND state = 'available' \
+         FOR SHARE",
+    )
+    .bind(tenant_id)
+    .bind(membership_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(locked.is_some())
 }
 
 pub async fn take_tenant_routing_lock_in_tx(
@@ -530,9 +561,6 @@ pub struct QueueEntryRow {
     pub required_skill_names: Vec<String>,
     pub status: String,
     pub escalated_at: DateTime<Utc>,
-    pub conv_channel: String,
-    pub cust_id: Uuid,
-    pub cust_name: String,
     pub waiting_seconds: i64,
 }
 

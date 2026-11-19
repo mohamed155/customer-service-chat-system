@@ -273,25 +273,20 @@ pub async fn get_conversation(
             return ApiError::internal_error("Failed to look up conversation").into_response();
         }
     };
-    let conv_row: Option<(Uuid, String, bool, bool)> = sqlx::query_as(
-        "SELECT id, status, escalated_at IS NOT NULL, assigned_membership_id IS NOT NULL \
-         FROM conversations \
-         WHERE tenant_id = $1 AND customer_id = $2 \
-           AND status NOT IN ('resolved', 'closed') \
-           AND deleted_at IS NULL \
-         ORDER BY last_activity_at DESC \
-         LIMIT 1",
-    )
-    .bind(session.tenant_id)
-    .bind(customer_id)
-    .fetch_optional(uow.conn())
-    .await
-    .map_err(|e| {
-        tracing::error!(%e, "get_conversation: db error");
-        ApiError::internal_error("Failed to look up conversation")
-    })
-    .ok()
-    .flatten();
+    let conv_row: Option<(Uuid, String, bool, bool)> =
+        conversations::directory::open_conversation_of_customer(
+            uow.conn(),
+            session.tenant_id,
+            customer_id,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(%e, "get_conversation: db error");
+            ApiError::internal_error("Failed to look up conversation")
+        })
+        .ok()
+        .flatten()
+        .map(|c| (c.id, c.status, c.escalated, c.assigned));
     drop(uow);
 
     let conv = match conv_row {
@@ -383,24 +378,19 @@ pub async fn create_conversation(
         .present_membership_ids_async(session.tenant_id)
         .await;
 
-    let existing: Option<(Uuid, String, bool, bool)> = sqlx::query_as(
-        "SELECT id, status, escalated_at IS NOT NULL, assigned_membership_id IS NOT NULL \
-         FROM conversations \
-         WHERE tenant_id = $1 AND customer_id = $2 \
-           AND status NOT IN ('resolved', 'closed') \
-           AND deleted_at IS NULL \
-         ORDER BY last_activity_at DESC \
-         LIMIT 1",
-    )
-    .bind(session.tenant_id)
-    .bind(customer_id)
-    .fetch_optional(tx.conn())
-    .await
-    .map_err(|e| {
-        tracing::error!(%e, "create_conversation: find existing failed");
-    })
-    .ok()
-    .flatten();
+    let existing: Option<(Uuid, String, bool, bool)> =
+        conversations::directory::open_conversation_of_customer(
+            tx.conn(),
+            session.tenant_id,
+            customer_id,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(%e, "create_conversation: find existing failed");
+        })
+        .ok()
+        .flatten()
+        .map(|c| (c.id, c.status, c.escalated, c.assigned));
 
     if let Some((conv_id, status, escalated, assigned)) = existing {
         let messages = conversations::queries::timeline_query_in_tx(
@@ -563,15 +553,12 @@ pub async fn send_message(
             let _ = tx.rollback().await;
             return ApiError::not_found("Conversation not found").into_response();
         };
-        let conv_status: Option<String> = sqlx::query_scalar(
-            "SELECT status FROM conversations \
-         WHERE tenant_id = $1 AND id = $2 AND customer_id = $3 AND deleted_at IS NULL \
-         FOR UPDATE",
+        let conv_status: Option<String> = conversations::directory::lock_customers_conversation(
+            tx.conn(),
+            session.tenant_id,
+            conversation_id,
+            session_customer_id,
         )
-        .bind(session.tenant_id)
-        .bind(conversation_id)
-        .bind(session_customer_id)
-        .fetch_optional(tx.conn())
         .await
         .map_err(|e| {
             error!(%e, "send_message: select for update failed");

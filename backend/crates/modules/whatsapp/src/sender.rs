@@ -72,22 +72,20 @@ pub async fn process_one(
 
     // 2. Get customer's whatsapp identifier
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
-    let customer_id: Uuid = sqlx::query_scalar(
-        "SELECT customer_id FROM conversations WHERE tenant_id = $1 AND id = $2",
+    let customer_id: Uuid = conversations::directory::customer_of_conversation(
+        uow.conn(),
+        event.tenant_id,
+        event.conversation_id,
     )
-    .bind(event.tenant_id)
-    .bind(event.conversation_id)
-    .fetch_optional(uow.conn())
     .await?
     .ok_or_else(|| format!("conversation {} not found", event.conversation_id))?;
 
-    let wa_identifier = sqlx::query_scalar::<_, String>(
-        "SELECT identifier FROM customer_channel_identifiers \
-         WHERE tenant_id = $1 AND customer_id = $2 AND channel = 'whatsapp' AND deleted_at IS NULL",
+    let wa_identifier = customers::directory::channel_identifier(
+        uow.conn(),
+        event.tenant_id,
+        customer_id,
+        "whatsapp",
     )
-    .bind(event.tenant_id)
-    .bind(customer_id)
-    .fetch_optional(uow.conn())
     .await?
     .ok_or_else(|| format!("no whatsapp identifier for customer {}", customer_id))?;
     drop(uow);

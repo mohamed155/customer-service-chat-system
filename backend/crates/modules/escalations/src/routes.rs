@@ -126,13 +126,11 @@ pub async fn escalate(
 
     // assigned_membership_id is a UUID column; decoding it as String failed
     // (500) as soon as a conversation was assigned, e.g. on a second escalate.
-    let conv = match sqlx::query_as::<_, (String, Option<Uuid>)>(
-        "SELECT status, assigned_membership_id FROM conversations \
-         WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
+    let conv = match conversations::directory::status_and_assignee(
+        tx.conn(),
+        ctx.tenant_id,
+        conversation_id,
     )
-    .bind(ctx.tenant_id)
-    .bind(conversation_id)
-    .fetch_optional(tx.conn())
     .await
     {
         Ok(Some(c)) => c,
@@ -341,11 +339,8 @@ pub async fn list_queue(
     let rows = sqlx::query_as::<_, queries::QueueEntryRow>(
         "SELECT e.id, e.conversation_id, e.reason, e.required_skill_ids, \
                 e.required_skill_names, e.status, e.escalated_at, \
-                c.channel AS conv_channel, cu.id AS cust_id, cu.display_name AS cust_name, \
                 EXTRACT(EPOCH FROM now() - e.escalated_at)::bigint AS waiting_seconds \
          FROM escalations e \
-         JOIN conversations c ON c.id = e.conversation_id AND c.tenant_id = e.tenant_id \
-         JOIN customers cu ON cu.id = c.customer_id AND cu.tenant_id = c.tenant_id \
          WHERE e.tenant_id = $1 AND e.status = 'queued' \
            AND (e.escalated_at, e.id) > ($2, $3) \
          ORDER BY e.escalated_at ASC, e.id ASC \
@@ -368,13 +363,36 @@ pub async fn list_queue(
         }
     };
 
+    // Which channel and customer each queued conversation has is `conversations`' to say.
+    let mut rows = rows;
+    let has_more = rows.len() > limit as usize;
+    rows.truncate(limit as usize);
+    let conversation_ids: Vec<Uuid> = rows.iter().map(|r| r.conversation_id).collect();
+    let cards = match conversations::directory::conversation_cards(
+        tx.conn(),
+        ctx.tenant_id,
+        &conversation_ids,
+    )
+    .await
+    {
+        Ok(cards) => cards,
+        Err(e) => {
+            tracing::error!(%e, "list_queue: conversation lookup failed");
+            return ApiError::internal_error("Failed to load queue")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
+
     tx.commit().await.ok();
 
-    let has_more = rows.len() > limit as usize;
     let entries: Vec<QueueEntry> = rows
         .into_iter()
-        .take(limit as usize)
-        .map(|r| {
+        .filter_map(|r| {
+            let card = cards.get(&r.conversation_id)?;
+            Some((r, card))
+        })
+        .map(|(r, card)| {
             let req_skills: Vec<RequiredSkillRef> = r
                 .required_skill_ids
                 .iter()
@@ -401,10 +419,10 @@ pub async fn list_queue(
                 },
                 conversation: QueueEntryConversationRef {
                     id: r.conversation_id,
-                    channel: r.conv_channel,
+                    channel: card.channel.clone(),
                     customer: CustomerRef {
-                        id: r.cust_id,
-                        name: r.cust_name,
+                        id: card.customer_id,
+                        name: card.customer_name.clone(),
                     },
                 },
                 waiting_seconds: r.waiting_seconds,

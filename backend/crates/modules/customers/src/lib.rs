@@ -94,6 +94,7 @@
 //! permissions enforced at the router layer.
 
 pub mod audit;
+pub mod directory;
 pub mod model;
 pub mod queries;
 pub mod routes;
