@@ -75,6 +75,9 @@ pub struct ErrorBody {
     pub request_id: String,
 }
 
+/// Deprecated. The legacy error envelope, sent when the request does not ask for
+/// `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link`
+/// headers, and the envelope will be removed.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 pub struct ErrorEnvelope {
     pub error: ErrorBody,

@@ -348,7 +348,7 @@ fn references_schema(content: &openapi::content::Content, name: &str) -> bool {
 /// envelope. The server answers in problem+json instead when the request's `Accept` header asks
 /// for it (`error_format_middleware`), so each such response gets a second media type,
 /// `application/problem+json` with `ProblemDetails`, and the legacy `application/json` is marked
-/// deprecated. It is done once here, on the finished document, because the paths of the router are
+/// deprecated (`x-deprecated`; the deprecation text is on the `ErrorEnvelope` schema). It is done once here, on the finished document, because the paths of the router are
 /// merged after [`ApiDoc`]'s own modifiers have run, and annotating hundreds of responses by hand
 /// would drift.
 pub fn describe_error_formats(openapi: &mut openapi::OpenApi) {
@@ -378,32 +378,20 @@ pub fn describe_error_formats(openapi: &mut openapi::OpenApi) {
                 if !legacy_is_envelope {
                     continue;
                 }
+                // OpenAPI 3.1 has no `description` (or `deprecated`) on a media type object, so the
+                // legacy one carries the `x-deprecated` extension and the schema says why.
                 if let Some(openapi::RefOr::T(legacy)) =
                     response.content.get_mut("application/json")
                 {
-                    legacy.description = Some(
-                        "Deprecated. The legacy error envelope, sent when the request does not \
-                         ask for `application/problem+json` (ADR-012, gap A2). The response carries \
-                         `Deprecation` and `Link` headers."
-                            .to_owned(),
-                    );
                     let mut extensions = openapi::extensions::Extensions::default();
                     extensions.insert("x-deprecated".to_owned(), serde_json::Value::Bool(true));
                     legacy.extensions = Some(extensions);
                 }
-                let mut problem = openapi::content::Content::new(Some(
-                    openapi::Ref::from_schema_name("ProblemDetails"),
-                ));
-                problem.description = Some(
-                    "RFC 9457 Problem Details, sent when the request's `Accept` header asks for \
-                     `application/problem+json`."
-                        .to_owned(),
-                );
-                // First, so a viewer that shows the first media type shows the one to use.
-                response.content.shift_insert(
-                    0,
+                response.content.insert(
                     kernel::PROBLEM_JSON.to_owned(),
-                    openapi::RefOr::T(problem),
+                    openapi::RefOr::T(openapi::content::Content::new(Some(
+                        openapi::Ref::from_schema_name("ProblemDetails"),
+                    ))),
                 );
             }
         }

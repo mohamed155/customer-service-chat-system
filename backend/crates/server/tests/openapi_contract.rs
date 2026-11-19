@@ -472,17 +472,16 @@ fn every_error_response_lists_both_formats_and_marks_the_legacy_one_deprecated()
                         "{at}: the legacy media type is not marked deprecated"
                     ));
                 }
-                if !legacy["description"]
-                    .as_str()
-                    .is_some_and(|d| d.starts_with("Deprecated"))
-                {
-                    problems.push(format!(
-                        "{at}: the legacy media type does not say it is deprecated"
-                    ));
-                }
             }
         }
     }
+    // The reason is on the schema, once, not repeated on each media type.
+    assert!(
+        json["components"]["schemas"]["ErrorEnvelope"]["description"]
+            .as_str()
+            .is_some_and(|d| d.starts_with("Deprecated")),
+        "the ErrorEnvelope schema must say it is deprecated"
+    );
     assert!(
         with_envelope > 100,
         "expected many error responses, found {with_envelope}"
@@ -606,4 +605,38 @@ async fn a_live_error_matches_the_schema_documented_for_its_format() {
             "undocumented member {member} in {body}"
         );
     }
+}
+
+/// OpenAPI 3.1 defines `schema`, `example`, `examples` and `encoding` on a media type object, plus
+/// `x-` extensions. utoipa can emit more (it follows a newer draft), which a strict 3.1 validator
+/// would reject, so nothing in the document may use it.
+#[test]
+fn media_type_objects_only_use_fields_openapi_31_defines() {
+    let json = serde_json::to_value(documented_openapi(false)).unwrap();
+    let allowed = ["schema", "example", "examples", "encoding"];
+    let mut offenders = Vec::new();
+    let mut check = |at: String, content: &Value| {
+        let Some(media_types) = content.as_object() else {
+            return;
+        };
+        for (media, object) in media_types {
+            for key in object.as_object().into_iter().flat_map(|o| o.keys()) {
+                if !allowed.contains(&key.as_str()) && !key.starts_with("x-") {
+                    offenders.push(format!("{at} {media}: `{key}`"));
+                }
+            }
+        }
+    };
+    for (path, ops) in json["paths"].as_object().unwrap() {
+        for (method, op) in ops.as_object().unwrap() {
+            check(
+                format!("{method} {path} requestBody"),
+                &op["requestBody"]["content"],
+            );
+            for (status, response) in op["responses"].as_object().unwrap() {
+                check(format!("{method} {path} {status}"), &response["content"]);
+            }
+        }
+    }
+    assert!(offenders.is_empty(), "not OpenAPI 3.1: {offenders:#?}");
 }

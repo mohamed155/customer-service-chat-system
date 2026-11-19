@@ -2787,6 +2787,11 @@ export interface components {
       field: string;
       message: string;
     };
+    /**
+     * @description Deprecated. The legacy error envelope, sent when the request does not ask for
+     *     `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link`
+     *     headers, and the envelope will be removed.
+     */
     ErrorEnvelope: {
       error: components['schemas']['ErrorBody'];
     };
@@ -4069,9 +4074,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4081,9 +4084,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4093,9 +4094,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4107,9 +4106,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4137,9 +4134,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4173,9 +4168,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4185,9 +4178,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4197,9 +4188,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4209,9 +4198,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4245,9 +4232,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4257,9 +4242,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4269,9 +4252,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4281,9 +4262,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4313,9 +4292,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4325,9 +4302,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4357,9 +4332,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4391,9 +4364,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4403,9 +4374,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4415,9 +4384,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4427,9 +4394,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4463,9 +4428,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4475,9 +4438,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4487,9 +4448,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4499,9 +4458,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4535,9 +4492,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4547,9 +4502,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4559,9 +4512,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4571,9 +4522,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4605,9 +4554,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4617,9 +4564,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4629,9 +4574,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4641,9 +4584,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4757,9 +4698,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4769,9 +4708,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4781,9 +4718,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4820,9 +4755,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4832,9 +4765,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4844,9 +4775,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4856,9 +4785,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4868,9 +4795,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4880,9 +4805,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4892,9 +4815,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4924,9 +4845,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -4936,9 +4855,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5018,9 +4935,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5030,9 +4945,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5042,9 +4955,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5054,9 +4965,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5090,9 +4999,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5102,9 +5009,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5114,9 +5019,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5126,9 +5029,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5138,9 +5039,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5170,9 +5069,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5182,9 +5079,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5194,9 +5089,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5215,9 +5108,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5254,9 +5145,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5266,9 +5155,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5278,9 +5165,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5290,9 +5175,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5302,9 +5185,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5335,9 +5216,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5347,9 +5226,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5359,9 +5236,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5371,9 +5246,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5753,9 +5626,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5765,9 +5636,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5777,9 +5646,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5789,9 +5656,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5825,9 +5690,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5837,9 +5700,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5849,9 +5710,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5861,9 +5720,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5873,9 +5730,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5885,9 +5740,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5920,9 +5773,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5932,9 +5783,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5944,9 +5793,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5956,9 +5803,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -5995,9 +5840,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6007,9 +5850,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6019,9 +5860,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6031,9 +5870,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6043,9 +5880,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6055,9 +5890,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6067,9 +5900,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6102,9 +5933,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6114,9 +5943,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6126,9 +5953,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6159,9 +5984,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6171,9 +5994,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6183,9 +6004,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6195,9 +6014,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6256,9 +6073,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6268,9 +6083,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6300,9 +6113,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6312,9 +6123,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6324,9 +6133,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6369,9 +6176,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6381,9 +6186,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6393,9 +6196,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6405,9 +6206,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6417,9 +6216,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6429,9 +6226,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6461,9 +6256,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6473,9 +6266,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6485,9 +6276,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6497,9 +6286,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6534,9 +6321,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6546,9 +6331,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6558,9 +6341,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6570,9 +6351,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6582,9 +6361,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6594,9 +6371,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6626,9 +6401,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6638,9 +6411,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6650,9 +6421,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6682,9 +6451,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6694,9 +6461,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6706,9 +6471,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6742,9 +6505,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6754,9 +6515,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6766,9 +6525,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6778,9 +6535,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6790,9 +6545,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6825,9 +6578,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6837,9 +6588,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6849,9 +6598,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6884,9 +6631,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6896,9 +6641,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6908,9 +6651,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6920,9 +6661,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6959,9 +6698,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6971,9 +6708,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6983,9 +6718,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -6995,9 +6728,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7007,9 +6738,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7019,9 +6748,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7051,9 +6778,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7063,9 +6788,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7075,9 +6798,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7087,9 +6808,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7123,9 +6842,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7135,9 +6852,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7147,9 +6862,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7159,9 +6872,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7171,9 +6882,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7201,9 +6910,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7213,9 +6920,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7225,9 +6930,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7237,9 +6940,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7269,9 +6970,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7281,9 +6980,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7293,9 +6990,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7314,9 +7009,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7353,9 +7046,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7365,9 +7056,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7377,9 +7066,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7389,9 +7076,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7401,9 +7086,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7434,9 +7117,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7446,9 +7127,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7458,9 +7137,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7470,9 +7147,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7507,9 +7182,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7519,9 +7192,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7531,9 +7202,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7543,9 +7212,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7578,9 +7245,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7590,9 +7255,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7602,9 +7265,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7614,9 +7275,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7649,9 +7308,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7661,9 +7318,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7673,9 +7328,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7685,9 +7338,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7832,9 +7483,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7844,9 +7493,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7856,9 +7503,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7868,9 +7513,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7904,9 +7547,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7916,9 +7557,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7928,9 +7567,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7940,9 +7577,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7952,9 +7587,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -7964,9 +7597,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8040,9 +7671,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8052,9 +7681,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8064,9 +7691,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8076,9 +7701,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8088,9 +7711,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8124,9 +7745,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8136,9 +7755,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8148,9 +7765,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8160,9 +7775,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8172,9 +7785,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8184,9 +7795,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8219,9 +7828,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8231,9 +7838,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8243,9 +7848,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8255,9 +7858,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8294,9 +7895,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8306,9 +7905,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8318,9 +7915,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8330,9 +7925,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8342,9 +7935,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8354,9 +7945,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8393,9 +7982,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8405,9 +7992,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8417,9 +8002,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8429,9 +8012,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8441,9 +8022,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8453,9 +8032,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8465,9 +8042,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8504,9 +8079,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8516,9 +8089,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8528,9 +8099,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8540,9 +8109,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8552,9 +8119,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8564,9 +8129,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8576,9 +8139,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8614,9 +8175,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8626,9 +8185,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8638,9 +8195,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8650,9 +8205,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8662,9 +8215,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8701,9 +8252,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8713,9 +8262,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8725,9 +8272,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8737,9 +8282,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8749,9 +8292,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8761,9 +8302,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8801,9 +8340,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8849,9 +8386,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8861,9 +8396,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8873,9 +8406,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8885,9 +8416,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8921,9 +8450,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8933,9 +8460,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8945,9 +8470,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8957,9 +8480,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8969,9 +8490,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -8981,9 +8500,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9016,9 +8533,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9028,9 +8543,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9040,9 +8553,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9052,9 +8563,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9091,9 +8600,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9103,9 +8610,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9115,9 +8620,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9127,9 +8630,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9139,9 +8640,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9151,9 +8650,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9163,9 +8660,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9198,9 +8693,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9210,9 +8703,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9222,9 +8713,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9234,9 +8723,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9246,9 +8733,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9281,9 +8766,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9293,9 +8776,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9305,9 +8786,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9317,9 +8796,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9352,9 +8829,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9364,9 +8839,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9376,9 +8849,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9388,9 +8859,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9400,9 +8869,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9432,9 +8899,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9444,9 +8909,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9567,9 +9030,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9579,9 +9040,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9591,9 +9050,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9603,9 +9060,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9615,9 +9070,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9627,9 +9080,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9666,9 +9117,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9678,9 +9127,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9690,9 +9137,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9702,9 +9147,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9714,9 +9157,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9726,9 +9167,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9761,9 +9200,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9773,9 +9210,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9785,9 +9220,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9797,9 +9230,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9809,9 +9240,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9890,9 +9319,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9902,9 +9329,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9914,9 +9339,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9950,9 +9373,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9962,9 +9383,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9974,9 +9393,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9986,9 +9403,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -9998,9 +9413,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10031,9 +9444,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10043,9 +9454,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10055,9 +9464,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10067,9 +9474,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10106,9 +9511,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10118,9 +9521,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10130,9 +9531,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10142,9 +9541,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10154,9 +9551,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10166,9 +9561,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10203,9 +9596,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10215,9 +9606,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10227,9 +9616,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10239,9 +9626,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10279,9 +9664,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10291,9 +9674,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10303,9 +9684,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10339,9 +9718,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10351,9 +9728,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10363,9 +9738,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10375,9 +9748,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10387,9 +9758,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10422,9 +9791,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10434,9 +9801,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10446,9 +9811,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10458,9 +9821,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10497,9 +9858,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10509,9 +9868,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10521,9 +9878,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10533,9 +9888,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10545,9 +9898,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10557,9 +9908,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10592,9 +9941,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10604,9 +9951,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10616,9 +9961,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10628,9 +9971,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10663,9 +10004,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10675,9 +10014,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10687,9 +10024,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10699,9 +10034,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10711,9 +10044,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10750,9 +10081,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10762,9 +10091,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10774,9 +10101,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10786,9 +10111,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10798,9 +10121,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10835,9 +10156,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10847,9 +10166,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10859,9 +10176,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10871,9 +10186,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10883,9 +10196,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10919,9 +10230,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10931,9 +10240,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10943,9 +10250,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10955,9 +10260,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -10991,9 +10294,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11003,9 +10304,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11015,9 +10314,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11027,9 +10324,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11039,9 +10334,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11051,9 +10344,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11084,9 +10375,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11096,9 +10385,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11108,9 +10395,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11120,9 +10405,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11132,9 +10415,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11167,9 +10448,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11179,9 +10458,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11191,9 +10468,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11203,9 +10478,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11242,9 +10515,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11254,9 +10525,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11266,9 +10535,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11278,9 +10545,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11290,9 +10555,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11302,9 +10565,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11314,9 +10575,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11347,9 +10606,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11359,9 +10616,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11371,9 +10626,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11383,9 +10636,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11422,9 +10673,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11434,9 +10683,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11446,9 +10693,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11458,9 +10703,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11470,9 +10713,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11482,9 +10723,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11646,9 +10885,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11658,9 +10895,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11670,9 +10905,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11706,9 +10939,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11718,9 +10949,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11730,9 +10959,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11742,9 +10969,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11754,9 +10979,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11766,9 +10989,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11799,9 +11020,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11811,9 +11030,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11823,9 +11040,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11835,9 +11050,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11874,9 +11087,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11886,9 +11097,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11898,9 +11107,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11910,9 +11117,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11922,9 +11127,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11934,9 +11137,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11946,9 +11147,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -11983,9 +11182,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12027,9 +11224,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12039,9 +11234,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12071,9 +11264,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12103,9 +11294,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12115,9 +11304,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12148,9 +11335,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12181,9 +11366,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12193,9 +11376,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12205,9 +11386,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12238,9 +11417,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12250,9 +11427,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12282,9 +11457,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12294,9 +11467,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12306,9 +11477,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12342,9 +11511,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12354,9 +11521,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12366,9 +11531,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12378,9 +11541,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12413,9 +11574,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12425,9 +11584,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12437,9 +11594,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12449,9 +11604,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12488,9 +11641,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12500,9 +11651,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12512,9 +11661,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12524,9 +11671,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12536,9 +11681,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12569,9 +11712,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12581,9 +11722,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12593,9 +11732,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12605,9 +11742,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12640,9 +11775,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12652,9 +11785,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12664,9 +11795,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12676,9 +11805,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12711,9 +11838,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12723,9 +11848,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12755,9 +11878,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12796,9 +11917,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12831,9 +11950,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12843,9 +11960,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12891,9 +12006,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12903,9 +12016,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12915,9 +12026,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12927,9 +12036,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12966,9 +12073,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12978,9 +12083,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -12990,9 +12093,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -13002,9 +12103,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -13014,9 +12113,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -13046,9 +12143,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -13082,9 +12177,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
@@ -13094,9 +12187,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          /** @description Deprecated. The legacy error envelope, sent when the request does not ask for `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link` headers. */
           'application/json': components['schemas']['ErrorEnvelope'];
-          /** @description RFC 9457 Problem Details, sent when the request's `Accept` header asks for `application/problem+json`. */
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
