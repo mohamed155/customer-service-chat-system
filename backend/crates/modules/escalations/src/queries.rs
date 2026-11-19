@@ -174,10 +174,11 @@ pub async fn select_candidate_in_tx(
         },
     )
     .await?;
-    // The eligibility read and the ranking are separate statements, so a member could be disabled
-    // or demoted between them and the assignment. Share-lock the one we pick: a roster change
-    // takes the same row `FOR UPDATE`, so it waits until this transaction has written the
-    // assignment. If the pick no longer qualifies, drop it and rank the rest.
+    // Eligibility, availability and load are read in separate statements, so a member could be
+    // disabled, demoted or set to away between them and the assignment. Share-lock the one we pick
+    // (their membership, and their availability row): a roster change or a presence change takes
+    // the same row `FOR UPDATE`, so it waits until this transaction has written the assignment.
+    // If the pick no longer qualifies, drop it and rank the rest.
     loop {
         if eligible.is_empty() {
             return Ok(None);
@@ -193,11 +194,32 @@ pub async fn select_candidate_in_tx(
             &ASSIGNABLE_ROLES,
         )
         .await?
+            && lock_available_in_tx(tx, tenant_id, candidate.membership_id).await?
         {
             return Ok(Some(candidate));
         }
         eligible.retain(|id| *id != candidate.membership_id);
     }
+}
+
+/// Takes a share lock on the member's availability row when they are still `available`, and says
+/// whether they are. A presence change updates the same row, so once this returns `true` the
+/// member cannot go away until the caller's transaction ends.
+pub async fn lock_available_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    membership_id: Uuid,
+) -> sqlx::Result<bool> {
+    let locked: Option<Uuid> = sqlx::query_scalar(
+        "SELECT membership_id FROM agent_availability \
+         WHERE tenant_id = $1 AND membership_id = $2 AND state = 'available' \
+         FOR SHARE",
+    )
+    .bind(tenant_id)
+    .bind(membership_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(locked.is_some())
 }
 
 pub async fn take_tenant_routing_lock_in_tx(
@@ -539,14 +561,6 @@ pub struct QueueEntryRow {
     pub required_skill_names: Vec<String>,
     pub status: String,
     pub escalated_at: DateTime<Utc>,
-    /// The conversation's channel and customer, filled from the `conversations` directory after
-    /// the query (`conversation_cards`).
-    #[sqlx(skip)]
-    pub conv_channel: String,
-    #[sqlx(skip)]
-    pub cust_id: Uuid,
-    #[sqlx(skip)]
-    pub cust_name: String,
     pub waiting_seconds: i64,
 }
 

@@ -388,14 +388,11 @@ pub async fn list_queue(
 
     let entries: Vec<QueueEntry> = rows
         .into_iter()
-        .filter_map(|mut r| {
+        .filter_map(|r| {
             let card = cards.get(&r.conversation_id)?;
-            r.conv_channel = card.channel.clone();
-            r.cust_id = card.customer_id;
-            r.cust_name = card.customer_name.clone();
-            Some(r)
+            Some((r, card))
         })
-        .map(|r| {
+        .map(|(r, card)| {
             let req_skills: Vec<RequiredSkillRef> = r
                 .required_skill_ids
                 .iter()
@@ -422,10 +419,10 @@ pub async fn list_queue(
                 },
                 conversation: QueueEntryConversationRef {
                     id: r.conversation_id,
-                    channel: r.conv_channel,
+                    channel: card.channel.clone(),
                     customer: CustomerRef {
-                        id: r.cust_id,
-                        name: r.cust_name,
+                        id: card.customer_id,
+                        name: card.customer_name.clone(),
                     },
                 },
                 waiting_seconds: r.waiting_seconds,
