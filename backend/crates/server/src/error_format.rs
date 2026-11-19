@@ -59,7 +59,17 @@ pub async fn error_format_middleware(request: Request, next: Next) -> Response {
             Some(parts) => parts,
             None => return response,
         },
-        None => return response,
+        None => {
+            // The same request with a problem+json preference gets a body, so a cache must not
+            // reuse this empty answer for it. Nothing else about the response changes, and it is
+            // not marked deprecated: it was never the legacy envelope.
+            if bodyless_framework_error(&response).is_some() {
+                response
+                    .headers_mut()
+                    .append(header::VARY, HeaderValue::from_static("accept"));
+            }
+            return response;
+        }
     };
 
     // The answer depends on `Accept`, whichever format it takes.
@@ -351,7 +361,11 @@ mod tests {
         let (status, headers, body) = get_with("/post-only", None).await;
         assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
         assert!(body.is_empty(), "unchanged for everyone else");
-        assert!(headers.get("deprecation").is_none() && headers.get(header::VARY).is_none());
+        assert_eq!(headers[header::ALLOW], "POST");
+        // Not the legacy envelope, so not deprecated; but a problem+json request gets a body, so
+        // a cache must tell the two apart.
+        assert!(headers.get("deprecation").is_none() && headers.get(header::LINK).is_none());
+        assert_eq!(headers[header::VARY], "accept");
 
         let (status, headers, body) = get_with("/post-only", Some(PROBLEM)).await;
         assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);

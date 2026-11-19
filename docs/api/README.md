@@ -19,7 +19,7 @@ A problem document has `type` (`urn:problem:<code>`), `title`, `status`, `detail
 request path, without the query), `code` (the stable machine code; branch on this, never on `detail`),
 `request_id` (quote it to support) and `errors[]` of `{ field, code }`. Context that is not a field
 error, such as the ID of the thing in conflict, is under `details`. A `5xx` carries only its public
-message: no `errors`, no `details`, no internal text. `Retry-After` is sent in both formats. Both
+message: an empty `errors`, no `details`, no internal text. `Retry-After` is sent in both formats. Both
 formats vary on `Accept` (`Vary: accept`).
 
 The backend counts every legacy-format answer in `error_envelope_legacy_total{route}` so the envelope
