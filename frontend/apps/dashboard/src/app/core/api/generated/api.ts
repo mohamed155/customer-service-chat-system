@@ -2787,6 +2787,11 @@ export interface components {
       field: string;
       message: string;
     };
+    /**
+     * @description Deprecated. The legacy error envelope, sent when the request does not ask for
+     *     `application/problem+json` (ADR-012, gap A2). The response carries `Deprecation` and `Link`
+     *     headers, and the envelope will be removed.
+     */
     ErrorEnvelope: {
       error: components['schemas']['ErrorBody'];
     };
@@ -3382,6 +3387,35 @@ export interface components {
       platform_role?: string | null;
       /** Format: uuid */
       user_id: string;
+    };
+    /** @description An error as RFC 9457 Problem Details, with the API's `code`, `request_id` and `errors`. */
+    ProblemDetails: {
+      /** @description The stable machine code clients branch on. */
+      code: string;
+      /** @description The specific message for this occurrence. A 5xx never carries internal detail. */
+      detail: string;
+      /**
+       * @description Other structured context the error carries (an ID of the thing in conflict, for example).
+       *     Omitted when there is none.
+       */
+      details?: unknown[];
+      /** @description Field errors, one per invalid field. */
+      errors: components['schemas']['ProblemFieldError'][];
+      /** @description The request path (no query string). */
+      instance: string;
+      /** @description The request ID to quote to support. */
+      request_id: string;
+      /** Format: int32 */
+      status: number;
+      /** @description A short, per-code title. */
+      title: string;
+      /** @description A stable URI per `code`: `urn:problem:<code>`. */
+      type: string;
+    };
+    /** @description A field-level error: which field, and the machine code a client translates. */
+    ProblemFieldError: {
+      code: string;
+      field: string;
     };
     PromptBootstrapResponse: {
       limits: components['schemas']['LimitsDto'];
@@ -4041,6 +4075,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Invalid email or password. */
@@ -4050,6 +4085,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -4059,6 +4095,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Sign-in is unavailable: the rate-limit store cannot be reached and sign-in fails closed (`APP_RATE_LIMIT_FAIL_MODE=auth_closed`, the default). The same answer for every account. Try again after the `Retry-After` interval. */
@@ -4070,6 +4107,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4097,6 +4135,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4130,6 +4169,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Two-factor authentication is already set up. */
@@ -4139,6 +4179,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description The password is not correct. */
@@ -4148,6 +4189,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Too many attempts. */
@@ -4157,6 +4199,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4190,6 +4233,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description No setup in progress. */
@@ -4199,6 +4243,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description The code is not valid. */
@@ -4208,6 +4253,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Too many wrong codes; the factor is locked. */
@@ -4217,6 +4263,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4246,6 +4293,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description No active second factor. */
@@ -4255,6 +4303,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4284,6 +4333,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4315,6 +4365,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Unauthenticated. */
@@ -4324,6 +4375,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description The code is not valid. */
@@ -4333,6 +4385,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Too many attempts, or the second factor is locked. */
@@ -4342,6 +4395,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4375,6 +4429,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description No valid challenge (missing, expired or already used): sign in again. */
@@ -4384,6 +4439,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description The code is not valid. */
@@ -4393,6 +4449,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Too many attempts, or the second factor is locked. */
@@ -4402,6 +4459,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4435,6 +4493,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description An account with this email already exists. */
@@ -4444,6 +4503,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (per-field). */
@@ -4453,6 +4513,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -4462,6 +4523,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4493,6 +4555,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Unauthenticated. */
@@ -4502,6 +4565,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description A session-cookie request without an allowed origin and the `X-Requested-With` header. */
@@ -4511,6 +4575,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Too many requests. */
@@ -4520,6 +4585,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4633,6 +4699,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Invitation has expired. */
@@ -4642,6 +4709,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -4651,6 +4719,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4687,6 +4756,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Signed-in principal email does not match the invitation email. */
@@ -4696,6 +4766,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Invitation not found (or the tenant is not active). */
@@ -4705,6 +4776,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Already a member of this tenant, or an account with this email already exists. */
@@ -4714,6 +4786,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Invitation has expired or has already been used. */
@@ -4723,6 +4796,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (per-field, e.g. invalid display name or password). */
@@ -4732,6 +4806,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -4741,6 +4816,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4770,6 +4846,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error */
@@ -4779,6 +4856,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4858,6 +4936,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -4867,6 +4946,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description AI is not configured. */
@@ -4876,6 +4956,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -4885,6 +4966,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4918,6 +5000,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -4927,6 +5010,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -4936,6 +5020,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (e.g. unknown provider, bad temperature). */
@@ -4945,6 +5030,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -4954,6 +5040,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -4983,6 +5070,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -4992,6 +5080,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description AI is not configured or no credential resolves. */
@@ -5001,6 +5090,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Provider rejected the test call. */
@@ -5019,6 +5109,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -5055,6 +5146,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -5064,6 +5156,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -5073,6 +5166,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (e.g. unknown provider or empty/oversized key). */
@@ -5082,6 +5176,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error (e.g. encryption not configured). */
@@ -5091,6 +5186,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -5121,6 +5217,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -5130,6 +5227,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description No credential found for this provider. */
@@ -5139,6 +5237,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -5148,6 +5247,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -5527,6 +5627,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -5536,6 +5637,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (invalid `status` filter). */
@@ -5545,6 +5647,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -5554,6 +5657,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -5587,6 +5691,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -5596,6 +5701,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -5605,6 +5711,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Slug is already in use. */
@@ -5614,6 +5721,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (per-field). */
@@ -5623,6 +5731,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -5632,6 +5741,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -5664,6 +5774,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -5673,6 +5784,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Tenant not found. */
@@ -5682,6 +5794,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -5691,6 +5804,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -5727,6 +5841,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -5736,6 +5851,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -5745,6 +5861,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Tenant not found. */
@@ -5754,6 +5871,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Slug is already in use. */
@@ -5763,6 +5881,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (per-field). */
@@ -5772,6 +5891,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -5781,6 +5901,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -5813,6 +5934,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Access denied (tenant not found or insufficient permissions). */
@@ -5822,6 +5944,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -5831,6 +5954,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -5861,6 +5985,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -5870,6 +5995,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description No such user. */
@@ -5879,6 +6005,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description You cannot reset your own. */
@@ -5888,6 +6015,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -5946,6 +6074,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions */
@@ -5955,6 +6084,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -5984,6 +6114,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -5993,6 +6124,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6002,6 +6134,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6044,6 +6177,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -6053,6 +6187,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6062,6 +6197,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Version conflict. */
@@ -6071,6 +6207,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (e.g. bad tone, unknown channel). */
@@ -6080,6 +6217,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6089,6 +6227,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6118,6 +6257,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6127,6 +6267,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Agent configuration or avatar not found. */
@@ -6136,6 +6277,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6145,6 +6287,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6179,6 +6322,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6188,6 +6332,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Agent configuration not found. */
@@ -6197,6 +6342,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Avatar exceeds 256 KB. */
@@ -6206,6 +6352,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Invalid content type. */
@@ -6215,6 +6362,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6224,6 +6372,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6253,6 +6402,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6262,6 +6412,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6271,6 +6422,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6300,6 +6452,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6309,6 +6462,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6318,6 +6472,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6351,6 +6506,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6360,6 +6516,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Version conflict. */
@@ -6369,6 +6526,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed. */
@@ -6378,6 +6536,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6387,6 +6546,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6419,6 +6579,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6428,6 +6589,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6437,6 +6599,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6469,6 +6632,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6478,6 +6642,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Version not found. */
@@ -6487,6 +6652,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6496,6 +6662,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6532,6 +6699,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6541,6 +6709,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Version not found. */
@@ -6550,6 +6719,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Version conflict. */
@@ -6559,6 +6729,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed. */
@@ -6568,6 +6739,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6577,6 +6749,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6606,6 +6779,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6615,6 +6789,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description AI is not configured at any level. */
@@ -6624,6 +6799,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6633,6 +6809,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6666,6 +6843,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -6675,6 +6853,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6684,6 +6863,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (e.g. unknown provider, bad temperature). */
@@ -6693,6 +6873,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6702,6 +6883,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6729,6 +6911,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6738,6 +6921,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description AI config not found for this tenant. */
@@ -6747,6 +6931,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6756,6 +6941,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6785,6 +6971,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6794,6 +6981,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description AI is not configured or no credential resolves. */
@@ -6803,6 +6991,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Provider rejected the test call. */
@@ -6821,6 +7010,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6857,6 +7047,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -6866,6 +7057,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6875,6 +7067,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (e.g. unknown provider or empty/oversized key). */
@@ -6884,6 +7077,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error (e.g. encryption not configured). */
@@ -6893,6 +7087,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6923,6 +7118,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -6932,6 +7128,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description No credential found for this provider. */
@@ -6941,6 +7138,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -6950,6 +7148,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -6984,6 +7183,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -6993,6 +7193,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7002,6 +7203,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7011,6 +7213,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7043,6 +7246,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -7052,6 +7256,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7061,6 +7266,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7070,6 +7276,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7102,6 +7309,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7111,6 +7319,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Usage record not found. */
@@ -7120,6 +7329,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7129,6 +7339,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7273,6 +7484,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7282,6 +7494,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Membership not found in this tenant. */
@@ -7291,6 +7504,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7300,6 +7514,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7333,6 +7548,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -7342,6 +7558,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7351,6 +7568,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Membership not found in this tenant. */
@@ -7360,6 +7578,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (invalid state value). */
@@ -7369,6 +7588,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7378,6 +7598,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7451,6 +7672,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -7460,6 +7682,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7469,6 +7692,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (invalid `status`, `assignee`, or `channel` filter). */
@@ -7478,6 +7702,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7487,6 +7712,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7520,6 +7746,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -7529,6 +7756,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7538,6 +7766,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Customer not found in this tenant. */
@@ -7547,6 +7776,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (per-field, e.g. invalid channel or message body length). */
@@ -7556,6 +7786,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7565,6 +7796,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7597,6 +7829,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions */
@@ -7606,6 +7839,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation not found */
@@ -7615,6 +7849,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error */
@@ -7624,6 +7859,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7660,6 +7896,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -7669,6 +7906,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7678,6 +7916,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation not found. */
@@ -7687,6 +7926,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (no fields supplied, or the target membership is not active in this tenant). */
@@ -7696,6 +7936,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7705,6 +7946,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7741,6 +7983,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -7750,6 +7993,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7759,6 +8003,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation not found. */
@@ -7768,6 +8013,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conflict (agent configured or conversation resolved/closed). */
@@ -7777,6 +8023,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Unprocessable entity (credential not resolvable). */
@@ -7786,6 +8033,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7795,6 +8043,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7831,6 +8080,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -7840,6 +8090,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7849,6 +8100,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation not found. */
@@ -7858,6 +8110,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation already has an active escalation. */
@@ -7867,6 +8120,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (reason length, or unknown required skill id). */
@@ -7876,6 +8130,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7885,6 +8140,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7920,6 +8176,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -7929,6 +8186,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -7938,6 +8196,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation not found. */
@@ -7947,6 +8206,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -7956,6 +8216,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -7992,6 +8253,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -8001,6 +8263,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8010,6 +8273,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation not found. */
@@ -8019,6 +8283,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (e.g. invalid `kind` or `body` length). */
@@ -8028,6 +8293,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8037,6 +8303,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8074,6 +8341,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8119,6 +8387,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -8128,6 +8397,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8137,6 +8407,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8146,6 +8417,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8179,6 +8451,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -8188,6 +8461,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8197,6 +8471,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Channel identifier is already held by another customer in this tenant. */
@@ -8206,6 +8481,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (per-field, e.g. invalid email/phone, unknown channel, duplicate identifiers in payload, or no contact information supplied). */
@@ -8215,6 +8491,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8224,6 +8501,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8256,6 +8534,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8265,6 +8544,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Customer not found. */
@@ -8274,6 +8554,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8283,6 +8564,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8319,6 +8601,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -8328,6 +8611,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8337,6 +8621,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Customer not found. */
@@ -8346,6 +8631,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Channel identifier in the new set is already held by another customer in this tenant. */
@@ -8355,6 +8641,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (per-field, e.g. invalid email/phone, unknown channel, or too many metadata keys). */
@@ -8364,6 +8651,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8373,6 +8661,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8405,6 +8694,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -8414,6 +8704,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8423,6 +8714,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Customer not found. */
@@ -8432,6 +8724,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8441,6 +8734,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8473,6 +8767,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -8482,6 +8777,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8491,6 +8787,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8500,6 +8797,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8532,6 +8830,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8541,6 +8840,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Escalation or membership not found. */
@@ -8550,6 +8850,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Escalation already claimed. */
@@ -8559,6 +8860,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8568,6 +8870,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8597,6 +8900,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions */
@@ -8606,6 +8910,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8726,6 +9031,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8735,6 +9041,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Unknown integration slug. */
@@ -8744,6 +9051,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Integration is not actively connected. */
@@ -8753,6 +9061,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed. */
@@ -8762,6 +9071,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8771,6 +9081,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8807,6 +9118,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8816,6 +9128,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Unknown integration slug. */
@@ -8825,6 +9138,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Integration is already actively connected. */
@@ -8834,6 +9148,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed or catalog entry not available. */
@@ -8843,6 +9158,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8852,6 +9168,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8884,6 +9201,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -8893,6 +9211,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Unknown integration slug. */
@@ -8902,6 +9221,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Integration is not actively connected. */
@@ -8911,6 +9231,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -8920,6 +9241,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -8998,6 +9320,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9007,6 +9330,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9016,6 +9340,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9049,6 +9374,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -9058,6 +9384,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9067,6 +9394,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Category already exists. */
@@ -9076,6 +9404,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9085,6 +9414,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9115,6 +9445,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9124,6 +9455,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Category not found. */
@@ -9133,6 +9465,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9142,6 +9475,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9178,6 +9512,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -9187,6 +9522,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9196,6 +9532,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Category not found. */
@@ -9205,6 +9542,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Duplicate name. */
@@ -9214,6 +9552,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9223,6 +9562,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9257,6 +9597,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -9266,6 +9607,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9275,6 +9617,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9284,6 +9627,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9321,6 +9665,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9330,6 +9675,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9339,6 +9685,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9372,6 +9719,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -9381,6 +9729,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9390,6 +9739,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Unprocessable entity. */
@@ -9399,6 +9749,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9408,6 +9759,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9440,6 +9792,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9449,6 +9802,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Item not found. */
@@ -9458,6 +9812,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9467,6 +9822,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9503,6 +9859,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -9512,6 +9869,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9521,6 +9879,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Item not found. */
@@ -9530,6 +9889,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Unprocessable entity. */
@@ -9539,6 +9899,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9548,6 +9909,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9580,6 +9942,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9589,6 +9952,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Item or file not found. */
@@ -9598,6 +9962,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9607,6 +9972,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9639,6 +10005,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9648,6 +10015,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Item not found. */
@@ -9657,6 +10025,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Item is not published. */
@@ -9666,6 +10035,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9675,6 +10045,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9711,6 +10082,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -9720,6 +10092,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9729,6 +10102,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Item not found. */
@@ -9738,6 +10112,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9747,6 +10122,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9781,6 +10157,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required */
@@ -9790,6 +10167,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions */
@@ -9799,6 +10177,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed */
@@ -9808,6 +10187,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error */
@@ -9817,6 +10197,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9850,6 +10231,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9859,6 +10241,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (invalid `status` filter or `limit` range). */
@@ -9868,6 +10251,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9877,6 +10261,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9910,6 +10295,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required or insufficient rank. */
@@ -9919,6 +10305,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9928,6 +10315,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description A pending invitation already exists for this email, or the user is already a member. */
@@ -9937,6 +10325,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (per-field, e.g. invalid email or unknown role). */
@@ -9946,6 +10335,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -9955,6 +10345,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -9985,6 +10376,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -9994,6 +10386,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Invitation not found. */
@@ -10003,6 +10396,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Invitation is not in a revocable state. */
@@ -10012,6 +10406,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -10021,6 +10416,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10053,6 +10449,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -10062,6 +10459,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Invitation not found. */
@@ -10071,6 +10469,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -10080,6 +10479,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10116,6 +10516,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required or insufficient rank. */
@@ -10125,6 +10526,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions or rank to manage the target. */
@@ -10134,6 +10536,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Membership not found. */
@@ -10143,6 +10546,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conflict (role/status unchanged, last active Owner guard, or self-action). */
@@ -10152,6 +10556,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (per-field, e.g. unknown role/status, or both/neither of role and status supplied). */
@@ -10161,6 +10566,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -10170,6 +10576,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10200,6 +10607,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions, or the user belongs to other workspaces or is platform staff. */
@@ -10209,6 +10617,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description No such member. */
@@ -10218,6 +10627,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description You cannot reset your own. */
@@ -10227,6 +10637,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10263,6 +10674,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -10272,6 +10684,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -10281,6 +10694,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Membership not found in this tenant. */
@@ -10290,6 +10704,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (target membership is not agent-capable, or unknown skill id). */
@@ -10299,6 +10714,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -10308,6 +10724,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10469,6 +10886,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -10478,6 +10896,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -10487,6 +10906,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10520,6 +10940,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -10529,6 +10950,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -10538,6 +10960,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description A skill with this name already exists. */
@@ -10547,6 +10970,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (name length). */
@@ -10556,6 +10980,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -10565,6 +10990,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10595,6 +11021,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -10604,6 +11031,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Skill not found. */
@@ -10613,6 +11041,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -10622,6 +11051,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10658,6 +11088,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Authentication required. */
@@ -10667,6 +11098,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -10676,6 +11108,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Skill not found. */
@@ -10685,6 +11118,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description A skill with this name already exists. */
@@ -10694,6 +11128,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed (name length). */
@@ -10703,6 +11138,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -10712,6 +11148,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10746,6 +11183,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10787,6 +11225,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal error */
@@ -10796,6 +11235,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10825,6 +11265,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10854,6 +11295,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal error */
@@ -10863,6 +11305,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10893,6 +11336,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10923,6 +11367,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed */
@@ -10932,6 +11377,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal error */
@@ -10941,6 +11387,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -10971,6 +11418,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal error */
@@ -10980,6 +11428,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11009,6 +11458,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -11018,6 +11468,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -11027,6 +11478,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11060,6 +11512,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -11069,6 +11522,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed. */
@@ -11078,6 +11532,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -11087,6 +11542,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11119,6 +11575,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -11128,6 +11585,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Widget instance not found. */
@@ -11137,6 +11595,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -11146,6 +11605,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11182,6 +11642,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -11191,6 +11652,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Widget instance not found. */
@@ -11200,6 +11662,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed. */
@@ -11209,6 +11672,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -11218,6 +11682,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11248,6 +11713,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -11257,6 +11723,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Widget instance not found. */
@@ -11266,6 +11733,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -11275,6 +11743,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11307,6 +11776,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Insufficient permissions. */
@@ -11316,6 +11786,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Widget instance not found. */
@@ -11325,6 +11796,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Internal server error. */
@@ -11334,6 +11806,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11366,6 +11839,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Widget not found. */
@@ -11375,6 +11849,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11404,6 +11879,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11442,6 +11918,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11474,6 +11951,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation not found. */
@@ -11483,6 +11961,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11528,6 +12007,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation not found. */
@@ -11537,6 +12017,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed. */
@@ -11546,6 +12027,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Rate limited. */
@@ -11555,6 +12037,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11591,6 +12074,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation not found. */
@@ -11600,6 +12084,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Conversation closed. */
@@ -11609,6 +12094,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Validation failed. */
@@ -11618,6 +12104,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Rate limited. */
@@ -11627,6 +12114,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11656,6 +12144,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };
@@ -11689,6 +12178,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
       /** @description Widget not found. */
@@ -11698,6 +12188,7 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
     };

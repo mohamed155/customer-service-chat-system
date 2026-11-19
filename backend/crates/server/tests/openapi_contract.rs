@@ -441,3 +441,202 @@ fn every_error_envelope_response_carries_required_fields() {
         );
     }
 }
+
+// ── Error formats (ADR-012 gap A2, MOH-198) ────────────────────────────────
+
+const PROBLEM_JSON: &str = "application/problem+json";
+
+/// Every error response that documents the legacy envelope also lists problem+json with
+/// `ProblemDetails`, listed first, and marks the legacy media type deprecated.
+#[test]
+fn every_error_response_lists_both_formats_and_marks_the_legacy_one_deprecated() {
+    let json = serde_json::to_value(documented_openapi(false)).unwrap();
+    let mut with_envelope = 0;
+    let mut problems = Vec::new();
+    for (path, ops) in json["paths"].as_object().unwrap() {
+        for (method, op) in ops.as_object().unwrap() {
+            for (status, response) in op["responses"].as_object().unwrap() {
+                let content = &response["content"];
+                let legacy = &content["application/json"];
+                if legacy["schema"]["$ref"] != "#/components/schemas/ErrorEnvelope" {
+                    continue;
+                }
+                with_envelope += 1;
+                let at = format!("{method} {path} {status}");
+                if content[PROBLEM_JSON]["schema"]["$ref"] != "#/components/schemas/ProblemDetails"
+                {
+                    problems.push(format!("{at}: no problem+json with ProblemDetails"));
+                }
+                if legacy["x-deprecated"] != Value::Bool(true) {
+                    problems.push(format!(
+                        "{at}: the legacy media type is not marked deprecated"
+                    ));
+                }
+            }
+        }
+    }
+    // The reason is on the schema, once, not repeated on each media type.
+    assert!(
+        json["components"]["schemas"]["ErrorEnvelope"]["description"]
+            .as_str()
+            .is_some_and(|d| d.starts_with("Deprecated")),
+        "the ErrorEnvelope schema must say it is deprecated"
+    );
+    assert!(
+        with_envelope > 100,
+        "expected many error responses, found {with_envelope}"
+    );
+    assert!(problems.is_empty(), "{problems:#?}");
+}
+
+#[test]
+fn the_problem_details_schema_has_the_documented_members() {
+    let problem = resolve_schema("ProblemDetails");
+    let required: Vec<&str> = problem["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    for member in [
+        "type",
+        "title",
+        "status",
+        "detail",
+        "instance",
+        "code",
+        "request_id",
+        "errors",
+    ] {
+        assert!(
+            required.contains(&member),
+            "ProblemDetails must require {member}: {required:?}"
+        );
+        assert!(
+            problem["properties"][member].is_object(),
+            "no property {member}"
+        );
+    }
+    // `details` carries context that is not a field error and is absent when there is none.
+    assert!(problem["properties"]["details"].is_object());
+    assert!(!required.contains(&"details"));
+    // A field error is `{ field, code }`.
+    assert_eq!(
+        problem["properties"]["errors"]["items"]["$ref"],
+        "#/components/schemas/ProblemFieldError"
+    );
+    let field_error = resolve_schema("ProblemFieldError");
+    for member in ["field", "code"] {
+        assert!(
+            field_error["properties"][member].is_object(),
+            "ProblemFieldError.{member}"
+        );
+    }
+}
+
+/// The schema a documented response names for `media`, resolved from the document.
+fn documented_schema(path: &str, method: &str, status: u16, media: &str) -> Value {
+    let json = serde_json::to_value(documented_openapi(false)).unwrap();
+    let reference = json["paths"][path][method]["responses"][status.to_string()]["content"][media]
+        ["schema"]["$ref"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{method} {path} {status} documents no {media} schema"))
+        .to_owned();
+    json["components"]["schemas"][reference.trim_start_matches("#/components/schemas/")].clone()
+}
+
+/// A real error, in each format, against the schema the document names for that format.
+#[tokio::test]
+async fn a_live_error_matches_the_schema_documented_for_its_format() {
+    // GET /tenant/members without a session: documented as 401 in the operation's responses.
+    let uri = "/api/v1/tenant/members";
+    let legacy_schema = documented_schema("/tenant/members", "get", 401, "application/json");
+    let problem_schema = documented_schema("/tenant/members", "get", 401, PROBLEM_JSON);
+
+    // Legacy: the default, and still the answer to `Accept: application/json`.
+    for accept in [None, Some("application/json")] {
+        let mut request = Request::builder().uri(uri);
+        if let Some(accept) = accept {
+            request = request.header("accept", accept);
+        }
+        let response = router::app(make_state())
+            .oneshot(request.body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            response.headers()["content-type"],
+            "application/json",
+            "{accept:?}"
+        );
+        let (status, body) = body_json(response).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_field(&body, &legacy_schema, "error");
+        let error_body = resolve_schema("ErrorBody");
+        for field in ["code", "message", "details", "request_id"] {
+            assert_field(&body["error"], &error_body, field);
+        }
+    }
+
+    // problem+json: asked for.
+    let response = router::app(make_state())
+        .oneshot(
+            Request::builder()
+                .uri(uri)
+                .header("accept", "application/problem+json, application/json;q=0.5")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.headers()["content-type"], PROBLEM_JSON);
+    let (status, body) = body_json(response).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    for field in problem_schema["required"].as_array().unwrap() {
+        assert_field(&body, &problem_schema, field.as_str().unwrap());
+    }
+    assert_eq!(body["status"], 401);
+    assert_eq!(body["code"], "unauthenticated");
+    assert_eq!(body["instance"], uri);
+    // Only what the schema declares is sent.
+    let declared = problem_schema["properties"].as_object().unwrap();
+    for member in body.as_object().unwrap().keys() {
+        assert!(
+            declared.contains_key(member),
+            "undocumented member {member} in {body}"
+        );
+    }
+}
+
+/// OpenAPI 3.1 defines `schema`, `example`, `examples` and `encoding` on a media type object, plus
+/// `x-` extensions. utoipa can emit more (it follows a newer draft), which a strict 3.1 validator
+/// would reject, so nothing in the document may use it.
+#[test]
+fn media_type_objects_only_use_fields_openapi_31_defines() {
+    let json = serde_json::to_value(documented_openapi(false)).unwrap();
+    let allowed = ["schema", "example", "examples", "encoding"];
+    let mut offenders = Vec::new();
+    let mut check = |at: String, content: &Value| {
+        let Some(media_types) = content.as_object() else {
+            return;
+        };
+        for (media, object) in media_types {
+            for key in object.as_object().into_iter().flat_map(|o| o.keys()) {
+                if !allowed.contains(&key.as_str()) && !key.starts_with("x-") {
+                    offenders.push(format!("{at} {media}: `{key}`"));
+                }
+            }
+        }
+    };
+    for (path, ops) in json["paths"].as_object().unwrap() {
+        for (method, op) in ops.as_object().unwrap() {
+            check(
+                format!("{method} {path} requestBody"),
+                &op["requestBody"]["content"],
+            );
+            for (status, response) in op["responses"].as_object().unwrap() {
+                check(format!("{method} {path} {status}"), &response["content"]);
+            }
+        }
+    }
+    assert!(offenders.is_empty(), "not OpenAPI 3.1: {offenders:#?}");
+}

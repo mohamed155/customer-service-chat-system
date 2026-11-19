@@ -28,7 +28,13 @@ use utoipa::{openapi, Modify, OpenApi};
         title = "AI Customer Service Platform API",
         version = "1.0.0",
         description = "REST API for the multi-tenant AI customer service platform. \
-                      All authenticated endpoints require a valid `app_session` cookie."
+                      All authenticated endpoints require a valid `app_session` cookie.\n\n\
+                      **Errors.** An error answers in `application/problem+json` (RFC 9457, \
+                      `ProblemDetails`) when the request's `Accept` header asks for it, for \
+                      example `Accept: application/problem+json, application/json;q=0.5`. \
+                      Any other request still gets the legacy `application/json` envelope \
+                      (`ErrorEnvelope`), which is deprecated: it carries `Deprecation` and \
+                      `Link` headers and will be removed (ADR-012, gap A2)."
     ),
     modifiers(&SecurityAddon, &ServerAddon, &TagDescriptionsAddon),
     // Operational paths (mounted outside `/api/v1` — see module docs).
@@ -43,6 +49,8 @@ use utoipa::{openapi, Modify, OpenApi};
         kernel::ErrorEnvelope,
         kernel::ErrorBody,
         kernel::ErrorDetail,
+        kernel::ProblemDetails,
+        kernel::ProblemFieldError,
         // Identity
         identity::routes::LoginRequest,
         identity::Principal,
@@ -311,5 +319,81 @@ impl Modify for TagDescriptionsAddon {
             out.push(tag);
         }
         openapi.tags = Some(out);
+    }
+}
+
+/// The statuses an operation documents as errors: `4xx` and `5xx`.
+fn is_error_status(status: &str) -> bool {
+    status.starts_with('4') || status.starts_with('5')
+}
+
+/// Whether a media type's schema is a reference to `name`.
+fn references_schema(content: &openapi::content::Content, name: &str) -> bool {
+    content
+        .schema
+        .as_ref()
+        .and_then(|schema| serde_json::to_value(schema).ok())
+        .and_then(|schema| {
+            schema
+                .get("$ref")
+                .and_then(|r| r.as_str())
+                .map(str::to_owned)
+        })
+        .is_some_and(|reference| reference == format!("#/components/schemas/{name}"))
+}
+
+/// Describes the two error formats on every documented error response (ADR-012, gap A2).
+///
+/// The handlers document their errors with `body = kernel::ErrorEnvelope`, which is the legacy
+/// envelope. The server answers in problem+json instead when the request's `Accept` header asks
+/// for it (`error_format_middleware`), so each such response gets a second media type,
+/// `application/problem+json` with `ProblemDetails`, and the legacy `application/json` is marked
+/// deprecated (`x-deprecated`; the deprecation text is on the `ErrorEnvelope` schema). It is done once here, on the finished document, because the paths of the router are
+/// merged after [`ApiDoc`]'s own modifiers have run, and annotating hundreds of responses by hand
+/// would drift.
+pub fn describe_error_formats(openapi: &mut openapi::OpenApi) {
+    for item in openapi.paths.paths.values_mut() {
+        let operations = [
+            &mut item.get,
+            &mut item.put,
+            &mut item.post,
+            &mut item.delete,
+            &mut item.options,
+            &mut item.head,
+            &mut item.patch,
+            &mut item.trace,
+        ];
+        for operation in operations.into_iter().flatten() {
+            for (status, response) in operation.responses.responses.iter_mut() {
+                if !is_error_status(status) {
+                    continue;
+                }
+                let openapi::RefOr::T(response) = response else {
+                    continue;
+                };
+                let legacy_is_envelope = matches!(
+                    response.content.get("application/json"),
+                    Some(openapi::RefOr::T(content)) if references_schema(content, "ErrorEnvelope")
+                );
+                if !legacy_is_envelope {
+                    continue;
+                }
+                // OpenAPI 3.1 has no `description` (or `deprecated`) on a media type object, so the
+                // legacy one carries the `x-deprecated` extension and the schema says why.
+                if let Some(openapi::RefOr::T(legacy)) =
+                    response.content.get_mut("application/json")
+                {
+                    let mut extensions = openapi::extensions::Extensions::default();
+                    extensions.insert("x-deprecated".to_owned(), serde_json::Value::Bool(true));
+                    legacy.extensions = Some(extensions);
+                }
+                response.content.insert(
+                    kernel::PROBLEM_JSON.to_owned(),
+                    openapi::RefOr::T(openapi::content::Content::new(Some(
+                        openapi::Ref::from_schema_name("ProblemDetails"),
+                    ))),
+                );
+            }
+        }
     }
 }
