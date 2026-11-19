@@ -1425,32 +1425,6 @@ impl AiService {
     }
 }
 
-#[async_trait::async_trait]
-impl knowledge::indexer::Embedder for AiService {
-    async fn embed(
-        &self,
-        tenant_id: Uuid,
-        texts: Vec<String>,
-        request_id: String,
-    ) -> Result<Vec<Vec<f32>>, knowledge::indexer::EmbedError> {
-        let ctx = AiCallContext {
-            tenant_id,
-            request_id: Some(request_id),
-        };
-        match self.embed_platform(ctx, texts).await {
-            Ok(embeddings) => Ok(embeddings),
-            Err(AiCallError::Provider { category, .. }) if category.retriable() => Err(
-                knowledge::indexer::EmbedError::Retriable(category.as_str().to_string()),
-            ),
-            Err(AiCallError::Provider { category, .. }) => Err(
-                knowledge::indexer::EmbedError::Permanent(category.as_str().to_string()),
-            ),
-            Err(AiCallError::NotConfigured) => Err(knowledge::indexer::EmbedError::NotConfigured),
-            Err(AiCallError::Internal(e)) => Err(knowledge::indexer::EmbedError::Permanent(e)),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

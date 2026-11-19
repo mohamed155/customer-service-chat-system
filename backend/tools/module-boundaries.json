@@ -52,7 +52,6 @@
         "conversations",
         "escalations",
         "identity",
-        "knowledge",
         "tenancy",
         "tools"
       ],

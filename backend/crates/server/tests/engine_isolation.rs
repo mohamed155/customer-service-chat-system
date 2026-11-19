@@ -430,9 +430,10 @@ async fn engine_cross_tenant_isolation() {
     // Process up to 5 iterations to handle tenant B's outbox event (tenant A's
     // event may also be processed, but we only assert about B).
     for _ in 0..5 {
-        let processed = process_agent_responder_once(&pool, &state.ai, &state.escalations)
-            .await
-            .expect("agent responder should not panic");
+        let processed =
+            process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
+                .await
+                .expect("agent responder should not panic");
         if !processed {
             break;
         }

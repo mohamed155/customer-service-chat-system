@@ -30,7 +30,6 @@ serde_json.workspace = true
 sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
 conversations = { path = "../conversations" }
 escalations = { path = "../escalations" }
-knowledge = { path = "../knowledge" }
 tenancy = { path = "../tenancy" }
 tools = { path = "../tools" }
 tokio.workspace = true

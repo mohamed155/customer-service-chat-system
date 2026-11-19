@@ -318,7 +318,9 @@ async fn engine_retry_exhaustion_triggers_fallback() {
     // to allow retry budget to be exhausted and fallback to trigger
     let mut processed_any = false;
     for i in 0..30 {
-        match process_agent_responder_once(&pool, &state.ai, &state.escalations).await {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
+            .await
+        {
             Ok(true) => {
                 processed_any = true;
             }

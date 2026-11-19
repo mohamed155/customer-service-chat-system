@@ -23,6 +23,7 @@ pub fn agent_channel(conversation_channel: &str) -> &str {
 pub async fn process_agent_responder_once(
     pool: &PgPool,
     ai: &crate::AiService,
+    ports: &crate::ports::AiPorts,
     presence: &Arc<escalations::presence::Runtime>,
 ) -> sqlx::Result<bool> {
     // Phase A — Claim + Read (no long-held locks)
@@ -66,6 +67,7 @@ pub async fn process_agent_responder_once(
         crate::engine::run_followup_generation(
             pool,
             ai,
+            ports,
             presence,
             tenant_id,
             conversation_id,
@@ -376,6 +378,7 @@ pub async fn process_agent_responder_once(
     crate::engine::run_generation(
         pool,
         ai,
+        ports,
         presence,
         tenant_id,
         conversation_id,
@@ -411,10 +414,11 @@ async fn handle_routing_outcome(
 pub async fn run_agent_responder_worker(
     pool: PgPool,
     ai: crate::AiService,
+    ports: crate::ports::AiPorts,
     presence: Arc<escalations::presence::Runtime>,
 ) -> ! {
     loop {
-        match process_agent_responder_once(&pool, &ai, &presence).await {
+        match process_agent_responder_once(&pool, &ai, &ports, &presence).await {
             Ok(true) => {}
             Ok(false) => tokio::time::sleep(Duration::from_secs(1)).await,
             Err(e) => {

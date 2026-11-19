@@ -381,7 +381,9 @@ async fn exhausted_allowance_gate_deletes_outbox_and_blocks_ai() {
     // Run responder once
     let mut processed = false;
     for i in 0..20 {
-        match process_agent_responder_once(&pool, &state.ai, &state.escalations).await {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
+            .await
+        {
             Ok(true) => {
                 processed = true;
             }
@@ -484,7 +486,9 @@ async fn conversation_and_customer_message_survive_gate() {
 
     let mut processed = false;
     for i in 0..20 {
-        match process_agent_responder_once(&pool, &state.ai, &state.escalations).await {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
+            .await
+        {
             Ok(true) => {
                 processed = true;
             }
@@ -597,7 +601,9 @@ async fn escalation_rule_still_matches_while_over_limit() {
 
     let mut processed = false;
     for i in 0..20 {
-        match process_agent_responder_once(&pool, &state.ai, &state.escalations).await {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
+            .await
+        {
             Ok(true) => {
                 processed = true;
             }
@@ -766,7 +772,9 @@ async fn allowance_available_responder_proceeds_normally() {
 
     let mut processed = false;
     for i in 0..20 {
-        match process_agent_responder_once(&pool, &state.ai, &state.escalations).await {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
+            .await
+        {
             Ok(true) => {
                 processed = true;
             }

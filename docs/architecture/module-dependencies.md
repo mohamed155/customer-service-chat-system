@@ -14,7 +14,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 
 | Module | Layout | Depends on (modules) | Used by (modules) | Tables owned |
 | -- | -- | -- | -- | -- |
-| `ai` | flat | `authz`, `billing`, `conversations`, `escalations`, `identity`, `knowledge`, `tenancy`, `tools` | – | `agent_avatar_uploads`, `agent_configurations`, `agent_prompt_versions`, `agent_prompts`, `ai_configurations`, `ai_credentials`, `ai_generations`, `ai_usage_records` |
+| `ai` | flat | `authz`, `billing`, `conversations`, `escalations`, `identity`, `tenancy`, `tools` | – | `agent_avatar_uploads`, `agent_configurations`, `agent_prompt_versions`, `agent_prompts`, `ai_configurations`, `ai_credentials`, `ai_generations`, `ai_usage_records` |
 | `analytics` | flat | `tenancy` | – | – |
 | `audit` | flat | `identity`, `tenancy` | – | `audit_logs` |
 | `authz` | flat | `identity` | `ai`, `customers`, `knowledge`, `notifications`, `tenancy` | – |
@@ -26,7 +26,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `feedback` | flat | `tenancy`, `widgets` | – | `conversation_feedback` |
 | `identity` | flat | – | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `tenancy`, `tools`, `widgets` | `mfa_factors`, `mfa_recovery_codes`, `revoked_sessions`, `users` |
 | `integrations` | flat | `identity`, `tenancy` | `conversations`, `whatsapp` | `integration_catalog`, `integration_connections`, `integration_events`, `integration_secrets`, `integration_webhook_deliveries` |
-| `knowledge` | flat | `authz`, `identity`, `tenancy` | `ai` | `knowledge_categories`, `knowledge_chunks`, `knowledge_documents`, `knowledge_index_state`, `knowledge_item_tags`, `knowledge_items` |
+| `knowledge` | flat | `authz`, `identity`, `tenancy` | – | `knowledge_categories`, `knowledge_chunks`, `knowledge_documents`, `knowledge_index_state`, `knowledge_item_tags`, `knowledge_items` |
 | `notifications` | flat | `authz`, `escalations`, `identity`, `tenancy` | – | `notifications` |
 | `platform` | flat | `tenancy` | – | – |
 | `tenancy` | flat | `authz`, `email`, `identity` | `ai`, `analytics`, `audit`, `billing`, `conversations`, `customers`, `escalations`, `feedback`, `integrations`, `knowledge`, `notifications`, `platform`, `tools`, `whatsapp`, `widgets` | `tenant_invitations`, `tenant_memberships`, `tenant_rate_limit_overrides`, `tenants` |
@@ -45,7 +45,6 @@ flowchart LR
   ai --> conversations
   ai --> escalations
   ai --> identity
-  ai --> knowledge
   ai --> tenancy
   ai --> tools
   analytics --> tenancy
