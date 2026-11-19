@@ -10,7 +10,9 @@ mod tool_fixtures;
 
 use std::time::Duration;
 
-use ai::ports::{NewToolRequest, ResolvedTool, ToolSource, ValidationFailure};
+use ai::ports::{
+    NewToolRequest, NewToolRequestStatus, ResolvedTool, ToolSource, ValidationFailure,
+};
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -136,17 +138,17 @@ async fn seed_tenant_tool(tenant_id: Uuid) -> Uuid {
     .unwrap()
 }
 
-fn request(f: &Fixture, status: &str, source: &str) -> NewToolRequest {
+fn request(f: &Fixture, status: NewToolRequestStatus, source: ToolSource) -> NewToolRequest {
     NewToolRequest {
         tenant_id: f.tenant_id,
         conversation_id: f.conversation_id,
         generation_id: f.generation_id,
         tool_name: "update_customer_contact".into(),
-        tool_source: source.into(),
+        tool_source: source,
         tenant_tool_id: None,
         arguments: json!({"email": "anna@example.com"}),
-        status: status.into(),
-        approval_required: status == "awaiting_approval",
+        status,
+        approval_required: status == NewToolRequestStatus::AwaitingApproval,
         expires_at: None,
         chain_index: 0,
     }
@@ -265,7 +267,14 @@ async fn a_request_inserted_through_the_port_follows_the_callers_transaction() {
         .unwrap();
     let rolled_back = ports
         .tools
-        .insert_request_in_tx(uow.conn(), request(&f, "awaiting_approval", "builtin"))
+        .insert_request_in_tx(
+            uow.conn(),
+            request(
+                &f,
+                NewToolRequestStatus::AwaitingApproval,
+                ToolSource::Builtin,
+            ),
+        )
         .await
         .unwrap();
     ai::outbox::emit_tool_approval_requested_in_tx(
@@ -294,7 +303,14 @@ async fn a_request_inserted_through_the_port_follows_the_callers_transaction() {
         .unwrap();
     let committed = ports
         .tools
-        .insert_request_in_tx(uow.conn(), request(&f, "awaiting_approval", "builtin"))
+        .insert_request_in_tx(
+            uow.conn(),
+            request(
+                &f,
+                NewToolRequestStatus::AwaitingApproval,
+                ToolSource::Builtin,
+            ),
+        )
         .await
         .unwrap();
     ai::outbox::emit_tool_approval_requested_in_tx(
@@ -334,14 +350,17 @@ async fn a_request_is_found_by_its_tenant_and_never_by_another() {
             &pool,
             NewToolRequest {
                 tenant_tool_id: Some(tenant_tool_id),
-                ..request(&a, "pending", "tenant")
+                ..request(&a, NewToolRequestStatus::Pending, ToolSource::Tenant)
             },
         )
         .await
         .unwrap();
     let builtin_request = ports
         .tools
-        .insert_request(&pool, request(&a, "pending", "builtin"))
+        .insert_request(
+            &pool,
+            request(&a, NewToolRequestStatus::Pending, ToolSource::Builtin),
+        )
         .await
         .unwrap();
 
@@ -398,17 +417,34 @@ async fn cancelling_follows_the_callers_transaction_and_stays_in_its_conversatio
 
     let waiting = ports
         .tools
-        .insert_request(&pool, request(&f, "awaiting_approval", "builtin"))
+        .insert_request(
+            &pool,
+            request(
+                &f,
+                NewToolRequestStatus::AwaitingApproval,
+                ToolSource::Builtin,
+            ),
+        )
         .await
         .unwrap();
     let finished = ports
         .tools
-        .insert_request(&pool, request(&f, "pending", "builtin"))
+        .insert_request(
+            &pool,
+            request(&f, NewToolRequestStatus::Pending, ToolSource::Builtin),
+        )
         .await
         .unwrap();
     let elsewhere = ports
         .tools
-        .insert_request(&pool, request(&other, "awaiting_approval", "builtin"))
+        .insert_request(
+            &pool,
+            request(
+                &other,
+                NewToolRequestStatus::AwaitingApproval,
+                ToolSource::Builtin,
+            ),
+        )
         .await
         .unwrap();
 
@@ -493,7 +529,10 @@ async fn a_request_runs_pending_to_executing_to_its_outcome_for_its_own_tenant_o
     let ports = server::ai_ports::ai_ports();
     let id = ports
         .tools
-        .insert_request(&pool, request(&a, "pending", "builtin"))
+        .insert_request(
+            &pool,
+            request(&a, NewToolRequestStatus::Pending, ToolSource::Builtin),
+        )
         .await
         .unwrap();
 

@@ -11,8 +11,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use ai::ports::{
-    AiPorts, ExecutionOutcome, KnowledgeRetrieval, NewToolRequest, PendingToolRequest,
-    ResolvedTool, RetrievedChunk, ToolRequest, ToolRun, ToolRuntime, ToolSource, ValidationFailure,
+    AiPorts, ExecutionOutcome, KnowledgeRetrieval, NewToolRequest, NewToolRequestStatus,
+    PendingToolRequest, ResolvedTool, RetrievedChunk, ToolRequest, ToolRun, ToolRuntime,
+    ToolSource, ValidationFailure,
 };
 
 use crate::state::AppState;
@@ -93,16 +94,25 @@ fn tool_to_tools(tool: &ResolvedTool) -> tools::policy::ResolvedTool {
     }
 }
 
+/// The value of the `tool_requests.status` column a new request is stored with.
+fn status_to_column(status: NewToolRequestStatus) -> &'static str {
+    match status {
+        NewToolRequestStatus::Pending => "pending",
+        NewToolRequestStatus::AwaitingApproval => "awaiting_approval",
+        NewToolRequestStatus::Refused => "refused",
+    }
+}
+
 fn new_request_to_tools(request: NewToolRequest) -> tools::queries::NewToolRequest {
     tools::queries::NewToolRequest {
         tenant_id: request.tenant_id,
         conversation_id: request.conversation_id,
         generation_id: request.generation_id,
         tool_name: request.tool_name,
-        tool_source: request.tool_source,
+        tool_source: source_to_tools(&request.tool_source).as_str().to_string(),
         tenant_tool_id: request.tenant_tool_id,
         arguments: request.arguments,
-        status: request.status,
+        status: status_to_column(request.status).to_string(),
         approval_required: request.approval_required,
         expires_at: request.expires_at,
         chain_index: request.chain_index,

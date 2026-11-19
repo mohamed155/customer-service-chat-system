@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::agent_config::{self, AgentConfigurationRow};
 use crate::agent_prompt;
 use crate::generation_record::{self, GenerationOutcome, GenerationRecord};
-use crate::ports::{AiPorts, RetrievedChunk};
+use crate::ports::{AiPorts, NewToolRequestStatus, RetrievedChunk, ToolSource};
 use crate::prompt_store;
 use crate::prompt_validate;
 use crate::{AiCallContext, AiCallError, AiInput, AiService};
@@ -647,10 +647,10 @@ pub async fn run_generation(
                                             conversation_id,
                                             generation_id,
                                             tool_name: tc.name.clone(),
-                                            tool_source: "builtin".into(),
+                                            tool_source: ToolSource::Builtin,
                                             tenant_tool_id: None,
                                             arguments: tc.arguments.clone(),
-                                            status: "refused".into(),
+                                            status: NewToolRequestStatus::Refused,
                                             approval_required: false,
                                             expires_at: None,
                                             chain_index,
@@ -723,10 +723,10 @@ pub async fn run_generation(
                                             conversation_id,
                                             generation_id,
                                             tool_name: tc.name.clone(),
-                                            tool_source: "builtin".into(),
+                                            tool_source: ToolSource::Builtin,
                                             tenant_tool_id: None,
                                             arguments: tc.arguments.clone(),
-                                            status: "awaiting_approval".into(),
+                                            status: NewToolRequestStatus::AwaitingApproval,
                                             approval_required: true,
                                             expires_at: Some(expires_at),
                                             chain_index,
@@ -784,10 +784,10 @@ pub async fn run_generation(
                                             conversation_id,
                                             generation_id,
                                             tool_name: tc.name.clone(),
-                                            tool_source: "builtin".into(),
+                                            tool_source: ToolSource::Builtin,
                                             tenant_tool_id: None,
                                             arguments: tc.arguments.clone(),
-                                            status: "pending".into(),
+                                            status: NewToolRequestStatus::Pending,
                                             approval_required: false,
                                             expires_at: None,
                                             chain_index,

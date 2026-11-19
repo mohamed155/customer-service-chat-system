@@ -79,18 +79,29 @@ pub enum ExecutionOutcome {
     TimedOut,
 }
 
-/// A tool call to record. `status` is one of the request states the `tool_requests` table allows
-/// (`pending`, `awaiting_approval`, `refused`).
+/// The state a tool call is recorded in. A call that has run, failed or been cancelled got there
+/// from one of these.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewToolRequestStatus {
+    /// Allowed to run without approval; the engine runs it next.
+    Pending,
+    /// Waits for a person to approve it.
+    AwaitingApproval,
+    /// Not run: unknown, disabled, or the model's arguments did not fit the tool.
+    Refused,
+}
+
+/// A tool call to record.
 #[derive(Debug, Clone)]
 pub struct NewToolRequest {
     pub tenant_id: Uuid,
     pub conversation_id: Uuid,
     pub generation_id: Uuid,
     pub tool_name: String,
-    pub tool_source: String,
+    pub tool_source: ToolSource,
     pub tenant_tool_id: Option<Uuid>,
     pub arguments: Value,
-    pub status: String,
+    pub status: NewToolRequestStatus,
     pub approval_required: bool,
     pub expires_at: Option<DateTime<Utc>>,
     pub chain_index: i16,
