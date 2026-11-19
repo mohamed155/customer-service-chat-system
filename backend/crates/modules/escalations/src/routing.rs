@@ -562,15 +562,9 @@ async fn resolve_actor_membership_id_in_tx(
     tenant_id: Uuid,
     actor_user_id: Uuid,
 ) -> Option<Uuid> {
-    sqlx::query_scalar(
-        "SELECT id FROM tenant_memberships \
-         WHERE tenant_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .bind(actor_user_id)
-    .fetch_optional(&mut **tx)
-    .await
-    .unwrap_or(None)
+    tenancy::directory::active_membership_id_of_user(&mut **tx, tenant_id, actor_user_id)
+        .await
+        .unwrap_or(None)
 }
 
 async fn notify_escalation_queued(

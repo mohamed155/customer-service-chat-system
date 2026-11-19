@@ -28,8 +28,8 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `integrations` | flat | `identity`, `tenancy` | `conversations`, `whatsapp` | `integration_catalog`, `integration_connections`, `integration_events`, `integration_secrets`, `integration_webhook_deliveries` |
 | `knowledge` | flat | `authz`, `identity`, `tenancy` | `ai` | `knowledge_categories`, `knowledge_chunks`, `knowledge_documents`, `knowledge_index_state`, `knowledge_item_tags`, `knowledge_items` |
 | `notifications` | flat | `authz`, `escalations`, `identity`, `tenancy` | `ai` | `notifications` |
-| `platform` | flat | – | – | – |
-| `tenancy` | flat | `authz`, `email`, `identity` | `ai`, `analytics`, `audit`, `billing`, `conversations`, `customers`, `escalations`, `feedback`, `integrations`, `knowledge`, `notifications`, `tools`, `whatsapp`, `widgets` | `tenant_invitations`, `tenant_memberships`, `tenant_rate_limit_overrides`, `tenants` |
+| `platform` | flat | `tenancy` | – | – |
+| `tenancy` | flat | `authz`, `email`, `identity` | `ai`, `analytics`, `audit`, `billing`, `conversations`, `customers`, `escalations`, `feedback`, `integrations`, `knowledge`, `notifications`, `platform`, `tools`, `whatsapp`, `widgets` | `tenant_invitations`, `tenant_memberships`, `tenant_rate_limit_overrides`, `tenants` |
 | `tools` | flat | `conversations`, `customers`, `identity`, `tenancy` | `ai`, `escalations` | `tenant_tool_policies`, `tenant_tools`, `tool_requests` |
 | `whatsapp` | flat | `conversations`, `customers`, `integrations`, `tenancy` | – | `whatsapp_message_meta` |
 | `widgets` | flat | `conversations`, `customers`, `escalations`, `identity`, `tenancy` | `feedback` | `widget_instances`, `widget_sessions` |
@@ -77,6 +77,7 @@ flowchart LR
   notifications --> escalations
   notifications --> identity
   notifications --> tenancy
+  platform --> tenancy
   tenancy --> authz
   tenancy --> email
   tenancy --> identity
@@ -123,46 +124,30 @@ Counts of SQL references to a table another module owns, per crate. They may onl
 | `ai` | `conversations` | `conversations` | 1 |
 | `ai` | `skills` | `escalations` | 1 |
 | `ai` | `tool_requests` | `tools` | 1 |
-| `audit` | `users` | `identity` | 1 |
 | `billing` | `ai_usage_records` | `ai` | 1 |
 | `billing` | `conversations` | `conversations` | 1 |
-| `billing` | `tenants` | `tenancy` | 1 |
 | `conversations` | `conversation_feedback` | `feedback` | 2 |
 | `conversations` | `customers` | `customers` | 6 |
 | `conversations` | `knowledge_items` | `knowledge` | 1 |
-| `conversations` | `tenant_memberships` | `tenancy` | 12 |
-| `conversations` | `users` | `identity` | 7 |
 | `conversations` | `whatsapp_message_meta` | `whatsapp` | 1 |
 | `conversations` | `widget_instances` | `widgets` | 2 |
 | `customers` | `conversations` | `conversations` | 1 |
 | `escalations` | `conversations` | `conversations` | 3 |
 | `escalations` | `customers` | `customers` | 1 |
-| `escalations` | `tenant_memberships` | `tenancy` | 8 |
 | `feedback` | `agent_configurations` | `ai` | 1 |
 | `feedback` | `ai_generations` | `ai` | 1 |
 | `feedback` | `conversations` | `conversations` | 2 |
-| `integrations` | `tenant_memberships` | `tenancy` | 1 |
-| `integrations` | `tenants` | `tenancy` | 1 |
 | `notifications` | `conversations` | `conversations` | 1 |
-| `notifications` | `tenant_memberships` | `tenancy` | 5 |
-| `notifications` | `users` | `identity` | 1 |
-| `platform` | `tenants` | `tenancy` | 1 |
 | `server` | `ai_credentials` | `ai` | 2 |
 | `server` | `audit_logs` | `audit` | 1 |
 | `server` | `integration_catalog` | `integrations` | 2 |
 | `server` | `integration_connections` | `integrations` | 3 |
 | `server` | `integration_secrets` | `integrations` | 2 |
 | `server` | `revoked_sessions` | `identity` | 1 |
-| `server` | `tenant_memberships` | `tenancy` | 2 |
 | `server` | `tenant_rate_limit_overrides` | `tenancy` | 1 |
 | `server` | `tenant_tools` | `tools` | 2 |
-| `server` | `tenants` | `tenancy` | 1 |
-| `server` | `users` | `identity` | 3 |
 | `tenancy` | `audit_logs` | `audit` | 1 |
-| `tenancy` | `users` | `identity` | 10 |
 | `tools` | `audit_logs` | `audit` | 2 |
-| `tools` | `tenant_memberships` | `tenancy` | 4 |
-| `tools` | `users` | `identity` | 1 |
 | `whatsapp` | `conversations` | `conversations` | 3 |
 | `whatsapp` | `customer_channel_identifiers` | `customers` | 2 |
 | `whatsapp` | `integration_connections` | `integrations` | 1 |
@@ -170,4 +155,4 @@ Counts of SQL references to a table another module owns, per crate. They may onl
 | `whatsapp` | `messages` | `conversations` | 3 |
 | `widgets` | `conversations` | `conversations` | 4 |
 
-Total: 120.
+Total: 61.

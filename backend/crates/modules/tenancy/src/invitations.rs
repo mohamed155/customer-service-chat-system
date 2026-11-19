@@ -341,13 +341,18 @@ pub async fn create_invitation(
         Ok(u) => u,
         Err(r) => return r,
     };
+    // Every account with this email counts, not just one: a deleted account and a live one can
+    // share an address, and the member may be either.
+    let user_ids = identity::directory::user_ids_by_email(uow.conn(), &email)
+        .await
+        .unwrap_or_default();
     let existing_member: Option<(String,)> = sqlx::query_as(
         "SELECT status FROM tenant_memberships \
-         WHERE tenant_id = $1 AND user_id IN (SELECT id FROM users WHERE email = $2) \
-         AND deleted_at IS NULL",
+         WHERE tenant_id = $1 AND user_id = ANY($2) AND deleted_at IS NULL \
+         ORDER BY created_at LIMIT 1",
     )
     .bind(ctx.tenant_id)
-    .bind(&email)
+    .bind(&user_ids)
     .fetch_optional(uow.conn())
     .await
     .unwrap_or(None);
@@ -517,10 +522,10 @@ pub async fn create_invitation(
     // invitation (the caller would lose the accept URL and a retry would conflict).
     let invited_by_name: String = match ctx.unit_of_work(&pool).await {
         Ok(mut uow3) => {
-            let name = sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1")
-                .bind(principal.user_id)
-                .fetch_one(uow3.conn())
+            let name = identity::directory::display_names(uow3.conn(), &[principal.user_id])
                 .await
+                .unwrap_or_default()
+                .remove(&principal.user_id)
                 .unwrap_or_default();
             if let Err(error) = uow3.commit().await {
                 tracing::warn!(%error, "create_invitation: closing the inviter lookup failed");
@@ -823,9 +828,8 @@ pub async fn list_invitations(
     }
 
     let sql = format!(
-        "SELECT ti.id, ti.email, ti.role, ti.status, ti.email_delivery_status, ti.email_delivery_error, u.display_name AS invited_by_name, ti.expires_at, ti.created_at \
+        "SELECT ti.id, ti.email, ti.role, ti.status, ti.email_delivery_status, ti.email_delivery_error, ti.invited_by, ti.expires_at, ti.created_at \
          FROM tenant_invitations ti \
-         JOIN users u ON u.id = ti.invited_by \
          WHERE {} \
          ORDER BY ti.created_at DESC, ti.id DESC \
          LIMIT ${bind_index}",
@@ -863,6 +867,19 @@ pub async fn list_invitations(
             return ApiError::internal_error("Failed to list invitations").into_response();
         }
     };
+    // The inviter's name belongs to `identity`; ask for the page's inviters in one go.
+    let inviter_ids: Vec<Uuid> = rows
+        .iter()
+        .take(limit as usize)
+        .map(|row| row.get::<Uuid, _>("invited_by"))
+        .collect();
+    let inviter_names = match identity::directory::display_names(uow.conn(), &inviter_ids).await {
+        Ok(names) => names,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to resolve inviter names");
+            return ApiError::internal_error("Failed to list invitations").into_response();
+        }
+    };
     if let Err(r) = ctx.commit(uow).await {
         return r;
     }
@@ -885,7 +902,10 @@ pub async fn list_invitations(
                 email: row.get("email"),
                 role: row.get("role"),
                 status: derived_status.to_string(),
-                invited_by_name: row.get("invited_by_name"),
+                invited_by_name: inviter_names
+                    .get(&row.get::<Uuid, _>("invited_by"))
+                    .cloned()
+                    .unwrap_or_default(),
                 expires_at,
                 created_at: row.get("created_at"),
                 email_delivery_status: match row.get::<String, _>("email_delivery_status").as_str()
@@ -1123,12 +1143,9 @@ pub async fn preview_invitation(
     let tenant_name: String = row.get("tenant_name");
 
     // Check if account exists
-    let account_exists: bool =
-        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)")
-            .bind(&email)
-            .fetch_one(&pool)
-            .await
-            .unwrap_or(false);
+    let account_exists: bool = identity::directory::email_is_registered(&pool, &email)
+        .await
+        .unwrap_or(false);
 
     Json(PreviewInvitationResponse {
         tenant_name,
@@ -1387,9 +1404,7 @@ pub async fn accept_invitation(
     };
 
     // Check if account already exists
-    let existing_user: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
-        .bind(&email)
-        .fetch_optional(&pool)
+    let existing_user: Option<Uuid> = identity::directory::user_id_by_email(&pool, &email)
         .await
         .unwrap_or(None);
 
@@ -1415,26 +1430,21 @@ pub async fn accept_invitation(
         };
 
     // ---- Transaction: create user + invitation + membership + audit ----
-    let new_user_id: Uuid = match sqlx::query_scalar(
-        "INSERT INTO users (email, display_name, password_hash) \
-         VALUES ($1, $2, $3) RETURNING id",
-    )
-    .bind(&email)
-    .bind(&display_name)
-    .bind(&password_hash)
-    .fetch_one(tx.conn())
-    .await
-    {
-        Ok(id) => id,
-        Err(sqlx::Error::Database(dbe)) if dbe.code().as_deref() == Some("23505") => {
-            return ApiError::conflict("An account with this email already exists").into_response();
-        }
-        Err(e) => {
-            return ApiError::internal_error_from("User insert failed", &e)
-                .for_tenant(tenant_id)
-                .into_response();
-        }
-    };
+    let new_user_id: Uuid =
+        match identity::directory::create_user(tx.conn(), &email, &display_name, &password_hash)
+            .await
+        {
+            Ok(id) => id,
+            Err(sqlx::Error::Database(dbe)) if dbe.code().as_deref() == Some("23505") => {
+                return ApiError::conflict("An account with this email already exists")
+                    .into_response();
+            }
+            Err(e) => {
+                return ApiError::internal_error_from("User insert failed", &e)
+                    .for_tenant(tenant_id)
+                    .into_response();
+            }
+        };
 
     let consumed = match sqlx::query(
         "UPDATE tenant_invitations \

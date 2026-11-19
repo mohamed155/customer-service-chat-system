@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod authorize;
+pub mod directory;
 pub mod invitations;
 pub mod members;
 pub mod routes;

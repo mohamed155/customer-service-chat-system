@@ -28,4 +28,9 @@ paths = [
   '''^Helix Admin\.html$''',
   # Vendored spec-kit extension catalog cache (third-party metadata)
   '''^\.specify/extensions/\.cache/''',
+  # Third-party agent skill documentation (installed with `skills add`, locked in
+  # skills-lock.json). Its code examples contain placeholder credentials such as
+  # `password: "postgres"` and AWS's documented example key AKIAIOSFODNN7EXAMPLE.
+  # Markdown only: scripts, YAML and JSON in these folders are still scanned.
+  '''^\.agents/skills/.*\.md$''',
 ]

@@ -213,9 +213,7 @@ pub async fn signup(
         Err(error) => return error.into_response(),
     };
 
-    let existing_user: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
-        .bind(&input.email)
-        .fetch_optional(&pool)
+    let existing_user: Option<Uuid> = identity::directory::user_id_by_email(&pool, &input.email)
         .await
         .unwrap_or(None);
 
@@ -309,14 +307,12 @@ pub async fn signup(
         return ApiError::internal_error_from("Tenant context failed", &e).into_response();
     }
 
-    let new_user_id: Uuid = match sqlx::query_scalar(
-        "INSERT INTO users (email, display_name, password_hash) \
-         VALUES ($1, $2, $3) RETURNING id",
+    let new_user_id: Uuid = match identity::directory::create_user(
+        &mut *tx,
+        &input.email,
+        &input.display_name,
+        &password_hash,
     )
-    .bind(&input.email)
-    .bind(&input.display_name)
-    .bind(&password_hash)
-    .fetch_one(&mut *tx)
     .await
     {
         Ok(id) => id,

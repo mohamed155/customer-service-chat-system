@@ -158,11 +158,9 @@ pub async fn run(pool: &PgPool, config: &AppConfig, op: Op) -> Result<Report, St
         platform_credential(pool, &ai_vault, provider, op, &mut report).await;
     }
 
-    let tenants: Vec<Uuid> =
-        sqlx::query_scalar("SELECT id FROM tenants WHERE deleted_at IS NULL ORDER BY id")
-            .fetch_all(pool)
-            .await
-            .map_err(|e| format!("could not list tenants: {e}"))?;
+    let tenants: Vec<Uuid> = tenancy::directory::live_tenant_ids(pool)
+        .await
+        .map_err(|e| format!("could not list tenants: {e}"))?;
 
     for tenant_id in tenants {
         for kind in Kind::ALL {

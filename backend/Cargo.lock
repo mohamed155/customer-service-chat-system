@@ -3576,6 +3576,7 @@ dependencies = [
  "serde",
  "sqlx",
  "storage",
+ "tenancy",
  "tokio",
  "tracing",
  "utoipa",

@@ -354,13 +354,11 @@ pub async fn decide_tool_request(
         Ok(u) => u,
         Err(r) => return r,
     };
-    let membership_id = match sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM tenant_memberships \
-         WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    let membership_id = match tenancy::directory::membership_id_of_user(
+        uow.conn(),
+        ctx.tenant_id,
+        principal.user_id,
     )
-    .bind(ctx.tenant_id)
-    .bind(principal.user_id)
-    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => mid,

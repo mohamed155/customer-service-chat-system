@@ -103,44 +103,92 @@ pub struct Candidate {
     pub load_count: i64,
 }
 
+/// The best of `eligible` for an escalation: most of the required skills matched, then the fewest
+/// open conversations, then the lowest ID. Only available members are considered. The ranking
+/// reads this module's own tables; who is eligible is decided before, by `tenancy`.
+async fn rank_candidate_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    required_skill_ids: &[Uuid],
+    eligible: &[Uuid],
+) -> sqlx::Result<Option<Candidate>> {
+    sqlx::query_as::<_, Candidate>(
+        "SELECT aa.membership_id AS membership_id, \
+                COALESCE(m.match_count, 0) AS match_count, \
+                COALESCE(m.matched_ids, '{}') AS matched_ids, \
+                COALESCE(l.load_count, 0) AS load_count \
+         FROM agent_availability aa \
+         LEFT JOIN LATERAL ( \
+             SELECT COUNT(*) AS match_count, array_agg(ask.skill_id) AS matched_ids \
+             FROM agent_skills ask \
+             WHERE ask.tenant_id = aa.tenant_id AND ask.membership_id = aa.membership_id \
+               AND ask.skill_id = ANY($3) \
+         ) m ON true \
+         LEFT JOIN LATERAL ( \
+             SELECT COUNT(*) AS load_count FROM conversations c \
+             WHERE c.tenant_id = aa.tenant_id AND c.assigned_membership_id = aa.membership_id \
+               AND c.status IN ('open','pending') AND c.deleted_at IS NULL \
+         ) l ON true \
+         WHERE aa.tenant_id = $1 \
+           AND aa.state = 'available' \
+           AND aa.membership_id = ANY($4) \
+         ORDER BY match_count DESC, load_count ASC, aa.membership_id ASC \
+         LIMIT 1",
+    )
+    .bind(tenant_id)
+    .bind(required_skill_ids)
+    .bind(required_skill_ids)
+    .bind(eligible)
+    .fetch_optional(&mut **tx)
+    .await
+}
+
+/// The roles whose members can take an escalation.
+const ASSIGNABLE_ROLES: [&str; 4] = ["owner", "admin", "manager", "agent"];
+
 pub async fn select_candidate_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
     required_skill_ids: &[Uuid],
     present_ids: &[Uuid],
 ) -> sqlx::Result<Option<Candidate>> {
-    let candidate = sqlx::query_as::<_, Candidate>(
-        "SELECT tm.id AS membership_id, \
-                COALESCE(m.match_count, 0) AS match_count, \
-                COALESCE(m.matched_ids, '{}') AS matched_ids, \
-                COALESCE(l.load_count, 0) AS load_count \
-         FROM tenant_memberships tm \
-         JOIN agent_availability aa ON aa.tenant_id = tm.tenant_id AND aa.membership_id = tm.id \
-         LEFT JOIN LATERAL ( \
-             SELECT COUNT(*) AS match_count, array_agg(ask.skill_id) AS matched_ids \
-             FROM agent_skills ask \
-             WHERE ask.tenant_id = tm.tenant_id AND ask.membership_id = tm.id \
-               AND ask.skill_id = ANY($3) \
-         ) m ON true \
-         LEFT JOIN LATERAL ( \
-             SELECT COUNT(*) AS load_count FROM conversations c \
-             WHERE c.tenant_id = tm.tenant_id AND c.assigned_membership_id = tm.id \
-               AND c.status IN ('open','pending') AND c.deleted_at IS NULL \
-         ) l ON true \
-         WHERE tm.tenant_id = $1 AND tm.status = 'active' AND tm.deleted_at IS NULL \
-           AND tm.role IN ('owner','admin','manager','agent') \
-           AND aa.state = 'available' \
-           AND tm.id = ANY($4) \
-         ORDER BY match_count DESC, load_count ASC, tm.id ASC \
-         LIMIT 1",
+    // Who may take an escalation (an active member with a role that handles conversations, among
+    // those present) is `tenancy`'s to say. This statement then ranks those members by skill match
+    // and current load from this module's own tables.
+    let mut eligible = tenancy::directory::active_member_ids(
+        &mut **tx,
+        tenant_id,
+        tenancy::directory::ActiveMembers {
+            roles: Some(&ASSIGNABLE_ROLES),
+            among: Some(present_ids),
+            ..Default::default()
+        },
     )
-    .bind(tenant_id)
-    .bind(required_skill_ids)
-    .bind(required_skill_ids)
-    .bind(present_ids)
-    .fetch_optional(&mut **tx)
     .await?;
-    Ok(candidate)
+    // The eligibility read and the ranking are separate statements, so a member could be disabled
+    // or demoted between them and the assignment. Share-lock the one we pick: a roster change
+    // takes the same row `FOR UPDATE`, so it waits until this transaction has written the
+    // assignment. If the pick no longer qualifies, drop it and rank the rest.
+    loop {
+        if eligible.is_empty() {
+            return Ok(None);
+        }
+        let candidate = rank_candidate_in_tx(tx, tenant_id, required_skill_ids, &eligible).await?;
+        let Some(candidate) = candidate else {
+            return Ok(None);
+        };
+        if tenancy::directory::lock_active_member(
+            &mut **tx,
+            tenant_id,
+            candidate.membership_id,
+            &ASSIGNABLE_ROLES,
+        )
+        .await?
+        {
+            return Ok(Some(candidate));
+        }
+        eligible.retain(|id| *id != candidate.membership_id);
+    }
 }
 
 pub async fn take_tenant_routing_lock_in_tx(
@@ -344,13 +392,8 @@ pub async fn set_member_skills_in_tx(
     if !skill_ids.is_empty() && !skill_ids_exist_in_tenant_in_tx(tx, tenant_id, skill_ids).await? {
         return Err(sqlx::Error::Protocol("Unknown skill id in set".into()));
     }
-    let role: Option<String> = sqlx::query_scalar(
-        "SELECT role FROM tenant_memberships WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .bind(membership_id)
-    .fetch_optional(&mut **tx)
-    .await?;
+    let role: Option<String> =
+        tenancy::directory::membership_role(&mut **tx, tenant_id, membership_id).await?;
     match role.as_deref() {
         Some("owner" | "admin" | "manager" | "agent") => {}
         _ => {

@@ -56,13 +56,11 @@ pub async fn record_config_change(
 ) {
     // Resolve user_id from membership
     let user_id: Option<Uuid> = match db::UnitOfWork::begin_for_tenant(pool, tenant_id).await {
-        Ok(mut uow) => sqlx::query_scalar(
-            "SELECT user_id FROM tenant_memberships WHERE id = $1 AND deleted_at IS NULL",
-        )
-        .bind(actor_membership_id)
-        .fetch_optional(uow.conn())
-        .await
-        .unwrap_or(None),
+        Ok(mut uow) => {
+            tenancy::directory::membership_user_id(uow.conn(), tenant_id, actor_membership_id)
+                .await
+                .unwrap_or(None)
+        }
         Err(_) => None,
     };
 

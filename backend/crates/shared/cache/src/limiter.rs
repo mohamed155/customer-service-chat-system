@@ -647,13 +647,29 @@ mod tests {
             Decision::Unavailable { .. }
         ));
 
-        // The attempt carried on. Given time to finish, the next check reaches the store.
-        tokio::time::sleep(Duration::from_millis(1000)).await;
-        assert!(
-            matches!(
+        // The attempt carried on. Later checks get a roomy deadline (a loaded machine can be slow
+        // to connect and to answer, and this test is about the attempt surviving, not about
+        // speed) and ask until the store answers or the time is up.
+        limiter.check_timeout = Duration::from_secs(5);
+        let started = std::time::Instant::now();
+        let mut allowed = false;
+        let mut attempt = 0;
+        while started.elapsed() < Duration::from_secs(30) {
+            // A fresh identifier each time: a retry that gives up after the store counted it
+            // must not use up the budget of the next one.
+            attempt += 1;
+            let id = format!("{id}-{attempt}");
+            if matches!(
                 limiter.check(Scope::Login, &id, small_budget()).await,
                 Decision::Allowed { .. }
-            ),
+            ) {
+                allowed = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert!(
+            allowed,
             "the connection attempt must survive the request that stopped waiting for it"
         );
         // It was the same attempt, not a restart: a cancelled attempt would have been followed by

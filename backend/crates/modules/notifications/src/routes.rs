@@ -36,15 +36,7 @@ async fn active_membership_id(
             return Err(ApiError::internal_error("Database error").into_response());
         }
     };
-    match sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM tenant_memberships \
-         WHERE tenant_id = $1 AND user_id = $2 AND status = 'active' AND deleted_at IS NULL",
-    )
-    .bind(tenant_id)
-    .bind(user_id)
-    .fetch_optional(uow.conn())
-    .await
-    {
+    match tenancy::directory::active_membership_id_of_user(uow.conn(), tenant_id, user_id).await {
         Ok(Some(mid)) => Ok(mid),
         Ok(None) => {
             Err(ApiError::validation_failed("No active membership in this tenant").into_response())
@@ -67,17 +59,12 @@ async fn actor_display_names(
     let Ok(mut uow) = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await else {
         return HashMap::new();
     };
-    let rows = sqlx::query_as::<_, (Uuid, String)>(
-        "SELECT DISTINCT ON (tm.id) tm.id, u.display_name \
-         FROM tenant_memberships tm \
-         JOIN users u ON u.id = tm.user_id \
-         WHERE tm.id = ANY($1)",
-    )
-    .bind(membership_ids)
-    .fetch_all(uow.conn())
-    .await
-    .unwrap_or_default();
-    rows.into_iter().collect()
+    tenancy::directory::member_profiles(uow.conn(), tenant_id, membership_ids)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(membership_id, profile)| (membership_id, profile.display_name))
+        .collect()
 }
 
 fn row_to_dto(

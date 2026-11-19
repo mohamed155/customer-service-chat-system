@@ -1,6 +1,7 @@
 //! Identity module — principal types, middleware, and extractors.
 
 pub mod audit;
+pub mod directory;
 
 pub mod mfa;
 pub mod mfa_routes;

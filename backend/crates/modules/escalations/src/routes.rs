@@ -464,13 +464,11 @@ pub async fn claim(
         Ok(u) => u,
         Err(r) => return r,
     };
-    let membership_id = match sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM tenant_memberships \
-         WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    let membership_id = match tenancy::directory::membership_id_of_user(
+        uow.conn(),
+        ctx.tenant_id,
+        principal.user_id,
     )
-    .bind(ctx.tenant_id)
-    .bind(principal.user_id)
-    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => mid,
@@ -620,13 +618,11 @@ pub async fn get_my_availability(
         Ok(u) => u,
         Err(r) => return r,
     };
-    let membership_id = match sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM tenant_memberships \
-         WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    let membership_id = match tenancy::directory::membership_id_of_user(
+        uow.conn(),
+        ctx.tenant_id,
+        principal.user_id,
     )
-    .bind(ctx.tenant_id)
-    .bind(principal.user_id)
-    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => mid,
@@ -715,13 +711,11 @@ pub async fn set_my_availability(
         Ok(u) => u,
         Err(r) => return r,
     };
-    let membership_id = match sqlx::query_scalar::<_, Uuid>(
-        "SELECT id FROM tenant_memberships \
-         WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL",
+    let membership_id = match tenancy::directory::membership_id_of_user(
+        uow.conn(),
+        ctx.tenant_id,
+        principal.user_id,
     )
-    .bind(ctx.tenant_id)
-    .bind(principal.user_id)
-    .fetch_optional(uow.conn())
     .await
     {
         Ok(Some(mid)) => mid,
@@ -1203,15 +1197,10 @@ pub async fn set_member_skills(
         Ok(u) => u,
         Err(r) => return r,
     };
-    let role: Option<String> = sqlx::query_scalar(
-        "SELECT role FROM tenant_memberships \
-         WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL",
-    )
-    .bind(ctx.tenant_id)
-    .bind(membership_id)
-    .fetch_optional(uow.conn())
-    .await
-    .unwrap_or(None);
+    let role: Option<String> =
+        tenancy::directory::membership_role(uow.conn(), ctx.tenant_id, membership_id)
+            .await
+            .unwrap_or(None);
     if let Err(r) = ctx.commit(uow).await {
         return r;
     }

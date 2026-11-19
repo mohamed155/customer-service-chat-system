@@ -126,6 +126,18 @@ thread_local! {
     static SEED_POOL: RefCell<Option<PgPool>> = const { RefCell::new(None) };
 }
 
+/// Inserts a tenant row for a test fixture and returns its ID. `tenants` is owned by `tenancy`;
+/// a test in another module that needs a tenant to hang its own rows on uses this instead of
+/// naming that table in its SQL.
+pub async fn insert_tenant(pool: &PgPool, name: &str, slug: &str) -> uuid::Uuid {
+    sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
+        .bind(name)
+        .bind(slug)
+        .fetch_one(pool)
+        .await
+        .expect("inserting the fixture tenant failed")
+}
+
 /// A pool for test **fixtures and assertions** on tables under forced Row-Level Security.
 ///
 /// `app_runtime`, the role the code under test runs as, sees only the tenant the transaction set,

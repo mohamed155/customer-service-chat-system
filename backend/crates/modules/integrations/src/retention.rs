@@ -58,13 +58,12 @@ mod tests {
 
         // Seed a tenant + catalog connection so the FK on integration_events
         // and integration_webhook_deliveries is satisfied.
-        let tenant_id: Uuid =
-            sqlx::query_scalar("INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id")
-                .bind("Integrations Retention Tenant")
-                .bind(format!("iret-{}", Uuid::new_v4().simple()))
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+        let tenant_id: Uuid = db::testing::insert_tenant(
+            &pool,
+            "Integrations Retention Tenant",
+            &format!("iret-{}", Uuid::new_v4().simple()),
+        )
+        .await;
         let catalog_id: Uuid =
             sqlx::query_scalar("SELECT id FROM integration_catalog WHERE slug = $1")
                 .bind("generic-webhook")
