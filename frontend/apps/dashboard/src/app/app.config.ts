@@ -21,6 +21,7 @@ import { routes } from './app.routes';
 import { AppUiEffects } from './core/state/app-ui.effects';
 import { appUiFeature } from './core/state/app-ui.feature';
 import { authTokenInterceptor } from './core/http/auth-token.interceptor';
+import { problemAcceptInterceptor } from './core/http/problem-accept.interceptor';
 import { apiErrorInterceptor } from './core/http/api-error.interceptor';
 import { requestIdInterceptor } from './core/http/request-id.interceptor';
 import { httpResilienceInterceptor } from './core/http/http-resilience.interceptor';
@@ -55,6 +56,8 @@ export const appConfig: ApplicationConfig = {
         // First, so the ID is on the request every later interceptor and the error handler see.
         requestIdInterceptor,
         authTokenInterceptor,
+        // Ask for errors as problem+json; the mapper reads that and the legacy envelope (MOH-199).
+        problemAcceptInterceptor,
         tenantContextInterceptor,
         devIdentityInterceptor,
         // Outside apiErrorInterceptor on purpose: it sees the mapped error, and it retries once.
