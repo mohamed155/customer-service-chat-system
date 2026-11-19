@@ -1,6 +1,5 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { Subscription, timer } from 'rxjs';
-import { HttpErrorResponse } from '@angular/common/http';
 import {
   WidgetConfig,
   WidgetConversation,
@@ -11,6 +10,7 @@ import {
   RateLimitedError,
   SessionExpiredError,
 } from './models';
+import { isConversationClosed } from './error-body';
 import { WidgetApiService } from './widget-api.service';
 import { SessionStore } from './session.store';
 import { WidgetSseClient } from './widget-sse.client';
@@ -139,7 +139,7 @@ export class WidgetStore {
       },
       error: (err) => {
         this.messagesSignal.update((m) => m.filter((x) => x.id !== optimistic.id));
-        if (err instanceof HttpErrorResponse && err.status === 409) {
+        if (isConversationClosed(err)) {
           this.handleClosedConversation();
           this.checkPendingFeedback();
         } else if (err instanceof RateLimitedError) {

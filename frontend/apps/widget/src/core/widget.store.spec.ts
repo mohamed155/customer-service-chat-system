@@ -4,7 +4,13 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { WidgetStore, REPLY_TIMEOUT_MS } from './widget.store';
 import { WIDGET_API_BASE, WidgetApiService } from './widget-api.service';
 import { SessionStore } from './session.store';
-import { WidgetConfig, WidgetEvent, PendingFeedback, WidgetFeedback } from './models';
+import {
+  WidgetConfig,
+  WidgetEvent,
+  PendingFeedback,
+  WidgetFeedback,
+  RateLimitedError,
+} from './models';
 import { of, throwError } from 'rxjs';
 
 function makeConfig(): WidgetConfig {
@@ -174,6 +180,87 @@ describe('WidgetStore', () => {
       store.submitFeedback(5, 'Great!');
 
       expect(submitSpy).toHaveBeenCalledWith('test-token', 'conv1', 5, 'Great!');
+    });
+  });
+
+  describe('a failed send (ADR-012 gap A2, MOH-200)', () => {
+    const body409 = (code: string) => ({
+      legacy: { error: { code, message: 'raw', details: [], request_id: 'r' } },
+      problem: {
+        type: `urn:problem:${code}`,
+        title: 'T',
+        status: 409,
+        detail: 'raw',
+        instance: '/widget/v1/conversations/conv1/messages',
+        code,
+        request_id: 'r',
+        errors: [],
+      },
+    });
+
+    function sendFailing(error: HttpErrorResponse) {
+      const apiService = TestBed.inject(WidgetApiService);
+      vi.spyOn(apiService, 'sendMessage').mockReturnValue(throwError(() => error));
+      const pending = vi.spyOn(apiService, 'getPendingFeedback').mockReturnValue(of(null));
+      store.setConfig(makeConfig());
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (store as any).conversationSignal.set({
+        id: 'conv1',
+        handling: 'ai',
+        teamOnline: true,
+        endedNote: false,
+        messages: [],
+      });
+      store.sendMessage('hello', 'conv1');
+      return pending;
+    }
+
+    it('treats a closed conversation the same in either format', () => {
+      for (const format of ['legacy', 'problem'] as const) {
+        const pending = sendFailing(
+          new HttpErrorResponse({ status: 409, error: body409('conversation_closed')[format] }),
+        );
+        expect(pending, format).toHaveBeenCalled();
+        expect(store.uiState(), format).not.toBe('error');
+      }
+    });
+
+    it('shows the generic error for a 409 that names another code', () => {
+      for (const format of ['legacy', 'problem'] as const) {
+        const pending = sendFailing(
+          new HttpErrorResponse({ status: 409, error: body409('conflict')[format] }),
+        );
+        expect(pending, format).not.toHaveBeenCalled();
+        expect(store.uiState(), format).toBe('error');
+      }
+    });
+
+    it('shows the generic error for a 5xx, with a body in either format or none', () => {
+      for (const error of [
+        { error: { code: 'internal_error', message: 'x', details: [], request_id: 'r' } },
+        { code: 'internal_error', detail: 'x', status: 500, request_id: 'r', errors: [] },
+        '<html>Bad gateway</html>',
+        null,
+      ]) {
+        sendFailing(new HttpErrorResponse({ status: 500, error }));
+        expect(store.uiState()).toBe('error');
+      }
+    });
+
+    it('shows the rate-limited state for a 429', () => {
+      const apiService = TestBed.inject(WidgetApiService);
+      vi.spyOn(apiService, 'sendMessage').mockReturnValue(throwError(() => new RateLimitedError()));
+      store.setConfig(makeConfig());
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (store as any).conversationSignal.set({
+        id: 'conv1',
+        handling: 'ai',
+        teamOnline: true,
+        endedNote: false,
+        messages: [],
+      });
+      store.sendMessage('hello', 'conv1');
+      expect(store.uiState()).toBe('rate-limited');
     });
   });
 
