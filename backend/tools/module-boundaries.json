@@ -286,10 +286,6 @@
     "customers": {
       "conversations": 1
     },
-    "escalations": {
-      "conversations": 3,
-      "customers": 1
-    },
     "tools": {
       "audit_logs": 2
     },
@@ -301,14 +297,7 @@
       "agent_configurations": 1,
       "ai_generations": 1
     },
-    "widgets": {
-      "conversations": 4
-    },
     "whatsapp": {
-      "conversations": 3,
-      "messages": 3,
-      "message_attachments": 4,
-      "customer_channel_identifiers": 2,
       "integration_connections": 1
     },
     "server": {

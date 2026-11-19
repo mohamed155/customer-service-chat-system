@@ -17,22 +17,8 @@ pub struct WhatsappMessageMetaRow {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct MessageAttachmentRow {
-    pub id: Uuid,
-    pub tenant_id: Uuid,
-    pub message_id: Uuid,
-    pub kind: String,
-    pub status: String,
-    pub provider_media_id: Option<String>,
-    pub storage_key: Option<String>,
-    pub mime_type: Option<String>,
-    pub size_bytes: Option<i64>,
-    pub file_name: Option<String>,
-    pub fetch_attempts: i32,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
+/// A message attachment. The row belongs to `conversations`, which owns `message_attachments`.
+pub use conversations::attachments::AttachmentRow as MessageAttachmentRow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

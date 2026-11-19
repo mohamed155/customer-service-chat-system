@@ -210,12 +210,13 @@ pub async fn stream_events(
                 return ApiError::not_found("Conversation not found").into_response();
             }
         };
-        let conv_owner: Option<(Uuid, Uuid)> = sqlx::query_as(
-            "SELECT customer_id, tenant_id FROM conversations \
-         WHERE id = $1 AND deleted_at IS NULL",
+        // Asked for in the session's own tenant, so another tenant's conversation is as absent as
+        // an unknown one.
+        let conv_owner: Option<Uuid> = conversations::directory::customer_of_live_conversation(
+            uow.conn(),
+            session.tenant_id,
+            conversation_id,
         )
-        .bind(conversation_id)
-        .fetch_optional(uow.conn())
         .await
         .map_err(|e| {
             error!(%e, "stream_events: lookup failed");
@@ -224,12 +225,11 @@ pub async fn stream_events(
         .flatten();
         drop(uow);
 
-        let (customer_id, conv_tenant_id) = match conv_owner {
-            Some(c) => c,
-            None => return ApiError::not_found("Conversation not found").into_response(),
+        let Some(customer_id) = conv_owner else {
+            return ApiError::not_found("Conversation not found").into_response();
         };
 
-        if conv_tenant_id != session.tenant_id || session.customer_id != Some(customer_id) {
+        if session.customer_id != Some(customer_id) {
             return ApiError::not_found("Conversation not found").into_response();
         }
 

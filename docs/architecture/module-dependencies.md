@@ -132,8 +132,6 @@ Counts of SQL references to a table another module owns, per crate. They may onl
 | `conversations` | `whatsapp_message_meta` | `whatsapp` | 1 |
 | `conversations` | `widget_instances` | `widgets` | 2 |
 | `customers` | `conversations` | `conversations` | 1 |
-| `escalations` | `conversations` | `conversations` | 3 |
-| `escalations` | `customers` | `customers` | 1 |
 | `feedback` | `agent_configurations` | `ai` | 1 |
 | `feedback` | `ai_generations` | `ai` | 1 |
 | `feedback` | `conversations` | `conversations` | 2 |
@@ -148,11 +146,6 @@ Counts of SQL references to a table another module owns, per crate. They may onl
 | `server` | `tenant_tools` | `tools` | 2 |
 | `tenancy` | `audit_logs` | `audit` | 1 |
 | `tools` | `audit_logs` | `audit` | 2 |
-| `whatsapp` | `conversations` | `conversations` | 3 |
-| `whatsapp` | `customer_channel_identifiers` | `customers` | 2 |
 | `whatsapp` | `integration_connections` | `integrations` | 1 |
-| `whatsapp` | `message_attachments` | `conversations` | 4 |
-| `whatsapp` | `messages` | `conversations` | 3 |
-| `widgets` | `conversations` | `conversations` | 4 |
 
-Total: 61.
+Total: 41.

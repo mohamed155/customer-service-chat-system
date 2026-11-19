@@ -99,7 +99,10 @@
 //! query runs. This keeps the conversation module agnostic of tenant
 //! isolation — it simply queries by `(tenant_id, customer_id)`.
 
+pub mod attachments;
 pub mod audit;
+pub mod directory;
+pub mod inbound;
 pub mod model;
 pub mod outbox;
 pub mod queries;
