@@ -89,6 +89,11 @@ pub fn init() {
         "Total number of rate limit degradations"
     );
     metrics::describe_counter!(
+        "error_envelope_legacy_total",
+        "Error responses sent in the legacy envelope format instead of problem+json, by route \
+         (ADR-012 gap A2); the envelope is removed once this stays at zero"
+    );
+    metrics::describe_counter!(
         "frontend_errors_total",
         "Errors reported by the dashboard in users' browsers (MOH-168), by kind and by the \
          release of the backend that received them"
@@ -115,6 +120,14 @@ pub fn record_frontend_errors(kind: &'static str, release: &str, count: u64) {
         "release" => release.to_owned(),
     )
     .increment(count);
+}
+
+/// Count an error answered in the legacy envelope format (ADR-012, gap A2). `route` is the matched
+/// route pattern (`/api/v1/tenant/members/{id}`), never the concrete path, and there is no tenant,
+/// user or client label, so the number of series is bounded by the number of routes. The envelope
+/// is removed once this has shown nothing for two weeks across a release cycle.
+pub fn record_legacy_error_envelope(route: &str) {
+    metrics::counter!("error_envelope_legacy_total", "route" => route.to_owned()).increment(1);
 }
 
 pub fn set_outbox_backlog(count: i64) {
