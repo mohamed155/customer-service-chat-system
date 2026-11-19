@@ -605,273 +605,269 @@ pub async fn run_generation(
                         break;
                     }
 
-                    let content = match tools::executor::validate(
-                        &resolved_tools,
-                        &tc.name,
-                        &tc.arguments,
-                    ) {
-                        Err(failure) => {
-                            let reason = match failure {
-                                tools::executor::ValidationFailure::UnknownOrDisabled => {
-                                    format!("Tool '{}' is not available or disabled.", tc.name)
-                                }
-                                tools::executor::ValidationFailure::SchemaMismatch(e) => {
-                                    format!("Tool '{}' call had invalid arguments: {}", tc.name, e)
-                                }
-                            };
+                    let content =
+                        match tools::executor::validate(&resolved_tools, &tc.name, &tc.arguments) {
+                            Err(failure) => {
+                                let reason = match failure {
+                                    tools::executor::ValidationFailure::UnknownOrDisabled => {
+                                        format!("Tool '{}' is not available or disabled.", tc.name)
+                                    }
+                                    tools::executor::ValidationFailure::SchemaMismatch(e) => {
+                                        format!(
+                                            "Tool '{}' call had invalid arguments: {}",
+                                            tc.name, e
+                                        )
+                                    }
+                                };
 
-                            generation_record::ensure_provisional(
-                                pool,
-                                generation_id,
-                                tenant_id,
-                                conversation_id,
-                                trigger_message_id,
-                            )
-                            .await?;
-                            let req_id = tools::queries::insert_request(
-                                pool,
-                                tools::queries::NewToolRequest {
+                                generation_record::ensure_provisional(
+                                    pool,
+                                    generation_id,
                                     tenant_id,
                                     conversation_id,
-                                    generation_id,
+                                    trigger_message_id,
+                                )
+                                .await?;
+                                let req_id = tools::queries::insert_request(
+                                    pool,
+                                    tools::queries::NewToolRequest {
+                                        tenant_id,
+                                        conversation_id,
+                                        generation_id,
+                                        tool_name: tc.name.clone(),
+                                        tool_source: "builtin".into(),
+                                        tenant_tool_id: None,
+                                        arguments: tc.arguments.clone(),
+                                        status: "refused".into(),
+                                        approval_required: false,
+                                        expires_at: None,
+                                        chain_index,
+                                    },
+                                )
+                                .await?;
+
+                                // T018: broadcast created + updated (refused is terminal)
+                                let created_ev = escalations::model::ToolRequestCreated {
+                                    id: req_id,
+                                    conversation_id,
                                     tool_name: tc.name.clone(),
                                     tool_source: "builtin".into(),
-                                    tenant_tool_id: None,
                                     arguments: tc.arguments.clone(),
-                                    status: "refused".into(),
                                     approval_required: false,
                                     expires_at: None,
                                     chain_index,
-                                },
-                            )
-                            .await?;
-
-                            // T018: broadcast created + updated (refused is terminal)
-                            let created_ev = escalations::model::ToolRequestCreated {
-                                id: req_id,
-                                conversation_id,
-                                tool_name: tc.name.clone(),
-                                tool_source: "builtin".into(),
-                                arguments: tc.arguments.clone(),
-                                approval_required: false,
-                                expires_at: None,
-                                chain_index,
-                                created_at: chrono::Utc::now(),
-                            };
-                            presence.broadcast(
-                                tenant_id,
-                                escalations::presence::Event::ConversationTool(
-                                    escalations::presence::ConversationToolEvent::Created(
-                                        created_ev,
+                                    created_at: chrono::Utc::now(),
+                                };
+                                presence.broadcast(
+                                    tenant_id,
+                                    escalations::presence::Event::ConversationTool(
+                                        escalations::presence::ConversationToolEvent::Created(
+                                            created_ev,
+                                        ),
                                     ),
-                                ),
-                            );
+                                );
 
-                            let updated_ev = escalations::model::ToolRequestUpdated {
-                                id: req_id,
-                                conversation_id,
-                                status: "refused".into(),
-                                decided_by_display_name: None,
-                                duration_ms: None,
-                                has_result: false,
-                                error: Some(reason.clone()),
-                            };
-                            presence.broadcast(
-                                tenant_id,
-                                escalations::presence::Event::ConversationTool(
-                                    escalations::presence::ConversationToolEvent::Updated(
-                                        updated_ev,
+                                let updated_ev = escalations::model::ToolRequestUpdated {
+                                    id: req_id,
+                                    conversation_id,
+                                    status: "refused".into(),
+                                    decided_by_display_name: None,
+                                    duration_ms: None,
+                                    has_result: false,
+                                    error: Some(reason.clone()),
+                                };
+                                presence.broadcast(
+                                    tenant_id,
+                                    escalations::presence::Event::ConversationTool(
+                                        escalations::presence::ConversationToolEvent::Updated(
+                                            updated_ev,
+                                        ),
                                     ),
-                                ),
-                            );
+                                );
 
-                            reason
-                        }
-                        Ok(resolved) if resolved.approval_required => {
-                            let expires_at = chrono::Utc::now() + chrono::Duration::minutes(5);
-                            generation_record::ensure_provisional(
-                                pool,
-                                generation_id,
-                                tenant_id,
-                                conversation_id,
-                                trigger_message_id,
-                            )
-                            .await?;
-                            let req_id = tools::queries::insert_request(
-                                pool,
-                                tools::queries::NewToolRequest {
+                                reason
+                            }
+                            Ok(resolved) if resolved.approval_required => {
+                                let expires_at = chrono::Utc::now() + chrono::Duration::minutes(5);
+                                generation_record::ensure_provisional(
+                                    pool,
+                                    generation_id,
                                     tenant_id,
                                     conversation_id,
-                                    generation_id,
+                                    trigger_message_id,
+                                )
+                                .await?;
+                                // The request and the event that tells people to approve it commit
+                                // together (`notifications` raises the notification from the event):
+                                // a request without its event would wait for an approver in silence.
+                                let mut approval_tx =
+                                    db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+                                let req_id = tools::queries::insert_request_in_tx(
+                                    approval_tx.conn(),
+                                    tools::queries::NewToolRequest {
+                                        tenant_id,
+                                        conversation_id,
+                                        generation_id,
+                                        tool_name: tc.name.clone(),
+                                        tool_source: "builtin".into(),
+                                        tenant_tool_id: None,
+                                        arguments: tc.arguments.clone(),
+                                        status: "awaiting_approval".into(),
+                                        approval_required: true,
+                                        expires_at: Some(expires_at),
+                                        chain_index,
+                                    },
+                                )
+                                .await?;
+                                crate::outbox::emit_tool_approval_requested_in_tx(
+                                    approval_tx.conn(),
+                                    tenant_id,
+                                    req_id,
+                                    conversation_id,
+                                )
+                                .await?;
+                                approval_tx.commit().await?;
+
+                                // T018: broadcast created
+                                let created_ev = escalations::model::ToolRequestCreated {
+                                    id: req_id,
+                                    conversation_id,
                                     tool_name: tc.name.clone(),
                                     tool_source: "builtin".into(),
-                                    tenant_tool_id: None,
                                     arguments: tc.arguments.clone(),
-                                    status: "awaiting_approval".into(),
                                     approval_required: true,
                                     expires_at: Some(expires_at),
                                     chain_index,
-                                },
-                            )
-                            .await?;
-
-                            // T041: notify conversations.manage holders
-                            notifications::emit::emit_requested_on_pool(
-                                    pool,
-                                    &notifications::emit::NotificationRequest {
-                                        tenant_id,
-                                        kind: notifications::model::NotificationKind::ToolApprovalRequired,
-                                        subject_type: notifications::model::SubjectType::ToolRequest,
-                                        subject_id: req_id,
-                                        actor_membership_id: None,
-                                        target_membership_id: None,
-                                        dedupe_key: notifications::emit::dedupe_key_tool_approval(req_id),
-                                        title: "Tool approval required".into(),
-                                        body: Some("A tool action requires your approval.".into()),
-                                    },
-                                )
-                                .await;
-
-                            // T018: broadcast created
-                            let created_ev = escalations::model::ToolRequestCreated {
-                                id: req_id,
-                                conversation_id,
-                                tool_name: tc.name.clone(),
-                                tool_source: "builtin".into(),
-                                arguments: tc.arguments.clone(),
-                                approval_required: true,
-                                expires_at: Some(expires_at),
-                                chain_index,
-                                created_at: chrono::Utc::now(),
-                            };
-                            presence.broadcast(
-                                tenant_id,
-                                escalations::presence::Event::ConversationTool(
-                                    escalations::presence::ConversationToolEvent::Created(
-                                        created_ev,
+                                    created_at: chrono::Utc::now(),
+                                };
+                                presence.broadcast(
+                                    tenant_id,
+                                    escalations::presence::Event::ConversationTool(
+                                        escalations::presence::ConversationToolEvent::Created(
+                                            created_ev,
+                                        ),
                                     ),
-                                ),
-                            );
+                                );
 
-                            awaiting_approval = true;
-                            break;
-                        }
-                        Ok(resolved) => {
-                            generation_record::ensure_provisional(
-                                pool,
-                                generation_id,
-                                tenant_id,
-                                conversation_id,
-                                trigger_message_id,
-                            )
-                            .await?;
-                            let req_id = tools::queries::insert_request(
-                                pool,
-                                tools::queries::NewToolRequest {
+                                awaiting_approval = true;
+                                break;
+                            }
+                            Ok(resolved) => {
+                                generation_record::ensure_provisional(
+                                    pool,
+                                    generation_id,
                                     tenant_id,
                                     conversation_id,
-                                    generation_id,
+                                    trigger_message_id,
+                                )
+                                .await?;
+                                let req_id = tools::queries::insert_request(
+                                    pool,
+                                    tools::queries::NewToolRequest {
+                                        tenant_id,
+                                        conversation_id,
+                                        generation_id,
+                                        tool_name: tc.name.clone(),
+                                        tool_source: "builtin".into(),
+                                        tenant_tool_id: None,
+                                        arguments: tc.arguments.clone(),
+                                        status: "pending".into(),
+                                        approval_required: false,
+                                        expires_at: None,
+                                        chain_index,
+                                    },
+                                )
+                                .await?;
+
+                                // T018: broadcast created
+                                let created_ev = escalations::model::ToolRequestCreated {
+                                    id: req_id,
+                                    conversation_id,
                                     tool_name: tc.name.clone(),
                                     tool_source: "builtin".into(),
-                                    tenant_tool_id: None,
                                     arguments: tc.arguments.clone(),
-                                    status: "pending".into(),
                                     approval_required: false,
                                     expires_at: None,
                                     chain_index,
-                                },
-                            )
-                            .await?;
-
-                            // T018: broadcast created
-                            let created_ev = escalations::model::ToolRequestCreated {
-                                id: req_id,
-                                conversation_id,
-                                tool_name: tc.name.clone(),
-                                tool_source: "builtin".into(),
-                                arguments: tc.arguments.clone(),
-                                approval_required: false,
-                                expires_at: None,
-                                chain_index,
-                                created_at: chrono::Utc::now(),
-                            };
-                            presence.broadcast(
-                                tenant_id,
-                                escalations::presence::Event::ConversationTool(
-                                    escalations::presence::ConversationToolEvent::Created(
-                                        created_ev,
+                                    created_at: chrono::Utc::now(),
+                                };
+                                presence.broadcast(
+                                    tenant_id,
+                                    escalations::presence::Event::ConversationTool(
+                                        escalations::presence::ConversationToolEvent::Created(
+                                            created_ev,
+                                        ),
                                     ),
-                                ),
-                            );
+                                );
 
-                            let _exec_started =
-                                tools::queries::mark_executing(pool, req_id, tenant_id).await;
+                                let _exec_started =
+                                    tools::queries::mark_executing(pool, req_id, tenant_id).await;
 
-                            let exec_ctx = tools::registry::ToolExecutionCtx {
-                                tenant_id,
-                                conversation_id,
-                                pool: pool.clone(),
-                                vault: ai.shared_vault(),
-                                http: ai.tools_http(),
-                            };
-                            let outcome = tools::executor::execute(
-                                &exec_ctx,
-                                &resolved,
-                                tc.arguments.clone(),
-                                req_id,
-                            )
-                            .await;
+                                let exec_ctx = tools::registry::ToolExecutionCtx {
+                                    tenant_id,
+                                    conversation_id,
+                                    pool: pool.clone(),
+                                    vault: ai.shared_vault(),
+                                    http: ai.tools_http(),
+                                };
+                                let outcome = tools::executor::execute(
+                                    &exec_ctx,
+                                    &resolved,
+                                    tc.arguments.clone(),
+                                    req_id,
+                                )
+                                .await;
 
-                            let (status, result_val, error_val) = match outcome {
-                                tools::executor::ExecutionOutcome::Succeeded(v) => {
-                                    ("succeeded", Some(v), None)
-                                }
-                                tools::executor::ExecutionOutcome::Failed(e) => {
-                                    ("failed", None, Some(e))
-                                }
-                                tools::executor::ExecutionOutcome::TimedOut => {
-                                    ("timed_out", None, None)
-                                }
-                            };
+                                let (status, result_val, error_val) = match outcome {
+                                    tools::executor::ExecutionOutcome::Succeeded(v) => {
+                                        ("succeeded", Some(v), None)
+                                    }
+                                    tools::executor::ExecutionOutcome::Failed(e) => {
+                                        ("failed", None, Some(e))
+                                    }
+                                    tools::executor::ExecutionOutcome::TimedOut => {
+                                        ("timed_out", None, None)
+                                    }
+                                };
 
-                            tools::queries::mark_terminal(
-                                pool,
-                                req_id,
-                                tenant_id,
-                                status,
-                                result_val.clone(),
-                                error_val.clone(),
-                            )
-                            .await?;
+                                tools::queries::mark_terminal(
+                                    pool,
+                                    req_id,
+                                    tenant_id,
+                                    status,
+                                    result_val.clone(),
+                                    error_val.clone(),
+                                )
+                                .await?;
 
-                            // T018: broadcast updated
-                            let updated_ev = escalations::model::ToolRequestUpdated {
-                                id: req_id,
-                                conversation_id,
-                                status: status.into(),
-                                decided_by_display_name: None,
-                                duration_ms: None,
-                                has_result: result_val.is_some(),
-                                error: error_val.clone(),
-                            };
-                            presence.broadcast(
-                                tenant_id,
-                                escalations::presence::Event::ConversationTool(
-                                    escalations::presence::ConversationToolEvent::Updated(
-                                        updated_ev,
+                                // T018: broadcast updated
+                                let updated_ev = escalations::model::ToolRequestUpdated {
+                                    id: req_id,
+                                    conversation_id,
+                                    status: status.into(),
+                                    decided_by_display_name: None,
+                                    duration_ms: None,
+                                    has_result: result_val.is_some(),
+                                    error: error_val.clone(),
+                                };
+                                presence.broadcast(
+                                    tenant_id,
+                                    escalations::presence::Event::ConversationTool(
+                                        escalations::presence::ConversationToolEvent::Updated(
+                                            updated_ev,
+                                        ),
                                     ),
-                                ),
-                            );
+                                );
 
-                            if let Some(ref r) = result_val {
-                                serde_json::to_string(r).unwrap_or_default()
-                            } else if let Some(ref e) = error_val {
-                                format!("Error: {}", e)
-                            } else {
-                                "The tool execution timed out.".into()
+                                if let Some(ref r) = result_val {
+                                    serde_json::to_string(r).unwrap_or_default()
+                                } else if let Some(ref e) = error_val {
+                                    format!("Error: {}", e)
+                                } else {
+                                    "The tool execution timed out.".into()
+                                }
                             }
-                        }
-                    };
+                        };
 
                     all_messages.push(ai_providers::Message {
                         role: ai_providers::Role::Tool,
@@ -1366,26 +1362,11 @@ pub async fn run_generation(
             let _ = generation_record::insert(pool, &rec).await;
 
             if matches!(outcome, GenerationOutcome::Failed) {
-                let now = chrono::Utc::now();
-                notifications::emit::emit_requested_on_pool(
+                crate::outbox::emit_response_failed(
                     pool,
-                    &notifications::emit::NotificationRequest {
-                        tenant_id,
-                        kind: notifications::model::NotificationKind::AiResponseFailed,
-                        subject_type: notifications::model::SubjectType::Conversation,
-                        subject_id: conversation_id,
-                        actor_membership_id: None,
-                        target_membership_id: None,
-                        dedupe_key: notifications::emit::dedupe_key_ai_failed(
-                            conversation_id,
-                            &now,
-                        ),
-                        title: "AI response failed".into(),
-                        body: Some(
-                            "The AI was unable to generate a response for this conversation."
-                                .into(),
-                        ),
-                    },
+                    tenant_id,
+                    conversation_id,
+                    chrono::Utc::now(),
                 )
                 .await;
             }
@@ -1665,22 +1646,11 @@ pub async fn run_followup_generation(
             };
             let _ = generation_record::insert(pool, &rec).await;
 
-            let now = chrono::Utc::now();
-            notifications::emit::emit_requested_on_pool(
+            crate::outbox::emit_response_failed(
                 pool,
-                &notifications::emit::NotificationRequest {
-                    tenant_id,
-                    kind: notifications::model::NotificationKind::AiResponseFailed,
-                    subject_type: notifications::model::SubjectType::Conversation,
-                    subject_id: conversation_id,
-                    actor_membership_id: None,
-                    target_membership_id: None,
-                    dedupe_key: notifications::emit::dedupe_key_ai_failed(conversation_id, &now),
-                    title: "AI response failed".into(),
-                    body: Some(
-                        "The AI was unable to generate a response for this conversation.".into(),
-                    ),
-                },
+                tenant_id,
+                conversation_id,
+                chrono::Utc::now(),
             )
             .await;
 

@@ -381,34 +381,39 @@ pub struct NewToolRequest {
 
 pub async fn insert_request(pool: &sqlx::PgPool, req: NewToolRequest) -> sqlx::Result<Uuid> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, req.tenant_id).await?;
-    let result: sqlx::Result<Uuid> = async {
-        let id: Uuid = sqlx::query_scalar(
-            "INSERT INTO tool_requests \
-         (tenant_id, conversation_id, generation_id, tool_name, tool_source, \
-          tenant_tool_id, arguments, status, approval_required, expires_at, chain_index) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
-         RETURNING id",
-        )
-        .bind(req.tenant_id)
-        .bind(req.conversation_id)
-        .bind(req.generation_id)
-        .bind(&req.tool_name)
-        .bind(&req.tool_source)
-        .bind(req.tenant_tool_id)
-        .bind(&req.arguments)
-        .bind(&req.status)
-        .bind(req.approval_required)
-        .bind(req.expires_at)
-        .bind(req.chain_index)
-        .fetch_one(uow.conn())
-        .await?;
-        Ok(id)
-    }
-    .await;
+    let result = insert_request_in_tx(uow.conn(), req).await;
     if result.is_ok() {
         uow.commit().await?;
     }
     result
+}
+
+/// Inserts a tool request in the caller's transaction, so it commits (or rolls back) with whatever
+/// else the caller writes: an approval request and the event that tells people about it, say.
+pub async fn insert_request_in_tx(
+    conn: &mut sqlx::PgConnection,
+    req: NewToolRequest,
+) -> sqlx::Result<Uuid> {
+    sqlx::query_scalar(
+        "INSERT INTO tool_requests \
+         (tenant_id, conversation_id, generation_id, tool_name, tool_source, \
+          tenant_tool_id, arguments, status, approval_required, expires_at, chain_index) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+         RETURNING id",
+    )
+    .bind(req.tenant_id)
+    .bind(req.conversation_id)
+    .bind(req.generation_id)
+    .bind(&req.tool_name)
+    .bind(&req.tool_source)
+    .bind(req.tenant_tool_id)
+    .bind(&req.arguments)
+    .bind(&req.status)
+    .bind(req.approval_required)
+    .bind(req.expires_at)
+    .bind(req.chain_index)
+    .fetch_one(conn)
+    .await
 }
 
 /// Transition a request from `pending` or `approved` to `executing`.

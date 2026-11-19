@@ -30,14 +30,7 @@
     "outbox_events",
     "secret_keks"
   ],
-  "exceptions": [
-    {
-      "rule": "event-consumer-called",
-      "from": "ai",
-      "to": "notifications",
-      "reason": "ai calls notifications::emit directly to raise tool-approval and failed-response notifications; ADR-001 would have notifications consume the AI turn events instead."
-    }
-  ],
+  "exceptions": [],
   "readModels": {
     "analytics": {
       "tables": [
@@ -60,7 +53,6 @@
         "escalations",
         "identity",
         "knowledge",
-        "notifications",
         "tenancy",
         "tools"
       ],

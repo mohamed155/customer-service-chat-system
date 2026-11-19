@@ -8,7 +8,10 @@
 //!
 //! # Responsibilities
 //! - Define notification kinds, states, and the persisted data model.
-//! - Emit notifications from domain events (via `emit`).
+//! - Emit notifications from domain events (via `emit`), and raise them from the events other
+//!   modules publish: `notification.requested` (a request the producer words itself),
+//!   `ai.tool_approval_requested` and `ai.response_failed` (the AI engine says what happened and
+//!   `worker` decides the kind, the wording and the dedupe rule; MOH-195).
 //! - Resolve the correct recipients for a given subject.
 //! - Query and paginate a recipient's inbox.
 //! - Transition state (unread → read → resolved) and enforce deduplication.

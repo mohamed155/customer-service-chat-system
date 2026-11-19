@@ -437,6 +437,43 @@ async fn engine_tool_approval_approve() {
     );
     let tool_request_id = pending_rows[0].0;
 
+    // The engine says a person must approve it with an AI event (`ai::outbox`), which
+    // `notifications` turns into notifications; it does not ask for the notification itself.
+    let approval_events: Vec<serde_json::Value> = sqlx::query_scalar(
+        "SELECT payload FROM outbox_events \
+         WHERE tenant_id = $1::text AND event_type = 'ai.tool_approval_requested'",
+    )
+    .bind(tenant_id)
+    .fetch_all(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        approval_events.len(),
+        1,
+        "one ai.tool_approval_requested event"
+    );
+    assert_eq!(
+        approval_events[0]["toolRequestId"],
+        tool_request_id.to_string()
+    );
+    assert_eq!(
+        approval_events[0]["conversationId"],
+        conversation_id.to_string()
+    );
+    assert_eq!(approval_events[0]["tenantId"], tenant_id.to_string());
+    let direct_requests: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM outbox_events \
+         WHERE tenant_id = $1::text AND event_type = 'notification.requested'",
+    )
+    .bind(tenant_id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(
+        direct_requests, 0,
+        "the engine no longer requests a notification itself"
+    );
+
     // The ai_generations row should have outcome=awaiting_tool_approval
     let gen_outcome: String = sqlx::query_scalar(
         "SELECT outcome FROM ai_generations WHERE tenant_id = $1 AND conversation_id = $2",
@@ -535,4 +572,15 @@ async fn engine_tool_approval_approve() {
         "expected at least 2 AI messages (interim + follow-up), got {}",
         ai_messages_after.len()
     );
+
+    // Leave nothing behind: the AI event this run published is `notifications`' to consume, and
+    // an event left in the shared outbox is the next test's worker call to claim first.
+    let presence = std::sync::Arc::new(escalations::presence::Runtime::new(
+        pool.clone(),
+        Duration::from_secs(45),
+    ));
+    while notifications::worker::process_notification_outbox_once(&pool, &presence)
+        .await
+        .unwrap()
+    {}
 }

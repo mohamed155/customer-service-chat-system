@@ -250,7 +250,6 @@ dependencies = [
  "identity",
  "kernel",
  "knowledge",
- "notifications",
  "outbound",
  "rand 0.10.3",
  "reqwest",

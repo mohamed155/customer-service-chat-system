@@ -14,7 +14,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 
 | Module | Layout | Depends on (modules) | Used by (modules) | Tables owned |
 | -- | -- | -- | -- | -- |
-| `ai` | flat | `authz`, `billing`, `conversations`, `escalations`, `identity`, `knowledge`, `notifications`, `tenancy`, `tools` | – | `agent_avatar_uploads`, `agent_configurations`, `agent_prompt_versions`, `agent_prompts`, `ai_configurations`, `ai_credentials`, `ai_generations`, `ai_usage_records` |
+| `ai` | flat | `authz`, `billing`, `conversations`, `escalations`, `identity`, `knowledge`, `tenancy`, `tools` | – | `agent_avatar_uploads`, `agent_configurations`, `agent_prompt_versions`, `agent_prompts`, `ai_configurations`, `ai_credentials`, `ai_generations`, `ai_usage_records` |
 | `analytics` | flat | `tenancy` | – | – |
 | `audit` | flat | `identity`, `tenancy` | – | `audit_logs` |
 | `authz` | flat | `identity` | `ai`, `customers`, `knowledge`, `notifications`, `tenancy` | – |
@@ -27,7 +27,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `identity` | flat | – | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `tenancy`, `tools`, `widgets` | `mfa_factors`, `mfa_recovery_codes`, `revoked_sessions`, `users` |
 | `integrations` | flat | `identity`, `tenancy` | `conversations`, `whatsapp` | `integration_catalog`, `integration_connections`, `integration_events`, `integration_secrets`, `integration_webhook_deliveries` |
 | `knowledge` | flat | `authz`, `identity`, `tenancy` | `ai` | `knowledge_categories`, `knowledge_chunks`, `knowledge_documents`, `knowledge_index_state`, `knowledge_item_tags`, `knowledge_items` |
-| `notifications` | flat | `authz`, `escalations`, `identity`, `tenancy` | `ai` | `notifications` |
+| `notifications` | flat | `authz`, `escalations`, `identity`, `tenancy` | – | `notifications` |
 | `platform` | flat | `tenancy` | – | – |
 | `tenancy` | flat | `authz`, `email`, `identity` | `ai`, `analytics`, `audit`, `billing`, `conversations`, `customers`, `escalations`, `feedback`, `integrations`, `knowledge`, `notifications`, `platform`, `tools`, `whatsapp`, `widgets` | `tenant_invitations`, `tenant_memberships`, `tenant_rate_limit_overrides`, `tenants` |
 | `tools` | flat | `conversations`, `customers`, `identity`, `tenancy` | `ai`, `escalations` | `tenant_tool_policies`, `tenant_tools`, `tool_requests` |
@@ -46,7 +46,6 @@ flowchart LR
   ai --> escalations
   ai --> identity
   ai --> knowledge
-  ai --> notifications
   ai --> tenancy
   ai --> tools
   analytics --> tenancy
@@ -107,9 +106,7 @@ flowchart LR
 
 ## Accepted exceptions
 
-| Rule | From | To | Reason |
-| -- | -- | -- | -- |
-| event-consumer-called | `ai` | `notifications` | ai calls notifications::emit directly to raise tool-approval and failed-response notifications; ADR-001 would have notifications consume the AI turn events instead. |
+None.
 
 Read models (may read other modules' tables, never write):
 
