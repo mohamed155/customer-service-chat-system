@@ -15,22 +15,27 @@
 //! detail in one format as in the other.
 
 use axum::body::Body;
+use axum::body::HttpBody;
 use axum::extract::{MatchedPath, Request};
 use axum::http::{header, HeaderValue};
 use axum::middleware::Next;
 use axum::response::Response;
 use kernel::{
-    prefers_problem_json, ErrorResponseParts, LEGACY_DEPRECATION, LEGACY_DEPRECATION_LINK,
-    PROBLEM_JSON,
+    prefers_problem_json, ErrorBody, ErrorEnvelope, ErrorResponseParts, LEGACY_DEPRECATION,
+    LEGACY_DEPRECATION_LINK, PROBLEM_JSON,
 };
 use observability::request_id::REQUEST_ID_HEADER;
 
 pub async fn error_format_middleware(request: Request, next: Next) -> Response {
-    let wants_problem = request
+    // Every `Accept` field line counts: two lines are the same as one comma-separated list.
+    let accept = request
         .headers()
-        .get(header::ACCEPT)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(prefers_problem_json);
+        .get_all(header::ACCEPT)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let wants_problem = prefers_problem_json(&accept);
     let instance = request.uri().path().to_owned();
     let route = request
         .extensions()
@@ -45,8 +50,16 @@ pub async fn error_format_middleware(request: Request, next: Next) -> Response {
         .to_owned();
 
     let mut response = next.run(request).await;
-    let Some(parts) = response.extensions().get::<ErrorResponseParts>().cloned() else {
-        return response;
+    let parts = match response.extensions().get::<ErrorResponseParts>().cloned() {
+        Some(parts) => parts,
+        // An error the framework made itself (a 405 for the wrong method, a 415, a 413) has a
+        // status and no body. A client that asks for problem+json still gets a problem document
+        // for it, with the status and headers (`Allow`) it had. Everyone else gets it unchanged.
+        None if wants_problem => match bodyless_framework_error(&response) {
+            Some(parts) => parts,
+            None => return response,
+        },
+        None => return response,
     };
 
     // The answer depends on `Accept`, whichever format it takes.
@@ -77,6 +90,28 @@ pub async fn error_format_middleware(request: Request, next: Next) -> Response {
     head.headers
         .insert(header::CONTENT_LENGTH, HeaderValue::from(body.len()));
     Response::from_parts(head, Body::from(body))
+}
+
+/// The parts of an error response that has an error status and an empty body, so it came from the
+/// framework and not from [`kernel::ApiError`]. The code is the status's reason phrase in snake
+/// case (`method_not_allowed`).
+fn bodyless_framework_error(response: &Response) -> Option<ErrorResponseParts> {
+    let status = response.status();
+    if !(status.is_client_error() || status.is_server_error()) || !response.body().is_end_stream() {
+        return None;
+    }
+    let reason = status.canonical_reason()?;
+    Some(ErrorResponseParts {
+        status,
+        envelope: ErrorEnvelope {
+            error: ErrorBody {
+                code: reason.to_ascii_lowercase().replace([' ', '-'], "_"),
+                message: reason.to_owned(),
+                details: Vec::new(),
+                request_id: String::new(),
+            },
+        },
+    })
 }
 
 #[cfg(test)]
@@ -125,6 +160,7 @@ mod tests {
                 }),
             )
             .route("/ok", get(|| async { "fine".into_response() }))
+            .route("/post-only", axum::routing::post(|| async { "posted" }))
             .layer(from_fn(internal_error_middleware))
             .layer(from_fn(error_format_middleware))
     }
@@ -277,6 +313,62 @@ mod tests {
                 assert_eq!(json["error"]["request_id"], "req_test");
             }
         }
+    }
+
+    #[tokio::test]
+    async fn every_accept_line_counts_not_only_the_first() {
+        for (lines, wants_problem) in [
+            (
+                vec!["application/problem+json;q=0.5", "application/json"],
+                false,
+            ),
+            (
+                vec!["application/json", "application/problem+json;q=0.5"],
+                false,
+            ),
+            (
+                vec!["application/json;q=0.5", "application/problem+json"],
+                true,
+            ),
+            (vec!["text/html", "application/problem+json"], true),
+        ] {
+            let mut request = HttpRequest::builder().uri("/invalid");
+            for line in &lines {
+                request = request.header("accept", *line);
+            }
+            let response = app()
+                .oneshot(request.body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            let is_problem = response.headers()[header::CONTENT_TYPE] == PROBLEM_JSON;
+            assert_eq!(is_problem, wants_problem, "Accept lines {lines:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_framework_error_becomes_a_problem_only_for_a_client_that_asks() {
+        // GET on a POST-only route: axum answers 405 with an `Allow` header and no body.
+        let (status, headers, body) = get_with("/post-only", None).await;
+        assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+        assert!(body.is_empty(), "unchanged for everyone else");
+        assert!(headers.get("deprecation").is_none() && headers.get(header::VARY).is_none());
+
+        let (status, headers, body) = get_with("/post-only", Some(PROBLEM)).await;
+        assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(headers[header::CONTENT_TYPE], PROBLEM_JSON);
+        assert_eq!(
+            headers[header::ALLOW],
+            "POST",
+            "the framework's header is kept"
+        );
+        let json: Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["status"], 405);
+        assert_eq!(json["code"], "method_not_allowed");
+        assert_eq!(json["type"], "urn:problem:method_not_allowed");
+        assert_eq!(json["title"], "Method not allowed");
+        assert_eq!(json["detail"], "Method Not Allowed");
+        assert_eq!(json["instance"], "/post-only");
+        assert_eq!(json["request_id"], "req_test");
     }
 
     #[tokio::test]

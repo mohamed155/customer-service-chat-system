@@ -23,7 +23,10 @@ message: no `errors`, no `details`, no internal text. `Retry-After` is sent in b
 formats vary on `Accept` (`Vary: accept`).
 
 The backend counts every legacy-format answer in `error_envelope_legacy_total{route}` so the envelope
-can be removed when nobody receives it any more.
+can be removed when nobody receives it any more. It is removed only after the counter has shown no
+legacy answer for two weeks across a full release cycle (ADR-012, gap A2): widget builds already
+embedded on customers' pages are the slowest clients to update, and a shorter quiet period could
+break one that comes back later.
 
 ## What checks it
 

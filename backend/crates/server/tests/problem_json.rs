@@ -177,15 +177,18 @@ async fn a_panic_is_a_500_that_hides_the_cause_in_both_formats() {
 async fn each_legacy_response_is_counted_by_route_and_nothing_else() {
     observability::metrics::init();
     // One legacy answer on a matched route, one problem+json answer on the same route.
-    let (_, _, _) = call("/api/v1/tenant/members", None).await;
-    let (_, _, _) = call("/api/v1/tenant/members", Some(PROBLEM)).await;
+    // A route no other test in this file calls: the recorder is process-wide, and `cargo test`
+    // runs the tests of one file side by side in that process.
+    let (_, _, _) = call("/api/v1/tenant/customers", None).await;
+    let (_, _, _) = call("/api/v1/tenant/customers", Some(PROBLEM)).await;
     let (status, _, body) = call("/metrics", None).await;
     assert_eq!(status, StatusCode::OK);
     let text = String::from_utf8(body).unwrap();
     let line = text
         .lines()
         .find(|l| {
-            l.starts_with("error_envelope_legacy_total{") && l.contains("/api/v1/tenant/members")
+            l.starts_with("error_envelope_legacy_total{")
+                && l.contains("route=\"/api/v1/tenant/customers\"")
         })
         .unwrap_or_else(|| panic!("no legacy counter for the route in:\n{text}"));
     assert!(

@@ -137,6 +137,31 @@ fn split_details(
     (errors, other)
 }
 
+/// A `qvalue` as RFC 9110 writes it: `0` or `1`, optionally followed by a dot and up to three
+/// digits, and nothing above 1. Anything else (`1e0`, `.5`, `0.8000`, `1.5`, `-1`) is not a quality,
+/// even where Rust's float parser would take it.
+fn parse_qvalue(raw: &str) -> Option<f32> {
+    let raw = raw.trim();
+    let (whole, fraction) = match raw.split_once('.') {
+        Some((whole, fraction)) => (whole, Some(fraction)),
+        None => (raw, None),
+    };
+    let digits = fraction.unwrap_or("");
+    if digits.len() > 3 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let thousandths: u32 = if digits.is_empty() {
+        0
+    } else {
+        digits.parse::<u32>().ok()? * 10u32.pow(3 - digits.len() as u32)
+    };
+    match whole {
+        "0" => Some(thousandths as f32 / 1000.0),
+        "1" if thousandths == 0 => Some(1.0),
+        _ => None,
+    }
+}
+
 /// Whether the `Accept` header asks for problem+json: it lists `application/problem+json` with a
 /// quality above zero and at least that of `application/json`. Only the exact media type opts in:
 /// `*/*`, `application/*` and no header at all keep the legacy envelope, so no existing client
@@ -154,11 +179,7 @@ pub fn prefers_problem_json(accept: &str) -> bool {
                 .strip_prefix("q=")
                 .or_else(|| parameter.strip_prefix("Q="))
             {
-                quality = value
-                    .trim()
-                    .parse::<f32>()
-                    .ok()
-                    .filter(|q| (0.0..=1.0).contains(q));
+                quality = parse_qvalue(value);
             }
         }
         // An unusable quality value makes the range unusable, not "1".
@@ -219,6 +240,19 @@ mod tests {
             ("application/problem+json;q=0", false),
             ("application/problem+json;q=abc, application/json", false),
             ("application/problem+json;q=1.5", false),
+            ("application/problem+json;q=1e0", false),
+            ("application/problem+json;q=.5", false),
+            ("application/problem+json;q=0.8000", false),
+            ("application/problem+json;q=-1", false),
+            ("application/problem+json;q=1.0001", false),
+            ("application/problem+json;q=1.000", true),
+            ("application/problem+json;q=1", true),
+            ("application/problem+json;q=0.001", true),
+            (
+                "application/problem+json;q=0.800, application/json;q=0.5",
+                true,
+            ),
+            ("application/problem+json;q=0., application/json;q=1", false),
             ("text/html, application/problem+json;q=0.9, */*;q=0.1", true),
         ] {
             assert_eq!(
