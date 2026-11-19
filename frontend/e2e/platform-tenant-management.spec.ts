@@ -1271,6 +1271,66 @@ test.describe('platform tenant management', () => {
     await expect(page.getByText('Name is too short')).toHaveCount(0);
   });
 
+  test('create form shows server 422 errors sent as problem+json, and asks for them (MOH-199)', async ({
+    page,
+  }) => {
+    const accepts: (string | undefined)[] = [];
+    await page.route('**/api/v1/**', async (route) => {
+      const url = new URL(route.request().url());
+      const path = url.pathname.replace('/api/v1', '');
+      const method = route.request().method();
+
+      if (path === '/me') return json(route, identities.platform);
+      if (path === '/auth/logout') return json(route, null);
+
+      if (method === 'POST' && path === '/platform/tenants') {
+        accepts.push(route.request().headers()['accept']);
+        // The same error as the test above, in the new format (RFC 9457): no `error` wrapper, no
+        // sentence per field, `detail` and `errors[]` instead.
+        return route.fulfill({
+          status: 422,
+          contentType: 'application/problem+json',
+          body: JSON.stringify({
+            type: 'urn:problem:validation_failed',
+            title: 'Validation failed',
+            status: 422,
+            detail: 'Validation failed',
+            instance: '/api/v1/platform/tenants',
+            code: 'validation_failed',
+            request_id: 'req_e2e_problem',
+            errors: [
+              { field: 'name', code: 'invalid_length' },
+              { field: 'slug', code: 'invalid_format' },
+            ],
+          }),
+        });
+      }
+
+      return json(route, { items: [], nextCursor: null, hasMore: false });
+    });
+
+    await page.goto('/platform/tenants/new');
+    await expect(page.getByRole('heading', { name: 'New tenant' })).toBeVisible();
+
+    await page.locator('input[formControlName="name"]').fill('A');
+    await page.locator('input[formControlName="slug"]').fill('ab');
+    await page.locator('select[formControlName="plan"]').selectOption('professional');
+
+    const createResponsePromise = page.waitForResponse(
+      (res) => res.url().includes('/api/v1/platform/tenants') && res.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Create tenant' }).click();
+    await createResponsePromise;
+
+    // The screen is the same as for the legacy envelope: each field says its code in words.
+    await expect(page.getByText('Value is too long or too short')).toBeVisible();
+    await expect(
+      page.getByText('Slug must be lowercase letters/digits with optional single hyphens'),
+    ).toBeVisible();
+    // The dashboard asked for problem+json, with the legacy envelope as the fallback.
+    expect(accepts).toEqual(['application/problem+json, application/json;q=0.5']);
+  });
+
   test('create form shows 409 slug conflict error on slug field', async ({ page }) => {
     await page.route('**/api/v1/**', async (route) => {
       const url = new URL(route.request().url());
