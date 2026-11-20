@@ -92,6 +92,14 @@ async fn seed_item_with_chunk(tenant_id: Uuid, status: &str, title: &str, conten
     .unwrap()
 }
 
+/// The ports the engine runs on, wired as the server wires them.
+fn ports(pool: &PgPool) -> ai::ports::AiPorts {
+    server::ai_ports::ai_ports(
+        pool.clone(),
+        escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
+    )
+}
+
 fn query() -> Vec<f32> {
     vec![0.5; 1536]
 }
@@ -107,7 +115,7 @@ async fn the_adapter_returns_what_the_knowledge_module_finds() {
     let direct = knowledge::retrieval::search(&pool, tenant, &query(), 5, 0.70)
         .await
         .unwrap();
-    let through_port = server::ai_ports::ai_ports()
+    let through_port = ports(&pool)
         .knowledge
         .search(&pool, tenant, &query(), 5, 0.70)
         .await
@@ -144,7 +152,7 @@ async fn the_adapter_never_returns_another_tenants_passages() {
     );
     let chunk_a = seed_item_with_chunk(a, "published", "A's policy", "A's text").await;
     let chunk_b = seed_item_with_chunk(b, "published", "B's policy", "B's text").await;
-    let ports = server::ai_ports::ai_ports();
+    let ports = ports(&pool);
 
     let for_a = ports
         .knowledge
@@ -186,7 +194,7 @@ async fn the_adapter_skips_drafts_and_matches_below_the_threshold() {
     let tenant = seed_tenant(&pool).await;
     seed_item_with_chunk(tenant, "draft", "Unfinished", "Not yet approved.").await;
     let published = seed_item_with_chunk(tenant, "published", "Live", "Approved.").await;
-    let ports = server::ai_ports::ai_ports();
+    let ports = ports(&pool);
 
     let found = ports
         .knowledge

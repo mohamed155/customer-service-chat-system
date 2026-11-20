@@ -154,6 +154,23 @@ fn request(f: &Fixture, status: NewToolRequestStatus, source: ToolSource) -> New
     }
 }
 
+/// The ports the engine runs on, wired as the server wires them.
+fn ports(pool: &PgPool) -> ai::ports::AiPorts {
+    server::ai_ports::ai_ports(
+        pool.clone(),
+        escalations::presence::Runtime::new(pool.clone(), Duration::from_secs(45)),
+    )
+}
+
+/// Ports for the tests that never touch a database (the pool connects only when used).
+fn ports_without_database() -> ai::ports::AiPorts {
+    ports(&db::lazy_pool(
+        "postgres://localhost:5432/unused",
+        1,
+        Duration::from_secs(1),
+    ))
+}
+
 async fn status_of(id: Uuid) -> Option<String> {
     sqlx::query_scalar("SELECT status FROM tool_requests WHERE id = $1")
         .bind(id)
@@ -179,9 +196,9 @@ fn tool(name: &str, source: ToolSource, tenant_tool_id: Option<Uuid>) -> Resolve
     }
 }
 
-#[test]
-fn validation_keeps_the_tool_and_names_why_a_call_cannot_run() {
-    let ports = server::ai_ports::ai_ports();
+#[tokio::test]
+async fn validation_keeps_the_tool_and_names_why_a_call_cannot_run() {
+    let ports = ports_without_database();
     let tenant_tool = Uuid::new_v4();
     let tools = vec![
         tool("update_customer_contact", ToolSource::Builtin, None),
@@ -231,12 +248,10 @@ fn validation_keeps_the_tool_and_names_why_a_call_cannot_run() {
     ));
 }
 
-#[test]
-fn the_call_limit_is_the_tools_modules_own() {
+#[tokio::test]
+async fn the_call_limit_is_the_tools_modules_own() {
     assert_eq!(
-        server::ai_ports::ai_ports()
-            .tools
-            .max_calls_per_generation(),
+        ports_without_database().tools.max_calls_per_generation(),
         tools::executor::MAX_TOOL_CALLS_PER_GENERATION
     );
 }
@@ -249,7 +264,7 @@ async fn a_request_inserted_through_the_port_follows_the_callers_transaction() {
     let Some(pool) = get_pool().await else { return };
     setup().await;
     let f = seed(&pool).await;
-    let ports = server::ai_ports::ai_ports();
+    let ports = ports(&pool);
 
     let event_count = |tool_request_id: Uuid| async move {
         sqlx::query_scalar::<_, i64>(
@@ -341,7 +356,7 @@ async fn a_request_is_found_by_its_tenant_and_never_by_another() {
     setup().await;
     let a = seed(&pool).await;
     let b = seed(&pool).await;
-    let ports = server::ai_ports::ai_ports();
+    let ports = ports(&pool);
 
     let tenant_tool_id = seed_tenant_tool(a.tenant_id).await;
     let tenant_request = ports
@@ -413,7 +428,7 @@ async fn cancelling_follows_the_callers_transaction_and_stays_in_its_conversatio
     setup().await;
     let f = seed(&pool).await;
     let other = seed(&pool).await;
-    let ports = server::ai_ports::ai_ports();
+    let ports = ports(&pool);
 
     let waiting = ports
         .tools
@@ -526,7 +541,7 @@ async fn a_request_runs_pending_to_executing_to_its_outcome_for_its_own_tenant_o
     setup().await;
     let a = seed(&pool).await;
     let b = seed(&pool).await;
-    let ports = server::ai_ports::ai_ports();
+    let ports = ports(&pool);
     let id = ports
         .tools
         .insert_request(

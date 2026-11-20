@@ -829,10 +829,9 @@ async fn configured_agent_drives_ai_reply() {
     .unwrap();
 
     // Process the outbox event
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("agent responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("agent responder should succeed");
     assert!(processed, "agent responder should have processed an event");
 
     // Assert an ai-kind message was inserted
@@ -1107,10 +1106,9 @@ async fn unconfigured_tenant_sends_single_auto_ack() {
     assert_eq!(msg_resp.status(), StatusCode::OK);
 
     // Run the responder
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("responder should succeed");
     assert!(processed, "responder should have processed an event");
 
     // Assert exactly one system message
@@ -1157,10 +1155,9 @@ async fn unconfigured_tenant_sends_single_auto_ack() {
     assert_eq!(msg2_resp.status(), StatusCode::OK);
 
     // Run responder again
-    let processed2 =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("responder should succeed");
+    let processed2 = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("responder should succeed");
     assert!(processed2, "responder should have processed second event");
 
     // Assert still exactly one system message (no duplicate ack)
@@ -1328,10 +1325,9 @@ async fn ai_handling_platform_ai_then_ai_reply() {
     assert_eq!(msg_resp.status(), StatusCode::OK);
 
     // Run responder
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("responder should succeed");
     assert!(processed, "responder should have processed an event");
 
     // Assert an ai-kind reply was inserted
@@ -1444,10 +1440,9 @@ async fn ai_handling_human_escalates_immediately() {
     .await;
     assert_eq!(msg_resp.status(), StatusCode::OK);
 
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("responder should succeed");
     assert!(processed, "responder should have processed the event");
 
     // Assert no new message (beyond the customer one we just posted) and no new escalation
@@ -1671,10 +1666,9 @@ async fn unresolvable_platform_ai_returns_to_awaiting_decision() {
     assert_eq!(msg_resp.status(), StatusCode::OK);
 
     // Run responder to get the auto-ack
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("responder should succeed");
     assert!(
         processed,
         "responder should have processed the auto-ack event"
@@ -1774,10 +1768,9 @@ async fn unresolvable_platform_ai_returns_to_awaiting_decision() {
     .await;
     assert_eq!(msg2_resp.status(), StatusCode::OK);
 
-    let processed2 =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("responder should succeed");
+    let processed2 = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("responder should succeed");
     assert!(
         processed2,
         "responder should have processed the follow-up event"
@@ -1898,10 +1891,9 @@ async fn business_rule_appears_in_composed_prompt() {
     .await
     .unwrap();
 
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("agent responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("agent responder should succeed");
     assert!(processed, "agent responder should have processed an event");
 
     let requests = openai_mock.received_requests().await.unwrap();
@@ -2023,10 +2015,9 @@ async fn keyword_rule_escalates_with_rule_name_reason() {
     .await
     .unwrap();
 
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("agent responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("agent responder should succeed");
     assert!(processed, "agent responder should have processed an event");
 
     // No AI reply should have been inserted
@@ -2152,10 +2143,9 @@ async fn baseline_escalation_survives_zero_tenant_rules() {
     .await
     .unwrap();
 
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("agent responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("agent responder should succeed");
     assert!(processed, "agent responder should have processed an event");
 
     // Escalation should exist with BASELINE_ESCALATION_REASON
@@ -2490,10 +2480,9 @@ async fn disabled_channel_blocks_ai_reply() {
     .unwrap();
 
     // Run the responder
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("agent responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("agent responder should succeed");
     assert!(
         processed,
         "responder should have processed (blocked) the event"
@@ -2636,10 +2625,9 @@ async fn re_enabled_channel_resumes_replies() {
     .unwrap();
 
     // Run the responder
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("agent responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("agent responder should succeed");
     assert!(processed, "responder should have processed the event");
 
     // Assert an AI reply was inserted
@@ -3236,10 +3224,9 @@ async fn provider_override_serves_ai_reply() {
     .await
     .unwrap();
 
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("agent responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("agent responder should succeed");
     assert!(processed, "agent responder should have processed an event");
 
     // Assert AI message was inserted
@@ -3385,10 +3372,9 @@ async fn stale_override_falls_back() {
     .await
     .unwrap();
 
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("agent responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("agent responder should succeed");
     assert!(processed, "agent responder should have processed an event");
 
     // Assert the AI reply came from OpenAI (default path)

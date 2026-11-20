@@ -1,5 +1,4 @@
 use sqlx::PgPool;
-use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -23,7 +22,6 @@ pub async fn process_agent_responder_once(
     pool: &PgPool,
     ai: &crate::AiService,
     ports: &crate::ports::AiPorts,
-    presence: &Arc<escalations::presence::Runtime>,
 ) -> sqlx::Result<bool> {
     // Phase A — Claim + Read (no long-held locks)
 
@@ -67,7 +65,6 @@ pub async fn process_agent_responder_once(
             pool,
             ai,
             ports,
-            presence,
             tenant_id,
             conversation_id,
             tool_request_id,
@@ -215,7 +212,11 @@ pub async fn process_agent_responder_once(
 
         // Gate on open escalation: the reply is cancelled before generation
         // starts; record that outcome (spec 021, scenario 3).
-        if escalations::routing::has_open_escalation(pool, tenant_id, conversation_id).await? {
+        if ports
+            .escalation
+            .has_open_escalation(pool, tenant_id, conversation_id)
+            .await?
+        {
             let rec = crate::generation_record::GenerationRecord {
                 id: kernel::ids::new_id(),
                 tenant_id,
@@ -267,20 +268,18 @@ pub async fn process_agent_responder_once(
 
         match rule_match {
             RuleMatch::Baseline => {
-                let present_ids = presence.present_membership_ids_async(tenant_id).await;
                 let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-                let outcome = escalations::routing::route_new_escalation_in_tx(
-                    &mut tx,
-                    pool,
-                    tenant_id,
-                    conversation_id,
-                    BASELINE_ESCALATION_REASON,
-                    &[],
-                    &[],
-                    &present_ids,
-                    Uuid::nil(),
-                )
-                .await;
+                let outcome = ports
+                    .escalation
+                    .route_new_escalation(
+                        &mut tx,
+                        tenant_id,
+                        conversation_id,
+                        BASELINE_ESCALATION_REASON,
+                        &[],
+                        Uuid::nil(),
+                    )
+                    .await;
                 // Cancel any pending tool requests for this conversation
                 if let Ok(ids) = ports
                     .tools
@@ -288,7 +287,7 @@ pub async fn process_agent_responder_once(
                     .await
                 {
                     for id in &ids {
-                        let updated_ev = escalations::model::ToolRequestUpdated {
+                        let updated_ev = crate::ports::ToolRequestUpdated {
                             id: *id,
                             conversation_id,
                             status: "cancelled".into(),
@@ -297,11 +296,9 @@ pub async fn process_agent_responder_once(
                             has_result: false,
                             error: None,
                         };
-                        presence.broadcast(
+                        ports.realtime.publish(
                             tenant_id,
-                            escalations::presence::Event::ConversationTool(
-                                escalations::presence::ConversationToolEvent::Updated(updated_ev),
-                            ),
+                            crate::ports::AiRealtimeEvent::ToolRequestUpdated(updated_ev),
                         );
                     }
                 }
@@ -317,20 +314,18 @@ pub async fn process_agent_responder_once(
                 required_skill_ids,
                 ..
             } => {
-                let present_ids = presence.present_membership_ids_async(tenant_id).await;
                 let mut tx = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-                let outcome = escalations::routing::route_new_escalation_in_tx(
-                    &mut tx,
-                    pool,
-                    tenant_id,
-                    conversation_id,
-                    &rule_name,
-                    &required_skill_ids,
-                    &[],
-                    &present_ids,
-                    Uuid::nil(),
-                )
-                .await;
+                let outcome = ports
+                    .escalation
+                    .route_new_escalation(
+                        &mut tx,
+                        tenant_id,
+                        conversation_id,
+                        &rule_name,
+                        &required_skill_ids,
+                        Uuid::nil(),
+                    )
+                    .await;
                 // Cancel any pending tool requests for this conversation
                 if let Ok(ids) = ports
                     .tools
@@ -338,7 +333,7 @@ pub async fn process_agent_responder_once(
                     .await
                 {
                     for id in &ids {
-                        let updated_ev = escalations::model::ToolRequestUpdated {
+                        let updated_ev = crate::ports::ToolRequestUpdated {
                             id: *id,
                             conversation_id,
                             status: "cancelled".into(),
@@ -347,11 +342,9 @@ pub async fn process_agent_responder_once(
                             has_result: false,
                             error: None,
                         };
-                        presence.broadcast(
+                        ports.realtime.publish(
                             tenant_id,
-                            escalations::presence::Event::ConversationTool(
-                                escalations::presence::ConversationToolEvent::Updated(updated_ev),
-                            ),
+                            crate::ports::AiRealtimeEvent::ToolRequestUpdated(updated_ev),
                         );
                     }
                 }
@@ -382,7 +375,6 @@ pub async fn process_agent_responder_once(
         pool,
         ai,
         ports,
-        presence,
         tenant_id,
         conversation_id,
         message_id,
@@ -397,7 +389,7 @@ pub async fn process_agent_responder_once(
 }
 
 async fn handle_routing_outcome(
-    outcome: Result<escalations::routing::RouteOutcome, escalations::routing::RouteError>,
+    outcome: Result<serde_json::Value, crate::ports::EscalationError>,
     tx: db::UnitOfWork,
     _pool: &PgPool,
 ) {
@@ -418,10 +410,9 @@ pub async fn run_agent_responder_worker(
     pool: PgPool,
     ai: crate::AiService,
     ports: crate::ports::AiPorts,
-    presence: Arc<escalations::presence::Runtime>,
 ) -> ! {
     loop {
-        match process_agent_responder_once(&pool, &ai, &ports, &presence).await {
+        match process_agent_responder_once(&pool, &ai, &ports).await {
             Ok(true) => {}
             Ok(false) => tokio::time::sleep(Duration::from_secs(1)).await,
             Err(e) => {

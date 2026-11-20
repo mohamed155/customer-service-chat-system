@@ -11,10 +11,12 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use ai::ports::{
-    AiPorts, ExecutionOutcome, KnowledgeRetrieval, NewToolRequest, NewToolRequestStatus,
-    PendingToolRequest, ResolvedTool, RetrievedChunk, ToolRequest, ToolRun, ToolRuntime,
-    ToolSource, ValidationFailure,
+    AiPorts, AiRealtime, AiRealtimeEvent, EscalationError, EscalationRouting, ExecutionOutcome,
+    FailureCategory, KnowledgeRetrieval, NewToolRequest, NewToolRequestStatus, PendingToolRequest,
+    ResolvedTool, RetrievedChunk, SupersededReason, ToolRequest, ToolRun, ToolRuntime, ToolSource,
+    ValidationFailure,
 };
+use std::sync::Arc;
 
 use crate::state::AppState;
 
@@ -256,18 +258,182 @@ impl ToolRuntime for ToolsAdapter {
     }
 }
 
+/// `ai::ports::EscalationRouting` on top of `escalations::routing`. Who is present to take the
+/// conversation comes from the presence runtime, which `ai` does not know about.
+struct EscalationAdapter {
+    pool: PgPool,
+    presence: Arc<escalations::presence::Runtime>,
+}
+
+#[async_trait]
+impl EscalationRouting for EscalationAdapter {
+    async fn has_open_escalation(
+        &self,
+        pool: &PgPool,
+        tenant_id: Uuid,
+        conversation_id: Uuid,
+    ) -> sqlx::Result<bool> {
+        escalations::routing::has_open_escalation(pool, tenant_id, conversation_id).await
+    }
+
+    async fn route_new_escalation(
+        &self,
+        tx: &mut db::UnitOfWork,
+        tenant_id: Uuid,
+        conversation_id: Uuid,
+        reason: &str,
+        required_skill_ids: &[Uuid],
+        actor_user_id: Uuid,
+    ) -> Result<serde_json::Value, EscalationError> {
+        let present_ids = self.presence.present_membership_ids_async(tenant_id).await;
+        let outcome = escalations::routing::route_new_escalation_in_tx(
+            tx,
+            &self.pool,
+            tenant_id,
+            conversation_id,
+            reason,
+            required_skill_ids,
+            &[],
+            &present_ids,
+            actor_user_id,
+        )
+        .await
+        .map_err(|error| match error {
+            escalations::routing::RouteError::Duplicate => EscalationError::Duplicate,
+            escalations::routing::RouteError::ConversationNotFound => {
+                EscalationError::ConversationNotFound
+            }
+            escalations::routing::RouteError::InvalidState => EscalationError::InvalidState,
+            escalations::routing::RouteError::Internal(detail) => EscalationError::Internal(detail),
+        })?;
+        let escalation = match outcome {
+            escalations::routing::RouteOutcome::Assigned { escalation, .. }
+            | escalations::routing::RouteOutcome::Queued { escalation } => escalation,
+        };
+        serde_json::to_value(&escalation)
+            .map_err(|error| EscalationError::Internal(error.to_string()))
+    }
+}
+
+/// `ai::ports::AiRealtime` on top of the presence runtime's tenant broadcast. The payloads are the
+/// types the SSE stream already serialises, so what the dashboard reads does not change.
+struct RealtimeAdapter {
+    presence: Arc<escalations::presence::Runtime>,
+}
+
+impl AiRealtime for RealtimeAdapter {
+    fn publish(&self, tenant_id: Uuid, event: AiRealtimeEvent) {
+        self.presence.broadcast(tenant_id, presence_event(event));
+    }
+}
+
+fn superseded_reason(reason: SupersededReason) -> escalations::model::SupersededReason {
+    match reason {
+        SupersededReason::NewerMessage => escalations::model::SupersededReason::NewerMessage,
+        SupersededReason::Escalated => escalations::model::SupersededReason::Escalated,
+    }
+}
+
+fn failure_category(category: FailureCategory) -> escalations::model::FailureCategory {
+    match category {
+        FailureCategory::Unavailable => escalations::model::FailureCategory::Unavailable,
+        FailureCategory::Timeout => escalations::model::FailureCategory::Timeout,
+        FailureCategory::RateLimited => escalations::model::FailureCategory::RateLimited,
+        FailureCategory::Authentication => escalations::model::FailureCategory::Authentication,
+        FailureCategory::InvalidRequest => escalations::model::FailureCategory::InvalidRequest,
+        FailureCategory::Internal => escalations::model::FailureCategory::Internal,
+    }
+}
+
+/// An AI event as the presence runtime broadcasts it, field for field.
+pub fn presence_event(event: AiRealtimeEvent) -> escalations::presence::Event {
+    use escalations::model::{
+        ConversationAiCompleted, ConversationAiDelta, ConversationAiEvent, ConversationAiFailed,
+        ConversationAiStarted, ConversationAiSuperseded, ToolRequestCreated, ToolRequestUpdated,
+    };
+    use escalations::presence::{ConversationToolEvent, Event};
+
+    match event {
+        AiRealtimeEvent::Started(e) => {
+            Event::ConversationAi(ConversationAiEvent::Started(ConversationAiStarted {
+                conversation_id: e.conversation_id,
+                generation_id: e.generation_id,
+                trigger_message_id: e.trigger_message_id,
+                started_at: e.started_at,
+            }))
+        }
+        AiRealtimeEvent::Delta(e) => {
+            Event::ConversationAi(ConversationAiEvent::Delta(ConversationAiDelta {
+                conversation_id: e.conversation_id,
+                generation_id: e.generation_id,
+                text: e.text,
+            }))
+        }
+        AiRealtimeEvent::Completed(e) => {
+            Event::ConversationAi(ConversationAiEvent::Completed(ConversationAiCompleted {
+                conversation_id: e.conversation_id,
+                generation_id: e.generation_id,
+                message: e.message,
+            }))
+        }
+        AiRealtimeEvent::Superseded(e) => {
+            Event::ConversationAi(ConversationAiEvent::Superseded(ConversationAiSuperseded {
+                conversation_id: e.conversation_id,
+                generation_id: e.generation_id,
+                reason: superseded_reason(e.reason),
+            }))
+        }
+        AiRealtimeEvent::Failed(e) => {
+            Event::ConversationAi(ConversationAiEvent::Failed(ConversationAiFailed {
+                conversation_id: e.conversation_id,
+                generation_id: e.generation_id,
+                category: failure_category(e.category),
+            }))
+        }
+        AiRealtimeEvent::ToolRequestCreated(e) => {
+            Event::ConversationTool(ConversationToolEvent::Created(ToolRequestCreated {
+                id: e.id,
+                conversation_id: e.conversation_id,
+                tool_name: e.tool_name,
+                tool_source: source_to_tools(&e.tool_source).as_str().to_string(),
+                arguments: e.arguments,
+                approval_required: e.approval_required,
+                expires_at: e.expires_at,
+                chain_index: e.chain_index,
+                created_at: e.created_at,
+            }))
+        }
+        AiRealtimeEvent::ToolRequestUpdated(e) => {
+            Event::ConversationTool(ConversationToolEvent::Updated(ToolRequestUpdated {
+                id: e.id,
+                conversation_id: e.conversation_id,
+                status: e.status,
+                decided_by_display_name: e.decided_by_display_name,
+                duration_ms: e.duration_ms,
+                has_result: e.has_result,
+                error: e.error,
+            }))
+        }
+    }
+}
+
 /// The ports the AI engine runs on, wired to the modules behind them.
-pub fn ai_ports() -> AiPorts {
+pub fn ai_ports(pool: PgPool, presence: Arc<escalations::presence::Runtime>) -> AiPorts {
     AiPorts {
-        knowledge: std::sync::Arc::new(KnowledgeAdapter),
-        tools: std::sync::Arc::new(ToolsAdapter),
+        knowledge: Arc::new(KnowledgeAdapter),
+        tools: Arc::new(ToolsAdapter),
+        escalation: Arc::new(EscalationAdapter {
+            pool,
+            presence: presence.clone(),
+        }),
+        realtime: Arc::new(RealtimeAdapter { presence }),
     }
 }
 
 impl AppState {
     /// The ports the AI engine runs on (see [`ai_ports()`]).
     pub fn ai_ports(&self) -> AiPorts {
-        ai_ports()
+        ai_ports(self.db.clone(), self.escalations.clone())
     }
 }
 

@@ -298,7 +298,7 @@ async fn run_until_generation_recorded(
         if recorded {
             return;
         }
-        if !process_agent_responder_once(pool, &state.ai, &state.ai_ports(), &state.escalations)
+        if !process_agent_responder_once(pool, &state.ai, &state.ai_ports())
             .await
             .expect("agent responder")
         {

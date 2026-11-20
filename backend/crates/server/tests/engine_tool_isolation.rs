@@ -440,10 +440,9 @@ async fn engine_tool_isolation() {
 
     // Drive the responder for tenant B's event
     for _ in 0..10 {
-        let processed =
-            process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-                .await
-                .expect("agent responder should not panic");
+        let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+            .await
+            .expect("agent responder should not panic");
         if !processed {
             break;
         }

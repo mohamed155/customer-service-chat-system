@@ -369,9 +369,7 @@ async fn engine_tool_refusal_creates_refused_row_and_stores_reply() {
     // Drive the agent responder
     let mut processed = false;
     for i in 0..20 {
-        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-        {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports()).await {
             Ok(true) => {
                 processed = true;
             }

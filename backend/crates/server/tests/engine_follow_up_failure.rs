@@ -376,9 +376,7 @@ async fn a_failed_follow_up_publishes_an_ai_response_failed_event() {
     // awaiting_approval request + interim message).
     let mut processed = false;
     for i in 0..10 {
-        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-        {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports()).await {
             Ok(true) => {
                 processed = true;
             }
@@ -453,9 +451,7 @@ async fn a_failed_follow_up_publishes_an_ai_response_failed_event() {
     // Drive the responder again to consume the ai.tool_decision event
     let mut follow_up_processed = false;
     for i in 0..20 {
-        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-        {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports()).await {
             Ok(true) => {
                 follow_up_processed = true;
             }

@@ -363,9 +363,7 @@ async fn respond_on_channel(channel: &str) {
     // Run process_agent_responder_once until idle (max 20 iterations)
     let mut processed = false;
     for i in 0..20 {
-        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-        {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports()).await {
             Ok(true) => {
                 processed = true;
             }

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::body::Bytes;
 use axum::extract::{Path, State};
 use axum::http::{header, HeaderMap, StatusCode};
@@ -896,7 +894,6 @@ pub async fn set_conversation_ai_handling(
     State(pool): State<PgPool>,
     ctx: TenantContext,
     Extension(principal): Extension<Principal>,
-    Extension(presence): Extension<Arc<escalations::presence::Runtime>>,
     Extension(ports): Extension<crate::ports::AiPorts>,
     Path(conversation_id): Path<Uuid>,
     ApiJson(payload): ApiJson<AiHandlingPayload>,
@@ -951,7 +948,9 @@ pub async fn set_conversation_ai_handling(
         "platform_ai" => {
             // Once escalated, the queue/claim state owns the conversation:
             // human -> platform_ai is a 409 before any AI-layer check.
-            match escalations::routing::has_open_escalation(&pool, ctx.tenant_id, conversation_id)
+            match ports
+                .escalation
+                .has_open_escalation(&pool, ctx.tenant_id, conversation_id)
                 .await
             {
                 Ok(false) => {}
@@ -1075,8 +1074,6 @@ pub async fn set_conversation_ai_handling(
             Json(serde_json::json!({ "data": detail })).into_response()
         }
         "human" => {
-            let present_ids = presence.present_membership_ids_async(ctx.tenant_id).await;
-
             let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
                 Ok(tx) => tx,
                 Err(e) => {
@@ -1123,23 +1120,19 @@ pub async fn set_conversation_ai_handling(
                 .await
                 .unwrap_or_default();
 
-            let escalation = match escalations::routing::route_new_escalation_in_tx(
-                &mut tx,
-                &pool,
-                ctx.tenant_id,
-                conversation_id,
-                crate::agent_rules::UNCONFIGURED_ESCALATION_REASON,
-                &[],
-                &[],
-                &present_ids,
-                principal.user_id,
-            )
-            .await
+            let escalation = match ports
+                .escalation
+                .route_new_escalation(
+                    &mut tx,
+                    ctx.tenant_id,
+                    conversation_id,
+                    crate::agent_rules::UNCONFIGURED_ESCALATION_REASON,
+                    &[],
+                    principal.user_id,
+                )
+                .await
             {
-                Ok(outcome) => match outcome {
-                    escalations::routing::RouteOutcome::Assigned { escalation, .. } => escalation,
-                    escalations::routing::RouteOutcome::Queued { escalation } => escalation,
-                },
+                Ok(escalation) => escalation,
                 Err(e) => {
                     tracing::error!(%e, conversation_id = %conversation_id, "set_ai_handling: route_new_escalation failed");
                     let _ = tx.rollback().await;
@@ -1176,7 +1169,7 @@ pub async fn set_conversation_ai_handling(
             if !cancelled_ids.is_empty() {
                 for tool in &pending_tools {
                     if cancelled_ids.contains(&tool.id) {
-                        let updated_ev = escalations::model::ToolRequestUpdated {
+                        let updated_ev = crate::ports::ToolRequestUpdated {
                             id: tool.id,
                             conversation_id: tool.conversation_id,
                             status: "cancelled".into(),
@@ -1185,11 +1178,9 @@ pub async fn set_conversation_ai_handling(
                             has_result: false,
                             error: None,
                         };
-                        presence.broadcast(
+                        ports.realtime.publish(
                             ctx.tenant_id,
-                            escalations::presence::Event::ConversationTool(
-                                escalations::presence::ConversationToolEvent::Updated(updated_ev),
-                            ),
+                            crate::ports::AiRealtimeEvent::ToolRequestUpdated(updated_ev),
                         );
                     }
                 }

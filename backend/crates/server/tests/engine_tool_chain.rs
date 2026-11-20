@@ -378,9 +378,7 @@ async fn engine_tool_chain_executes_lookup_customer() {
     // Drive the agent responder
     let mut processed = false;
     for i in 0..20 {
-        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-        {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports()).await {
             Ok(true) => {
                 processed = true;
             }
