@@ -260,7 +260,6 @@ dependencies = [
  "tenancy",
  "tokio",
  "tokio-stream",
- "tools",
  "tracing",
  "utoipa",
  "uuid",

@@ -31,7 +31,6 @@ sqlx = { workspace = true, features = ["postgres", "uuid", "chrono"] }
 conversations = { path = "../conversations" }
 escalations = { path = "../escalations" }
 tenancy = { path = "../tenancy" }
-tools = { path = "../tools" }
 tokio.workspace = true
 tokio-stream = { version = "0.1", features = ["sync"] }
 tracing.workspace = true

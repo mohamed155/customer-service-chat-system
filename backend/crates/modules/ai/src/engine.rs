@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::agent_config::{self, AgentConfigurationRow};
 use crate::agent_prompt;
 use crate::generation_record::{self, GenerationOutcome, GenerationRecord};
-use crate::ports::{AiPorts, RetrievedChunk};
+use crate::ports::{AiPorts, NewToolRequestStatus, RetrievedChunk, ToolSource};
 use crate::prompt_store;
 use crate::prompt_validate;
 use crate::{AiCallContext, AiCallError, AiInput, AiService};
@@ -525,7 +525,7 @@ pub async fn run_generation(
     let start = Instant::now();
 
     // 0. Resolve available built-in tools
-    let resolved_tools = tools::policy::resolve_available_builtins(pool, tenant_id).await?;
+    let resolved_tools = ports.tools.resolve_available(pool, tenant_id).await?;
     let tool_specs: Vec<ai_providers::ToolSpec> =
         resolved_tools.iter().map(|r| r.spec.clone()).collect();
 
@@ -574,7 +574,7 @@ pub async fn run_generation(
     // 4. Tool chain generation loop
     let mut all_messages = input.messages.clone();
     let mut chain_index: i16 = 0;
-    let max_tool_calls = tools::executor::MAX_TOOL_CALLS_PER_GENERATION as i16;
+    let max_tool_calls = ports.tools.max_calls_per_generation() as i16;
     let mut final_gen_result: Result<GenerationOutput, GenerateError> =
         Err(GenerateError::Provider(AiCallError::NotConfigured));
     let mut awaiting_approval = false;
@@ -613,13 +613,16 @@ pub async fn run_generation(
                     }
 
                     let content =
-                        match tools::executor::validate(&resolved_tools, &tc.name, &tc.arguments) {
+                        match ports
+                            .tools
+                            .validate(&resolved_tools, &tc.name, &tc.arguments)
+                        {
                             Err(failure) => {
                                 let reason = match failure {
-                                    tools::executor::ValidationFailure::UnknownOrDisabled => {
+                                    crate::ports::ValidationFailure::UnknownOrDisabled => {
                                         format!("Tool '{}' is not available or disabled.", tc.name)
                                     }
-                                    tools::executor::ValidationFailure::SchemaMismatch(e) => {
+                                    crate::ports::ValidationFailure::SchemaMismatch(e) => {
                                         format!(
                                             "Tool '{}' call had invalid arguments: {}",
                                             tc.name, e
@@ -635,23 +638,25 @@ pub async fn run_generation(
                                     trigger_message_id,
                                 )
                                 .await?;
-                                let req_id = tools::queries::insert_request(
-                                    pool,
-                                    tools::queries::NewToolRequest {
-                                        tenant_id,
-                                        conversation_id,
-                                        generation_id,
-                                        tool_name: tc.name.clone(),
-                                        tool_source: "builtin".into(),
-                                        tenant_tool_id: None,
-                                        arguments: tc.arguments.clone(),
-                                        status: "refused".into(),
-                                        approval_required: false,
-                                        expires_at: None,
-                                        chain_index,
-                                    },
-                                )
-                                .await?;
+                                let req_id = ports
+                                    .tools
+                                    .insert_request(
+                                        pool,
+                                        crate::ports::NewToolRequest {
+                                            tenant_id,
+                                            conversation_id,
+                                            generation_id,
+                                            tool_name: tc.name.clone(),
+                                            tool_source: ToolSource::Builtin,
+                                            tenant_tool_id: None,
+                                            arguments: tc.arguments.clone(),
+                                            status: NewToolRequestStatus::Refused,
+                                            approval_required: false,
+                                            expires_at: None,
+                                            chain_index,
+                                        },
+                                    )
+                                    .await?;
 
                                 // T018: broadcast created + updated (refused is terminal)
                                 let created_ev = escalations::model::ToolRequestCreated {
@@ -709,23 +714,25 @@ pub async fn run_generation(
                                 // a request without its event would wait for an approver in silence.
                                 let mut approval_tx =
                                     db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-                                let req_id = tools::queries::insert_request_in_tx(
-                                    approval_tx.conn(),
-                                    tools::queries::NewToolRequest {
-                                        tenant_id,
-                                        conversation_id,
-                                        generation_id,
-                                        tool_name: tc.name.clone(),
-                                        tool_source: "builtin".into(),
-                                        tenant_tool_id: None,
-                                        arguments: tc.arguments.clone(),
-                                        status: "awaiting_approval".into(),
-                                        approval_required: true,
-                                        expires_at: Some(expires_at),
-                                        chain_index,
-                                    },
-                                )
-                                .await?;
+                                let req_id = ports
+                                    .tools
+                                    .insert_request_in_tx(
+                                        approval_tx.conn(),
+                                        crate::ports::NewToolRequest {
+                                            tenant_id,
+                                            conversation_id,
+                                            generation_id,
+                                            tool_name: tc.name.clone(),
+                                            tool_source: ToolSource::Builtin,
+                                            tenant_tool_id: None,
+                                            arguments: tc.arguments.clone(),
+                                            status: NewToolRequestStatus::AwaitingApproval,
+                                            approval_required: true,
+                                            expires_at: Some(expires_at),
+                                            chain_index,
+                                        },
+                                    )
+                                    .await?;
                                 crate::outbox::emit_tool_approval_requested_in_tx(
                                     approval_tx.conn(),
                                     tenant_id,
@@ -768,23 +775,25 @@ pub async fn run_generation(
                                     trigger_message_id,
                                 )
                                 .await?;
-                                let req_id = tools::queries::insert_request(
-                                    pool,
-                                    tools::queries::NewToolRequest {
-                                        tenant_id,
-                                        conversation_id,
-                                        generation_id,
-                                        tool_name: tc.name.clone(),
-                                        tool_source: "builtin".into(),
-                                        tenant_tool_id: None,
-                                        arguments: tc.arguments.clone(),
-                                        status: "pending".into(),
-                                        approval_required: false,
-                                        expires_at: None,
-                                        chain_index,
-                                    },
-                                )
-                                .await?;
+                                let req_id = ports
+                                    .tools
+                                    .insert_request(
+                                        pool,
+                                        crate::ports::NewToolRequest {
+                                            tenant_id,
+                                            conversation_id,
+                                            generation_id,
+                                            tool_name: tc.name.clone(),
+                                            tool_source: ToolSource::Builtin,
+                                            tenant_tool_id: None,
+                                            arguments: tc.arguments.clone(),
+                                            status: NewToolRequestStatus::Pending,
+                                            approval_required: false,
+                                            expires_at: None,
+                                            chain_index,
+                                        },
+                                    )
+                                    .await?;
 
                                 // T018: broadcast created
                                 let created_ev = escalations::model::ToolRequestCreated {
@@ -808,44 +817,43 @@ pub async fn run_generation(
                                 );
 
                                 let _exec_started =
-                                    tools::queries::mark_executing(pool, req_id, tenant_id).await;
+                                    ports.tools.mark_executing(pool, req_id, tenant_id).await;
 
-                                let exec_ctx = tools::registry::ToolExecutionCtx {
+                                let exec_ctx = crate::ports::ToolRun {
                                     tenant_id,
                                     conversation_id,
                                     pool: pool.clone(),
                                     vault: ai.shared_vault(),
                                     http: ai.tools_http(),
                                 };
-                                let outcome = tools::executor::execute(
-                                    &exec_ctx,
-                                    &resolved,
-                                    tc.arguments.clone(),
-                                    req_id,
-                                )
-                                .await;
+                                let outcome = ports
+                                    .tools
+                                    .execute(&exec_ctx, &resolved, tc.arguments.clone(), req_id)
+                                    .await;
 
                                 let (status, result_val, error_val) = match outcome {
-                                    tools::executor::ExecutionOutcome::Succeeded(v) => {
+                                    crate::ports::ExecutionOutcome::Succeeded(v) => {
                                         ("succeeded", Some(v), None)
                                     }
-                                    tools::executor::ExecutionOutcome::Failed(e) => {
+                                    crate::ports::ExecutionOutcome::Failed(e) => {
                                         ("failed", None, Some(e))
                                     }
-                                    tools::executor::ExecutionOutcome::TimedOut => {
+                                    crate::ports::ExecutionOutcome::TimedOut => {
                                         ("timed_out", None, None)
                                     }
                                 };
 
-                                tools::queries::mark_terminal(
-                                    pool,
-                                    req_id,
-                                    tenant_id,
-                                    status,
-                                    result_val.clone(),
-                                    error_val.clone(),
-                                )
-                                .await?;
+                                ports
+                                    .tools
+                                    .mark_terminal(
+                                        pool,
+                                        req_id,
+                                        tenant_id,
+                                        status,
+                                        result_val.clone(),
+                                        error_val.clone(),
+                                    )
+                                    .await?;
 
                                 // T018: broadcast updated
                                 let updated_ev = escalations::model::ToolRequestUpdated {
@@ -1009,7 +1017,7 @@ pub async fn run_generation(
     // that this in-flight generation may have created (narrow window before
     // the early awaiting_approval return above processes them).
     if superseded {
-        let _ = tools::approval::fetch_awaiting_approval_for_conversation(
+        let _ = ports.tools.awaiting_approval(
             pool,
             tenant_id,
             conversation_id,
@@ -1019,6 +1027,7 @@ pub async fn run_generation(
             if !rows.is_empty() {
                 // Best-effort cancellation; errors are logged only
                 let pool = pool.clone();
+                let tools = ports.tools.clone();
                 let tid = tenant_id;
                 let cid = conversation_id;
                 tokio::spawn(async move {
@@ -1026,9 +1035,7 @@ pub async fn run_generation(
                         Ok(tx) => tx,
                         Err(_) => return,
                     };
-                    if let Err(e) =
-                        tools::approval::cancel_pending_for_conversation(&mut tx, tid, cid).await
-                    {
+                    if let Err(e) = tools.cancel_pending(&mut tx, tid, cid).await {
                         tracing::warn!(%e, "engine: failed to cancel pending tools on supersede");
                         let _ = tx.rollback().await;
                         return;
@@ -1294,12 +1301,10 @@ pub async fn run_generation(
                 )
                 .await;
                 // Cancel any pending tool requests for this conversation
-                if let Ok(ids) = tools::approval::cancel_pending_for_conversation(
-                    &mut tx,
-                    tenant_id,
-                    conversation_id,
-                )
-                .await
+                if let Ok(ids) = ports
+                    .tools
+                    .cancel_pending(&mut tx, tenant_id, conversation_id)
+                    .await
                 {
                     for id in &ids {
                         let updated_ev = escalations::model::ToolRequestUpdated {
@@ -1445,20 +1450,13 @@ pub async fn run_followup_generation(
     let start = Instant::now();
 
     // Load the tool_requests row
-    let tool_row: tools::queries::ToolRequestFullRow = sqlx::query_as(
-        "SELECT id, tenant_id, conversation_id, generation_id, tool_name, \
-         tool_source, tenant_tool_id, arguments, status, approval_required, \
-         expires_at, chain_index, started_at, finished_at, result, error, \
-         created_at, decided_by_membership_id, decided_at \
-         FROM tool_requests WHERE id = $1 AND tenant_id = $2",
-    )
-    .bind(tool_request_id)
-    .bind(tenant_id)
-    .fetch_optional(uow.conn())
-    .await?
-    .ok_or_else(|| {
-        sqlx::Error::Protocol("tool_request not found in run_followup_generation".into())
-    })?;
+    let tool_row = ports
+        .tools
+        .find_request(uow.conn(), tenant_id, tool_request_id)
+        .await?
+        .ok_or_else(|| {
+            sqlx::Error::Protocol("tool_request not found in run_followup_generation".into())
+        })?;
 
     // The follow-up answers the same customer message as the generation
     // that requested the tool; ai_generations.trigger_message_id is a FK, so
@@ -1475,52 +1473,56 @@ pub async fn run_followup_generation(
 
     let tool_message = if outcome == "approved" {
         // Execute the tool
-        let resolved = tools::policy::ResolvedTool {
+        let resolved = crate::ports::ResolvedTool {
             spec: ai_providers::ToolSpec {
                 name: tool_row.tool_name.clone(),
                 description: String::new(),
                 input_schema: serde_json::Value::Null,
             },
-            source: match tool_row.tool_source.as_str() {
-                "tenant" => tools::model::ToolSource::Tenant,
-                _ => tools::model::ToolSource::Builtin,
-            },
+            source: tool_row.tool_source.clone(),
             approval_required: true,
             tenant_tool_id: tool_row.tenant_tool_id,
         };
 
-        let _exec_started = tools::queries::mark_executing(pool, tool_request_id, tenant_id).await;
+        let _exec_started = ports
+            .tools
+            .mark_executing(pool, tool_request_id, tenant_id)
+            .await;
 
-        let exec_ctx = tools::registry::ToolExecutionCtx {
+        let exec_ctx = crate::ports::ToolRun {
             tenant_id,
             conversation_id,
             pool: pool.clone(),
             vault: ai.shared_vault(),
             http: ai.tools_http(),
         };
-        let outcome_result = tools::executor::execute(
-            &exec_ctx,
-            &resolved,
-            tool_row.arguments.clone(),
-            tool_request_id,
-        )
-        .await;
+        let outcome_result = ports
+            .tools
+            .execute(
+                &exec_ctx,
+                &resolved,
+                tool_row.arguments.clone(),
+                tool_request_id,
+            )
+            .await;
 
         let (status, result_val, error_val) = match outcome_result {
-            tools::executor::ExecutionOutcome::Succeeded(v) => ("succeeded", Some(v), None),
-            tools::executor::ExecutionOutcome::Failed(e) => ("failed", None, Some(e)),
-            tools::executor::ExecutionOutcome::TimedOut => ("timed_out", None, None),
+            crate::ports::ExecutionOutcome::Succeeded(v) => ("succeeded", Some(v), None),
+            crate::ports::ExecutionOutcome::Failed(e) => ("failed", None, Some(e)),
+            crate::ports::ExecutionOutcome::TimedOut => ("timed_out", None, None),
         };
 
-        tools::queries::mark_terminal(
-            pool,
-            tool_request_id,
-            tenant_id,
-            status,
-            result_val.clone(),
-            error_val.clone(),
-        )
-        .await?;
+        ports
+            .tools
+            .mark_terminal(
+                pool,
+                tool_request_id,
+                tenant_id,
+                status,
+                result_val.clone(),
+                error_val.clone(),
+            )
+            .await?;
 
         // Broadcast tool.request.updated
         let updated_ev = escalations::model::ToolRequestUpdated {

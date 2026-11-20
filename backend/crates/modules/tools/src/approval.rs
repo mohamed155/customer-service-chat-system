@@ -138,8 +138,10 @@ pub async fn sweep_expired(pool: &PgPool) -> sqlx::Result<u64> {
     Ok(expired as u64)
 }
 
+/// Cancels every `awaiting_approval` request of a conversation, in the caller's transaction, and
+/// returns their ids.
 pub async fn cancel_pending_for_conversation(
-    tx: &mut Transaction<'_, Postgres>,
+    conn: &mut sqlx::PgConnection,
     tenant_id: Uuid,
     conversation_id: Uuid,
 ) -> sqlx::Result<Vec<Uuid>> {
@@ -151,7 +153,7 @@ pub async fn cancel_pending_for_conversation(
     )
     .bind(tenant_id)
     .bind(conversation_id)
-    .fetch_all(&mut **tx)
+    .fetch_all(conn)
     .await?;
     Ok(ids.into_iter().map(|(id,)| id).collect())
 }

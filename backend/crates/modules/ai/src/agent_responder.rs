@@ -5,7 +5,6 @@ use uuid::Uuid;
 
 use crate::agent_config::{self, AgentConfigurationRow, EscalationRule};
 use crate::agent_rules::{self, RuleMatch, BASELINE_ESCALATION_REASON};
-use tools::approval::cancel_pending_for_conversation;
 
 /// The agent-configuration channel that governs a conversation channel.
 ///
@@ -283,8 +282,10 @@ pub async fn process_agent_responder_once(
                 )
                 .await;
                 // Cancel any pending tool requests for this conversation
-                if let Ok(ids) =
-                    cancel_pending_for_conversation(&mut tx, tenant_id, conversation_id).await
+                if let Ok(ids) = ports
+                    .tools
+                    .cancel_pending(&mut tx, tenant_id, conversation_id)
+                    .await
                 {
                     for id in &ids {
                         let updated_ev = escalations::model::ToolRequestUpdated {
@@ -331,8 +332,10 @@ pub async fn process_agent_responder_once(
                 )
                 .await;
                 // Cancel any pending tool requests for this conversation
-                if let Ok(ids) =
-                    cancel_pending_for_conversation(&mut tx, tenant_id, conversation_id).await
+                if let Ok(ids) = ports
+                    .tools
+                    .cancel_pending(&mut tx, tenant_id, conversation_id)
+                    .await
                 {
                     for id in &ids {
                         let updated_ev = escalations::model::ToolRequestUpdated {
