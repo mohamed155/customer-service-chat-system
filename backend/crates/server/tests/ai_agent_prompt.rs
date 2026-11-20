@@ -677,10 +677,9 @@ async fn responder_substitutes_prompt_variables() {
     .unwrap();
 
     // Process the outbox event
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("agent responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("agent responder should succeed");
     assert!(processed, "agent responder should have processed an event");
 
     // Assert AI reply was inserted
@@ -861,10 +860,9 @@ async fn second_save_rebinding_reflects_new_prompt() {
     .unwrap();
 
     // Process
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("responder should succeed");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("responder should succeed");
     assert!(processed, "responder should have processed an event");
 
     // Assert the outbound request contains V2 content (not V1)

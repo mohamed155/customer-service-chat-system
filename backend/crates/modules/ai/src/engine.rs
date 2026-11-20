@@ -1,7 +1,6 @@
 use rand::RngExt;
 use sqlx::PgPool;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -19,7 +18,7 @@ pub const TOOL_APPROVAL_HOLDING_MESSAGE: &str =
 /// Context for broadcasting AI engine events to the tenant SSE stream and
 /// performing mid-stream supersede checks.
 pub struct BroadcastCtx {
-    pub presence: Arc<escalations::presence::Runtime>,
+    pub ports: AiPorts,
     pub pool: PgPool,
     pub tenant_id: Uuid,
     pub conversation_id: Uuid,
@@ -281,17 +280,13 @@ pub async fn generate(
 
     // Broadcast started before the first provider attempt
     if let Some(bc) = broadcast_ctx {
-        let started_ev = escalations::presence::Event::ConversationAi(
-            escalations::model::ConversationAiEvent::Started(
-                escalations::model::ConversationAiStarted {
-                    conversation_id: bc.conversation_id,
-                    generation_id: bc.generation_id,
-                    trigger_message_id: bc.trigger_message_id,
-                    started_at: chrono::Utc::now(),
-                },
-            ),
-        );
-        bc.presence.broadcast(bc.tenant_id, started_ev);
+        let started_ev = crate::ports::AiRealtimeEvent::Started(crate::ports::GenerationStarted {
+            conversation_id: bc.conversation_id,
+            generation_id: bc.generation_id,
+            trigger_message_id: bc.trigger_message_id,
+            started_at: chrono::Utc::now(),
+        });
+        bc.ports.realtime.publish(bc.tenant_id, started_ev);
     }
 
     for attempt in 0..3 {
@@ -359,16 +354,14 @@ pub async fn generate(
                         let now = Instant::now();
                         if now.duration_since(last_broadcast) >= Duration::from_millis(250) {
                             last_broadcast = now;
-                            let delta_ev = escalations::presence::Event::ConversationAi(
-                                escalations::model::ConversationAiEvent::Delta(
-                                    escalations::model::ConversationAiDelta {
-                                        conversation_id: bc.conversation_id,
-                                        generation_id: bc.generation_id,
-                                        text: text.clone(),
-                                    },
-                                ),
+                            let delta_ev = crate::ports::AiRealtimeEvent::Delta(
+                                crate::ports::GenerationDelta {
+                                    conversation_id: bc.conversation_id,
+                                    generation_id: bc.generation_id,
+                                    text: text.clone(),
+                                },
                             );
-                            bc.presence.broadcast(bc.tenant_id, delta_ev);
+                            bc.ports.realtime.publish(bc.tenant_id, delta_ev);
                         }
 
                         // Mid-stream supersede checks (~1/s)
@@ -387,13 +380,12 @@ pub async fn generate(
                                     reason: "newer_message".into(),
                                 });
                             }
-                            let has_esc = escalations::routing::has_open_escalation(
-                                &bc.pool,
-                                bc.tenant_id,
-                                bc.conversation_id,
-                            )
-                            .await
-                            .unwrap_or(false);
+                            let has_esc = bc
+                                .ports
+                                .escalation
+                                .has_open_escalation(&bc.pool, bc.tenant_id, bc.conversation_id)
+                                .await
+                                .unwrap_or(false);
                             if has_esc {
                                 return Err(GenerateError::Superseded {
                                     reason: "escalated".into(),
@@ -504,7 +496,6 @@ pub async fn run_generation(
     pool: &PgPool,
     ai: &AiService,
     ports: &AiPorts,
-    presence: &Arc<escalations::presence::Runtime>,
     tenant_id: Uuid,
     conversation_id: Uuid,
     trigger_message_id: Uuid,
@@ -563,7 +554,7 @@ pub async fn run_generation(
 
     // 3. Create broadcast context for SSE events
     let broadcast_ctx = BroadcastCtx {
-        presence: presence.clone(),
+        ports: ports.clone(),
         pool: pool.clone(),
         tenant_id,
         conversation_id,
@@ -659,27 +650,23 @@ pub async fn run_generation(
                                     .await?;
 
                                 // T018: broadcast created + updated (refused is terminal)
-                                let created_ev = escalations::model::ToolRequestCreated {
+                                let created_ev = crate::ports::ToolRequestCreated {
                                     id: req_id,
                                     conversation_id,
                                     tool_name: tc.name.clone(),
-                                    tool_source: "builtin".into(),
+                                    tool_source: crate::ports::ToolSource::Builtin,
                                     arguments: tc.arguments.clone(),
                                     approval_required: false,
                                     expires_at: None,
                                     chain_index,
                                     created_at: chrono::Utc::now(),
                                 };
-                                presence.broadcast(
+                                ports.realtime.publish(
                                     tenant_id,
-                                    escalations::presence::Event::ConversationTool(
-                                        escalations::presence::ConversationToolEvent::Created(
-                                            created_ev,
-                                        ),
-                                    ),
+                                    crate::ports::AiRealtimeEvent::ToolRequestCreated(created_ev),
                                 );
 
-                                let updated_ev = escalations::model::ToolRequestUpdated {
+                                let updated_ev = crate::ports::ToolRequestUpdated {
                                     id: req_id,
                                     conversation_id,
                                     status: "refused".into(),
@@ -688,13 +675,9 @@ pub async fn run_generation(
                                     has_result: false,
                                     error: Some(reason.clone()),
                                 };
-                                presence.broadcast(
+                                ports.realtime.publish(
                                     tenant_id,
-                                    escalations::presence::Event::ConversationTool(
-                                        escalations::presence::ConversationToolEvent::Updated(
-                                            updated_ev,
-                                        ),
-                                    ),
+                                    crate::ports::AiRealtimeEvent::ToolRequestUpdated(updated_ev),
                                 );
 
                                 reason
@@ -743,24 +726,20 @@ pub async fn run_generation(
                                 approval_tx.commit().await?;
 
                                 // T018: broadcast created
-                                let created_ev = escalations::model::ToolRequestCreated {
+                                let created_ev = crate::ports::ToolRequestCreated {
                                     id: req_id,
                                     conversation_id,
                                     tool_name: tc.name.clone(),
-                                    tool_source: "builtin".into(),
+                                    tool_source: crate::ports::ToolSource::Builtin,
                                     arguments: tc.arguments.clone(),
                                     approval_required: true,
                                     expires_at: Some(expires_at),
                                     chain_index,
                                     created_at: chrono::Utc::now(),
                                 };
-                                presence.broadcast(
+                                ports.realtime.publish(
                                     tenant_id,
-                                    escalations::presence::Event::ConversationTool(
-                                        escalations::presence::ConversationToolEvent::Created(
-                                            created_ev,
-                                        ),
-                                    ),
+                                    crate::ports::AiRealtimeEvent::ToolRequestCreated(created_ev),
                                 );
 
                                 awaiting_approval = true;
@@ -796,24 +775,20 @@ pub async fn run_generation(
                                     .await?;
 
                                 // T018: broadcast created
-                                let created_ev = escalations::model::ToolRequestCreated {
+                                let created_ev = crate::ports::ToolRequestCreated {
                                     id: req_id,
                                     conversation_id,
                                     tool_name: tc.name.clone(),
-                                    tool_source: "builtin".into(),
+                                    tool_source: crate::ports::ToolSource::Builtin,
                                     arguments: tc.arguments.clone(),
                                     approval_required: false,
                                     expires_at: None,
                                     chain_index,
                                     created_at: chrono::Utc::now(),
                                 };
-                                presence.broadcast(
+                                ports.realtime.publish(
                                     tenant_id,
-                                    escalations::presence::Event::ConversationTool(
-                                        escalations::presence::ConversationToolEvent::Created(
-                                            created_ev,
-                                        ),
-                                    ),
+                                    crate::ports::AiRealtimeEvent::ToolRequestCreated(created_ev),
                                 );
 
                                 let _exec_started =
@@ -856,7 +831,7 @@ pub async fn run_generation(
                                     .await?;
 
                                 // T018: broadcast updated
-                                let updated_ev = escalations::model::ToolRequestUpdated {
+                                let updated_ev = crate::ports::ToolRequestUpdated {
                                     id: req_id,
                                     conversation_id,
                                     status: status.into(),
@@ -865,13 +840,9 @@ pub async fn run_generation(
                                     has_result: result_val.is_some(),
                                     error: error_val.clone(),
                                 };
-                                presence.broadcast(
+                                ports.realtime.publish(
                                     tenant_id,
-                                    escalations::presence::Event::ConversationTool(
-                                        escalations::presence::ConversationToolEvent::Updated(
-                                            updated_ev,
-                                        ),
-                                    ),
+                                    crate::ports::AiRealtimeEvent::ToolRequestUpdated(updated_ev),
                                 );
 
                                 if let Some(ref r) = result_val {
@@ -969,17 +940,13 @@ pub async fn run_generation(
                 "band": "low",
             },
         });
-        presence.broadcast(
+        ports.realtime.publish(
             tenant_id,
-            escalations::presence::Event::ConversationAi(
-                escalations::model::ConversationAiEvent::Completed(
-                    escalations::model::ConversationAiCompleted {
-                        conversation_id,
-                        generation_id,
-                        message: completed_msg,
-                    },
-                ),
-            ),
+            crate::ports::AiRealtimeEvent::Completed(crate::ports::GenerationCompleted {
+                conversation_id,
+                generation_id,
+                message: completed_msg,
+            }),
         );
 
         sqlx::query("SELECT xtenant.outbox_ack($1)")
@@ -999,7 +966,9 @@ pub async fn run_generation(
     )
     .await
     .unwrap_or(false);
-    let has_esc = escalations::routing::has_open_escalation(pool, tenant_id, conversation_id)
+    let has_esc = ports
+        .escalation
+        .has_open_escalation(pool, tenant_id, conversation_id)
         .await
         .unwrap_or(false);
     let already_replied = conversations::queries::has_ai_reply_since(
@@ -1152,17 +1121,13 @@ pub async fn run_generation(
                     "band": confidence_band_label,
                 },
             });
-            presence.broadcast(
+            ports.realtime.publish(
                 tenant_id,
-                escalations::presence::Event::ConversationAi(
-                    escalations::model::ConversationAiEvent::Completed(
-                        escalations::model::ConversationAiCompleted {
-                            conversation_id,
-                            generation_id,
-                            message: completed_msg,
-                        },
-                    ),
-                ),
+                crate::ports::AiRealtimeEvent::Completed(crate::ports::GenerationCompleted {
+                    conversation_id,
+                    generation_id,
+                    message: completed_msg,
+                }),
             );
             tracing::info!("engine: reply sent");
         }
@@ -1212,21 +1177,17 @@ pub async fn run_generation(
             };
             let _ = generation_record::insert(pool, &rec).await;
 
-            presence.broadcast(
+            ports.realtime.publish(
                 tenant_id,
-                escalations::presence::Event::ConversationAi(
-                    escalations::model::ConversationAiEvent::Superseded(
-                        escalations::model::ConversationAiSuperseded {
-                            conversation_id,
-                            generation_id,
-                            reason: if reason == "escalated" {
-                                escalations::model::SupersededReason::Escalated
-                            } else {
-                                escalations::model::SupersededReason::NewerMessage
-                            },
-                        },
-                    ),
-                ),
+                crate::ports::AiRealtimeEvent::Superseded(crate::ports::GenerationSuperseded {
+                    conversation_id,
+                    generation_id,
+                    reason: if reason == "escalated" {
+                        crate::ports::SupersededReason::Escalated
+                    } else {
+                        crate::ports::SupersededReason::NewerMessage
+                    },
+                }),
             );
 
             sqlx::query("SELECT xtenant.outbox_ack($1)")
@@ -1287,19 +1248,17 @@ pub async fn run_generation(
                     )
                     .await?;
                 }
-                let present_ids = presence.present_membership_ids_async(tenant_id).await;
-                let _ = escalations::routing::route_new_escalation_in_tx(
-                    &mut tx,
-                    pool,
-                    tenant_id,
-                    conversation_id,
-                    "AI assistant unavailable",
-                    &[],
-                    &[],
-                    &present_ids,
-                    Uuid::nil(),
-                )
-                .await;
+                let _ = ports
+                    .escalation
+                    .route_new_escalation(
+                        &mut tx,
+                        tenant_id,
+                        conversation_id,
+                        "AI assistant unavailable",
+                        &[],
+                        Uuid::nil(),
+                    )
+                    .await;
                 // Cancel any pending tool requests for this conversation
                 if let Ok(ids) = ports
                     .tools
@@ -1307,7 +1266,7 @@ pub async fn run_generation(
                     .await
                 {
                     for id in &ids {
-                        let updated_ev = escalations::model::ToolRequestUpdated {
+                        let updated_ev = crate::ports::ToolRequestUpdated {
                             id: *id,
                             conversation_id,
                             status: "cancelled".into(),
@@ -1316,11 +1275,9 @@ pub async fn run_generation(
                             has_result: false,
                             error: None,
                         };
-                        presence.broadcast(
+                        ports.realtime.publish(
                             tenant_id,
-                            escalations::presence::Event::ConversationTool(
-                                escalations::presence::ConversationToolEvent::Updated(updated_ev),
-                            ),
+                            crate::ports::AiRealtimeEvent::ToolRequestUpdated(updated_ev),
                         );
                     }
                 }
@@ -1383,33 +1340,29 @@ pub async fn run_generation(
                 .await;
             }
 
-            presence.broadcast(
+            ports.realtime.publish(
                 tenant_id,
-                escalations::presence::Event::ConversationAi(
-                    escalations::model::ConversationAiEvent::Failed(
-                        escalations::model::ConversationAiFailed {
-                            conversation_id,
-                            generation_id,
-                            category: match category {
-                                ai_providers::ErrorCategory::Authentication => {
-                                    escalations::model::FailureCategory::Authentication
-                                }
-                                ai_providers::ErrorCategory::RateLimited => {
-                                    escalations::model::FailureCategory::RateLimited
-                                }
-                                ai_providers::ErrorCategory::Unavailable => {
-                                    escalations::model::FailureCategory::Unavailable
-                                }
-                                ai_providers::ErrorCategory::Timeout => {
-                                    escalations::model::FailureCategory::Timeout
-                                }
-                                ai_providers::ErrorCategory::InvalidRequest => {
-                                    escalations::model::FailureCategory::InvalidRequest
-                                }
-                            },
-                        },
-                    ),
-                ),
+                crate::ports::AiRealtimeEvent::Failed(crate::ports::GenerationFailed {
+                    conversation_id,
+                    generation_id,
+                    category: match category {
+                        ai_providers::ErrorCategory::Authentication => {
+                            crate::ports::FailureCategory::Authentication
+                        }
+                        ai_providers::ErrorCategory::RateLimited => {
+                            crate::ports::FailureCategory::RateLimited
+                        }
+                        ai_providers::ErrorCategory::Unavailable => {
+                            crate::ports::FailureCategory::Unavailable
+                        }
+                        ai_providers::ErrorCategory::Timeout => {
+                            crate::ports::FailureCategory::Timeout
+                        }
+                        ai_providers::ErrorCategory::InvalidRequest => {
+                            crate::ports::FailureCategory::InvalidRequest
+                        }
+                    },
+                }),
             );
 
             sqlx::query("SELECT xtenant.outbox_ack($1)")
@@ -1439,7 +1392,6 @@ pub async fn run_followup_generation(
     pool: &PgPool,
     ai: &AiService,
     ports: &AiPorts,
-    presence: &Arc<escalations::presence::Runtime>,
     tenant_id: Uuid,
     conversation_id: Uuid,
     tool_request_id: Uuid,
@@ -1525,7 +1477,7 @@ pub async fn run_followup_generation(
             .await?;
 
         // Broadcast tool.request.updated
-        let updated_ev = escalations::model::ToolRequestUpdated {
+        let updated_ev = crate::ports::ToolRequestUpdated {
             id: tool_request_id,
             conversation_id,
             status: status.into(),
@@ -1534,11 +1486,9 @@ pub async fn run_followup_generation(
             has_result: result_val.is_some(),
             error: error_val.clone(),
         };
-        presence.broadcast(
+        ports.realtime.publish(
             tenant_id,
-            escalations::presence::Event::ConversationTool(
-                escalations::presence::ConversationToolEvent::Updated(updated_ev),
-            ),
+            crate::ports::AiRealtimeEvent::ToolRequestUpdated(updated_ev),
         );
 
         if let Some(ref r) = result_val {
@@ -1732,17 +1682,13 @@ pub async fn run_followup_generation(
             "band": "low",
         },
     });
-    presence.broadcast(
+    ports.realtime.publish(
         tenant_id,
-        escalations::presence::Event::ConversationAi(
-            escalations::model::ConversationAiEvent::Completed(
-                escalations::model::ConversationAiCompleted {
-                    conversation_id,
-                    generation_id,
-                    message: completed_msg,
-                },
-            ),
-        ),
+        crate::ports::AiRealtimeEvent::Completed(crate::ports::GenerationCompleted {
+            conversation_id,
+            generation_id,
+            message: completed_msg,
+        }),
     );
 
     Ok(())

@@ -227,7 +227,6 @@ fn spawn_workers(
         state.db.clone(),
         state.ai.clone(),
         state.ai_ports(),
-        state.escalations.clone(),
     ));
     let widget_session_sweeper = {
         let pool = state.db.clone();

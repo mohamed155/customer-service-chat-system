@@ -50,7 +50,6 @@
         "authz",
         "billing",
         "conversations",
-        "escalations",
         "identity",
         "tenancy"
       ],

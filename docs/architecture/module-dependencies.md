@@ -14,7 +14,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 
 | Module | Layout | Depends on (modules) | Used by (modules) | Tables owned |
 | -- | -- | -- | -- | -- |
-| `ai` | flat | `authz`, `billing`, `conversations`, `escalations`, `identity`, `tenancy` | – | `agent_avatar_uploads`, `agent_configurations`, `agent_prompt_versions`, `agent_prompts`, `ai_configurations`, `ai_credentials`, `ai_generations`, `ai_usage_records` |
+| `ai` | flat | `authz`, `billing`, `conversations`, `identity`, `tenancy` | – | `agent_avatar_uploads`, `agent_configurations`, `agent_prompt_versions`, `agent_prompts`, `ai_configurations`, `ai_credentials`, `ai_generations`, `ai_usage_records` |
 | `analytics` | flat | `tenancy` | – | – |
 | `audit` | flat | `identity`, `tenancy` | – | `audit_logs` |
 | `authz` | flat | `identity` | `ai`, `customers`, `knowledge`, `notifications`, `tenancy` | – |
@@ -22,7 +22,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `conversations` | flat | `customers`, `identity`, `integrations`, `tenancy` | `ai`, `escalations`, `tools`, `whatsapp`, `widgets` | `conversations`, `message_attachments`, `message_citations`, `messages` |
 | `customers` | flat | `authz`, `identity`, `tenancy` | `conversations`, `tools`, `whatsapp`, `widgets` | `customer_channel_identifiers`, `customers` |
 | `email` | flat | – | `tenancy` | – |
-| `escalations` | flat | `conversations`, `identity`, `tenancy`, `tools` | `ai`, `notifications`, `widgets` | `agent_availability`, `agent_skills`, `escalations`, `skills` |
+| `escalations` | flat | `conversations`, `identity`, `tenancy`, `tools` | `notifications`, `widgets` | `agent_availability`, `agent_skills`, `escalations`, `skills` |
 | `feedback` | flat | `tenancy`, `widgets` | – | `conversation_feedback` |
 | `identity` | flat | – | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `tenancy`, `tools`, `widgets` | `mfa_factors`, `mfa_recovery_codes`, `revoked_sessions`, `users` |
 | `integrations` | flat | `identity`, `tenancy` | `conversations`, `whatsapp` | `integration_catalog`, `integration_connections`, `integration_events`, `integration_secrets`, `integration_webhook_deliveries` |
@@ -43,7 +43,6 @@ flowchart LR
   ai --> authz
   ai --> billing
   ai --> conversations
-  ai --> escalations
   ai --> identity
   ai --> tenancy
   analytics --> tenancy

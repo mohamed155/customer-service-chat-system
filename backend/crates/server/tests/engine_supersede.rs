@@ -358,9 +358,7 @@ async fn engine_supersede_rapid_second_message() {
     // ── Drive the responder until idle (up to 30 iterations) ──────────────
     let mut processed = false;
     for i in 0..30 {
-        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-        {
+        match process_agent_responder_once(&pool, &state.ai, &state.ai_ports()).await {
             Ok(true) => {
                 processed = true;
             }
@@ -569,10 +567,9 @@ async fn engine_supersede_escalation_cancels_generation() {
     .unwrap();
 
     // ── Drive the responder once ──────────────────────────────────────────
-    let processed =
-        process_agent_responder_once(&pool, &state.ai, &state.ai_ports(), &state.escalations)
-            .await
-            .expect("agent responder should not panic");
+    let processed = process_agent_responder_once(&pool, &state.ai, &state.ai_ports())
+        .await
+        .expect("agent responder should not panic");
     assert!(
         processed,
         "responder should have processed the outbox event"
