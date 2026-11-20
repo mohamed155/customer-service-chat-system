@@ -255,11 +255,13 @@ pub trait EscalationRouting: Send + Sync {
         conversation_id: Uuid,
     ) -> sqlx::Result<bool>;
 
-    /// Opens an escalation for the conversation and routes it to a person: the best-matching agent
-    /// who is present and has the `required_skill_ids`, or the queue when nobody does. Runs in the
-    /// caller's unit of work, which the caller commits or rolls back, and returns the escalation as
-    /// the API shows it (`ai` hands it on and does not read it). `actor_user_id` is who asked; the
-    /// nil id means the AI itself.
+    /// Opens an escalation for the conversation and routes it to a person: the best-ranked agent
+    /// among those who are present and able to take it, or the queue when there is none. The
+    /// `required_skill_ids` are a preference, not a requirement: agents who have them rank first,
+    /// and when none of the present agents does, the least loaded one still gets the escalation.
+    /// Runs in the caller's unit of work, which the caller commits or rolls back, and returns the
+    /// escalation as the API shows it (`ai` hands it on and does not read it). `actor_user_id` is
+    /// who asked; the nil id means the AI itself.
     async fn route_new_escalation(
         &self,
         tx: &mut db::UnitOfWork,

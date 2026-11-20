@@ -427,8 +427,9 @@ async fn an_escalation_goes_to_a_present_agent_or_waits_in_the_queue() {
     assert_eq!(assigned["conversationId"], json!(conversation));
 }
 
-/// The skills the caller asks for reach the router: the agent who has them is chosen over a
-/// present agent who has not.
+/// The skills the caller asks for reach the router and rank the agents: the agent who has them is
+/// chosen over a present agent who has not. They are a preference, not a requirement: when only an
+/// agent without the skill is present, that agent still gets the escalation (load fallback).
 #[tokio::test]
 async fn the_required_skills_reach_the_router() {
     let Some(pool) = get_pool().await else { return };
@@ -471,8 +472,28 @@ async fn the_required_skills_reach_the_router() {
     .unwrap();
 
     assert_eq!(escalation["routing"]["assignedMembershipId"], json!(with));
+    assert_eq!(escalation["routing"]["reason"], "skill_match");
     assert_eq!(escalation["routing"]["matchedSkills"], json!(["billing"]));
     assert_eq!(escalation["requiredSkills"][0]["id"], json!(skill));
+
+    // Nobody present has the skill: the escalation is not left in the queue; the agent who is
+    // present takes it, and the routing says it was by load.
+    let alone = Runtime::new(pool.clone(), Duration::from_secs(45));
+    let ports = ports_with(&pool, &alone);
+    let (_g3, _r3) = alone.connect(tenant, without);
+    let fallback = route(
+        &pool,
+        &ports,
+        tenant,
+        seed_conversation(tenant).await,
+        &[skill],
+    )
+    .await
+    .unwrap();
+    assert_eq!(fallback["status"], "assigned", "{fallback}");
+    assert_eq!(fallback["routing"]["assignedMembershipId"], json!(without));
+    assert_eq!(fallback["routing"]["reason"], "load_fallback");
+    assert_eq!(fallback["routing"]["matchedSkills"], json!([]));
 }
 
 /// The escalation is the caller's: a rollback takes it, a commit keeps it, a second one for the
