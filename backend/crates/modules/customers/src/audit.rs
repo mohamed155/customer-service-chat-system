@@ -13,7 +13,7 @@ pub async fn record_customer_created(
     customer_id: Uuid,
     created_fields: &[&str],
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_CREATED,
         Some(actor_user_id),
@@ -32,7 +32,7 @@ pub async fn record_customer_updated(
     customer_id: Uuid,
     changed_fields: &[&str],
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_UPDATED,
         Some(actor_user_id),

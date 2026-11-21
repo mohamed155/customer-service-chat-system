@@ -1,12 +1,12 @@
 # ADR-017: Layering for new and changed modules, and CI-checked module boundaries
 
-- **Status:** Accepted
+- **Status:** Accepted, Superseded by ADR-019 for MOH-196
 - **Date:** 2026-11-17
 - **Deciders:** Platform engineering
 - **Related:** [ADR-001](0001-modular-monolith-hexagonal-modules.md) (this ADR amends its section 3
   and 4 timing and closes its follow-up M5), constitution Principle IV (amended in the same PR,
   version 2.1.0), [System architecture §3–4](../architecture/system-architecture.md#3-bounded-contexts-and-module-map),
-  [Module dependencies](../architecture/module-dependencies.md) (generated), MOH-79
+  [Module dependencies](../architecture/module-dependencies.md) (generated), MOH-79, [ADR-019](0019-audit-log-shared-crate.md)
 
 ## Context
 

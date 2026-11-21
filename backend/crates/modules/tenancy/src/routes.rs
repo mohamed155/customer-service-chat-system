@@ -14,7 +14,7 @@ use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-use crate::{audit, TenantContext};
+use crate::TenantContext;
 
 #[derive(Serialize, ToSchema)]
 pub struct TenantSummary {
@@ -733,7 +733,7 @@ pub async fn switch_tenant(
 
     let (id_v, name, slug, status, plan) = row;
     let id_str = id_v.to_string();
-    audit::record(
+    audit_log::record(
         &pool,
         "platform.tenant_switched",
         Some(principal.user_id),
@@ -1000,7 +1000,7 @@ pub async fn create_tenant(
     }
 
     // ---- Audit (inside the same transaction as the INSERT) ----
-    if let Err(e) = crate::audit::record_in_tx(
+    if let Err(e) = audit_log::record_in_tx(
         &mut tx,
         "platform.tenant_created",
         Some(principal.user_id),
@@ -1492,7 +1492,7 @@ pub async fn update_tenant(
     if let Some(ref new_s) = new_status {
         if new_s != &existing_status {
             let id_str = id_v.to_string();
-            if let Err(e) = crate::audit::record_in_tx(
+            if let Err(e) = audit_log::record_in_tx(
                 &mut tx,
                 "platform.tenant_status_changed",
                 Some(principal.user_id),
@@ -1547,7 +1547,7 @@ pub async fn update_tenant(
     }
     if !changes.is_empty() {
         let id_str = id_v.to_string();
-        if let Err(e) = crate::audit::record_in_tx(
+        if let Err(e) = audit_log::record_in_tx(
             &mut tx,
             "platform.tenant_updated",
             Some(principal.user_id),

@@ -788,7 +788,7 @@ pub async fn set_my_availability(
             }
         };
 
-    audit::record_availability_changed(
+    if let Err(error) = audit::record_availability_changed(
         &mut tx,
         Some(principal.user_id),
         ctx.tenant_id,
@@ -798,7 +798,12 @@ pub async fn set_my_availability(
         "toggle",
     )
     .await
-    .ok();
+    {
+        tracing::error!(error = %error, "failed to record availability.changed audit");
+        return ApiError::internal_error("Failed to record audit entry")
+            .with_request_id(&ctx.request_id)
+            .into_response();
+    }
 
     if let Err(e) = tx.commit().await {
         tracing::error!(%e, "set_availability: commit failed");
@@ -980,9 +985,15 @@ pub async fn create_skill(
         }
     };
 
-    audit::record_skill_created(&mut tx, principal.user_id, ctx.tenant_id, skill.id, &name)
-        .await
-        .ok();
+    if let Err(error) =
+        audit::record_skill_created(&mut tx, principal.user_id, ctx.tenant_id, skill.id, &name)
+            .await
+    {
+        tracing::error!(error = %error, "failed to record skill.created audit");
+        return ApiError::internal_error("Failed to record audit entry")
+            .with_request_id(&ctx.request_id)
+            .into_response();
+    }
 
     if let Err(e) = tx.commit().await {
         tracing::error!(%e, "create_skill: commit failed");
@@ -1081,7 +1092,7 @@ pub async fn rename_skill(
         }
     };
 
-    audit::record_skill_updated(
+    if let Err(error) = audit::record_skill_updated(
         &mut tx,
         principal.user_id,
         ctx.tenant_id,
@@ -1090,7 +1101,12 @@ pub async fn rename_skill(
         &new_name,
     )
     .await
-    .ok();
+    {
+        tracing::error!(error = %error, "failed to record skill.updated audit");
+        return ApiError::internal_error("Failed to record audit entry")
+            .with_request_id(&ctx.request_id)
+            .into_response();
+    }
 
     if let Err(e) = tx.commit().await {
         tracing::error!(%e, "rename_skill: commit failed");
@@ -1164,9 +1180,15 @@ pub async fn delete_skill(
             .into_response();
     }
 
-    audit::record_skill_deleted(&mut tx, principal.user_id, ctx.tenant_id, skill_id, &name)
-        .await
-        .ok();
+    if let Err(error) =
+        audit::record_skill_deleted(&mut tx, principal.user_id, ctx.tenant_id, skill_id, &name)
+            .await
+    {
+        tracing::error!(error = %error, "failed to record skill.deleted audit");
+        return ApiError::internal_error("Failed to record audit entry")
+            .with_request_id(&ctx.request_id)
+            .into_response();
+    }
 
     if let Err(e) = tx.commit().await {
         tracing::error!(%e, "delete_skill: commit failed");
@@ -1269,7 +1291,7 @@ pub async fn set_member_skills(
         }
     };
 
-    audit::record_member_skills_changed(
+    if let Err(error) = audit::record_member_skills_changed(
         &mut tx,
         principal.user_id,
         ctx.tenant_id,
@@ -1278,7 +1300,12 @@ pub async fn set_member_skills(
         &payload.skill_ids,
     )
     .await
-    .ok();
+    {
+        tracing::error!(error = %error, "failed to record member.skills_changed audit");
+        return ApiError::internal_error("Failed to record audit entry")
+            .with_request_id(&ctx.request_id)
+            .into_response();
+    }
 
     if let Err(e) = tx.commit().await {
         tracing::error!(%e, "set_member_skills: commit failed");

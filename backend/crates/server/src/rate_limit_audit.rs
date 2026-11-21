@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Instant;
-use tracing::error;
 use uuid::Uuid;
 
 static LAST_REFUSAL: LazyLock<Mutex<HashMap<Uuid, Instant>>> =
@@ -24,30 +23,14 @@ pub async fn record_refusal(pool: &PgPool, tenant_id: Uuid) {
         cache.insert(tenant_id, Instant::now());
     }
 
-    let result: sqlx::Result<()> = async {
-        let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-        sqlx::query(
-            "INSERT INTO audit_logs \
-             (actor_user_id, action, resource_type, resource_id, tenant_id, details) \
-             VALUES ($1, $2, $3, $4, $5, $6)",
-        )
-        .bind(Option::<Uuid>::None)
-        .bind("security.rate_limit.refused")
-        .bind("rate_limit")
-        .bind(tenant_id.to_string())
-        .bind(tenant_id)
-        .bind(serde_json::json!({}))
-        .execute(uow.conn())
-        .await?;
-        uow.commit().await
-    }
+    audit_log::record(
+        pool,
+        "security.rate_limit.refused",
+        None,
+        Some(tenant_id),
+        "rate_limit",
+        Some(&tenant_id.to_string()),
+        &serde_json::json!({}),
+    )
     .await;
-
-    if let Err(e) = result {
-        error!(
-            tenant_id = %tenant_id,
-            error = %e,
-            "failed to record rate-limit refusal audit log"
-        );
-    }
 }

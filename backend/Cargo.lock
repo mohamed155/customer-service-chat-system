@@ -235,6 +235,7 @@ dependencies = [
  "aes-gcm",
  "ai-providers",
  "async-trait",
+ "audit-log",
  "authz",
  "axum",
  "base64 0.23.1",
@@ -427,6 +428,18 @@ dependencies = [
  "tenancy",
  "tracing",
  "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "audit-log"
+version = "0.1.0"
+dependencies = [
+ "db",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -988,6 +1001,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 name = "billing"
 version = "0.1.0"
 dependencies = [
+ "audit-log",
  "axum",
  "chrono",
  "db",
@@ -1245,6 +1259,7 @@ name = "conversations"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "audit-log",
  "axum",
  "chrono",
  "customers",
@@ -1441,6 +1456,7 @@ dependencies = [
 name = "customers"
 version = "0.1.0"
 dependencies = [
+ "audit-log",
  "authz",
  "axum",
  "db",
@@ -1682,6 +1698,7 @@ dependencies = [
 name = "escalations"
 version = "0.1.0"
 dependencies = [
+ "audit-log",
  "axum",
  "chrono",
  "conversations",
@@ -2478,6 +2495,7 @@ name = "integrations"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "audit-log",
  "axum",
  "base64 0.23.1",
  "chrono",
@@ -2633,6 +2651,7 @@ version = "0.1.0"
 dependencies = [
  "ammonia",
  "async-trait",
+ "audit-log",
  "authz",
  "axum",
  "base64 0.23.1",
@@ -4421,6 +4440,7 @@ dependencies = [
  "argon2",
  "async-trait",
  "audit",
+ "audit-log",
  "authz",
  "axum",
  "base64 0.23.1",
@@ -4943,6 +4963,7 @@ name = "tenancy"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "audit-log",
  "authz",
  "axum",
  "chrono",
@@ -5168,6 +5189,7 @@ version = "0.1.0"
 dependencies = [
  "ai-providers",
  "async-trait",
+ "audit-log",
  "axum",
  "base64 0.23.1",
  "chrono",
@@ -5831,6 +5853,7 @@ checksum = "626c4bac6755d76ffc12cb01b2eac751db1996b9e0041de9aa02c8c211ddc82c"
 name = "widgets"
 version = "0.1.0"
 dependencies = [
+ "audit-log",
  "axum",
  "chrono",
  "config",

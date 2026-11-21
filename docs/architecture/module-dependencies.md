@@ -130,15 +130,12 @@ Counts of SQL references to a table another module owns, per crate. They may onl
 | `feedback` | `conversations` | `conversations` | 2 |
 | `notifications` | `conversations` | `conversations` | 1 |
 | `server` | `ai_credentials` | `ai` | 2 |
-| `server` | `audit_logs` | `audit` | 1 |
 | `server` | `integration_catalog` | `integrations` | 2 |
 | `server` | `integration_connections` | `integrations` | 3 |
 | `server` | `integration_secrets` | `integrations` | 2 |
 | `server` | `revoked_sessions` | `identity` | 1 |
 | `server` | `tenant_rate_limit_overrides` | `tenancy` | 1 |
 | `server` | `tenant_tools` | `tools` | 2 |
-| `tenancy` | `audit_logs` | `audit` | 1 |
-| `tools` | `audit_logs` | `audit` | 2 |
 | `whatsapp` | `integration_connections` | `integrations` | 1 |
 
-Total: 40.
+Total: 36.

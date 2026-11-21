@@ -15,7 +15,7 @@ pub async fn record_escalation_created(
     conversation_id: Uuid,
     reason: &str,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "escalation.created",
         Some(actor_user_id),
@@ -38,7 +38,7 @@ pub async fn record_escalation_assigned(
     load_count: i64,
     assigned_membership_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "escalation.assigned",
         Some(actor_user_id),
@@ -61,7 +61,7 @@ pub async fn record_escalation_queued(
     tenant_id: Uuid,
     escalation_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "escalation.queued",
         Some(actor_user_id),
@@ -79,7 +79,7 @@ pub async fn record_escalation_claimed(
     tenant_id: Uuid,
     escalation_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "escalation.claimed",
         Some(actor_user_id),
@@ -99,7 +99,7 @@ pub async fn record_escalation_closed(
     escalation_id: Uuid,
     cause: &str,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "escalation.closed",
         actor_user_id,
@@ -118,7 +118,7 @@ pub async fn record_skill_created(
     skill_id: Uuid,
     name: &str,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "skill.created",
         Some(actor_user_id),
@@ -138,7 +138,7 @@ pub async fn record_skill_updated(
     previous_name: &str,
     new_name: &str,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "skill.updated",
         Some(actor_user_id),
@@ -157,7 +157,7 @@ pub async fn record_skill_deleted(
     skill_id: Uuid,
     name: &str,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "skill.deleted",
         Some(actor_user_id),
@@ -177,7 +177,7 @@ pub async fn record_member_skills_changed(
     previous_skill_ids: &[Uuid],
     new_skill_ids: &[Uuid],
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "member.skills_changed",
         Some(actor_user_id),
@@ -203,7 +203,7 @@ pub async fn record_availability_changed(
     new_state: &str,
     cause: &str,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "availability.changed",
         actor_user_id,

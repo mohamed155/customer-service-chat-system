@@ -27,7 +27,8 @@
 //! - `PUT  /platform/billing/tenants/{tenant_id}/subscription` — upsert subscription (platform, manage)
 //!
 //! ## Dependencies
-//! - `tenancy`: tenant context middleware + `audit::record_in_tx`
+//! - `tenancy`: tenant context middleware
+//! - `audit-log` (shared): `record_in_tx`, which writes the audit record in the caller's transaction
 //! - `identity`: actor identity for audit trails
 //! - `kernel`: shared types (`ApiError`, `ApiJson`, etc.)
 //! - `sqlx` / `uuid` / `chrono`: database interaction

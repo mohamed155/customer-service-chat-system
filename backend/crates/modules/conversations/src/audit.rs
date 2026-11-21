@@ -15,7 +15,7 @@ pub async fn record_conversation_created(
     customer_id: Uuid,
     channel: &str,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_CREATED,
         actor_user_id,
@@ -36,7 +36,7 @@ pub async fn record_status_changed(
     to: &str,
     auto: bool,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_STATUS_CHANGED,
         actor_user_id,
@@ -56,7 +56,7 @@ pub async fn record_assignment_changed(
     from_membership_id: Option<Uuid>,
     to_membership_id: Option<Uuid>,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_ASSIGNMENT_CHANGED,
         Some(actor_user_id),
