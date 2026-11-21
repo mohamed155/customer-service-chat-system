@@ -1,12 +1,12 @@
 # ADR-017: Layering for new and changed modules, and CI-checked module boundaries
 
-- **Status:** Accepted
+- **Status:** Accepted, Superseded by ADR-019 for MOH-196
 - **Date:** 2026-11-17
 - **Deciders:** Platform engineering
 - **Related:** [ADR-001](0001-modular-monolith-hexagonal-modules.md) (this ADR amends its section 3
   and 4 timing and closes its follow-up M5), constitution Principle IV (amended in the same PR,
   version 2.1.0), [System architecture §3–4](../architecture/system-architecture.md#3-bounded-contexts-and-module-map),
-  [Module dependencies](../architecture/module-dependencies.md) (generated), MOH-79
+  [Module dependencies](../architecture/module-dependencies.md) (generated), MOH-79, [ADR-019](0019-audit-log-shared-crate.md)
 
 ## Context
 
@@ -121,10 +121,5 @@ Principle IV of the constitution is amended to match (version 2.1.0).
   `message_attachments` and `customers` through the owners' interfaces.
 - MOH-195: `ai` depends on ports it owns (ADR-001 M3) and `notifications` consumes AI events
   (removes the `ai -> notifications` exception).
-- MOH-196: write audit records through one interface. Done as the `audit-log` shared crate
-  (`record_in_tx` in the caller's transaction, `record` best effort), not as a function of the
-  `audit` module: rule 4 keeps modules from depending on `audit`, and `audit` depends on `tenancy`,
-  which writes audit records itself, so a call from `tenancy` to `audit` would be a dependency
-  cycle. The crate is the only place outside `audit` whose SQL names `audit_logs`; the `audit`
-  module still owns the table and the read API.
+- MOH-196: write audit records through the `audit` module's public interface.
 - MOH-80 removes the four placeholder crates; each removal also edits the config.
