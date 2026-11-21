@@ -14,7 +14,7 @@ pub async fn record_instance_created_in_tx(
     instance_id: Uuid,
     name: &str,
 ) -> sqlx::Result<()> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_CREATED,
         Some(actor_id),
@@ -36,7 +36,7 @@ pub async fn record_instance_updated_in_tx(
     instance_id: Uuid,
     name: &str,
 ) -> sqlx::Result<()> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_UPDATED,
         Some(actor_id),
@@ -58,7 +58,7 @@ pub async fn record_instance_deleted_in_tx(
     instance_id: Uuid,
     name: &str,
 ) -> sqlx::Result<()> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_DELETED,
         Some(actor_id),

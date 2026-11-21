@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+audit-log = { path = "../../shared/audit-log" }
 secrets = { path = "../../shared/secrets" }
 db = { path = "../../shared/db" }
 ai-providers = { path = "../../ai-providers" }

@@ -15,7 +15,7 @@ pub async fn record_connected_in_tx(
     connection_id: Uuid,
     slug: &str,
 ) -> sqlx::Result<()> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_CONNECTED,
         Some(actor_id),
@@ -37,7 +37,7 @@ pub async fn record_config_updated_in_tx(
     connection_id: Uuid,
     slug: &str,
 ) -> sqlx::Result<()> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_CONFIG_UPDATED,
         Some(actor_id),
@@ -59,7 +59,7 @@ pub async fn record_secret_rotated_in_tx(
     connection_id: Uuid,
     slug: &str,
 ) -> sqlx::Result<()> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_SECRET_ROTATED,
         Some(actor_id),
@@ -81,7 +81,7 @@ pub async fn record_disconnected_in_tx(
     connection_id: Uuid,
     slug: &str,
 ) -> sqlx::Result<()> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         ACTION_DISCONNECTED,
         Some(actor_id),

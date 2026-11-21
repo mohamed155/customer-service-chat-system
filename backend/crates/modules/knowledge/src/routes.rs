@@ -15,7 +15,6 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use storage::{ObjectStorage, StorageError};
-use tenancy::audit;
 use tenancy::TenantContext;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
@@ -555,7 +554,7 @@ pub async fn create_item(
         }
     }
 
-    if let Err(e) = audit::record_in_tx(
+    if let Err(e) = audit_log::record_in_tx(
         &mut tx,
         "knowledge_item.created",
         Some(principal.user_id),
@@ -948,7 +947,7 @@ pub async fn update_item(
         "itemId": updated.id,
         "itemType": updated.item_type,
     });
-    if let Err(e) = audit::record_in_tx(
+    if let Err(e) = audit_log::record_in_tx(
         &mut tx,
         "knowledge_item.updated",
         Some(principal.user_id),
@@ -1181,7 +1180,7 @@ pub async fn set_item_status(
         validate::ItemStatus::Draft => "knowledge_item.restored",
     };
 
-    if let Err(e) = audit::record_in_tx(
+    if let Err(e) = audit_log::record_in_tx(
         &mut tx,
         audit_action,
         Some(principal.user_id),
@@ -1368,7 +1367,7 @@ pub async fn reindex_item(
             .into_response();
     }
 
-    if let Err(e) = audit::record_in_tx(
+    if let Err(e) = audit_log::record_in_tx(
         &mut tx,
         "knowledge_item.reindex_requested",
         Some(principal.user_id),
@@ -1523,7 +1522,7 @@ pub async fn upload_document(
                     store::enqueue_index_requested_in_tx(&mut tx, ctx.tenant_id, item.id).await?;
                 }
 
-                audit::record_in_tx(
+                audit_log::record_in_tx(
                     &mut tx,
                     "knowledge_item.created",
                     Some(principal.user_id),

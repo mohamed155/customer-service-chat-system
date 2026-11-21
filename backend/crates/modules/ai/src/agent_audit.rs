@@ -11,7 +11,7 @@ pub async fn record_ai_handling_set(
     mode: &str,
 ) -> sqlx::Result<()> {
     let details = json!({"mode": mode});
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "conversation.ai_handling_set",
         actor_user_id,
@@ -30,7 +30,7 @@ pub async fn record_agent_config_created(
     agent_id: Uuid,
     payload: &serde_json::Value,
 ) -> sqlx::Result<()> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "agent_config.created",
         actor_user_id,
@@ -50,7 +50,7 @@ pub async fn record_agent_config_updated(
     changed_fields: &[&str],
 ) -> sqlx::Result<()> {
     let details = json!({"changed_fields": changed_fields});
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "agent_config.updated",
         actor_user_id,
@@ -71,7 +71,7 @@ pub async fn record_agent_config_avatar_updated(
     detail: &str,
 ) -> sqlx::Result<()> {
     let details = json!({"kind": kind, "detail": detail});
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "agent_config.avatar_updated",
         actor_user_id,
@@ -97,7 +97,7 @@ pub async fn record_agent_prompt_version_created(
         "content_length": content_len,
         "has_change_note": has_change_note
     });
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "agent_prompt.version_created",
         actor_user_id,
@@ -123,7 +123,7 @@ pub async fn record_agent_prompt_version_restored(
         "restored_from": restored_from,
         "content_length": content_len
     });
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "agent_prompt.version_restored",
         actor_user_id,

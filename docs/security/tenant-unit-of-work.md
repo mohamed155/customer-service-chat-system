@@ -108,7 +108,7 @@ write the audit row of the tenant they create or change:
 | `tenancy::routes::create_tenant`, `update_tenant` | Platform routes on `tenants` (global). The transaction is bound to the tenant (`db::set_tenant_in_tx`) once its id is known, so the audit rows, including the `tenant.slug_changed` row written by a trigger, belong to that tenant |
 | `billing::routes::create_plan`, `update_plan` | `billing_plans` is global; the audit row has no tenant, so it goes through `xtenant.record_platform_event` |
 
-Audit rows with no tenant (`tenancy::audit::record` and `record_in_tx` with `tenant_id = None`) cannot be
+Audit rows with no tenant (`audit_log::record` and `record_in_tx` with `tenant_id = None`) cannot be
 inserted directly: the `audit_logs` policy refuses an insert without a tenant. They go through
 `xtenant.record_platform_event`, which accepts exactly three (action, resource type) pairs:
 `tenant.access_denied`, `billing_plan.created` and `billing_plan.status_changed`. Authentication

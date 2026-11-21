@@ -109,6 +109,10 @@ Rules:
   are never called synchronously by producers.
 - `ai_runtime` depends on **interfaces** (ports) for knowledge retrieval and tool execution, not on
   their implementations.
+- An audit record is written in the caller's transaction, so that it commits with the action it
+  describes (Constitution III). That write is synchronous, so it does not go through the `audit`
+  consumer: every module writes it through the `audit-log` shared crate (`record_in_tx`), and
+  `audit` owns the table and serves the audit API.
 - The module crates as built, their edges, the tables each owns and the accepted exceptions are in
   [Module dependencies](module-dependencies.md), generated from the code and checked in CI ([ADR-017](../adr/0017-module-layering-and-ci-checked-boundaries.md)).
 

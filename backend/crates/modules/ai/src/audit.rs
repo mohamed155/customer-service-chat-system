@@ -10,7 +10,7 @@ pub async fn config_updated(
     config_id: Uuid,
     details: &serde_json::Value,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "ai_config.updated",
         Some(actor_user_id),
@@ -29,7 +29,7 @@ pub async fn config_deleted(
     config_id: Uuid,
     details: &serde_json::Value,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "ai_config.deleted",
         Some(actor_user_id),
@@ -49,7 +49,7 @@ pub async fn capture_content_changed(
     old: bool,
     new: bool,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "ai_config.capture_content_changed",
         Some(actor_user_id),
@@ -70,7 +70,7 @@ pub async fn credential_set(
     key_hint: &str,
     rotated: bool,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "ai_credential.set",
         Some(actor_user_id),
@@ -89,7 +89,7 @@ pub async fn credential_deleted(
     credential_id: Uuid,
     provider: &str,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "ai_credential.deleted",
         Some(actor_user_id),

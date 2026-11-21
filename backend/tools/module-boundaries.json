@@ -261,9 +261,6 @@
       "ai_usage_records": 1,
       "conversations": 1
     },
-    "tenancy": {
-      "audit_logs": 1
-    },
     "conversations": {
       "customers": 6,
       "widget_instances": 2,
@@ -273,9 +270,6 @@
     },
     "customers": {
       "conversations": 1
-    },
-    "tools": {
-      "audit_logs": 2
     },
     "notifications": {
       "conversations": 1
@@ -290,7 +284,6 @@
     },
     "server": {
       "tenant_rate_limit_overrides": 1,
-      "audit_logs": 1,
       "revoked_sessions": 1,
       "ai_credentials": 2,
       "integration_secrets": 2,

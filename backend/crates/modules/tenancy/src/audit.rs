@@ -1,148 +1,5 @@
 use serde_json::json;
 use sqlx::{PgPool, Postgres, Transaction};
-use tracing::error;
-
-pub async fn record(
-    pool: &PgPool,
-    action: &str,
-    actor_user_id: Option<uuid::Uuid>,
-    tenant_id: Option<uuid::Uuid>,
-    resource_type: &str,
-    resource_id: Option<&str>,
-    details: &serde_json::Value,
-) {
-    // A row for a tenant is written inside that tenant's Unit of Work (app.tenant_id set). A row
-    // without a tenant is a platform-level event (MOH-31 cross-tenant path): Row-Level Security
-    // refuses a direct insert without a tenant, so it goes through `xtenant.record_platform_event`.
-    let result = match tenant_id {
-        Some(tenant) => match db::UnitOfWork::begin_for_tenant(pool, tenant).await {
-            Ok(mut uow) => {
-                match insert_audit(
-                    uow.conn(),
-                    action,
-                    actor_user_id,
-                    tenant_id,
-                    resource_type,
-                    resource_id,
-                    details,
-                )
-                .await
-                {
-                    Ok(()) => uow.commit().await,
-                    Err(e) => Err(e),
-                }
-            }
-            Err(e) => Err(e),
-        },
-        None => match pool.acquire().await {
-            Ok(mut conn) => {
-                insert_platform_event(
-                    &mut conn,
-                    action,
-                    actor_user_id,
-                    resource_type,
-                    resource_id,
-                    details,
-                )
-                .await
-            }
-            Err(e) => Err(e),
-        },
-    };
-
-    if let Err(e) = result {
-        error!(
-            action = %action,
-            resource_type = %resource_type,
-            error = %e,
-            "failed to record audit log entry"
-        );
-    }
-}
-
-async fn insert_audit(
-    conn: &mut sqlx::PgConnection,
-    action: &str,
-    actor_user_id: Option<uuid::Uuid>,
-    tenant_id: Option<uuid::Uuid>,
-    resource_type: &str,
-    resource_id: Option<&str>,
-    details: &serde_json::Value,
-) -> sqlx::Result<()> {
-    sqlx::query(
-        "INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, tenant_id, details) VALUES ($1, $2, $3, $4, $5, $6)",
-    )
-    .bind(actor_user_id)
-    .bind(action)
-    .bind(resource_type)
-    .bind(resource_id)
-    .bind(tenant_id)
-    .bind(details)
-    .execute(conn)
-    .await
-    .map(|_| ())
-}
-
-/// Writes an audit row that belongs to no tenant, through the audited function that accepts only
-/// the platform-level actions (`xtenant.record_platform_event`).
-async fn insert_platform_event(
-    conn: &mut sqlx::PgConnection,
-    action: &str,
-    actor_user_id: Option<uuid::Uuid>,
-    resource_type: &str,
-    resource_id: Option<&str>,
-    details: &serde_json::Value,
-) -> sqlx::Result<()> {
-    sqlx::query("SELECT xtenant.record_platform_event($1, $2, $3, $4, $5)")
-        .bind(action)
-        .bind(actor_user_id)
-        .bind(resource_type)
-        .bind(resource_id)
-        .bind(details)
-        .execute(conn)
-        .await
-        .map(|_| ())
-}
-
-/// Transactional variant: writes the audit row inside the caller's open
-/// transaction and surfaces the sqlx error to the caller. Used by handlers
-/// that require the audit row and the data mutation to commit atomically
-/// (T042 / FR-009 / Constitution III).
-pub async fn record_in_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    action: &str,
-    actor_user_id: Option<uuid::Uuid>,
-    tenant_id: Option<uuid::Uuid>,
-    resource_type: &str,
-    resource_id: Option<&str>,
-    details: &serde_json::Value,
-) -> Result<(), sqlx::Error> {
-    // Callers use the nil UUID to mean "the system" (routing engine, presence
-    // timeouts). actor_user_id references users(id), so store that as NULL
-    // instead of failing the whole transaction on the FK.
-    let actor_user_id = actor_user_id.filter(|id| !id.is_nil());
-    let Some(tenant_id) = tenant_id else {
-        return insert_platform_event(
-            tx,
-            action,
-            actor_user_id,
-            resource_type,
-            resource_id,
-            details,
-        )
-        .await;
-    };
-    insert_audit(
-        tx,
-        action,
-        actor_user_id,
-        Some(tenant_id),
-        resource_type,
-        resource_id,
-        details,
-    )
-    .await
-}
 
 pub async fn record_member_invited(
     tx: &mut Transaction<'_, Postgres>,
@@ -152,7 +9,7 @@ pub async fn record_member_invited(
     email: &str,
     role: &str,
 ) -> Result<(), sqlx::Error> {
-    record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "member.invited",
         Some(actor_user_id),
@@ -172,7 +29,7 @@ pub async fn record_member_invitation_revoked(
     email: &str,
     role: &str,
 ) -> Result<(), sqlx::Error> {
-    record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "member.invitation_revoked",
         Some(actor_user_id),
@@ -193,7 +50,7 @@ pub async fn record_member_invitation_accepted(
     role: &str,
     user_id: uuid::Uuid,
 ) -> Result<(), sqlx::Error> {
-    record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "member.invitation_accepted",
         Some(actor_user_id),
@@ -213,7 +70,7 @@ pub async fn record_member_role_changed(
     previous_role: &str,
     new_role: &str,
 ) -> Result<(), sqlx::Error> {
-    record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "member.role_changed",
         Some(actor_user_id),
@@ -234,7 +91,7 @@ pub async fn record_member_disabled(
     previous_status: &str,
     new_status: &str,
 ) -> Result<(), sqlx::Error> {
-    record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "member.disabled",
         Some(actor_user_id),
@@ -255,7 +112,7 @@ pub async fn record_member_enabled(
     previous_status: &str,
     new_status: &str,
 ) -> Result<(), sqlx::Error> {
-    record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "member.enabled",
         Some(actor_user_id),
@@ -275,7 +132,7 @@ pub async fn record_tenant_signup_completed(
     slug: &str,
     email: &str,
 ) -> Result<(), sqlx::Error> {
-    record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "tenant.signup_completed",
         Some(actor_user_id),
@@ -293,7 +150,7 @@ pub async fn access_denied(
     requested_tenant_id: &str,
     reason: &str,
 ) {
-    record(
+    audit_log::record(
         pool,
         "tenant.access_denied",
         actor_user_id,

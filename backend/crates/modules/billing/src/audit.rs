@@ -8,7 +8,7 @@ pub async fn plan_created(
     actor_user_id: uuid::Uuid,
     plan: &model::PlanDto,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "billing_plan.created",
         Some(actor_user_id),
@@ -32,7 +32,7 @@ pub async fn plan_status_changed(
     from: &str,
     to: &str,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "billing_plan.status_changed",
         Some(actor_user_id),
@@ -52,7 +52,7 @@ pub async fn subscription_changed(
     before: &serde_json::Value,
     after: &serde_json::Value,
 ) -> Result<(), sqlx::Error> {
-    tenancy::audit::record_in_tx(
+    audit_log::record_in_tx(
         tx,
         "billing_subscription.changed",
         Some(actor_user_id),
