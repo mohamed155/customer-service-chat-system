@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-11-21
 - **Deciders:** Platform engineering
-- **Related:** [ADR-001](0001-modular-monolith-hexagonal-modules.md), [ADR-017](0017-module-layering-and-ci-checked-boundaries.md) (supersedes its MOH-196 follow-up), constitution Principle III, [System architecture §5](../architecture/system-architecture.md#5-audit-log), MOH-196
+- **Related:** [ADR-001](0001-modular-monolith-hexagonal-modules.md), [ADR-017](0017-module-layering-and-ci-checked-boundaries.md) (supersedes its MOH-196 follow-up), constitution Principle III, [System architecture §13.2](../architecture/system-architecture.md#132-application-security-controls), MOH-196
 
 ## Context
 
