@@ -19,6 +19,7 @@ import {
   isIdentityEndpoint,
   isLoginEndpoint,
   isPlatformEndpoint,
+  isRefreshEndpoint,
 } from './api-request';
 
 export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
@@ -74,7 +75,9 @@ const isSessionExpired = (error: { status: number; code: string }, path: string 
   error.code === 'unauthenticated' &&
   path !== null &&
   !isIdentityEndpoint(path) &&
-  !isLoginEndpoint(path);
+  !isLoginEndpoint(path) &&
+  // A refresh that fails is reported by the call that needed it, once, not twice.
+  !isRefreshEndpoint(path);
 
 const currentPath = (): string => {
   if (typeof window === 'undefined') return '/';

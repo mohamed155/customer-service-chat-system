@@ -28,7 +28,7 @@ use utoipa::{openapi, Modify, OpenApi};
         title = "AI Customer Service Platform API",
         version = "1.0.0",
         description = "REST API for the multi-tenant AI customer service platform. \
-                      All authenticated endpoints require a valid `app_session` cookie.\n\n\
+                      All authenticated endpoints require a valid `__Host-app_session` cookie.\n\n\
                       **Errors.** An error answers in `application/problem+json` (RFC 9457, \
                       `ProblemDetails`) when the request's `Accept` header asks for it, for \
                       example `Accept: application/problem+json, application/json;q=0.5`. \
@@ -233,7 +233,7 @@ impl Modify for SecurityAddon {
             .get_or_insert_with(openapi::Components::new);
         components.add_security_scheme(
             "session_cookie",
-            SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new("app_session"))),
+            SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::new("__Host-app_session"))),
         );
     }
 }

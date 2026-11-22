@@ -33,6 +33,7 @@ import { devtoolsProviders } from './core/state/devtools';
 import { tenantContextFeature } from './core/state/tenant-context.feature';
 import { tenantContextInterceptor } from './core/http/tenant-context.interceptor';
 import { devIdentityInterceptor } from './core/http/dev-identity.interceptor';
+import { sessionRefreshInterceptor } from './core/http/session-refresh.interceptor';
 import { stepUpInterceptor } from './core/http/step-up.interceptor';
 import { CurrentUserService } from './core/tenant/current-user.service';
 import { AppUpdateService } from './core/version/app-update.service';
@@ -63,6 +64,9 @@ export const appConfig: ApplicationConfig = {
         // Outside apiErrorInterceptor on purpose: it sees the mapped error, and it retries once.
         stepUpInterceptor,
         apiErrorInterceptor,
+        // A 401 from an expired access token: refresh once and send the call again (MOH-93). Inside
+        // apiErrorInterceptor, so the session-expired handling only sees a refresh that failed.
+        sessionRefreshInterceptor,
         // Closest to the network, inside apiErrorInterceptor: it sees raw HTTP errors for the retry
         // rules, and a timeout it raises is mapped to an ApiError on the way out.
         httpResilienceInterceptor,

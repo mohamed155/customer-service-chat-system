@@ -333,7 +333,7 @@ async fn seed_member(tenant: Uuid, role: &str) -> (Uuid, Uuid, String) {
 /// A session for `user` with the given second-factor state, as the cookie header value.
 fn cookie_for(user: Uuid, auth: session::SessionAuth) -> String {
     let (jwt, _, _) = session::issue_session(JWT_SECRET, 3600, user, auth).unwrap();
-    format!("app_session={jwt}")
+    format!("__Host-app_session={jwt}")
 }
 
 fn password_only(user: Uuid) -> String {
@@ -484,8 +484,8 @@ async fn a_session_without_a_second_factor_is_held_at_the_door_when_mfa_is_requi
 
     // The session that confirmed carries the factor and is let in.
     let new_cookie = format!(
-        "app_session={}",
-        cookie_value(&confirm, "app_session").unwrap()
+        "__Host-app_session={}",
+        cookie_value(&confirm, "__Host-app_session").unwrap()
     );
     let ok = send(
         &app,
@@ -639,10 +639,16 @@ async fn sensitive_actions_need_a_fresh_code_and_a_step_up_unlocks_them() {
     )
     .await;
     assert_eq!(up.status(), StatusCode::NO_CONTENT);
-    let fresh_cookie = format!("app_session={}", cookie_value(&up, "app_session").unwrap());
-    let claims =
-        session::validate_token(JWT_SECRET, fresh_cookie.trim_start_matches("app_session="))
-            .unwrap();
+    let fresh_cookie = format!(
+        "__Host-app_session={}",
+        cookie_value(&up, "__Host-app_session").unwrap()
+    );
+    let claims = session::validate_session_token(
+        identity::keys::keys_for(&config::Environment::Test),
+        JWT_SECRET,
+        fresh_cookie.trim_start_matches("__Host-app_session="),
+    )
+    .unwrap();
     assert!(claims.second_factor_fresh(chrono::Utc::now().timestamp(), 300));
     assert_eq!(
         send(&app, put_secret(&fresh_cookie)).await.status(),
@@ -843,8 +849,8 @@ async fn a_tenant_owner_resets_a_members_factor_and_ends_their_sessions() {
     .await;
     assert_eq!(login.status(), StatusCode::OK);
     let relogin = format!(
-        "app_session={}",
-        cookie_value(&login, "app_session").unwrap()
+        "__Host-app_session={}",
+        cookie_value(&login, "__Host-app_session").unwrap()
     );
     let blocked = send(&app, tenant_get("/api/v1/tenant/members", tenant, &relogin)).await;
     assert_eq!(error_code(blocked).await, "mfa_enrolment_required");

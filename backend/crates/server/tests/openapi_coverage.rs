@@ -51,6 +51,7 @@ const EXPECTED: &[(&str, &str)] = &[
     // Public (auth, invitations)
     ("POST", "/auth/login"),
     ("POST", "/auth/logout"),
+    ("POST", "/auth/refresh"),
     ("POST", "/auth/mfa/verify"),
     ("POST", "/auth/signup"),
     ("GET", "/invitations/{token}"),

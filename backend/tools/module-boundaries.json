@@ -152,7 +152,9 @@
         "users",
         "mfa_factors",
         "mfa_recovery_codes",
-        "revoked_sessions"
+        "revoked_sessions",
+        "auth_sessions",
+        "refresh_tokens"
       ]
     },
     "integrations": {

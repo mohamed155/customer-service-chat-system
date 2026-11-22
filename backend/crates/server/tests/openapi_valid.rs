@@ -49,8 +49,8 @@ fn api_doc_is_a_valid_openapi_31_document() {
     assert_eq!(scheme["type"], "apiKey", "session_cookie must be apiKey");
     assert_eq!(scheme["in"], "cookie", "session_cookie must be in cookie");
     assert_eq!(
-        scheme["name"], "app_session",
-        "session_cookie must be named app_session"
+        scheme["name"], "__Host-app_session",
+        "session_cookie must be named __Host-app_session"
     );
 
     let servers = doc["servers"].as_array().expect("servers array");

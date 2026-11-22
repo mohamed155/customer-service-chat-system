@@ -31,6 +31,8 @@ pub enum Scope {
     Login,
     Mfa,
     MfaEnrol,
+    /// Exchanging a refresh token for a new access token (`POST /auth/refresh`), per client.
+    Refresh,
     /// Error reports sent by the dashboard (MOH-168), per signed-in user.
     ClientErrors,
     /// What one user may add to the frontend error counter (MOH-168).
@@ -47,6 +49,7 @@ impl Scope {
             Self::Login => "login",
             Self::Mfa => "mfa",
             Self::MfaEnrol => "mfa_enrol",
+            Self::Refresh => "refresh",
             Self::ClientErrors => "client_errors",
             Self::ClientErrorsCounted => "client_errors_counted",
             Self::WidgetSession => "widget_session",

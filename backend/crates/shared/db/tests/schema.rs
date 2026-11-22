@@ -120,6 +120,7 @@ async fn run_migrations_succeeds() {
         (76, "envelope encryption"),
         (77, "mfa"),
         (78, "sessions valid after"),
+        (79, "auth sessions refresh tokens"),
     ];
     assert_eq!(
         rows.len(),

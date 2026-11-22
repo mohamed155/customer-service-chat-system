@@ -67,7 +67,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | S | Credential stuffing, password guessing | Argon2id; `(email, ip)` login throttle; uniform error messages | ✓ throttle · Gap: per-account lockout (ADR-005 A7), MFA (A6) | Identity & Access |
 | S | Account enumeration via login timing | Dummy hash on unknown email | ✓ dummy and real hashes share one set of pinned parameters, with a test for it and a timing test (ADR-005 A3 resolved) | Identity & Access |
 | S | Session theft via XSS | HttpOnly cookie, CSP, no tokens in JS storage | ✓ HttpOnly, no JS storage · ✓ CSP enforced (`script-src 'self'`, no inline script), checked in a browser against the built dashboard (MOH-38) | Identity & Access |
-| T | Forged session token | Signed JWT | ✓ HS256 · Gap: EdDSA + `kid`, verify-only keys in other units (ADR-005 A1) | Identity & Access |
+| T | Forged session token | Signed JWT | ✓ EdDSA + `kid`, only `alg = EdDSA` accepted (ADR-005 A1) · HS256 still accepted for the cutover window · Gap: verify-only keys in other units (JWKS) | Identity & Access |
 | R | User denies a login or sensitive action | Audit records for login, logout, role changes | ✓ | Identity & Access |
 | I | Long-lived token replay after theft | Short access token + rotating refresh with reuse detection | Gap: single 8 h token (ADR-005 A2) | Identity & Access |
 | D | Login floods exhausting memory (Argon2id) | Rate limits, login concurrency cap | ✓ rate limit · Gap: concurrency semaphore (ADR-005 consequences) | Identity & Access |

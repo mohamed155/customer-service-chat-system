@@ -2412,8 +2412,10 @@ name = "identity"
 version = "0.1.0"
 dependencies = [
  "argon2",
+ "aws-lc-rs",
  "axum",
  "axum-extra",
+ "base64 0.23.1",
  "chrono",
  "config",
  "hmac",
@@ -2424,6 +2426,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1",
+ "sha2 0.11.1",
  "sqlx",
  "tokio",
  "tower",

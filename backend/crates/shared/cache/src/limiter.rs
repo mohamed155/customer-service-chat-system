@@ -509,6 +509,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn refresh_with_the_store_down_never_signs_people_out() {
+        // Only sign-in fails closed. A refresh token is 256 random bits and rotates on use, so
+        // there is nothing to guess; refusing refreshes during a Redis outage would end every
+        // session within ten minutes, so each process counts on its own instead.
+        for mode in ["auth_closed", "open"] {
+            let limiter = limiter_with_redis_down(mode);
+            for _ in 0..2 {
+                assert!(
+                    matches!(
+                        limiter
+                            .check(Scope::Refresh, "10.0.0.1", small_budget())
+                            .await,
+                        Decision::Allowed { .. }
+                    ),
+                    "{mode}"
+                );
+            }
+            assert!(
+                matches!(
+                    limiter
+                        .check(Scope::Refresh, "10.0.0.1", small_budget())
+                        .await,
+                    Decision::Refused { .. }
+                ),
+                "the local count still applies: {mode}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn any_fail_mode_other_than_open_fails_closed_for_login() {
         // The documented values are `auth_closed` and `open`; a typo must not open the door.
         let limiter = limiter_with_redis_down("pass_open");

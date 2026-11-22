@@ -134,6 +134,29 @@ pub async fn mfa_rate_limit(
     request: Request,
     next: Next,
 ) -> Response {
+    limit_by_client(Scope::Mfa, 1, store, config, request, next).await
+}
+
+/// Middleware that rate-limits `POST /auth/refresh` per client address. The budget is six times the
+/// sign-in budget: a signed-in dashboard refreshes about every ten minutes per tab, and an office
+/// shares one address, but a client hammering the endpoint is still stopped.
+pub async fn refresh_rate_limit(
+    Extension(store): Extension<Arc<dyn RateLimiter>>,
+    Extension(config): Extension<Arc<AppConfig>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    limit_by_client(Scope::Refresh, 6, store, config, request, next).await
+}
+
+async fn limit_by_client(
+    scope: Scope,
+    budget_factor: u32,
+    store: Arc<dyn RateLimiter>,
+    config: Arc<AppConfig>,
+    request: Request,
+    next: Next,
+) -> Response {
     if !config.rate_limit_enabled {
         return next.run(request).await;
     }
@@ -161,10 +184,10 @@ pub async fn mfa_rate_limit(
     });
     if let Decision::Refused { retry_after } = store
         .check(
-            Scope::Mfa,
+            scope,
             &client_ip,
             Budget {
-                max_requests: config.rate_limit_login_max,
+                max_requests: config.rate_limit_login_max.saturating_mul(budget_factor),
                 window: Duration::from_secs(config.rate_limit_login_window_secs),
             },
         )

@@ -270,12 +270,29 @@ mod tests {
             .and_then(|value| value.to_str().ok())
             .expect("login should set session cookie")
             .to_owned();
-        assert!(cookie.starts_with("app_session="));
+        assert!(cookie.starts_with("__Host-app_session="));
         assert!(cookie.contains("HttpOnly"));
         assert!(cookie.contains("Secure"));
         assert!(cookie.contains("SameSite=Lax"));
-        assert!(cookie.contains("Path=/"));
-        assert!(cookie.contains("Max-Age=28800"));
+        assert!(cookie.contains("Path=/;"));
+        assert!(!cookie.contains("Domain"), "a __Host- cookie has no Domain");
+        assert!(
+            cookie.contains("Max-Age=600"),
+            "ten-minute access token: {cookie}"
+        );
+
+        let refresh = res
+            .headers()
+            .get_all("set-cookie")
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .find(|c| c.starts_with("__Secure-app_refresh="))
+            .expect("login should set the refresh cookie")
+            .to_owned();
+        assert!(refresh.contains("HttpOnly"));
+        assert!(refresh.contains("Secure"));
+        assert!(refresh.contains("SameSite=Strict"));
+        assert!(refresh.contains("Path=/api/v1/auth/refresh"));
 
         let body = body_json(&mut res).await;
         assert_eq!(
@@ -978,15 +995,26 @@ mod tests {
             .get("set-cookie")
             .and_then(|value| value.to_str().ok())
             .expect("logout should clear cookie");
-        assert!(clear_cookie.contains("app_session="));
+        assert!(clear_cookie.contains("__Host-app_session="));
         assert!(clear_cookie.contains("Max-Age=0"));
+        let cleared: Vec<_> = logout
+            .headers()
+            .get_all("set-cookie")
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .collect();
+        assert!(cleared
+            .iter()
+            .any(|c| c.starts_with("__Secure-app_refresh=;")));
 
-        let revoked_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM revoked_sessions WHERE user_id = $1")
-                .bind(user_id)
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+        let revoked_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM auth_sessions \
+             WHERE user_id = $1 AND revoked_at IS NOT NULL AND revoke_reason = 'logout'",
+        )
+        .bind(user_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         let audit_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM audit_logs WHERE action = 'auth.logged_out' AND actor_user_id = $1",
         )
@@ -1082,7 +1110,7 @@ mod tests {
             .and_then(|value| value.to_str().ok())
             .expect("signup should set session cookie")
             .to_owned();
-        assert!(cookie.starts_with("app_session="));
+        assert!(cookie.starts_with("__Host-app_session="));
 
         let body = body_json(&mut res).await;
         assert_eq!(body["email"], email);
