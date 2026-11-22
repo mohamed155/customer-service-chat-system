@@ -555,7 +555,9 @@ pub async fn assign<U: ConversationUnit>(
             None => None,
         };
         if assignee_is_told(actor_membership_id, target_membership_id) {
-            // The assignment stands even when the notification cannot be queued.
+            // A failure to queue the notification is logged, not returned, as it always has been.
+            // It is the caller's transaction that decides what a failed statement means for the
+            // assignment written before it.
             if let Err(error) = unit
                 .publish(&ConversationEvent::AssigneeNotification {
                     tenant_id,

@@ -37,8 +37,8 @@ pub struct HistoryResponse {
 /// signalling that more rows exist beyond the 20-row window (FR-010).
 ///
 /// Both the customer-existence check and the conversation query execute inside
-/// a single Postgres transaction, ensuring both reads come from the same
-/// database snapshot (T139).
+/// one Postgres transaction. It runs at the default `READ COMMITTED` level, so each
+/// statement sees the data committed when it starts, not one shared snapshot.
 #[utoipa::path(
     get,
     path = "/tenant/customers/{id}/conversations",

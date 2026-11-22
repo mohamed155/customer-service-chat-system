@@ -226,8 +226,9 @@ impl<T> ConversationUnit for T where
 {
 }
 
-/// What a message list is enriched with. These reads run in units of work of their own, so the
-/// enrichment of a page does not hold the page's transaction open.
+/// What a message list is enriched with. These reads run in units of work of their own, on their
+/// own pooled connections, while the caller's page transaction is still open (as they always
+/// have).
 #[async_trait]
 pub trait MessageEnrichment: Send + Sync {
     async fn citations(

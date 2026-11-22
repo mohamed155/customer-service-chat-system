@@ -54,7 +54,8 @@ struct FakeUnit {
     active_members: HashSet<Uuid>,
     members: HashMap<Uuid, Member>,
     user_membership: HashMap<Uuid, Uuid>,
-    customers: HashSet<Uuid>,
+    /// Customers by `(tenant, customer)`, so a lookup in the wrong tenant finds nothing.
+    customers: HashSet<(Uuid, Uuid)>,
     customer_name: String,
     detail_row: Option<DetailRecord>,
     inbox: Vec<InboxRecord>,
@@ -62,6 +63,8 @@ struct FakeUnit {
     participants: Vec<Uuid>,
     // What the store was asked to do.
     asked_inbox_after: Option<Option<(DateTime<Utc>, Uuid)>>,
+    asked_inbox_fetch: Option<i64>,
+    asked_timeline_fetch: Option<i64>,
     asked_timeline_before: Option<Option<(DateTime<Utc>, i64)>>,
     writes: Vec<String>,
     events: Vec<(&'static str, Value)>,
@@ -78,7 +81,7 @@ impl FakeUnit {
             customer_name: "Ada".to_owned(),
             ..Self::default()
         };
-        unit.customers.insert(id(CUSTOMER));
+        unit.customers.insert((id(TENANT), id(CUSTOMER)));
         unit.add_member(AGENT_MEMBER, AGENT_USER, "Grace", true);
         unit
     }
@@ -204,9 +207,10 @@ impl ConversationReader for FakeUnit {
         _: Uuid,
         _: &InboxFilter,
         after: Option<(DateTime<Utc>, Uuid)>,
-        _fetch: i64,
+        fetch: i64,
     ) -> StoreResult<Vec<InboxRecord>> {
         self.asked_inbox_after = Some(after);
+        self.asked_inbox_fetch = Some(fetch);
         Ok(self.inbox.clone())
     }
 
@@ -219,9 +223,10 @@ impl ConversationReader for FakeUnit {
         _: Uuid,
         _: Uuid,
         before: Option<(DateTime<Utc>, i64)>,
-        _fetch: i64,
+        fetch: i64,
     ) -> StoreResult<Vec<TimelineRecord>> {
         self.asked_timeline_before = Some(before);
+        self.asked_timeline_fetch = Some(fetch);
         Ok(self.timeline.clone())
     }
 
@@ -269,8 +274,8 @@ impl MemberDirectory for FakeUnit {
 
 #[async_trait]
 impl CustomerDirectory for FakeUnit {
-    async fn customer_exists(&mut self, _: Uuid, customer_id: Uuid) -> StoreResult<bool> {
-        Ok(self.customers.contains(&customer_id))
+    async fn customer_exists(&mut self, tenant_id: Uuid, customer_id: Uuid) -> StoreResult<bool> {
+        Ok(self.customers.contains(&(tenant_id, customer_id)))
     }
 }
 
@@ -492,7 +497,7 @@ async fn unassigning_is_published_and_announced_to_nobody() {
 }
 
 #[tokio::test]
-async fn a_notification_that_cannot_be_queued_does_not_undo_the_assignment() {
+async fn a_notification_that_cannot_be_queued_is_logged_and_does_not_fail_the_assignment() {
     let mut unit = FakeUnit::with_conversation("open");
     unit.add_member(OTHER_MEMBER, 20, "Linus", true);
     unit.fail_notification = true;
@@ -666,6 +671,8 @@ fn staff() -> ConversationActor {
 #[tokio::test]
 async fn a_conversation_cannot_be_opened_for_a_customer_of_another_tenant() {
     let mut unit = FakeUnit::with_conversation("open");
+    // The customer exists, in a different tenant.
+    unit.customers.insert((id(TENANT + 1), id(999)));
 
     let error = create(
         &mut unit,
@@ -1085,6 +1092,11 @@ async fn a_full_inbox_page_reports_more_and_points_at_the_last_row_it_kept() {
         .await
         .unwrap();
 
+    assert_eq!(
+        unit.asked_inbox_fetch,
+        Some(3),
+        "the store is asked for one row more than the page"
+    );
     assert!(page.has_more);
     assert_eq!(page.conversations.len(), 2);
     assert_eq!(
@@ -1207,6 +1219,11 @@ async fn a_timeline_page_points_at_the_last_message_it_kept() {
     .await
     .unwrap();
 
+    assert_eq!(
+        unit.asked_timeline_fetch,
+        Some(3),
+        "the store is asked for one row more than the page"
+    );
     assert!(page.has_more);
     assert_eq!(page.messages.len(), 2);
     assert_eq!(page.next_cursor, Some(encode_timeline_cursor(at(20), 2)));

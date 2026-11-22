@@ -1,7 +1,7 @@
 //! Events other modules ask `conversations` to put in the outbox, in the transaction they hold.
 //!
-//! The events themselves, with their names and payloads, are [`ConversationEvent`]; these
-//! functions are the facade over writing them.
+//! The events themselves (names and payloads) are defined by the module's `ConversationEvent`;
+//! these functions are the facade over writing them.
 
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;

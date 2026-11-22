@@ -33,7 +33,7 @@
 //!   open a conversation, the detail and the timeline) and the single-statement reads and writes
 //!   of the AI responder, the WhatsApp sender, the widget and escalations.
 //! - [`outbox`]: the events other modules ask this one to publish, whose names and payloads are
-//!   [`application::ConversationEvent`].
+//!   those of the module's `ConversationEvent`.
 //! - [`directory`], [`inbound`] and [`attachments`]: what the widget, the escalation queue and the
 //!   channels may ask of conversations, messages and attachments (MOH-194).
 //! - [`AiAgentStatus`]: what the inbox needs to know about the tenant's AI agent, implemented by
