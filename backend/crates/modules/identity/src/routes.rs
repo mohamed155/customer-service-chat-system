@@ -83,7 +83,8 @@ struct LoginUser {
 
 pub struct LoginSuccess {
     pub principal: Principal,
-    pub session_cookie: String,
+    /// The `Set-Cookie` values: the access token and the refresh token.
+    pub session_cookies: Vec<String>,
 }
 
 /// The result of the password step.
@@ -107,6 +108,7 @@ pub enum LoginError {
 pub async fn authenticate_login(
     pool: &PgPool,
     config: &AppConfig,
+    headers: &axum::http::HeaderMap,
     payload: LoginRequest,
 ) -> Result<LoginOutcome, LoginError> {
     let email = payload.email.trim().to_owned();
@@ -165,24 +167,27 @@ pub async fn authenticate_login(
                 LoginError::Internal("user row does not produce an authenticated principal".into())
             })?;
 
-    let (jwt, _, _) = session::issue_token(
-        &config.auth_jwt_secret,
-        config.auth_session_ttl_seconds,
+    let session_cookies = crate::sessions::start_for_response(
+        pool,
+        &config.environment,
         user.id,
+        session::SessionAuth::password(),
+        headers,
     )
-    .map_err(|error| LoginError::Internal(format!("Session token issuance failed: {error}")))?;
+    .await
+    .map_err(|_| LoginError::Internal("Session issuance failed".into()))?;
 
     Ok(LoginOutcome::Session(LoginSuccess {
         principal,
-        session_cookie: session::build_session_cookie(&jwt, config.auth_session_ttl_seconds),
+        session_cookies,
     }))
 }
 
 /// Logout the current session.
 ///
-/// On success the response clears the `app_session` cookie by setting an
-/// already-expired `Set-Cookie` header, and the session's JWT ID (JTI) is
-/// recorded in `revoked_sessions` so it cannot be reused.
+/// On success the session is revoked, so its access token stops working at once, and the response
+/// clears the session cookies by setting already-expired `Set-Cookie` headers. A token of the HS256
+/// cutover window has no session row; its JWT ID (JTI) is recorded in `revoked_sessions` instead.
 ///
 /// # OpenAPI
 ///
@@ -196,13 +201,13 @@ pub async fn authenticate_login(
     tag = "auth",
     operation_id = "auth_logout",
     summary = "Logout and clear session cookie",
-    description = "Revokes the current session's JTI and clears the `app_session` cookie. \
-                  Returns 204 No Content on success. The `Set-Cookie` response header sets \
-                  `app_session=; Path=/; HttpOnly; Max-Age=0` (or an already-expired date) so \
-                  clients can drop the cookie. Requires a valid `app_session` cookie; \
-                  unauthenticated requests are rejected with 401.",
+    description = "Revokes the current session (the whole refresh-token family) and clears the \
+                  `__Host-app_session` and `__Secure-app_refresh` cookies. Returns 204 No \
+                  Content on success. The `Set-Cookie` response headers set both cookies to an \
+                  empty value with `Max-Age=0` so clients can drop them. Requires a valid \
+                  session cookie; unauthenticated requests are rejected with 401.",
     responses(
-        (status = 204, description = "Session revoked; `app_session` cookie cleared."),
+        (status = 204, description = "Session revoked; the session cookies are cleared."),
         (status = 401, description = "Unauthenticated.", body = kernel::ErrorEnvelope),
     ),
     security(("session_cookie" = [])),
@@ -213,31 +218,22 @@ pub async fn logout(
     claims: Option<Extension<session::SessionClaims>>,
 ) -> Response {
     if let Some(Extension(claims)) = claims {
-        let insert = sqlx::query(
-            r#"
-            INSERT INTO revoked_sessions (jti, user_id, expires_at)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (jti) DO NOTHING
-            "#,
-        )
-        .bind(claims.jti)
-        .bind(principal.user_id)
-        .bind(chrono::DateTime::from_timestamp(claims.exp, 0).unwrap_or_else(chrono::Utc::now))
-        .execute(&pool)
-        .await;
-
-        if let Err(e) = insert {
+        if let Err(e) =
+            crate::sessions::revoke_claims(&pool, &claims, crate::sessions::reason::LOGOUT).await
+        {
             return ApiError::internal_error_from("Database query failed", &e).into_response();
         }
 
         audit::logged_out(&pool, principal.user_id, claims.jti).await;
     }
 
-    (
-        [(SET_COOKIE, session::clear_session_cookie())],
-        StatusCode::NO_CONTENT,
-    )
-        .into_response()
+    let mut response = StatusCode::NO_CONTENT.into_response();
+    for cookie in crate::sessions::clear_cookies() {
+        if let Ok(value) = cookie.parse() {
+            response.headers_mut().append(SET_COOKIE, value);
+        }
+    }
+    response
 }
 async fn fetch_login_user(pool: &PgPool, email: &str) -> sqlx::Result<Option<LoginUser>> {
     let row = sqlx::query_as::<_, (Uuid, String, String, Option<String>, Option<String>)>(

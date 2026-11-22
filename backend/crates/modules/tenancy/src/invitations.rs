@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::{header::SET_COOKIE, StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Json, Response},
     Extension,
 };
@@ -1170,7 +1170,7 @@ pub async fn preview_invitation(
     description = "Public endpoint that accepts a pending invitation. If the caller is signed in \
                   and the principal's email matches the invitation, a membership is created for the \
                   existing user. Otherwise an anonymous accept creates a new user account (supplying \
-                  `displayName` and `password`) and signs them in via a new `app_session` cookie. \
+                  `displayName` and `password`) and signs them in with new session cookies (an access token and a refresh token). \
                   Returns 404 for unknown tokens, soft-deleted or suspended tenants, and \
                   accepted/revoked invitations; returns 410 for expired or already-used tokens.",
     params(("token" = String, Path, description = "Invitation token")),
@@ -1192,6 +1192,7 @@ pub async fn accept_invitation(
     Extension(config): Extension<Arc<AppConfig>>,
     Path(token): Path<String>,
     maybe_principal: OptionalPrincipal,
+    headers: axum::http::HeaderMap,
     kernel::ApiJson(payload): kernel::ApiJson<AcceptInvitationPayload>,
 ) -> Response {
     let token_hash = match parse_token_hash(&token) {
@@ -1506,20 +1507,19 @@ pub async fn accept_invitation(
             .into_response();
     }
 
-    // ---- Issue session cookie ----
-    let (jwt, _, _) = match session::issue_token(
-        &config.auth_jwt_secret,
-        config.auth_session_ttl_seconds,
+    // ---- Issue session cookies ----
+    let session_cookies = match identity::sessions::start_for_response(
+        &pool,
+        &config.environment,
         new_user_id,
-    ) {
-        Ok(t) => t,
-        Err(e) => {
-            return ApiError::internal_error_from("Session token issuance failed", &e)
-                .for_tenant(tenant_id)
-                .into_response();
-        }
+        session::SessionAuth::password(),
+        &headers,
+    )
+    .await
+    {
+        Ok(cookies) => cookies,
+        Err(error) => return error.for_tenant(tenant_id).into_response(),
     };
-    let session_cookie = session::build_session_cookie(&jwt, config.auth_session_ttl_seconds);
     let principal = Principal {
         user_id: new_user_id,
         email,
@@ -1535,7 +1535,11 @@ pub async fn accept_invitation(
     )
     .await
     {
-        Ok(response) => ([(SET_COOKIE, session_cookie)], Json(response)).into_response(),
+        Ok(response) => {
+            let mut reply = Json(response).into_response();
+            identity::mfa_routes::append_cookies(&mut reply, session_cookies);
+            reply
+        }
         Err(error) => error.into_response(),
     }
 }

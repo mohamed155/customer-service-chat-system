@@ -204,7 +204,7 @@ pub async fn begin_enrolment(
     summary = "Confirm two-factor authentication with a code",
     description = "Checks a code from the authenticator app. On success the factor becomes active, \
                   ten recovery codes are returned once (stored only as hashes), and the \
-                  `app_session` cookie is replaced by a session that records the second factor. \
+                  session cookies are replaced by a session that records the second factor. \
                   Wrong codes count toward the lockout.",
     request_body = ConfirmRequest,
     responses(
@@ -221,6 +221,7 @@ pub async fn confirm_enrolment(
     Extension(config): Extension<Arc<AppConfig>>,
     principal: Principal,
     claims: Option<Extension<session::SessionClaims>>,
+    headers: axum::http::HeaderMap,
     ApiJson(payload): ApiJson<ConfirmRequest>,
 ) -> Response {
     let keys = match keys(&pool, &config) {
@@ -236,32 +237,33 @@ pub async fn confirm_enrolment(
 
     // The session that confirmed the factor is replaced by one that records it, and the old one
     // stops working.
-    let (jwt, _, _) = match session::issue_session(
-        &config.auth_jwt_secret,
-        config.auth_session_ttl_seconds,
+    let cookies = match crate::sessions::start_for_response(
+        &pool,
+        &config.environment,
         principal.user_id,
         session::SessionAuth::second_factor(session::AMR_OTP),
-    ) {
-        Ok(issued) => issued,
-        Err(e) => {
-            return ApiError::internal_error_from("Session token issuance failed", e)
-                .into_response()
-        }
+        &headers,
+    )
+    .await
+    {
+        Ok(cookies) => cookies,
+        Err(error) => return error.into_response(),
     };
     if let Some(Extension(old)) = claims {
-        revoke(&pool, principal.user_id, old.jti, old.exp).await;
+        // Best effort, on purpose: the factor is confirmed and the codes below are shown only once,
+        // so failing now would lose them. The old session has no second factor, and the middleware
+        // already refuses such a session for a user who has one, so it stops working anyway.
+        if let Err(error) = end_replaced_session(&pool, &old).await {
+            tracing::error!(%error, "could not end the replaced session");
+        }
     }
 
-    (
-        [(
-            SET_COOKIE,
-            session::build_session_cookie(&jwt, config.auth_session_ttl_seconds),
-        )],
-        Json(RecoveryCodesResponse {
-            recovery_codes: codes,
-        }),
-    )
-        .into_response()
+    let mut response = Json(RecoveryCodesResponse {
+        recovery_codes: codes,
+    })
+    .into_response();
+    append_cookies(&mut response, cookies);
+    response
 }
 
 /// Check the user's password against its stored hash. A user without a password never passes.
@@ -337,7 +339,7 @@ pub async fn status(
     operation_id = "auth_mfa_step_up",
     summary = "Prove a second factor again for a sensitive action",
     description = "Takes an authenticator code or a recovery code from a signed-in user, and on \
-                  success replaces the `app_session` cookie by a session whose second factor is \
+                  success replaces the session cookies by a session whose second factor is \
                   fresh for five minutes. Calls that need it answer `401` with the code \
                   `mfa_step_up_required` until then. A code works once; wrong codes count toward \
                   the lockout.",
@@ -356,6 +358,7 @@ pub async fn step_up(
     Extension(config): Extension<Arc<AppConfig>>,
     principal: Principal,
     claims: Option<Extension<session::SessionClaims>>,
+    headers: axum::http::HeaderMap,
     ApiJson(payload): ApiJson<VerifyRequest>,
 ) -> Response {
     let credential = match (payload.code, payload.recovery_code) {
@@ -375,29 +378,28 @@ pub async fn step_up(
         Ok(method) => method,
         Err(error) => return error_response(error),
     };
-    let (jwt, _, _) = match session::issue_session(
-        &config.auth_jwt_secret,
-        config.auth_session_ttl_seconds,
+    let cookies = match crate::sessions::start_for_response(
+        &pool,
+        &config.environment,
         principal.user_id,
         session::SessionAuth::second_factor(method.amr()),
-    ) {
-        Ok(issued) => issued,
-        Err(e) => {
-            return ApiError::internal_error_from("Session token issuance failed", e)
-                .into_response()
-        }
-    };
-    if let Some(Extension(old)) = claims {
-        revoke(&pool, principal.user_id, old.jti, old.exp).await;
-    }
-    (
-        StatusCode::NO_CONTENT,
-        [(
-            SET_COOKIE,
-            session::build_session_cookie(&jwt, config.auth_session_ttl_seconds),
-        )],
+        &headers,
     )
-        .into_response()
+    .await
+    {
+        Ok(cookies) => cookies,
+        Err(error) => return error.into_response(),
+    };
+    // The old session carries the second factor of an earlier moment and its refresh token could
+    // keep it alive, so a replacement that did not end it is not a success: the person asks again.
+    if let Some(Extension(old)) = claims {
+        if let Err(error) = end_replaced_session(&pool, &old).await {
+            return ApiError::internal_error_from("Step-up failed", error).into_response();
+        }
+    }
+    let mut response = StatusCode::NO_CONTENT.into_response();
+    append_cookies(&mut response, cookies);
+    response
 }
 
 /// New recovery codes, replacing the old ones.
@@ -427,6 +429,21 @@ pub async fn regenerate_recovery_codes(
         .into_response(),
         Err(error) => error_response(error),
     }
+}
+
+/// Sets every cookie of `cookies` on `response`.
+pub fn append_cookies(response: &mut Response, cookies: Vec<String>) {
+    for cookie in cookies {
+        if let Ok(value) = cookie.parse() {
+            response.headers_mut().append(SET_COOKIE, value);
+        }
+    }
+}
+
+/// The session that a fresh one replaces stops working (the second factor was set up or proven
+/// again, so the old session's `amr` is out of date).
+async fn end_replaced_session(pool: &PgPool, old: &session::SessionClaims) -> sqlx::Result<()> {
+    crate::sessions::revoke_claims(pool, old, crate::sessions::reason::REPLACED).await
 }
 
 /// Stop a session id from working again (logout does the same).

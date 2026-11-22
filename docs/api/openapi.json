@@ -6349,13 +6349,13 @@
     "securitySchemes": {
       "session_cookie": {
         "in": "cookie",
-        "name": "app_session",
+        "name": "__Host-app_session",
         "type": "apiKey"
       }
     }
   },
   "info": {
-    "description": "REST API for the multi-tenant AI customer service platform. All authenticated endpoints require a valid `app_session` cookie.\n\n**Errors.** An error answers in `application/problem+json` (RFC 9457, `ProblemDetails`) when the request's `Accept` header asks for it, for example `Accept: application/problem+json, application/json;q=0.5`. Any other request still gets the legacy `application/json` envelope (`ErrorEnvelope`), which is deprecated: it carries `Deprecation` and `Link` headers and will be removed (ADR-012, gap A2).",
+    "description": "REST API for the multi-tenant AI customer service platform. All authenticated endpoints require a valid `__Host-app_session` cookie.\n\n**Errors.** An error answers in `application/problem+json` (RFC 9457, `ProblemDetails`) when the request's `Accept` header asks for it, for example `Accept: application/problem+json, application/json;q=0.5`. Any other request still gets the legacy `application/json` envelope (`ErrorEnvelope`), which is deprecated: it carries `Deprecation` and `Link` headers and will be removed (ADR-012, gap A2).",
     "license": {
       "name": ""
     },
@@ -6366,7 +6366,7 @@
   "paths": {
     "/auth/login": {
       "post": {
-        "description": "Accepts an email + password pair, verifies them against the `users` table, and on success issues a signed JWT session. The JWT is returned to the client via a `Set-Cookie: app_session=...; HttpOnly; SameSite=Lax; Path=/` response header. The response body is the same profile shape returned by `GET /me` (see `tenancy::routes::MeResponse`); the typed body schema is filled in by the tenancy-module annotation pass. This endpoint is public — no `app_session` cookie is required.",
+        "description": "Accepts an email + password pair, verifies them against the `users` table, and on success starts a session: a short-lived access token in the `__Host-app_session` cookie and a rotating refresh token in the `__Secure-app_refresh` cookie (`POST /auth/refresh` exchanges it). The response body is the same profile shape returned by `GET /me` (see `tenancy::routes::MeResponse`); the typed body schema is filled in by the tenancy-module annotation pass. This endpoint is public — no session cookie is required.",
         "operationId": "auth_login",
         "requestBody": {
           "content": {
@@ -6385,7 +6385,7 @@
                 "schema": {}
               }
             },
-            "description": "Login successful. Returns the user profile and sets the `app_session` cookie."
+            "description": "Login successful. Returns the user profile and sets the session cookies."
           },
           "202": {
             "content": {
@@ -6483,11 +6483,11 @@
     },
     "/auth/logout": {
       "post": {
-        "description": "Revokes the current session's JTI and clears the `app_session` cookie. Returns 204 No Content on success. The `Set-Cookie` response header sets `app_session=; Path=/; HttpOnly; Max-Age=0` (or an already-expired date) so clients can drop the cookie. Requires a valid `app_session` cookie; unauthenticated requests are rejected with 401.",
+        "description": "Revokes the current session (the whole refresh-token family) and clears the `__Host-app_session` and `__Secure-app_refresh` cookies. Returns 204 No Content on success. The `Set-Cookie` response headers set both cookies to an empty value with `Max-Age=0` so clients can drop them. Requires a valid session cookie; unauthenticated requests are rejected with 401.",
         "operationId": "auth_logout",
         "responses": {
           "204": {
-            "description": "Session revoked; `app_session` cookie cleared."
+            "description": "Session revoked; the session cookies are cleared."
           },
           "401": {
             "content": {
@@ -6620,7 +6620,7 @@
     },
     "/auth/mfa/enrol/confirm": {
       "post": {
-        "description": "Checks a code from the authenticator app. On success the factor becomes active, ten recovery codes are returned once (stored only as hashes), and the `app_session` cookie is replaced by a session that records the second factor. Wrong codes count toward the lockout.",
+        "description": "Checks a code from the authenticator app. On success the factor becomes active, ten recovery codes are returned once (stored only as hashes), and the session cookies are replaced by a session that records the second factor. Wrong codes count toward the lockout.",
         "operationId": "auth_mfa_enrol_confirm",
         "requestBody": {
           "content": {
@@ -6823,7 +6823,7 @@
     },
     "/auth/mfa/step-up": {
       "post": {
-        "description": "Takes an authenticator code or a recovery code from a signed-in user, and on success replaces the `app_session` cookie by a session whose second factor is fresh for five minutes. Calls that need it answer `401` with the code `mfa_step_up_required` until then. A code works once; wrong codes count toward the lockout.",
+        "description": "Takes an authenticator code or a recovery code from a signed-in user, and on success replaces the session cookies by a session whose second factor is fresh for five minutes. Calls that need it answer `401` with the code `mfa_step_up_required` until then. A code works once; wrong codes count toward the lockout.",
         "operationId": "auth_mfa_step_up",
         "requestBody": {
           "content": {
@@ -6917,7 +6917,7 @@
     },
     "/auth/mfa/verify": {
       "post": {
-        "description": "Takes an authenticator code or a recovery code, together with the `app_mfa_pending` cookie that `POST /auth/login` set. On success it starts the session (the `app_session` cookie records the second factor), clears the challenge and returns the same profile body as login. A code is accepted once; five wrong codes lock the account's second factor for fifteen minutes. The challenge lasts five minutes. Public: no `app_session` cookie is needed.",
+        "description": "Takes an authenticator code or a recovery code, together with the `app_mfa_pending` cookie that `POST /auth/login` set. On success it starts the session (the session records the second factor), clears the challenge and returns the same profile body as login. A code is accepted once; five wrong codes lock the account's second factor for fifteen minutes. The challenge lasts five minutes. Public: no session cookie is needed.",
         "operationId": "auth_mfa_verify",
         "requestBody": {
           "content": {
@@ -6936,7 +6936,7 @@
                 "schema": {}
               }
             },
-            "description": "Signed in. Returns the user profile and sets the `app_session` cookie."
+            "description": "Signed in. Returns the user profile and sets the session cookies."
           },
           "400": {
             "content": {
@@ -7012,9 +7012,91 @@
         ]
       }
     },
+    "/auth/refresh": {
+      "post": {
+        "description": "Reads the `__Secure-app_refresh` cookie (HttpOnly, sent only to this path), uses that refresh token up and sets a new access token (`__Host-app_session`) and a new refresh token. A refresh token works once: presenting a used one again is treated as theft and ends the whole session, except when another request of the same browser rotated it less than ten seconds ago (two tabs), in which case only a new access token is issued. When the refresh token is not accepted (unknown, expired, used again, or its session is over) the session cookies are cleared and the answer is `401`: sign in again. A server failure answers `500` and leaves the cookies as they were. Like login, this needs an allowed `Origin` and `X-Requested-With`, with no session required.",
+        "operationId": "auth_refresh",
+        "responses": {
+          "204": {
+            "description": "Refreshed. The new cookies are set."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No valid refresh token: unknown, expired, used again, or the session was revoked. The cookies are cleared."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "A missing or foreign `Origin`, or a missing `X-Requested-With` header."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too many refreshes from this client."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The refresh failed on the server. The cookies are left as they were."
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "Exchange the refresh token for a new session token pair",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/signup": {
       "post": {
-        "description": "Public, self-serve signup (FR-AUTH-001). Creates a new tenant (workspace) on the `trial` plan, a new user account as that tenant's Owner, and starts a session — the response body is the same `MeResponse` shape returned by `GET /me`, and the `app_session` cookie is set the same way as `POST /auth/login`. The workspace slug is derived automatically from `workspaceName` (and disambiguated on collision); it can be changed later from tenant settings. Returns 409 if the email is already registered.",
+        "description": "Public, self-serve signup (FR-AUTH-001). Creates a new tenant (workspace) on the `trial` plan, a new user account as that tenant's Owner, and starts a session — the response body is the same `MeResponse` shape returned by `GET /me`, and the session cookies are set the same way as `POST /auth/login`. The workspace slug is derived automatically from `workspaceName` (and disambiguated on collision); it can be changed later from tenant settings. Returns 409 if the email is already registered.",
         "operationId": "auth_signup",
         "requestBody": {
           "content": {
@@ -7033,7 +7115,7 @@
                 "schema": {}
               }
             },
-            "description": "Workspace and account created. Returns the user profile and sets the `app_session` cookie."
+            "description": "Workspace and account created. Returns the user profile and sets the session cookies."
           },
           "400": {
             "content": {
@@ -7373,7 +7455,7 @@
     },
     "/invitations/{token}/accept": {
       "post": {
-        "description": "Public endpoint that accepts a pending invitation. If the caller is signed in and the principal's email matches the invitation, a membership is created for the existing user. Otherwise an anonymous accept creates a new user account (supplying `displayName` and `password`) and signs them in via a new `app_session` cookie. Returns 404 for unknown tokens, soft-deleted or suspended tenants, and accepted/revoked invitations; returns 410 for expired or already-used tokens.",
+        "description": "Public endpoint that accepts a pending invitation. If the caller is signed in and the principal's email matches the invitation, a membership is created for the existing user. Otherwise an anonymous accept creates a new user account (supplying `displayName` and `password`) and signs them in with new session cookies (an access token and a refresh token). Returns 404 for unknown tokens, soft-deleted or suspended tenants, and accepted/revoked invitations; returns 410 for expired or already-used tokens.",
         "operationId": "accept_invitation",
         "parameters": [
           {

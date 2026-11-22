@@ -1,3 +1,5 @@
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { APP_CONFIG } from '../config/app-config';
@@ -18,6 +20,8 @@ describe('RealtimeService', () => {
       providers: [
         provideZonelessChangeDetection(),
         RealtimeService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
         provideTenantStore(),
         { provide: APP_CONFIG, useValue: { apiBaseUrl: 'http://localhost:8080/api/v1' } },
       ],
@@ -35,6 +39,51 @@ describe('RealtimeService', () => {
   afterEach(() => {
     service.disconnect();
     vi.restoreAllMocks(); // the `fetch` and `Math.random` spies must not leak into the next test
+  });
+
+  it('renews an expired access token once and opens the stream again', async () => {
+    const statuses = [401, 200];
+    const calls: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      calls.push(url as string);
+      const status = statuses.shift() ?? 200;
+      return Promise.resolve(
+        new Response(null, { status, headers: { 'content-type': 'text/event-stream' } }),
+      );
+    });
+
+    service = createService();
+    tenantStore().activate(testTenant('tenant-42'));
+    service.connect();
+
+    const http = TestBed.inject(HttpTestingController);
+    const refresh = await vi.waitFor(() =>
+      http.expectOne('http://localhost:8080/api/v1/auth/refresh'),
+    );
+    refresh.flush(null, { status: 204, statusText: 'No Content' });
+
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    http.verify();
+  });
+
+  it('does not refresh again when the second attempt is also refused', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() => Promise.resolve(new Response(null, { status: 401 })));
+
+    service = createService();
+    tenantStore().activate(testTenant('tenant-42'));
+    service.connect();
+
+    const http = TestBed.inject(HttpTestingController);
+    const refresh = await vi.waitFor(() =>
+      http.expectOne('http://localhost:8080/api/v1/auth/refresh'),
+    );
+    refresh.flush(null, { status: 204, statusText: 'No Content' });
+
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    // The second 401 goes to the backoff, not to another refresh.
+    http.expectNone('http://localhost:8080/api/v1/auth/refresh');
   });
 
   it('includes credentials and X-Tenant-ID header on the fetch', async () => {

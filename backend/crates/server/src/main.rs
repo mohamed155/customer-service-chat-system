@@ -45,6 +45,23 @@ async fn main() {
     if std::env::args().nth(1).as_deref() == Some("healthcheck") {
         std::process::exit(server::healthcheck::run());
     }
+    // Prints a new signing key in the format `AUTH_SIGNING_KEYS` takes (ADR-005 §2). The private key
+    // goes to the secret store, never into the repository.
+    if std::env::args().nth(1).as_deref() == Some("keygen") {
+        let kid = std::env::args()
+            .nth(2)
+            .unwrap_or_else(|| chrono::Utc::now().format("%Y-%m-%d").to_string());
+        match identity::keys::generated_key_json(&kid) {
+            Ok(json) => {
+                println!("{json}");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("Could not generate a key: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
     if std::env::args().nth(1).as_deref() == Some("secrets") {
         let args: Vec<String> = std::env::args().skip(2).collect();
         std::process::exit(secrets_command(&args).await);
@@ -73,6 +90,14 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    // A process that signs in users needs a signing key; production and staging don't invent one.
+    if matches!(mode, RunMode::Api | RunMode::All) {
+        if let Err(e) = identity::keys::validate_startup(&config.environment, true) {
+            eprintln!("Config error: {e}");
+            std::process::exit(1);
+        }
+    }
 
     observability::init_observability(
         config.log_format.clone(),
@@ -247,6 +272,28 @@ fn spawn_workers(
             }
         })
     };
+    let session_retention_sweeper = {
+        let pool = state.db.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(6 * 3600));
+            loop {
+                interval.tick().await;
+                match identity::sessions::sweep_ended(&pool).await {
+                    Ok(count) => {
+                        if count > 0 {
+                            tracing::info!(
+                                count,
+                                "session retention sweep: deleted ended sessions"
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(%e, "session retention sweep failed");
+                    }
+                }
+            }
+        })
+    };
     let tool_expiry_sweeper = {
         let pool = state.db.clone();
         tokio::spawn(async move {
@@ -382,6 +429,10 @@ fn spawn_workers(
     workers.spawn(async move {
         let _ = widget_session_sweeper.await;
         "widget session sweeper"
+    });
+    workers.spawn(async move {
+        let _ = session_retention_sweeper.await;
+        "session retention sweeper"
     });
     workers.spawn(async move {
         let _ = tool_expiry_sweeper.await;

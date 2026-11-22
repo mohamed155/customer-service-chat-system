@@ -15,7 +15,7 @@ export interface paths {
     put?: never;
     /**
      * Authenticate and start a session
-     * @description Accepts an email + password pair, verifies them against the `users` table, and on success issues a signed JWT session. The JWT is returned to the client via a `Set-Cookie: app_session=...; HttpOnly; SameSite=Lax; Path=/` response header. The response body is the same profile shape returned by `GET /me` (see `tenancy::routes::MeResponse`); the typed body schema is filled in by the tenancy-module annotation pass. This endpoint is public — no `app_session` cookie is required.
+     * @description Accepts an email + password pair, verifies them against the `users` table, and on success starts a session: a short-lived access token in the `__Host-app_session` cookie and a rotating refresh token in the `__Secure-app_refresh` cookie (`POST /auth/refresh` exchanges it). The response body is the same profile shape returned by `GET /me` (see `tenancy::routes::MeResponse`); the typed body schema is filled in by the tenancy-module annotation pass. This endpoint is public — no session cookie is required.
      */
     post: operations['auth_login'];
     delete?: never;
@@ -35,7 +35,7 @@ export interface paths {
     put?: never;
     /**
      * Logout and clear session cookie
-     * @description Revokes the current session's JTI and clears the `app_session` cookie. Returns 204 No Content on success. The `Set-Cookie` response header sets `app_session=; Path=/; HttpOnly; Max-Age=0` (or an already-expired date) so clients can drop the cookie. Requires a valid `app_session` cookie; unauthenticated requests are rejected with 401.
+     * @description Revokes the current session (the whole refresh-token family) and clears the `__Host-app_session` and `__Secure-app_refresh` cookies. Returns 204 No Content on success. The `Set-Cookie` response headers set both cookies to an empty value with `Max-Age=0` so clients can drop them. Requires a valid session cookie; unauthenticated requests are rejected with 401.
      */
     post: operations['auth_logout'];
     delete?: never;
@@ -75,7 +75,7 @@ export interface paths {
     put?: never;
     /**
      * Confirm two-factor authentication with a code
-     * @description Checks a code from the authenticator app. On success the factor becomes active, ten recovery codes are returned once (stored only as hashes), and the `app_session` cookie is replaced by a session that records the second factor. Wrong codes count toward the lockout.
+     * @description Checks a code from the authenticator app. On success the factor becomes active, ten recovery codes are returned once (stored only as hashes), and the session cookies are replaced by a session that records the second factor. Wrong codes count toward the lockout.
      */
     post: operations['auth_mfa_enrol_confirm'];
     delete?: never;
@@ -135,7 +135,7 @@ export interface paths {
     put?: never;
     /**
      * Prove a second factor again for a sensitive action
-     * @description Takes an authenticator code or a recovery code from a signed-in user, and on success replaces the `app_session` cookie by a session whose second factor is fresh for five minutes. Calls that need it answer `401` with the code `mfa_step_up_required` until then. A code works once; wrong codes count toward the lockout.
+     * @description Takes an authenticator code or a recovery code from a signed-in user, and on success replaces the session cookies by a session whose second factor is fresh for five minutes. Calls that need it answer `401` with the code `mfa_step_up_required` until then. A code works once; wrong codes count toward the lockout.
      */
     post: operations['auth_mfa_step_up'];
     delete?: never;
@@ -155,9 +155,29 @@ export interface paths {
     put?: never;
     /**
      * Complete sign-in with a second factor
-     * @description Takes an authenticator code or a recovery code, together with the `app_mfa_pending` cookie that `POST /auth/login` set. On success it starts the session (the `app_session` cookie records the second factor), clears the challenge and returns the same profile body as login. A code is accepted once; five wrong codes lock the account's second factor for fifteen minutes. The challenge lasts five minutes. Public: no `app_session` cookie is needed.
+     * @description Takes an authenticator code or a recovery code, together with the `app_mfa_pending` cookie that `POST /auth/login` set. On success it starts the session (the session records the second factor), clears the challenge and returns the same profile body as login. A code is accepted once; five wrong codes lock the account's second factor for fifteen minutes. The challenge lasts five minutes. Public: no session cookie is needed.
      */
     post: operations['auth_mfa_verify'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/refresh': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Exchange the refresh token for a new session token pair
+     * @description Reads the `__Secure-app_refresh` cookie (HttpOnly, sent only to this path), uses that refresh token up and sets a new access token (`__Host-app_session`) and a new refresh token. A refresh token works once: presenting a used one again is treated as theft and ends the whole session, except when another request of the same browser rotated it less than ten seconds ago (two tabs), in which case only a new access token is issued. When the refresh token is not accepted (unknown, expired, used again, or its session is over) the session cookies are cleared and the answer is `401`: sign in again. A server failure answers `500` and leaves the cookies as they were. Like login, this needs an allowed `Origin` and `X-Requested-With`, with no session required.
+     */
+    post: operations['auth_refresh'];
     delete?: never;
     options?: never;
     head?: never;
@@ -175,7 +195,7 @@ export interface paths {
     put?: never;
     /**
      * Create a workspace and its first (Owner) user
-     * @description Public, self-serve signup (FR-AUTH-001). Creates a new tenant (workspace) on the `trial` plan, a new user account as that tenant's Owner, and starts a session — the response body is the same `MeResponse` shape returned by `GET /me`, and the `app_session` cookie is set the same way as `POST /auth/login`. The workspace slug is derived automatically from `workspaceName` (and disambiguated on collision); it can be changed later from tenant settings. Returns 409 if the email is already registered.
+     * @description Public, self-serve signup (FR-AUTH-001). Creates a new tenant (workspace) on the `trial` plan, a new user account as that tenant's Owner, and starts a session — the response body is the same `MeResponse` shape returned by `GET /me`, and the session cookies are set the same way as `POST /auth/login`. The workspace slug is derived automatically from `workspaceName` (and disambiguated on collision); it can be changed later from tenant settings. Returns 409 if the email is already registered.
      */
     post: operations['auth_signup'];
     delete?: never;
@@ -275,7 +295,7 @@ export interface paths {
     put?: never;
     /**
      * Accept an invitation
-     * @description Public endpoint that accepts a pending invitation. If the caller is signed in and the principal's email matches the invitation, a membership is created for the existing user. Otherwise an anonymous accept creates a new user account (supplying `displayName` and `password`) and signs them in via a new `app_session` cookie. Returns 404 for unknown tokens, soft-deleted or suspended tenants, and accepted/revoked invitations; returns 410 for expired or already-used tokens.
+     * @description Public endpoint that accepts a pending invitation. If the caller is signed in and the principal's email matches the invitation, a membership is created for the existing user. Otherwise an anonymous accept creates a new user account (supplying `displayName` and `password`) and signs them in with new session cookies (an access token and a refresh token). Returns 404 for unknown tokens, soft-deleted or suspended tenants, and accepted/revoked invitations; returns 410 for expired or already-used tokens.
      */
     post: operations['accept_invitation'];
     delete?: never;
@@ -4050,7 +4070,7 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Login successful. Returns the user profile and sets the `app_session` cookie. */
+      /** @description Login successful. Returns the user profile and sets the session cookies. */
       200: {
         headers: {
           [name: string]: unknown;
@@ -4121,7 +4141,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Session revoked; `app_session` cookie cleared. */
+      /** @description Session revoked; the session cookies are cleared. */
       204: {
         headers: {
           [name: string]: unknown;
@@ -4413,7 +4433,7 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Signed in. Returns the user profile and sets the `app_session` cookie. */
+      /** @description Signed in. Returns the user profile and sets the session cookies. */
       200: {
         headers: {
           [name: string]: unknown;
@@ -4464,6 +4484,64 @@ export interface operations {
       };
     };
   };
+  auth_refresh: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Refreshed. The new cookies are set. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description No valid refresh token: unknown, expired, used again, or the session was revoked. The cookies are cleared. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description A missing or foreign `Origin`, or a missing `X-Requested-With` header. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Too many refreshes from this client. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description The refresh failed on the server. The cookies are left as they were. */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   auth_signup: {
     parameters: {
       query?: never;
@@ -4477,7 +4555,7 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Workspace and account created. Returns the user profile and sets the `app_session` cookie. */
+      /** @description Workspace and account created. Returns the user profile and sets the session cookies. */
       201: {
         headers: {
           [name: string]: unknown;

@@ -2,6 +2,7 @@
 
 pub mod audit;
 pub mod directory;
+pub mod keys;
 
 pub mod mfa;
 pub mod mfa_routes;
@@ -10,6 +11,7 @@ pub mod password;
 pub mod routes;
 
 pub mod session;
+pub mod sessions;
 pub mod step_up;
 pub mod totp;
 
@@ -140,7 +142,7 @@ pub async fn principal_middleware(
         .headers()
         .get(header::COOKIE)
         .and_then(|value| value.to_str().ok())
-        .and_then(extract_app_session_cookie)
+        .and_then(session::access_token_from_cookie_header)
         .map(str::to_owned);
     let dev_user_id = request
         .headers()
@@ -174,7 +176,12 @@ async fn resolve_cookie_principal(
     jwt: Option<&str>,
 ) -> Option<(Principal, SessionClaims)> {
     let jwt = jwt?;
-    let claims = session::validate_token(&cfg.auth_jwt_secret, jwt).ok()?;
+    let claims = session::validate_session_token(
+        keys::keys_for(&cfg.environment),
+        &cfg.auth_jwt_secret,
+        jwt,
+    )
+    .ok()?;
 
     let result = sqlx::query_as::<_, (Uuid, String, String, Option<String>, bool)>(
         r#"
@@ -184,17 +191,26 @@ async fn resolve_cookie_principal(
         FROM users
         WHERE id = $1
           AND deleted_at IS NULL
-          AND NOT EXISTS (
-              SELECT 1 FROM revoked_sessions WHERE jti = $2
-          )
-          -- Strictly after: a session issued in the second of a reset is one the reset meant to end.
-          AND (sessions_valid_after IS NULL
-               OR $3 > FLOOR(EXTRACT(EPOCH FROM sessions_valid_after))::bigint)
+          AND CASE
+                -- An EdDSA access token lives and dies with its session row: revoking the
+                -- session stops it at once, whatever its own expiry says.
+                WHEN $4::uuid IS NOT NULL THEN EXISTS (
+                    SELECT 1 FROM auth_sessions s
+                    WHERE s.id = $4 AND s.user_id = users.id
+                      AND s.revoked_at IS NULL AND s.absolute_expires_at > now())
+                -- An HS256 token of the cutover window: the `jti` denylist, and the moment of the
+                -- last "end every session" (strictly after: a session issued in the second of a
+                -- reset is one the reset meant to end).
+                ELSE NOT EXISTS (SELECT 1 FROM revoked_sessions WHERE jti = $2)
+                     AND (sessions_valid_after IS NULL
+                          OR $3 > FLOOR(EXTRACT(EPOCH FROM sessions_valid_after))::bigint)
+              END
         "#,
     )
     .bind(claims.sub)
     .bind(claims.jti)
     .bind(claims.iat)
+    .bind(claims.sid)
     .fetch_optional(&cfg.pool)
     .await
     .ok()?;
@@ -206,13 +222,6 @@ async fn resolve_cookie_principal(
         return None;
     }
     principal_from_row(id, email, display_name, role_str).map(|principal| (principal, claims))
-}
-
-fn extract_app_session_cookie(cookie_header: &str) -> Option<&str> {
-    cookie_header.split(';').find_map(|part| {
-        let value = part.trim().strip_prefix("app_session=")?;
-        (!value.is_empty()).then_some(value)
-    })
 }
 
 async fn resolve_dev_header_principal(

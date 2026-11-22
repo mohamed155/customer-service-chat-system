@@ -6,6 +6,7 @@ import { catchError, throwError } from 'rxjs';
 import { APP_CONFIG } from '../config/app-config';
 import { MFA_ENROLMENT_REQUIRED } from '../auth/mfa.service';
 import { ApiErrorNotificationService } from '../errors/api-error-notification.service';
+import { isApiError } from '../errors/api-error';
 import { errorMessageKey } from '../errors/error-message';
 import { mapHttpError } from '../errors/http-error.mapper';
 import { LocaleService } from '../i18n/locale.service';
@@ -19,6 +20,7 @@ import {
   isIdentityEndpoint,
   isLoginEndpoint,
   isPlatformEndpoint,
+  isRefreshEndpoint,
 } from './api-request';
 
 export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
@@ -34,7 +36,10 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
 
   return next(request).pipe(
     catchError((error: unknown) => {
-      const apiError = mapHttpError(error, request.headers.get(REQUEST_ID_HEADER));
+      // A nested refresh request has already been mapped with its own request reference.
+      const apiError = isApiError(error)
+        ? error
+        : mapHttpError(error, request.headers.get(REQUEST_ID_HEADER));
       if (isSessionExpired(apiError, path)) {
         currentUser.clear();
         errorNotifications.show(
@@ -74,7 +79,9 @@ const isSessionExpired = (error: { status: number; code: string }, path: string 
   error.code === 'unauthenticated' &&
   path !== null &&
   !isIdentityEndpoint(path) &&
-  !isLoginEndpoint(path);
+  !isLoginEndpoint(path) &&
+  // A refresh that fails is reported by the call that needed it, once, not twice.
+  !isRefreshEndpoint(path);
 
 const currentPath = (): string => {
   if (typeof window === 'undefined') return '/';

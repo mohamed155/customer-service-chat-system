@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { Store } from '@ngrx/store';
-import { Observable, Subject } from 'rxjs';
+import { firstValueFrom, Observable, Subject } from 'rxjs';
+import { SessionRefreshService } from '../auth/session-refresh.service';
 import { APP_CONFIG } from '../config/app-config';
 import { selectActiveTenant } from '../state/tenant-context.feature';
 import { TenantScope } from '../state/tenant-scope';
@@ -41,6 +42,7 @@ export function reconnectDelay(attempt: number, random: () => number = Math.rand
 export class RealtimeService {
   private readonly store = inject(Store);
   private readonly config = inject(APP_CONFIG);
+  private readonly sessionRefresh = inject(SessionRefreshService);
   private readonly events$ = new Subject<SseEvent>();
   private abortController?: AbortController;
   private retryTimer?: ReturnType<typeof setTimeout>;
@@ -70,8 +72,11 @@ export class RealtimeService {
     this.open();
   }
 
-  /** Open a stream. Unlike `connect()` it keeps the reconnect count. */
-  private open(): void {
+  /**
+   * Open a stream. Unlike `connect()` it keeps the reconnect count. `refreshed` says the access
+   * token was just renewed for this attempt, so a second `401` is not answered with another refresh.
+   */
+  private open(refreshed = false): void {
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
     const tenantId = this.store.selectSignal(selectActiveTenant)()?.id;
@@ -88,6 +93,15 @@ export class RealtimeService {
           signal,
         });
 
+        // The access token lasts ten minutes and `fetch` does not go through the HTTP interceptors,
+        // so a stream that is opened after it ran out renews it here, once, and opens again.
+        if (response.status === 401 && !refreshed) {
+          const renewed = await firstValueFrom(this.sessionRefresh.refresh());
+          if (renewed && !signal.aborted) {
+            this.open(true);
+            return;
+          }
+        }
         if (!response.ok || !response.body) {
           throw new Error(`SSE connection failed: ${response.status}`);
         }

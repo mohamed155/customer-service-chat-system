@@ -510,6 +510,15 @@ pub async fn reset(
         .bind(target_user_id)
         .execute(&mut *tx)
         .await?;
+    // `sessions_valid_after` ends the HS256 sessions of the cutover window; the others have rows.
+    sqlx::query(
+        "UPDATE auth_sessions SET revoked_at = now(), revoke_reason = $2 \
+         WHERE user_id = $1 AND revoked_at IS NULL",
+    )
+    .bind(target_user_id)
+    .bind(crate::sessions::reason::MFA_RESET)
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
 
     // The row names the user whose factor was reset (the resource) and who did it (the actor).

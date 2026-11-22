@@ -283,6 +283,32 @@ pub async fn list_members_rows_in_tx(
     ),
     security(("session_cookie" = []))
 )]
+/// Whether `user_id` can still sign in to something other than `tenant_id`: a live membership in
+/// another workspace (whatever its status: the check errs towards keeping a session) or a platform
+/// role.
+async fn has_access_elsewhere(
+    conn: &mut sqlx::PgConnection,
+    user_id: Uuid,
+    tenant_id: Uuid,
+) -> sqlx::Result<bool> {
+    // The memberships of a user span tenants, so they come from the audited function
+    // `xtenant.user_memberships`.
+    let others: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM xtenant.user_memberships($1) WHERE tenant_id <> $2",
+    )
+    .bind(user_id)
+    .bind(tenant_id)
+    .fetch_one(&mut *conn)
+    .await?;
+    if others > 0 {
+        return Ok(true);
+    }
+    let role = identity::directory::principal_row(&mut *conn, user_id)
+        .await?
+        .and_then(|(_, _, _, role)| role);
+    Ok(role.is_some())
+}
+
 pub async fn list_members(
     State(pool): State<sqlx::PgPool>,
     ctx: TenantContext,
@@ -680,6 +706,34 @@ pub async fn update_member(
         if let Err(e) = audit_result {
             tracing::error!(error = %e, "failed to record audit");
             return ApiError::internal_error("Failed to record audit").into_response();
+        }
+    }
+
+    // A member who was disabled in their only workspace has nothing left to sign in to: their
+    // sessions end in the same transaction as the change (ADR-005 §3), so a failure here leaves the
+    // member active and the admin can try again, rather than a disabled member with a live session.
+    // A person who still belongs to another workspace, or has a platform role, keeps their sessions:
+    // they cannot reach this workspace any more (the tenant check requires an active membership on
+    // every request), and signing them out everywhere would let one workspace's admin end a session
+    // in another.
+    if payload.status.as_deref() == Some("disabled") {
+        let ended = async {
+            if has_access_elsewhere(tx.conn(), target_user_id, ctx.tenant_id).await? {
+                return Ok::<(), sqlx::Error>(());
+            }
+            identity::sessions::revoke_user_sessions_in(
+                tx.conn(),
+                target_user_id,
+                identity::sessions::reason::MEMBER_REMOVED,
+                None,
+            )
+            .await
+            .map(|_| ())
+        }
+        .await;
+        if let Err(e) = ended {
+            tracing::error!(error = %e, "failed to end the sessions of a disabled member");
+            return ApiError::internal_error("Failed to update status").into_response();
         }
     }
 

@@ -178,7 +178,7 @@ test('T150 browser workflow enforces tenant team lifecycle end to end', async ({
   await expect(inviteePage).toHaveURL(/\/tenant\/overview$/);
   await expect(inviteePage.getByRole('link', { name: 'Team' })).toHaveCount(0);
   const sessionCookie = (await inviteePage.context().cookies()).find(
-    (cookie) => cookie.name === 'app_session',
+    (cookie) => cookie.name === '__Host-app_session',
   );
   expect(sessionCookie).toMatchObject({ httpOnly: true, sameSite: 'Lax' });
   expect(

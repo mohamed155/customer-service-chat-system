@@ -9,7 +9,7 @@ use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::response::Response;
 use http_body_util::BodyExt;
-use identity::{session, totp};
+use identity::{keys, session, sessions, totp};
 use serde_json::{json, Value};
 use server::router;
 use server::state::AppState;
@@ -333,7 +333,7 @@ async fn seed_member(tenant: Uuid, role: &str) -> (Uuid, Uuid, String) {
 /// A session for `user` with the given second-factor state, as the cookie header value.
 fn cookie_for(user: Uuid, auth: session::SessionAuth) -> String {
     let (jwt, _, _) = session::issue_session(JWT_SECRET, 3600, user, auth).unwrap();
-    format!("app_session={jwt}")
+    format!("__Host-app_session={jwt}")
 }
 
 fn password_only(user: Uuid) -> String {
@@ -484,8 +484,8 @@ async fn a_session_without_a_second_factor_is_held_at_the_door_when_mfa_is_requi
 
     // The session that confirmed carries the factor and is let in.
     let new_cookie = format!(
-        "app_session={}",
-        cookie_value(&confirm, "app_session").unwrap()
+        "__Host-app_session={}",
+        cookie_value(&confirm, "__Host-app_session").unwrap()
     );
     let ok = send(
         &app,
@@ -639,10 +639,16 @@ async fn sensitive_actions_need_a_fresh_code_and_a_step_up_unlocks_them() {
     )
     .await;
     assert_eq!(up.status(), StatusCode::NO_CONTENT);
-    let fresh_cookie = format!("app_session={}", cookie_value(&up, "app_session").unwrap());
-    let claims =
-        session::validate_token(JWT_SECRET, fresh_cookie.trim_start_matches("app_session="))
-            .unwrap();
+    let fresh_cookie = format!(
+        "__Host-app_session={}",
+        cookie_value(&up, "__Host-app_session").unwrap()
+    );
+    let claims = session::validate_session_token(
+        identity::keys::keys_for(&config::Environment::Test),
+        JWT_SECRET,
+        fresh_cookie.trim_start_matches("__Host-app_session="),
+    )
+    .unwrap();
     assert!(claims.second_factor_fresh(chrono::Utc::now().timestamp(), 300));
     assert_eq!(
         send(&app, put_secret(&fresh_cookie)).await.status(),
@@ -763,23 +769,43 @@ async fn recovery_codes_can_be_replaced_after_a_step_up() {
 
 #[tokio::test]
 async fn a_tenant_owner_resets_a_members_factor_and_ends_their_sessions() {
-    let (_pool, app, _lock) = setup!();
+    let (pool, app, _lock) = setup!();
     let tenant = seed_tenant().await;
     let (owner, _, _) = seed_member(tenant, "owner").await;
     let (member, member_membership, member_email) = seed_member(tenant, "agent").await;
     enrol(&app, owner).await;
     enrol(&app, member).await;
-    let member_session = fresh(member);
-    assert_eq!(
-        send(
-            &app,
-            with_cookie(
-                Request::get("/api/v1/me").body(Body::empty()).unwrap(),
-                &member_session
-            )
+    let issued = sessions::start(
+        &pool,
+        keys::keys_for(&config::Environment::Test),
+        member,
+        session::SessionAuth::second_factor(session::AMR_OTP),
+        &sessions::ClientMeta::default(),
+    )
+    .await
+    .unwrap();
+    let access_cookie = format!("{}={}", session::SESSION_COOKIE_NAME, issued.access_token);
+    let refresh_cookie = format!("{}={}", session::REFRESH_COOKIE_NAME, issued.refresh_token);
+    let (legacy_jwt, _, _) = session::issue_session(
+        JWT_SECRET,
+        3600,
+        member,
+        session::SessionAuth::second_factor(session::AMR_OTP),
+    )
+    .unwrap();
+    let legacy_cookie = format!("{}={legacy_jwt}", session::LEGACY_SESSION_COOKIE_NAME);
+    let me = |cookie: &str| {
+        with_cookie(
+            Request::get("/api/v1/me").body(Body::empty()).unwrap(),
+            cookie,
         )
-        .await
-        .status(),
+    };
+    assert_eq!(
+        send(&app, me(&access_cookie)).await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        send(&app, me(&legacy_cookie)).await.status(),
         StatusCode::OK
     );
 
@@ -807,17 +833,31 @@ async fn a_tenant_owner_resets_a_members_factor_and_ends_their_sessions() {
             .unwrap();
     assert_eq!((factors, codes), (0, 0));
     assert_eq!(
-        send(
-            &app,
-            with_cookie(
-                Request::get("/api/v1/me").body(Body::empty()).unwrap(),
-                &member_session
-            )
-        )
-        .await
-        .status(),
+        send(&app, me(&access_cookie)).await.status(),
         StatusCode::UNAUTHORIZED,
-        "an existing session is ended"
+        "the persisted session's access token is rejected"
+    );
+    let refresh = with_cookie(
+        json_request(Method::POST, "/api/v1/auth/refresh", json!(null)),
+        &refresh_cookie,
+    );
+    assert_eq!(
+        send(&app, refresh).await.status(),
+        StatusCode::UNAUTHORIZED,
+        "the persisted session's refresh token is rejected"
+    );
+    let revoke_reason: Option<String> = sqlx::query_scalar(
+        "SELECT revoke_reason FROM auth_sessions WHERE id = $1 AND revoked_at IS NOT NULL",
+    )
+    .bind(issued.sid)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(revoke_reason.as_deref(), Some(sessions::reason::MFA_RESET));
+    assert_eq!(
+        send(&app, me(&legacy_cookie)).await.status(),
+        StatusCode::UNAUTHORIZED,
+        "the cutover also rejects a rowless HS256 session"
     );
     let row: (Uuid, String, Value) = sqlx::query_as(
         "SELECT actor_user_id, resource_id, details FROM audit_logs WHERE action = 'auth.mfa_reset'",
@@ -843,8 +883,8 @@ async fn a_tenant_owner_resets_a_members_factor_and_ends_their_sessions() {
     .await;
     assert_eq!(login.status(), StatusCode::OK);
     let relogin = format!(
-        "app_session={}",
-        cookie_value(&login, "app_session").unwrap()
+        "__Host-app_session={}",
+        cookie_value(&login, "__Host-app_session").unwrap()
     );
     let blocked = send(&app, tenant_get("/api/v1/tenant/members", tenant, &relogin)).await;
     assert_eq!(error_code(blocked).await, "mfa_enrolment_required");

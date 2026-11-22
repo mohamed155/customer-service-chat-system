@@ -34,6 +34,27 @@ export function isLoginEndpoint(relativePath: string | null): boolean {
   return relativePath === '/auth/login';
 }
 
+/** The refresh call: `POST /auth/refresh` exchanges the refresh cookie for a new access token. */
+export function isRefreshEndpoint(relativePath: string | null): boolean {
+  return relativePath === '/auth/refresh';
+}
+
+/**
+ * Calls that start a session, or the refresh itself. A `401` from one of them is an answer about
+ * that call (a wrong password, a lapsed second-step challenge, a refresh token that is no longer
+ * good), not an expired access token, so none of them is refreshed and retried. Logout is not in
+ * the list: the access cookie lives ten minutes, so a person who signs out after that gets a `401`
+ * and has to be refreshed first, or the session would stay alive on the server.
+ */
+export function isSessionEndpoint(relativePath: string | null): boolean {
+  return (
+    relativePath === '/auth/login' ||
+    relativePath === '/auth/signup' ||
+    relativePath === '/auth/mfa/verify' ||
+    isRefreshEndpoint(relativePath)
+  );
+}
+
 export function targetsApiBaseUrl(requestUrl: string, apiBaseUrl: string): boolean {
   const apiBase = normalizeBase(apiBaseUrl);
   const apiPath = pathnameFromUrl(apiBase);

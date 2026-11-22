@@ -253,15 +253,16 @@ async fn authentication_middleware(request: Request, next: middleware::Next) -> 
     operation_id = "auth_login",
     summary = "Authenticate and start a session",
     description = "Accepts an email + password pair, verifies them against the `users` table, \
-                  and on success issues a signed JWT session. The JWT is returned to the client via \
-                  a `Set-Cookie: app_session=...; HttpOnly; SameSite=Lax; Path=/` response header. \
+                  and on success starts a session: a short-lived access token in the \
+                  `__Host-app_session` cookie and a rotating refresh token in the \
+                  `__Secure-app_refresh` cookie (`POST /auth/refresh` exchanges it). \
                   The response body is the same profile shape returned by `GET /me` (see \
                   `tenancy::routes::MeResponse`); the typed body schema is filled in by the \
-                  tenancy-module annotation pass. This endpoint is public — no `app_session` cookie \
+                  tenancy-module annotation pass. This endpoint is public — no session cookie \
                   is required.",
     request_body = identity::routes::LoginRequest,
     responses(
-        (status = 200, description = "Login successful. Returns the user profile and sets the `app_session` cookie.", body = serde_json::Value),
+        (status = 200, description = "Login successful. Returns the user profile and sets the session cookies.", body = serde_json::Value),
         (status = 202, description = "The password was right and the user has two-factor authentication: no session yet. Sets a short-lived `app_mfa_pending` cookie; complete the sign-in with `POST /auth/mfa/verify`.", body = identity::mfa_routes::MfaRequiredResponse),
         (status = 400, description = "Validation failed (missing email or password).", body = kernel::ErrorEnvelope),
         (status = 401, description = "Invalid email or password.", body = kernel::ErrorEnvelope),
@@ -273,9 +274,12 @@ async fn authentication_middleware(request: Request, next: middleware::Next) -> 
 async fn login(
     axum::extract::State(pool): axum::extract::State<sqlx::PgPool>,
     Extension(config): Extension<Arc<AppConfig>>,
+    headers: axum::http::HeaderMap,
     kernel::ApiJson(payload): kernel::ApiJson<identity::routes::LoginRequest>,
 ) -> Response {
-    let success = match identity::routes::authenticate_login(&pool, &config, payload).await {
+    let success = match identity::routes::authenticate_login(&pool, &config, &headers, payload)
+        .await
+    {
         Ok(identity::routes::LoginOutcome::Session(success)) => success,
         Ok(identity::routes::LoginOutcome::MfaRequired {
             pending_cookie,
@@ -321,7 +325,9 @@ async fn login(
     };
     identity::audit::login_succeeded(&pool, user_id).await;
 
-    ([(SET_COOKIE, success.session_cookie)], axum::Json(response)).into_response()
+    let mut reply = axum::Json(response).into_response();
+    identity::mfa_routes::append_cookies(&mut reply, success.session_cookies);
+    reply
 }
 
 /// The second sign-in step.
@@ -333,13 +339,13 @@ async fn login(
     summary = "Complete sign-in with a second factor",
     description = "Takes an authenticator code or a recovery code, together with the \
                   `app_mfa_pending` cookie that `POST /auth/login` set. On success it starts the \
-                  session (the `app_session` cookie records the second factor), clears the \
+                  session (the session records the second factor), clears the \
                   challenge and returns the same profile body as login. A code is accepted once; \
                   five wrong codes lock the account's second factor for fifteen minutes. The \
-                  challenge lasts five minutes. Public: no `app_session` cookie is needed.",
+                  challenge lasts five minutes. Public: no session cookie is needed.",
     request_body = identity::mfa_routes::VerifyRequest,
     responses(
-        (status = 200, description = "Signed in. Returns the user profile and sets the `app_session` cookie.", body = serde_json::Value),
+        (status = 200, description = "Signed in. Returns the user profile and sets the session cookies.", body = serde_json::Value),
         (status = 400, description = "Neither or both of `code` and `recoveryCode`.", body = kernel::ErrorEnvelope),
         (status = 401, description = "No valid challenge (missing, expired or already used): sign in again.", body = kernel::ErrorEnvelope),
         (status = 422, description = "The code is not valid.", body = kernel::ErrorEnvelope),
@@ -410,17 +416,17 @@ async fn mfa_verify(
         Ok(None) => return again(),
         Err(e) => return ApiError::internal_error_from("Sign-in failed", e).into_response(),
     };
-    let (jwt, _, _) = match identity::session::issue_session(
-        &config.auth_jwt_secret,
-        config.auth_session_ttl_seconds,
+    let cookies = match identity::sessions::start_for_response(
+        &pool,
+        &config.environment,
         principal.user_id,
         identity::session::SessionAuth::second_factor(method.amr()),
-    ) {
-        Ok(issued) => issued,
-        Err(e) => {
-            return ApiError::internal_error_from("Session token issuance failed", e)
-                .into_response()
-        }
+        &headers,
+    )
+    .await
+    {
+        Ok(cookies) => cookies,
+        Err(error) => return error.into_response(),
     };
     identity::mfa_routes::revoke(&pool, principal.user_id, challenge.jti, challenge.exp).await;
     let user_id = principal.user_id;
@@ -437,16 +443,81 @@ async fn mfa_verify(
     identity::audit::login_succeeded(&pool, user_id).await;
 
     let mut reply = axum::Json(response).into_response();
-    let cookies = reply.headers_mut();
-    if let Ok(value) =
-        identity::session::build_session_cookie(&jwt, config.auth_session_ttl_seconds).parse()
-    {
-        cookies.append(SET_COOKIE, value);
-    }
+    identity::mfa_routes::append_cookies(&mut reply, cookies);
     if let Ok(value) = identity::session::clear_pending_cookie().parse() {
-        cookies.append(SET_COOKIE, value);
+        reply.headers_mut().append(SET_COOKIE, value);
     }
     reply
+}
+
+/// Exchange the refresh token for a new access token and refresh token.
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    tag = "auth",
+    operation_id = "auth_refresh",
+    summary = "Exchange the refresh token for a new session token pair",
+    description = "Reads the `__Secure-app_refresh` cookie (HttpOnly, sent only to this path), \
+                  uses that refresh token up and sets a new access token (`__Host-app_session`) \
+                  and a new refresh token. A refresh token works once: presenting a used one again \
+                  is treated as theft and ends the whole session, except when another request of \
+                  the same browser rotated it less than ten seconds ago (two tabs), in which case \
+                  only a new access token is issued. When the refresh token is not accepted \
+                  (unknown, expired, used again, or its session is over) the session cookies are \
+                  cleared and the answer is `401`: sign in again. A server failure answers `500` \
+                  and leaves the cookies as they were. Like login, this needs an \
+                  allowed `Origin` and `X-Requested-With`, with no session required.",
+    responses(
+        (status = 204, description = "Refreshed. The new cookies are set."),
+        (status = 401, description = "No valid refresh token: unknown, expired, used again, or the session was revoked. The cookies are cleared.", body = kernel::ErrorEnvelope),
+        (status = 403, description = "A missing or foreign `Origin`, or a missing `X-Requested-With` header.", body = kernel::ErrorEnvelope),
+        (status = 429, description = "Too many refreshes from this client.", body = kernel::ErrorEnvelope),
+        (status = 500, description = "The refresh failed on the server. The cookies are left as they were.", body = kernel::ErrorEnvelope),
+    ),
+    security(()),
+)]
+async fn refresh(
+    axum::extract::State(pool): axum::extract::State<sqlx::PgPool>,
+    Extension(config): Extension<Arc<AppConfig>>,
+    headers: axum::http::HeaderMap,
+) -> Response {
+    let again = || {
+        let mut response = ApiError::unauthenticated("Sign in again").into_response();
+        identity::mfa_routes::append_cookies(&mut response, identity::sessions::clear_cookies());
+        response
+    };
+    let Some(token) = headers
+        .get(header::COOKIE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(identity::session::refresh_token_from_cookie_header)
+    else {
+        return again();
+    };
+    let keys = identity::keys::keys_for(&config.environment);
+    match identity::sessions::refresh(&pool, keys, token).await {
+        Ok(identity::sessions::Refresh::Rotated(issued)) => {
+            let mut response = StatusCode::NO_CONTENT.into_response();
+            identity::mfa_routes::append_cookies(&mut response, issued.set_cookies());
+            response
+        }
+        Ok(identity::sessions::Refresh::Concurrent {
+            access_token,
+            access_ttl,
+        }) => {
+            // Only the access token: the request that won already set the new refresh cookie.
+            let mut response = StatusCode::NO_CONTENT.into_response();
+            identity::mfa_routes::append_cookies(
+                &mut response,
+                vec![
+                    identity::session::build_session_cookie(&access_token, access_ttl),
+                    identity::session::clear_legacy_session_cookie(),
+                ],
+            );
+            response
+        }
+        Ok(identity::sessions::Refresh::Rejected | identity::sessions::Refresh::Reuse) => again(),
+        Err(error) => ApiError::internal_error_from("Refresh failed", error).into_response(),
+    }
 }
 
 /// Combine two `MethodRouter`s, each with its own per-method permission
@@ -483,6 +554,11 @@ fn public_routes() -> OpenApiRouter<sqlx::PgPool> {
         .routes(
             routes!(mfa_verify)
                 .layer(middleware::from_fn(crate::rate_limit::mfa_rate_limit))
+                .layer(middleware::from_fn(csrf_session_start_middleware)),
+        )
+        .routes(
+            routes!(refresh)
+                .layer(middleware::from_fn(crate::rate_limit::refresh_rate_limit))
                 .layer(middleware::from_fn(csrf_session_start_middleware)),
         )
         .routes(routes!(identity::routes::logout))

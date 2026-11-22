@@ -7,7 +7,7 @@
 
 use axum::{
     extract::State,
-    http::{header::SET_COOKIE, StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Json, Response},
     Extension,
 };
@@ -189,13 +189,13 @@ fn random_suffix() -> String {
     description = "Public, self-serve signup (FR-AUTH-001). Creates a new tenant (workspace) on the \
                   `trial` plan, a new user account as that tenant's Owner, and starts a session — \
                   the response body is the same `MeResponse` shape returned by `GET /me`, and the \
-                  `app_session` cookie is set the same way as `POST /auth/login`. The workspace slug \
+                  session cookies are set the same way as `POST /auth/login`. The workspace slug \
                   is derived automatically from `workspaceName` (and disambiguated on collision); it \
                   can be changed later from tenant settings. Returns 409 if the email is already \
                   registered.",
     request_body = SignupRequest,
     responses(
-        (status = 201, description = "Workspace and account created. Returns the user profile and sets the `app_session` cookie.", body = serde_json::Value),
+        (status = 201, description = "Workspace and account created. Returns the user profile and sets the session cookies.", body = serde_json::Value),
         (status = 400, description = "Validation failed (request body is not valid JSON).", body = kernel::ErrorEnvelope),
         (status = 409, description = "An account with this email already exists.", body = kernel::ErrorEnvelope),
         (status = 422, description = "Validation failed (per-field).", body = kernel::ErrorEnvelope),
@@ -206,6 +206,7 @@ fn random_suffix() -> String {
 pub async fn signup(
     State(pool): State<sqlx::PgPool>,
     Extension(config): Extension<Arc<AppConfig>>,
+    headers: axum::http::HeaderMap,
     kernel::ApiJson(payload): kernel::ApiJson<SignupRequest>,
 ) -> Response {
     let input = match validate_signup(payload) {
@@ -353,18 +354,18 @@ pub async fn signup(
         return ApiError::internal_error_from("Transaction commit failed", &e).into_response();
     }
 
-    let (jwt, _, _) = match session::issue_token(
-        &config.auth_jwt_secret,
-        config.auth_session_ttl_seconds,
+    let session_cookies = match identity::sessions::start_for_response(
+        &pool,
+        &config.environment,
         new_user_id,
-    ) {
-        Ok(t) => t,
-        Err(e) => {
-            return ApiError::internal_error_from("Session token issuance failed", &e)
-                .into_response();
-        }
+        session::SessionAuth::password(),
+        &headers,
+    )
+    .await
+    {
+        Ok(cookies) => cookies,
+        Err(error) => return error.into_response(),
     };
-    let session_cookie = session::build_session_cookie(&jwt, config.auth_session_ttl_seconds);
 
     let principal = Principal {
         user_id: new_user_id,
@@ -381,12 +382,11 @@ pub async fn signup(
     )
     .await
     {
-        Ok(response) => (
-            StatusCode::CREATED,
-            [(SET_COOKIE, session_cookie)],
-            Json(response),
-        )
-            .into_response(),
+        Ok(response) => {
+            let mut reply = (StatusCode::CREATED, Json(response)).into_response();
+            identity::mfa_routes::append_cookies(&mut reply, session_cookies);
+            reply
+        }
         Err(error) => error.into_response(),
     }
 }

@@ -390,8 +390,13 @@ async fn enrolment_shows_the_secret_once_and_confirming_activates_the_factor() {
     )
     .await;
     assert_eq!(confirm.status(), StatusCode::OK);
-    let jwt = cookie_value(&confirm, "app_session").expect("a replacement session");
-    let claims = session::validate_token(JWT_SECRET, &jwt).unwrap();
+    let jwt = cookie_value(&confirm, "__Host-app_session").expect("a replacement session");
+    let claims = session::validate_session_token(
+        identity::keys::keys_for(&config::Environment::Test),
+        JWT_SECRET,
+        &jwt,
+    )
+    .unwrap();
     assert_eq!(claims.sub, user);
     assert_eq!(claims.amr, vec!["pwd", "otp"]);
     assert!(claims.second_factor_fresh(chrono::Utc::now().timestamp(), 300));
@@ -526,7 +531,7 @@ async fn a_session_that_skipped_the_second_factor_stops_working_once_the_user_en
     let me = |jwt: &str| {
         with_cookie(
             Request::get("/api/v1/me").body(Body::empty()).unwrap(),
-            &format!("app_session={jwt}"),
+            &format!("__Host-app_session={jwt}"),
         )
     };
     assert_eq!(
@@ -544,7 +549,7 @@ async fn a_session_that_skipped_the_second_factor_stops_working_once_the_user_en
                 "/api/v1/auth/mfa/enrol",
                 json!({ "password": PASSWORD }),
             ),
-            &format!("app_session={old}"),
+            &format!("__Host-app_session={old}"),
         ),
     )
     .await;
@@ -558,12 +563,12 @@ async fn a_session_that_skipped_the_second_factor_stops_working_once_the_user_en
                 "/api/v1/auth/mfa/enrol/confirm",
                 json!({ "code": code }),
             ),
-            &format!("app_session={old}"),
+            &format!("__Host-app_session={old}"),
         ),
     )
     .await;
     assert_eq!(confirm.status(), StatusCode::OK);
-    let fresh = cookie_value(&confirm, "app_session").unwrap();
+    let fresh = cookie_value(&confirm, "__Host-app_session").unwrap();
 
     // The session that confirmed is replaced by one that records the factor; the old one is gone,
     // and so would be any other password-only session of this user.
@@ -609,7 +614,7 @@ async fn sign_in_is_two_steps_and_the_session_records_the_second_factor() {
     .await;
     assert_eq!(login.status(), StatusCode::ACCEPTED);
     assert!(
-        cookie_value(&login, "app_session").is_none(),
+        cookie_value(&login, "__Host-app_session").is_none(),
         "no session yet"
     );
     let pending = cookie_value(&login, "app_mfa_pending").expect("a challenge");
@@ -641,8 +646,13 @@ async fn sign_in_is_two_steps_and_the_session_records_the_second_factor() {
     let code = totp::code_at(&secret, now() + 30, 6);
     let verify = send(&app, verify_request(&pending, json!({ "code": code }))).await;
     assert_eq!(verify.status(), StatusCode::OK);
-    let jwt = cookie_value(&verify, "app_session").expect("a session");
-    let claims = session::validate_token(JWT_SECRET, &jwt).unwrap();
+    let jwt = cookie_value(&verify, "__Host-app_session").expect("a session");
+    let claims = session::validate_session_token(
+        identity::keys::keys_for(&config::Environment::Test),
+        JWT_SECRET,
+        &jwt,
+    )
+    .unwrap();
     assert_eq!(
         (claims.sub, claims.amr.clone()),
         (user, vec!["pwd".to_owned(), "otp".to_owned()])
@@ -657,7 +667,7 @@ async fn sign_in_is_two_steps_and_the_session_records_the_second_factor() {
         &app,
         with_cookie(
             Request::get("/api/v1/me").body(Body::empty()).unwrap(),
-            &format!("app_session={jwt}"),
+            &format!("__Host-app_session={jwt}"),
         ),
     )
     .await;
@@ -880,8 +890,12 @@ async fn a_recovery_code_signs_in_once() {
     )
     .await;
     assert_eq!(first.status(), StatusCode::OK);
-    let claims =
-        session::validate_token(JWT_SECRET, &cookie_value(&first, "app_session").unwrap()).unwrap();
+    let claims = session::validate_session_token(
+        identity::keys::keys_for(&config::Environment::Test),
+        JWT_SECRET,
+        &cookie_value(&first, "__Host-app_session").unwrap(),
+    )
+    .unwrap();
     assert_eq!(claims.amr, vec!["pwd", "rcv"]);
 
     // Used: refused. Lower case and spaces in what the person typed are fine for an unused one.
@@ -1028,7 +1042,7 @@ async fn a_challenge_is_not_a_session_and_a_session_is_not_a_challenge() {
         &app,
         with_cookie(
             Request::get("/api/v1/me").body(Body::empty()).unwrap(),
-            &format!("app_session={token}"),
+            &format!("__Host-app_session={token}"),
         ),
     )
     .await;
@@ -1058,9 +1072,15 @@ async fn a_user_without_a_factor_still_signs_in_with_a_password() {
     )
     .await;
     assert_eq!(login.status(), StatusCode::OK);
-    let jwt = cookie_value(&login, "app_session").unwrap();
+    let jwt = cookie_value(&login, "__Host-app_session").unwrap();
     assert_eq!(
-        session::validate_token(JWT_SECRET, &jwt).unwrap().amr,
+        session::validate_session_token(
+            identity::keys::keys_for(&config::Environment::Test),
+            JWT_SECRET,
+            &jwt
+        )
+        .unwrap()
+        .amr,
         vec!["pwd"]
     );
     // An unconfirmed enrolment does not change that.

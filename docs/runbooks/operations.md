@@ -691,3 +691,54 @@ capacity review.
   question while processed rows are deleted (ADR-007 Q3).
 - **A restore drill (section 3) takes longer than the 1 h RTO**: this is a trigger for all five
   tables, whatever their size. Open ADR-018 decision 4 for the largest one first.
+
+---
+
+## 12. Rotate the Session Signing Keys
+
+Access tokens are signed with an Ed25519 key (`AUTH_SIGNING_KEYS`, ADR-005 §2). Rotate every 90
+days, and at once if a private key may have leaked. A rotation signs nobody out when the new key
+reaches every process **before** it starts signing, and the old key stays as a verifier for one
+access-token lifetime (10 minutes by default).
+
+### Steps
+
+1. Make the new key: `cargo run -q -p server -- keygen <kid>` (use the date as the `kid`). Put the
+   output in the secret store. A private key is never committed and never goes in a ticket or a
+   chat.
+2. **Add it as a verifier.** Deploy with the new key listed *after* the current one:
+   `[current, new]`. The first entry with a `private_key` signs, so nothing changes yet, but every
+   API process now accepts tokens of either key.
+3. **Make it sign.** Once the release from step 2 has reached every process, deploy `[new, old]`.
+   New tokens carry the new `kid`; tokens of the old key still verify.
+4. **Drop the old key** after at least one access-token lifetime (`AUTH_ACCESS_TTL_SECONDS`, 10
+   minutes by default; wait 15 to be safe): deploy `[new]`. A browser that still holds an old token
+   gets a `401`, refreshes with its refresh cookie, and carries on.
+5. **Compromise:** skip the waiting and deploy `[new]` at step 3. Everyone is refused once, then
+   signs in again by refreshing. If the refresh tokens may be exposed as well, end every session
+   (run as the schema owner), which makes everybody sign in with a password:
+
+   ```sql
+   UPDATE auth_sessions SET revoked_at = now(), revoke_reason = 'key_compromise'
+    WHERE revoked_at IS NULL;
+   ```
+
+A verify-only process (one that never signs) can list `{"kid": "...", "public_key": "..."}` entries
+instead; the base64url public key of a key is the `x` of `KeySet::jwks`.
+
+### Expected outcome
+
+- New tokens have the new `kid` in their header. Sign-ins and refreshes keep working through each
+  deploy, and `auth.refresh_reuse_detected` audit rows do not rise.
+
+### When it fails
+
+- **Startup stops with `AUTH_SIGNING_KEYS is required` or `... is not a valid key list`**: the
+  variable is missing or malformed (a `kid` twice, a key that is not base64, a public key that is
+  not 32 bytes). The old release keeps serving (`ops/deploy.sh` aborts on a readiness timeout).
+- **Many `401` after a deploy**: a process verifies with a key list that lacks the signing key of
+  another. Roll the list back to the previous release's, then redo steps 2 and 3 in order.
+- **Turning off the HS256 window**: set `AUTH_ACCEPT_HS256=false` once `AUTH_SESSION_TTL_SECONDS`
+  (8 hours by default) has passed since the release that introduced EdDSA tokens: an HS256 token
+  issued just before it lives that long. Sessions still holding an HS256 token sign
+  in again once (the refresh cookie does not exist for them).

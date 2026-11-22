@@ -393,10 +393,12 @@ pub mod isolation {
     /// protected), and a table with neither is reported until it is classified one way or the other.
     pub const GLOBAL_TABLES: &[&str] = &[
         "_sqlx_migrations",
+        "auth_sessions",
         "billing_plans",
         "integration_catalog",
         "mfa_factors",
         "mfa_recovery_codes",
+        "refresh_tokens",
         "revoked_sessions",
         "secret_keks",
         "tenants",

@@ -42,7 +42,7 @@ export class MfaService {
   }
 
   /**
-   * The second sign-in step. The session is the `app_session` cookie the answer sets; the answer's
+   * The second sign-in step. The session is the cookies the answer sets; the answer's
    * body is not typed in the contract and nothing needs it (`AuthService` loads the user next).
    */
   async verify(credential: MfaCredential): Promise<void> {
