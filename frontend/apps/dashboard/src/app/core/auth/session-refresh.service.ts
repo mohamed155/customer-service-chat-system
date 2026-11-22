@@ -1,6 +1,6 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { catchError, defer, finalize, map, Observable, of, shareReplay } from 'rxjs';
+import { catchError, defer, finalize, map, Observable, of, shareReplay, throwError } from 'rxjs';
 import { APP_CONFIG } from '../config/app-config';
 
 /**
@@ -17,14 +17,23 @@ export class SessionRefreshService {
   private readonly config = inject(APP_CONFIG);
   private inFlight: Observable<boolean> | null = null;
 
-  /** `true` when the session was refreshed and the new cookies are set; `false` when it was not. */
+  /**
+   * `true` when the session was refreshed and the new cookies are set; `false` when the refresh
+   * token was refused (`401`: unknown, expired, used again, or the session is over), which is the
+   * one answer that means "sign in again". Any other failure (a `429`, a `503`, a timeout, a
+   * dropped connection) is thrown as it is: the refresh token may still be good, so it must not be
+   * taken for an expired session.
+   */
   refresh(): Observable<boolean> {
     this.inFlight ??= defer(() =>
       this.http.post<void>(`${this.config.apiBaseUrl.replace(/\/$/, '')}/auth/refresh`, null),
     ).pipe(
       map(() => true),
-      // Any failure means the same thing to the caller: the session is over, sign in again.
-      catchError(() => of(false)),
+      catchError((error: unknown) =>
+        error instanceof HttpErrorResponse && error.status === 401
+          ? of(false)
+          : throwError(() => error),
+      ),
       finalize(() => {
         this.inFlight = null;
       }),

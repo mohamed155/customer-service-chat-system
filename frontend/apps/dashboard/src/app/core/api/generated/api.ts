@@ -175,7 +175,7 @@ export interface paths {
     put?: never;
     /**
      * Exchange the refresh token for a new session token pair
-     * @description Reads the `__Secure-app_refresh` cookie (HttpOnly, sent only to this path), uses that refresh token up and sets a new access token (`__Host-app_session`) and a new refresh token. A refresh token works once: presenting a used one again is treated as theft and ends the whole session, except when another request of the same browser rotated it less than ten seconds ago (two tabs), in which case only a new access token is issued. On any failure the session cookies are cleared and the answer is `401`: sign in again. Like login, this needs an allowed `Origin` and `X-Requested-With`, with no session required.
+     * @description Reads the `__Secure-app_refresh` cookie (HttpOnly, sent only to this path), uses that refresh token up and sets a new access token (`__Host-app_session`) and a new refresh token. A refresh token works once: presenting a used one again is treated as theft and ends the whole session, except when another request of the same browser rotated it less than ten seconds ago (two tabs), in which case only a new access token is issued. When the refresh token is not accepted (unknown, expired, used again, or its session is over) the session cookies are cleared and the answer is `401`: sign in again. A database failure answers `500` and leaves the cookies alone, so trying again is safe. Like login, this needs an allowed `Origin` and `X-Requested-With`, with no session required.
      */
     post: operations['auth_refresh'];
     delete?: never;
@@ -195,7 +195,7 @@ export interface paths {
     put?: never;
     /**
      * Create a workspace and its first (Owner) user
-     * @description Public, self-serve signup (FR-AUTH-001). Creates a new tenant (workspace) on the `trial` plan, a new user account as that tenant's Owner, and starts a session — the response body is the same `MeResponse` shape returned by `GET /me`, and the `app_session` cookie is set the same way as `POST /auth/login`. The workspace slug is derived automatically from `workspaceName` (and disambiguated on collision); it can be changed later from tenant settings. Returns 409 if the email is already registered.
+     * @description Public, self-serve signup (FR-AUTH-001). Creates a new tenant (workspace) on the `trial` plan, a new user account as that tenant's Owner, and starts a session — the response body is the same `MeResponse` shape returned by `GET /me`, and the session cookies are set the same way as `POST /auth/login`. The workspace slug is derived automatically from `workspaceName` (and disambiguated on collision); it can be changed later from tenant settings. Returns 409 if the email is already registered.
      */
     post: operations['auth_signup'];
     delete?: never;
@@ -295,7 +295,7 @@ export interface paths {
     put?: never;
     /**
      * Accept an invitation
-     * @description Public endpoint that accepts a pending invitation. If the caller is signed in and the principal's email matches the invitation, a membership is created for the existing user. Otherwise an anonymous accept creates a new user account (supplying `displayName` and `password`) and signs them in via a new `app_session` cookie. Returns 404 for unknown tokens, soft-deleted or suspended tenants, and accepted/revoked invitations; returns 410 for expired or already-used tokens.
+     * @description Public endpoint that accepts a pending invitation. If the caller is signed in and the principal's email matches the invitation, a membership is created for the existing user. Otherwise an anonymous accept creates a new user account (supplying `displayName` and `password`) and signs them in with new session cookies (an access token and a refresh token). Returns 404 for unknown tokens, soft-deleted or suspended tenants, and accepted/revoked invitations; returns 410 for expired or already-used tokens.
      */
     post: operations['accept_invitation'];
     delete?: never;
@@ -4530,6 +4530,16 @@ export interface operations {
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
+      /** @description The refresh failed on the server. Nothing was changed and the cookies are left as they were: try again. */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
     };
   };
   auth_signup: {
@@ -4545,7 +4555,7 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Workspace and account created. Returns the user profile and sets the `app_session` cookie. */
+      /** @description Workspace and account created. Returns the user profile and sets the session cookies. */
       201: {
         headers: {
           [name: string]: unknown;

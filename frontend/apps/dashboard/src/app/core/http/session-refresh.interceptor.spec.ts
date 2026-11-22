@@ -74,6 +74,18 @@ describe('sessionRefreshInterceptor', () => {
     expect(await result).toBe(401);
   });
 
+  it.each([429, 503])(
+    'passes a %s from the refresh on instead of the 401, so the session is not taken for expired',
+    async (status) => {
+      const result = failedWith(client().get('/api/v1/tenant/customers'));
+
+      http().expectOne('/api/v1/tenant/customers').flush(UNAUTHENTICATED, REFUSED);
+      http().expectOne('/api/v1/auth/refresh').flush(null, { status, statusText: 'Trouble' });
+
+      expect(await result).toBe(status);
+    },
+  );
+
   it('retries a call only once', async () => {
     const result = failedWith(client().get('/api/v1/tenant/customers'));
 

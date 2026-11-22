@@ -30,13 +30,27 @@ describe('SessionRefreshService', () => {
     expect(await result).toBe(true);
   });
 
-  it('reports failure for any error, without throwing', async () => {
+  it('reports a refused refresh token as false, without throwing', async () => {
     const result = firstValueFrom(TestBed.inject(SessionRefreshService).refresh());
     TestBed.inject(HttpTestingController)
       .expectOne(URL)
       .flush({ code: 'unauthenticated' }, { status: 401, statusText: 'Unauthorized' });
     expect(await result).toBe(false);
   });
+
+  it.each([429, 503])(
+    'throws a %s, which says nothing about whether the session is over',
+    async (status) => {
+      const result = firstValueFrom(TestBed.inject(SessionRefreshService).refresh()).then(
+        () => 0,
+        (error: { status: number }) => error.status,
+      );
+      TestBed.inject(HttpTestingController)
+        .expectOne(URL)
+        .flush(null, { status, statusText: 'Trouble' });
+      expect(await result).toBe(status);
+    },
+  );
 
   it('shares one request between callers that arrive while it is in flight', async () => {
     const service = TestBed.inject(SessionRefreshService);

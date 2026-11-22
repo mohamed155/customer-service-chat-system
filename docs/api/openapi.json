@@ -7014,7 +7014,7 @@
     },
     "/auth/refresh": {
       "post": {
-        "description": "Reads the `__Secure-app_refresh` cookie (HttpOnly, sent only to this path), uses that refresh token up and sets a new access token (`__Host-app_session`) and a new refresh token. A refresh token works once: presenting a used one again is treated as theft and ends the whole session, except when another request of the same browser rotated it less than ten seconds ago (two tabs), in which case only a new access token is issued. On any failure the session cookies are cleared and the answer is `401`: sign in again. Like login, this needs an allowed `Origin` and `X-Requested-With`, with no session required.",
+        "description": "Reads the `__Secure-app_refresh` cookie (HttpOnly, sent only to this path), uses that refresh token up and sets a new access token (`__Host-app_session`) and a new refresh token. A refresh token works once: presenting a used one again is treated as theft and ends the whole session, except when another request of the same browser rotated it less than ten seconds ago (two tabs), in which case only a new access token is issued. When the refresh token is not accepted (unknown, expired, used again, or its session is over) the session cookies are cleared and the answer is `401`: sign in again. A database failure answers `500` and leaves the cookies alone, so trying again is safe. Like login, this needs an allowed `Origin` and `X-Requested-With`, with no session required.",
         "operationId": "auth_refresh",
         "responses": {
           "204": {
@@ -7067,6 +7067,22 @@
               }
             },
             "description": "Too many refreshes from this client."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The refresh failed on the server. Nothing was changed and the cookies are left as they were: try again."
           }
         },
         "security": [

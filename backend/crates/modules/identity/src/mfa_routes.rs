@@ -250,7 +250,12 @@ pub async fn confirm_enrolment(
         Err(error) => return error.into_response(),
     };
     if let Some(Extension(old)) = claims {
-        end_replaced_session(&pool, &old).await;
+        // Best effort, on purpose: the factor is confirmed and the codes below are shown only once,
+        // so failing now would lose them. The old session has no second factor, and the middleware
+        // already refuses such a session for a user who has one, so it stops working anyway.
+        if let Err(error) = end_replaced_session(&pool, &old).await {
+            tracing::error!(%error, "could not end the replaced session");
+        }
     }
 
     let mut response = Json(RecoveryCodesResponse {
@@ -385,8 +390,12 @@ pub async fn step_up(
         Ok(cookies) => cookies,
         Err(error) => return error.into_response(),
     };
+    // The old session carries the second factor of an earlier moment and its refresh token could
+    // keep it alive, so a replacement that did not end it is not a success: the person asks again.
     if let Some(Extension(old)) = claims {
-        end_replaced_session(&pool, &old).await;
+        if let Err(error) = end_replaced_session(&pool, &old).await {
+            return ApiError::internal_error_from("Step-up failed", error).into_response();
+        }
     }
     let mut response = StatusCode::NO_CONTENT.into_response();
     append_cookies(&mut response, cookies);
@@ -433,12 +442,8 @@ pub fn append_cookies(response: &mut Response, cookies: Vec<String>) {
 
 /// The session that a fresh one replaces stops working (the second factor was set up or proven
 /// again, so the old session's `amr` is out of date).
-async fn end_replaced_session(pool: &PgPool, old: &session::SessionClaims) {
-    if let Err(error) =
-        crate::sessions::revoke_claims(pool, old, crate::sessions::reason::REPLACED).await
-    {
-        tracing::error!(%error, "could not end the replaced session");
-    }
+async fn end_replaced_session(pool: &PgPool, old: &session::SessionClaims) -> sqlx::Result<()> {
+    crate::sessions::revoke_claims(pool, old, crate::sessions::reason::REPLACED).await
 }
 
 /// Stop a session id from working again (logout does the same).

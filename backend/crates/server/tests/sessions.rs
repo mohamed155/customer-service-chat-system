@@ -80,16 +80,28 @@ fn app_state(pool: sqlx::PgPool) -> AppState {
     }
 }
 
+fn require_db_tests() -> bool {
+    std::env::var("REQUIRE_DB_TESTS").as_deref() == Ok("1")
+}
+
 async fn get_pool() -> Option<sqlx::PgPool> {
     let url = match std::env::var("DATABASE_URL") {
         Ok(v) => v,
         Err(_) => {
+            assert!(
+                !require_db_tests(),
+                "REQUIRE_DB_TESTS=1 but DATABASE_URL is not set"
+            );
             eprintln!("skipping sessions test: DATABASE_URL not set");
             return None;
         }
     };
     let pool = db::lazy_pool(&url, 4, Duration::from_secs(5));
     if sqlx::query("SELECT 1").execute(&pool).await.is_err() {
+        assert!(
+            !require_db_tests(),
+            "REQUIRE_DB_TESTS=1 but DATABASE_URL is unreachable"
+        );
         eprintln!("skipping sessions test: could not connect to DATABASE_URL");
         return None;
     }
@@ -899,4 +911,33 @@ async fn disabling_a_member_ends_their_sessions_only_when_they_have_no_other_acc
         .body(Body::empty())
         .unwrap();
     assert_eq!(send(&pool, into_tenant).await.status(), 403);
+}
+
+#[tokio::test]
+async fn resetting_a_second_factor_ends_persisted_sessions_and_their_refresh_tokens() {
+    let Some(pool) = get_pool().await else { return };
+    let (user, email) = seed_user(&pool, None).await;
+    let (admin, _) = seed_user(&pool, None).await;
+    let tokens = sign_in(&pool, &email).await;
+    assert_eq!(send(&pool, me_request(&tokens.access)).await.status(), 200);
+
+    identity::mfa::reset(&pool, user, admin, "platform", None)
+        .await
+        .unwrap();
+
+    // The session row is revoked, so neither the access token nor the refresh token works, not only
+    // the HS256 `sessions_valid_after` of the cutover window.
+    let (revoked, reason, _, _) = session_row(&pool, sid_of(&tokens.access)).await;
+    assert!(revoked);
+    assert_eq!(reason.as_deref(), Some("mfa_reset"));
+    assert_eq!(send(&pool, me_request(&tokens.access)).await.status(), 401);
+    assert_eq!(
+        send(&pool, refresh_request(Some(&tokens.refresh), true))
+            .await
+            .status(),
+        401
+    );
+    // A new sign-in in the same second still works.
+    let again = sign_in(&pool, &email).await;
+    assert_eq!(send(&pool, me_request(&again.access)).await.status(), 200);
 }

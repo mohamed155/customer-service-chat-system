@@ -287,7 +287,7 @@ pub async fn list_members_rows_in_tx(
 /// another workspace (whatever its status: the check errs towards keeping a session) or a platform
 /// role.
 async fn has_access_elsewhere(
-    pool: &sqlx::PgPool,
+    conn: &mut sqlx::PgConnection,
     user_id: Uuid,
     tenant_id: Uuid,
 ) -> sqlx::Result<bool> {
@@ -298,12 +298,12 @@ async fn has_access_elsewhere(
     )
     .bind(user_id)
     .bind(tenant_id)
-    .fetch_one(pool)
+    .fetch_one(&mut *conn)
     .await?;
     if others > 0 {
         return Ok(true);
     }
-    let role = identity::directory::principal_row(pool, user_id)
+    let role = identity::directory::principal_row(&mut *conn, user_id)
         .await?
         .and_then(|(_, _, _, role)| role);
     Ok(role.is_some())
@@ -709,38 +709,37 @@ pub async fn update_member(
         }
     }
 
+    // A member who was disabled in their only workspace has nothing left to sign in to: their
+    // sessions end in the same transaction as the change (ADR-005 §3), so a failure here leaves the
+    // member active and the admin can try again, rather than a disabled member with a live session.
+    // A person who still belongs to another workspace, or has a platform role, keeps their sessions:
+    // they cannot reach this workspace any more (the tenant check requires an active membership on
+    // every request), and signing them out everywhere would let one workspace's admin end a session
+    // in another.
+    if payload.status.as_deref() == Some("disabled") {
+        let ended = async {
+            if has_access_elsewhere(tx.conn(), target_user_id, ctx.tenant_id).await? {
+                return Ok::<(), sqlx::Error>(());
+            }
+            identity::sessions::revoke_user_sessions_in(
+                tx.conn(),
+                target_user_id,
+                identity::sessions::reason::MEMBER_REMOVED,
+                None,
+            )
+            .await
+            .map(|_| ())
+        }
+        .await;
+        if let Err(e) = ended {
+            tracing::error!(error = %e, "failed to end the sessions of a disabled member");
+            return ApiError::internal_error("Failed to update status").into_response();
+        }
+    }
+
     if let Err(e) = tx.commit().await {
         tracing::error!(error = %e, "failed to commit transaction");
         return ApiError::internal_error("Failed to commit transaction").into_response();
-    }
-
-    // A member who was disabled in their only workspace has nothing left to sign in to: end their
-    // sessions now instead of letting the access tokens run out (ADR-005 §3). A person who still
-    // belongs to another workspace, or has a platform role, keeps their sessions: they cannot reach
-    // this workspace any more (the tenant check requires an active membership on every request),
-    // and signing them out everywhere would let one workspace's admin end a session in another.
-    if payload.status.as_deref() == Some("disabled") {
-        match has_access_elsewhere(&pool, target_user_id, ctx.tenant_id).await {
-            Ok(false) => {
-                if let Err(e) = identity::sessions::revoke_user_sessions(
-                    &pool,
-                    target_user_id,
-                    identity::sessions::reason::MEMBER_REMOVED,
-                    None,
-                )
-                .await
-                {
-                    // The membership change is committed; the sessions end at the latest when
-                    // their access tokens expire (ten minutes) and the refresh tokens can no
-                    // longer be exchanged.
-                    tracing::error!(error = %e, "failed to revoke the sessions of a disabled member");
-                }
-            }
-            Ok(true) => {}
-            Err(e) => {
-                tracing::error!(error = %e, "failed to check the other access of a disabled member");
-            }
-        }
     }
 
     let mut uow = match ctx.unit_of_work(&pool).await {

@@ -519,6 +519,19 @@ pub async fn revoke_user_sessions(
     why: &str,
     keep: Option<Uuid>,
 ) -> sqlx::Result<u64> {
+    let mut conn = pool.acquire().await?;
+    revoke_user_sessions_in(&mut conn, user_id, why, keep).await
+}
+
+/// [`revoke_user_sessions`] on a connection the caller owns, so it can be part of a transaction: a
+/// change that must end the sessions (a member who lost their last workspace) commits together
+/// with their revocation, or not at all.
+pub async fn revoke_user_sessions_in(
+    conn: &mut sqlx::PgConnection,
+    user_id: Uuid,
+    why: &str,
+    keep: Option<Uuid>,
+) -> sqlx::Result<u64> {
     let ended = sqlx::query(
         "UPDATE auth_sessions SET revoked_at = now(), revoke_reason = $2 \
          WHERE user_id = $1 AND revoked_at IS NULL AND ($3::uuid IS NULL OR id <> $3)",
@@ -526,13 +539,13 @@ pub async fn revoke_user_sessions(
     .bind(user_id)
     .bind(why)
     .bind(keep)
-    .execute(pool)
+    .execute(&mut *conn)
     .await?
     .rows_affected();
     if keep.is_none() && session::legacy_hs256_accepted() {
         sqlx::query("UPDATE users SET sessions_valid_after = now() WHERE id = $1")
             .bind(user_id)
-            .execute(pool)
+            .execute(&mut *conn)
             .await?;
     }
     Ok(ended)
