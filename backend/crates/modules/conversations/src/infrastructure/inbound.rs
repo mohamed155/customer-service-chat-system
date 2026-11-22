@@ -16,7 +16,7 @@ pub async fn open_or_create_in_tx(
     channel: &str,
 ) -> sqlx::Result<Uuid> {
     if let Some(id) =
-        crate::queries::find_open_conversation_in_tx(tx, tenant_id, customer_id, channel).await?
+        super::messages::find_open_conversation_in_tx(tx, tenant_id, customer_id, channel).await?
     {
         return Ok(id);
     }

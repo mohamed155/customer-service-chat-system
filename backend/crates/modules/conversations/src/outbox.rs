@@ -1,65 +1,15 @@
-use serde_json::json;
+//! Events other modules ask `conversations` to put in the outbox, in the transaction they hold.
+//!
+//! The events themselves, with their names and payloads, are [`ConversationEvent`]; these
+//! functions are the facade over writing them.
+
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-pub async fn emit_status_changed_in_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    tenant_id: Uuid,
-    conversation_id: Uuid,
-    old_status: &str,
-    new_status: &str,
-    actor_membership_id: Option<Uuid>,
-    origin: &str,
-) -> sqlx::Result<()> {
-    sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.status_changed', $4, now())",
-    )
-    .bind(kernel::ids::new_id())
-    .bind(conversation_id)
-    .bind(tenant_id)
-    .bind(json!({
-        "tenantId": tenant_id,
-        "conversationId": conversation_id,
-        "oldStatus": old_status,
-        "newStatus": new_status,
-        "actorMembershipId": actor_membership_id,
-        "origin": origin,
-    }))
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
+use crate::application::ConversationEvent;
+use crate::infrastructure::outbox::publish;
 
-pub async fn emit_assignment_changed_in_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    tenant_id: Uuid,
-    conversation_id: Uuid,
-    old_membership_id: Option<Uuid>,
-    new_membership_id: Option<Uuid>,
-    actor_membership_id: Option<Uuid>,
-    origin: &str,
-) -> sqlx::Result<()> {
-    sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.assignment_changed', $4, now())",
-    )
-    .bind(kernel::ids::new_id())
-    .bind(conversation_id)
-    .bind(tenant_id)
-    .bind(json!({
-        "tenantId": tenant_id,
-        "conversationId": conversation_id,
-        "oldMembershipId": old_membership_id,
-        "newMembershipId": new_membership_id,
-        "actorMembershipId": actor_membership_id,
-        "origin": origin,
-    }))
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
-}
-
+/// A customer wrote on `channel`: the AI responder and the notifications pick it up.
 pub async fn emit_customer_message_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
@@ -67,23 +17,19 @@ pub async fn emit_customer_message_in_tx(
     message_id: Uuid,
     channel: &str,
 ) -> sqlx::Result<()> {
-    sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
-         VALUES ($1, 'conversation', $2, $3, 'conversation.customer_message', $4, now())",
+    publish(
+        tx,
+        &ConversationEvent::CustomerMessage {
+            tenant_id,
+            conversation_id,
+            message_id,
+            channel,
+        },
     )
-    .bind(kernel::ids::new_id())
-    .bind(conversation_id)
-    .bind(tenant_id)
-    .bind(json!({
-        "conversation_id": conversation_id,
-        "message_id": message_id,
-        "channel": channel,
-    }))
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
+    .await
 }
 
+/// A tool request was approved, denied, cancelled or expired.
 pub async fn emit_tool_decision_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
@@ -91,42 +37,32 @@ pub async fn emit_tool_decision_in_tx(
     tool_request_id: Uuid,
     outcome: &str,
 ) -> sqlx::Result<()> {
-    sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
-         VALUES ($1, 'conversation', $2, $3, 'ai.tool_decision', $4, now())",
+    publish(
+        tx,
+        &ConversationEvent::ToolDecision {
+            tenant_id,
+            conversation_id,
+            tool_request_id,
+            outcome,
+        },
     )
-    .bind(kernel::ids::new_id())
-    .bind(conversation_id)
-    .bind(tenant_id)
-    .bind(json!({
-        "tenantId": tenant_id,
-        "conversationId": conversation_id,
-        "toolRequestId": tool_request_id,
-        "outcome": outcome,
-    }))
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
+    .await
 }
 
+/// A message is waiting to be sent to the customer on WhatsApp.
 pub async fn emit_whatsapp_outbound_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
     conversation_id: Uuid,
     message_id: Uuid,
 ) -> sqlx::Result<()> {
-    sqlx::query(
-        "INSERT INTO outbox_events (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
-         VALUES ($1, 'conversation', $2, $3, 'whatsapp.outbound_message', $4, now())",
+    publish(
+        tx,
+        &ConversationEvent::WhatsappOutbound {
+            tenant_id,
+            conversation_id,
+            message_id,
+        },
     )
-    .bind(kernel::ids::new_id())
-    .bind(conversation_id)
-    .bind(tenant_id)
-    .bind(json!({
-        "conversationId": conversation_id,
-        "messageId": message_id,
-    }))
-    .execute(&mut **tx)
-    .await?;
-    Ok(())
+    .await
 }

@@ -1,45 +1,14 @@
+//! The shapes conversations are exchanged in: what the dashboard, the widget and the other
+//! modules receive and send. They are the wire format, so a field or a rename here is an API
+//! change.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-// ---------------------------------------------------------------------------
-// Enums
-// ---------------------------------------------------------------------------
+pub use crate::domain::{confidence_band, ConversationStatus, MessageKind};
 
-/// Conversation lifecycle status.
-///
-/// Variants serialize to their snake_case wire names (`open`, `pending`,
-/// `resolved`, `closed`) via the explicit serde rename; the OpenAPI schema
-/// surfaces the same names so the documented vocabulary matches the wire
-/// format (FR-006 / data-model.md).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ConversationStatus {
-    Open,
-    Pending,
-    Resolved,
-    Closed,
-}
-
-/// Message kind — the sender role that produced a given message row.
-///
-/// Variants serialize to their snake_case wire names (`customer`, `reply`,
-/// `note`) so the documented vocabulary matches the wire format
-/// (FR-006 / data-model.md).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum MessageKind {
-    Customer,
-    #[serde(rename = "ai")]
-    Ai,
-    #[serde(rename = "system")]
-    System,
-    Reply,
-    Note,
-}
-
-// ---------------------------------------------------------------------------
 // Response DTOs
 // ---------------------------------------------------------------------------
 
@@ -191,16 +160,6 @@ pub struct Message {
 pub struct ConfidenceView {
     pub score: f32,
     pub band: String,
-}
-
-pub fn confidence_band(score: f32) -> &'static str {
-    if score >= 0.70 {
-        "high"
-    } else if score >= 0.40 {
-        "medium"
-    } else {
-        "low"
-    }
 }
 
 /// A citation linking an AI message to a knowledge-base passage at the

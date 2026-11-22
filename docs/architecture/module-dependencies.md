@@ -19,7 +19,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `audit` | flat | `identity`, `tenancy` | – | `audit_logs` |
 | `authz` | flat | `identity` | `ai`, `customers`, `knowledge`, `notifications`, `tenancy` | – |
 | `billing` | flat | `identity`, `tenancy` | `ai` | `billing_plans`, `tenant_subscriptions` |
-| `conversations` | flat | `customers`, `identity`, `integrations`, `tenancy` | `ai`, `escalations`, `tools`, `whatsapp`, `widgets` | `conversations`, `message_attachments`, `message_citations`, `messages` |
+| `conversations` | layered | `customers`, `identity`, `integrations`, `tenancy` | `ai`, `escalations`, `tools`, `whatsapp`, `widgets` | `conversations`, `message_attachments`, `message_citations`, `messages` |
 | `customers` | flat | `authz`, `identity`, `tenancy` | `conversations`, `tools`, `whatsapp`, `widgets` | `customer_channel_identifiers`, `customers` |
 | `email` | flat | – | `tenancy` | – |
 | `escalations` | flat | `conversations`, `identity`, `tenancy`, `tools` | `notifications`, `widgets` | `agent_availability`, `agent_skills`, `escalations`, `skills` |

@@ -201,7 +201,7 @@ fn build_conversation_view(
         .into_iter()
         .filter(|m| m.kind != conversations::model::MessageKind::Note)
         .map(|m| {
-            let kind_str = serde_json::to_value(&m.kind)
+            let kind_str = serde_json::to_value(m.kind)
                 .ok()
                 .and_then(|v| v.as_str().map(|s| s.to_owned()))
                 .unwrap_or_default();
@@ -440,7 +440,7 @@ pub async fn create_conversation(
         return ApiError::internal_error("Failed to commit").into_response();
     }
 
-    let status_str = serde_json::to_value(&conv_detail.status)
+    let status_str = serde_json::to_value(conv_detail.status)
         .ok()
         .and_then(|v| v.as_str().map(|s| s.to_owned()))
         .unwrap_or_else(|| "open".to_string());
