@@ -175,7 +175,7 @@ export interface paths {
     put?: never;
     /**
      * Exchange the refresh token for a new session token pair
-     * @description Reads the `__Secure-app_refresh` cookie (HttpOnly, sent only to this path), uses that refresh token up and sets a new access token (`__Host-app_session`) and a new refresh token. A refresh token works once: presenting a used one again is treated as theft and ends the whole session, except when another request of the same browser rotated it less than ten seconds ago (two tabs), in which case only a new access token is issued. When the refresh token is not accepted (unknown, expired, used again, or its session is over) the session cookies are cleared and the answer is `401`: sign in again. A database failure answers `500` and leaves the cookies alone, so trying again is safe. Like login, this needs an allowed `Origin` and `X-Requested-With`, with no session required.
+     * @description Reads the `__Secure-app_refresh` cookie (HttpOnly, sent only to this path), uses that refresh token up and sets a new access token (`__Host-app_session`) and a new refresh token. A refresh token works once: presenting a used one again is treated as theft and ends the whole session, except when another request of the same browser rotated it less than ten seconds ago (two tabs), in which case only a new access token is issued. When the refresh token is not accepted (unknown, expired, used again, or its session is over) the session cookies are cleared and the answer is `401`: sign in again. A server failure answers `500` and leaves the cookies as they were. Like login, this needs an allowed `Origin` and `X-Requested-With`, with no session required.
      */
     post: operations['auth_refresh'];
     delete?: never;
@@ -4530,7 +4530,7 @@ export interface operations {
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
-      /** @description The refresh failed on the server. Nothing was changed and the cookies are left as they were: try again. */
+      /** @description The refresh failed on the server. The cookies are left as they were. */
       500: {
         headers: {
           [name: string]: unknown;

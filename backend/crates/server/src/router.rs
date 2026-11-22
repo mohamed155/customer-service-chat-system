@@ -464,15 +464,15 @@ async fn mfa_verify(
                   the same browser rotated it less than ten seconds ago (two tabs), in which case \
                   only a new access token is issued. When the refresh token is not accepted \
                   (unknown, expired, used again, or its session is over) the session cookies are \
-                  cleared and the answer is `401`: sign in again. A database failure answers `500` \
-                  and leaves the cookies alone, so trying again is safe. Like login, this needs an \
+                  cleared and the answer is `401`: sign in again. A server failure answers `500` \
+                  and leaves the cookies as they were. Like login, this needs an \
                   allowed `Origin` and `X-Requested-With`, with no session required.",
     responses(
         (status = 204, description = "Refreshed. The new cookies are set."),
         (status = 401, description = "No valid refresh token: unknown, expired, used again, or the session was revoked. The cookies are cleared.", body = kernel::ErrorEnvelope),
         (status = 403, description = "A missing or foreign `Origin`, or a missing `X-Requested-With` header.", body = kernel::ErrorEnvelope),
         (status = 429, description = "Too many refreshes from this client.", body = kernel::ErrorEnvelope),
-        (status = 500, description = "The refresh failed on the server. Nothing was changed and the cookies are left as they were: try again.", body = kernel::ErrorEnvelope),
+        (status = 500, description = "The refresh failed on the server. The cookies are left as they were.", body = kernel::ErrorEnvelope),
     ),
     security(()),
 )]
