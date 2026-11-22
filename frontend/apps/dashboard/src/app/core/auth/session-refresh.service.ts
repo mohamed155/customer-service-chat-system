@@ -1,7 +1,8 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { catchError, defer, finalize, map, Observable, of, shareReplay, throwError } from 'rxjs';
 import { APP_CONFIG } from '../config/app-config';
+import { toApiError } from '../errors/api-error';
 
 /**
  * Exchanges the refresh cookie for a new access token (`POST /auth/refresh`, ADR-005 §3).
@@ -30,9 +31,7 @@ export class SessionRefreshService {
     ).pipe(
       map(() => true),
       catchError((error: unknown) =>
-        error instanceof HttpErrorResponse && error.status === 401
-          ? of(false)
-          : throwError(() => error),
+        toApiError(error).status === 401 ? of(false) : throwError(() => error),
       ),
       finalize(() => {
         this.inFlight = null;

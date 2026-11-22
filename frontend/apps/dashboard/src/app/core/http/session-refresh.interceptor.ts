@@ -12,9 +12,9 @@ const REFRESHED = new HttpContextToken<boolean>(() => false);
 /**
  * A call that answers `401 unauthenticated` met an expired access token (they last ten minutes).
  * Ask for a new one once (`SessionRefreshService`, single flight) and send the call again. If the
- * refresh fails the original error goes on, and `apiErrorInterceptor` treats it as an expired
- * session. It sits inside `apiErrorInterceptor` on purpose, so it sees the raw HTTP error before
- * the session-expired handling does.
+ * refresh token is refused, forward the original 401 for session-expired handling. Other refresh
+ * errors propagate as they are. This sits inside `apiErrorInterceptor` so it sees the original
+ * call's raw HTTP error before the session-expired handling does.
  *
  * Not refreshed: the calls that start or end a session, a `401` with another code (the step-up
  * prompt answers `401 mfa_step_up_required`), and a call that was already retried.

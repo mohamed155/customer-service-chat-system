@@ -1,8 +1,14 @@
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
+import { provideMockStore } from '@ngrx/store/testing';
 import { firstValueFrom, Observable } from 'rxjs';
 import { APP_CONFIG } from '../config/app-config';
+import { ApiErrorNotificationService } from '../errors/api-error-notification.service';
+import { CurrentUserService } from '../tenant/current-user.service';
+import { apiErrorInterceptor } from './api-error.interceptor';
+import { httpResilienceInterceptor } from './http-resilience.interceptor';
 import { sessionRefreshInterceptor } from './session-refresh.interceptor';
 
 /** The HTTP status a call failed with, or `0` when it succeeded. */
@@ -20,13 +26,25 @@ describe('sessionRefreshInterceptor', () => {
   };
   const REFUSED = { status: 401, statusText: 'Unauthorized' };
   const NO_CONTENT = { status: 204, statusText: 'No Content' };
+  const router = { navigate: vi.fn().mockResolvedValue(true) };
+  const notifications = { show: vi.fn() };
 
   beforeEach(() => {
+    vi.clearAllMocks();
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(withInterceptors([sessionRefreshInterceptor])),
+        provideHttpClient(
+          withInterceptors([
+            apiErrorInterceptor,
+            sessionRefreshInterceptor,
+            httpResilienceInterceptor,
+          ]),
+        ),
         provideHttpClientTesting(),
+        provideMockStore(),
         { provide: APP_CONFIG, useValue: { apiBaseUrl: '/api/v1' } },
+        { provide: Router, useValue: router },
+        { provide: ApiErrorNotificationService, useValue: notifications },
       ],
     });
   });
@@ -65,26 +83,76 @@ describe('sessionRefreshInterceptor', () => {
     expect(await Promise.all([a, b, c])).toEqual([{ ok: 'a' }, { ok: 'b' }, { ok: 'c' }]);
   });
 
-  it('passes the original error on when the refresh fails', async () => {
+  it('ends the session when the refresh is refused', async () => {
+    const clear = vi.spyOn(TestBed.inject(CurrentUserService), 'clear');
     const result = failedWith(client().get('/api/v1/tenant/customers'));
 
     http().expectOne('/api/v1/tenant/customers').flush(UNAUTHENTICATED, REFUSED);
     http().expectOne('/api/v1/auth/refresh').flush(UNAUTHENTICATED, REFUSED);
 
     expect(await result).toBe(401);
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(notifications.show).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/auth/login'], expect.anything());
+  });
+
+  it('lets a signed-out visitor finish loading the current user during app startup', async () => {
+    const currentUser = TestBed.inject(CurrentUserService);
+    const result = expect(currentUser.load()).resolves.toBeUndefined();
+
+    http().expectOne('/api/v1/me').flush(UNAUTHENTICATED, REFUSED);
+    http().expectOne('/api/v1/auth/refresh').flush(UNAUTHENTICATED, REFUSED);
+
+    await result;
+    expect(currentUser.currentUser()).toBeNull();
+    expect(notifications.show).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 
   it.each([429, 503])(
     'passes a %s from the refresh on instead of the 401, so the session is not taken for expired',
     async (status) => {
-      const result = failedWith(client().get('/api/v1/tenant/customers'));
+      const clear = vi.spyOn(TestBed.inject(CurrentUserService), 'clear');
+      const result = firstValueFrom(client().get('/api/v1/tenant/customers')).catch(
+        (error: unknown) => error,
+      );
 
       http().expectOne('/api/v1/tenant/customers').flush(UNAUTHENTICATED, REFUSED);
-      http().expectOne('/api/v1/auth/refresh').flush(null, { status, statusText: 'Trouble' });
+      http()
+        .expectOne('/api/v1/auth/refresh')
+        .flush(null, { status, statusText: 'Trouble', headers: { 'X-Request-ID': 'req_refresh' } });
 
-      expect(await result).toBe(status);
+      expect(await result).toMatchObject({ status, requestId: 'req_refresh' });
+      expect(clear).not.toHaveBeenCalled();
+      expect(notifications.show).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
     },
   );
+
+  it.each(['network_error', 'timeout'])('keeps the session after a refresh %s', async (code) => {
+    vi.useFakeTimers();
+    try {
+      const clear = vi.spyOn(TestBed.inject(CurrentUserService), 'clear');
+      const result = firstValueFrom(client().get('/api/v1/tenant/customers')).catch(
+        (error: unknown) => error,
+      );
+
+      http().expectOne('/api/v1/tenant/customers').flush(UNAUTHENTICATED, REFUSED);
+      const refresh = http().expectOne('/api/v1/auth/refresh');
+      if (code === 'timeout') {
+        await vi.advanceTimersByTimeAsync(30_000);
+      } else {
+        refresh.error(new ProgressEvent('error'));
+      }
+
+      expect(await result).toMatchObject({ status: 0, code });
+      expect(clear).not.toHaveBeenCalled();
+      expect(notifications.show).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it('retries a call only once', async () => {
     const result = failedWith(client().get('/api/v1/tenant/customers'));
