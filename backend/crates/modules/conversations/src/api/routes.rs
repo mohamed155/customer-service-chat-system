@@ -1,8 +1,16 @@
 use std::sync::Arc;
 
-use super::{model, queries};
-use crate::outbox::{emit_customer_message_in_tx, emit_whatsapp_outbound_in_tx};
-use crate::AiAgentStatus;
+use crate::application::model;
+use crate::application::ports::{ConversationStore, EventOutbox};
+use crate::application::{
+    service, AiAgentStatus, ConversationActor, ConversationError, ConversationEvent,
+};
+use crate::domain::whatsapp::{fits_in_a_message, reply_window_is_open};
+use crate::domain::{
+    attribute_staff_message, awaiting_ai_decision, clamp_page_size, is_known_channel,
+    validate_body, BodyError, FilterError, InboxFilter, MessageKind, CHANNELS,
+};
+use crate::infrastructure::{messages, PgEnrichment, PgUnit};
 
 use axum::{
     extract::{Path, Query, State},
@@ -14,7 +22,7 @@ use chrono::Utc;
 use identity::Principal;
 use kernel::{ApiError, ApiJson, ErrorEnvelope};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -123,78 +131,13 @@ pub struct AddMessageResponseEnvelope {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn status_from_str(s: &str) -> model::ConversationStatus {
-    serde_json::from_value(Value::String(s.to_owned())).unwrap_or(model::ConversationStatus::Open)
-}
-
-fn kind_from_str(s: &str) -> model::MessageKind {
-    serde_json::from_value(Value::String(s.to_owned())).unwrap_or(model::MessageKind::Reply)
-}
-
-fn row_to_conversation(row: queries::InboxRow) -> model::Conversation {
-    let status = status_from_str(&row.status);
-    let assignee = row.assigned_membership_id.map(|mid| model::Assignee {
-        membership_id: mid,
-        display_name: row.assignee_display_name.unwrap_or_default(),
-        active: row.assignee_active.unwrap_or(false),
-    });
-    let last_message = row.last_message_kind.map(|kind| {
-        let preview = row.last_message_preview.unwrap_or_default();
-        model::LastMessagePreview {
-            kind: kind_from_str(&kind),
-            preview,
-        }
-    });
-
-    let widget_instance = row.widget_instance_id.map(|id| model::WidgetInstanceRef {
-        id,
-        name: row.widget_instance_name.unwrap_or_default(),
-    });
-
-    model::Conversation {
-        id: row.id,
-        customer: model::CustomerRef {
-            id: row.customer_id,
-            display_name: row.customer_display_name,
-        },
-        channel: row.channel,
-        status,
-        assignee,
-        last_message,
-        last_activity_at: row.last_activity_at,
-        created_at: row.created_at,
-        ai_handling: row.ai_handling,
-        awaiting_ai_decision: false,
-        widget_instance,
-        rating: row.feedback_rating,
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
-async fn compute_awaiting_ai_decision(
-    agent_configured: bool,
-    has_system_ack: bool,
-    platform_ai_available: bool,
-    row: &queries::InboxRow,
-) -> bool {
-    if agent_configured {
-        return false;
-    }
-    if !has_system_ack {
-        return false;
-    }
-    match row.ai_handling.as_deref() {
-        None => true,
-        Some("platform_ai") => !platform_ai_available,
-        Some("human") => false,
-        _ => true,
-    }
+fn not_found(ctx: &tenancy::TenantContext, message: &'static str) -> Response {
+    ApiError::not_found(message)
+        .with_request_id(&ctx.request_id)
+        .into_response()
 }
 
 /// `GET /tenant/conversations` — inbox list.
@@ -231,49 +174,34 @@ pub async fn list_conversations(
     Extension(ai_status): Extension<Arc<dyn AiAgentStatus>>,
     Query(params): Query<InboxQueryParams>,
 ) -> Response {
-    // Validate filter values that must match a known vocabulary or format.
-    if let Some(ref status) = params.status {
-        if status != "all" {
-            // Try as a valid status value via serde round-trip
-            let status_ok =
-                serde_json::from_value::<model::ConversationStatus>(json!(status)).is_ok();
-            if !status_ok {
-                return ApiError::unprocessable_entity("Invalid status filter")
-                    .with_details(vec![json!({
-                        "field": "status",
-                        "code": "invalid_value",
-                        "message": format!("Unknown status '{status}'. Valid values: open, pending, resolved, closed, all"),
-                    })])
-                    .with_request_id(&ctx.request_id)
-                    .into_response();
-            }
+    let filter = match InboxFilter::parse(
+        params.status.as_deref(),
+        params.assignee.as_deref(),
+        params.channel.as_deref(),
+        params.escalated,
+    ) {
+        Ok(filter) => filter,
+        Err(FilterError::Status(status)) => {
+            return ApiError::unprocessable_entity("Invalid status filter")
+                .with_details(vec![json!({
+                    "field": "status",
+                    "code": "invalid_value",
+                    "message": format!("Unknown status '{status}'. Valid values: open, pending, resolved, closed, all"),
+                })])
+                .with_request_id(&ctx.request_id)
+                .into_response();
         }
-    }
-
-    if let Some(ref assignee) = params.assignee {
-        match assignee.as_str() {
-            "me" | "unassigned" => {}
-            uuid_str => {
-                if Uuid::parse_str(uuid_str).is_err() {
-                    return ApiError::unprocessable_entity("Invalid assignee filter")
-                        .with_details(vec![json!({
-                            "field": "assignee",
-                            "code": "invalid_value",
-                            "message": format!("Unknown assignee '{assignee}'. Valid values: me, unassigned, or a membership UUID"),
-                        })])
-                        .with_request_id(&ctx.request_id)
-                        .into_response();
-                }
-            }
+        Err(FilterError::Assignee(assignee)) => {
+            return ApiError::unprocessable_entity("Invalid assignee filter")
+                .with_details(vec![json!({
+                    "field": "assignee",
+                    "code": "invalid_value",
+                    "message": format!("Unknown assignee '{assignee}'. Valid values: me, unassigned, or a membership UUID"),
+                })])
+                .with_request_id(&ctx.request_id)
+                .into_response();
         }
-    }
-
-    if let Some(ref channel) = params.channel {
-        // Valid channels (from existing constraint)
-        let valid_channels = [
-            "email", "phone", "web_chat", "whatsapp", "telegram", "widget",
-        ];
-        if !valid_channels.contains(&channel.as_str()) {
+        Err(FilterError::Channel(channel)) => {
             return ApiError::unprocessable_entity("Invalid channel filter")
                 .with_details(vec![json!({
                     "field": "channel",
@@ -283,9 +211,9 @@ pub async fn list_conversations(
                 .with_request_id(&ctx.request_id)
                 .into_response();
         }
-    }
+    };
 
-    let limit = params.limit.clamp(1, 100) as i64;
+    let limit = clamp_page_size(params.limit);
 
     // Look up the acting member's membership_id for `assignee=me`.
     let mut uow = match ctx.unit_of_work(&pool).await {
@@ -324,20 +252,19 @@ pub async fn list_conversations(
         }
     };
 
-    let (rows, has_more) = match queries::inbox_query(
-        &mut tx,
-        ctx.tenant_id,
-        acting_membership_id,
-        params.status,
-        params.assignee,
-        params.channel,
-        params.escalated,
-        params.cursor,
-        limit,
-    )
-    .await
-    {
-        Ok(result) => result,
+    let page = {
+        let mut unit = PgUnit::new(&mut tx);
+        service::inbox(
+            &mut unit,
+            ctx.tenant_id,
+            &filter.for_member(acting_membership_id),
+            params.cursor.as_deref(),
+            limit,
+        )
+        .await
+    };
+    let mut page = match page {
+        Ok(page) => page,
         Err(error) => {
             tracing::error!(%error, "inbox query failed");
             return ApiError::internal_error("Failed to load conversations")
@@ -356,38 +283,28 @@ pub async fn list_conversations(
     let agent_configured = ai_status.agent_configured(ctx.tenant_id).await;
     let platform_ai_available = ai_status.platform_ai_available(ctx.tenant_id).await;
 
-    let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
+    let ids: Vec<Uuid> = page.conversations.iter().map(|c| c.id).collect();
     let system_acks: Vec<(Uuid, bool)> =
-        queries::has_system_message_batch(&pool, ctx.tenant_id, &ids)
+        messages::has_system_message_batch(&pool, ctx.tenant_id, &ids)
             .await
             .unwrap_or_default();
     let ack_map: std::collections::HashMap<Uuid, bool> = system_acks.into_iter().collect();
 
-    let mut data: Vec<model::Conversation> = Vec::with_capacity(rows.len());
-    for row in rows {
-        let has_system_ack = ack_map.get(&row.id).copied().unwrap_or(false);
-        let awaiting = compute_awaiting_ai_decision(
+    for conversation in &mut page.conversations {
+        let has_system_ack = ack_map.get(&conversation.id).copied().unwrap_or(false);
+        conversation.awaiting_ai_decision = awaiting_ai_decision(
             agent_configured,
             has_system_ack,
             platform_ai_available,
-            &row,
-        )
-        .await;
-        let mut conv = row_to_conversation(row);
-        conv.awaiting_ai_decision = awaiting;
-        data.push(conv);
+            conversation.ai_handling.as_deref(),
+        );
     }
 
-    let next_cursor = data
-        .last()
-        .filter(|_| has_more)
-        .map(|last| queries::encode_cursor(last.last_activity_at, last.id));
-
     Json(PaginatedResponse {
-        data,
+        data: page.conversations,
         pagination: Pagination {
-            next_cursor,
-            has_more,
+            next_cursor: page.next_cursor,
+            has_more: page.has_more,
         },
     })
     .into_response()
@@ -456,13 +373,13 @@ pub async fn get_conversation(
         }
     };
 
-    let detail = match queries::detail_query_in_tx(&mut tx, ctx.tenant_id, id).await {
+    let detail = {
+        let mut unit = PgUnit::new(&mut tx);
+        service::detail(&mut unit, ctx.tenant_id, id).await
+    };
+    let detail = match detail {
         Ok(Some(detail)) => detail,
-        Ok(None) => {
-            return ApiError::not_found("Conversation not found")
-                .with_request_id(&ctx.request_id)
-                .into_response();
-        }
+        Ok(None) => return not_found(&ctx, "Conversation not found"),
         Err(error) => {
             tracing::error!(%error, conversation_id = %id, "detail query failed");
             return ApiError::internal_error("Failed to load conversation")
@@ -524,7 +441,7 @@ pub async fn get_timeline(
         }
     };
 
-    let limit = params.limit.clamp(1, 100) as i64;
+    let limit = clamp_page_size(params.limit);
 
     let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
@@ -536,32 +453,30 @@ pub async fn get_timeline(
         }
     };
 
-    match queries::conversation_row_in_tx(&mut tx, ctx.tenant_id, conversation_id).await {
-        Ok(Some(_)) => {}
-        Ok(None) => {
-            return ApiError::not_found("Conversation not found")
-                .with_request_id(&ctx.request_id)
-                .into_response();
+    let page = {
+        let mut unit = PgUnit::new(&mut tx);
+        match unit.find_live(ctx.tenant_id, conversation_id).await {
+            Ok(Some(_)) => {}
+            Ok(None) => return not_found(&ctx, "Conversation not found"),
+            Err(error) => {
+                tracing::error!(%error, "failed to check conversation existence");
+                return ApiError::internal_error("Failed to load messages")
+                    .with_request_id(&ctx.request_id)
+                    .into_response();
+            }
         }
-        Err(error) => {
-            tracing::error!(%error, "failed to check conversation existence");
-            return ApiError::internal_error("Failed to load messages")
-                .with_request_id(&ctx.request_id)
-                .into_response();
-        }
-    }
-
-    let (messages, has_more, next_cursor) = match queries::timeline_query_in_tx(
-        &mut tx,
-        &pool,
-        ctx.tenant_id,
-        conversation_id,
-        params.cursor,
-        limit,
-    )
-    .await
-    {
-        Ok(result) => result,
+        service::timeline(
+            &mut unit,
+            &PgEnrichment::new(&pool),
+            ctx.tenant_id,
+            conversation_id,
+            params.cursor.as_deref(),
+            limit,
+        )
+        .await
+    };
+    let page = match page {
+        Ok(page) => page,
         Err(error) => {
             tracing::error!(%error, conversation_id = %conversation_id, "timeline query failed");
             return ApiError::internal_error("Failed to load messages")
@@ -578,10 +493,10 @@ pub async fn get_timeline(
     }
 
     Json(json!({
-        "data": messages,
+        "data": page.messages,
         "pagination": {
-            "next_cursor": next_cursor,
-            "has_more": has_more,
+            "next_cursor": page.next_cursor,
+            "has_more": page.has_more,
         }
     }))
     .into_response()
@@ -634,38 +549,22 @@ pub async fn add_message(
         }
     };
 
-    let body = payload.body.trim().to_string();
-    if body.is_empty() || body.len() > 10000 {
-        return ApiError::unprocessable_entity(
-            "Message body must be between 1 and 10000 characters",
-        )
-        .with_details(vec![json!({
-            "field": "body",
-            "code": "invalid_length",
-            "message": "Body must be 1-10000 characters after trimming"
-        })])
-        .with_request_id(&ctx.request_id)
-        .into_response();
-    }
-
-    let kind_str = serde_json::to_string(&payload.kind)
-        .unwrap_or_default()
-        .trim_matches('"')
-        .to_string();
-
-    let valid_kinds = ["customer", "reply", "note", "ai", "system"];
-    if !valid_kinds.contains(&kind_str.as_str()) {
-        return ApiError::unprocessable_entity("Invalid message kind")
+    let body = match validate_body(&payload.body) {
+        Ok(body) => body,
+        Err(BodyError::Empty | BodyError::TooLong) => {
+            return ApiError::unprocessable_entity(
+                "Message body must be between 1 and 10000 characters",
+            )
             .with_details(vec![json!({
-                "field": "kind",
-                "code": "invalid_value",
-                "message": "Kind must be one of: customer, reply, note, ai, system"
+                "field": "body",
+                "code": "invalid_length",
+                "message": "Body must be 1-10000 characters after trimming"
             })])
             .with_request_id(&ctx.request_id)
             .into_response();
-    }
+        }
+    };
 
-    // Resolve the acting member's membership id
     let mut uow = match ctx.unit_of_work(&pool).await {
         Ok(u) => u,
         Err(r) => return r,
@@ -678,11 +577,7 @@ pub async fn add_message(
     .await
     {
         Ok(Some(mid)) => mid,
-        Ok(None) => {
-            return ApiError::not_found("User not found in tenant")
-                .with_request_id(&ctx.request_id)
-                .into_response();
-        }
+        Ok(None) => return not_found(&ctx, "User not found in tenant"),
         Err(error) => {
             tracing::error!(%error, "failed to resolve membership_id");
             return ApiError::internal_error("Failed to resolve membership")
@@ -694,11 +589,7 @@ pub async fn add_message(
         return r;
     }
 
-    let (sender_membership_id, logged_by_membership_id) = match &payload.kind {
-        model::MessageKind::Customer => (None, Some(membership_id)),
-        model::MessageKind::Ai | model::MessageKind::System => (None, None),
-        _ => (Some(membership_id), None),
-    };
+    let attribution = attribute_staff_message(payload.kind, membership_id);
 
     let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
@@ -709,24 +600,20 @@ pub async fn add_message(
                 .into_response();
         }
     };
+    let mut unit = PgUnit::new(&mut tx);
 
-    let conv_channel =
-        match queries::conversation_row_in_tx(&mut tx, ctx.tenant_id, conversation_id).await {
-            Ok(Some(row)) => row.channel,
-            Ok(None) => {
-                return ApiError::not_found("Conversation not found")
-                    .with_request_id(&ctx.request_id)
-                    .into_response();
-            }
-            Err(error) => {
-                tracing::error!(%error, "failed to check conversation existence");
-                return ApiError::internal_error("Failed to add message")
-                    .with_request_id(&ctx.request_id)
-                    .into_response();
-            }
-        };
+    let conv_channel = match unit.find_live(ctx.tenant_id, conversation_id).await {
+        Ok(Some(row)) => row.channel,
+        Ok(None) => return not_found(&ctx, "Conversation not found"),
+        Err(error) => {
+            tracing::error!(%error, "failed to check conversation existence");
+            return ApiError::internal_error("Failed to add message")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
+    };
 
-    if payload.kind == model::MessageKind::Reply && conv_channel == "whatsapp" {
+    if payload.kind == MessageKind::Reply && conv_channel == "whatsapp" {
         if integrations::queries::active_connection_for_slug(&pool, ctx.tenant_id, "whatsapp")
             .await
             .unwrap_or(None)
@@ -741,23 +628,21 @@ pub async fn add_message(
             .into_response();
         }
 
-        let last_ts = queries::last_customer_message_at(&pool, ctx.tenant_id, conversation_id)
-            .await
-            .unwrap_or(None);
-        match last_ts {
-            Some(ts) if Utc::now().signed_duration_since(ts) < chrono::Duration::hours(24) => {}
-            _ => {
-                return ApiError::new_with_code(
-                    StatusCode::UNPROCESSABLE_ENTITY,
-                    "whatsapp_window_expired",
-                    "The WhatsApp messaging window has expired for this conversation.",
-                )
-                .with_request_id(&ctx.request_id)
-                .into_response();
-            }
+        let last_customer_message_at =
+            messages::last_customer_message_at(&pool, ctx.tenant_id, conversation_id)
+                .await
+                .unwrap_or(None);
+        if !reply_window_is_open(last_customer_message_at, Utc::now()) {
+            return ApiError::new_with_code(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "whatsapp_window_expired",
+                "The WhatsApp messaging window has expired for this conversation.",
+            )
+            .with_request_id(&ctx.request_id)
+            .into_response();
         }
 
-        if body.chars().count() > 4096 {
+        if !fits_in_a_message(&body) {
             return ApiError::new_with_code(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "whatsapp_body_too_long",
@@ -768,22 +653,22 @@ pub async fn add_message(
         }
     }
 
-    let (message, status_ref) = match queries::add_message_in_tx(
-        &mut tx,
+    let added = match service::add_message(
+        &mut unit,
         ctx.tenant_id,
         conversation_id,
-        &kind_str,
+        payload.kind,
         &body,
-        sender_membership_id,
-        logged_by_membership_id,
-        queries::ConversationActor::Staff {
+        attribution.sender_membership_id,
+        attribution.logged_by_membership_id,
+        ConversationActor::Staff {
             user_id: principal.user_id,
             membership_id,
         },
     )
     .await
     {
-        Ok(result) => result,
+        Ok(added) => added,
         Err(error) => {
             tracing::error!(%error, conversation_id = %conversation_id, "add_message failed");
             return ApiError::internal_error("Failed to add message")
@@ -792,15 +677,15 @@ pub async fn add_message(
         }
     };
 
-    if payload.kind == model::MessageKind::Customer {
-        if let Err(error) = emit_customer_message_in_tx(
-            &mut tx,
-            ctx.tenant_id,
-            conversation_id,
-            message.id,
-            &conv_channel,
-        )
-        .await
+    if payload.kind == MessageKind::Customer {
+        if let Err(error) = unit
+            .publish(&ConversationEvent::CustomerMessage {
+                tenant_id: ctx.tenant_id,
+                conversation_id,
+                message_id: added.message.id,
+                channel: &conv_channel,
+            })
+            .await
         {
             tracing::error!(%error, conversation_id = %conversation_id, "emit_customer_message failed");
             return ApiError::internal_error("Failed to add message")
@@ -809,9 +694,14 @@ pub async fn add_message(
         }
     }
 
-    if payload.kind == model::MessageKind::Reply && conv_channel == "whatsapp" {
-        if let Err(error) =
-            emit_whatsapp_outbound_in_tx(&mut tx, ctx.tenant_id, conversation_id, message.id).await
+    if payload.kind == MessageKind::Reply && conv_channel == "whatsapp" {
+        if let Err(error) = unit
+            .publish(&ConversationEvent::WhatsappOutbound {
+                tenant_id: ctx.tenant_id,
+                conversation_id,
+                message_id: added.message.id,
+            })
+            .await
         {
             tracing::error!(%error, conversation_id = %conversation_id, "emit_whatsapp_outbound failed");
             return ApiError::internal_error("Failed to add message")
@@ -829,8 +719,8 @@ pub async fn add_message(
 
     Json(json!({
         "data": {
-            "message": message,
-            "conversation": status_ref,
+            "message": added.message,
+            "conversation": added.conversation,
         }
     }))
     .into_response()
@@ -895,13 +785,6 @@ pub async fn patch_conversation(
         .into_response();
     }
 
-    let status_str = payload.status.as_ref().map(|s| {
-        serde_json::to_string(s)
-            .unwrap_or_default()
-            .trim_matches('"')
-            .to_string()
-    });
-
     let mut tx = match db::UnitOfWork::begin(&pool, &ctx).await {
         Ok(tx) => tx,
         Err(error) => {
@@ -911,14 +794,11 @@ pub async fn patch_conversation(
                 .into_response();
         }
     };
+    let mut unit = PgUnit::new(&mut tx);
 
-    match queries::conversation_row_in_tx(&mut tx, ctx.tenant_id, id).await {
+    match unit.find_live(ctx.tenant_id, id).await {
         Ok(Some(_)) => {}
-        Ok(None) => {
-            return ApiError::not_found("Conversation not found")
-                .with_request_id(&ctx.request_id)
-                .into_response();
-        }
+        Ok(None) => return not_found(&ctx, "Conversation not found"),
         Err(error) => {
             tracing::error!(%error, "failed to check conversation existence");
             return ApiError::internal_error("Failed to update conversation")
@@ -927,11 +807,11 @@ pub async fn patch_conversation(
         }
     }
 
-    let detail = match queries::patch_conversation_in_tx(
-        &mut tx,
+    let detail = match service::patch(
+        &mut unit,
         ctx.tenant_id,
         id,
-        status_str.as_deref(),
+        payload.status,
         payload.assigned_membership_id,
         principal.user_id,
     )
@@ -940,8 +820,7 @@ pub async fn patch_conversation(
         Ok(detail) => detail,
         Err(error) => {
             tracing::error!(%error, conversation_id = %id, "patch conversation failed");
-            let err_msg = error.to_string();
-            if err_msg.contains("is not active in tenant") {
+            if matches!(error, ConversationError::MembershipNotActive { .. }) {
                 return ApiError::unprocessable_entity("Invalid assignment target")
                     .with_details(vec![json!({
                         "field": "assigned_membership_id",
@@ -1009,19 +888,16 @@ pub async fn create_conversation(
         }));
     }
 
-    let valid_channels = [
-        "email", "phone", "web_chat", "whatsapp", "telegram", "widget",
-    ];
-    if !valid_channels.contains(&payload.channel.as_str()) {
+    if !is_known_channel(&payload.channel) {
         details.push(json!({
             "field": "channel",
             "code": "invalid_value",
-            "message": format!("Channel must be one of: {}", valid_channels.join(", "))
+            "message": format!("Channel must be one of: {}", CHANNELS.join(", "))
         }));
     }
 
-    let body = payload.message.body.trim().to_string();
-    if body.is_empty() || body.len() > 10000 {
+    let body = validate_body(&payload.message.body);
+    if body.is_err() {
         details.push(json!({
             "field": "message.body",
             "code": "invalid_length",
@@ -1035,8 +911,8 @@ pub async fn create_conversation(
             .with_request_id(&ctx.request_id)
             .into_response();
     }
+    let body = body.unwrap_or_default();
 
-    // Resolve the acting member's membership id
     let mut uow = match ctx.unit_of_work(&pool).await {
         Ok(u) => u,
         Err(r) => return r,
@@ -1049,11 +925,7 @@ pub async fn create_conversation(
     .await
     {
         Ok(Some(mid)) => mid,
-        Ok(None) => {
-            return ApiError::not_found("User not found in tenant")
-                .with_request_id(&ctx.request_id)
-                .into_response();
-        }
+        Ok(None) => return not_found(&ctx, "User not found in tenant"),
         Err(error) => {
             tracing::error!(%error, "failed to resolve membership_id");
             return ApiError::internal_error("Failed to resolve membership")
@@ -1075,28 +947,28 @@ pub async fn create_conversation(
         }
     };
 
-    let detail = match queries::create_conversation_in_tx(
-        &mut tx,
-        ctx.tenant_id,
-        payload.customer_id,
-        &payload.channel,
-        &body,
-        queries::ConversationActor::Staff {
-            user_id: principal.user_id,
-            membership_id,
-        },
-        None,
-    )
-    .await
-    {
+    let detail = {
+        let mut unit = PgUnit::new(&mut tx);
+        service::create(
+            &mut unit,
+            ctx.tenant_id,
+            payload.customer_id,
+            &payload.channel,
+            &body,
+            ConversationActor::Staff {
+                user_id: principal.user_id,
+                membership_id,
+            },
+            None,
+        )
+        .await
+    };
+    let detail = match detail {
         Ok(detail) => detail,
         Err(error) => {
             tracing::error!(%error, customer_id = %payload.customer_id, "create conversation failed");
-            let err_msg = error.to_string();
-            if err_msg.contains("not found in tenant") {
-                return ApiError::not_found("Customer not found")
-                    .with_request_id(&ctx.request_id)
-                    .into_response();
+            if matches!(error, ConversationError::CustomerNotFound { .. }) {
+                return not_found(&ctx, "Customer not found");
             }
             return ApiError::internal_error("Failed to create conversation")
                 .with_request_id(&ctx.request_id)
