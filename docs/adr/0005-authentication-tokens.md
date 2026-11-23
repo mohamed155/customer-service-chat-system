@@ -155,8 +155,9 @@ The checks don't depend on a principal being present.
 
 Long-lived SSE streams (`GET /tenant/events`, ADR-009) are safe methods and need no CSRF check.
 However, they **outlive the access token**. When a stream is opened, the server records the
-session's `sid`, and the stream is closed as soon as that session is revoked. Otherwise the
-stream can stay open up to its absolute session cap. The client reconnects after each refresh,
+session's `sid` and closes the stream when revalidation detects that session was revoked. A hint
+triggers the check immediately. In the absence of a hint, the periodic check detects revocation.
+Revalidation also enforces the session's absolute cap. The client reconnects after each refresh,
 so that the per-request authorization runs again.
 
 ### 6. MFA plan

@@ -63,6 +63,8 @@ SSE is the default. A WebSocket endpoint needs a stated reason in its spec.
 
 - Authorization runs **on subscribe**: session (ADR-005), tenant membership and permission
   (ADR-006). Channel names come from the server-side tenant context, never from the client.
+- Opening a tenant stream requires an active tenant membership, including for platform staff
+  using a platform access grant. An open grant stream rechecks the grant and staff permissions.
 - The stream records its session ID and is **closed on revocation**, logout, or tenant
   suspension, and the client must re-authorise on reconnect.
 - Redis pub/sub carries session, user, and membership revalidation hints between API instances.

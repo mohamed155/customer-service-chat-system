@@ -29,9 +29,7 @@ type RevocationExtensions = (
 );
 
 pub struct GuardedStream {
-    // Observers have no PresenceGuard. Retain the tenant broadcast sender for their lifetime.
-    _runtime: Arc<presence::Runtime>,
-    pub guard: Option<presence::PresenceGuard>,
+    pub guard: presence::PresenceGuard,
     pub inner: BroadcastStream<presence::Event>,
     pub seq: u64,
     pub tenant_id: Uuid,
@@ -206,45 +204,34 @@ pub async fn stream_events(
         .is_none_or(|Extension(config)| config.environment == config::Environment::Production);
     let session_id = claims.map(|Extension(claims)| claims.sid);
     let signals = bus.map(|Extension(bus)| bus.subscribe());
-    let membership_id = if grant.is_some() {
-        Uuid::nil()
-    } else {
-        let mut uow = match ctx.unit_of_work(&pool).await {
-            Ok(u) => u,
-            Err(r) => return r,
-        };
-        let membership_id = match tenancy::directory::active_membership_id_of_user(
-            uow.conn(),
-            ctx.tenant_id,
-            principal.user_id,
-        )
-        .await
-        {
-            Ok(Some(mid)) => mid,
-            Ok(None) => {
-                return kernel::ApiError::not_found("Membership not found in tenant")
-                    .with_request_id(&ctx.request_id)
-                    .into_response();
-            }
-            Err(error) => {
-                tracing::error!(%error, "failed to resolve membership_id for SSE");
-                return kernel::ApiError::internal_error("Failed to start event stream")
-                    .with_request_id(&ctx.request_id)
-                    .into_response();
-            }
-        };
-        if let Err(r) = ctx.commit(uow).await {
-            return r;
+    let mut uow = match ctx.unit_of_work(&pool).await {
+        Ok(u) => u,
+        Err(r) => return r,
+    };
+    let membership_id = match tenancy::directory::active_membership_id_of_user(
+        uow.conn(),
+        ctx.tenant_id,
+        principal.user_id,
+    )
+    .await
+    {
+        Ok(Some(mid)) => mid,
+        Ok(None) => {
+            return kernel::ApiError::not_found("Membership not found in tenant")
+                .with_request_id(&ctx.request_id)
+                .into_response();
         }
-
-        membership_id
+        Err(error) => {
+            tracing::error!(%error, "failed to resolve membership_id for SSE");
+            return kernel::ApiError::internal_error("Failed to start event stream")
+                .with_request_id(&ctx.request_id)
+                .into_response();
+        }
     };
-    let (guard, rx) = if grant.is_some() {
-        (None, runtime.observe(ctx.tenant_id))
-    } else {
-        let (guard, rx) = runtime.connect(ctx.tenant_id, membership_id);
-        (Some(guard), rx)
-    };
+    if let Err(r) = ctx.commit(uow).await {
+        return r;
+    }
+    let (guard, rx) = runtime.connect(ctx.tenant_id, membership_id);
 
     // Reconnect drain: if the agent is already available (reconnect within grace window),
     // drain one queued escalation for them. Awaited before the stream is returned so the
@@ -252,56 +239,52 @@ pub async fn stream_events(
     let pool_for_drain = pool.clone();
     let tenant_id = ctx.tenant_id;
     let runtime_for_drain = runtime.clone();
-    if grant.is_none() {
-        async move {
-            let avail_state: Option<String> =
-                match db::UnitOfWork::begin_for_tenant(&pool_for_drain, tenant_id).await {
-                    Ok(mut lookup) => {
-                        let state = sqlx::query_scalar(
-                            "SELECT state FROM agent_availability \
-                         WHERE tenant_id = $1 AND membership_id = $2",
-                        )
-                        .bind(tenant_id)
-                        .bind(membership_id)
-                        .fetch_optional(lookup.conn())
-                        .await
-                        .ok()
-                        .flatten();
-                        lookup.commit().await.ok();
-                        state
-                    }
-                    Err(_) => None,
-                };
-            if avail_state.as_deref() == Some("available") {
-                let present_ids = runtime_for_drain
-                    .present_membership_ids_async(tenant_id)
-                    .await;
-                let mut tx =
-                    match db::UnitOfWork::begin_for_tenant(&pool_for_drain, tenant_id).await {
-                        Ok(tx) => tx,
-                        Err(_) => return,
-                    };
-                if let Err(e) = routing::drain_one_for_membership_in_tx(
-                    &mut tx,
-                    tenant_id,
-                    membership_id,
-                    &present_ids,
-                    Uuid::nil(),
-                )
-                .await
-                {
-                    tracing::error!(%e, "reconnect drain failed");
-                    tx.rollback().await.ok();
-                    return;
+    async move {
+        let avail_state: Option<String> =
+            match db::UnitOfWork::begin_for_tenant(&pool_for_drain, tenant_id).await {
+                Ok(mut lookup) => {
+                    let state = sqlx::query_scalar(
+                        "SELECT state FROM agent_availability \
+                     WHERE tenant_id = $1 AND membership_id = $2",
+                    )
+                    .bind(tenant_id)
+                    .bind(membership_id)
+                    .fetch_optional(lookup.conn())
+                    .await
+                    .ok()
+                    .flatten();
+                    lookup.commit().await.ok();
+                    state
                 }
-                tx.commit().await.ok();
+                Err(_) => None,
+            };
+        if avail_state.as_deref() == Some("available") {
+            let present_ids = runtime_for_drain
+                .present_membership_ids_async(tenant_id)
+                .await;
+            let mut tx = match db::UnitOfWork::begin_for_tenant(&pool_for_drain, tenant_id).await {
+                Ok(tx) => tx,
+                Err(_) => return,
+            };
+            if let Err(e) = routing::drain_one_for_membership_in_tx(
+                &mut tx,
+                tenant_id,
+                membership_id,
+                &present_ids,
+                Uuid::nil(),
+            )
+            .await
+            {
+                tracing::error!(%e, "reconnect drain failed");
+                tx.rollback().await.ok();
+                return;
             }
+            tx.commit().await.ok();
         }
-        .await;
     }
+    .await;
 
     let stream = GuardedStream {
-        _runtime: runtime,
         guard,
         inner: BroadcastStream::new(rx),
         seq: 0,
@@ -349,12 +332,7 @@ pub async fn stream_events(
                         }
                     }
                     if let Some(grant) = platform_grant {
-                        if !grant.is_current(&pool).await
-                            || !tenancy::staff_can_view_conversation_stream(
-                                &pool,
-                                user_id,
-                                is_production,
-                            )
+                        if !platform_stream_is_authorized(grant, &pool, user_id, is_production)
                             .await
                         {
                             return None;
@@ -390,13 +368,8 @@ pub async fn stream_events(
             .then(move |event| {
                 let pool = stream_pool.clone();
                 async move {
-                    (grant.is_current(&pool).await
-                        && tenancy::staff_can_view_conversation_stream(
-                            &pool,
-                            user_id,
-                            is_production,
-                        )
-                        .await)
+                    platform_stream_is_authorized(grant, &pool, user_id, is_production)
+                        .await
                         .then_some(event)
                 }
             })
@@ -406,6 +379,24 @@ pub async fn stream_events(
         return Sse::new(guarded).keep_alive(keep_alive).into_response();
     }
     Sse::new(stream).keep_alive(keep_alive).into_response()
+}
+
+async fn platform_stream_is_authorized(
+    grant: PlatformAccessGrant,
+    pool: &sqlx::PgPool,
+    user_id: Uuid,
+    is_production: bool,
+) -> bool {
+    if !grant.is_current(pool).await {
+        return false;
+    }
+    match tenancy::staff_can_view_conversation_stream(pool, user_id, is_production).await {
+        Ok(allowed) => allowed,
+        Err(error) => {
+            tracing::warn!(%error, "Failed to revalidate platform stream permission");
+            false
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

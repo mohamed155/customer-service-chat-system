@@ -155,17 +155,6 @@ impl Runtime {
         (guard, rx)
     }
 
-    pub(crate) fn observe(&self, tenant_id: Uuid) -> broadcast::Receiver<Event> {
-        let mut map = lock_registry(&self.inner.registry);
-        map.entry(tenant_id)
-            .or_insert_with(|| TenantPresence {
-                members: HashMap::new(),
-                tx: broadcast::channel(256).0,
-            })
-            .tx
-            .subscribe()
-    }
-
     pub fn broadcast(&self, tenant_id: Uuid, event: Event) {
         let map = lock_registry(&self.inner.registry);
         if let Some(tp) = map.get(&tenant_id) {

@@ -174,24 +174,51 @@ async fn seed_tenant(pool: &PgPool) -> Uuid {
 
 async fn seed_member(pool: &PgPool, tenant: Uuid, role: &str) -> (Uuid, Issued) {
     let user = seed_user(pool, None).await;
-    sqlx::query("INSERT INTO tenant_memberships (tenant_id,user_id,role) VALUES ($1,$2,$3)")
-        .bind(tenant)
-        .bind(user)
-        .bind(role)
-        .execute(&db::testing::seed_pool())
-        .await
-        .unwrap();
+    seed_membership(&db::testing::seed_pool(), tenant, user, role).await;
     (
         user,
         session_fixture::start(pool, &Environment::Test, user).await,
     )
 }
 
-async fn open(
-    app: &Router,
+async fn seed_membership(pool: &PgPool, tenant: Uuid, user: Uuid, role: &str) {
+    sqlx::query("INSERT INTO tenant_memberships (tenant_id,user_id,role) VALUES ($1,$2,$3)")
+        .bind(tenant)
+        .bind(user)
+        .bind(role)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn confirm_stream_ready(
+    runtime: &escalations::presence::Runtime,
     tenant: Uuid,
-    session: &Issued,
-) -> tokio::task::JoinHandle<Result<http_body_util::Collected<axum::body::Bytes>, axum::Error>> {
+    body: &mut Body,
+) {
+    // Poll the empty stream before queuing the marker. Tokio's first interval tick may
+    // still be pending on the first poll. If its database check is in flight, the marker
+    // will remain queued until that check finishes.
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), body.frame())
+            .await
+            .is_err()
+    );
+    runtime.broadcast(
+        tenant,
+        escalations::presence::Event::ConversationMessageStatus(
+            serde_json::json!({"marker":"ready"}),
+        ),
+    );
+    let frame = tokio::time::timeout(Duration::from_secs(3), body.frame())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&frame.into_data().unwrap()).contains(r#""marker":"ready""#));
+}
+
+async fn open_body(app: &Router, tenant: Uuid, session: &Issued) -> Body {
     let response = send(
         app,
         Method::GET,
@@ -202,7 +229,22 @@ async fn open(
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    tokio::spawn(response.into_body().collect())
+    response.into_body()
+}
+
+async fn expect_stream_closed(body: &mut Body, within: Duration) {
+    assert!(tokio::time::timeout(within, body.frame())
+        .await
+        .expect("event stream remained open")
+        .is_none());
+}
+
+async fn open(
+    app: &Router,
+    tenant: Uuid,
+    session: &Issued,
+) -> tokio::task::JoinHandle<Result<http_body_util::Collected<axum::body::Bytes>, axum::Error>> {
+    tokio::spawn(open_body(app, tenant, session).await.collect())
 }
 
 #[tokio::test]
@@ -250,11 +292,7 @@ async fn logout_closes_the_matching_stream_across_redis_instances() {
     assert_eq!(response.status(), StatusCode::OK);
     let mut body = response.into_body();
     let mut unaffected = open(&reader, tenant, &other).await;
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), body.frame())
-            .await
-            .is_err()
-    );
+    confirm_stream_ready(&runtime, tenant, &mut body).await;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
     assert_eq!(
         send(
@@ -301,15 +339,13 @@ async fn periodic_recheck_closes_a_directly_revoked_session() {
     let Some(pool) = database().await else { return };
     let tenant = seed_tenant(&pool).await;
     let (_, session) = seed_member(&pool, tenant, "owner").await;
-    let app = app(&pool).layer(axum::Extension(config::SseRevalidation(
+    let (app, runtime) = app_with_presence(&pool);
+    let app = app.layer(axum::Extension(config::SseRevalidation(
         Duration::from_secs(5),
     )));
-    let mut stream = open(&app, tenant, &session).await;
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), &mut stream)
-            .await
-            .is_err()
-    );
+    let mut body = open_body(&app, tenant, &session).await;
+    let first_check = tokio::time::Instant::now();
+    confirm_stream_ready(&runtime, tenant, &mut body).await;
     assert!(identity::sessions::revoke_session(
         &pool,
         session.sid,
@@ -317,11 +353,12 @@ async fn periodic_recheck_closes_a_directly_revoked_session() {
     )
     .await
     .unwrap());
-    tokio::time::timeout(Duration::from_secs(6), stream)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    assert!(
+        tokio::time::timeout_at(first_check + Duration::from_secs(4), body.frame())
+            .await
+            .is_err()
+    );
+    expect_stream_closed(&mut body, Duration::from_secs(2)).await;
 }
 
 #[tokio::test]
@@ -346,8 +383,9 @@ async fn member_changes_close_only_streams_that_lose_access() {
             .fetch_one(&seed)
             .await
             .unwrap();
-    let app = app(&pool);
-    let mut stream = open(&app, tenant, &member).await;
+    let (app, runtime) = app_with_presence(&pool);
+    let mut body = open_body(&app, tenant, &member).await;
+    confirm_stream_ready(&runtime, tenant, &mut body).await;
     let mut other_stream = open(&app, tenant, &other).await;
     let mut other_tenant_stream = open(&app, other_tenant, &member).await;
     let path = format!("/api/v1/tenant/members/{id}");
@@ -364,11 +402,7 @@ async fn member_changes_close_only_streams_that_lose_access() {
         .status(),
         StatusCode::OK
     );
-    assert!(
-        tokio::time::timeout(Duration::from_millis(250), &mut stream)
-            .await
-            .is_err()
-    );
+    confirm_stream_ready(&runtime, tenant, &mut body).await;
     assert_eq!(
         send(
             &app,
@@ -382,11 +416,7 @@ async fn member_changes_close_only_streams_that_lose_access() {
         .status(),
         StatusCode::OK
     );
-    tokio::time::timeout(Duration::from_secs(3), stream)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    expect_stream_closed(&mut body, Duration::from_secs(3)).await;
     assert!(
         tokio::time::timeout(Duration::from_millis(250), &mut other_stream)
             .await
@@ -407,13 +437,9 @@ async fn replayed_refresh_closes_its_stream() {
     let Some(pool) = database().await else { return };
     let tenant = seed_tenant(&pool).await;
     let (_, session) = seed_member(&pool, tenant, "owner").await;
-    let app = app(&pool);
-    let mut stream = open(&app, tenant, &session).await;
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), &mut stream)
-            .await
-            .is_err()
-    );
+    let (app, runtime) = app_with_presence(&pool);
+    let mut body = open_body(&app, tenant, &session).await;
+    confirm_stream_ready(&runtime, tenant, &mut body).await;
     let refresh = || {
         let app = app.clone();
         let req = Request::post("/api/v1/auth/refresh")
@@ -436,11 +462,7 @@ async fn replayed_refresh_closes_its_stream() {
     .await
     .unwrap();
     assert_eq!(refresh().await.status(), StatusCode::UNAUTHORIZED);
-    tokio::time::timeout(Duration::from_secs(3), stream)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    expect_stream_closed(&mut body, Duration::from_secs(3)).await;
 }
 
 #[tokio::test]
@@ -471,13 +493,9 @@ async fn password_reset_closes_the_users_stream() {
     .execute(&pool)
     .await
     .unwrap();
-    let app = app(&pool);
-    let mut stream = open(&app, tenant, &session).await;
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), &mut stream)
-            .await
-            .is_err()
-    );
+    let (app, runtime) = app_with_presence(&pool);
+    let mut body = open_body(&app, tenant, &session).await;
+    confirm_stream_ready(&runtime, tenant, &mut body).await;
     assert_eq!(
         send(
             &app,
@@ -491,11 +509,7 @@ async fn password_reset_closes_the_users_stream() {
         .status(),
         StatusCode::NO_CONTENT
     );
-    tokio::time::timeout(Duration::from_secs(3), stream)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    expect_stream_closed(&mut body, Duration::from_secs(3)).await;
 }
 
 #[tokio::test]
@@ -549,23 +563,16 @@ async fn a_deleted_membership_closes_only_its_tenant_stream_on_recheck() {
         .await
         .unwrap();
     let bus = kernel::stream_revocation::Bus::default();
-    let app = app(&pool).layer(axum::Extension(bus.clone()));
-    let mut removed = open(&app, tenant, &session).await;
+    let (app, runtime) = app_with_presence(&pool);
+    let app = app.layer(axum::Extension(bus.clone()));
+    let mut removed = open_body(&app, tenant, &session).await;
     let mut unaffected = open(&app, another, &session).await;
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), &mut removed)
-            .await
-            .is_err()
-    );
+    confirm_stream_ready(&runtime, tenant, &mut removed).await;
     bus.publish(kernel::stream_revocation::Signal::Membership {
         tenant_id: tenant,
         user_id: user,
     });
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), &mut removed)
-            .await
-            .is_err()
-    );
+    confirm_stream_ready(&runtime, tenant, &mut removed).await;
     sqlx::query(
         "UPDATE tenant_memberships SET deleted_at = now() WHERE tenant_id = $1 AND user_id = $2",
     )
@@ -578,11 +585,7 @@ async fn a_deleted_membership_closes_only_its_tenant_stream_on_recheck() {
         tenant_id: tenant,
         user_id: user,
     });
-    tokio::time::timeout(Duration::from_secs(3), removed)
-        .await
-        .unwrap()
-        .unwrap()
-        .unwrap();
+    expect_stream_closed(&mut removed, Duration::from_secs(3)).await;
     assert!(
         tokio::time::timeout(Duration::from_millis(250), &mut unaffected)
             .await
@@ -596,10 +599,10 @@ async fn a_platform_role_change_that_removes_conversation_access_closes_the_stre
     let Some(pool) = database().await else { return };
     let tenant = seed_tenant(&pool).await;
     let staff = seed_user(&pool, Some("support")).await;
+    seed_membership(&db::testing::seed_pool(), tenant, staff, "agent").await;
     let bus = kernel::stream_revocation::Bus::default();
-    let app = app_with_environment(&pool, Environment::Production)
-        .0
-        .layer(axum::Extension(bus.clone()));
+    let (app, runtime) = app_with_environment(&pool, Environment::Production);
+    let app = app.layer(axum::Extension(bus.clone()));
     let session =
         session_fixture::PlatformAccess::sign_in(&pool, &Environment::Production, staff).await;
     let switched = app.clone().oneshot(session.switch(tenant)).await.unwrap();
@@ -608,21 +611,82 @@ async fn a_platform_role_change_that_removes_conversation_access_closes_the_stre
     let request = session.scoped_request(Method::GET, "/api/v1/tenant/events", tenant, None);
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let mut stream = tokio::spawn(response.into_body().collect());
-    assert!(
-        tokio::time::timeout(Duration::from_millis(200), &mut stream)
-            .await
-            .is_err()
-    );
+    let mut body = response.into_body();
+    confirm_stream_ready(&runtime, tenant, &mut body).await;
     sqlx::query("UPDATE users SET platform_role = 'sales' WHERE id = $1")
         .bind(staff)
         .execute(&pool)
         .await
         .unwrap();
     bus.publish(kernel::stream_revocation::Signal::User { user_id: staff });
-    tokio::time::timeout(Duration::from_secs(3), stream)
+    expect_stream_closed(&mut body, Duration::from_secs(3)).await;
+}
+
+#[tokio::test]
+async fn soft_deleted_tenant_closes_a_member_stream() {
+    let Some(pool) = database().await else { return };
+    let tenant = seed_tenant(&pool).await;
+    let (_, session) = seed_member(&pool, tenant, "owner").await;
+    let (app, runtime) = app_with_presence(&pool);
+    let app = app.layer(axum::Extension(config::SseRevalidation(
+        Duration::from_secs(5),
+    )));
+    let mut body = open_body(&app, tenant, &session).await;
+    confirm_stream_ready(&runtime, tenant, &mut body).await;
+
+    soft_delete_tenant(tenant).await;
+    expect_stream_closed(&mut body, Duration::from_secs(6)).await;
+}
+
+#[tokio::test]
+async fn soft_deleted_tenant_closes_a_platform_stream_with_or_without_a_hint() {
+    let Some(pool) = database().await else { return };
+    for send_hint in [false, true] {
+        let tenant = seed_tenant(&pool).await;
+        let staff = seed_user(&pool, Some("support")).await;
+        seed_membership(&db::testing::seed_pool(), tenant, staff, "agent").await;
+        let bus = kernel::stream_revocation::Bus::default();
+        let (app, runtime) = app_with_presence(&pool);
+        let app = app.layer(axum::Extension(bus.clone()));
+        let session =
+            session_fixture::PlatformAccess::sign_in(&pool, &Environment::Test, staff).await;
+        assert_eq!(
+            app.clone()
+                .oneshot(session.switch(tenant))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        let request = session.scoped_request(Method::GET, "/api/v1/tenant/events", tenant, None);
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let mut body = response.into_body();
+        confirm_stream_ready(&runtime, tenant, &mut body).await;
+
+        soft_delete_tenant(tenant).await;
+        if send_hint {
+            bus.publish(kernel::stream_revocation::Signal::Membership {
+                tenant_id: tenant,
+                user_id: staff,
+            });
+            expect_stream_closed(&mut body, Duration::from_secs(1)).await;
+        } else {
+            // Platform grants have a two-second fallback poll.
+            assert!(
+                tokio::time::timeout(Duration::from_millis(200), body.frame())
+                    .await
+                    .is_err()
+            );
+            expect_stream_closed(&mut body, Duration::from_secs(3)).await;
+        }
+    }
+}
+
+async fn soft_delete_tenant(tenant: Uuid) {
+    sqlx::query("UPDATE tenants SET deleted_at = now() WHERE id = $1")
+        .bind(tenant)
+        .execute(&db::testing::seed_pool())
         .await
-        .unwrap()
-        .unwrap()
         .unwrap();
 }

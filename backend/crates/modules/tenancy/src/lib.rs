@@ -320,17 +320,15 @@ pub async fn staff_can_view_conversation_stream(
     pool: &sqlx::PgPool,
     user_id: uuid::Uuid,
     is_production: bool,
-) -> bool {
-    identity::directory::principal_row(pool, user_id)
-        .await
-        .ok()
-        .flatten()
+) -> sqlx::Result<bool> {
+    Ok(identity::directory::principal_row(pool, user_id)
+        .await?
         .and_then(|(_, _, _, role)| role)
         .and_then(|role| identity::PlatformRole::from_str(&role).ok())
         .is_some_and(|role| {
             authz::staff_tenant_permissions(role, is_production)
                 .contains(&CONVERSATION_STREAM_PERMISSION)
-        })
+        }))
 }
 
 #[cfg(test)]

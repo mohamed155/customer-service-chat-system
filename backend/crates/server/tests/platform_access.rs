@@ -928,7 +928,14 @@ async fn closing_platform_access_ends_an_existing_event_stream() {
     let Some(fixture) = Fixture::new().await else {
         return;
     };
-    // Platform grants authorize the stream without creating a tenant membership.
+    sqlx::query(
+        "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, 'agent')",
+    )
+    .bind(fixture.tenant)
+    .bind(fixture.staff)
+    .execute(&db::testing::seed_pool())
+    .await
+    .unwrap();
     for cause in ["end", "expiry", "logout"] {
         let session_id = fixture.start(fixture.tenant).await;
         let response = fixture
@@ -982,4 +989,26 @@ async fn closing_platform_access_ends_an_existing_event_stream() {
             .unwrap();
         assert!(result.is_ok());
     }
+}
+
+#[tokio::test]
+async fn platform_grant_without_membership_cannot_open_an_event_stream() {
+    let Some(fixture) = Fixture::new().await else {
+        return;
+    };
+    fixture.start(fixture.tenant).await;
+    let response = fixture
+        .send(
+            Method::GET,
+            "/api/v1/tenant/events",
+            &fixture.sign_in,
+            Some(fixture.tenant),
+            None,
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        body(response).await["detail"],
+        "Membership not found in tenant"
+    );
 }
