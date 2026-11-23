@@ -181,7 +181,7 @@ Password recovery (MOH-94) addresses four risks:
 | T | Job payload tenant ID tampered | Payload from trusted producers; worker re-establishes tenant context + RLS | ✓ the consumer re-establishes the tenant and RLS applies (ADR-004 T1) | Platform Engineering |
 | R | Lost history of processed events | Mark dispatched, keep for retention window | Gap: rows deleted after processing (ADR-007 Q3) | Platform Engineering |
 | I | SSE stream receives another tenant's events | Tenant-scoped channels from server-side context | ✓ | Conversations |
-| I | Stream stays open after logout or revocation | Close stream on revocation | Gap (ADR-009 RT3, ADR-005 A8) | Conversations |
+| I | Stream stays open after logout or revocation | Close stream on revocation | ✓ Redis hints and periodic authorization checks (ADR-009 RT3, ADR-005 A8) | Conversations |
 | D | Duplicate or stuck jobs | Leases, retries with jitter, dead letters, inbox dedupe | Partial (ADR-007 Q2–Q5) | Platform Engineering |
 | E | — | Workers use the same least-privilege DB role as the API | ✓ same least-privilege `app_runtime` role as the API (ADR-004 T2) | Platform Engineering |
 

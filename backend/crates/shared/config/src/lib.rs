@@ -769,8 +769,50 @@ fn validate_public_dashboard_url(url: &str) -> Result<(), ConfigError> {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct SseRevalidation(pub std::time::Duration);
+
+impl Default for SseRevalidation {
+    fn default() -> Self {
+        Self(std::time::Duration::from_secs(15))
+    }
+}
+
+impl SseRevalidation {
+    pub fn from_env() -> Result<Self, ConfigError> {
+        match std::env::var("SSE_REVALIDATE_SECS") {
+            Err(std::env::VarError::NotPresent) => Ok(Self::default()),
+            Ok(value) => Self::parse(&value),
+            Err(error) => Err(ConfigError(format!("SSE_REVALIDATE_SECS: {error}"))),
+        }
+    }
+
+    fn parse(value: &str) -> Result<Self, ConfigError> {
+        value
+            .parse::<u64>()
+            .ok()
+            .filter(|secs| (5..=300).contains(secs))
+            .map(|secs| Self(std::time::Duration::from_secs(secs)))
+            .ok_or_else(|| {
+                ConfigError("SSE_REVALIDATE_SECS must be an integer from 5 to 300".into())
+            })
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sse_revalidation_validates_seconds() {
+        use super::SseRevalidation;
+        assert_eq!(SseRevalidation::default().0.as_secs(), 15);
+        for (value, expected) in [("5", 5), ("15", 15), ("300", 300)] {
+            assert_eq!(SseRevalidation::parse(value).unwrap().0.as_secs(), expected);
+        }
+        for invalid in ["", "4", "301", "5.5", "-1"] {
+            assert!(SseRevalidation::parse(invalid).is_err());
+        }
+    }
+
     use super::*;
 
     struct EnvGuard;

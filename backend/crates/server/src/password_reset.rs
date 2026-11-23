@@ -117,29 +117,33 @@ pub async fn forgot(
 )]
 pub async fn reset(
     State(pool): State<PgPool>,
+    bus: Option<axum::Extension<kernel::stream_revocation::Bus>>,
     ApiJson(payload): ApiJson<ResetPasswordRequest>,
 ) -> Result<StatusCode, ApiError> {
-    password_reset::reset(&pool, &payload.token, payload.password)
-        .await
-        .map_err(|error| match error {
-            ResetError::InvalidToken => ApiError::new_with_code(
-                StatusCode::BAD_REQUEST,
-                "reset_token_invalid",
-                "The password reset link is invalid or expired.",
-            ),
-            ResetError::InvalidPassword(error) => {
-                ApiError::unprocessable_entity("Validation failed").with_details(vec![error])
-            }
-            ResetError::Database(error) => {
-                ApiError::internal_error_from("Password reset transaction failed", error)
-            }
-            ResetError::Hash(error) => {
-                ApiError::internal_error_from("Password hashing failed", error)
-            }
-            ResetError::HashTask(error) => {
-                ApiError::internal_error_from("Password hashing task failed", error)
-            }
-        })?;
+    password_reset::reset_with_bus(
+        &pool,
+        &payload.token,
+        payload.password,
+        bus.as_ref().map(|axum::Extension(bus)| bus),
+    )
+    .await
+    .map_err(|error| match error {
+        ResetError::InvalidToken => ApiError::new_with_code(
+            StatusCode::BAD_REQUEST,
+            "reset_token_invalid",
+            "The password reset link is invalid or expired.",
+        ),
+        ResetError::InvalidPassword(error) => {
+            ApiError::unprocessable_entity("Validation failed").with_details(vec![error])
+        }
+        ResetError::Database(error) => {
+            ApiError::internal_error_from("Password reset transaction failed", error)
+        }
+        ResetError::Hash(error) => ApiError::internal_error_from("Password hashing failed", error),
+        ResetError::HashTask(error) => {
+            ApiError::internal_error_from("Password hashing task failed", error)
+        }
+    })?;
     Ok(StatusCode::NO_CONTENT)
 }
 

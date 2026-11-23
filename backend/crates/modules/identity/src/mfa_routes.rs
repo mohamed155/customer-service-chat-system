@@ -221,6 +221,7 @@ pub async fn confirm_enrolment(
     Extension(config): Extension<Arc<AppConfig>>,
     principal: Principal,
     claims: Option<Extension<session::SessionClaims>>,
+    bus: Option<Extension<kernel::stream_revocation::Bus>>,
     headers: axum::http::HeaderMap,
     ApiJson(payload): ApiJson<ConfirmRequest>,
 ) -> Response {
@@ -234,6 +235,12 @@ pub async fn confirm_enrolment(
             Ok(codes) => codes,
             Err(error) => return error_response(error),
         };
+
+    if let Some(Extension(bus)) = &bus {
+        bus.publish(kernel::stream_revocation::Signal::User {
+            user_id: principal.user_id,
+        });
+    }
 
     // The session that confirmed the factor is replaced by one that records it, and the old one
     // stops working.
@@ -254,7 +261,9 @@ pub async fn confirm_enrolment(
         // Best effort, on purpose: the factor is confirmed and the codes below are shown only once,
         // so failing now would lose them. The old session has no second factor, and the middleware
         // already refuses such a session for a user who has one, so it stops working anyway.
-        if let Err(error) = end_replaced_session(&pool, &old).await {
+        if let Err(error) =
+            end_replaced_session(&pool, &old, bus.as_ref().map(|Extension(bus)| bus)).await
+        {
             tracing::error!(%error, "could not end the replaced session");
         }
     }
@@ -359,6 +368,7 @@ pub async fn step_up(
     Extension(config): Extension<Arc<AppConfig>>,
     principal: Principal,
     claims: Option<Extension<session::SessionClaims>>,
+    bus: Option<Extension<kernel::stream_revocation::Bus>>,
     headers: axum::http::HeaderMap,
     ApiJson(payload): ApiJson<VerifyRequest>,
 ) -> Response {
@@ -395,7 +405,9 @@ pub async fn step_up(
     // The old session carries the second factor of an earlier moment and its refresh token could
     // keep it alive, so a replacement that did not end it is not a success: the person asks again.
     if let Some(Extension(old)) = claims {
-        if let Err(error) = end_replaced_session(&pool, &old).await {
+        if let Err(error) =
+            end_replaced_session(&pool, &old, bus.as_ref().map(|Extension(bus)| bus)).await
+        {
             return ApiError::internal_error_from("Step-up failed", error).into_response();
         }
     }
@@ -444,6 +456,16 @@ pub fn append_cookies(response: &mut Response, cookies: Vec<String>) {
 
 /// The session that a fresh one replaces stops working (the second factor was set up or proven
 /// again, so the old session's `amr` is out of date).
-async fn end_replaced_session(pool: &PgPool, old: &session::SessionClaims) -> sqlx::Result<()> {
-    crate::sessions::revoke_claims(pool, old, crate::sessions::reason::REPLACED).await
+async fn end_replaced_session(
+    pool: &PgPool,
+    old: &session::SessionClaims,
+    bus: Option<&kernel::stream_revocation::Bus>,
+) -> sqlx::Result<()> {
+    crate::sessions::revoke_claims(pool, old, crate::sessions::reason::REPLACED).await?;
+    if let Some(bus) = bus {
+        bus.publish(kernel::stream_revocation::Signal::Session {
+            session_id: old.sid,
+        });
+    }
+    Ok(())
 }

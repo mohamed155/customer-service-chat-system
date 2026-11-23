@@ -492,6 +492,7 @@ async fn mfa_verify(
 async fn refresh(
     axum::extract::State(pool): axum::extract::State<sqlx::PgPool>,
     Extension(config): Extension<Arc<AppConfig>>,
+    bus: Option<Extension<kernel::stream_revocation::Bus>>,
     headers: axum::http::HeaderMap,
 ) -> Response {
     let again = || {
@@ -507,7 +508,14 @@ async fn refresh(
         return again();
     };
     let keys = identity::keys::keys_for(&config.environment);
-    match identity::sessions::refresh(&pool, keys, token).await {
+    match identity::sessions::refresh_with_bus(
+        &pool,
+        keys,
+        token,
+        bus.as_ref().map(|Extension(bus)| bus),
+    )
+    .await
+    {
         Ok(identity::sessions::Refresh::Rotated(issued)) => {
             let mut response = StatusCode::NO_CONTENT.into_response();
             identity::mfa_routes::append_cookies(&mut response, issued.set_cookies());
@@ -869,7 +877,7 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
         )
         .routes(
             routes!(escalations::events::stream_events)
-                .layer(require_permission(Permission::ConversationsView)),
+                .layer(require_permission(tenancy::CONVERSATION_STREAM_PERMISSION)),
         )
         .routes(
             routes!(escalations::routes::escalate)
@@ -1707,7 +1715,21 @@ fn build_app(
         }
     }
 
-    app_router.with_state(state)
+    app_router
+        .layer(middleware::from_fn({
+            let bus = kernel::stream_revocation::Bus::default();
+            move |mut request: Request, next: middleware::Next| {
+                if request
+                    .extensions()
+                    .get::<kernel::stream_revocation::Bus>()
+                    .is_none()
+                {
+                    request.extensions_mut().insert(bus.clone());
+                }
+                next.run(request)
+            }
+        }))
+        .with_state(state)
 }
 
 /// The router for one run mode, as `main` serves it. `app_with_email_sender` is the `all` mode.

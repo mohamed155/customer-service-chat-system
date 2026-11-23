@@ -49,6 +49,7 @@ pub async fn reset_member_mfa(
     ctx: TenantContext,
     Extension(principal): Extension<Principal>,
     Path(member_id): Path<Uuid>,
+    bus: Option<Extension<kernel::stream_revocation::Bus>>,
 ) -> Response {
     let request_id = ctx.request_id.clone();
     let internal =
@@ -110,7 +111,12 @@ pub async fn reset_member_mfa(
     )
     .await
     {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => {
+            if let Some(Extension(bus)) = bus {
+                bus.publish(kernel::stream_revocation::Signal::User { user_id: target });
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(error) => identity::mfa_routes::error_response(error),
     }
 }
@@ -140,6 +146,7 @@ pub async fn reset_user_mfa(
     State(pool): State<PgPool>,
     Extension(principal): Extension<Principal>,
     Path(user_id): Path<Uuid>,
+    bus: Option<Extension<kernel::stream_revocation::Bus>>,
 ) -> Response {
     if user_id == principal.user_id {
         return ApiError::unprocessable_entity(
@@ -154,7 +161,12 @@ pub async fn reset_user_mfa(
         Err(e) => return ApiError::internal_error_from("MFA reset failed", e).into_response(),
     }
     match mfa::reset(&pool, user_id, principal.user_id, "platform", None).await {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => {
+            if let Some(Extension(bus)) = bus {
+                bus.publish(kernel::stream_revocation::Signal::User { user_id });
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
         Err(error) => identity::mfa_routes::error_response(error),
     }
 }

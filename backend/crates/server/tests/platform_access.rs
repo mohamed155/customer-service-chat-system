@@ -928,16 +928,8 @@ async fn closing_platform_access_ends_an_existing_event_stream() {
     let Some(fixture) = Fixture::new().await else {
         return;
     };
-    sqlx::query(
-        "INSERT INTO tenant_memberships (tenant_id, user_id, role) VALUES ($1, $2, 'agent')",
-    )
-    .bind(fixture.tenant)
-    .bind(fixture.staff)
-    .execute(&db::testing::seed_pool())
-    .await
-    .unwrap();
-
-    for explicit_end in [true, false] {
+    // Platform grants authorize the stream without creating a tenant membership.
+    for cause in ["end", "expiry", "logout"] {
         let session_id = fixture.start(fixture.tenant).await;
         let response = fixture
             .send(
@@ -961,13 +953,27 @@ async fn closing_platform_access_ends_an_existing_event_stream() {
             "the event stream closed before tenant access ended"
         );
 
-        if explicit_end {
+        if cause == "end" {
             assert_eq!(
                 fixture.end_for(&fixture.sign_in).await.status(),
                 StatusCode::NO_CONTENT
             );
-        } else {
+        } else if cause == "expiry" {
             expire(&fixture.pool, session_id).await;
+        } else {
+            assert_eq!(
+                fixture
+                    .send(
+                        Method::POST,
+                        "/api/v1/auth/logout",
+                        &fixture.sign_in,
+                        None,
+                        None
+                    )
+                    .await
+                    .status(),
+                StatusCode::NO_CONTENT
+            );
         }
 
         let result = tokio::time::timeout(Duration::from_secs(5), reader)

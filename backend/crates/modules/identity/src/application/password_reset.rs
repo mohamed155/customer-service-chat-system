@@ -75,6 +75,15 @@ pub async fn reset(
     raw_token: &str,
     password: String,
 ) -> Result<(), ResetError> {
+    reset_with_bus(store, raw_token, password, None).await
+}
+
+pub async fn reset_with_bus(
+    store: &impl PasswordResetStore,
+    raw_token: &str,
+    password: String,
+    bus: Option<&kernel::stream_revocation::Bus>,
+) -> Result<(), ResetError> {
     let token_hash = domain::token_hash(raw_token).ok_or(ResetError::InvalidToken)?;
     // An unlocked preflight keeps misses cheap and keeps Argon2 off the transaction's lock path.
     let user = store
@@ -87,7 +96,11 @@ pub async fn reset(
         .map_err(ResetError::HashTask)?
         .map_err(ResetError::Hash)?;
 
-    store.redeem(user, &token_hash, &password_hash).await
+    store.redeem(user, &token_hash, &password_hash).await?;
+    if let Some(bus) = bus {
+        bus.publish(kernel::stream_revocation::Signal::User { user_id: user });
+    }
+    Ok(())
 }
 
 #[derive(Debug)]

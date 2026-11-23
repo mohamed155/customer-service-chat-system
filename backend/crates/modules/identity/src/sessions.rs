@@ -485,6 +485,15 @@ pub async fn refresh(
     keys: &KeySet,
     presented: &str,
 ) -> Result<Refresh, SessionError> {
+    refresh_with_bus(pool, keys, presented, None).await
+}
+
+pub async fn refresh_with_bus(
+    pool: &PgPool,
+    keys: &KeySet,
+    presented: &str,
+    bus: Option<&kernel::stream_revocation::Bus>,
+) -> Result<Refresh, SessionError> {
     let hash = hash_token(presented);
     let ttl = session::access_ttl_seconds();
 
@@ -600,6 +609,9 @@ pub async fn refresh(
 
     // A used token again, outside the grace window: someone has a copy.
     if revoke_session(pool, sid, reason::REFRESH_REUSE).await? {
+        if let Some(bus) = bus {
+            bus.publish(kernel::stream_revocation::Signal::Session { session_id: sid });
+        }
         let resource = sid.to_string();
         audit::record(
             pool,

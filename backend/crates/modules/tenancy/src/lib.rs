@@ -286,6 +286,53 @@ fn permission_set_for_stored_tenant_role(
     Some((role, authz::PermissionSet::new(permissions.iter().copied())))
 }
 
+/// Permission required both when opening and revalidating tenant conversation streams.
+pub const CONVERSATION_STREAM_PERMISSION: authz::Permission = authz::Permission::ConversationsView;
+
+/// Reuse the tenant permission matrix for an existing stream's active membership.
+pub async fn can_view_conversation_stream(
+    pool: &sqlx::PgPool,
+    tenant_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+    membership_id: uuid::Uuid,
+) -> sqlx::Result<bool> {
+    let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let role: Option<String> = sqlx::query_scalar(
+        "SELECT m.role FROM tenant_memberships m JOIN tenants t ON t.id = m.tenant_id
+         WHERE m.tenant_id = $1 AND m.user_id = $2 AND m.id = $3
+           AND m.status = 'active' AND m.deleted_at IS NULL AND t.status = 'active'
+           AND t.deleted_at IS NULL",
+    )
+    .bind(tenant_id)
+    .bind(user_id)
+    .bind(membership_id)
+    .fetch_optional(uow.conn())
+    .await?;
+    uow.commit().await?;
+    Ok(role
+        .as_deref()
+        .and_then(permission_set_for_stored_tenant_role)
+        .is_some_and(|(_, permissions)| permissions.contains(CONVERSATION_STREAM_PERMISSION)))
+}
+
+/// Check the current platform role against the same permission matrix used on subscribe.
+pub async fn staff_can_view_conversation_stream(
+    pool: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    is_production: bool,
+) -> bool {
+    identity::directory::principal_row(pool, user_id)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|(_, _, _, role)| role)
+        .and_then(|role| identity::PlatformRole::from_str(&role).ok())
+        .is_some_and(|role| {
+            authz::staff_tenant_permissions(role, is_production)
+                .contains(&CONVERSATION_STREAM_PERMISSION)
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::permission_set_for_stored_tenant_role;
