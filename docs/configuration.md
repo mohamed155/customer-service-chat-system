@@ -98,6 +98,10 @@ openssl rand -base64 32
 | `APP_RATE_LIMIT_ENABLED` | Enable request rate limiting globally. Accepts boolean-like values. | `true` | no |
 | `APP_RATE_LIMIT_LOGIN_MAX` | Maximum failed login attempts per window (per email+IP pair) | `10` | no |
 | `APP_RATE_LIMIT_LOGIN_WINDOW_SECS` | Login rate-limit window in seconds | `60` | no |
+| `LOGIN_LOCKOUT_THRESHOLD` | Consecutive account-wide password failures before a lock starts; minimum `3`. A successful login or password reset clears the count. | `5` | no |
+| `LOGIN_LOCKOUT_BASE_SECS` | First lock duration in seconds; subsequent failed attempts after an expired lock double this delay up to `LOGIN_LOCKOUT_MAX_SECS`. | `60` | no |
+| `LOGIN_LOCKOUT_MAX_SECS` | Maximum per-account lock duration in seconds. Must be at least `LOGIN_LOCKOUT_BASE_SECS`. | `900` | no |
+| `LOGIN_LOCKOUT_RESET_AFTER_SECS` | Age after which a failure starts a new streak and resets the count. | `86400` | no |
 | `APP_RATE_LIMIT_PASSWORD_RESET_FORGOT_EMAIL_MAX` | Password reset link requests per normalized email per window | `3` | no |
 | `APP_RATE_LIMIT_PASSWORD_RESET_FORGOT_IP_MAX` | Password reset link requests per client IP per window | `20` | no |
 | `APP_RATE_LIMIT_PASSWORD_RESET_IP_MAX` | Password reset redemption attempts per client IP per window | `20` | no |
@@ -110,6 +114,10 @@ openssl rand -base64 32
 | `APP_HSTS_MAX_AGE` | `max-age` value for `Strict-Transport-Security`. Set to `0` for local development (prevents browser pinning localhost to HTTPS). Default seconds equals 1 year. | `31536000` | no |
 | `APP_TRACE_SAMPLE_RATIO` | Read by the backend but **no longer applied at the SDK** — every span is now exported so that FR-020's "an errored request's trace is always retained" can hold. The retention rate for non-errored traces is set by `OTEL_TAIL_SAMPLE_PERCENTAGE` on the collector. | `1.0` | no |
 | `APP_TRUSTED_PROXY` | Must be `true` in staging/production (traffic arrives through Caddy which overwrites `X-Forwarded-For`). Must stay `false` in local development (nothing sanitises the header). Defaults to `false`. | `false` | no |
+
+A locked user can wait for the configured lock interval and try again. If the owner did not make the
+failed attempts, use **Forgot password**; redeeming the emailed reset link clears the lockout state
+and unlocks the account. The login response stays the same generic sign-in error while locked.
 
 ### Outbound HTTP timeouts (per integration)
 

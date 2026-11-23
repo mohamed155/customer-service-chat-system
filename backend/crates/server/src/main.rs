@@ -169,6 +169,9 @@ async fn main() {
                 if let Ok((pending, age)) = identity::password_reset::queue_health(&pool).await {
                     observability::metrics::set_password_reset_queue_health(pending, age);
                 }
+                if let Ok((pending, age)) = identity::login_lockout::queue_health(&pool).await {
+                    observability::metrics::set_login_lockout_queue_health(pending, age);
+                }
             }
         });
     }
@@ -249,6 +252,12 @@ fn spawn_workers(
     ));
     let password_reset_delivery_worker =
         tokio::spawn(identity::password_reset::run_delivery_worker(
+            state.db.clone(),
+            email_sender.clone(),
+            state.config.public_dashboard_url.clone(),
+        ));
+    let login_lockout_notification_worker =
+        tokio::spawn(identity::login_lockout::run_notification_worker(
             state.db.clone(),
             email_sender,
             state.config.public_dashboard_url.clone(),
@@ -439,6 +448,10 @@ fn spawn_workers(
     workers.spawn(async move {
         let _ = password_reset_delivery_worker.await;
         "password reset delivery worker"
+    });
+    workers.spawn(async move {
+        let _ = login_lockout_notification_worker.await;
+        "login lockout notification worker"
     });
     workers.spawn(async move {
         let _ = escalation_worker.await;

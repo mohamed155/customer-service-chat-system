@@ -395,6 +395,7 @@ pub mod isolation {
         "auth_sessions",
         "billing_plans",
         "integration_catalog",
+        "login_lockout_notifications",
         "mfa_factors",
         "mfa_recovery_codes",
         "password_reset_requests",

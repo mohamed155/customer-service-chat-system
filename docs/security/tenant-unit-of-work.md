@@ -219,6 +219,9 @@ fail. A single-column reference from a tenant table to a global table such as `u
 A new tenant table needs the migration, a harness entry, and nothing else for this check; a new global
 table needs an entry in `GLOBAL_TABLES` with the reason in the PR.
 
+`login_lockout_notifications` is global identity state. A notification is keyed by a global user ID,
+and sign-in happens before the request has a tenant context.
+
 #### Current tenant-owned foreign-key inventory
 
 This inventory was generated from PostgreSQL's catalog after migrations `0083`–`0094` (MOH-98). Each

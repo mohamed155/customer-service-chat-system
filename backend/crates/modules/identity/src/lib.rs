@@ -474,3 +474,12 @@ pub mod password_reset {
     };
     pub use crate::infrastructure::password_reset::{enqueue, queue_health, sweep_tokens};
 }
+
+pub mod login_lockout {
+    pub use crate::application::login_lockout::{
+        begin_login, complete_password_success, finalize_failed_password,
+        process_notification_once, run_notification_worker, LoginAccount, LoginAttempt,
+        LoginLockoutStore, LoginReservation, NotificationClaim, NotificationError,
+    };
+    pub use crate::infrastructure::login_lockout::queue_health;
+}

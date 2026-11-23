@@ -217,6 +217,64 @@ impl PasswordResetLimits {
     }
 }
 
+/// Per-account sign-in backoff. These values are kept separate from the per-client request
+/// limiter: they apply across all addresses used to attack one account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LoginLockoutLimits {
+    pub threshold: i32,
+    pub base_secs: i32,
+    pub max_secs: i32,
+    pub reset_after_secs: i32,
+}
+
+impl Default for LoginLockoutLimits {
+    fn default() -> Self {
+        Self {
+            threshold: 5,
+            base_secs: 60,
+            max_secs: 900,
+            reset_after_secs: 86_400,
+        }
+    }
+}
+
+impl LoginLockoutLimits {
+    fn from_env() -> Result<Self, ConfigError> {
+        fn read(name: &str, default: i32) -> Result<i32, ConfigError> {
+            let value = match env::var(name) {
+                Ok(raw) => raw.trim().parse::<i32>().map_err(|_| {
+                    ConfigError(format!("{name} must be a whole number of seconds/attempts"))
+                })?,
+                Err(env::VarError::NotPresent) => default,
+                Err(error) => return Err(ConfigError(format!("could not read {name}: {error}"))),
+            };
+            if value <= 0 {
+                return Err(ConfigError(format!("{name} must be positive")));
+            }
+            Ok(value)
+        }
+
+        let defaults = Self::default();
+        let limits = Self {
+            threshold: read("LOGIN_LOCKOUT_THRESHOLD", defaults.threshold)?,
+            base_secs: read("LOGIN_LOCKOUT_BASE_SECS", defaults.base_secs)?,
+            max_secs: read("LOGIN_LOCKOUT_MAX_SECS", defaults.max_secs)?,
+            reset_after_secs: read("LOGIN_LOCKOUT_RESET_AFTER_SECS", defaults.reset_after_secs)?,
+        };
+        if limits.threshold < 3 {
+            return Err(ConfigError(
+                "LOGIN_LOCKOUT_THRESHOLD must be at least 3".into(),
+            ));
+        }
+        if limits.max_secs < limits.base_secs {
+            return Err(ConfigError(
+                "LOGIN_LOCKOUT_MAX_SECS must be at least LOGIN_LOCKOUT_BASE_SECS".into(),
+            ));
+        }
+        Ok(limits)
+    }
+}
+
 fn positive_env<T: std::str::FromStr + PartialOrd + Default>(
     name: &str,
     default: T,
@@ -272,6 +330,7 @@ pub struct AppConfig {
     pub rate_limit_login_max: u32,
     pub password_reset_limits: PasswordResetLimits,
     pub rate_limit_login_window_secs: u64,
+    pub login_lockout: LoginLockoutLimits,
     pub rate_limit_max_override: u32,
     pub rate_limit_fail_mode: String,
     pub security_headers_enabled: bool,
@@ -329,6 +388,7 @@ impl fmt::Debug for AppConfig {
                 "rate_limit_login_window_secs",
                 &self.rate_limit_login_window_secs,
             )
+            .field("login_lockout", &self.login_lockout)
             .field("rate_limit_max_override", &self.rate_limit_max_override)
             .field("rate_limit_fail_mode", &self.rate_limit_fail_mode)
             .field("security_headers_enabled", &self.security_headers_enabled)
@@ -666,6 +726,7 @@ impl AppConfig {
             rate_limit_login_max,
             password_reset_limits: PasswordResetLimits::from_env()?,
             rate_limit_login_window_secs,
+            login_lockout: LoginLockoutLimits::from_env()?,
             rate_limit_max_override,
             rate_limit_fail_mode,
             security_headers_enabled,
@@ -752,6 +813,10 @@ mod tests {
                 "APP_RATE_LIMIT_PASSWORD_RESET_FORGOT_IP_MAX",
                 "APP_RATE_LIMIT_PASSWORD_RESET_IP_MAX",
                 "APP_RATE_LIMIT_PASSWORD_RESET_WINDOW_SECS",
+                "LOGIN_LOCKOUT_THRESHOLD",
+                "LOGIN_LOCKOUT_BASE_SECS",
+                "LOGIN_LOCKOUT_MAX_SECS",
+                "LOGIN_LOCKOUT_RESET_AFTER_SECS",
                 "APP_RATE_LIMIT_LOGIN_WINDOW_SECS",
                 "APP_RATE_LIMIT_MAX_OVERRIDE",
                 "APP_RATE_LIMIT_FAIL_MODE",
@@ -818,6 +883,10 @@ mod tests {
                 "APP_RATE_LIMIT_PASSWORD_RESET_FORGOT_IP_MAX",
                 "APP_RATE_LIMIT_PASSWORD_RESET_IP_MAX",
                 "APP_RATE_LIMIT_PASSWORD_RESET_WINDOW_SECS",
+                "LOGIN_LOCKOUT_THRESHOLD",
+                "LOGIN_LOCKOUT_BASE_SECS",
+                "LOGIN_LOCKOUT_MAX_SECS",
+                "LOGIN_LOCKOUT_RESET_AFTER_SECS",
                 "APP_RATE_LIMIT_LOGIN_WINDOW_SECS",
                 "APP_RATE_LIMIT_MAX_OVERRIDE",
                 "APP_RATE_LIMIT_FAIL_MODE",
@@ -853,6 +922,54 @@ mod tests {
             err.0.contains("REDIS_URL") || err.0.contains("APP_ENVIRONMENT"),
             "Expected error naming a missing variable, got: {err}"
         );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn login_lockout_limits_use_the_documented_defaults_and_accept_valid_overrides() {
+        let _g = EnvGuard::setup(&[]);
+        assert_eq!(
+            LoginLockoutLimits::from_env().unwrap(),
+            LoginLockoutLimits::default()
+        );
+
+        env::set_var("LOGIN_LOCKOUT_THRESHOLD", "7");
+        env::set_var("LOGIN_LOCKOUT_BASE_SECS", "30");
+        env::set_var("LOGIN_LOCKOUT_MAX_SECS", "600");
+        env::set_var("LOGIN_LOCKOUT_RESET_AFTER_SECS", "3600");
+        assert_eq!(
+            LoginLockoutLimits::from_env().unwrap(),
+            LoginLockoutLimits {
+                threshold: 7,
+                base_secs: 30,
+                max_secs: 600,
+                reset_after_secs: 3600,
+            }
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn login_lockout_limits_reject_invalid_values() {
+        let _g = EnvGuard::setup(&[]);
+        for (key, value) in [
+            ("LOGIN_LOCKOUT_THRESHOLD", "2"),
+            ("LOGIN_LOCKOUT_THRESHOLD", "nope"),
+            ("LOGIN_LOCKOUT_BASE_SECS", "0"),
+            ("LOGIN_LOCKOUT_MAX_SECS", "0"),
+            ("LOGIN_LOCKOUT_RESET_AFTER_SECS", "0"),
+            ("LOGIN_LOCKOUT_MAX_SECS", "59"),
+        ] {
+            env::set_var(key, value);
+            assert!(
+                LoginLockoutLimits::from_env().is_err(),
+                "{key}={value} should be rejected"
+            );
+            env::remove_var(key);
+        }
+        env::set_var("LOGIN_LOCKOUT_BASE_SECS", "60");
+        env::set_var("LOGIN_LOCKOUT_MAX_SECS", "59");
+        assert!(LoginLockoutLimits::from_env().is_err());
     }
 
     #[test]

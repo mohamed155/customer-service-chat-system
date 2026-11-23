@@ -143,6 +143,11 @@ pub fn set_password_reset_queue_health(count: i64, age_seconds: f64) {
     metrics::gauge!("outbox_oldest_age_seconds", "queue" => "password_reset").set(age_seconds);
 }
 
+pub fn set_login_lockout_queue_health(count: i64, age_seconds: f64) {
+    metrics::gauge!("outbox_backlog", "queue" => "login_lockout").set(count as f64);
+    metrics::gauge!("outbox_oldest_age_seconds", "queue" => "login_lockout").set(age_seconds);
+}
+
 /// Spawn a background task that periodically runs the health checks and
 /// sets `dependency_up{ dependency="<name>" }` to 1 (pass) or 0 (fail).
 ///

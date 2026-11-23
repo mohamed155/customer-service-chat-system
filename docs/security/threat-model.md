@@ -64,7 +64,7 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 
 | STRIDE | Threat | Controls | Status | Owner |
 | -- | -- | -- | -- | -- |
-| S | Credential stuffing, password guessing | Argon2id; `(email, ip)` login throttle; uniform error messages | ✓ throttle · Gap: per-account lockout (ADR-005 A7), MFA (A6) | Identity & Access |
+| S | Credential stuffing, password guessing | Argon2id; `(email, ip)` login throttle; account-wide exponential lockout; owner email alert; uniform error messages | ✓ both throttles, locked-account Argon2 work, generic responses, and lock/unlock audit (ADR-005 A7 resolved) · Gap: MFA (A6) | Identity & Access |
 | S | Account enumeration via login timing | Dummy hash on unknown email | ✓ dummy and real hashes share one set of pinned parameters, with a test for it and a timing test (ADR-005 A3 resolved) | Identity & Access |
 | S | Session theft via XSS | HttpOnly cookie, CSP, no tokens in JS storage | ✓ HttpOnly, no JS storage · ✓ CSP enforced (`script-src 'self'`, no inline script), checked in a browser against the built dashboard (MOH-38) | Identity & Access |
 | T | Forged session token | Signed JWT | ✓ EdDSA + `kid`, only `alg = EdDSA` accepted (ADR-005 A1) · Gap: verify-only keys in other units (JWKS) | Identity & Access |
