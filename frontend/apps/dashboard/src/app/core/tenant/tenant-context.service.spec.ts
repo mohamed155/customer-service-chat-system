@@ -4,7 +4,7 @@ import { TenantContextService } from './tenant-context.service';
 import { ApiService } from '../api/api.service';
 import { TenantSummary } from '../api/tenant-api.models';
 import { tenantContextActions } from '../state/tenant-context.feature';
-import { of, Subject, throwError } from 'rxjs';
+import { of, ReplaySubject, Subject, throwError } from 'rxjs';
 
 const fakeTenant: TenantSummary = {
   id: 't-1',
@@ -19,8 +19,9 @@ const accessSession = {
   id: 'access-1',
   tenantId: fakeTenant.id,
   reason: reason.reason,
-  startedAt: '2026-11-23T10:00:00Z',
-  expiresAt: '2026-11-23T10:30:00Z',
+  startedAt: new Date(Date.now() - 60_000).toISOString(),
+  // Relative to now: restoring a workspace checks that the session has not expired.
+  expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
 };
 const wire = { ...fakeTenant, accessSession };
 
@@ -167,6 +168,82 @@ describe('TenantContextService', () => {
 
     expect(service.accessSession()).toBeNull();
     expect(api.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets only the latest of two overlapping restores commit', async () => {
+    const dispatch = vi.spyOn(store, 'dispatch');
+    const stale = new Subject<{ data: typeof accessSession & { tenantName: string } }>();
+    const newer = { ...accessSession, id: 'access-2', tenantId: 't-2', tenantName: 'Beta' };
+    const beta: TenantSummary = { ...fakeTenant, id: 't-2', name: 'Beta', slug: 'beta' };
+    api.get
+      .mockReturnValueOnce(stale)
+      .mockReturnValueOnce(of({ data: newer }))
+      .mockReturnValueOnce(of({ data: beta }));
+
+    const first = service.restoreAccess();
+    const second = service.restoreAccess();
+    await second;
+    stale.next({ data: { ...accessSession, tenantName: fakeTenant.name } });
+    await first;
+
+    expect(service.accessSession()?.id).toBe('access-2');
+    expect(api.get).toHaveBeenCalledTimes(3);
+    expect(dispatch).toHaveBeenCalledWith(tenantContextActions.setActiveTenant({ tenant: beta }));
+    expect(dispatch).not.toHaveBeenCalledWith(
+      tenantContextActions.setActiveTenant({ tenant: fakeTenant }),
+    );
+  });
+
+  it('does not bring a workspace back after its access expired while it was loading', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const dispatch = vi.spyOn(store, 'dispatch');
+      // The service subscribes a microtask after restoreAccess() starts: keep the answer for it.
+      const detail = new ReplaySubject<{ data: TenantSummary }>(1);
+      api.get
+        .mockReturnValueOnce(of({ data: { ...accessSession, tenantName: fakeTenant.name } }))
+        .mockReturnValueOnce(detail);
+
+      const restoring = service.restoreAccess();
+      vi.setSystemTime(Date.parse(accessSession.expiresAt) + 1_000);
+      detail.next({ data: fakeTenant });
+      await restoring;
+
+      expect(dispatch).not.toHaveBeenCalledWith(
+        tenantContextActions.setActiveTenant({ tenant: fakeTenant }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  describe('a refusal for a request sent under an access session', () => {
+    beforeEach(async () => {
+      store.setState({ tenantContext: { activeTenant: fakeTenant, status: 'idle' } });
+      await service.restoreAccess(fakeTenant);
+    });
+
+    it('does not end a newer session that replaced the one the request used', () => {
+      const dispatch = vi.spyOn(store, 'dispatch');
+
+      expect(service.rejectAccess('t-1', fakeTenant, 'an-older-session')).toBe(false);
+
+      expect(service.accessSession()?.id).toBe('access-1');
+      expect(dispatch).not.toHaveBeenCalledWith(tenantContextActions.clearActiveTenant());
+    });
+
+    it('ends the session the request used', () => {
+      const dispatch = vi.spyOn(store, 'dispatch');
+
+      expect(service.rejectAccess('t-1', fakeTenant, 'access-1')).toBe(true);
+
+      expect(service.accessSession()).toBeNull();
+      expect(dispatch).toHaveBeenCalledWith(tenantContextActions.clearActiveTenant());
+    });
+
+    it('still ends access for a request sent before any session was held', () => {
+      expect(service.rejectAccess('t-1', fakeTenant, null)).toBe(true);
+    });
   });
 
   it('ends access on the server, clears the workspace, and verifies the current session again', async () => {

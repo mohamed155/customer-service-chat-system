@@ -143,10 +143,14 @@
     </div>
   }
 </app-page-container>
-@if (accessTarget(); as target) {
-  <app-platform-access-dialog
-    [tenant]="target"
-    (started)="openTenantWorkspace()"
-    (closed)="accessTarget.set(null)"
-  />
+@defer (when accessTarget(); prefetch on idle) {
+  @if (accessTarget(); as target) {
+    <app-platform-access-dialog
+      [tenant]="target"
+      (started)="openTenantWorkspace()"
+      (closed)="accessTarget.set(null)"
+    />
+  }
+} @error {
+  <p role="alert">{{ 'platformAccess.loadError' | transloco }}</p>
 }

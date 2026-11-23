@@ -70,6 +70,9 @@ export class PlatformAccessBannerComponent {
       const expiresAt = Date.parse(session.expiresAt);
       let timeout: ReturnType<typeof setTimeout> | undefined;
       const tick = () => {
+        // Effects run during change detection, so a timer that is already due can fire before this
+        // effect reruns for a replacement session. It must not expire or navigate for that one.
+        if (this.accessSession()?.id !== session.id) return;
         const remaining = Math.max(0, expiresAt - Date.now());
         this.minutesLeft.set(Math.ceil(remaining / MINUTE_MS));
         if (remaining > 0) {

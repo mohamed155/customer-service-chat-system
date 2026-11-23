@@ -83,7 +83,8 @@
     "reasonTooLong": "Enter 500 characters or fewer.",
     "durationLabel": "Access duration",
     "durationOption": "{count, plural, one {# minute} other {# minutes}}",
-    "durationInvalid": "Select a duration from 5 to 240 minutes."
+    "durationInvalid": "Select a duration from 5 to 240 minutes.",
+    "loadError": "The access form could not be loaded. Reload the page and try again."
   },
   "topbar": {
     "toggleSidebar": "Toggle sidebar",

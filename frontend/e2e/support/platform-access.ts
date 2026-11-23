@@ -45,6 +45,14 @@ export function mockPlatformAccess(
     }
     const tenant = tenants.find(({ id }) => path === `/platform/tenants/${id}/switch`);
     if (tenant) return startAccess(route, tenant);
+    // A switch to a tenant the mock does not know must fail, not fall through to a success answer
+    // without an access session.
+    if (/^\/platform\/tenants\/[^/]+\/switch$/.test(path)) {
+      return route.fulfill({
+        status: 404,
+        json: { code: 'not_found', status: 404, detail: 'Tenant not found' },
+      });
+    }
     return undefined;
   };
 

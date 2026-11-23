@@ -207,8 +207,9 @@ key identifies the workspace that access covers. The schema rule names this exce
 Lifecycle audit rows still use the affected tenant's scope and follow the `audit_logs` RLS policy.
 The audit writer carries the validated session ID through each platform tenant request. A
 request that finishes after a session is replaced keeps its original attribution. The audit
-insert trigger supplies the active session ID for matching platform writes outside that
-request scope.
+insert trigger links only the session's own lifecycle rows. A write outside a tenant request
+that an access session authorized, such as a `/platform/*` route, carries no link: nothing in the
+insert can tell which sign-in made it, so guessing could attach it to the wrong session.
 
 The other tests in that file plant a table that breaks each part of the rule inside a transaction that is
 rolled back, and check that the matching message appears, so the check is shown to fail. A new tenant table

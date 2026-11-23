@@ -117,8 +117,9 @@ grant **no tenant permissions on their own**. Acting inside a tenant requires an
 | Audit | Every request made during the session is audited with `actor_user_id = staff user`, `on_behalf_of_tenant_id`, `impersonation_session_id`. Start and end events go to both the tenant and platform audit logs. |
 | End | Ended explicitly, by expiry, by logout, or by a SuperAdmin. An ended session's `imp` is rejected on the next request. |
 
-Non-production environments may keep today's direct staff access, gated by the existing
-`is_production` flag, so test setup doesn't need impersonation sessions.
+The original target let non-production environments keep direct staff access, gated by the
+existing `is_production` flag. MOH-97 does not: the access session is required in every
+environment, and tests open one through the shared `PlatformAccess` helper.
 
 **Status (MOH-97).** Platform access uses `POST /platform/tenants/{id}/switch` with a
 10–500 character reason. Access lasts 60 minutes by default and at most four hours. One session

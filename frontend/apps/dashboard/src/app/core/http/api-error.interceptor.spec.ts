@@ -9,6 +9,7 @@ import { APP_CONFIG, AppConfig } from '../config/app-config';
 import { ApiErrorNotificationService } from '../errors/api-error-notification.service';
 import { tenantContextActions } from '../state/tenant-context.feature';
 import { CurrentUserService } from '../tenant/current-user.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
 import { apiErrorInterceptor } from './api-error.interceptor';
 import { authTokenInterceptor } from './auth-token.interceptor';
 
@@ -130,6 +131,52 @@ describe('HTTP interceptors', () => {
       expect(router.navigate).toHaveBeenCalledExactlyOnceWith(['/platform', 'tenants']);
     },
   );
+
+  it('does not end a newer access session for a refusal sent under an older one', async () => {
+    const tenant = { id: 'tenant-1', name: 'Tenant 1' };
+    const { router, currentUser } = configure({
+      tenantContext: { activeTenant: tenant, status: 'idle' },
+    });
+    const notifications = TestBed.inject(ApiErrorNotificationService);
+    const show = vi.spyOn(notifications, 'show');
+    const dispatch = vi.spyOn(TestBed.inject(MockStore), 'dispatch');
+    const service = TestBed.inject(TenantContextService);
+    const client = TestBed.inject(HttpClient);
+    const http = TestBed.inject(HttpTestingController);
+    const session = (id: string) => ({
+      id,
+      tenantId: 'tenant-1',
+      tenantName: 'Tenant 1',
+      reason: 'Investigating a customer request',
+      startedAt: new Date(Date.now() - 60_000).toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    });
+    const restore = async (id: string) => {
+      const restoring = service.restoreAccess(tenant as never);
+      http.expectOne('/api/v1/platform/access-session').flush(session(id));
+      await restoring;
+    };
+
+    await restore('access-old');
+    const refused = firstValueFrom(
+      client.get('/api/v1/tenant/members', { headers: { 'X-Tenant-ID': 'tenant-1' } }),
+    ).catch((error: ApiError) => error);
+    // Another tab starts new access for the same tenant before the old request is answered.
+    await restore('access-new');
+    http
+      .expectOne('/api/v1/tenant/members')
+      .flush(
+        { code: 'platform_access_expired', detail: 'Internal wording', status: 403 },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(await refused).toMatchObject({ code: 'platform_access_expired' });
+    expect(service.accessSession()?.id).toBe('access-new');
+    expect(dispatch).not.toHaveBeenCalledWith(tenantContextActions.clearActiveTenant());
+    expect(show).not.toHaveBeenCalled();
+    expect(currentUser.clear).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
 
   it('leaves the session alone when a password recovery request fails its origin proof', async () => {
     const { router, currentUser } = configure();

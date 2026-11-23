@@ -891,6 +891,38 @@ async fn starting_again_after_expiry_records_expiry_instead_of_replacement() {
 }
 
 #[tokio::test]
+async fn a_platform_write_outside_the_access_gate_is_not_linked_to_a_session() {
+    let Some(fixture) = Fixture::new().await else {
+        return;
+    };
+    // The access session belongs to the first sign-in. The same staff user then edits the tenant
+    // through a platform route from a second sign-in. No access session authorized that request,
+    // so its audit row must not be attached to the open session.
+    let opened = fixture.start(fixture.tenant).await;
+    let other_sign_in =
+        session_fixture::start(&fixture.pool, &Environment::Test, fixture.staff).await;
+
+    let updated = fixture
+        .send(
+            Method::PATCH,
+            &format!("/api/v1/platform/tenants/{}", fixture.tenant),
+            &other_sign_in,
+            None,
+            Some(json!({"contactName": "Edited Without Access"})),
+        )
+        .await;
+    assert_eq!(updated.status(), StatusCode::OK);
+
+    let edits = fixture.audit("platform.tenant_updated").await;
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].platform_access_session_id, None);
+
+    let started = fixture.audit(STARTED).await;
+    assert_eq!(started.len(), 1);
+    assert_eq!(started[0].platform_access_session_id, Some(opened));
+}
+
+#[tokio::test]
 async fn closing_platform_access_ends_an_existing_event_stream() {
     let Some(fixture) = Fixture::new().await else {
         return;
@@ -917,7 +949,16 @@ async fn closing_platform_access_ends_an_existing_event_stream() {
             .await;
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()["content-type"], "text/event-stream");
-        let reader = tokio::spawn(response.into_body().collect());
+        let mut reader = tokio::spawn(response.into_body().collect());
+
+        // The stream must be open before access changes, or a stream that closes by itself would
+        // pass the check below without showing that ending access closed it.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), &mut reader)
+                .await
+                .is_err(),
+            "the event stream closed before tenant access ended"
+        );
 
         if explicit_end {
             assert_eq!(

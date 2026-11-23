@@ -47,10 +47,9 @@ BEGIN
         RETURN NEW;
     END IF;
 
-    SELECT s.id INTO NEW.platform_access_session_id
-      FROM public.platform_access_sessions s
-     WHERE s.user_id = NEW.actor_user_id AND s.tenant_id = NEW.tenant_id
-       AND s.ended_at IS NULL AND s.expires_at > clock_timestamp();
+    -- Any other row is linked by the writer, from the access session that authorized the request.
+    -- Guessing here from (actor, tenant) could attach a write made from another sign-in, or by a
+    -- route no access session authorized, to a session it does not belong to.
     RETURN NEW;
 END
 $$;

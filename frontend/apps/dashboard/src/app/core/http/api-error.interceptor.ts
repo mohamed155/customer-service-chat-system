@@ -37,6 +37,9 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
 
   const path = apiRelativePath(request.url, config.apiBaseUrl);
   const requestTenant = activeTenant();
+  // The access session held when the request went out, so a refusal that arrives after another
+  // session replaced it does not end the replacement. Read lazily: the service needs HttpClient.
+  const requestSessionId = injector.get(TenantContextService).accessSession()?.id ?? null;
 
   return next(request).pipe(
     catchError((error: unknown) => {
@@ -61,7 +64,13 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
           apiError.code === 'platform_access_expired')
       ) {
         const tenantContext = injector.get(TenantContextService);
-        if (tenantContext.rejectAccess(request.headers.get('X-Tenant-ID'), requestTenant)) {
+        if (
+          tenantContext.rejectAccess(
+            request.headers.get('X-Tenant-ID'),
+            requestTenant,
+            requestSessionId,
+          )
+        ) {
           errorNotifications.show(locale.translate(errorMessageKey(apiError)), apiError.requestId);
           void router.navigate([`/${APP_PATHS.platform.base}`, APP_PATHS.platform.tenants]);
         }

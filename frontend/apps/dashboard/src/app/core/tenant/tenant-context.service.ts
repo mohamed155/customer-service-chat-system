@@ -21,6 +21,8 @@ export class TenantContextService {
   private readonly session = signal<PlatformAccessSession | null>(null);
   // A read of server state may finish after another switch, end or sign-out.
   private revision = 0;
+  // Restores can overlap inside one revision; only the latest one may commit.
+  private restoreCount = 0;
   private handledDenial = false;
 
   readonly activeTenant = this.store.selectSignal(selectActiveTenant);
@@ -76,11 +78,15 @@ export class TenantContextService {
 
   async restoreAccess(knownTenant = this.activeTenant()): Promise<void> {
     const revision = this.revision;
+    // Restores can overlap (start-up, after a switch, after ending). Only the latest one may
+    // commit, so a slow answer for an older session never replaces a newer session or tenant.
+    const restore = ++this.restoreCount;
+    const latest = () => this.revision === revision && this.restoreCount === restore;
     try {
       const { data: session } = await firstValueFrom(
         this.api.get<PlatformAccessSession>('/platform/access-session'),
       );
-      if (this.revision !== revision) return;
+      if (!latest()) return;
       this.handledDenial = false;
       this.session.set(session);
       if (knownTenant?.id !== session.tenantId) {
@@ -91,10 +97,15 @@ export class TenantContextService {
         const { data } = await firstValueFrom(
           this.api.get<Schemas['PlatformTenantDetail']>(`/platform/tenants/${session.tenantId}`),
         );
-        if (this.revision === revision) this.set(tenantSummaryFromWire(data));
+        if (!latest()) return;
+        // The banner can expire the session while the tenant is being fetched; don't bring a
+        // workspace back for access that has ended.
+        const live = this.session();
+        if (live?.id !== session.id || Date.parse(live.expiresAt) <= Date.now()) return;
+        this.set(tenantSummaryFromWire(data));
       }
     } catch (error: unknown) {
-      if (this.revision !== revision) return;
+      if (!latest()) return;
       if (isApiError(error) && error.status === 404) {
         if (this.session() || this.activeTenant()) this.clear();
       } else if (!this.session() && this.activeTenant()) {
@@ -109,10 +120,20 @@ export class TenantContextService {
     void this.restoreAccess(null);
   }
 
-  rejectAccess(tenantId: string | null, expectedTenant: TenantSummary | null): boolean {
+  /**
+   * Handles a tenant request the server refused for lack of access. `issuedSessionId` is the
+   * access session the browser held when it sent the request: a refusal for an older session
+   * must not end a newer one (another tab can start access for the same tenant).
+   */
+  rejectAccess(
+    tenantId: string | null,
+    expectedTenant: TenantSummary | null,
+    issuedSessionId: string | null = null,
+  ): boolean {
     if (this.handledDenial) return false;
     const active = this.activeTenant();
     if (active !== expectedTenant || (tenantId !== null && active?.id !== tenantId)) return false;
+    if (issuedSessionId !== null && this.session()?.id !== issuedSessionId) return false;
     if (this.status() === 'switching') {
       // A denial for the old workspace can arrive while the new access is being started.
       this.session.set(null);

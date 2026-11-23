@@ -59,6 +59,39 @@ describe('PlatformAccessBannerComponent', () => {
     expect(navigate).toHaveBeenCalledExactlyOnceWith(['/platform', 'tenants']);
   });
 
+  it('does not expire a session that a newer one has already replaced', () => {
+    // The effect reruns a render late, so a timer that is already due can fire before it does.
+    // Capture the old session's timer and fire it by hand, after the replacement is set and
+    // before change detection could clear it.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const realSetTimeout = globalThis.setTimeout;
+    const due: Array<() => void> = [];
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+      callback: () => void,
+      delay?: number,
+    ) => {
+      if (delay !== undefined && delay >= 50_000 && delay <= 60_000) {
+        due.push(callback);
+        return 0;
+      }
+      return realSetTimeout(callback, delay);
+    }) as never);
+    try {
+      accessSession.set(session(2));
+      fixture.detectChanges();
+      expect(due).toHaveLength(1);
+
+      accessSession.set({ ...session(30), id: 'access-2' });
+      vi.setSystemTime(Date.now() + 3 * 60_000);
+      due[0]();
+
+      expect(expireAccess).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it('replaces a countdown with a link to start new access when the session expires', () => {
     accessSession.set(session(-1));
     fixture.detectChanges();
