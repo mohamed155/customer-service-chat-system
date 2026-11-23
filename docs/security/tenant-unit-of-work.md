@@ -199,7 +199,9 @@ check) reads the catalog and fails when:
 - a table has no `tenant_id` and is not in the explicit global list
   (`db::testing::isolation::GLOBAL_TABLES`), so a new table cannot skip the decision;
 - a table in the global list carries a `tenant_id` column outside the specific exception below, or
-  no longer exists.
+  no longer exists;
+- a foreign key between two tenant-owned tables does not use `(tenant_id, <child column>)` to
+  reference `(tenant_id, id)` on the parent. The parent must have a unique key on those columns.
 
 `platform_access_sessions` is global platform authorization state. The request gate reads it before
 there is a tenant context, and the worker closes sessions across tenants. Its `tenant_id` foreign
@@ -211,11 +213,67 @@ insert trigger links only the session's own lifecycle rows. A write outside a te
 that an access session authorized, such as a `/platform/*` route, carries no link: nothing in the
 insert can tell which sign-in made it, so guessing could attach it to the wrong session.
 
-The other tests in that file plant a table that breaks each part of the rule inside a transaction that is
-rolled back, and check that the matching message appears, so the check is shown to fail. A new tenant table
-needs the migration, a harness entry, and nothing else for this check; a new global table needs an entry in
-`GLOBAL_TABLES` with the reason in the PR. The ADR also asks for a check on single-column tenant-to-tenant
-foreign keys; that belongs to ADR-004 gap T3 and is not part of this rule.
+The other tests in that file plant a table or foreign key that breaks each part of the rule inside a
+transaction that is rolled back, and check that the matching message appears, so the check is shown to
+fail. A single-column reference from a tenant table to a global table such as `users` remains allowed.
+A new tenant table needs the migration, a harness entry, and nothing else for this check; a new global
+table needs an entry in `GLOBAL_TABLES` with the reason in the PR.
+
+#### Current tenant-owned foreign-key inventory
+
+This inventory was generated from PostgreSQL's catalog after migrations `0083`–`0092` (MOH-98). Each
+row represents one constraint between tenant-owned tables. All 47 rows use
+`(tenant_id, <column>) REFERENCES <parent>(tenant_id, id)`; `ON UPDATE` remains `NO ACTION`.
+
+| Child table | Column | Parent table | On delete |
+| -- | -- | -- | -- |
+| `agent_availability` | `membership_id` | `tenant_memberships` | CASCADE |
+| `agent_avatar_uploads` | `agent_id` | `agent_configurations` | CASCADE |
+| `agent_prompt_versions` | `prompt_id` | `agent_prompts` | RESTRICT |
+| `agent_skills` | `membership_id` | `tenant_memberships` | NO ACTION |
+| `agent_skills` | `skill_id` | `skills` | CASCADE |
+| `ai_generations` | `conversation_id` | `conversations` | RESTRICT |
+| `ai_generations` | `response_message_id` | `messages` | SET NULL |
+| `ai_generations` | `trigger_message_id` | `messages` | RESTRICT |
+| `ai_generations` | `usage_record_id` | `ai_usage_records` | SET NULL |
+| `conversation_feedback` | `agent_configuration_id` | `agent_configurations` | RESTRICT |
+| `conversation_feedback` | `assigned_membership_id` | `tenant_memberships` | NO ACTION |
+| `conversation_feedback` | `conversation_id` | `conversations` | RESTRICT |
+| `conversation_feedback` | `widget_session_id` | `widget_sessions` | SET NULL |
+| `conversations` | `assigned_membership_id` | `tenant_memberships` | NO ACTION |
+| `conversations` | `customer_id` | `customers` | NO ACTION |
+| `conversations` | `widget_instance_id` | `widget_instances` | SET NULL |
+| `customer_channel_identifiers` | `customer_id` | `customers` | NO ACTION |
+| `escalations` | `assigned_membership_id` | `tenant_memberships` | NO ACTION |
+| `escalations` | `conversation_id` | `conversations` | NO ACTION |
+| `integration_connections` | `connected_by_membership_id` | `tenant_memberships` | NO ACTION |
+| `integration_connections` | `disconnected_by_membership_id` | `tenant_memberships` | NO ACTION |
+| `integration_events` | `actor_membership_id` | `tenant_memberships` | NO ACTION |
+| `integration_events` | `connection_id` | `integration_connections` | CASCADE |
+| `integration_secrets` | `connection_id` | `integration_connections` | CASCADE |
+| `integration_webhook_deliveries` | `connection_id` | `integration_connections` | CASCADE |
+| `knowledge_chunks` | `item_id` | `knowledge_items` | CASCADE |
+| `knowledge_documents` | `item_id` | `knowledge_items` | CASCADE |
+| `knowledge_index_state` | `item_id` | `knowledge_items` | CASCADE |
+| `knowledge_item_tags` | `item_id` | `knowledge_items` | CASCADE |
+| `knowledge_items` | `category_id` | `knowledge_categories` | SET NULL |
+| `message_attachments` | `message_id` | `messages` | NO ACTION |
+| `message_citations` | `message_id` | `messages` | CASCADE |
+| `messages` | `conversation_id` | `conversations` | NO ACTION |
+| `messages` | `logged_by_membership_id` | `tenant_memberships` | NO ACTION |
+| `messages` | `sender_membership_id` | `tenant_memberships` | NO ACTION |
+| `notifications` | `actor_membership_id` | `tenant_memberships` | NO ACTION |
+| `notifications` | `recipient_membership_id` | `tenant_memberships` | CASCADE |
+| `tenant_tool_policies` | `updated_by_membership_id` | `tenant_memberships` | NO ACTION |
+| `tenant_tools` | `created_by_membership_id` | `tenant_memberships` | NO ACTION |
+| `tool_requests` | `conversation_id` | `conversations` | NO ACTION |
+| `tool_requests` | `decided_by_membership_id` | `tenant_memberships` | NO ACTION |
+| `tool_requests` | `generation_id` | `ai_generations` | NO ACTION |
+| `tool_requests` | `tenant_tool_id` | `tenant_tools` | NO ACTION |
+| `whatsapp_message_meta` | `conversation_id` | `conversations` | NO ACTION |
+| `whatsapp_message_meta` | `message_id` | `messages` | NO ACTION |
+| `widget_sessions` | `customer_id` | `customers` | SET NULL |
+| `widget_sessions` | `widget_instance_id` | `widget_instances` | RESTRICT |
 
 Adding a table group:
 
