@@ -87,6 +87,10 @@ migrations run as `app_owner` in a separate step before rollout.
 - Single-column FKs are allowed only to **global** tables (`users`, `tenants`).
   This makes a cross-tenant reference impossible at the database level, independent of RLS.
 
+**Current state (MOH-98):** All 31 tenant-to-tenant single-column foreign keys were converted to
+composite keys in migrations `0083`–`0094`. The CI schema rule checks that every foreign key between
+tenant-owned tables has this shape; it also permits single-column references to global tables.
+
 ### 5. Tenant → cell mapping from day one
 
 - A `tenant_cells` table maps every tenant to a **cell** (a database plus its worker pool). All
@@ -109,9 +113,8 @@ metrics carry `tenant_id` (constitution Principles I and VII).
 - A shared **tenant-isolation test harness** creates two tenants and runs every repository and
   endpoint against the wrong tenant: read, list, update, delete, and guessed IDs.
 - A CI schema check fails if a table with a `tenant_id` column lacks forced RLS and a policy, or
-  if a tenant-to-tenant FK is single-column. The RLS half is
-  `backend/crates/shared/db/tests/rls_schema_rule.rs` (MOH-50); the single-column FK half is still
-  open with T3.
+  if a tenant-to-tenant FK is single-column. `backend/crates/shared/db/tests/rls_schema_rule.rs`
+  now checks both the RLS configuration and the tenant-to-tenant FK shape (MOH-98).
 - A test asserts the runtime role has no `BYPASSRLS` and owns no tables.
 
 ## Alternatives considered
@@ -150,17 +153,18 @@ metrics carry `tenant_id` (constitution Principles I and VII).
 
 **Follow-ups**
 
-- A corrective spec for RLS, roles and composite FKs (the constitution's COMPLIANCE_GAP TODO).
+- ~~A corrective spec for RLS, roles and composite FKs (the constitution's COMPLIANCE_GAP TODO).~~
+  **Resolved across MOH-31, MOH-23/MOH-45 and MOH-98; tenant-to-cell mapping remains T4 below.**
 
 ## Current state and migration
 
-These gaps between the code and this decision were follow-up work. T1, T2 and T5 are resolved
-(struck-through titles); T3 and T4 are still open. The ADR's decision itself did not change.
+These gaps between the code and this decision were follow-up work. T1, T2, T3 and T5 are resolved
+(struck-through titles); T4 remains open. The ADR's decision itself did not change.
 
 | # | Gap | Where | Follow-up |
 | -- | -- | -- | -- |
 | T1 | ~~**No Row-Level Security.**~~ **Resolved (MOH-31).** Every table with a `tenant_id` column has RLS enabled and forced, with a `USING` and `WITH CHECK` tenant policy (42 tables, migrations `0072`, `0073`, `0074`). `db::UnitOfWork` sets `app.tenant_id` transaction-locally (MOH-44) and the tenant-owned queries run through it; the few that legitimately start without a tenant or span tenants go through audited `SECURITY DEFINER` functions in the `xtenant` schema, owned by `app_platform` (MOH-46: `0067`–`0071`, plus `0074` for tenant-less audit rows and the trigger functions). A query without a tenant returns no rows and writes nothing. A CI test keeps it so: it fails when a table with a `tenant_id` lacks enabled and forced RLS or a complete policy, and when a table is neither tenant-scoped nor on the explicit global list (`db::testing::isolation::GLOBAL_TABLES`). See [Tenant Unit of Work](../security/tenant-unit-of-work.md). | `backend/migrations/0072_rls_conversations_customers.sql`, `0073_rls_knowledge_ai_tools.sql`, `0074_rls_remaining_tenant_tables.sql`, `backend/migrations/0067`–`0071` (`xtenant`), `backend/crates/shared/db/src/tenant.rs`, `backend/crates/shared/db/tests/rls_schema_rule.rs` | Done. New tenant tables follow the steps in the tenant-isolation harness section of the Tenant Unit of Work doc. |
 | T2 | ~~**The app's database role would bypass RLS.**~~ **Resolved (MOH-23, MOH-45) for the repository and local/CI environments.** The backend connects as `app_runtime` (`NOSUPERUSER`, `NOBYPASSRLS`, owns nothing, no DDL) through `DATABASE_URL`; migrations run only as `app_owner` through `MIGRATION_DATABASE_URL` with `server migrate`, and the server no longer migrates at startup. `app_platform` (`NOLOGIN`, `BYPASSRLS`) owns the `xtenant` functions. `infra/postgres/verify-roles.sh` and the `runtime_role.rs` tests prove `app_runtime` cannot bypass a forced policy and owns no relation; CI runs the whole backend suite as `app_runtime`. **Still to confirm outside the repository:** the staging `.env.staging` is not in the repo (and the runbook's `.env.staging.example` does not exist), so a real deployment must follow [the deployment runbook](../runbooks/deployment.md) and run `just verify-roles` against it. | `backend/.env.example`, `infra/docker-compose.yml`, `infra/postgres/init/02-roles.sh`, `infra/postgres/verify-roles.sh`, `backend/crates/server/src/main.rs` (`migrate`), `backend/crates/shared/db/tests/runtime_role.rs`, `docs/runbooks/deployment.md`, `docs/configuration.md`, `.github/workflows/backend.yml` | Verify staging and production use the three-role setup before they rely on RLS. |
-| T3 | **Composite FKs are partial.** There are about 36 composite tenant FKs (e.g. migrations `0027`, `0033`) next to about 80 single-column `REFERENCES x(id)` FKs. Some of those point at tenant-owned tables, e.g. `REFERENCES conversations(id)` in `0048` and `0049`. | `backend/migrations/0025`–`0056` | Inventory single-column FKs; convert the tenant-to-tenant ones to composite with `UNIQUE (tenant_id, id)` on the targets. Add the CI schema check. |
+| T3 | ~~**Composite FKs are partial.**~~ **Resolved (MOH-98).** All 31 tenant-to-tenant single-column foreign keys were converted to validated composite constraints, preserving each delete action; column-targeted `SET NULL` keeps `tenant_id` intact. The schema rule in CI fails on a new non-composite tenant-to-tenant FK. | `backend/migrations/0083`–`0094`, `backend/crates/shared/db/src/testing.rs`, `backend/crates/shared/db/tests/rls_schema_rule.rs` | Done. The security guide carries the full FK inventory from the migrated catalog. |
 | T4 | **No tenant→cell mapping.** There is no `tenant_cells` table and no routing port. | — | Add the table (all tenants → `cell-1`) and a `CellRouter` that returns the single pool. |
 | T5 | ~~Cross-tenant tests are case by case.~~ **Resolved (MOH-47 to MOH-49).** A shared harness proves every table under forced RLS against the wrong tenant as `app_runtime`: read by guessed id, list, update, delete, move to the other tenant, and read, update, delete and insert with no tenant (`tenant_isolation.rs`, 42 tables; a guard test fails when its list differs from the tables with forced RLS). A repository-level suite calls the repository functions with the wrong tenant, including RAG retrieval (`tenant_isolation_repositories.rs`). The per-feature endpoint suites remain for the HTTP layer, and the harness doc says new modules must add an entry. | `backend/crates/shared/db/tests/tenant_isolation.rs`, `backend/crates/shared/db/src/testing.rs` (`isolation`), `backend/crates/server/tests/tenant_isolation_repositories.rs`, `docs/security/tenant-unit-of-work.md` | Done. Endpoint-level wrong-tenant tests are still written per feature; a new endpoint on a tenant table needs one. |

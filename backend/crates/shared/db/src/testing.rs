@@ -412,7 +412,11 @@ pub mod isolation {
     /// - every tenant-owned table in `public` has Row-Level Security enabled **and** forced, and
     ///   a policy for all commands with both `USING` and `WITH CHECK`;
     /// - every other table is in [`GLOBAL_TABLES`], so a new table cannot skip the decision;
-    /// - every entry of [`GLOBAL_TABLES`] still exists.
+    /// - every entry of [`GLOBAL_TABLES`] still exists;
+    /// - foreign keys between tenant-owned tables reference `(tenant_id, id)` through
+    ///   `(tenant_id, <child reference>)`; partitions count on both sides, and constraints PostgreSQL
+    ///   cloned from a partitioned table (`conparentid <> 0`) are skipped so they are not reported
+    ///   twice.
     pub async fn rls_rule_violations(conn: &mut sqlx::PgConnection) -> Vec<String> {
         let tables: Vec<(String, bool, bool, bool, bool)> = sqlx::query_as(
             "SELECT c.relname::text, \
@@ -473,6 +477,51 @@ pub mod isolation {
             if !tables.iter().any(|(name, ..)| name == global) {
                 violations.push(format!(
                     "{global}: listed in GLOBAL_TABLES but the table does not exist"
+                ));
+            }
+        }
+
+        let foreign_keys: Vec<(String, String, String, bool)> = sqlx::query_as(
+            "WITH tenant_children AS (\
+                 SELECT c.oid, c.relname::text, tenant.attnum AS tenant_id_attnum \
+                 FROM pg_class c \
+                 JOIN pg_namespace n ON n.oid = c.relnamespace \
+                 JOIN pg_attribute tenant ON tenant.attrelid = c.oid \
+                   AND tenant.attname = 'tenant_id' AND NOT tenant.attisdropped \
+                 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') \
+                   AND NOT c.relname = ANY($1) \
+             ), tenant_parents AS (\
+                 SELECT c.oid, c.relname::text, tenant.attnum AS tenant_id_attnum \
+                 FROM pg_class c \
+                 JOIN pg_namespace n ON n.oid = c.relnamespace \
+                 JOIN pg_attribute tenant ON tenant.attrelid = c.oid \
+                   AND tenant.attname = 'tenant_id' AND NOT tenant.attisdropped \
+                 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') \
+                   AND NOT c.relname = ANY($1) \
+             ) \
+             SELECT child.relname, con.conname::text, parent.relname, \
+                    cardinality(con.conkey) = 2 \
+                      AND con.conkey[1] = child.tenant_id_attnum \
+                      AND con.conkey[2] <> child.tenant_id_attnum \
+                      AND con.confkey[1] = parent.tenant_id_attnum \
+                      AND parent_id.attnum IS NOT NULL \
+                      AND con.confkey[2] = parent_id.attnum AS is_composite_tenant_fk \
+             FROM pg_constraint con \
+             JOIN tenant_children child ON child.oid = con.conrelid \
+             JOIN tenant_parents parent ON parent.oid = con.confrelid \
+             LEFT JOIN pg_attribute parent_id ON parent_id.attrelid = parent.oid \
+               AND parent_id.attname = 'id' AND NOT parent_id.attisdropped \
+             WHERE con.contype = 'f' AND con.conparentid = 0 \
+             ORDER BY child.relname COLLATE \"C\", con.conname COLLATE \"C\"",
+        )
+        .bind(GLOBAL_TABLES)
+        .fetch_all(&mut *conn)
+        .await
+        .expect("could not read tenant foreign keys from the catalog");
+        for (child, constraint, parent, is_composite) in foreign_keys {
+            if !is_composite {
+                violations.push(format!(
+                    "{child}: foreign key {constraint} to {parent} must be composite (tenant_id, ...) -> (tenant_id, id)"
                 ));
             }
         }

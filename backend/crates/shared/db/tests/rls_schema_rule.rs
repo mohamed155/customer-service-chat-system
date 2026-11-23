@@ -1,9 +1,10 @@
 //! The schema rule behind tenant isolation (ADR-004 sections 2 and 7; MOH-50), run by CI as part
-//! of the backend suite: every tenant-owned table has Row-Level Security enabled and forced and
-//! a policy, and every other table is explicitly listed as global.
+//! of the backend suite: every tenant-owned table has Row-Level Security enabled and forced, has a
+//! policy, and has no single-column foreign key to another tenant-owned table; every other table
+//! is explicitly listed as global.
 //!
 //! The first test is the check itself, run against the migrated schema. The others prove it fails:
-//! each plants a table that breaks one part of the rule inside a transaction that is rolled back
+//! each plants a table or foreign key that breaks one part of the rule inside a transaction that is rolled back
 //! (nothing is left in the schema) and expects the matching message.
 //!
 //! Needs the role split (`MIGRATION_DATABASE_URL`); skips without it unless `REQUIRE_DB_TESTS=1`.
@@ -157,6 +158,173 @@ async fn a_complete_tenant_table_passes() {
     )
     .await;
     assert!(found.is_empty(), "a correct table must pass: {found:?}");
+}
+
+#[tokio::test]
+async fn a_tenant_to_tenant_single_column_foreign_key_is_reported() {
+    if !can_run() {
+        return;
+    }
+    let found = violations_after(
+        &[
+            "CREATE TABLE planted_fk_parent (id uuid PRIMARY KEY, tenant_id uuid NOT NULL)",
+            "CREATE TABLE planted_fk_child (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, parent_id uuid NOT NULL REFERENCES planted_fk_parent(id))",
+            "ALTER TABLE planted_fk_parent ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_fk_parent FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_fk_parent \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+            "ALTER TABLE planted_fk_child ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_fk_child FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_fk_child \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+        ],
+        "planted_fk_child",
+    )
+    .await;
+    assert_eq!(
+        found,
+        ["planted_fk_child: foreign key planted_fk_child_parent_id_fkey to planted_fk_parent must be composite (tenant_id, ...) -> (tenant_id, id)"]
+    );
+}
+
+#[tokio::test]
+async fn a_tenant_to_tenant_composite_foreign_key_passes() {
+    if !can_run() {
+        return;
+    }
+    let found = violations_after(
+        &[
+            "CREATE TABLE planted_fk_composite_parent (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, UNIQUE (tenant_id, id))",
+            "CREATE TABLE planted_fk_composite_child (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, parent_id uuid NOT NULL, FOREIGN KEY (tenant_id, parent_id) REFERENCES planted_fk_composite_parent(tenant_id, id))",
+            "ALTER TABLE planted_fk_composite_parent ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_fk_composite_parent FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_fk_composite_parent \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+            "ALTER TABLE planted_fk_composite_child ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_fk_composite_child FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_fk_composite_child \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+        ],
+        "planted_fk_composite_child",
+    )
+    .await;
+    assert!(
+        found.is_empty(),
+        "the composite reference must pass: {found:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_single_column_foreign_key_to_a_tenant_partition_is_reported() {
+    if !can_run() {
+        return;
+    }
+    let found = violations_after(
+        &[
+            "CREATE TABLE planted_partition_parent (id uuid NOT NULL, tenant_id uuid NOT NULL, PRIMARY KEY (tenant_id, id)) PARTITION BY LIST (tenant_id)",
+            "CREATE TABLE planted_partition_parent_a PARTITION OF planted_partition_parent FOR VALUES IN ('00000000-0000-0000-0000-000000000001')",
+            "CREATE UNIQUE INDEX planted_partition_parent_a_id_uq ON planted_partition_parent_a (id)",
+            "CREATE TABLE planted_partition_child (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, parent_id uuid NOT NULL REFERENCES planted_partition_parent_a(id))",
+            "ALTER TABLE planted_partition_parent ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_partition_parent FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_partition_parent \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+            "ALTER TABLE planted_partition_child ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_partition_child FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_partition_child \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+        ],
+        "planted_partition_child",
+    )
+    .await;
+    assert_eq!(
+        found,
+        ["planted_partition_child: foreign key planted_partition_child_parent_id_fkey to planted_partition_parent_a must be composite (tenant_id, ...) -> (tenant_id, id)"]
+    );
+}
+
+#[tokio::test]
+async fn a_single_column_foreign_key_defined_on_a_tenant_partition_is_reported() {
+    if !can_run() {
+        return;
+    }
+    let found = violations_after(
+        &[
+            "CREATE TABLE planted_childpart_parent (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, UNIQUE (tenant_id, id))",
+            "CREATE TABLE planted_childpart_child (id uuid NOT NULL, tenant_id uuid NOT NULL, parent_id uuid NOT NULL, PRIMARY KEY (tenant_id, id)) PARTITION BY LIST (tenant_id)",
+            "CREATE TABLE planted_childpart_child_a PARTITION OF planted_childpart_child FOR VALUES IN ('00000000-0000-0000-0000-000000000001')",
+            "ALTER TABLE planted_childpart_child_a ADD CONSTRAINT planted_childpart_direct_fkey FOREIGN KEY (parent_id) REFERENCES planted_childpart_parent(id)",
+            "ALTER TABLE planted_childpart_parent ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_childpart_parent FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_childpart_parent \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+            "ALTER TABLE planted_childpart_child ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_childpart_child FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_childpart_child \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+        ],
+        "planted_childpart_child_a",
+    )
+    .await;
+    assert_eq!(
+        found,
+        ["planted_childpart_child_a: foreign key planted_childpart_direct_fkey to planted_childpart_parent must be composite (tenant_id, ...) -> (tenant_id, id)"]
+    );
+}
+
+#[tokio::test]
+async fn a_single_column_foreign_key_to_a_global_table_passes() {
+    if !can_run() {
+        return;
+    }
+    let found = violations_after(
+        &[
+            "CREATE TABLE planted_fk_global_child (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, user_id uuid NOT NULL REFERENCES users(id))",
+            "ALTER TABLE planted_fk_global_child ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_fk_global_child FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_fk_global_child \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+        ],
+        "planted_fk_global_child",
+    )
+    .await;
+    assert!(
+        found.is_empty(),
+        "a reference to global users is allowed: {found:?}"
+    );
+}
+
+#[tokio::test]
+async fn postgres_rejects_a_composite_foreign_key_without_a_matching_unique_parent_key() {
+    if !can_run() {
+        return;
+    }
+    let mut tx = db::testing::owner_tx().await;
+    sqlx::query(
+        "CREATE TABLE planted_fk_nonunique_parent (id uuid PRIMARY KEY, tenant_id uuid NOT NULL)",
+    )
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    let error = sqlx::query(
+        "CREATE TABLE planted_fk_nonunique_child (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, parent_id uuid NOT NULL, FOREIGN KEY (tenant_id, parent_id) REFERENCES planted_fk_nonunique_parent(tenant_id, id))",
+    )
+    .execute(&mut *tx)
+    .await
+    .expect_err("PostgreSQL must require a unique referenced (tenant_id, id) key");
+    match error {
+        sqlx::Error::Database(error) => assert_eq!(error.code().as_deref(), Some("42830")),
+        error => panic!("unexpected non-database error: {error}"),
+    }
 }
 
 /// The allow-list can only contain the known global platform authorization table and tables

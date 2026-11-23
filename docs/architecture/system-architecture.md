@@ -242,7 +242,10 @@ enterprise, pool for everyone else).
 3. **Database:** each transaction runs `SET LOCAL app.tenant_id = $1`; RLS policies on every tenant
    table: `USING (tenant_id = current_setting('app.tenant_id')::uuid)`. The app connects as a
    non-owner role without `BYPASSRLS`. A separate migration role owns tables.
-4. **Referential:** composite FKs `(tenant_id, conversation_id) REFERENCES conversations(tenant_id, id)`.
+4. **Referential:** every FK between tenant-owned tables is composite, such as
+   `(tenant_id, conversation_id) REFERENCES conversations(tenant_id, id)`. Migrations `0083`–`0094`
+   and MOH-98's catalog check enforce the rule; single-column references to global tables remain
+   allowed.
 5. **Indexes:** every tenant table indexes with `tenant_id` as the leading column.
 6. **Everything else:** Redis keys `t:{tenant_id}:…`, object keys `tenants/{tenant_id}/…`, vector
    queries always filtered by tenant, job payloads carry tenant ID and re-establish context.

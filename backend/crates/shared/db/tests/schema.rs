@@ -124,6 +124,18 @@ async fn run_migrations_succeeds() {
         (80, "retire hs256 sessions"),
         (81, "password reset tokens"),
         (82, "platform access sessions"),
+        (83, "agent configurations tenant id id uq"),
+        (84, "agent prompts tenant id id uq"),
+        (85, "ai usage records tenant id id uq"),
+        (86, "widget sessions tenant id id uq"),
+        (87, "widget instances tenant id id uq"),
+        (88, "integration connections tenant id id uq"),
+        (89, "knowledge categories tenant id id uq"),
+        (90, "tenant tools tenant id id uq"),
+        (91, "ai generations tenant id id uq"),
+        (92, "composite tenant foreign keys"),
+        (93, "validate composite tenant foreign keys"),
+        (94, "contract composite tenant foreign keys"),
     ];
     assert_eq!(
         rows.len(),
