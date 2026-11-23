@@ -35,6 +35,8 @@ const PATTERNS: readonly [RegExp, string][] = [
   ],
   // `password=x` and `authorization: x` up to the next separator
   [new RegExp(`(\\b${SENSITIVE_KEYS}\\s*[:=]\\s*)[^\\s,;&"'}]+`, 'gi'), '$1[redacted]'],
+  // Reset links may be malformed. Remove the credential segment regardless of its shape.
+  [/(\/reset-password\/)[^/\s?#'"`)<>]+/gi, '$1:token'],
   // A UUID in a path or a message.
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, ':id'],
   // A path segment that is long and made of token characters (invite and verification links).

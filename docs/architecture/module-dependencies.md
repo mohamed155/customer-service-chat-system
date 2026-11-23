@@ -21,10 +21,10 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `billing` | flat | `identity`, `tenancy` | `ai` | `billing_plans`, `tenant_subscriptions` |
 | `conversations` | layered | `customers`, `identity`, `integrations`, `tenancy` | `ai`, `escalations`, `tools`, `whatsapp`, `widgets` | `conversations`, `message_attachments`, `message_citations`, `messages` |
 | `customers` | flat | `authz`, `identity`, `tenancy` | `conversations`, `tools`, `whatsapp`, `widgets` | `customer_channel_identifiers`, `customers` |
-| `email` | flat | – | `tenancy` | – |
+| `email` | flat | – | `identity`, `tenancy` | – |
 | `escalations` | flat | `conversations`, `identity`, `tenancy`, `tools` | `notifications`, `widgets` | `agent_availability`, `agent_skills`, `escalations`, `skills` |
 | `feedback` | flat | `tenancy`, `widgets` | – | `conversation_feedback` |
-| `identity` | flat | – | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `tenancy`, `tools`, `widgets` | `auth_sessions`, `mfa_factors`, `mfa_recovery_codes`, `refresh_tokens`, `users` |
+| `identity` | flat | `email` | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `tenancy`, `tools`, `widgets` | `auth_sessions`, `mfa_factors`, `mfa_recovery_codes`, `password_reset_requests`, `password_reset_tokens`, `refresh_tokens`, `users` |
 | `integrations` | flat | `identity`, `tenancy` | `conversations`, `whatsapp` | `integration_catalog`, `integration_connections`, `integration_events`, `integration_secrets`, `integration_webhook_deliveries` |
 | `knowledge` | flat | `authz`, `identity`, `tenancy` | – | `knowledge_categories`, `knowledge_chunks`, `knowledge_documents`, `knowledge_index_state`, `knowledge_item_tags`, `knowledge_items` |
 | `notifications` | flat | `authz`, `escalations`, `identity`, `tenancy` | – | `notifications` |
@@ -64,6 +64,7 @@ flowchart LR
   escalations --> tools
   feedback --> tenancy
   feedback --> widgets
+  identity --> email
   integrations --> identity
   integrations --> tenancy
   knowledge --> authz

@@ -164,6 +164,40 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/password/forgot': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Request a password reset link */
+    post: operations['auth_forgot_password'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/password/reset': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Reset a password using a one-time link */
+    post: operations['auth_reset_password'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/refresh': {
     parameters: {
       query?: never;
@@ -2915,6 +2949,13 @@ export interface components {
       /** Format: int64 */
       feedback_count: number;
     };
+    ForgotPasswordRequest: {
+      /** Format: email */
+      email: string;
+    };
+    ForgotPasswordResponse: {
+      message: string;
+    };
     HealthReport: {
       checks: components['schemas']['CheckResult'][];
       status: components['schemas']['HealthStatus'];
@@ -3612,6 +3653,10 @@ export interface components {
       /** Format: uuid */
       id?: string | null;
       name: string;
+    };
+    ResetPasswordRequest: {
+      password: string;
+      token: string;
     };
     RestorePayload: {
       /** Format: int32 */
@@ -4474,6 +4519,172 @@ export interface operations {
       };
       /** @description Too many attempts, or the second factor is locked. */
       429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  auth_forgot_password: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ForgotPasswordRequest'];
+      };
+    };
+    responses: {
+      /** @description Request accepted */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ForgotPasswordResponse'];
+        };
+      };
+      /** @description Invalid request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Missing or invalid request origin proof */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Invalid email */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Too many requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Request could not be queued */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Rate limiter unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  auth_reset_password: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResetPasswordRequest'];
+      };
+    };
+    responses: {
+      /** @description Password changed and sessions revoked */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Invalid, expired, or already used token */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Missing or invalid request origin proof */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Invalid password */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Too many requests */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Password could not be reset */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Rate limiter unavailable */
+      503: {
         headers: {
           [name: string]: unknown;
         };

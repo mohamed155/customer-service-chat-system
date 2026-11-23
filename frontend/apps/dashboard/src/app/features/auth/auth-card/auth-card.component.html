@@ -6,7 +6,9 @@
       <small>{{ 'app.tagline' | transloco }}</small>
     </div>
     <h1>{{ title() }}</h1>
-    <p>{{ subtitle() }}</p>
+    @if (subtitle()) {
+      <p>{{ subtitle() }}</p>
+    }
     <ng-content />
     <footer><ng-content select="[auth-footer]" /></footer>
   </section>

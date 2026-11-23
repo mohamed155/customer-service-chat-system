@@ -171,6 +171,19 @@ five-minute EdDSA challenge and creates no session. The challenge has its own `m
 audience and kind. Completing the factor step records the challenge ID on the new session,
 which prevents a second completion from creating another session.
 
+### 7. Password reset
+
+`POST /auth/password/forgot` validates the request, checks independent email and IP budgets,
+and enqueues the same outbox record for every valid email. It returns a fixed `202 Accepted`.
+The worker looks up the account and sends email only for an active user with a password credential.
+
+The link contains a 256-bit random, base64url token. The database stores its SHA-256 hash for at most
+30 minutes of validity. A newer request supersedes the previous link. Redemption is rate limited per
+IP and atomically replaces the Argon2id password hash, consumes the token, revokes every session,
+and records `auth.password_reset` with the user as actor and resource. The audit details contain no
+credentials. The operation preserves MFA enrollment. A pending MFA challenge based on the old
+password can no longer start a session.
+
 ## Alternatives considered
 
 | Option | Why rejected |

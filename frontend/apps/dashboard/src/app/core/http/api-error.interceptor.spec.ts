@@ -89,6 +89,23 @@ describe('HTTP interceptors', () => {
     expect(notifications.message()).toBe("You don't have access to this tenant.");
   });
 
+  it('leaves the session alone when a password recovery request fails its origin proof', async () => {
+    const { router, currentUser } = configure();
+    const request = firstValueFrom(
+      TestBed.inject(HttpClient).post('/api/v1/auth/password/reset', {}),
+    ).catch((error: ApiError) => error);
+    TestBed.inject(HttpTestingController)
+      .expectOne('/api/v1/auth/password/reset')
+      .flush(
+        { error: { code: 'unauthorized', message: 'Origin not allowed' } },
+        { status: 403, statusText: 'Forbidden' },
+      );
+    expect(await request).toMatchObject({ code: 'unauthorized', status: 403 });
+    expect(currentUser.load).not.toHaveBeenCalled();
+    expect(currentUser.clear).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
   it('clears client state and redirects when a non-login API request is unauthenticated', async () => {
     const { router, currentUser } = configure();
     const notifications = TestBed.inject(ApiErrorNotificationService);

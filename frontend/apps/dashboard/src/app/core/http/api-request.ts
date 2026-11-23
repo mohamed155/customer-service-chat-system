@@ -39,6 +39,11 @@ export function isRefreshEndpoint(relativePath: string | null): boolean {
   return relativePath === '/auth/refresh';
 }
 
+/** Public password recovery calls do not carry a session proof. */
+export function isPasswordResetEndpoint(relativePath: string | null): boolean {
+  return relativePath === '/auth/password/forgot' || relativePath === '/auth/password/reset';
+}
+
 /**
  * Calls that start a session, or the refresh itself. A `401` from one of them is an answer about
  * that call (a wrong password, a lapsed second-step challenge, a refresh token that is no longer
@@ -51,6 +56,7 @@ export function isSessionEndpoint(relativePath: string | null): boolean {
     relativePath === '/auth/login' ||
     relativePath === '/auth/signup' ||
     relativePath === '/auth/mfa/verify' ||
+    isPasswordResetEndpoint(relativePath) ||
     isRefreshEndpoint(relativePath)
   );
 }

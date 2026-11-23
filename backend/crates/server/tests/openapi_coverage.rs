@@ -52,6 +52,8 @@ const EXPECTED: &[(&str, &str)] = &[
     ("POST", "/auth/login"),
     ("POST", "/auth/logout"),
     ("POST", "/auth/refresh"),
+    ("POST", "/auth/password/forgot"),
+    ("POST", "/auth/password/reset"),
     ("POST", "/auth/mfa/verify"),
     ("POST", "/auth/signup"),
     ("GET", "/invitations/{token}"),

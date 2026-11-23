@@ -173,6 +173,64 @@ fn http_timeouts(name: &str, default: HttpTimeouts) -> Result<HttpTimeouts, Conf
     })
 }
 
+/// Independent request budgets for password recovery, sharing one time window.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PasswordResetLimits {
+    pub forgot_email_max: u32,
+    pub forgot_ip_max: u32,
+    pub reset_ip_max: u32,
+    pub window_secs: u64,
+}
+
+impl Default for PasswordResetLimits {
+    fn default() -> Self {
+        Self {
+            forgot_email_max: 3,
+            forgot_ip_max: 20,
+            reset_ip_max: 20,
+            window_secs: 900,
+        }
+    }
+}
+
+impl PasswordResetLimits {
+    fn from_env() -> Result<Self, ConfigError> {
+        let defaults = Self::default();
+        Ok(Self {
+            forgot_email_max: positive_env(
+                "APP_RATE_LIMIT_PASSWORD_RESET_FORGOT_EMAIL_MAX",
+                defaults.forgot_email_max,
+            )?,
+            forgot_ip_max: positive_env(
+                "APP_RATE_LIMIT_PASSWORD_RESET_FORGOT_IP_MAX",
+                defaults.forgot_ip_max,
+            )?,
+            reset_ip_max: positive_env(
+                "APP_RATE_LIMIT_PASSWORD_RESET_IP_MAX",
+                defaults.reset_ip_max,
+            )?,
+            window_secs: positive_env(
+                "APP_RATE_LIMIT_PASSWORD_RESET_WINDOW_SECS",
+                defaults.window_secs,
+            )?,
+        })
+    }
+}
+
+fn positive_env<T: std::str::FromStr + PartialOrd + Default>(
+    name: &str,
+    default: T,
+) -> Result<T, ConfigError> {
+    match env::var(name) {
+        Err(env::VarError::NotPresent) => Ok(default),
+        value => value
+            .ok()
+            .and_then(|value| value.parse::<T>().ok())
+            .filter(|value| *value > T::default())
+            .ok_or_else(|| ConfigError(format!("{name} must be a positive integer"))),
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub struct AppConfig {
     pub database_url: String,
@@ -212,6 +270,7 @@ pub struct AppConfig {
     pub docs_enabled: bool,
     pub rate_limit_enabled: bool,
     pub rate_limit_login_max: u32,
+    pub password_reset_limits: PasswordResetLimits,
     pub rate_limit_login_window_secs: u64,
     pub rate_limit_max_override: u32,
     pub rate_limit_fail_mode: String,
@@ -265,6 +324,7 @@ impl fmt::Debug for AppConfig {
             .field("s3", &self.s3)
             .field("rate_limit_enabled", &self.rate_limit_enabled)
             .field("rate_limit_login_max", &self.rate_limit_login_max)
+            .field("password_reset_limits", &self.password_reset_limits)
             .field(
                 "rate_limit_login_window_secs",
                 &self.rate_limit_login_window_secs,
@@ -604,6 +664,7 @@ impl AppConfig {
             docs_enabled,
             rate_limit_enabled,
             rate_limit_login_max,
+            password_reset_limits: PasswordResetLimits::from_env()?,
             rate_limit_login_window_secs,
             rate_limit_max_override,
             rate_limit_fail_mode,
@@ -687,6 +748,10 @@ mod tests {
                 "APP_S3_FORCE_PATH_STYLE",
                 "APP_RATE_LIMIT_ENABLED",
                 "APP_RATE_LIMIT_LOGIN_MAX",
+                "APP_RATE_LIMIT_PASSWORD_RESET_FORGOT_EMAIL_MAX",
+                "APP_RATE_LIMIT_PASSWORD_RESET_FORGOT_IP_MAX",
+                "APP_RATE_LIMIT_PASSWORD_RESET_IP_MAX",
+                "APP_RATE_LIMIT_PASSWORD_RESET_WINDOW_SECS",
                 "APP_RATE_LIMIT_LOGIN_WINDOW_SECS",
                 "APP_RATE_LIMIT_MAX_OVERRIDE",
                 "APP_RATE_LIMIT_FAIL_MODE",
@@ -749,6 +814,10 @@ mod tests {
                 "APP_S3_FORCE_PATH_STYLE",
                 "APP_RATE_LIMIT_ENABLED",
                 "APP_RATE_LIMIT_LOGIN_MAX",
+                "APP_RATE_LIMIT_PASSWORD_RESET_FORGOT_EMAIL_MAX",
+                "APP_RATE_LIMIT_PASSWORD_RESET_FORGOT_IP_MAX",
+                "APP_RATE_LIMIT_PASSWORD_RESET_IP_MAX",
+                "APP_RATE_LIMIT_PASSWORD_RESET_WINDOW_SECS",
                 "APP_RATE_LIMIT_LOGIN_WINDOW_SECS",
                 "APP_RATE_LIMIT_MAX_OVERRIDE",
                 "APP_RATE_LIMIT_FAIL_MODE",

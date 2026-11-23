@@ -29,6 +29,9 @@ impl Default for InMemoryRateLimitStore {
 #[strum(serialize_all = "snake_case")]
 pub enum Scope {
     Login,
+    PasswordForgotEmail,
+    PasswordForgotIp,
+    PasswordResetIp,
     Mfa,
     MfaEnrol,
     /// Exchanging a refresh token for a new access token (`POST /auth/refresh`), per client.
@@ -47,6 +50,9 @@ impl Scope {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Login => "login",
+            Self::PasswordForgotEmail => "password_forgot_email",
+            Self::PasswordForgotIp => "password_forgot_ip",
+            Self::PasswordResetIp => "password_reset_ip",
             Self::Mfa => "mfa",
             Self::MfaEnrol => "mfa_enrol",
             Self::Refresh => "refresh",

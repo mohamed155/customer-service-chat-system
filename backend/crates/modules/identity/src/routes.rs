@@ -73,12 +73,14 @@ pub struct LoginRequest {
     pub password: String,
 }
 
+#[derive(sqlx::FromRow)]
 struct LoginUser {
     id: Uuid,
     email: String,
     display_name: String,
     platform_role: Option<String>,
     password_hash: Option<String>,
+    password_reset_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 pub struct LoginSuccess {
@@ -144,11 +146,12 @@ pub async fn authenticate_login(
     // A user with a second factor gets a challenge, not a session.
     match crate::mfa::is_enrolled(pool, user.id).await {
         Ok(true) => {
-            let (jwt, _) =
-                session::issue_pending(crate::keys::keys_for(&config.environment), user.id)
-                    .map_err(|e| {
-                        LoginError::Internal(format!("Challenge token issuance failed: {e}"))
-                    })?;
+            let (jwt, _) = session::issue_pending_for_password(
+                crate::keys::keys_for(&config.environment),
+                user.id,
+                user.password_reset_at,
+            )
+            .map_err(|e| LoginError::Internal(format!("Challenge token issuance failed: {e}")))?;
             return Ok(LoginOutcome::MfaRequired {
                 user_id: user.id,
                 pending_cookie: session::build_pending_cookie(&jwt),
@@ -168,15 +171,18 @@ pub async fn authenticate_login(
                 LoginError::Internal("user row does not produce an authenticated principal".into())
             })?;
 
-    let session_cookies = crate::sessions::start_for_response(
+    let session_cookies = crate::sessions::start_for_password(
         pool,
         &config.environment,
         user.id,
-        session::SessionAuth::password(),
+        user.password_reset_at,
         headers,
     )
     .await
-    .map_err(|_| LoginError::Internal("Session issuance failed".into()))?;
+    .map_err(|error| match error {
+        crate::sessions::SessionError::StaleProof => LoginError::InvalidCredentials,
+        _ => LoginError::Internal("Session issuance failed".into()),
+    })?;
 
     Ok(LoginOutcome::Session(LoginSuccess {
         principal,
@@ -236,27 +242,13 @@ pub async fn logout(
     response
 }
 async fn fetch_login_user(pool: &PgPool, email: &str) -> sqlx::Result<Option<LoginUser>> {
-    let row = sqlx::query_as::<_, (Uuid, String, String, Option<String>, Option<String>)>(
-        r#"
-        SELECT id, email, display_name, platform_role, password_hash
-        FROM users
-        WHERE lower(email) = lower($1)
-          AND deleted_at IS NULL
-        "#,
+    sqlx::query_as(
+        "SELECT id, email::text, display_name, platform_role, password_hash, password_reset_at
+         FROM users WHERE lower(email) = lower($1) AND deleted_at IS NULL",
     )
     .bind(email)
     .fetch_optional(pool)
-    .await?;
-
-    Ok(row.map(
-        |(id, email, display_name, platform_role, password_hash)| LoginUser {
-            id,
-            email,
-            display_name,
-            platform_role,
-            password_hash,
-        },
-    ))
+    .await
 }
 
 /// Replace a hash made with older parameters by one made with the current ones, now that the

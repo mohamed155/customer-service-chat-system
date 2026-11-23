@@ -237,12 +237,13 @@ pub async fn confirm_enrolment(
 
     // The session that confirmed the factor is replaced by one that records it, and the old one
     // stops working.
-    let cookies = match crate::sessions::start_for_response(
+    let cookies = match crate::sessions::start_replacing_session(
         &pool,
         &config.environment,
         principal.user_id,
         session::SessionAuth::second_factor(session::AMR_OTP),
         &headers,
+        claims.as_ref().map(|Extension(claims)| claims.sid),
     )
     .await
     {
@@ -378,12 +379,13 @@ pub async fn step_up(
         Ok(method) => method,
         Err(error) => return error_response(error),
     };
-    let cookies = match crate::sessions::start_for_response(
+    let cookies = match crate::sessions::start_replacing_session(
         &pool,
         &config.environment,
         principal.user_id,
         session::SessionAuth::second_factor(method.amr()),
         &headers,
+        claims.as_ref().map(|Extension(claims)| claims.sid),
     )
     .await
     {

@@ -79,6 +79,7 @@ pub enum SessionError {
     /// The user no longer exists or was deleted.
     NoSuchUser,
     ChallengeUsed,
+    StaleProof,
 }
 
 impl std::fmt::Display for SessionError {
@@ -88,6 +89,7 @@ impl std::fmt::Display for SessionError {
             Self::Token(e) => write!(f, "token error: {e}"),
             Self::NoSuchUser => f.write_str("no such user"),
             Self::ChallengeUsed => f.write_str("MFA challenge already used"),
+            Self::StaleProof => f.write_str("session proof was revoked"),
         }
     }
 }
@@ -189,15 +191,25 @@ pub async fn start(
     auth: SessionAuth,
     meta: &ClientMeta,
 ) -> Result<Issued, SessionError> {
-    start_session(pool, keys, user_id, auth, meta, None).await
+    start_session(pool, keys, user_id, auth, meta, SessionProof::NewAccount).await
 }
 
-/// Whether the challenge has already created a session, including one that has since ended.
-pub async fn challenge_used(pool: &PgPool, challenge_id: Uuid) -> sqlx::Result<bool> {
-    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM auth_sessions WHERE mfa_challenge_id = $1)")
-        .bind(challenge_id)
-        .fetch_one(pool)
-        .await
+/// A pending challenge still represents the current password and has never created a session.
+pub async fn challenge_available(
+    pool: &PgPool,
+    challenge: &session::PendingClaims,
+) -> sqlx::Result<bool> {
+    sqlx::query_scalar(
+        "SELECT EXISTS (
+             SELECT 1 FROM users
+             WHERE id = $1 AND deleted_at IS NULL AND password_reset_at IS NOT DISTINCT FROM $2
+         ) AND NOT EXISTS (SELECT 1 FROM auth_sessions WHERE mfa_challenge_id = $3)",
+    )
+    .bind(challenge.sub)
+    .bind(challenge.password_reset_at)
+    .bind(challenge.jti)
+    .fetch_one(pool)
+    .await
 }
 
 /// A completed challenge can start only one session. The unique index enforces this even
@@ -215,13 +227,66 @@ pub async fn start_from_challenge(
         challenge.sub,
         auth,
         &ClientMeta::from_headers(headers),
-        Some(challenge.jti),
+        SessionProof::Challenge(challenge),
     )
     .await
     .map(|issued| issued.set_cookies())
     .map_err(|error| match error {
-        SessionError::ChallengeUsed => ApiError::unauthenticated("Sign in again"),
+        SessionError::ChallengeUsed | SessionError::StaleProof => {
+            ApiError::unauthenticated("Sign in again")
+        }
         other => ApiError::internal_error_from("Session token issuance failed", other),
+    })
+}
+
+enum SessionProof<'a> {
+    NewAccount,
+    Password(Option<DateTime<Utc>>),
+    Challenge(&'a session::PendingClaims),
+    ExistingSession(Uuid),
+}
+
+pub(crate) async fn start_for_password(
+    pool: &PgPool,
+    environment: &Environment,
+    user_id: Uuid,
+    password_reset_at: Option<DateTime<Utc>>,
+    headers: &HeaderMap,
+) -> Result<Vec<String>, SessionError> {
+    start_session(
+        pool,
+        keys::keys_for(environment),
+        user_id,
+        SessionAuth::password(),
+        &ClientMeta::from_headers(headers),
+        SessionProof::Password(password_reset_at),
+    )
+    .await
+    .map(|issued| issued.set_cookies())
+}
+
+pub(crate) async fn start_replacing_session(
+    pool: &PgPool,
+    environment: &Environment,
+    user_id: Uuid,
+    auth: SessionAuth,
+    headers: &HeaderMap,
+    old_sid: Option<Uuid>,
+) -> Result<Vec<String>, ApiError> {
+    let proof = old_sid.map_or(SessionProof::NewAccount, SessionProof::ExistingSession);
+    start_session(
+        pool,
+        keys::keys_for(environment),
+        user_id,
+        auth,
+        &ClientMeta::from_headers(headers),
+        proof,
+    )
+    .await
+    .map(|issued| issued.set_cookies())
+    .map_err(|error| match error {
+        SessionError::StaleProof => ApiError::unauthenticated("Sign in again"),
+        other => ApiError::internal_error_from("Session issuance failed", other),
     })
 }
 
@@ -231,18 +296,47 @@ async fn start_session(
     user_id: Uuid,
     auth: SessionAuth,
     meta: &ClientMeta,
-    challenge_id: Option<Uuid>,
+    proof: SessionProof<'_>,
 ) -> Result<Issued, SessionError> {
-    let platform: Option<bool> = sqlx::query_scalar(
-        "SELECT platform_role IS NOT NULL FROM users WHERE id = $1 AND deleted_at IS NULL",
+    let mut tx = pool.begin().await?;
+    // The password reset transaction locks the same user before revoking sessions. A proof that
+    // predates the reset either creates a session before revocation or is refused after it.
+    let user: Option<(bool, Option<DateTime<Utc>>)> = sqlx::query_as(
+        "SELECT platform_role IS NOT NULL, password_reset_at FROM users
+         WHERE id = $1 AND deleted_at IS NULL FOR SHARE",
     )
     .bind(user_id)
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
-    let platform = platform.ok_or(SessionError::NoSuchUser)?;
+    let (platform, password_reset_at) = user.ok_or(SessionError::NoSuchUser)?;
+    let challenge_id = match proof {
+        SessionProof::Password(proven_at) if password_reset_at != proven_at => {
+            return Err(SessionError::StaleProof);
+        }
+        SessionProof::Challenge(challenge) => {
+            if password_reset_at != challenge.password_reset_at {
+                return Err(SessionError::StaleProof);
+            }
+            Some(challenge.jti)
+        }
+        SessionProof::ExistingSession(sid) => {
+            let active: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM auth_sessions WHERE id = $1 AND user_id = $2
+                 AND revoked_at IS NULL AND idle_expires_at > now() AND absolute_expires_at > now())",
+            )
+            .bind(sid)
+            .bind(user_id)
+            .fetch_one(&mut *tx)
+            .await?;
+            if !active {
+                return Err(SessionError::StaleProof);
+            }
+            None
+        }
+        _ => None,
+    };
     let life = lifetimes(platform);
 
-    let mut tx = pool.begin().await?;
     let (sid, absolute_left): (Uuid, i64) = sqlx::query_as(
         r#"
         INSERT INTO auth_sessions

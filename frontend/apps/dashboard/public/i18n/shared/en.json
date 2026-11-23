@@ -582,6 +582,7 @@
     "mfaChallenge": "Two-step verification",
     "signup": "Create account",
     "forgotPassword": "Forgot password",
+    "resetPassword": "Reset password",
     "verifyEmail": "Verify email",
     "mfaSetup": "Set up two-step verification",
     "security": "Security"

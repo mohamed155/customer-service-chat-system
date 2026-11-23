@@ -162,6 +162,7 @@ fn test_config(environment: Environment) -> config::AppConfig {
         rate_limit_enabled: true,
         rate_limit_login_max: 10,
         rate_limit_login_window_secs: 60,
+        password_reset_limits: Default::default(),
         rate_limit_max_override: 10000,
         rate_limit_fail_mode: "auth_closed".into(),
         security_headers_enabled: true,

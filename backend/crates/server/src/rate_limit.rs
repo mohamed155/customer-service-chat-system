@@ -160,28 +160,9 @@ async fn limit_by_client(
     if !config.rate_limit_enabled {
         return next.run(request).await;
     }
-    // Behind the trusted proxy the client is the address it forwards. With no such header the
-    // peer address is used, so a request is never exempt from the limit.
-    let forwarded = if config.trusted_proxy {
-        request
-            .headers()
-            .get("x-forwarded-for")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.split(',').next())
-            // Only an address is a client; anything else in the header is ignored, so the
-            // header cannot be used to name some other limiter key.
-            .and_then(|first| first.trim().parse::<std::net::IpAddr>().ok())
-            .map(|ip| ip.to_string())
-    } else {
-        None
-    };
-    let client_ip = forwarded.unwrap_or_else(|| {
-        request
-            .extensions()
-            .get::<ConnectInfo<SocketAddr>>()
-            .map(|ConnectInfo(addr)| addr.ip().to_string())
-            .unwrap_or_else(|| "unknown".to_string())
-    });
+    let client_ip = client_ip(&request, config.trusted_proxy)
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|| "unknown".to_string());
     if let Decision::Refused { retry_after } = store
         .check(
             scope,
@@ -196,6 +177,30 @@ async fn limit_by_client(
         return ApiError::rate_limited("Too many attempts", retry_after).into_response();
     }
     next.run(request).await
+}
+
+/// Use the proxy address only when explicitly trusted and syntactically valid.
+pub(crate) fn client_ip(request: &Request, trusted_proxy: bool) -> Option<std::net::IpAddr> {
+    let forwarded = trusted_proxy
+        .then(|| {
+            request
+                .headers()
+                .get("x-forwarded-for")?
+                .to_str()
+                .ok()?
+                .split(',')
+                .next()?
+                .trim()
+                .parse()
+                .ok()
+        })
+        .flatten();
+    forwarded.or_else(|| {
+        request
+            .extensions()
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|ConnectInfo(addr)| addr.ip())
+    })
 }
 
 pub async fn per_ip_creation_limit(

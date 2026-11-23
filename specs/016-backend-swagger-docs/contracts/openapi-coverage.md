@@ -14,6 +14,8 @@ This is the authoritative inventory of every endpoint the OpenAPI document MUST 
 |--------|------|---------|---------|--------|----------|------------|
 | POST | `/auth/login` | `LoginRequest` | 200 `MeResponse` + `Set-Cookie: app_session` | 400, 401, 500 | public | — |
 | POST | `/auth/logout` | — | 200 (clears cookie) | 401 | cookie | — |
+| POST | `/auth/password/forgot` | `ForgotPasswordRequest` | 202 `ForgotPasswordResponse` | 400, 403, 422, 429, 500, 503 | public | — |
+| POST | `/auth/password/reset` | `ResetPasswordRequest` | 204 | 400, 403, 422, 429, 500, 503 | public | — |
 | GET | `/invitations/{token}` | path `token: string` | 200 `PreviewInvitationResponse` | 404, 410 | public | — |
 | POST | `/invitations/{token}/accept` | `AcceptInvitationPayload` | 200 `AcceptInvitationResponse` | 400, 404, 410, 422 | public | — |
 

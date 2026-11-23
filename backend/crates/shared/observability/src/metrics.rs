@@ -100,6 +100,10 @@ pub fn init() {
     );
     metrics::describe_gauge!("outbox_backlog", "Number of pending outbox messages");
     metrics::describe_gauge!(
+        "outbox_oldest_age_seconds",
+        "Age in seconds of the oldest pending outbox message"
+    );
+    metrics::describe_gauge!(
         "dependency_up",
         "Whether a dependency is reachable (1 = up, 0 = down)"
     );
@@ -132,6 +136,11 @@ pub fn record_legacy_error_envelope(route: &str) {
 
 pub fn set_outbox_backlog(count: i64) {
     metrics::gauge!("outbox_backlog", "queue" => "outbox").set(count as f64);
+}
+
+pub fn set_password_reset_queue_health(count: i64, age_seconds: f64) {
+    metrics::gauge!("outbox_backlog", "queue" => "password_reset").set(count as f64);
+    metrics::gauge!("outbox_oldest_age_seconds", "queue" => "password_reset").set(age_seconds);
 }
 
 /// Spawn a background task that periodically runs the health checks and

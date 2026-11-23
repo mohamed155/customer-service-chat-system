@@ -140,6 +140,14 @@ describe(
       }
     });
 
+    it("serves a reset link with no referrer or cache", async () => {
+      const res = await get(port, "/reset-password/a.token");
+      assert.equal(res.status, 200);
+      assert.equal(res.text, "<html>the app</html>");
+      assert.equal(res.headers["referrer-policy"], "no-referrer");
+      assert.equal(res.headers["cache-control"], "no-store");
+    });
+
     it("serves a present hashed file for a year, as immutable", async () => {
       const js = await get(port, "/main-4TYQZ6FJ.js");
       assert.equal(js.status, 200);
