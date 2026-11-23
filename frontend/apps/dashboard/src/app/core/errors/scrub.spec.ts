@@ -36,7 +36,7 @@ describe('scrubText', () => {
       '{"password":"hunter2","name":"Jane"}',
       '{"password":"[redacted]","name":"Jane"}',
     ],
-    ['a cookie', 'cookie: app_session=abc123', 'cookie: [redacted]'],
+    ['a cookie', 'cookie: __Host-app_session=abc123', 'cookie: [redacted]'],
     ['a UUID', 'customer 0191f3a2-6b1e-7c3d-8e4f-5a6b7c8d9e0f not found', 'customer :id not found'],
     [
       'a long path segment (invite or verification link)',

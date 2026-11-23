@@ -25,8 +25,6 @@ fn test_config(environment: Environment) -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment,
@@ -119,21 +117,9 @@ fn authenticated_request(
     method: Method,
     user_id: Uuid,
     tenant_id: Option<Uuid>,
-    environment: Environment,
 ) -> Request<Body> {
     let mut builder = Request::builder().uri(uri).method(method);
-    if environment == Environment::Production {
-        let config = test_config(environment.clone());
-        let (token, _, _) = identity::session::issue_token(
-            &config.auth_jwt_secret,
-            config.auth_session_ttl_seconds,
-            user_id,
-        )
-        .unwrap();
-        builder = builder.header("cookie", format!("app_session={token}"));
-    } else {
-        builder = builder.header("X-Dev-User-Id", user_id.to_string());
-    }
+    builder = builder.header("X-Dev-User-Id", user_id.to_string());
     if let Some(tenant_id) = tenant_id {
         builder = builder.header("X-Tenant-ID", tenant_id.to_string());
     }
@@ -381,7 +367,6 @@ async fn list_returns_newest_first() {
             Method::GET,
             user_id,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -431,7 +416,6 @@ async fn cursor_pagination_returns_all_pages() {
                 Method::GET,
                 user_id,
                 Some(tenant_id),
-                Environment::Test,
             ),
         )
         .await;
@@ -454,13 +438,7 @@ async fn cursor_pagination_returns_all_pages() {
         let response = send(
             pool.clone(),
             Environment::Test,
-            authenticated_request(
-                &uri,
-                Method::GET,
-                user_id,
-                Some(tenant_id),
-                Environment::Test,
-            ),
+            authenticated_request(&uri, Method::GET, user_id, Some(tenant_id)),
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
@@ -556,7 +534,6 @@ async fn unread_count_counts_only_unread() {
             Method::GET,
             user_id,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -598,7 +575,6 @@ async fn mark_read_is_idempotent() {
             Method::POST,
             user_id,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -615,7 +591,6 @@ async fn mark_read_is_idempotent() {
             Method::POST,
             user_id,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -659,7 +634,6 @@ async fn mark_all_read_returns_count_and_is_idempotent() {
             Method::POST,
             user_id,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -676,7 +650,6 @@ async fn mark_all_read_returns_count_and_is_idempotent() {
             Method::POST,
             user_id,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -720,7 +693,6 @@ async fn reading_another_members_notification_returns_404_not_403() {
             Method::POST,
             user_b,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -762,7 +734,6 @@ async fn tenant_isolation() {
             Method::GET,
             user_id,
             Some(tenant_b),
-            Environment::Test,
         ),
     )
     .await;
@@ -789,7 +760,6 @@ async fn deactivated_membership_cannot_read_inbox() {
             Method::GET,
             user_id,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -835,7 +805,6 @@ async fn all_five_tenant_roles_can_access_inbox() {
                 Method::GET,
                 user_id,
                 Some(tenant_id),
-                Environment::Test,
             ),
         )
         .await;
@@ -855,7 +824,6 @@ async fn all_five_tenant_roles_can_access_inbox() {
                 Method::GET,
                 user_id,
                 Some(tenant_id),
-                Environment::Test,
             ),
         )
         .await;
@@ -917,7 +885,6 @@ async fn list_under_one_second_with_one_thousand_notifications() {
             Method::GET,
             user_id,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -2041,7 +2008,6 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
             Method::GET,
             user_id,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -2082,7 +2048,6 @@ async fn deactivated_member_gets_no_inbox_re_add_gets_zero_unread() {
             Method::GET,
             user_id,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;

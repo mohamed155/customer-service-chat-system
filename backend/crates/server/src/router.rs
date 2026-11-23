@@ -367,16 +367,13 @@ async fn mfa_verify(
     else {
         return again();
     };
-    let Ok(challenge) = identity::session::validate_pending(&config.auth_jwt_secret, token) else {
+    let Ok(challenge) =
+        identity::session::validate_pending(identity::keys::keys_for(&config.environment), token)
+    else {
         return again();
     };
     // A challenge that already completed a sign-in cannot start another.
-    let used: Result<bool, sqlx::Error> =
-        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM revoked_sessions WHERE jti = $1)")
-            .bind(challenge.jti)
-            .fetch_one(&pool)
-            .await;
-    match used {
+    match identity::sessions::challenge_used(&pool, challenge.jti).await {
         Ok(false) => {}
         Ok(true) => return again(),
         Err(e) => return ApiError::internal_error_from("Sign-in failed", e).into_response(),
@@ -416,10 +413,10 @@ async fn mfa_verify(
         Ok(None) => return again(),
         Err(e) => return ApiError::internal_error_from("Sign-in failed", e).into_response(),
     };
-    let cookies = match identity::sessions::start_for_response(
+    let cookies = match identity::sessions::start_from_challenge(
         &pool,
         &config.environment,
-        principal.user_id,
+        &challenge,
         identity::session::SessionAuth::second_factor(method.amr()),
         &headers,
     )
@@ -428,7 +425,6 @@ async fn mfa_verify(
         Ok(cookies) => cookies,
         Err(error) => return error.into_response(),
     };
-    identity::mfa_routes::revoke(&pool, principal.user_id, challenge.jti, challenge.exp).await;
     let user_id = principal.user_id;
     let response = match tenancy::routes::build_me_response(
         &pool,
@@ -508,10 +504,10 @@ async fn refresh(
             let mut response = StatusCode::NO_CONTENT.into_response();
             identity::mfa_routes::append_cookies(
                 &mut response,
-                vec![
-                    identity::session::build_session_cookie(&access_token, access_ttl),
-                    identity::session::clear_legacy_session_cookie(),
-                ],
+                vec![identity::session::build_session_cookie(
+                    &access_token,
+                    access_ttl,
+                )],
             );
             response
         }
@@ -1360,8 +1356,6 @@ fn api_routes(
     let identity_config = IdentityConfig {
         pool: state.db.clone(),
         environment: state.config.environment.clone(),
-        auth_jwt_secret: state.config.auth_jwt_secret.clone(),
-        auth_session_ttl_seconds: state.config.auth_session_ttl_seconds,
     };
     let tenancy_config = tenancy::TenancyConfig {
         pool: state.db.clone(),
@@ -1737,8 +1731,6 @@ mod tests {
         let mut config = AppConfig {
             database_url: String::new(),
             redis_url: String::new(),
-            auth_jwt_secret: String::new(),
-            auth_session_ttl_seconds: 0,
             port: 0,
             bind_address: String::new(),
             environment: Environment::Development,

@@ -1,5 +1,9 @@
 # Quickstart: Authentication
 
+This guide records the original HS256 release. For the current token and cookie behavior, see
+[ADR-005](../../docs/adr/0005-authentication-tokens.md) and
+[the cutover runbook](../../docs/runbooks/operations.md#before-you-deploy-the-hs256-cutover).
+
 Validation guide proving the feature end-to-end. References: [contracts/http-api.md](contracts/http-api.md), [data-model.md](data-model.md).
 
 ## Prerequisites

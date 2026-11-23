@@ -8,7 +8,7 @@ use std::time::Duration;
 use argon2::{Argon2, PasswordHasher};
 use axum::body::Body;
 use axum::http::{Method, Request};
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use serde_json::json;
 use server::router;
 use server::state::AppState;
@@ -24,8 +24,6 @@ fn test_config() -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
@@ -244,7 +242,6 @@ fn sid_of(access: &str) -> Uuid {
     identity::session::validate_access_token(keys(), access)
         .unwrap()
         .sid
-        .unwrap()
 }
 
 fn hash_of(token: &str) -> Vec<u8> {
@@ -267,7 +264,7 @@ async fn sign_in_starts_a_session_with_an_eddsa_access_token_and_a_hashed_refres
     assert!(header.kid.is_some());
 
     // The session row, with the tenant-user lifetimes.
-    let (revoked, _, idle, absolute) = session_row(&pool, claims.sid.unwrap()).await;
+    let (revoked, _, idle, absolute) = session_row(&pool, claims.sid).await;
     assert!(!revoked);
     let now = chrono::Utc::now();
     assert!((idle - now).num_seconds().abs_diff(12 * 3600) < 30);
@@ -295,19 +292,19 @@ async fn sign_in_starts_a_session_with_an_eddsa_access_token_and_a_hashed_refres
 }
 
 #[tokio::test]
-async fn every_new_session_clears_a_leftover_hs256_cookie() {
-    // A browser that signed in before the cutover holds an eight-hour `app_session`. When the new
-    // access cookie expires after ten minutes, the middleware would fall back to the old one and
-    // sign the browser in as whoever it names, with nothing to trigger a refresh.
+async fn sign_in_and_refresh_issue_only_current_session_cookies() {
     let Some(pool) = get_pool().await else { return };
     let (_, email) = seed_user(&pool, None).await;
 
     let login = send(&pool, login_request(&email)).await;
-    assert!(cleared(&login, "app_session"));
+    assert!(cookie(&login, ACCESS).is_some());
+    assert_eq!(login.headers().get_all("set-cookie").iter().count(), 2);
     let refresh = cookie(&login, REFRESH).unwrap();
 
     let refreshed = send(&pool, refresh_request(Some(&refresh), true)).await;
-    assert!(cleared(&refreshed, "app_session"));
+    assert!(cookie(&refreshed, ACCESS).is_some());
+    assert!(cookie(&refreshed, REFRESH).is_some());
+    assert_eq!(refreshed.headers().get_all("set-cookie").iter().count(), 2);
 }
 
 #[tokio::test]
@@ -318,7 +315,7 @@ async fn a_platform_user_gets_the_shorter_session() {
 
     let claims = identity::session::validate_access_token(keys(), &tokens.access).unwrap();
     assert_eq!(claims.typ.as_deref(), Some("platform_user"));
-    let (_, _, idle, absolute) = session_row(&pool, claims.sid.unwrap()).await;
+    let (_, _, idle, absolute) = session_row(&pool, claims.sid).await;
     let now = chrono::Utc::now();
     assert!(
         (idle - now).num_seconds().abs_diff(3600) < 30,
@@ -653,44 +650,58 @@ async fn ending_every_session_of_a_user_ends_each_of_them_except_the_one_kept() 
 }
 
 #[tokio::test]
-async fn an_hs256_session_of_the_cutover_window_still_works_and_logs_out() {
+async fn retired_hs256_sessions_and_the_old_cookie_are_refused() {
+    let Some(pool) = get_pool().await else { return };
+    let (user, email) = seed_user(&pool, None).await;
+    let now = chrono::Utc::now().timestamp();
+    let legacy = jsonwebtoken::encode(
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+        &json!({ "sub": user, "jti": Uuid::new_v4(), "iat": now, "exp": now + 600 }),
+        &jsonwebtoken::EncodingKey::from_secret(b"test-auth-jwt-secret-at-least-32-bytes").unwrap(),
+    )
+    .unwrap();
+    assert_eq!(send(&pool, me_request(&legacy)).await.status(), 401);
+
+    let tokens = sign_in(&pool, &email).await;
+    assert_eq!(send(&pool, me_request(&tokens.access)).await.status(), 200);
+    for token in [&legacy, &tokens.access] {
+        let request = Request::builder()
+            .uri("/api/v1/me")
+            .header("cookie", format!("app_session={token}"))
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(send(&pool, request).await.status(), 401);
+    }
+}
+
+#[tokio::test]
+async fn a_completed_mfa_challenge_can_create_only_one_session() {
     let Some(pool) = get_pool().await else { return };
     let (user, _) = seed_user(&pool, None).await;
-    let cfg = test_config();
-    let (jwt, jti, _) = identity::session::issue_token(&cfg.auth_jwt_secret, 600, user).unwrap();
-    let old_cookie = format!("app_session={jwt}");
-
-    let me = |cookie: &str| {
-        Request::builder()
-            .uri("/api/v1/me")
-            .header("cookie", cookie)
-            .body(Body::empty())
-            .unwrap()
+    let (_, challenge) = identity::session::issue_pending(keys(), user).unwrap();
+    let headers = axum::http::HeaderMap::new();
+    let complete = || {
+        identity::sessions::start_from_challenge(
+            &pool,
+            &config::Environment::Test,
+            &challenge,
+            identity::session::SessionAuth::second_factor(identity::session::AMR_OTP),
+            &headers,
+        )
     };
-    assert_eq!(send(&pool, me(&old_cookie)).await.status(), 200);
 
-    let logout = Request::builder()
-        .uri("/api/v1/auth/logout")
-        .method(Method::POST)
-        .header("origin", ORIGIN)
-        .header("x-requested-with", "XMLHttpRequest")
-        .header("cookie", &old_cookie)
-        .body(Body::empty())
-        .unwrap();
-    let response = send(&pool, logout).await;
-    assert_eq!(response.status(), 204);
-    assert!(
-        cleared(&response, "app_session"),
-        "the old cookie is cleared too"
-    );
-
-    let denied: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM revoked_sessions WHERE jti = $1")
-        .bind(jti)
+    let (first, second) = tokio::join!(complete(), complete());
+    let failure = match (first, second) {
+        (Ok(_), Err(error)) | (Err(error), Ok(_)) => error,
+        _ => panic!("exactly one completion should create a session"),
+    };
+    assert_eq!(failure.into_response().status(), 401);
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM auth_sessions WHERE user_id = $1")
+        .bind(user)
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(denied, 1);
-    assert_eq!(send(&pool, me(&old_cookie)).await.status(), 401);
+    assert_eq!(count, 1);
 }
 
 #[tokio::test]
@@ -706,7 +717,7 @@ async fn an_access_token_for_a_deleted_user_or_another_users_session_is_refused(
     let (kid, key) = keys().signing().unwrap();
     let mut claims =
         identity::session::validate_access_token(keys(), &alice_tokens.access).unwrap();
-    claims.sid = Some(sid_of(&bob_tokens.access));
+    claims.sid = sid_of(&bob_tokens.access);
     let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::EdDSA);
     header.kid = Some(kid.to_owned());
     let mixed = jsonwebtoken::encode(&header, &claims, key).unwrap();
@@ -925,8 +936,7 @@ async fn resetting_a_second_factor_ends_persisted_sessions_and_their_refresh_tok
         .await
         .unwrap();
 
-    // The session row is revoked, so neither the access token nor the refresh token works, not only
-    // the HS256 `sessions_valid_after` of the cutover window.
+    // Revocation ends both the access token and the refresh token.
     let (revoked, reason, _, _) = session_row(&pool, sid_of(&tokens.access)).await;
     assert!(revoked);
     assert_eq!(reason.as_deref(), Some("mfa_reset"));

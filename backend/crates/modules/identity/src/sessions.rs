@@ -78,6 +78,7 @@ pub enum SessionError {
     Token(jsonwebtoken::errors::Error),
     /// The user no longer exists or was deleted.
     NoSuchUser,
+    ChallengeUsed,
 }
 
 impl std::fmt::Display for SessionError {
@@ -86,6 +87,7 @@ impl std::fmt::Display for SessionError {
             Self::Database(e) => write!(f, "database error: {e}"),
             Self::Token(e) => write!(f, "token error: {e}"),
             Self::NoSuchUser => f.write_str("no such user"),
+            Self::ChallengeUsed => f.write_str("MFA challenge already used"),
         }
     }
 }
@@ -144,25 +146,20 @@ pub struct Issued {
 }
 
 impl Issued {
-    /// The `Set-Cookie` values: the access token, the refresh token, and a clearing of the old
-    /// `app_session` cookie. A browser that still holds an HS256 session from before the cutover
-    /// would otherwise fall back to it when the new access cookie expires, and could be signed in
-    /// as whoever that token names.
+    /// The access and refresh cookies to send to the browser.
     pub fn set_cookies(&self) -> Vec<String> {
         vec![
             session::build_session_cookie(&self.access_token, self.access_ttl),
             session::build_refresh_cookie(&self.refresh_token, self.refresh_max_age),
-            session::clear_legacy_session_cookie(),
         ]
     }
 }
 
-/// `Set-Cookie` values that sign the browser out: both cookies, and the old-style one.
+/// Clear the access and refresh cookies.
 pub fn clear_cookies() -> Vec<String> {
     vec![
         session::clear_session_cookie(),
         session::clear_refresh_cookie(),
-        session::clear_legacy_session_cookie(),
     ]
 }
 
@@ -192,6 +189,50 @@ pub async fn start(
     auth: SessionAuth,
     meta: &ClientMeta,
 ) -> Result<Issued, SessionError> {
+    start_session(pool, keys, user_id, auth, meta, None).await
+}
+
+/// Whether the challenge has already created a session, including one that has since ended.
+pub async fn challenge_used(pool: &PgPool, challenge_id: Uuid) -> sqlx::Result<bool> {
+    sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM auth_sessions WHERE mfa_challenge_id = $1)")
+        .bind(challenge_id)
+        .fetch_one(pool)
+        .await
+}
+
+/// A completed challenge can start only one session. The unique index enforces this even
+/// when concurrent requests both passed the early check.
+pub async fn start_from_challenge(
+    pool: &PgPool,
+    environment: &Environment,
+    challenge: &session::PendingClaims,
+    auth: SessionAuth,
+    headers: &HeaderMap,
+) -> Result<Vec<String>, ApiError> {
+    start_session(
+        pool,
+        keys::keys_for(environment),
+        challenge.sub,
+        auth,
+        &ClientMeta::from_headers(headers),
+        Some(challenge.jti),
+    )
+    .await
+    .map(|issued| issued.set_cookies())
+    .map_err(|error| match error {
+        SessionError::ChallengeUsed => ApiError::unauthenticated("Sign in again"),
+        other => ApiError::internal_error_from("Session token issuance failed", other),
+    })
+}
+
+async fn start_session(
+    pool: &PgPool,
+    keys: &KeySet,
+    user_id: Uuid,
+    auth: SessionAuth,
+    meta: &ClientMeta,
+    challenge_id: Option<Uuid>,
+) -> Result<Issued, SessionError> {
     let platform: Option<bool> = sqlx::query_scalar(
         "SELECT platform_role IS NOT NULL FROM users WHERE id = $1 AND deleted_at IS NULL",
     )
@@ -205,8 +246,9 @@ pub async fn start(
     let (sid, absolute_left): (Uuid, i64) = sqlx::query_as(
         r#"
         INSERT INTO auth_sessions
-            (user_id, amr, mfa_at, idle_expires_at, absolute_expires_at, user_agent, ip)
-        VALUES ($1, $2, $3, now() + make_interval(secs => $4), now() + make_interval(secs => $5), $6, $7)
+            (user_id, amr, mfa_at, idle_expires_at, absolute_expires_at, user_agent, ip, mfa_challenge_id)
+        VALUES ($1, $2, $3, now() + make_interval(secs => $4), now() + make_interval(secs => $5), $6, $7, $8)
+        ON CONFLICT (mfa_challenge_id) WHERE mfa_challenge_id IS NOT NULL DO NOTHING
         RETURNING id, $5::bigint
         "#,
     )
@@ -217,8 +259,10 @@ pub async fn start(
     .bind(life.absolute_seconds as f64)
     .bind(meta.user_agent.as_deref())
     .bind(meta.ip.as_deref())
-    .fetch_one(&mut *tx)
-    .await?;
+    .bind(challenge_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(SessionError::ChallengeUsed)?;
 
     let refresh_token = new_refresh_token();
     sqlx::query(
@@ -510,9 +554,6 @@ pub async fn revoke_session(pool: &PgPool, sid: Uuid, why: &str) -> sqlx::Result
 }
 
 /// Ends every live session of `user_id`, except `keep` when given. Returns how many ended.
-///
-/// Also stamps `users.sessions_valid_after` when nothing is kept, so HS256 tokens of the cutover
-/// window, which have no session row, stop too.
 pub async fn revoke_user_sessions(
     pool: &PgPool,
     user_id: Uuid,
@@ -532,7 +573,7 @@ pub async fn revoke_user_sessions_in(
     why: &str,
     keep: Option<Uuid>,
 ) -> sqlx::Result<u64> {
-    let ended = sqlx::query(
+    Ok(sqlx::query(
         "UPDATE auth_sessions SET revoked_at = now(), revoke_reason = $2 \
          WHERE user_id = $1 AND revoked_at IS NULL AND ($3::uuid IS NULL OR id <> $3)",
     )
@@ -541,40 +582,16 @@ pub async fn revoke_user_sessions_in(
     .bind(keep)
     .execute(&mut *conn)
     .await?
-    .rows_affected();
-    if keep.is_none() && session::legacy_hs256_accepted() {
-        sqlx::query("UPDATE users SET sessions_valid_after = now() WHERE id = $1")
-            .bind(user_id)
-            .execute(&mut *conn)
-            .await?;
-    }
-    Ok(ended)
+    .rows_affected())
 }
 
-/// Ends the session a request was made with: the session row for an EdDSA token, the `jti` denylist
-/// for an HS256 token of the cutover window.
+/// Ends the session of the current access token.
 pub async fn revoke_claims(
     pool: &PgPool,
     claims: &session::SessionClaims,
     why: &str,
 ) -> sqlx::Result<()> {
-    match claims.sid {
-        Some(sid) => {
-            revoke_session(pool, sid, why).await?;
-        }
-        None => {
-            sqlx::query(
-                "INSERT INTO revoked_sessions (jti, user_id, expires_at) VALUES ($1, $2, $3) \
-                 ON CONFLICT (jti) DO NOTHING",
-            )
-            .bind(claims.jti)
-            .bind(claims.sub)
-            .bind(DateTime::from_timestamp(claims.exp, 0).unwrap_or_else(Utc::now))
-            .execute(pool)
-            .await?;
-        }
-    }
-    Ok(())
+    revoke_session(pool, claims.sid, why).await.map(|_| ())
 }
 
 #[cfg(test)]
@@ -616,7 +633,6 @@ mod tests {
             vec![
                 "__Host-app_session=jwt; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600",
                 "__Secure-app_refresh=rt_x; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth/refresh; Max-Age=604800",
-                "app_session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
             ]
         );
     }
@@ -626,7 +642,6 @@ mod tests {
         let cleared = clear_cookies().join("\n");
         assert!(cleared.contains("__Host-app_session=;"));
         assert!(cleared.contains("__Secure-app_refresh=;"));
-        assert!(cleared.contains("\napp_session=;"));
     }
 
     #[test]

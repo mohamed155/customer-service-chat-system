@@ -63,7 +63,7 @@ that serves it, or the reason it needs none.
 | --- | --- |
 | `tenancy`: `fetch_tenant`, `list_tenants`, `get_tenant_detail`, `switch_tenant`, `create_tenant`, `update_tenant` | `tenants` |
 | `billing`: `list_plans`, `plan_by_id`, `create_plan`, `update_plan` | `billing_plans` |
-| `identity`: `resolve_cookie_principal`, `resolve_dev_header_principal`, `logout`, `fetch_login_user` | `users`, `revoked_sessions` |
+| `identity`: `resolve_cookie_principal`, `resolve_dev_header_principal`, `logout`, `fetch_login_user` | `users`, `auth_sessions`, `refresh_tokens` |
 | `integrations`: `find_catalog_by_slug` | `integration_catalog` |
 
 ### Pre-tenant lookups (the tenant is found from a token or an identifier)
@@ -197,8 +197,7 @@ check) reads the catalog and fails when:
 - a table in `public` has a `tenant_id` column but RLS is not enabled, not forced, or there is no policy
   for all commands with both `USING` and `WITH CHECK`;
 - a table has no `tenant_id` and is not in the explicit global list
-  (`db::testing::isolation::GLOBAL_TABLES`: `users`, `tenants`, `revoked_sessions`, `integration_catalog`,
-  `billing_plans`, `_sqlx_migrations`), so a new table cannot skip the decision;
+  (`db::testing::isolation::GLOBAL_TABLES`), so a new table cannot skip the decision;
 - a table in the global list carries a `tenant_id` column, or no longer exists.
 
 The other tests in that file plant a table that breaks each part of the rule inside a transaction that is

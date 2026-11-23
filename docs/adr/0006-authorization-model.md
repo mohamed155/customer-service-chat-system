@@ -159,8 +159,8 @@ part of this decision but not built yet. See the gap table below.
    1. Read the session cookie and validate the JWT: signature, `exp`, and *(target)* `alg = EdDSA`,
       `iss`, `aud`. Or, *(target)*, read `Authorization: Bearer csk_…` and resolve an API-key
       principal.
-   2. Load the user (`deleted_at IS NULL`) and check that the session hasn't been revoked (today:
-      `revoked_sessions.jti`; *(target)*: `auth_sessions.revoked_at` by `sid`, cached in Redis).
+   2. Load the user (`deleted_at IS NULL`) and check the session row by `sid` and user ID. The row must be
+      active and within its absolute lifetime.
    3. In Development and Test only, fall back to the `X-Dev-User-Id` header. The header is
       ignored in Staging and Production.
    4. On success, insert `Principal` (and the claims) into the request extensions and record

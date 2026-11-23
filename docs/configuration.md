@@ -27,10 +27,8 @@ respectively — not by the Rust backend at runtime.
 | `REDIS_URL` | Redis connection string (e.g. `redis://host:6379`) | all environments | — | yes |
 | `APP_ENVIRONMENT` | Runtime environment: `production`, `staging`, `development`, or `test` | all environments | — | no |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins. Each must start with `http://` or `https://`. In production at least one origin is required. | all environments | — | no |
-| `AUTH_JWT_SECRET` | HMAC secret. It verifies the HS256 session tokens of the cutover window and signs the two-step sign-in challenge. Must be **at least 32 bytes**. | all environments | — | yes |
-| `AUTH_SIGNING_KEYS` | The Ed25519 keys that sign and verify access tokens (ADR-005 §2): a JSON array of `{"kid": "...", "private_key": "<base64 PKCS#8>"}` (signs and verifies) and `{"kid": "...", "public_key": "<base64url, 32 bytes>"}` (verifies only). The first entry with a `private_key` signs; every entry verifies. Make one with `server keygen [kid]`. `production` and `staging` refuse to start without a signing key; `development` and `test` generate one per process when it is unset (sessions then end at a restart). See [rotating the signing keys](runbooks/operations.md#12-rotate-the-session-signing-keys). | `production`, `staging` | generated in `development` and `test` | yes |
+| `AUTH_SIGNING_KEYS` | The Ed25519 keys that sign and verify access tokens and MFA sign-in challenges (ADR-005 §2): a JSON array of `{"kid": "...", "private_key": "<base64 PKCS#8>"}` (signs and verifies) and `{"kid": "...", "public_key": "<base64url, 32 bytes>"}` (verifies only). The first entry with a `private_key` signs; every entry verifies. Make one with `server keygen [kid]`. `production` and `staging` refuse to start without a signing key; `development` and `test` generate one per process when it is unset (sessions then end at a restart). See [rotating the signing keys](runbooks/operations.md#12-rotate-the-session-signing-keys). | `production`, `staging` | generated in `development` and `test` | yes |
 | `AUTH_ACCESS_TTL_SECONDS` | Lifetime of an access token, from 300 to 900. A value outside the range is ignored with a warning. | no | `600` | no |
-| `AUTH_ACCEPT_HS256` | Accept HS256 session tokens (and the old `app_session` cookie) signed with `AUTH_JWT_SECRET`. On for one `AUTH_SESSION_TTL_SECONDS` window (8 hours by default: the longest an HS256 token issued just before the release can live) after the release that introduces EdDSA tokens, so nobody is signed out; then set it to `false` (a follow-up removes the code). | no | `true` | no |
 
 ### Database roles
 
@@ -61,11 +59,9 @@ does it). `migrate` reads only `MIGRATION_DATABASE_URL` and refuses to fall back
 cargo run -q -p server -- keygen 2026-11   # prints [{"kid":"2026-11","private_key":"..."}]
 ```
 
-**Generate AUTH_JWT_SECRET:**
-
-```bash
-openssl rand -base64 32
-```
+The retired settings `AUTH_JWT_SECRET`, `AUTH_ACCEPT_HS256` and `AUTH_SESSION_TTL_SECONDS` are
+ignored. Leaving them set has no effect on startup. Remove them from the deployment environment
+after the [HS256 cutover](runbooks/operations.md#before-you-deploy-the-hs256-cutover).
 
 ---
 
@@ -94,11 +90,10 @@ openssl rand -base64 32
 | `DB_ACQUIRE_TIMEOUT_MS` | Milliseconds to wait for a database connection from the pool before timing out | `3000` | no |
 | `READY_PROBE_TIMEOUT_MS` | Milliseconds each dependency (database, Redis, object storage) gets during the `/ready` probe. The three are checked at once, so `/ready` answers within about this time. The container health check (`server healthcheck`) waits for this plus 3 seconds; keep the Docker `timeout` above that. | `2000` | no |
 | `SHUTDOWN_GRACE_SECONDS` | The shutdown period the platform allows. When the stop signal arrives `/ready` fails at once and the server keeps accepting for half of this value (at most 5 s) so a load balancer can stop routing to it; then it drains the requests in flight. It does not cap the drain: keep the orchestrator's own stop timeout above it. `0` means no delay. | `10` | no |
-| `AUTH_SESSION_TTL_SECONDS` | Lifetime of the HS256 session tokens of the cutover window, in seconds (EdDSA access tokens use `AUTH_ACCESS_TTL_SECONDS`). Removed with the HS256 path. | `28800` (8 hours) | no |
 | `SMTP_URL` | SMTP connection string (e.g. `smtp://user:pass@smtp.example.com:587`). Unset disables email sending. | — | yes |
 | `SMTP_FROM` | `From` address for outgoing emails. | — | no |
 | `PUBLIC_DASHBOARD_URL` | Public-facing dashboard URL used in emails and redirects. Must be `http://` or `https://`. Default is `https://dashboard.example.com` in `production`/`staging` and `http://localhost:4200` in `development`/`test`. | environment-dependent | no |
-| `APP_RUN_MODE` | Which parts of the server this process runs: `api` (dashboard, platform and `/auth` routes, API docs), `gateway` (public widget, integration-hook and channel-webhook routes), `worker` (background workers and sweepers, no routes except probes) or `all`. Every mode serves `/health`, `/ready` and `/metrics`. An unknown value stops the process at startup. **Use `all` until realtime fan-out moves to Redis** (ADR-009 RT1): in a split deployment, events produced in one process are not delivered to clients connected to another. `gateway` doesn't load `AUTH_JWT_SECRET` or `APP_AI_KEY_ENCRYPTION_KEY` at all, so a gateway deployment doesn't need them. A blank or unknown value stops the process. | `all` | no |
+| `APP_RUN_MODE` | Which parts of the server this process runs: `api` (dashboard, platform and `/auth` routes, API docs), `gateway` (public widget, integration-hook and channel-webhook routes), `worker` (background workers and sweepers, no routes except probes) or `all`. Every mode serves `/health`, `/ready` and `/metrics`. An unknown value stops the process at startup. **Use `all` until realtime fan-out moves to Redis** (ADR-009 RT1): in a split deployment, events produced in one process are not delivered to clients connected to another. `gateway` doesn't load `APP_AI_KEY_ENCRYPTION_KEY`, so a gateway deployment doesn't need it. A blank or unknown value stops the process. | `all` | no |
 | `APP_DOCS_ENABLED` | Serve Swagger UI (`/swagger-ui`) and OpenAPI spec (`/api-docs/openapi.json`). In non-production environments docs are **always served** regardless of this flag. In production the flag must be explicitly set to `true`. Accepts `1`, `true`, `yes`, `on`. | `false` | no |
 | `APP_RATE_LIMIT_ENABLED` | Enable request rate limiting globally. Accepts boolean-like values. | `true` | no |
 | `APP_RATE_LIMIT_LOGIN_MAX` | Maximum failed login attempts per window (per email+IP pair) | `10` | no |

@@ -399,7 +399,6 @@ pub mod isolation {
         "mfa_factors",
         "mfa_recovery_codes",
         "refresh_tokens",
-        "revoked_sessions",
         "secret_keks",
         "tenants",
         "users",

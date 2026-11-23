@@ -106,8 +106,6 @@ impl Principal {
 pub struct IdentityConfig {
     pub pool: PgPool,
     pub environment: Environment,
-    pub auth_jwt_secret: String,
-    pub auth_session_ttl_seconds: u64,
 }
 
 /// Axum middleware that resolves the current [`Principal`] from the request.
@@ -176,12 +174,7 @@ async fn resolve_cookie_principal(
     jwt: Option<&str>,
 ) -> Option<(Principal, SessionClaims)> {
     let jwt = jwt?;
-    let claims = session::validate_session_token(
-        keys::keys_for(&cfg.environment),
-        &cfg.auth_jwt_secret,
-        jwt,
-    )
-    .ok()?;
+    let claims = session::validate_access_token(keys::keys_for(&cfg.environment), jwt).ok()?;
 
     let result = sqlx::query_as::<_, (Uuid, String, String, Option<String>, bool)>(
         r#"
@@ -191,25 +184,14 @@ async fn resolve_cookie_principal(
         FROM users
         WHERE id = $1
           AND deleted_at IS NULL
-          AND CASE
-                -- An EdDSA access token lives and dies with its session row: revoking the
-                -- session stops it at once, whatever its own expiry says.
-                WHEN $4::uuid IS NOT NULL THEN EXISTS (
-                    SELECT 1 FROM auth_sessions s
-                    WHERE s.id = $4 AND s.user_id = users.id
-                      AND s.revoked_at IS NULL AND s.absolute_expires_at > now())
-                -- An HS256 token of the cutover window: the `jti` denylist, and the moment of the
-                -- last "end every session" (strictly after: a session issued in the second of a
-                -- reset is one the reset meant to end).
-                ELSE NOT EXISTS (SELECT 1 FROM revoked_sessions WHERE jti = $2)
-                     AND (sessions_valid_after IS NULL
-                          OR $3 > FLOOR(EXTRACT(EPOCH FROM sessions_valid_after))::bigint)
-              END
+          AND EXISTS (
+              SELECT 1 FROM auth_sessions s
+              WHERE s.id = $2 AND s.user_id = users.id
+                AND s.revoked_at IS NULL AND s.absolute_expires_at > now()
+          )
         "#,
     )
     .bind(claims.sub)
-    .bind(claims.jti)
-    .bind(claims.iat)
     .bind(claims.sid)
     .fetch_optional(&cfg.pool)
     .await

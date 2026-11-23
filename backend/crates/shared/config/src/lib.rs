@@ -177,8 +177,6 @@ fn http_timeouts(name: &str, default: HttpTimeouts) -> Result<HttpTimeouts, Conf
 pub struct AppConfig {
     pub database_url: String,
     pub redis_url: String,
-    pub auth_jwt_secret: String,
-    pub auth_session_ttl_seconds: u64,
     pub port: u16,
     pub bind_address: String,
     pub environment: Environment,
@@ -243,8 +241,6 @@ impl fmt::Debug for AppConfig {
         f.debug_struct("AppConfig")
             .field("database_url", &"[REDACTED]")
             .field("redis_url", &"[REDACTED]")
-            .field("auth_jwt_secret", &"[REDACTED]")
-            .field("auth_session_ttl_seconds", &self.auth_session_ttl_seconds)
             .field("port", &self.port)
             .field("bind_address", &self.bind_address)
             .field("environment", &self.environment)
@@ -333,16 +329,13 @@ impl AppConfig {
             .or(self.integration_secrets_key.as_deref())
     }
 
-    /// Parse and validate the full configuration. Requires the dashboard secrets
-    /// (`AUTH_JWT_SECRET`, and `APP_AI_KEY_ENCRYPTION_KEY` outside tests).
+    /// Parse and validate the full configuration, including the AI key outside tests.
     pub fn from_env() -> Result<Self, ConfigError> {
         Self::from_env_inner(true)
     }
 
     /// Same as [`AppConfig::from_env`] for a process that serves only the public gateway
-    /// (ADR-010): it neither requires nor reads `AUTH_JWT_SECRET` or `APP_AI_KEY_ENCRYPTION_KEY`,
-    /// so a gateway deployment doesn't have to hold them. `auth_jwt_secret` comes back empty and
-    /// `ai_key_encryption_key` as `None`, even if the variables are set.
+    /// (ADR-010). It leaves `ai_key_encryption_key` unset, even if its environment variable is set.
     pub fn from_env_for_gateway() -> Result<Self, ConfigError> {
         Self::from_env_inner(false)
     }
@@ -408,23 +401,6 @@ impl AppConfig {
             .unwrap_or_else(|_| "10".into())
             .parse()
             .map_err(|_| ConfigError("SHUTDOWN_GRACE_SECONDS must be a valid u64".into()))?;
-
-        let auth_jwt_secret = if dashboard_secrets {
-            let secret = required("AUTH_JWT_SECRET")?;
-            if secret.len() < 32 {
-                return Err(ConfigError(
-                    "AUTH_JWT_SECRET must be at least 32 bytes".into(),
-                ));
-            }
-            secret
-        } else {
-            String::new()
-        };
-
-        let auth_session_ttl_seconds = env::var("AUTH_SESSION_TTL_SECONDS")
-            .unwrap_or_else(|_| "28800".into())
-            .parse()
-            .map_err(|_| ConfigError("AUTH_SESSION_TTL_SECONDS must be a valid u64".into()))?;
 
         let smtp_url = env::var("SMTP_URL").ok();
         let smtp_from = env::var("SMTP_FROM").ok();
@@ -604,8 +580,6 @@ impl AppConfig {
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             redis_url: required("REDIS_URL")?,
-            auth_jwt_secret,
-            auth_session_ttl_seconds,
             smtp_url,
             smtp_from,
             public_dashboard_url,
@@ -681,7 +655,7 @@ mod tests {
     impl EnvGuard {
         fn setup(vars: &[(&str, &str)]) -> Self {
             // Start from a clean slate: the process may inherit any of these
-            // (e.g. CI sets AUTH_JWT_SECRET for the whole job).
+            // (e.g. CI sets variables for the whole job).
             for key in &[
                 "DATABASE_URL",
                 "REDIS_URL",
@@ -868,7 +842,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -876,7 +849,6 @@ mod tests {
         ]);
         let config = AppConfig::from_env().unwrap();
         assert_eq!(config.port, 8080);
-        assert_eq!(config.auth_session_ttl_seconds, 28_800);
         assert_eq!(config.db_max_connections, 10);
         assert_eq!(config.db_acquire_timeout_ms, 3000);
         assert_eq!(config.ready_probe_timeout_ms, 2000);
@@ -929,7 +901,6 @@ mod tests {
             ("REDIS_URL", "redis://user:pass@localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             ("SMTP_URL", "smtp://user:pass@smtp.example.com:587"),
             ("SMTP_FROM", "alerts@example.com"),
             (
@@ -969,7 +940,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             ("PUBLIC_DASHBOARD_URL", "ftp://example.com"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
@@ -983,57 +953,20 @@ mod tests {
 
     #[test]
     #[serial_test::serial]
-    fn missing_auth_jwt_secret_returns_error() {
+    fn retired_auth_settings_are_ignored() {
         let _g = EnvGuard::setup(&[
             ("DATABASE_URL", "postgres://localhost:5432/test"),
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
+            ("AUTH_JWT_SECRET", "obsolete"),
+            ("AUTH_SESSION_TTL_SECONDS", "obsolete"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
             ),
         ]);
-        let err = AppConfig::from_env().unwrap_err();
-        assert!(err.0.contains("AUTH_JWT_SECRET"));
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn short_auth_jwt_secret_returns_error() {
-        let _g = EnvGuard::setup(&[
-            ("DATABASE_URL", "postgres://localhost:5432/test"),
-            ("REDIS_URL", "redis://localhost:6379"),
-            ("APP_ENVIRONMENT", "development"),
-            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "too-short"),
-            (
-                "APP_AI_KEY_ENCRYPTION_KEY",
-                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-            ),
-        ]);
-        let err = AppConfig::from_env().unwrap_err();
-        assert!(err.0.contains("AUTH_JWT_SECRET"));
-        assert!(err.0.contains("32"));
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn auth_session_ttl_seconds_can_be_overridden() {
-        let _g = EnvGuard::setup(&[
-            ("DATABASE_URL", "postgres://localhost:5432/test"),
-            ("REDIS_URL", "redis://localhost:6379"),
-            ("APP_ENVIRONMENT", "development"),
-            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
-            ("AUTH_SESSION_TTL_SECONDS", "3600"),
-            (
-                "APP_AI_KEY_ENCRYPTION_KEY",
-                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-            ),
-        ]);
-        let config = AppConfig::from_env().unwrap();
-        assert_eq!(config.auth_session_ttl_seconds, 3600);
+        AppConfig::from_env().expect("retired settings are ignored");
     }
 
     #[test]
@@ -1044,7 +977,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             ("APP_AI_KEY_ENCRYPTION_KEY", "dG9vX3Nob3J0"), // base64 of "too_short" (9 bytes)
         ]);
         let err = AppConfig::from_env().unwrap_err();
@@ -1056,32 +988,12 @@ mod tests {
 
     #[test]
     #[serial_test::serial]
-    fn invalid_auth_session_ttl_seconds_returns_error() {
-        let _g = EnvGuard::setup(&[
-            ("DATABASE_URL", "postgres://localhost:5432/test"),
-            ("REDIS_URL", "redis://localhost:6379"),
-            ("APP_ENVIRONMENT", "development"),
-            ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
-            ("AUTH_SESSION_TTL_SECONDS", "not_a_number"),
-            (
-                "APP_AI_KEY_ENCRYPTION_KEY",
-                "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-            ),
-        ]);
-        let err = AppConfig::from_env().unwrap_err();
-        assert!(err.0.contains("AUTH_SESSION_TTL_SECONDS"));
-    }
-
-    #[test]
-    #[serial_test::serial]
     fn docs_enabled_defaults_to_false() {
         let _g = EnvGuard::setup(&[
             ("DATABASE_URL", "postgres://localhost:5432/test"),
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "production"),
             ("CORS_ALLOWED_ORIGINS", "https://app.example.com"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -1102,7 +1014,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "production"),
             ("CORS_ALLOWED_ORIGINS", "https://app.example.com"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             ("APP_DOCS_ENABLED", "true"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
@@ -1130,7 +1041,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "production"),
             ("CORS_ALLOWED_ORIGINS", "https://app.example.com"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             ("APP_DOCS_ENABLED", "maybe"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
@@ -1150,7 +1060,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -1168,7 +1077,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -1197,7 +1105,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -1221,7 +1128,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -1257,7 +1163,6 @@ mod tests {
             "the full config still requires the dashboard secrets"
         );
         let config = AppConfig::from_env_for_gateway().expect("gateway config");
-        assert!(config.auth_jwt_secret.is_empty());
         assert!(config.ai_key_encryption_key.is_none());
     }
 
@@ -1269,17 +1174,12 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "production"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
             ),
         ]);
         let config = AppConfig::from_env_for_gateway().expect("gateway config");
-        assert!(
-            config.auth_jwt_secret.is_empty(),
-            "the session secret was kept"
-        );
         assert!(
             config.ai_key_encryption_key.is_none(),
             "the AI key was kept"
@@ -1294,7 +1194,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -1339,7 +1238,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
@@ -1380,7 +1278,6 @@ mod tests {
             ("REDIS_URL", "redis://localhost:6379"),
             ("APP_ENVIRONMENT", "development"),
             ("CORS_ALLOWED_ORIGINS", "http://localhost:4200"),
-            ("AUTH_JWT_SECRET", "0123456789abcdef0123456789abcdef"),
             (
                 "APP_AI_KEY_ENCRYPTION_KEY",
                 "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",

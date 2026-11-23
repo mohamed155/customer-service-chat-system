@@ -6,13 +6,14 @@
 //! index covers live accounts only), so looking at one account is not enough: the member may be
 //! the live one while the lookup returns the deleted one.
 
+mod session_fixture;
+
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use http_body_util::BodyExt;
-use identity::session;
 use serde_json::{json, Value};
 use server::router;
 use server::state::AppState;
@@ -20,14 +21,11 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 const TEST_ORIGIN: &str = "http://localhost:4200";
-const JWT_SECRET: &str = "test-auth-jwt-secret-at-least-32-bytes";
 
 fn test_config() -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
@@ -121,14 +119,13 @@ async fn add_member(tenant: Uuid, user: Uuid, role: &str) {
 }
 
 async fn invite(
+    pool: &sqlx::PgPool,
     app: &axum::Router,
     tenant: Uuid,
     as_user: Uuid,
     email: &str,
 ) -> (StatusCode, Value) {
-    let (jwt, _, _) =
-        session::issue_session(JWT_SECRET, 3600, as_user, session::SessionAuth::password())
-            .unwrap();
+    let issued = session_fixture::start(pool, &config::Environment::Test, as_user).await;
     let request = Request::builder()
         .uri("/api/v1/tenant/members/invitations")
         .method(Method::POST)
@@ -136,7 +133,10 @@ async fn invite(
         .header("x-requested-with", "XMLHttpRequest")
         .header("content-type", "application/json")
         .header("x-tenant-id", tenant.to_string())
-        .header("cookie", format!("app_session={jwt}"))
+        .header(
+            "cookie",
+            format!("__Host-app_session={}", issued.access_token),
+        )
         .body(Body::from(
             json!({ "email": email, "role": "agent" }).to_string(),
         ))
@@ -154,7 +154,7 @@ async fn invite(
 async fn inviting_a_member_is_refused_even_when_a_deleted_account_shares_the_email() {
     let Some(pool) = get_pool().await else { return };
     db::testing::migrate().await;
-    let app = router::app(state(pool, test_config()));
+    let app = router::app(state(pool.clone(), test_config()));
     let seed = db::testing::seed_pool();
     let tag = Uuid::new_v4().simple().to_string();
     let tenant = db::testing::insert_tenant(&seed, "Invitations", &format!("inv-{tag}")).await;
@@ -172,11 +172,18 @@ async fn inviting_a_member_is_refused_even_when_a_deleted_account_shares_the_ema
     let live = seed_user(&shared).await;
     add_member(tenant, live, "agent").await;
 
-    let (status, body) = invite(&app, tenant, owner, &shared).await;
+    let (status, body) = invite(&pool, &app, tenant, owner, &shared).await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(body["error"]["code"], "conflict", "{body}");
 
     // An address nobody uses is invited as usual.
-    let (status, body) = invite(&app, tenant, owner, &format!("new-{tag}@invitations.test")).await;
+    let (status, body) = invite(
+        &pool,
+        &app,
+        tenant,
+        owner,
+        &format!("new-{tag}@invitations.test"),
+    )
+    .await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
 }
