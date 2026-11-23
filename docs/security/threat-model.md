@@ -194,7 +194,7 @@ Password recovery (MOH-94) addresses four risks:
 | R | Operator denies an action | `actor` + `on_behalf_of_tenant` on every audited action | ✓ | Platform Engineering |
 | I | Operators see more than they need | Separate platform permissions per role | ✓ (ADR-006) | Identity & Access |
 | D | — | — | — | — |
-| E | Compromised platform account reaches all tenants | Mandatory MFA for platform users; least privilege | ✓ a second factor is mandatory for every account when `AUTH_MFA_REQUIRED` is on (default in production and staging). Sensitive actions require step-up with a factor proven in the last five minutes (ADR-005 A6) | Identity & Access |
+| E | Compromised platform account reaches all tenants | Mandatory MFA for platform users; least privilege | ✓ a second factor is mandatory for every account when `AUTH_MFA_REQUIRED` is on (default in production and staging). When it is on, sensitive actions require step-up with a factor proven in the last five minutes (ADR-005 A6) | Identity & Access |
 
 ### 4.12 Billing (`billing`)
 
