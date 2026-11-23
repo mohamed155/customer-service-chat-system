@@ -64,12 +64,12 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 
 | STRIDE | Threat | Controls | Status | Owner |
 | -- | -- | -- | -- | -- |
-| S | Credential stuffing, password guessing | Argon2id; `(email, ip)` login throttle; account-wide exponential lockout; owner email alert; uniform error messages | ✓ both throttles, locked-account Argon2 work, generic responses, and lock/unlock audit (ADR-005 A7 resolved) · Gap: MFA (A6) | Identity & Access |
+| S | Credential stuffing, password guessing | Argon2id; `(email, ip)` login throttle; account-wide exponential lockout; owner email alert; uniform error messages | ✓ both throttles, locked-account Argon2 work, generic responses, and lock/unlock audit (ADR-005 A7 resolved) · a second factor is mandatory when `AUTH_MFA_REQUIRED` is on (ADR-005 A6 resolved) | Identity & Access |
 | S | Account enumeration via login timing | Dummy hash on unknown email | ✓ dummy and real hashes share one set of pinned parameters, with a test for it and a timing test (ADR-005 A3 resolved) | Identity & Access |
 | S | Session theft via XSS | HttpOnly cookie, CSP, no tokens in JS storage | ✓ HttpOnly, no JS storage · ✓ CSP enforced (`script-src 'self'`, no inline script), checked in a browser against the built dashboard (MOH-38) | Identity & Access |
 | T | Forged session token | Signed JWT | ✓ EdDSA + `kid`, only `alg = EdDSA` accepted (ADR-005 A1) · Gap: verify-only keys in other units (JWKS) | Identity & Access |
 | R | User denies a login or sensitive action | Audit records for login, logout, role changes | ✓ | Identity & Access |
-| I | Long-lived token replay after theft | Short access token + rotating refresh with reuse detection | Gap: single 8 h token (ADR-005 A2) | Identity & Access |
+| I | Long-lived token replay after theft | Short access token + rotating refresh with reuse detection | ✓ 10-minute access tokens by default, rotating refresh tokens, and session revocation on refresh-token reuse outside the grace window (ADR-005 A2 resolved) | Identity & Access |
 | D | Login floods exhausting memory (Argon2id) | Rate limits, login concurrency cap | ✓ rate limit · Gap: concurrency semaphore (ADR-005 consequences) | Identity & Access |
 | E | CSRF on cookie-authenticated requests | `SameSite=Lax`, strict `Origin` check, custom header | ✓ cookie requests need an allowed `Origin`/`Referer` and the custom header; login and signup are checked too (ADR-005 A4 resolved) | Identity & Access |
 
@@ -194,7 +194,7 @@ Password recovery (MOH-94) addresses four risks:
 | R | Operator denies an action | `actor` + `on_behalf_of_tenant` on every audited action | ✓ | Platform Engineering |
 | I | Operators see more than they need | Separate platform permissions per role | ✓ (ADR-006) | Identity & Access |
 | D | — | — | — | — |
-| E | Compromised platform account reaches all tenants | Mandatory MFA for platform users; least privilege | **Gap (high)**: no MFA yet (ADR-005 A6) | Identity & Access |
+| E | Compromised platform account reaches all tenants | Mandatory MFA for platform users; least privilege | ✓ a second factor is mandatory for every account when `AUTH_MFA_REQUIRED` is on (default in production and staging). Sensitive actions require step-up with a factor proven in the last five minutes (ADR-005 A6) | Identity & Access |
 
 ### 4.12 Billing (`billing`)
 
