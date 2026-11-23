@@ -73,6 +73,17 @@ Legend: **✓** control in place · **Gap** missing or partial (tracked where sh
 | D | Login floods exhausting memory (Argon2id) | Rate limits, login concurrency cap | ✓ rate limit · Gap: concurrency semaphore (ADR-005 consequences) | Identity & Access |
 | E | CSRF on cookie-authenticated requests | `SameSite=Lax`, strict `Origin` check, custom header | ✓ cookie requests need an allowed `Origin`/`Referer` and the custom header; login and signup are checked too (ADR-005 A4 resolved) | Identity & Access |
 
+Password recovery (MOH-94) addresses four risks:
+
+- **Enumeration.** The request runs the same rate-limit and outbox steps for every valid email.
+  Only the worker looks up account eligibility, after the response can be sent.
+- **Token theft.** The database stores a hash of a 256-bit random token. The dashboard suppresses
+  referrers for the reset link, and error reporting and access logs omit its credential.
+- **Replay.** A token expires within 30 minutes. Issuance supersedes earlier tokens, and a
+  transaction consumes the token and revokes the user's sessions. MFA enrollment stays in force.
+- **Brute force and email flooding.** Separate budgets limit requests by normalized email and IP,
+  and redemptions by IP. Password recovery returns `503` when its counter store is unavailable.
+
 ### 4.2 Tenancy and authorization (`tenancy`, `authz`, `rbac`)
 
 | STRIDE | Threat | Controls | Status | Owner |

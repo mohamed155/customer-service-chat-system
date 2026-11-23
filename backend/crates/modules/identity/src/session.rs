@@ -209,9 +209,19 @@ pub struct PendingClaims {
     pub aud: String,
     pub iss: String,
     pub typ: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password_reset_at: Option<chrono::DateTime<Utc>>,
 }
 
 pub fn issue_pending(keys: &crate::keys::KeySet, user_id: Uuid) -> Result<(String, PendingClaims)> {
+    issue_pending_for_password(keys, user_id, None)
+}
+
+pub(crate) fn issue_pending_for_password(
+    keys: &crate::keys::KeySet,
+    user_id: Uuid,
+    password_reset_at: Option<chrono::DateTime<Utc>>,
+) -> Result<(String, PendingClaims)> {
     let issued_at = Utc::now();
     let claims = PendingClaims {
         sub: user_id,
@@ -222,6 +232,7 @@ pub fn issue_pending(keys: &crate::keys::KeySet, user_id: Uuid) -> Result<(Strin
         aud: PENDING_AUDIENCE.to_owned(),
         iss: ISSUER.to_owned(),
         typ: TYP_PENDING.to_owned(),
+        password_reset_at,
     };
     Ok((sign(keys, &claims)?, claims))
 }

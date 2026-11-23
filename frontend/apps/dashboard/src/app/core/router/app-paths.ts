@@ -47,5 +47,6 @@ export const APP_PATHS = {
     notifications: 'notifications',
   },
   invite: 'invite',
+  resetPassword: 'reset-password',
   notFound: '**',
 } as const;

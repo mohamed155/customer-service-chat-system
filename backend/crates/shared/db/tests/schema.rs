@@ -122,6 +122,7 @@ async fn run_migrations_succeeds() {
         (78, "sessions valid after"),
         (79, "auth sessions refresh tokens"),
         (80, "retire hs256 sessions"),
+        (81, "password reset tokens"),
     ];
     assert_eq!(
         rows.len(),

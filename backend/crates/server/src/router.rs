@@ -160,6 +160,23 @@ async fn csrf_session_start_middleware(
     next.run(request).await
 }
 
+async fn csrf_password_reset_middleware(
+    Extension(config): Extension<Arc<AppConfig>>,
+    request: Request,
+    next: middleware::Next,
+) -> Result<Response, ApiError> {
+    require_csrf_proof(&config, request.headers())?;
+    if !request
+        .headers()
+        .get("x-requested-with")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        return Err(ApiError::unauthorized("Missing X-Requested-With header"));
+    }
+    Ok(next.run(request).await)
+}
+
 fn widget_cors_layer() -> CorsLayer {
     CorsLayer::new()
         .allow_origin(AllowOrigin::any())
@@ -372,10 +389,9 @@ async fn mfa_verify(
     else {
         return again();
     };
-    // A challenge that already completed a sign-in cannot start another.
-    match identity::sessions::challenge_used(&pool, challenge.jti).await {
-        Ok(false) => {}
-        Ok(true) => return again(),
+    match identity::sessions::challenge_available(&pool, &challenge).await {
+        Ok(true) => {}
+        Ok(false) => return again(),
         Err(e) => return ApiError::internal_error_from("Sign-in failed", e).into_response(),
     }
 
@@ -556,6 +572,18 @@ fn public_routes() -> OpenApiRouter<sqlx::PgPool> {
             routes!(refresh)
                 .layer(middleware::from_fn(crate::rate_limit::refresh_rate_limit))
                 .layer(middleware::from_fn(csrf_session_start_middleware)),
+        )
+        .routes(
+            routes!(crate::password_reset::forgot)
+                .layer(DefaultBodyLimit::max(4096))
+                .layer(middleware::from_fn(crate::password_reset::forgot_ip_limit))
+                .layer(middleware::from_fn(csrf_password_reset_middleware)),
+        )
+        .routes(
+            routes!(crate::password_reset::reset)
+                .layer(DefaultBodyLimit::max(4096))
+                .layer(middleware::from_fn(crate::password_reset::reset_ip_limit))
+                .layer(middleware::from_fn(csrf_password_reset_middleware)),
         )
         .routes(routes!(identity::routes::logout))
         .routes(routes!(tenancy::invitations::preview_invitation))
@@ -1756,6 +1784,7 @@ mod tests {
             rate_limit_enabled: true,
             rate_limit_login_max: 10,
             rate_limit_login_window_secs: 60,
+            password_reset_limits: Default::default(),
             rate_limit_max_override: 10000,
             rate_limit_fail_mode: "auth_closed".into(),
             security_headers_enabled: true,

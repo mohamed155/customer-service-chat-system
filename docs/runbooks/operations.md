@@ -312,6 +312,20 @@ credentials.
 
 ---
 
+## Password recovery limits
+
+`POST /auth/password/forgot` answers `202` after queuing a request. When users report missing
+emails, check the worker logs for `password reset email delivery failed` and verify SMTP and
+`PUBLIC_DASHBOARD_URL`. The worker retries delivery up to three times. Use the response request
+ID to correlate a delivery failure without collecting the link. Monitor queue depth
+(`outbox_backlog{queue="password_reset"}`) and oldest request age
+(`outbox_oldest_age_seconds{queue="password_reset"}`).
+
+For `429`, check `Retry-After` and the
+[`APP_RATE_LIMIT_PASSWORD_RESET_*` budgets](../configuration.md#optional-with-defaults).
+Email throttling applies only to requesting links. For `503` from either endpoint, check
+Redis connectivity. Password recovery fails closed while Redis is unavailable.
+
 ## 6. A Circuit Breaker Is Open
 
 The backend refuses calls at once to an AI provider or to WhatsApp that keeps failing, instead of

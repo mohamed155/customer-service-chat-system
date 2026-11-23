@@ -18,8 +18,10 @@ http://localhost:8080 {
 https://{$APP_DOMAIN} {
     header {
         X-Content-Type-Options "nosniff"
-        Referrer-Policy "strict-origin-when-cross-origin"
     }
+
+    @other_paths not path /reset-password/*
+    header @other_paths Referrer-Policy "strict-origin-when-cross-origin"
 
     tls {
         issuer acme

@@ -81,6 +81,7 @@ fn test_config_with_fail_mode(redis_url: &str, fail_mode: &str) -> config::AppCo
         rate_limit_enabled: true,
         rate_limit_login_max: 10,
         rate_limit_login_window_secs: 60,
+        password_reset_limits: Default::default(),
         rate_limit_max_override: 10000,
         rate_limit_fail_mode: fail_mode.into(),
         security_headers_enabled: false,

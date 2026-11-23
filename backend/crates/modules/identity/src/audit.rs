@@ -14,13 +14,7 @@ pub async fn record(
 ) {
     // Authentication events have no tenant, so the row is written by the audited function
     // `xtenant.record_auth_event`, which only accepts `auth.*` actions.
-    let result = sqlx::query("SELECT xtenant.record_auth_event($1, $2, $3, $4)")
-        .bind(action)
-        .bind(actor_user_id)
-        .bind(resource_id)
-        .bind(details)
-        .execute(pool)
-        .await;
+    let result = record_in(pool, action, actor_user_id, resource_id, details).await;
 
     if let Err(e) = result {
         error!(
@@ -30,6 +24,23 @@ pub async fn record(
             "failed to record authentication audit log entry"
         );
     }
+}
+
+pub(crate) async fn record_in<'c>(
+    db: impl sqlx::PgExecutor<'c>,
+    action: &str,
+    actor_user_id: Option<Uuid>,
+    resource_id: Option<&str>,
+    details: &serde_json::Value,
+) -> sqlx::Result<()> {
+    sqlx::query("SELECT xtenant.record_auth_event($1, $2, $3, $4)")
+        .bind(action)
+        .bind(actor_user_id)
+        .bind(resource_id)
+        .bind(details)
+        .execute(db)
+        .await?;
+    Ok(())
 }
 
 pub async fn login_succeeded(pool: &PgPool, user_id: Uuid) {

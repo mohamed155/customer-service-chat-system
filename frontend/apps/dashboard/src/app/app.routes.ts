@@ -28,6 +28,14 @@ export const routes: Routes = [
     data: { pageTitle: 'inviteAccept' },
   },
   {
+    path: `${APP_PATHS.resetPassword}/:token`,
+    loadComponent: () =>
+      import('./features/auth/reset-password/reset-password.component').then(
+        (m) => m.ResetPasswordComponent,
+      ),
+    title: marker('titles.resetPassword'),
+  },
+  {
     // Reached by a signed-in user whose account needs a second factor; outside the shell and the
     // guest-only auth routes.
     path: APP_PATHS.mfaSetup,

@@ -31,6 +31,24 @@ fn argon2() -> Result<Argon2<'static>, Error> {
     Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
 }
 
+pub fn validate_new_password(password: &str) -> Result<(), kernel::ErrorDetail> {
+    let length = if password.trim().is_empty() {
+        0
+    } else {
+        password.chars().take(129).count()
+    };
+    let (code, message) = match length {
+        0..=7 => ("too_short", "Use at least 8 characters"),
+        8..=128 => return Ok(()),
+        _ => ("too_long", "Use at most 128 characters"),
+    };
+    Err(kernel::ErrorDetail {
+        field: "password".into(),
+        code: code.into(),
+        message: message.into(),
+    })
+}
+
 pub fn hash_password(password: &str) -> Result<String, Error> {
     Ok(argon2()?.hash_password(password.as_bytes())?.to_string())
 }
@@ -92,6 +110,21 @@ mod tests {
             .hash_password(password.as_bytes())
             .unwrap()
             .to_string()
+    }
+
+    #[test]
+    fn new_password_limits_count_unicode_characters() {
+        for (count, code) in [
+            (7, Some("too_short")),
+            (8, None),
+            (128, None),
+            (129, Some("too_long")),
+        ] {
+            for letter in ["a", "🔑"] {
+                let result = validate_new_password(&letter.repeat(count));
+                assert_eq!(result.err().as_ref().map(|error| error.code.as_str()), code);
+            }
+        }
     }
 
     #[test]

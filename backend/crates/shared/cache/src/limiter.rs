@@ -189,6 +189,11 @@ impl RedisRateLimiter {
             Scope::Login if self.fail_mode != "open" => Decision::Unavailable {
                 retry_after: FAIL_CLOSED_RETRY_AFTER,
             },
+            Scope::PasswordForgotEmail | Scope::PasswordForgotIp | Scope::PasswordResetIp => {
+                Decision::Unavailable {
+                    retry_after: FAIL_CLOSED_RETRY_AFTER,
+                }
+            }
             _ => RateLimiter::check(&self.fallback, scope, identifier, budget).await,
         }
     }

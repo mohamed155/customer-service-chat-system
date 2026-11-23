@@ -398,6 +398,8 @@ pub mod isolation {
         "integration_catalog",
         "mfa_factors",
         "mfa_recovery_codes",
+        "password_reset_requests",
+        "password_reset_tokens",
         "refresh_tokens",
         "secret_keks",
         "tenants",

@@ -2,7 +2,22 @@
   "forgotPassword": {
     "title": "Reset password",
     "subtitle": "Send a reset link to your workspace email",
-    "submit": "Send reset link"
+    "submit": "Send reset link",
+    "pending": "Sending reset link…",
+    "confirmation": "If an account exists for that email, we’ll send a password reset link."
+  },
+  "resetPassword": {
+    "title": "Reset password",
+    "subtitle": "Choose a new password for your account",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "passwordLong": "Password must be 128 characters or fewer.",
+    "mismatch": "Passwords do not match.",
+    "submit": "Change password",
+    "pending": "Changing password…",
+    "success": "Your password has changed. Sign in with your new password.",
+    "invalidLink": "This password reset link is invalid or has expired.",
+    "requestLink": "Request a new reset link"
   },
   "email": "Email",
   "backToSignIn": "Back to sign in",

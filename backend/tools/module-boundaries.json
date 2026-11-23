@@ -147,13 +147,15 @@
       ]
     },
     "identity": {
-      "dependsOn": [],
+      "dependsOn": ["email"],
       "tables": [
         "users",
         "mfa_factors",
         "mfa_recovery_codes",
         "auth_sessions",
-        "refresh_tokens"
+        "refresh_tokens",
+        "password_reset_requests",
+        "password_reset_tokens"
       ]
     },
     "integrations": {

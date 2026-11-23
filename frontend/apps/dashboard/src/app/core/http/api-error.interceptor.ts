@@ -19,6 +19,7 @@ import {
   apiRelativePath,
   isIdentityEndpoint,
   isLoginEndpoint,
+  isPasswordResetEndpoint,
   isPlatformEndpoint,
   isRefreshEndpoint,
 } from './api-request';
@@ -57,7 +58,12 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
             queryParams: { returnUrl: currentPath() },
           });
         }
-      } else if (apiError.status === 403 && apiError.code === 'unauthorized' && path !== null) {
+      } else if (
+        apiError.status === 403 &&
+        apiError.code === 'unauthorized' &&
+        path !== null &&
+        !isPasswordResetEndpoint(path)
+      ) {
         if (!isIdentityEndpoint(path)) {
           void currentUser.load();
         }
@@ -80,6 +86,7 @@ const isSessionExpired = (error: { status: number; code: string }, path: string 
   path !== null &&
   !isIdentityEndpoint(path) &&
   !isLoginEndpoint(path) &&
+  !isPasswordResetEndpoint(path) &&
   // A refresh that fails is reported by the call that needed it, once, not twice.
   !isRefreshEndpoint(path);
 

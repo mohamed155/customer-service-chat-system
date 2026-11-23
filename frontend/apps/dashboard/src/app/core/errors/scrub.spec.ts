@@ -14,6 +14,16 @@ describe('scrubText', () => {
       'redirected to https://app.test/callback#id=abc and back',
       'redirected to https://app.test/callback and back',
     ],
+    [
+      'a password reset link',
+      'at /reset-password/bad%20token#hash',
+      'at /reset-password/:token#hash',
+    ],
+    [
+      'a reset URL',
+      'https://app.test/reset-password/' + 'A'.repeat(43),
+      'https://app.test/reset-password/:token',
+    ],
     ['the query of a path', 'at /invite/short?code=123 failed', 'at /invite/short failed'],
     [
       'a JWT',
