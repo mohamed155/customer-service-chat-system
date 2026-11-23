@@ -63,8 +63,13 @@ SSE is the default. A WebSocket endpoint needs a stated reason in its spec.
 
 - Authorization runs **on subscribe**: session (ADR-005), tenant membership and permission
   (ADR-006). Channel names come from the server-side tenant context, never from the client.
+- Opening a tenant stream requires an active tenant membership, including for platform staff
+  using a platform access grant. An open grant stream rechecks the grant and staff permissions.
 - The stream records its session ID and is **closed on revocation**, logout, or tenant
   suspension, and the client must re-authorise on reconnect.
+- Redis pub/sub carries session, user, and membership revalidation hints between API instances.
+  A hint prompts a database authorization check. A periodic check covers missed signals and
+  expiry. Redis carries only the revalidation hints; event delivery remains in process (RT1).
 - Widget streams authenticate with the widget session token, scoped to one conversation.
 
 ### 5. Backpressure and limits
@@ -109,5 +114,5 @@ this ADR.
 | -- | -- | -- | -- |
 | RT1 | **Fan-out is in-process only.** Events go through a per-tenant `tokio::sync::broadcast` channel inside one process. With more than one instance, a client misses events produced on other instances. Presence is also tracked per process. | `backend/crates/modules/escalations/src/presence.rs` (`connect`, `broadcast`) | **Blocker for horizontal scaling, and for running `api`, `gateway` and `worker` as separate processes (ADR-010, MOH-37).** Publish through Redis pub/sub; move presence to Redis TTL keys (§7.3). |
 | RT2 | **No resume.** There's no `Last-Event-ID` handling or replay buffer; a lagged receiver drops events. | `escalations/src/events.rs`, `widgets/src/public_events.rs` | Add event IDs, `Last-Event-ID` replay and the `resync` event; update the dashboard and widget SSE clients. |
-| RT3 | SSE streams aren't closed on session revocation (also ADR-005 A8). | same | Record the session ID on subscribe and close on revocation. |
+| RT3 | **Resolved (MOH-96).** Tenant SSE streams close when the database recheck finds access has ended. | `escalations/src/events.rs`, `cache/src/stream_revocation.rs` | Redis hints and periodic database revalidation. |
 | RT4 | Two SSE endpoints exist (`GET /tenant/events`, `GET /widget/v1/conversations/{id}/events`) with keep-alive; there's no WebSocket. This matches the "SSE by default" rule. | — | None. |

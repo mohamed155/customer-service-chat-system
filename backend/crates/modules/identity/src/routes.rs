@@ -232,6 +232,7 @@ pub async fn logout(
     State(pool): State<PgPool>,
     principal: Principal,
     claims: Option<Extension<session::SessionClaims>>,
+    bus: Option<Extension<kernel::stream_revocation::Bus>>,
 ) -> Response {
     if let Some(Extension(claims)) = claims {
         if let Err(e) =
@@ -240,6 +241,11 @@ pub async fn logout(
             return ApiError::internal_error_from("Database query failed", &e).into_response();
         }
 
+        if let Some(Extension(bus)) = bus {
+            bus.publish(kernel::stream_revocation::Signal::Session {
+                session_id: claims.sid,
+            });
+        }
         audit::logged_out(&pool, principal.user_id, claims.jti).await;
     }
 

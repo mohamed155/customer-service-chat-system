@@ -458,6 +458,7 @@ pub async fn update_member(
     ctx: TenantContext,
     Extension(principal): Extension<Principal>,
     Path(id): Path<Uuid>,
+    bus: Option<Extension<kernel::stream_revocation::Bus>>,
     kernel::ApiJson(payload): kernel::ApiJson<UpdateMemberPayload>,
 ) -> Response {
     let has_role = payload.role.is_some();
@@ -716,10 +717,11 @@ pub async fn update_member(
     // they cannot reach this workspace any more (the tenant check requires an active membership on
     // every request), and signing them out everywhere would let one workspace's admin end a session
     // in another.
+    let mut revoked_sessions = false;
     if payload.status.as_deref() == Some("disabled") {
         let ended = async {
             if has_access_elsewhere(tx.conn(), target_user_id, ctx.tenant_id).await? {
-                return Ok::<(), sqlx::Error>(());
+                return Ok::<bool, sqlx::Error>(false);
             }
             identity::sessions::revoke_user_sessions_in(
                 tx.conn(),
@@ -728,18 +730,33 @@ pub async fn update_member(
                 None,
             )
             .await
-            .map(|_| ())
+            .map(|count| count > 0)
         }
         .await;
-        if let Err(e) = ended {
-            tracing::error!(error = %e, "failed to end the sessions of a disabled member");
-            return ApiError::internal_error("Failed to update status").into_response();
+        match ended {
+            Ok(revoked) => revoked_sessions = revoked,
+            Err(e) => {
+                tracing::error!(error = %e, "failed to end the sessions of a disabled member");
+                return ApiError::internal_error("Failed to update status").into_response();
+            }
         }
     }
 
     if let Err(e) = tx.commit().await {
         tracing::error!(error = %e, "failed to commit transaction");
         return ApiError::internal_error("Failed to commit transaction").into_response();
+    }
+
+    if let Some(Extension(bus)) = bus {
+        bus.publish(kernel::stream_revocation::Signal::Membership {
+            tenant_id: ctx.tenant_id,
+            user_id: target_user_id,
+        });
+        if revoked_sessions {
+            bus.publish(kernel::stream_revocation::Signal::User {
+                user_id: target_user_id,
+            });
+        }
     }
 
     let mut uow = match ctx.unit_of_work(&pool).await {

@@ -136,3 +136,14 @@ mod tests {
         assert!(cache.is_ok());
     }
 }
+
+pub mod stream_revocation;
+
+impl Cache {
+    pub fn stream_revocation_bus(
+        &self,
+        workers: &mut tokio::task::JoinSet<&'static str>,
+    ) -> kernel::stream_revocation::Bus {
+        stream_revocation::connect(self.client.clone(), workers)
+    }
+}

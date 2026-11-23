@@ -936,8 +936,7 @@ async fn closing_platform_access_ends_an_existing_event_stream() {
     .execute(&db::testing::seed_pool())
     .await
     .unwrap();
-
-    for explicit_end in [true, false] {
+    for cause in ["end", "expiry", "logout"] {
         let session_id = fixture.start(fixture.tenant).await;
         let response = fixture
             .send(
@@ -961,13 +960,27 @@ async fn closing_platform_access_ends_an_existing_event_stream() {
             "the event stream closed before tenant access ended"
         );
 
-        if explicit_end {
+        if cause == "end" {
             assert_eq!(
                 fixture.end_for(&fixture.sign_in).await.status(),
                 StatusCode::NO_CONTENT
             );
-        } else {
+        } else if cause == "expiry" {
             expire(&fixture.pool, session_id).await;
+        } else {
+            assert_eq!(
+                fixture
+                    .send(
+                        Method::POST,
+                        "/api/v1/auth/logout",
+                        &fixture.sign_in,
+                        None,
+                        None
+                    )
+                    .await
+                    .status(),
+                StatusCode::NO_CONTENT
+            );
         }
 
         let result = tokio::time::timeout(Duration::from_secs(5), reader)
@@ -976,4 +989,26 @@ async fn closing_platform_access_ends_an_existing_event_stream() {
             .unwrap();
         assert!(result.is_ok());
     }
+}
+
+#[tokio::test]
+async fn platform_grant_without_membership_cannot_open_an_event_stream() {
+    let Some(fixture) = Fixture::new().await else {
+        return;
+    };
+    fixture.start(fixture.tenant).await;
+    let response = fixture
+        .send(
+            Method::GET,
+            "/api/v1/tenant/events",
+            &fixture.sign_in,
+            Some(fixture.tenant),
+            None,
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        body(response).await["detail"],
+        "Membership not found in tenant"
+    );
 }

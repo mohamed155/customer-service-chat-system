@@ -154,8 +154,10 @@ impl PlatformAccessGrant {
     pub async fn is_current(self, pool: &PgPool) -> bool {
         let active = async {
             let open: bool = sqlx::query_scalar(
-                "SELECT EXISTS (SELECT 1 FROM platform_access_sessions
-                 WHERE id = $1 AND ended_at IS NULL AND expires_at > statement_timestamp())",
+                "SELECT EXISTS (SELECT 1 FROM platform_access_sessions s
+                 JOIN tenants t ON t.id = s.tenant_id
+                 WHERE s.id = $1 AND s.ended_at IS NULL AND s.expires_at > statement_timestamp()
+                   AND t.deleted_at IS NULL)",
             )
             .bind(self.id)
             .fetch_one(pool)

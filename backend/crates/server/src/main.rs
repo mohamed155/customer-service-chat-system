@@ -91,6 +91,11 @@ async fn main() {
         }
     };
 
+    let sse_revalidation = config::SseRevalidation::from_env().unwrap_or_else(|error| {
+        eprintln!("Config error: {error}");
+        std::process::exit(1);
+    });
+
     // A process that signs in users needs a signing key; production and staging don't invent one.
     if matches!(mode, RunMode::Api | RunMode::All) {
         if let Err(e) = identity::keys::validate_startup(&config.environment, true) {
@@ -201,13 +206,21 @@ async fn main() {
     };
 
     let email_sender = router::configured_email_sender(&state.config);
-    let app = router::app_for_mode(state.clone(), mode, email_sender.clone(), storage.clone());
 
     let mut workers = if mode.runs_workers() {
         spawn_workers(&state, storage.clone(), email_sender.clone())
     } else {
         JoinSet::new()
     };
+
+    let bus = if mode.serves_api() {
+        state.cache.stream_revocation_bus(&mut workers)
+    } else {
+        kernel::stream_revocation::Bus::default()
+    };
+    let app = router::app_for_mode(state.clone(), mode, email_sender.clone(), storage.clone())
+        .layer(axum::Extension(bus))
+        .layer(axum::Extension(sse_revalidation));
 
     let drain_delay = server::shutdown::readiness_drain_delay(state.config.shutdown_grace_seconds);
     let address = format!("{}:{}", state.config.bind_address, state.config.port);

@@ -22,6 +22,12 @@ use crate::audit;
 use crate::presence;
 use crate::routing;
 
+type RevocationExtensions = (
+    Option<Extension<kernel::stream_revocation::Bus>>,
+    Option<Extension<config::SseRevalidation>>,
+    Option<Extension<Arc<config::AppConfig>>>,
+);
+
 pub struct GuardedStream {
     pub guard: presence::PresenceGuard,
     pub inner: BroadcastStream<presence::Event>,
@@ -191,12 +197,18 @@ pub async fn stream_events(
     Extension(principal): Extension<Principal>,
     Extension(runtime): Extension<Arc<presence::Runtime>>,
     grant: Option<Extension<PlatformAccessGrant>>,
+    claims: Option<Extension<identity::session::SessionClaims>>,
+    (bus, interval, config): RevocationExtensions,
 ) -> Response {
+    let is_production = config
+        .is_none_or(|Extension(config)| config.environment == config::Environment::Production);
+    let session_id = claims.map(|Extension(claims)| claims.sid);
+    let signals = bus.map(|Extension(bus)| bus.subscribe());
     let mut uow = match ctx.unit_of_work(&pool).await {
         Ok(u) => u,
         Err(r) => return r,
     };
-    let membership_id = match tenancy::directory::membership_id_of_user(
+    let membership_id = match tenancy::directory::active_membership_id_of_user(
         uow.conn(),
         ctx.tenant_id,
         principal.user_id,
@@ -219,7 +231,6 @@ pub async fn stream_events(
     if let Err(r) = ctx.commit(uow).await {
         return r;
     }
-
     let (guard, rx) = runtime.connect(ctx.tenant_id, membership_id);
 
     // Reconnect drain: if the agent is already available (reconnect within grace window),
@@ -234,7 +245,7 @@ pub async fn stream_events(
                 Ok(mut lookup) => {
                     let state = sqlx::query_scalar(
                         "SELECT state FROM agent_availability \
-                         WHERE tenant_id = $1 AND membership_id = $2",
+                     WHERE tenant_id = $1 AND membership_id = $2",
                     )
                     .bind(tenant_id)
                     .bind(membership_id)
@@ -282,12 +293,85 @@ pub async fn stream_events(
     };
 
     let keep_alive = KeepAlive::new().interval(Duration::from_secs(20)).text("");
-    if let Some(Extension(grant)) = grant {
+    let platform_grant = grant.map(|Extension(grant)| grant);
+    let recheck_pool = pool.clone();
+    let user_id = principal.user_id;
+    let tenant_id = ctx.tenant_id;
+    let mut ticks = tokio::time::interval(interval.map_or_else(
+        || config::SseRevalidation::default().0,
+        |Extension(interval)| interval.0,
+    ));
+    ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+    // The check and the event reader share one state machine. Once a check starts, buffered
+    // events stay queued until the database confirms authorization. A failed check ends SSE.
+    let stream = futures::stream::unfold(
+        (stream, signals, ticks),
+        move |(mut stream, mut signals, mut ticks)| {
+            let pool = recheck_pool.clone();
+            async move {
+                loop {
+                    tokio::select! {
+                        biased;
+                        _ = ticks.tick() => {}
+                        signal = async {
+                            match signals.as_mut() {
+                                Some(rx) => rx.recv().await,
+                                None => std::future::pending().await,
+                            }
+                        } => match signal {
+                            Ok(signal) if !signal.matches(session_id, user_id, tenant_id) => continue,
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                                signals = None;
+                                continue;
+                            }
+                            _ => {}
+                        },
+                        event = stream.next() => {
+                            return event.map(|event| (event, (stream, signals, ticks)));
+                        }
+                    }
+                    if let Some(grant) = platform_grant {
+                        if !platform_stream_is_authorized(grant, &pool, user_id, is_production)
+                            .await
+                        {
+                            return None;
+                        }
+                        continue;
+                    }
+                    if let Some(sid) = session_id {
+                        if !identity::sessions::active_session_ids(&pool, &[sid])
+                            .await
+                            .is_ok_and(|active| active.contains(&sid))
+                        {
+                            return None;
+                        }
+                    }
+                    if !tenancy::can_view_conversation_stream(
+                        &pool,
+                        tenant_id,
+                        user_id,
+                        membership_id,
+                    )
+                    .await
+                    .unwrap_or(false)
+                    {
+                        return None;
+                    }
+                }
+            }
+        },
+    );
+    if let Some(grant) = platform_grant {
         let stream_pool = pool.clone();
         let guarded = stream
             .then(move |event| {
                 let pool = stream_pool.clone();
-                async move { grant.is_current(&pool).await.then_some(event) }
+                async move {
+                    platform_stream_is_authorized(grant, &pool, user_id, is_production)
+                        .await
+                        .then_some(event)
+                }
             })
             .take_while(|event| ready(event.is_some()))
             .filter_map(ready)
@@ -295,6 +379,24 @@ pub async fn stream_events(
         return Sse::new(guarded).keep_alive(keep_alive).into_response();
     }
     Sse::new(stream).keep_alive(keep_alive).into_response()
+}
+
+async fn platform_stream_is_authorized(
+    grant: PlatformAccessGrant,
+    pool: &sqlx::PgPool,
+    user_id: Uuid,
+    is_production: bool,
+) -> bool {
+    if !grant.is_current(pool).await {
+        return false;
+    }
+    match tenancy::staff_can_view_conversation_stream(pool, user_id, is_production).await {
+        Ok(allowed) => allowed,
+        Err(error) => {
+            tracing::warn!(%error, "Failed to revalidate platform stream permission");
+            false
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

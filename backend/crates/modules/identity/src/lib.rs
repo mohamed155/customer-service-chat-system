@@ -469,8 +469,8 @@ mod tests {
 
 pub mod password_reset {
     pub use crate::application::password_reset::{
-        email_rate_limit_key, normalize_email, process_delivery_once, reset, run_delivery_worker,
-        ResetError,
+        email_rate_limit_key, normalize_email, process_delivery_once, reset, reset_with_bus,
+        run_delivery_worker, ResetError,
     };
     pub use crate::infrastructure::password_reset::{enqueue, queue_health, sweep_tokens};
 }
