@@ -1,4 +1,57 @@
--- MOH-98: make references between tenant-owned tables include tenant_id.
+-- MOH-98 expand: make references between tenant-owned tables include tenant_id.
+-- SQLx wraps each migration file in one transaction. Keep expansion (0092), validation (0093),
+-- and contraction (0094) separate so ALTER TABLE locks do not span validation scans.
+
+-- A failed CREATE INDEX CONCURRENTLY can leave an invalid index that IF NOT EXISTS will skip.
+-- Check the nine referenced parent indexes first and name every missing or invalid index clearly.
+DO $$
+DECLARE
+    index_ref record;
+    invalid_indexes text[] := ARRAY[]::text[];
+BEGIN
+    FOR index_ref IN
+        SELECT refs.table_name, refs.index_name, index_data.indisvalid
+        FROM (VALUES
+            ('agent_configurations', 'agent_configurations_tenant_id_id_uq'),
+            ('agent_prompts', 'agent_prompts_tenant_id_id_uq'),
+            ('ai_usage_records', 'ai_usage_records_tenant_id_id_uq'),
+            ('widget_sessions', 'widget_sessions_tenant_id_id_uq'),
+            ('widget_instances', 'widget_instances_tenant_id_id_uq'),
+            ('integration_connections', 'integration_connections_tenant_id_id_uq'),
+            ('knowledge_categories', 'knowledge_categories_tenant_id_id_uq'),
+            ('tenant_tools', 'tenant_tools_tenant_id_id_uq'),
+            ('ai_generations', 'ai_generations_tenant_id_id_uq')
+        ) AS refs(table_name, index_name)
+        LEFT JOIN pg_class table_data
+            ON table_data.relnamespace = 'public'::regnamespace
+            AND table_data.relname = refs.table_name
+        LEFT JOIN pg_class index_relation
+            ON index_relation.relnamespace = 'public'::regnamespace
+            AND index_relation.relname = refs.index_name
+        LEFT JOIN pg_index index_data
+            ON index_data.indexrelid = index_relation.oid
+            AND index_data.indrelid = table_data.oid
+    LOOP
+        IF index_ref.indisvalid IS NULL THEN
+            invalid_indexes := array_append(
+                invalid_indexes,
+                format('%s (missing on %s)', index_ref.index_name, index_ref.table_name)
+            );
+        ELSIF NOT index_ref.indisvalid THEN
+            invalid_indexes := array_append(
+                invalid_indexes,
+                format('%s (invalid)', index_ref.index_name)
+            );
+        END IF;
+    END LOOP;
+
+    IF cardinality(invalid_indexes) > 0 THEN
+        RAISE EXCEPTION 'MOH-98 parent-index preflight failed: %',
+            array_to_string(invalid_indexes, '; ')
+            USING HINT = 'Run REINDEX INDEX CONCURRENTLY <name> for an existing invalid index, or drop and rerun the corresponding index migration if missing.';
+    END IF;
+END
+$$;
 
 -- app_owner is subject to FORCE ROW LEVEL SECURITY. This platform role has
 -- SELECT on tenant tables and BYPASSRLS, so the preflight sees every tenant.
@@ -72,17 +125,8 @@ END
 $$;
 RESET ROLE;
 
--- Keep the old NO ACTION constraints active until their CASCADE replacements
--- have been validated. Their names conflict with the required final names.
-ALTER TABLE knowledge_chunks
-    RENAME CONSTRAINT knowledge_chunks_tenant_id_item_id_fkey
-    TO knowledge_chunks_tenant_id_item_id_legacy_no_action_fkey;
-ALTER TABLE knowledge_index_state
-    RENAME CONSTRAINT knowledge_index_state_tenant_id_item_id_fkey
-    TO knowledge_index_state_tenant_id_item_id_legacy_no_action_fkey;
-
 -- Expand: the new constraints are enforced for new writes immediately, while
--- validation checks every pre-existing row before any old FK is removed.
+-- validation in 0093 checks every pre-existing row before any old FK is removed in 0094.
 ALTER TABLE agent_avatar_uploads
     ADD CONSTRAINT agent_avatar_uploads_tenant_id_agent_id_fkey
     FOREIGN KEY (tenant_id, agent_id) REFERENCES agent_configurations (tenant_id, id)
@@ -144,7 +188,7 @@ ALTER TABLE integration_webhook_deliveries
     FOREIGN KEY (tenant_id, connection_id) REFERENCES integration_connections (tenant_id, id)
     MATCH SIMPLE ON UPDATE NO ACTION ON DELETE CASCADE NOT VALID;
 ALTER TABLE knowledge_chunks
-    ADD CONSTRAINT knowledge_chunks_tenant_id_item_id_fkey
+    ADD CONSTRAINT knowledge_chunks_tenant_id_item_id_cascade_fkey
     FOREIGN KEY (tenant_id, item_id) REFERENCES knowledge_items (tenant_id, id)
     MATCH SIMPLE ON UPDATE NO ACTION ON DELETE CASCADE NOT VALID;
 ALTER TABLE knowledge_documents
@@ -152,7 +196,7 @@ ALTER TABLE knowledge_documents
     FOREIGN KEY (tenant_id, item_id) REFERENCES knowledge_items (tenant_id, id)
     MATCH SIMPLE ON UPDATE NO ACTION ON DELETE CASCADE NOT VALID;
 ALTER TABLE knowledge_index_state
-    ADD CONSTRAINT knowledge_index_state_tenant_id_item_id_fkey
+    ADD CONSTRAINT knowledge_index_state_tenant_id_item_id_cascade_fkey
     FOREIGN KEY (tenant_id, item_id) REFERENCES knowledge_items (tenant_id, id)
     MATCH SIMPLE ON UPDATE NO ACTION ON DELETE CASCADE NOT VALID;
 ALTER TABLE knowledge_item_tags
@@ -207,72 +251,3 @@ ALTER TABLE widget_sessions
     ADD CONSTRAINT widget_sessions_tenant_id_widget_instance_id_fkey
     FOREIGN KEY (tenant_id, widget_instance_id) REFERENCES widget_instances (tenant_id, id)
     MATCH SIMPLE ON UPDATE NO ACTION ON DELETE RESTRICT NOT VALID;
-
--- Validate the expanded references before removing any original constraints.
-ALTER TABLE agent_avatar_uploads VALIDATE CONSTRAINT agent_avatar_uploads_tenant_id_agent_id_fkey;
-ALTER TABLE agent_prompt_versions VALIDATE CONSTRAINT agent_prompt_versions_tenant_id_prompt_id_fkey;
-ALTER TABLE ai_generations VALIDATE CONSTRAINT ai_generations_tenant_id_conversation_id_fkey;
-ALTER TABLE ai_generations VALIDATE CONSTRAINT ai_generations_tenant_id_response_message_id_fkey;
-ALTER TABLE ai_generations VALIDATE CONSTRAINT ai_generations_tenant_id_trigger_message_id_fkey;
-ALTER TABLE ai_generations VALIDATE CONSTRAINT ai_generations_tenant_id_usage_record_id_fkey;
-ALTER TABLE conversation_feedback VALIDATE CONSTRAINT conversation_feedback_tenant_id_agent_configuration_id_fkey;
-ALTER TABLE conversation_feedback VALIDATE CONSTRAINT conversation_feedback_tenant_id_widget_session_id_fkey;
-ALTER TABLE conversations VALIDATE CONSTRAINT conversations_tenant_id_widget_instance_id_fkey;
-ALTER TABLE integration_connections VALIDATE CONSTRAINT integration_connections_tenant_id_connected_by_membership_id_fkey;
-ALTER TABLE integration_connections VALIDATE CONSTRAINT integration_connections_tenant_id_disconnected_by_membership_id_fkey;
-ALTER TABLE integration_events VALIDATE CONSTRAINT integration_events_tenant_id_actor_membership_id_fkey;
-ALTER TABLE integration_events VALIDATE CONSTRAINT integration_events_tenant_id_connection_id_fkey;
-ALTER TABLE integration_secrets VALIDATE CONSTRAINT integration_secrets_tenant_id_connection_id_fkey;
-ALTER TABLE integration_webhook_deliveries VALIDATE CONSTRAINT integration_webhook_deliveries_tenant_id_connection_id_fkey;
-ALTER TABLE knowledge_chunks VALIDATE CONSTRAINT knowledge_chunks_tenant_id_item_id_fkey;
-ALTER TABLE knowledge_documents VALIDATE CONSTRAINT knowledge_documents_tenant_id_item_id_fkey;
-ALTER TABLE knowledge_index_state VALIDATE CONSTRAINT knowledge_index_state_tenant_id_item_id_fkey;
-ALTER TABLE knowledge_item_tags VALIDATE CONSTRAINT knowledge_item_tags_tenant_id_item_id_fkey;
-ALTER TABLE knowledge_items VALIDATE CONSTRAINT knowledge_items_tenant_id_category_id_fkey;
-ALTER TABLE message_citations VALIDATE CONSTRAINT message_citations_tenant_id_message_id_fkey;
-ALTER TABLE notifications VALIDATE CONSTRAINT notifications_tenant_id_actor_membership_id_fkey;
-ALTER TABLE notifications VALIDATE CONSTRAINT notifications_tenant_id_recipient_membership_id_fkey;
-ALTER TABLE tenant_tool_policies VALIDATE CONSTRAINT tenant_tool_policies_tenant_id_updated_by_membership_id_fkey;
-ALTER TABLE tenant_tools VALIDATE CONSTRAINT tenant_tools_tenant_id_created_by_membership_id_fkey;
-ALTER TABLE tool_requests VALIDATE CONSTRAINT tool_requests_tenant_id_conversation_id_fkey;
-ALTER TABLE tool_requests VALIDATE CONSTRAINT tool_requests_tenant_id_decided_by_membership_id_fkey;
-ALTER TABLE tool_requests VALIDATE CONSTRAINT tool_requests_tenant_id_generation_id_fkey;
-ALTER TABLE tool_requests VALIDATE CONSTRAINT tool_requests_tenant_id_tenant_tool_id_fkey;
-ALTER TABLE widget_sessions VALIDATE CONSTRAINT widget_sessions_tenant_id_customer_id_fkey;
-ALTER TABLE widget_sessions VALIDATE CONSTRAINT widget_sessions_tenant_id_widget_instance_id_fkey;
-
--- Contract: the composite constraints are now validated, so the old single-key
--- constraints and the superseded NO ACTION duplicates are no longer needed.
-ALTER TABLE agent_avatar_uploads DROP CONSTRAINT agent_avatar_uploads_agent_id_fkey;
-ALTER TABLE agent_prompt_versions DROP CONSTRAINT agent_prompt_versions_prompt_id_fkey;
-ALTER TABLE ai_generations DROP CONSTRAINT ai_generations_conversation_id_fkey;
-ALTER TABLE ai_generations DROP CONSTRAINT ai_generations_response_message_id_fkey;
-ALTER TABLE ai_generations DROP CONSTRAINT ai_generations_trigger_message_id_fkey;
-ALTER TABLE ai_generations DROP CONSTRAINT ai_generations_usage_record_id_fkey;
-ALTER TABLE conversation_feedback DROP CONSTRAINT conversation_feedback_agent_configuration_id_fkey;
-ALTER TABLE conversation_feedback DROP CONSTRAINT conversation_feedback_widget_session_id_fkey;
-ALTER TABLE conversations DROP CONSTRAINT conversations_widget_instance_id_fkey;
-ALTER TABLE integration_connections DROP CONSTRAINT integration_connections_connected_by_membership_id_fkey;
-ALTER TABLE integration_connections DROP CONSTRAINT integration_connections_disconnected_by_membership_id_fkey;
-ALTER TABLE integration_events DROP CONSTRAINT integration_events_actor_membership_id_fkey;
-ALTER TABLE integration_events DROP CONSTRAINT integration_events_connection_id_fkey;
-ALTER TABLE integration_secrets DROP CONSTRAINT integration_secrets_connection_id_fkey;
-ALTER TABLE integration_webhook_deliveries DROP CONSTRAINT integration_webhook_deliveries_connection_id_fkey;
-ALTER TABLE knowledge_chunks DROP CONSTRAINT knowledge_chunks_item_id_fkey;
-ALTER TABLE knowledge_documents DROP CONSTRAINT knowledge_documents_item_id_fkey;
-ALTER TABLE knowledge_index_state DROP CONSTRAINT knowledge_index_state_item_id_fkey;
-ALTER TABLE knowledge_item_tags DROP CONSTRAINT knowledge_item_tags_item_id_fkey;
-ALTER TABLE knowledge_items DROP CONSTRAINT knowledge_items_category_id_fkey;
-ALTER TABLE message_citations DROP CONSTRAINT message_citations_message_id_fkey;
-ALTER TABLE notifications DROP CONSTRAINT notifications_actor_membership_id_fkey;
-ALTER TABLE notifications DROP CONSTRAINT notifications_recipient_membership_id_fkey;
-ALTER TABLE tenant_tool_policies DROP CONSTRAINT tenant_tool_policies_updated_by_membership_id_fkey;
-ALTER TABLE tenant_tools DROP CONSTRAINT tenant_tools_created_by_membership_id_fkey;
-ALTER TABLE tool_requests DROP CONSTRAINT tool_requests_conversation_id_fkey;
-ALTER TABLE tool_requests DROP CONSTRAINT tool_requests_decided_by_membership_id_fkey;
-ALTER TABLE tool_requests DROP CONSTRAINT tool_requests_generation_id_fkey;
-ALTER TABLE tool_requests DROP CONSTRAINT tool_requests_tenant_tool_id_fkey;
-ALTER TABLE widget_sessions DROP CONSTRAINT widget_sessions_customer_id_fkey;
-ALTER TABLE widget_sessions DROP CONSTRAINT widget_sessions_widget_instance_id_fkey;
-ALTER TABLE knowledge_chunks DROP CONSTRAINT knowledge_chunks_tenant_id_item_id_legacy_no_action_fkey;
-ALTER TABLE knowledge_index_state DROP CONSTRAINT knowledge_index_state_tenant_id_item_id_legacy_no_action_fkey;

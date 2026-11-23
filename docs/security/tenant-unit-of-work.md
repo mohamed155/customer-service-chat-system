@@ -221,7 +221,7 @@ table needs an entry in `GLOBAL_TABLES` with the reason in the PR.
 
 #### Current tenant-owned foreign-key inventory
 
-This inventory was generated from PostgreSQL's catalog after migrations `0083`–`0092` (MOH-98). Each
+This inventory was generated from PostgreSQL's catalog after migrations `0083`–`0094` (MOH-98). Each
 row represents one constraint between tenant-owned tables. All 47 rows use
 `(tenant_id, <column>) REFERENCES <parent>(tenant_id, id)`; `ON UPDATE` remains `NO ACTION`.
 

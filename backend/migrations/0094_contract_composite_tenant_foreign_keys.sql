@@ -1,0 +1,43 @@
+-- The composite constraints validated in 0093 now replace the legacy single-key FKs.
+ALTER TABLE agent_avatar_uploads DROP CONSTRAINT agent_avatar_uploads_agent_id_fkey;
+ALTER TABLE agent_prompt_versions DROP CONSTRAINT agent_prompt_versions_prompt_id_fkey;
+ALTER TABLE ai_generations DROP CONSTRAINT ai_generations_conversation_id_fkey;
+ALTER TABLE ai_generations DROP CONSTRAINT ai_generations_response_message_id_fkey;
+ALTER TABLE ai_generations DROP CONSTRAINT ai_generations_trigger_message_id_fkey;
+ALTER TABLE ai_generations DROP CONSTRAINT ai_generations_usage_record_id_fkey;
+ALTER TABLE conversation_feedback DROP CONSTRAINT conversation_feedback_agent_configuration_id_fkey;
+ALTER TABLE conversation_feedback DROP CONSTRAINT conversation_feedback_widget_session_id_fkey;
+ALTER TABLE conversations DROP CONSTRAINT conversations_widget_instance_id_fkey;
+ALTER TABLE integration_connections DROP CONSTRAINT integration_connections_connected_by_membership_id_fkey;
+ALTER TABLE integration_connections DROP CONSTRAINT integration_connections_disconnected_by_membership_id_fkey;
+ALTER TABLE integration_events DROP CONSTRAINT integration_events_actor_membership_id_fkey;
+ALTER TABLE integration_events DROP CONSTRAINT integration_events_connection_id_fkey;
+ALTER TABLE integration_secrets DROP CONSTRAINT integration_secrets_connection_id_fkey;
+ALTER TABLE integration_webhook_deliveries DROP CONSTRAINT integration_webhook_deliveries_connection_id_fkey;
+ALTER TABLE knowledge_chunks DROP CONSTRAINT knowledge_chunks_item_id_fkey;
+ALTER TABLE knowledge_documents DROP CONSTRAINT knowledge_documents_item_id_fkey;
+ALTER TABLE knowledge_index_state DROP CONSTRAINT knowledge_index_state_item_id_fkey;
+ALTER TABLE knowledge_item_tags DROP CONSTRAINT knowledge_item_tags_item_id_fkey;
+ALTER TABLE knowledge_items DROP CONSTRAINT knowledge_items_category_id_fkey;
+ALTER TABLE message_citations DROP CONSTRAINT message_citations_message_id_fkey;
+ALTER TABLE notifications DROP CONSTRAINT notifications_actor_membership_id_fkey;
+ALTER TABLE notifications DROP CONSTRAINT notifications_recipient_membership_id_fkey;
+ALTER TABLE tenant_tool_policies DROP CONSTRAINT tenant_tool_policies_updated_by_membership_id_fkey;
+ALTER TABLE tenant_tools DROP CONSTRAINT tenant_tools_created_by_membership_id_fkey;
+ALTER TABLE tool_requests DROP CONSTRAINT tool_requests_conversation_id_fkey;
+ALTER TABLE tool_requests DROP CONSTRAINT tool_requests_decided_by_membership_id_fkey;
+ALTER TABLE tool_requests DROP CONSTRAINT tool_requests_generation_id_fkey;
+ALTER TABLE tool_requests DROP CONSTRAINT tool_requests_tenant_tool_id_fkey;
+ALTER TABLE widget_sessions DROP CONSTRAINT widget_sessions_customer_id_fkey;
+ALTER TABLE widget_sessions DROP CONSTRAINT widget_sessions_widget_instance_id_fkey;
+
+-- The new CASCADE constraints use temporary names until the old duplicate NO ACTION
+-- constraints are gone. Rename after dropping to preserve the final catalog names.
+ALTER TABLE knowledge_chunks DROP CONSTRAINT knowledge_chunks_tenant_id_item_id_fkey;
+ALTER TABLE knowledge_index_state DROP CONSTRAINT knowledge_index_state_tenant_id_item_id_fkey;
+ALTER TABLE knowledge_chunks
+    RENAME CONSTRAINT knowledge_chunks_tenant_id_item_id_cascade_fkey
+    TO knowledge_chunks_tenant_id_item_id_fkey;
+ALTER TABLE knowledge_index_state
+    RENAME CONSTRAINT knowledge_index_state_tenant_id_item_id_cascade_fkey
+    TO knowledge_index_state_tenant_id_item_id_fkey;

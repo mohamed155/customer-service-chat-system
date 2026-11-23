@@ -219,6 +219,37 @@ async fn a_tenant_to_tenant_composite_foreign_key_passes() {
 }
 
 #[tokio::test]
+async fn a_single_column_foreign_key_to_a_tenant_partition_is_reported() {
+    if !can_run() {
+        return;
+    }
+    let found = violations_after(
+        &[
+            "CREATE TABLE planted_partition_parent (id uuid NOT NULL, tenant_id uuid NOT NULL, PRIMARY KEY (tenant_id, id)) PARTITION BY LIST (tenant_id)",
+            "CREATE TABLE planted_partition_parent_a PARTITION OF planted_partition_parent FOR VALUES IN ('00000000-0000-0000-0000-000000000001')",
+            "CREATE UNIQUE INDEX planted_partition_parent_a_id_uq ON planted_partition_parent_a (id)",
+            "CREATE TABLE planted_partition_child (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, parent_id uuid NOT NULL REFERENCES planted_partition_parent_a(id))",
+            "ALTER TABLE planted_partition_parent ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_partition_parent FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_partition_parent \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+            "ALTER TABLE planted_partition_child ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_partition_child FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_partition_child \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+        ],
+        "planted_partition_child",
+    )
+    .await;
+    assert_eq!(
+        found,
+        ["planted_partition_child: foreign key planted_partition_child_parent_id_fkey to planted_partition_parent_a must be composite (tenant_id, ...) -> (tenant_id, id)"]
+    );
+}
+
+#[tokio::test]
 async fn a_single_column_foreign_key_to_a_global_table_passes() {
     if !can_run() {
         return;

@@ -134,6 +134,8 @@ async fn run_migrations_succeeds() {
         (90, "tenant tools tenant id id uq"),
         (91, "ai generations tenant id id uq"),
         (92, "composite tenant foreign keys"),
+        (93, "validate composite tenant foreign keys"),
+        (94, "contract composite tenant foreign keys"),
     ];
     assert_eq!(
         rows.len(),

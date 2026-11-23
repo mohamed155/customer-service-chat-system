@@ -414,7 +414,8 @@ pub mod isolation {
     /// - every other table is in [`GLOBAL_TABLES`], so a new table cannot skip the decision;
     /// - every entry of [`GLOBAL_TABLES`] still exists;
     /// - foreign keys between tenant-owned tables reference `(tenant_id, id)` through
-    ///   `(tenant_id, <child reference>)`.
+    ///   `(tenant_id, <child reference>)`; referenced partitions are included, while partition
+    ///   child constraints are skipped because PostgreSQL clones them from the partitioned table.
     pub async fn rls_rule_violations(conn: &mut sqlx::PgConnection) -> Vec<String> {
         let tables: Vec<(String, bool, bool, bool, bool)> = sqlx::query_as(
             "SELECT c.relname::text, \
@@ -480,7 +481,7 @@ pub mod isolation {
         }
 
         let foreign_keys: Vec<(String, String, String, bool)> = sqlx::query_as(
-            "WITH tenant_tables AS (\
+            "WITH tenant_children AS (\
                  SELECT c.oid, c.relname::text, tenant.attnum AS tenant_id_attnum \
                  FROM pg_class c \
                  JOIN pg_namespace n ON n.oid = c.relnamespace \
@@ -488,6 +489,14 @@ pub mod isolation {
                    AND tenant.attname = 'tenant_id' AND NOT tenant.attisdropped \
                  WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') \
                    AND NOT c.relispartition AND NOT c.relname = ANY($1) \
+             ), tenant_parents AS (\
+                 SELECT c.oid, c.relname::text, tenant.attnum AS tenant_id_attnum \
+                 FROM pg_class c \
+                 JOIN pg_namespace n ON n.oid = c.relnamespace \
+                 JOIN pg_attribute tenant ON tenant.attrelid = c.oid \
+                   AND tenant.attname = 'tenant_id' AND NOT tenant.attisdropped \
+                 WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') \
+                   AND NOT c.relname = ANY($1) \
              ) \
              SELECT child.relname, con.conname::text, parent.relname, \
                     cardinality(con.conkey) = 2 \
@@ -497,11 +506,11 @@ pub mod isolation {
                       AND parent_id.attnum IS NOT NULL \
                       AND con.confkey[2] = parent_id.attnum AS is_composite_tenant_fk \
              FROM pg_constraint con \
-             JOIN tenant_tables child ON child.oid = con.conrelid \
-             JOIN tenant_tables parent ON parent.oid = con.confrelid \
+             JOIN tenant_children child ON child.oid = con.conrelid \
+             JOIN tenant_parents parent ON parent.oid = con.confrelid \
              LEFT JOIN pg_attribute parent_id ON parent_id.attrelid = parent.oid \
                AND parent_id.attname = 'id' AND NOT parent_id.attisdropped \
-             WHERE con.contype = 'f' \
+             WHERE con.contype = 'f' AND con.conparentid = 0 \
              ORDER BY child.relname COLLATE \"C\", con.conname COLLATE \"C\"",
         )
         .bind(GLOBAL_TABLES)

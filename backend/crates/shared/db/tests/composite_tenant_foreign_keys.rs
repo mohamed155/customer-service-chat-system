@@ -6,7 +6,30 @@ use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 type OwnerTx = Transaction<'static, Postgres>;
-type ForeignKeyCatalogRow = (String, String, String, Vec<String>, Vec<String>, String);
+type ForeignKeyCatalogRow = (
+    String,
+    String,
+    String,
+    Vec<String>,
+    Vec<String>,
+    String,
+    Vec<String>,
+);
+
+static OWNER_TX_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+fn can_run() -> bool {
+    if std::env::var("REQUIRE_DB_TESTS").as_deref() == Ok("1")
+        || std::env::var("MIGRATION_DATABASE_URL").is_ok_and(|url| !url.trim().is_empty())
+        || std::env::var("DATABASE_URL").is_ok_and(|url| !url.trim().is_empty())
+    {
+        return true;
+    }
+    eprintln!(
+        "skipping composite tenant foreign key test: MIGRATION_DATABASE_URL or DATABASE_URL not set"
+    );
+    false
+}
 
 struct Fixtures {
     tenant_a: Uuid,
@@ -373,6 +396,10 @@ macro_rules! assert_same_tenant_insert_succeeds {
 
 #[tokio::test]
 async fn all_fourteen_parent_kinds_reject_cross_tenant_child_rows() {
+    if !can_run() {
+        return;
+    }
+    let _guard = OWNER_TX_TEST_LOCK.lock().await;
     let mut tx = owner_tx().await;
     let f = fixtures(&mut tx).await;
 
@@ -628,9 +655,13 @@ async fn all_fourteen_parent_kinds_reject_cross_tenant_child_rows() {
 
 #[tokio::test]
 async fn all_inventory_foreign_keys_are_composite_in_the_catalog() {
+    if !can_run() {
+        return;
+    }
+    let _guard = OWNER_TX_TEST_LOCK.lock().await;
     let mut tx = owner_tx().await;
     let rows: Vec<ForeignKeyCatalogRow> = sqlx::query_as(
-        "WITH tenant_tables AS (\
+        "WITH tenant_children AS (\
              SELECT c.oid, c.relname::text, tenant.attnum AS tenant_id_attnum \
              FROM pg_class c \
              JOIN pg_namespace n ON n.oid = c.relnamespace \
@@ -638,6 +669,14 @@ async fn all_inventory_foreign_keys_are_composite_in_the_catalog() {
                AND tenant.attname = 'tenant_id' AND NOT tenant.attisdropped \
              WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') \
                AND NOT c.relispartition AND NOT c.relname = ANY($1) \
+         ), tenant_parents AS (\
+             SELECT c.oid, c.relname::text, tenant.attnum AS tenant_id_attnum \
+             FROM pg_class c \
+             JOIN pg_namespace n ON n.oid = c.relnamespace \
+             JOIN pg_attribute tenant ON tenant.attrelid = c.oid \
+               AND tenant.attname = 'tenant_id' AND NOT tenant.attisdropped \
+             WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') \
+               AND NOT c.relname = ANY($1) \
          ) \
          SELECT child.relname, con.conname::text, parent.relname, \
                 ARRAY(SELECT a.attname::text FROM unnest(con.conkey) WITH ORDINALITY k(attnum, ord) \
@@ -646,11 +685,14 @@ async fn all_inventory_foreign_keys_are_composite_in_the_catalog() {
                 ARRAY(SELECT a.attname::text FROM unnest(con.confkey) WITH ORDINALITY k(attnum, ord) \
                       JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = k.attnum \
                       ORDER BY k.ord), \
-                con.confdeltype::text \
+                con.confdeltype::text, \
+                ARRAY(SELECT a.attname::text FROM unnest(con.confdelsetcols) WITH ORDINALITY k(attnum, ord) \
+                      JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.attnum \
+                      ORDER BY k.ord) \
          FROM pg_constraint con \
-         JOIN tenant_tables child ON child.oid = con.conrelid \
-         JOIN tenant_tables parent ON parent.oid = con.confrelid \
-         WHERE con.contype = 'f' \
+         JOIN tenant_children child ON child.oid = con.conrelid \
+         JOIN tenant_parents parent ON parent.oid = con.confrelid \
+         WHERE con.contype = 'f' AND con.conparentid = 0 \
          ORDER BY child.relname COLLATE \"C\", con.conname COLLATE \"C\"",
     )
     .bind(db::testing::isolation::GLOBAL_TABLES)
@@ -776,11 +818,28 @@ async fn all_inventory_foreign_keys_are_composite_in_the_catalog() {
             "r",
         ),
     ];
+    let expected_set_null_columns = [
+        ("ai_generations", "response_message_id"),
+        ("ai_generations", "usage_record_id"),
+        ("conversation_feedback", "widget_session_id"),
+        ("conversations", "widget_instance_id"),
+        ("knowledge_items", "category_id"),
+        ("widget_sessions", "customer_id"),
+    ];
     for (child, column, parent, delete_action) in expected {
         let mut name = format!("{child}_tenant_id_{column}_fkey");
         name.truncate(63); // PostgreSQL truncates identifiers to NAMEDATALEN - 1 bytes.
         let found = rows.iter().find(|row| row.0 == child && row.1 == name);
-        let Some((_, _, found_parent, child_columns, parent_columns, found_action)) = found else {
+        let Some((
+            _,
+            _,
+            found_parent,
+            child_columns,
+            parent_columns,
+            found_action,
+            set_null_columns,
+        )) = found
+        else {
             panic!("missing composite constraint {name}");
         };
         assert_eq!(found_parent, parent, "{name} references the wrong parent");
@@ -790,10 +849,19 @@ async fn all_inventory_foreign_keys_are_composite_in_the_catalog() {
             found_action, delete_action,
             "{name} changed its ON DELETE action"
         );
+        let expected_set_null = expected_set_null_columns
+            .iter()
+            .find(|(set_child, set_column)| *set_child == child && *set_column == column)
+            .map(|(_, set_column)| vec![set_column.to_string()])
+            .unwrap_or_default();
+        assert_eq!(
+            set_null_columns, &expected_set_null,
+            "{name} has unexpected ON DELETE SET NULL columns"
+        );
     }
     assert!(
         rows.iter()
-            .all(|(_, constraint, _, child_columns, parent_columns, _)| {
+            .all(|(_, constraint, _, child_columns, parent_columns, _, _)| {
                 child_columns.len() == 2
                     && child_columns[0] == "tenant_id"
                     && parent_columns == &["tenant_id", "id"]
@@ -801,10 +869,24 @@ async fn all_inventory_foreign_keys_are_composite_in_the_catalog() {
             }),
         "tenant-owned foreign keys must all be composite; found {rows:?}"
     );
+    let found_set_null_columns: Vec<(String, String)> = rows
+        .iter()
+        .filter(|row| !row.6.is_empty())
+        .map(|row| (row.0.clone(), row.6[0].clone()))
+        .collect();
+    let expected_set_null_columns: Vec<(String, String)> = expected_set_null_columns
+        .iter()
+        .map(|(child, column)| (child.to_string(), column.to_string()))
+        .collect();
+    assert_eq!(found_set_null_columns, expected_set_null_columns);
 }
 
 #[tokio::test]
 async fn deleting_a_knowledge_item_cascades_to_chunks() {
+    if !can_run() {
+        return;
+    }
+    let _guard = OWNER_TX_TEST_LOCK.lock().await;
     let mut tx = owner_tx().await;
     become_platform(&mut tx).await;
     let tenant_id = sqlx::query_scalar::<_, Uuid>(
@@ -851,6 +933,10 @@ async fn deleting_a_knowledge_item_cascades_to_chunks() {
 
 #[tokio::test]
 async fn deleting_a_response_message_nulls_only_its_reference() {
+    if !can_run() {
+        return;
+    }
+    let _guard = OWNER_TX_TEST_LOCK.lock().await;
     let mut tx = owner_tx().await;
     let f = fixtures(&mut tx).await;
     let response_message = sqlx::query_scalar::<_, Uuid>(
@@ -886,6 +972,10 @@ async fn deleting_a_response_message_nulls_only_its_reference() {
 
 #[tokio::test]
 async fn deleting_a_prompt_with_versions_remains_restricted() {
+    if !can_run() {
+        return;
+    }
+    let _guard = OWNER_TX_TEST_LOCK.lock().await;
     let mut tx = owner_tx().await;
     let f = fixtures(&mut tx).await;
     sqlx::query(
@@ -920,6 +1010,10 @@ async fn deleting_a_prompt_with_versions_remains_restricted() {
 async fn migration_preflight_reports_existing_cross_tenant_rows() {
     const MIGRATION: &str =
         include_str!("../../../../migrations/0092_composite_tenant_foreign_keys.sql");
+    if !can_run() {
+        return;
+    }
+    let _guard = OWNER_TX_TEST_LOCK.lock().await;
     let mut tx = owner_tx().await;
     let f = fixtures(&mut tx).await;
     become_owner(&mut tx).await;
@@ -937,7 +1031,9 @@ async fn migration_preflight_reports_existing_cross_tenant_rows() {
     .await
     .unwrap();
 
-    let start = MIGRATION.find("DO $$").expect("migration preflight block");
+    let start = MIGRATION
+        .find("DO $$\nDECLARE\n    ref record;")
+        .expect("migration data preflight block");
     let end = start
         + MIGRATION[start..]
             .find("$$;")
