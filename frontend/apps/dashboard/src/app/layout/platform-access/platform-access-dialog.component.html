@@ -1,0 +1,73 @@
+<app-dialog-shell
+  [open]="true"
+  [ariaLabelledby]="id + '-title'"
+  [dismissDisabled]="pending()"
+  (dismiss)="closed.emit()"
+>
+  <h2 [id]="id + '-title'">
+    {{ 'platformAccess.startTitle' | transloco: { tenant: tenant().name } }}
+  </h2>
+  <form novalidate (submit)="$event.preventDefault(); submit()">
+    <div>
+      <label [for]="id + '-reason'">{{ 'platformAccess.reasonLabel' | transloco }}</label>
+      <textarea
+        #reasonInput
+        [id]="id + '-reason'"
+        rows="4"
+        required
+        [value]="reason()"
+        [readOnly]="pending()"
+        [attr.aria-describedby]="
+          id + '-reason-hint' + (reasonError() ? ' ' + id + '-reason-error' : '')
+        "
+        [attr.aria-invalid]="reasonError() ? 'true' : null"
+        (input)="changeReason(reasonInput.value)"
+      ></textarea>
+      <span [id]="id + '-reason-hint'" class="hint">
+        {{ 'platformAccess.reasonHint' | transloco: { count: reasonLength() } }}
+      </span>
+      @if (reasonError(); as key) {
+        <span role="alert" [id]="id + '-reason-error'" class="field-error">{{
+          key | transloco
+        }}</span>
+      }
+    </div>
+    <div>
+      <label [for]="id + '-duration'">{{ 'platformAccess.durationLabel' | transloco }}</label>
+      <select
+        #durationInput
+        [id]="id + '-duration'"
+        [disabled]="pending()"
+        [attr.aria-describedby]="durationError() ? id + '-duration-error' : null"
+        [attr.aria-invalid]="durationError() ? 'true' : null"
+        (change)="changeDuration(durationInput.value)"
+      >
+        @for (duration of durations; track duration) {
+          <option [value]="duration" [selected]="durationMinutes() === duration">
+            {{ 'platformAccess.durationOption' | transloco: { count: duration } }}
+          </option>
+        }
+      </select>
+      @if (durationError(); as key) {
+        <span role="alert" [id]="id + '-duration-error'" class="field-error">{{
+          key | transloco
+        }}</span>
+      }
+    </div>
+    @if (requestError(); as key) {
+      <app-inline-alert tone="error" [requestId]="error()?.requestId">{{
+        key | transloco
+      }}</app-inline-alert>
+    } @else if (error()?.requestId; as requestId) {
+      <app-error-reference [requestId]="requestId" />
+    }
+    <div class="actions">
+      <app-button variant="secondary" [disabled]="pending()" (pressed)="closed.emit()">
+        {{ 'common.cancel' | transloco }}
+      </app-button>
+      <app-button variant="primary" type="submit" [disabled]="pending()">
+        {{ (pending() ? 'platformAccess.starting' : 'platformAccess.start') | transloco }}
+      </app-button>
+    </div>
+  </form>
+</app-dialog-shell>

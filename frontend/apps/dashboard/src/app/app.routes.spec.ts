@@ -44,7 +44,7 @@ describe('application routes', () => {
         { provide: CurrentUserService, useValue: currentUser },
         {
           provide: TenantContextService,
-          useValue: { activeTenant: vi.fn(() => ({ id: 'tenant-1' })) },
+          useValue: { activeTenant: vi.fn(() => ({ id: 'tenant-1' })), accessSession: () => null },
         },
         { provide: PermissionsService, useValue: permissions },
         provideZonelessChangeDetection(),

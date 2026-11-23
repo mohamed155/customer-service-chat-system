@@ -29,7 +29,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `knowledge` | flat | `authz`, `identity`, `tenancy` | – | `knowledge_categories`, `knowledge_chunks`, `knowledge_documents`, `knowledge_index_state`, `knowledge_item_tags`, `knowledge_items` |
 | `notifications` | flat | `authz`, `escalations`, `identity`, `tenancy` | – | `notifications` |
 | `platform` | flat | `tenancy` | – | – |
-| `tenancy` | flat | `authz`, `email`, `identity` | `ai`, `analytics`, `audit`, `billing`, `conversations`, `customers`, `escalations`, `feedback`, `integrations`, `knowledge`, `notifications`, `platform`, `tools`, `whatsapp`, `widgets` | `tenant_invitations`, `tenant_memberships`, `tenant_rate_limit_overrides`, `tenants` |
+| `tenancy` | layered | `authz`, `email`, `identity` | `ai`, `analytics`, `audit`, `billing`, `conversations`, `customers`, `escalations`, `feedback`, `integrations`, `knowledge`, `notifications`, `platform`, `tools`, `whatsapp`, `widgets` | `platform_access_sessions`, `tenant_invitations`, `tenant_memberships`, `tenant_rate_limit_overrides`, `tenants` |
 | `tools` | flat | `conversations`, `customers`, `identity`, `tenancy` | `escalations` | `tenant_tool_policies`, `tenant_tools`, `tool_requests` |
 | `whatsapp` | flat | `conversations`, `customers`, `integrations`, `tenancy` | – | `whatsapp_message_meta` |
 | `widgets` | flat | `conversations`, `customers`, `escalations`, `identity`, `tenancy` | `feedback` | `widget_instances`, `widget_sessions` |

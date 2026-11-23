@@ -675,6 +675,13 @@
             "format": "uuid",
             "type": "string"
           },
+          "platform_access_session_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "resource_id": {
             "type": "string"
           },
@@ -4173,6 +4180,24 @@
         ],
         "type": "object"
       },
+      "PlatformAccessSession": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/StartedPlatformAccessSession"
+          },
+          {
+            "properties": {
+              "tenantName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "tenantName"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "PlatformTenantDetail": {
         "description": "`PlatformTenantDetail` — full record returned by create/get/update handlers",
         "properties": {
@@ -5243,6 +5268,60 @@
         ],
         "type": "object"
       },
+      "StartPlatformAccessRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "durationMinutes": {
+            "default": 60,
+            "description": "Optional duration in minutes, from 5 through 240. The default is 60.",
+            "format": "int32",
+            "maximum": 240,
+            "minimum": 5,
+            "type": "integer"
+          },
+          "reason": {
+            "description": "Trimmed justification, visible in the tenant's audit log.",
+            "maxLength": 500,
+            "minLength": 10,
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "StartedPlatformAccessSession": {
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "tenantId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenantId",
+          "reason",
+          "startedAt",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
       "SubmitFeedbackPayload": {
         "properties": {
           "comment": {
@@ -5332,6 +5411,24 @@
           "explicit"
         ],
         "type": "object"
+      },
+      "SwitchTenantResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TenantSummary"
+          },
+          {
+            "properties": {
+              "accessSession": {
+                "$ref": "#/components/schemas/StartedPlatformAccessSession"
+              }
+            },
+            "required": [
+              "accessSession"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "SystemHealthDto": {
         "properties": {
@@ -7982,6 +8079,165 @@
         ]
       }
     },
+    "/platform/access-session": {
+      "get": {
+        "description": "Returns the current sign-in's open access session. Requires permission: platform.tenants.switch",
+        "operationId": "get_platform_access_session",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlatformAccessSession"
+                }
+              }
+            },
+            "description": "Current access session."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Authentication required."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Insufficient permissions."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No current access session."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal server error."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Get the current tenant access session",
+        "tags": [
+          "platform-tenants"
+        ]
+      }
+    },
+    "/platform/access-session/end": {
+      "post": {
+        "description": "Ends the current sign-in's access session, if any. Requires permission: platform.tenants.switch",
+        "operationId": "end_platform_access_session",
+        "responses": {
+          "204": {
+            "description": "No access session remains for this sign-in."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Authentication required."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Insufficient permissions."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal server error."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "End the current tenant access session",
+        "tags": [
+          "platform-tenants"
+        ]
+      }
+    },
     "/platform/ai-providers": {
       "get": {
         "operationId": "get_platform_ai_provider_status",
@@ -9435,7 +9691,7 @@
     },
     "/platform/tenants/{id}/switch": {
       "post": {
-        "description": "Record that the current platform user is switching to a different platform tenant context. Returns the target tenant summary. Requires permission: platform.tenants.switch",
+        "description": "Starts time-limited access to the target tenant for the current sign-in. A previous access session ends when the new one starts. Requires permission: platform.tenants.switch",
         "operationId": "switch_platform_tenant",
         "parameters": [
           {
@@ -9449,16 +9705,42 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPlatformAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TenantSummary"
+                  "$ref": "#/components/schemas/SwitchTenantResponse"
                 }
               }
             },
-            "description": "Switch recorded; returns target tenant summary."
+            "description": "Access started. Returns the tenant and access session."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid JSON body."
           },
           "401": {
             "content": {
@@ -9474,7 +9756,7 @@
                 }
               }
             },
-            "description": "Authentication required."
+            "description": "Authentication or fresh two-step proof required."
           },
           "403": {
             "content": {
@@ -9490,7 +9772,39 @@
                 }
               }
             },
-            "description": "Access denied (tenant not found or insufficient permissions)."
+            "description": "Tenant unavailable or insufficient permissions."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Another tenant access start is in progress."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid reason or duration."
           },
           "500": {
             "content": {
@@ -9514,7 +9828,7 @@
             "session_cookie": []
           }
         ],
-        "summary": "Record a platform tenant switch",
+        "summary": "Start a platform tenant access session",
         "tags": [
           "platform-tenants"
         ]

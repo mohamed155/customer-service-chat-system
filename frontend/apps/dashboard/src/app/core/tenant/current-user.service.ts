@@ -7,11 +7,13 @@ import type { components } from '../api/generated/api';
 import { MeResponse, meFromWire, TenantSummary } from '../api/tenant-api.models';
 import { selectActiveTenant } from '../state/tenant-context.feature';
 import { tenantContextActions } from '../state/tenant-context.feature';
+import { TenantContextService } from './tenant-context.service';
 
 @Injectable({ providedIn: 'root' })
 export class CurrentUserService {
   private readonly api = inject(ApiService);
   private readonly store = inject(Store);
+  private readonly tenantContext = inject(TenantContextService);
   private readonly activeTenant = this.store.selectSignal(selectActiveTenant);
   private readonly user = signal<MeResponse | null>(null);
 
@@ -25,6 +27,15 @@ export class CurrentUserService {
       );
       const data = meFromWire(response.data);
       this.user.set(data);
+
+      if (data.platformRole !== null) {
+        if (data.platformPermissions.includes('platform.tenants.switch')) {
+          await this.tenantContext.restoreAccess();
+        } else if (this.activeTenant()) {
+          this.tenantContext.clear();
+        }
+        return;
+      }
 
       if (data.platformRole == null && data.memberships.length > 0) {
         const activeTenantId = preferredTenantId ?? this.activeTenant()?.id;
@@ -53,7 +64,7 @@ export class CurrentUserService {
 
   clear(): void {
     this.user.set(null);
-    this.store.dispatch(tenantContextActions.clearActiveTenant());
+    this.tenantContext.clear();
   }
 }
 

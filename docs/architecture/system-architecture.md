@@ -251,11 +251,16 @@ enterprise, pool for everyone else).
 
 ### 5.3 Platform users and impersonation
 
-- Platform users act in a tenant via an **impersonation session**: explicit start with reason,
-  time-boxed (e.g. 60 min), visible banner, every action audited with `actor = platform user,
-  on_behalf_of_tenant`. Destructive actions in a tenant can require a second confirmation.
-- Platform permissions are separate (`platform.tenants.list`, `platform.billing.manage`, …).
-  Full impersonation-session rules: **ADR-006**.
+- Platform users start tenant access with a reason. Each user can have one open session, bound
+  to the tenant and the sign-in that started it. The duration defaults to 60 minutes and is
+  capped at four hours. Tenant routes enforce the session before resolving staff permissions.
+- The dashboard displays the tenant name and time remaining and provides an **End access**
+  control. The platform and tenant audit logs show start, end and expiry with the actor,
+  tenant, reason and session ID. Audit entries written by the actor for that tenant during
+  access carry the same ID.
+- Platform routes use separate permissions such as `platform.tenants.list` and
+  `platform.billing.manage`. [ADR-006](../adr/0006-authorization-model.md#3-platform-users-and-impersonation-sessions)
+  describes the target impersonation design.
 
 ### 5.4 Noisy-neighbor protection
 

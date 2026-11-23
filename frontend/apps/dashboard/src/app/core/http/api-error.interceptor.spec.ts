@@ -89,6 +89,48 @@ describe('HTTP interceptors', () => {
     expect(notifications.message()).toBe("You don't have access to this tenant.");
   });
 
+  it.each(['platform_access_required', 'platform_access_expired'])(
+    'clears workspace access and redirects once without signing out for %s',
+    async (code) => {
+      const { router, currentUser } = configure({
+        tenantContext: {
+          activeTenant: { id: 'tenant-1', name: 'Tenant 1' },
+          status: 'idle',
+        },
+      });
+      const notifications = TestBed.inject(ApiErrorNotificationService);
+      const show = vi.spyOn(notifications, 'show');
+      const dispatch = vi.spyOn(TestBed.inject(MockStore), 'dispatch');
+      const client = TestBed.inject(HttpClient);
+      const http = TestBed.inject(HttpTestingController);
+      const promise = Promise.all(
+        ['members', 'widgets'].map((resource) =>
+          firstValueFrom(
+            client.get(`/api/v1/tenant/${resource}`, {
+              headers: { 'X-Tenant-ID': 'tenant-1' },
+            }),
+          ).catch((error: ApiError) => error),
+        ),
+      );
+
+      for (const req of http.match((request) => request.url.startsWith('/api/v1/tenant/'))) {
+        req.flush(
+          { code, detail: 'Internal wording', status: 403 },
+          { status: 403, statusText: 'Forbidden' },
+        );
+      }
+
+      expect(await promise).toEqual([
+        expect.objectContaining({ code }),
+        expect.objectContaining({ code }),
+      ]);
+      expect(show).toHaveBeenCalledTimes(1);
+      expect(dispatch).toHaveBeenCalledWith(tenantContextActions.clearActiveTenant());
+      expect(currentUser.clear).not.toHaveBeenCalled();
+      expect(router.navigate).toHaveBeenCalledExactlyOnceWith(['/platform', 'tenants']);
+    },
+  );
+
   it('leaves the session alone when a password recovery request fails its origin proof', async () => {
     const { router, currentUser } = configure();
     const request = firstValueFrom(

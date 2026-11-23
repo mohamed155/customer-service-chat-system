@@ -221,6 +221,11 @@ In the `test` environment `APP_AI_KEY_ENCRYPTION_KEY` may be omitted — the
 encryption path is effectively disabled for test helpers. All other validation
 rules (base64 decoding, 32-byte length) apply when the variable is set.
 
+Platform tenant access is enforced in every environment. Tests that use a platform
+account on a tenant route must sign in and start an access session first. The caller
+can request 5–240 minutes when starting access. Omitting `durationMinutes` gives
+60 minutes.
+
 ---
 
 ## Test-Harness Variables (not read by the running platform)

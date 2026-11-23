@@ -1,6 +1,6 @@
 //! The schema rule behind tenant isolation (ADR-004 sections 2 and 7; MOH-50), run by CI as part
-//! of the backend suite: every table with a `tenant_id` column has Row-Level Security enabled and
-//! forced and a policy, and every other table is explicitly listed as global.
+//! of the backend suite: every tenant-owned table has Row-Level Security enabled and forced and
+//! a policy, and every other table is explicitly listed as global.
 //!
 //! The first test is the check itself, run against the migrated schema. The others prove it fails:
 //! each plants a table that breaks one part of the rule inside a transaction that is rolled back
@@ -159,10 +159,10 @@ async fn a_complete_tenant_table_passes() {
     assert!(found.is_empty(), "a correct table must pass: {found:?}");
 }
 
-/// The allow-list is for tables with no tenant: it cannot be used to exempt a tenant table, and
-/// the planted tables above never persist.
+/// The allow-list can only contain the known global platform authorization table and tables
+/// without a tenant_id. The planted tables above never persist.
 #[tokio::test]
-async fn the_global_list_holds_no_tenant_table_and_planted_tables_leave_nothing_behind() {
+async fn the_global_list_holds_only_the_known_exception_and_planted_tables_leave_nothing_behind() {
     if !can_run() {
         return;
     }
@@ -176,9 +176,10 @@ async fn the_global_list_holds_no_tenant_table_and_planted_tables_leave_nothing_
     .fetch_all(&mut *tx)
     .await
     .unwrap();
-    assert!(
-        tenant_tables.is_empty(),
-        "tables in GLOBAL_TABLES that carry a tenant_id: {tenant_tables:?}"
+    assert_eq!(
+        tenant_tables,
+        ["platform_access_sessions"],
+        "only the platform authorization table may carry a tenant_id in GLOBAL_TABLES"
     );
     let leftovers: Vec<String> = sqlx::query_scalar(
         "SELECT relname::text FROM pg_class \

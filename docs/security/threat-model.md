@@ -189,7 +189,7 @@ Password recovery (MOH-94) addresses four risks:
 
 | STRIDE | Threat | Controls | Status | Owner |
 | -- | -- | -- | -- | -- |
-| S | Operator acts in a tenant without trace | Impersonation sessions with reason, time box, banner | **Gap**: no impersonation sessions in code yet (ADR-006) | Identity & Access |
+| S | Operator acts in a tenant without trace | Sign-in-bound access sessions with a reason, time limit, visible banner, and tenant-visible audit linkage | ✓ enforced on tenant routes (MOH-97, ADR-006 §3) | Identity & Access |
 | T | Audit rows altered or deleted | Append-only table, no UPDATE/DELETE grants, SHA-256 hash chain | ✓ append-only trigger · Gap: no hash chain; grants depend on the DB role split (ADR-004 T2) | Platform Engineering |
 | R | Operator denies an action | `actor` + `on_behalf_of_tenant` on every audited action | ✓ | Platform Engineering |
 | I | Operators see more than they need | Separate platform permissions per role | ✓ (ADR-006) | Identity & Access |

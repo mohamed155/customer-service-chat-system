@@ -62,6 +62,14 @@
           </dd>
         </div>
       }
+      @if (e.platformAccessSessionId; as sessionId) {
+        <div class="def-row">
+          <dt>{{ 'audit.platformAccessSession' | transloco }}</dt>
+          <dd>
+            <code>{{ sessionId }}</code>
+          </dd>
+        </div>
+      }
     </dl>
 
     <h3 class="meta-heading">{{ 'audit.metadata' | transloco }}</h3>

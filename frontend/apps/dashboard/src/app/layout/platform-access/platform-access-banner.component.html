@@ -1,0 +1,27 @@
+@if (accessSession(); as session) {
+  <section class="banner" [class.expired]="minutesLeft() === 0">
+    <span role="status">
+      @if (minutesLeft() > 0) {
+        {{
+          'platformAccess.active' | transloco: { tenant: session.tenantName, count: minutesLeft() }
+        }}
+      } @else {
+        {{ 'platformAccess.expired' | transloco: { tenant: session.tenantName } }}
+      }
+    </span>
+    @if (minutesLeft() > 0) {
+      <app-button variant="secondary" [disabled]="ending()" (pressed)="end()">
+        {{ 'platformAccess.end' | transloco }}
+      </app-button>
+    } @else {
+      <a [routerLink]="[...tenantsPath, session.tenantId]">{{
+        'platformAccess.startNew' | transloco
+      }}</a>
+    }
+    @if (error(); as err) {
+      <app-inline-alert tone="error" [requestId]="err.requestId">{{
+        errorKey(err) | transloco
+      }}</app-inline-alert>
+    }
+  </section>
+}

@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
 mod session_fixture;
+use session_fixture::PlatformAccess;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -119,6 +120,8 @@ const PLATFORM_OPERATIONS: &[&str] = &[
 /// `/api/v1/platform/tenants/{seeded-tenant-id}` because the detail path
 /// needs a real UUID.
 const PLATFORM_OPERATIONS_DENY_BY_DEFAULT: &[(&str, Method)] = &[
+    ("/api/v1/platform/access-session", Method::GET),
+    ("/api/v1/platform/access-session/end", Method::POST),
     ("/api/v1/platform/tenants", Method::GET),
     ("/api/v1/platform/tenants", Method::POST),
     ("__TENANT_DETAIL__", Method::GET),
@@ -472,20 +475,8 @@ async fn all_tenant_roles_have_representative_allows_and_denies() {
             StatusCode::OK,
         )
         .await;
-        let switch = send(
-            pool.clone(),
-            Environment::Test,
-            authenticated_request(
-                &pool,
-                &format!("/api/v1/platform/tenants/{tenant_id}/switch"),
-                Method::POST,
-                user_id,
-                None,
-                Environment::Test,
-            )
-            .await,
-        )
-        .await;
+        let access = PlatformAccess::sign_in(&pool, &Environment::Test, user_id).await;
+        let switch = send(pool.clone(), Environment::Test, access.switch(tenant_id)).await;
         assert_eq!(switch.status(), StatusCode::FORBIDDEN);
         assert_status(
             &pool,
@@ -780,21 +771,21 @@ async fn production_staff_team_route_matrix_is_method_aware() {
 
     for role in ["super_admin", "developer", "support", "sales", "finance"] {
         let actor = seed_user(&pool, Some(role)).await;
+        let access = PlatformAccess::open(
+            &pool,
+            &Environment::Production,
+            actor,
+            tenant_id,
+            |request| send(pool.clone(), Environment::Production, request),
+        )
+        .await;
         let can_view = matches!(role, "super_admin" | "developer" | "sales" | "finance");
         let can_manage = role == "super_admin";
 
         let get_response = send(
             pool.clone(),
             Environment::Production,
-            authenticated_request(
-                &pool,
-                "/api/v1/tenant/members",
-                Method::GET,
-                actor,
-                Some(tenant_id),
-                Environment::Production,
-            )
-            .await,
+            access.scoped_request(Method::GET, "/api/v1/tenant/members", tenant_id, None),
         )
         .await;
         assert_eq!(
@@ -809,15 +800,12 @@ async fn production_staff_team_route_matrix_is_method_aware() {
         let invitations_get_response = send(
             pool.clone(),
             Environment::Production,
-            authenticated_request(
-                &pool,
-                "/api/v1/tenant/members/invitations",
+            access.scoped_request(
                 Method::GET,
-                actor,
-                Some(tenant_id),
-                Environment::Production,
-            )
-            .await,
+                "/api/v1/tenant/members/invitations",
+                tenant_id,
+                None,
+            ),
         )
         .await;
         assert_eq!(
@@ -832,16 +820,12 @@ async fn production_staff_team_route_matrix_is_method_aware() {
         let post_response = send(
             pool.clone(),
             Environment::Production,
-            authenticated_json_request(
-                &pool,
-                "/api/v1/tenant/members/invitations",
+            access.scoped_request(
                 Method::POST,
-                actor,
-                Some(tenant_id),
-                Environment::Production,
-                json!({"email": format!("prod-{role}@example.com"), "role": "agent"}),
-            )
-            .await,
+                "/api/v1/tenant/members/invitations",
+                tenant_id,
+                Some(json!({"email": format!("prod-{role}@example.com"), "role": "agent"})),
+            ),
         )
         .await;
         assert_eq!(
@@ -856,16 +840,12 @@ async fn production_staff_team_route_matrix_is_method_aware() {
         let patch_response = send(
             pool.clone(),
             Environment::Production,
-            authenticated_json_request(
-                &pool,
-                &format!("/api/v1/tenant/members/{target_id}"),
+            access.scoped_request(
                 Method::PATCH,
-                actor,
-                Some(tenant_id),
-                Environment::Production,
-                json!({"status": "disabled"}),
-            )
-            .await,
+                &format!("/api/v1/tenant/members/{target_id}"),
+                tenant_id,
+                Some(json!({"status": "disabled"})),
+            ),
         )
         .await;
         assert_eq!(
@@ -880,15 +860,12 @@ async fn production_staff_team_route_matrix_is_method_aware() {
         let delete_response = send(
             pool.clone(),
             Environment::Production,
-            authenticated_request(
-                &pool,
-                &format!("/api/v1/tenant/members/invitations/{invitation_id}"),
+            access.scoped_request(
                 Method::DELETE,
-                actor,
-                Some(tenant_id),
-                Environment::Production,
-            )
-            .await,
+                &format!("/api/v1/tenant/members/invitations/{invitation_id}"),
+                tenant_id,
+                None,
+            ),
         )
         .await;
         assert_eq!(
@@ -1051,30 +1028,18 @@ async fn all_platform_roles_have_representative_allows_and_denies() {
             StatusCode::OK,
         )
         .await;
-        let switch = send(
+        let access =
+            PlatformAccess::open(&pool, &Environment::Test, user_id, tenant_id, |request| {
+                send(pool.clone(), Environment::Test, request)
+            })
+            .await;
+        let response = send(
             pool.clone(),
             Environment::Test,
-            authenticated_request(
-                &pool,
-                &format!("/api/v1/platform/tenants/{tenant_id}/switch"),
-                Method::POST,
-                user_id,
-                None,
-                Environment::Test,
-            )
-            .await,
+            access.scoped_request(Method::GET, "/api/v1/tenant", tenant_id, None),
         )
         .await;
-        assert_eq!(switch.status(), StatusCode::OK);
-        assert_status(
-            &pool,
-            Environment::Test,
-            "/api/v1/tenant",
-            user_id,
-            Some(tenant_id),
-            StatusCode::OK,
-        )
-        .await;
+        assert_eq!(response.status(), StatusCode::OK);
         if let Some(denied_uri) = denied_uri {
             assert_status(
                 &pool,
@@ -1172,20 +1137,8 @@ async fn no_role_user_is_denied_by_every_protected_api_route() {
         )
         .await;
     }
-    let switch = send(
-        pool.clone(),
-        Environment::Test,
-        authenticated_request(
-            &pool,
-            &format!("/api/v1/platform/tenants/{tenant_id}/switch"),
-            Method::POST,
-            user_id,
-            None,
-            Environment::Test,
-        )
-        .await,
-    )
-    .await;
+    let access = PlatformAccess::sign_in(&pool, &Environment::Test, user_id).await;
+    let switch = send(pool.clone(), Environment::Test, access.switch(tenant_id)).await;
     assert!(!switch.status().is_success());
 }
 
@@ -1481,22 +1434,35 @@ async fn staff_tenant_access_is_environment_aware() {
 
     for role in roles {
         let user_id = seed_user(&pool, Some(role)).await;
+        let access = PlatformAccess::open(
+            &pool,
+            &Environment::Development,
+            user_id,
+            tenant_id,
+            |request| send(pool.clone(), Environment::Development, request),
+        )
+        .await;
         for (uri, _) in TENANT_OPERATIONS {
-            assert_status(
-                &pool,
-                Environment::Development,
-                &resolve(uri),
-                user_id,
-                Some(tenant_id),
-                StatusCode::OK,
-            )
-            .await;
+            let request = access.scoped_request(Method::GET, &resolve(uri), tenant_id, None);
+            assert_eq!(
+                send(pool.clone(), Environment::Development, request)
+                    .await
+                    .status(),
+                StatusCode::OK
+            );
         }
     }
 
     for role in roles {
         let user_id = seed_user(&pool, Some(role)).await;
-        let cookie = session_cookie(&pool, user_id, Environment::Production).await;
+        let access = PlatformAccess::open(
+            &pool,
+            &Environment::Production,
+            user_id,
+            tenant_id,
+            |request| send(pool.clone(), Environment::Production, request),
+        )
+        .await;
         // Expected access is derived from the authoritative staff matrix so
         // the list of routes and the matrix cannot drift apart.
         let platform_role = match role {
@@ -1516,11 +1482,7 @@ async fn staff_tenant_access_is_environment_aware() {
             })
             .collect();
         for ((uri, _), allowed) in TENANT_OPERATIONS.iter().zip(expected) {
-            let request = Request::get(resolve(uri))
-                .header("cookie", &cookie)
-                .header("X-Tenant-ID", tenant_id.to_string())
-                .body(Body::empty())
-                .unwrap();
+            let request = access.scoped_request(Method::GET, &resolve(uri), tenant_id, None);
             let response = send(pool.clone(), Environment::Production, request).await;
             assert_eq!(
                 response.status(),

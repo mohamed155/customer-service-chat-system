@@ -22,6 +22,7 @@ pub struct AuditEntryDto {
     pub resource_type: String,
     pub resource_id: String,
     pub tenant_id: Option<Uuid>,
+    pub platform_access_session_id: Option<Uuid>,
     pub details: serde_json::Value,
     pub created_at: DateTime<Utc>,
 }

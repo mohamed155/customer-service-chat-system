@@ -693,67 +693,6 @@ pub async fn get_tenant_detail(
     }
 }
 
-#[utoipa::path(
-    post,
-    path = "/platform/tenants/{id}/switch",
-    tag = "platform-tenants",
-    operation_id = "switch_platform_tenant",
-    summary = "Record a platform tenant switch",
-    description = "Record that the current platform user is switching to a different platform \
-                  tenant context. Returns the target tenant summary. Requires permission: \
-                  platform.tenants.switch",
-    params(("id" = Uuid, Path, description = "Tenant identifier")),
-    responses(
-        (status = 200, description = "Switch recorded; returns target tenant summary.", body = TenantSummary),
-        (status = 401, description = "Authentication required.", body = ErrorEnvelope),
-        (status = 403, description = "Access denied (tenant not found or insufficient permissions).", body = ErrorEnvelope),
-        (status = 500, description = "Internal server error.", body = ErrorEnvelope),
-    ),
-    security(("session_cookie" = []))
-)]
-pub async fn switch_tenant(
-    principal: Principal,
-    Path(id): Path<uuid::Uuid>,
-    State(pool): State<sqlx::PgPool>,
-) -> Response {
-    let row = match sqlx::query_as::<_, (Uuid, String, String, String, String)>(
-        "SELECT id, name, slug, status, plan \
-         FROM tenants \
-         WHERE id = $1 AND deleted_at IS NULL",
-    )
-    .bind(id)
-    .fetch_optional(&pool)
-    .await
-    {
-        Ok(Some(r)) => r,
-        _ => {
-            return ApiError::unauthorized("Access denied").into_response();
-        }
-    };
-
-    let (id_v, name, slug, status, plan) = row;
-    let id_str = id_v.to_string();
-    audit_log::record(
-        &pool,
-        "platform.tenant_switched",
-        Some(principal.user_id),
-        Some(id_v),
-        "tenant",
-        Some(&id_str),
-        &json!({"tenant_slug": &slug}),
-    )
-    .await;
-
-    Json(TenantSummary {
-        id: id_v,
-        name,
-        slug,
-        status,
-        plan,
-    })
-    .into_response()
-}
-
 /// `POST /api/v1/platform/tenants` — create a new customer organization.
 ///
 /// Requires `Permission::PlatformTenantsManage` (enforced by the router).

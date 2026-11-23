@@ -44,9 +44,6 @@
           <button type="button" (click)="retry()">{{ 'tenantSwitcher.retry' | transloco }}</button>
         </div>
       }
-      @if (switchFailed()) {
-        <div class="error" role="alert">{{ 'tenantSwitcher.switchFailed' | transloco }}</div>
-      }
       <div
         class="list"
         #list
@@ -80,3 +77,6 @@
     </div>
   }
 </div>
+@if (accessTarget(); as tenant) {
+  <app-platform-access-dialog [tenant]="tenant" (closed)="accessTarget.set(null)" />
+}

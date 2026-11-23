@@ -1,4 +1,5 @@
 import { Page, Route } from '@playwright/test';
+import { noPlatformAccess } from './support/platform-access';
 import { expect, test } from './support/test';
 
 const TENANT_PERMISSIONS = [
@@ -250,6 +251,8 @@ async function mockPlatformApi(
     const segments = path.split('/').filter(Boolean);
 
     if (path === '/me') return json(route, identity);
+
+    if (path === '/platform/access-session') return noPlatformAccess(route);
     if (path === '/auth/logout') return json(route, null);
 
     if (method === 'GET' && path === '/platform/tenants' && !segments[3]) {
@@ -480,6 +483,8 @@ test.describe('platform tenant management', () => {
       const segments = path.split('/').filter(Boolean);
 
       if (path === '/me') return json(route, identities.platform);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
 
       if (method === 'GET' && path === '/platform/tenants' && !segments[3]) {
@@ -543,6 +548,7 @@ test.describe('platform tenant management', () => {
         const url = new URL(route.request().url());
         const path = url.pathname.replace('/api/v1', '');
         if (path === '/me') return json(route, identity);
+        if (path === '/platform/access-session') return noPlatformAccess(route);
         if (path === '/auth/logout') return json(route, null);
         return json(route, { items: [], nextCursor: null, hasMore: false });
       });
@@ -586,6 +592,8 @@ test.describe('platform tenant management', () => {
       const segments = path.split('/').filter(Boolean);
 
       if (path === '/me') return json(route, identities.platform);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
       if (method === 'GET' && path === '/platform/tenants' && !segments[3]) {
         return json(route, { items: [tenant], nextCursor: null, hasMore: false });
@@ -661,6 +669,8 @@ test.describe('platform tenant management', () => {
       const segments = path.split('/').filter(Boolean);
 
       if (path === '/me') return json(route, identities.developer);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
       if (method === 'GET' && path === '/platform/tenants' && !segments[3]) {
         return json(route, { items: [tenant], nextCursor: null, hasMore: false });
@@ -887,6 +897,8 @@ test.describe('platform tenant management', () => {
       const segments = path.split('/').filter(Boolean);
 
       if (path === '/me') return json(route, identities.platform);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
       if (method === 'GET' && path === '/platform/tenants' && !segments[3]) {
         return json(route, { items: [tenant], nextCursor: null, hasMore: false });
@@ -1032,6 +1044,8 @@ test.describe('platform tenant management', () => {
       const segments = path.split('/').filter(Boolean);
 
       if (path === '/me') return json(route, identities.platform);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
 
       if (method === 'GET' && path === '/platform/tenants' && !segments[3]) {
@@ -1198,6 +1212,7 @@ test.describe('platform tenant management', () => {
             await new Promise((r) => setTimeout(r, 1500));
             return json(route, identity);
           }
+          if (path === '/platform/access-session') return noPlatformAccess(route);
           if (path === '/auth/logout') return json(route, null);
           return json(route, { items: [], nextCursor: null, hasMore: false });
         });
@@ -1224,6 +1239,8 @@ test.describe('platform tenant management', () => {
       const segments = path.split('/').filter(Boolean);
 
       if (path === '/me') return json(route, identities.platform);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
 
       if (method === 'POST' && path === '/platform/tenants') {
@@ -1281,6 +1298,8 @@ test.describe('platform tenant management', () => {
       const method = route.request().method();
 
       if (path === '/me') return json(route, identities.platform);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
 
       if (method === 'POST' && path === '/platform/tenants') {
@@ -1339,6 +1358,8 @@ test.describe('platform tenant management', () => {
       const segments = path.split('/').filter(Boolean);
 
       if (path === '/me') return json(route, identities.platform);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
 
       if (method === 'POST' && path === '/platform/tenants') {
@@ -1387,6 +1408,8 @@ test.describe('platform tenant management', () => {
       const segments = path.split('/').filter(Boolean);
 
       if (path === '/me') return json(route, identities.platform);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
 
       if (method === 'GET' && path === '/platform/tenants' && !segments[3]) {
@@ -1462,6 +1485,8 @@ test.describe('platform tenant management', () => {
       const segments = path.split('/').filter(Boolean);
 
       if (path === '/me') return json(route, identities.platform);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
 
       if (method === 'GET' && path === '/platform/tenants' && !segments[3]) {
@@ -1545,6 +1570,8 @@ test.describe('platform tenant management', () => {
       const segments = path.split('/').filter(Boolean);
 
       if (path === '/me') return json(route, identities.platform);
+
+      if (path === '/platform/access-session') return noPlatformAccess(route);
       if (path === '/auth/logout') return json(route, null);
 
       if (method === 'GET' && path === '/platform/tenants' && !segments[3]) {

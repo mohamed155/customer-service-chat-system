@@ -1,5 +1,6 @@
 import { Page, Route } from '@playwright/test';
 import { expect, test } from './support/test';
+import { mockPlatformAccess, submitPlatformAccess } from './support/platform-access';
 
 type MemberRole = 'owner' | 'admin' | 'manager' | 'agent' | 'viewer';
 type MemberStatus = 'active' | 'disabled';
@@ -237,6 +238,12 @@ function membershipFromTenant(tenant: Tenant, role: MemberRole): MembershipSumma
 }
 
 async function installTeamApi(page: Page, state: TeamState) {
+  const platformAccess = mockPlatformAccess(state.tenants, {
+    initialTenant: state.tenants.find((tenant) => tenant.id === state.activeTenantId),
+    onStart: (tenantId) => {
+      state.activeTenantId = tenantId;
+    },
+  });
   await page.context().route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace('/api/v1', '');
@@ -258,19 +265,8 @@ async function installTeamApi(page: Page, state: TeamState) {
       return json(route, { items: state.tenants, nextCursor: null, hasMore: false });
     }
 
-    if (
-      method === 'POST' &&
-      segments[0] === 'platform' &&
-      segments[1] === 'tenants' &&
-      segments[3] === 'switch'
-    ) {
-      const targetTenant = state.tenants.find((item) => item.id === segments[2]);
-      if (!targetTenant) {
-        return json(route, apiError('not_found', 'Tenant not found', 404), 404);
-      }
-      state.activeTenantId = targetTenant.id;
-      return json(route, targetTenant);
-    }
+    const access = platformAccess(route, path);
+    if (access) return access;
 
     if (method === 'GET' && path === '/tenant/members') {
       const q = url.searchParams.get('q')?.toLowerCase();
@@ -508,6 +504,7 @@ test.describe('tenant team management', () => {
     const switched = page.waitForResponse((response) => response.url().includes('/switch'));
     await page.getByRole('button', { name: 'Switch tenant' }).click();
     await page.locator('.option').filter({ hasText: 'Northwind Help' }).click();
+    await submitPlatformAccess(page);
     await switched;
     await page.waitForFunction(
       (id) => JSON.parse(localStorage.getItem('app.tenant') ?? '{}').id === id,

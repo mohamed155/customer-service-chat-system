@@ -1,4 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+mod session_fixture;
+use session_fixture::PlatformAccess;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -38,7 +41,7 @@ pub fn test_config() -> config::AppConfig {
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
-        cors_allowed_origins: vec![],
+        cors_allowed_origins: vec![session_fixture::DASHBOARD_ORIGIN.into()],
         log_format: config::LogFormat::Pretty,
         smtp_url: None,
         smtp_from: None,
@@ -526,14 +529,8 @@ mod tests {
         drop(create_res);
 
         // Switch to the new tenant.
-        let mut switch_res = send_request(
-            pool,
-            Request::post(format!("/api/v1/platform/tenants/{new_id}/switch"))
-                .header("X-Dev-User-Id", admin.to_string())
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await;
+        let access = PlatformAccess::sign_in(&pool, &config::Environment::Test, admin).await;
+        let mut switch_res = send_request(pool, access.switch(new_id)).await;
         assert_eq!(switch_res.status(), 200);
         let switch_body = body_json(&mut switch_res).await;
         assert_eq!(switch_body["id"], serde_json::json!(new_id));

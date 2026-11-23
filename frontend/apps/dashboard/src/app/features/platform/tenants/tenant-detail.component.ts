@@ -6,7 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { catchError, concatMap, EMPTY, pipe, Subject, switchMap, tap } from 'rxjs';
@@ -20,7 +20,9 @@ import { marker } from '../../../core/i18n/marker';
 import { planKey, tenantStatusKey } from '../../../core/i18n/platform-labels';
 import { APP_PATHS } from '../../../core/router/app-paths';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
+import { PlatformAccessDialogComponent } from '../../../layout/platform-access/platform-access-dialog.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
+import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { LoadingStateComponent } from '../../../shared/components/loading-state/loading-state.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
@@ -30,11 +32,13 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
 @Component({
   selector: 'app-tenant-detail',
   imports: [
+    ButtonComponent,
     ErrorReferenceComponent,
     LocaleDatePipe,
     RouterLink,
     PageContainerComponent,
     PageHeaderComponent,
+    PlatformAccessDialogComponent,
     LoadingStateComponent,
     EmptyStateComponent,
     StatusBadgeComponent,
@@ -47,6 +51,7 @@ import { ErrorReferenceComponent } from '../../../shared/components/error-refere
     `
       .header-actions {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: var(--app-space-3);
       }
@@ -244,6 +249,13 @@ export class TenantDetailComponent {
   protected readonly error = signal<ApiError | null>(null);
   protected readonly actionPending = signal(false);
   protected readonly actionError = signal<ApiError | null>(null);
+
+  protected readonly accessTarget = signal<PlatformTenantDetail | null>(null);
+  private readonly router = inject(Router);
+
+  protected openTenantWorkspace(): void {
+    void this.router.navigate([`/${APP_PATHS.tenant.base}`, APP_PATHS.tenant.overview]);
+  }
 
   protected readonly showConfirmDialog = signal(false);
   protected readonly pendingToggleTenant = signal<PlatformTenantDetail | null>(null);

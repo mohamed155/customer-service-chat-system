@@ -1,4 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+mod session_fixture;
+use session_fixture::PlatformAccess;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -35,7 +38,7 @@ pub fn test_config() -> config::AppConfig {
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
-        cors_allowed_origins: vec![],
+        cors_allowed_origins: vec![session_fixture::DASHBOARD_ORIGIN.into()],
         log_format: config::LogFormat::Pretty,
         smtp_url: None,
         smtp_from: None,
@@ -375,14 +378,17 @@ mod tests {
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let tenant_id = seed_tenant(&pool, Some("suspended")).await;
 
+        let access = PlatformAccess::open(
+            &pool,
+            &config::Environment::Test,
+            user_id,
+            tenant_id,
+            |request| send_request(pool.clone(), request),
+        )
+        .await;
         let mut res = send_request(
             pool.clone(),
-            Request::builder()
-                .uri("/api/v1/tenant")
-                .header("X-Dev-User-Id", user_id.to_string())
-                .header("X-Tenant-ID", tenant_id.to_string())
-                .body(Body::empty())
-                .unwrap(),
+            access.scoped_request(axum::http::Method::GET, "/api/v1/tenant", tenant_id, None),
         )
         .await;
 
@@ -689,75 +695,12 @@ mod tests {
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let tenant_id = seed_tenant(&pool, Some("active")).await;
 
-        let mut res = send_request(
-            pool.clone(),
-            Request::builder()
-                .uri(format!("/api/v1/platform/tenants/{}/switch", tenant_id))
-                .method("POST")
-                .header("X-Dev-User-Id", user_id.to_string())
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await;
+        let access = PlatformAccess::sign_in(&pool, &config::Environment::Test, user_id).await;
+        let mut res = send_request(pool.clone(), access.switch(tenant_id)).await;
 
         assert_eq!(res.status(), 200);
         let body = body_json(&mut res).await;
         assert_eq!(body["id"], serde_json::json!(tenant_id));
-    }
-
-    #[tokio::test]
-    async fn platform_tenants_switch_writes_audit_row() {
-        let Some(pool) = get_pool().await else { return };
-        db::testing::migrate().await;
-
-        let user_id = seed_user(&pool, Some("super_admin")).await;
-        let tenant_id = seed_tenant(&pool, Some("active")).await;
-
-        // fetch slug from the seeded tenant
-        let slug: String = sqlx::query_scalar("SELECT slug::text FROM tenants WHERE id = $1")
-            .bind(tenant_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-
-        let res = send_request(
-            pool.clone(),
-            Request::builder()
-                .uri(format!("/api/v1/platform/tenants/{}/switch", tenant_id))
-                .method("POST")
-                .header("X-Dev-User-Id", user_id.to_string())
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await;
-
-        assert_eq!(res.status(), 200);
-        drop(res);
-
-        tokio::time::sleep(Duration::from_millis(50)).await;
-
-        let row: Option<(uuid::Uuid, String, Option<uuid::Uuid>, serde_json::Value)> =
-            sqlx::query_as(
-                r#"
-                SELECT id, action, tenant_id, details
-                FROM audit_logs
-                WHERE actor_user_id = $1
-                  AND action = 'platform.tenant_switched'
-                ORDER BY created_at DESC
-                LIMIT 1
-                "#,
-            )
-            .bind(user_id)
-            .fetch_optional(&db::testing::seed_pool())
-            .await
-            .unwrap();
-
-        let (_, action, audited_tenant_id, details) =
-            row.expect("expected a platform.tenant_switched audit row");
-
-        assert_eq!(action, "platform.tenant_switched");
-        assert_eq!(audited_tenant_id, Some(tenant_id));
-        assert_eq!(details["tenant_slug"], slug);
     }
 
     #[tokio::test]
@@ -768,16 +711,8 @@ mod tests {
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let tenant_id = seed_tenant(&pool, Some("suspended")).await;
 
-        let mut res = send_request(
-            pool.clone(),
-            Request::builder()
-                .uri(format!("/api/v1/platform/tenants/{}/switch", tenant_id))
-                .method("POST")
-                .header("X-Dev-User-Id", user_id.to_string())
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await;
+        let access = PlatformAccess::sign_in(&pool, &config::Environment::Test, user_id).await;
+        let mut res = send_request(pool.clone(), access.switch(tenant_id)).await;
 
         assert_eq!(res.status(), 200);
         let body = body_json(&mut res).await;
@@ -792,19 +727,8 @@ mod tests {
         let user_id = seed_user(&pool, Some("super_admin")).await;
         let nonexistent_id = uuid::Uuid::new_v4();
 
-        let mut res = send_request(
-            pool.clone(),
-            Request::builder()
-                .uri(format!(
-                    "/api/v1/platform/tenants/{}/switch",
-                    nonexistent_id
-                ))
-                .method("POST")
-                .header("X-Dev-User-Id", user_id.to_string())
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await;
+        let access = PlatformAccess::sign_in(&pool, &config::Environment::Test, user_id).await;
+        let mut res = send_request(pool.clone(), access.switch(nonexistent_id)).await;
 
         assert_eq!(res.status(), 403);
         let body = body_json(&mut res).await;
@@ -820,16 +744,8 @@ mod tests {
         let tenant_id = seed_tenant(&pool, Some("active")).await;
         seed_membership(&pool, tenant_id, user_id, "agent").await;
 
-        let mut res = send_request(
-            pool.clone(),
-            Request::builder()
-                .uri(format!("/api/v1/platform/tenants/{}/switch", tenant_id))
-                .method("POST")
-                .header("X-Dev-User-Id", user_id.to_string())
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await;
+        let access = PlatformAccess::sign_in(&pool, &config::Environment::Test, user_id).await;
+        let mut res = send_request(pool.clone(), access.switch(tenant_id)).await;
 
         assert_eq!(res.status(), 403);
         let body = body_json(&mut res).await;

@@ -123,6 +123,7 @@ async fn run_migrations_succeeds() {
         (79, "auth sessions refresh tokens"),
         (80, "retire hs256 sessions"),
         (81, "password reset tokens"),
+        (82, "platform access sessions"),
     ];
     assert_eq!(
         rows.len(),

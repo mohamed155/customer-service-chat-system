@@ -371,6 +371,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/platform/access-session': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get the current tenant access session
+     * @description Returns the current sign-in's open access session. Requires permission: platform.tenants.switch
+     */
+    get: operations['get_platform_access_session'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/platform/access-session/end': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * End the current tenant access session
+     * @description Ends the current sign-in's access session, if any. Requires permission: platform.tenants.switch
+     */
+    post: operations['end_platform_access_session'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/platform/ai-providers': {
     parameters: {
       query?: never;
@@ -631,8 +671,8 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Record a platform tenant switch
-     * @description Record that the current platform user is switching to a different platform tenant context. Returns the target tenant summary. Requires permission: platform.tenants.switch
+     * Start a platform tenant access session
+     * @description Starts time-limited access to the target tenant for the current sign-in. A previous access session ends when the new one starts. Requires permission: platform.tenants.switch
      */
     post: operations['switch_platform_tenant'];
     delete?: never;
@@ -2342,6 +2382,8 @@ export interface components {
       details: unknown;
       /** Format: uuid */
       id: string;
+      /** Format: uuid */
+      platform_access_session_id?: string | null;
       resource_id: string;
       resource_type: string;
       /** Format: uuid */
@@ -3407,6 +3449,9 @@ export interface components {
     PlanListResponse: {
       plans: components['schemas']['PlanDto'][];
     };
+    PlatformAccessSession: components['schemas']['StartedPlatformAccessSession'] & {
+      tenantName: string;
+    };
     /** @description `PlatformTenantDetail` — full record returned by create/get/update handlers */
     PlatformTenantDetail: {
       contactEmail?: string | null;
@@ -3727,6 +3772,27 @@ export interface components {
     SkillListResponse: {
       data: components['schemas']['Skill'][];
     };
+    StartPlatformAccessRequest: {
+      /**
+       * Format: int32
+       * @description Optional duration in minutes, from 5 through 240. The default is 60.
+       * @default 60
+       */
+      durationMinutes: number;
+      /** @description Trimmed justification, visible in the tenant's audit log. */
+      reason: string;
+    };
+    StartedPlatformAccessSession: {
+      /** Format: date-time */
+      expiresAt: string;
+      /** Format: uuid */
+      id: string;
+      reason: string;
+      /** Format: date-time */
+      startedAt: string;
+      /** Format: uuid */
+      tenantId: string;
+    };
     SubmitFeedbackPayload: {
       comment?: string | null;
       /** Format: int32 */
@@ -3752,6 +3818,9 @@ export interface components {
       /** Format: uuid */
       tenant_id: string;
       tenant_name: string;
+    };
+    SwitchTenantResponse: components['schemas']['TenantSummary'] & {
+      accessSession: components['schemas']['StartedPlatformAccessSession'];
     };
     SystemHealthDto: {
       dependencies: components['schemas']['DependencyHealthDto'][];
@@ -5170,6 +5239,114 @@ export interface operations {
       };
     };
   };
+  get_platform_access_session: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current access session. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformAccessSession'];
+        };
+      };
+      /** @description Authentication required. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Insufficient permissions. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description No current access session. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Internal server error. */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  end_platform_access_session: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No access session remains for this sign-in. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Authentication required. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Insufficient permissions. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Internal server error. */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   get_platform_ai_provider_status: {
     parameters: {
       query?: {
@@ -6205,18 +6382,32 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StartPlatformAccessRequest'];
+      };
+    };
     responses: {
-      /** @description Switch recorded; returns target tenant summary. */
+      /** @description Access started. Returns the tenant and access session. */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['TenantSummary'];
+          'application/json': components['schemas']['SwitchTenantResponse'];
         };
       };
-      /** @description Authentication required. */
+      /** @description Invalid JSON body. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Authentication or fresh two-step proof required. */
       401: {
         headers: {
           [name: string]: unknown;
@@ -6226,8 +6417,28 @@ export interface operations {
           'application/problem+json': components['schemas']['ProblemDetails'];
         };
       };
-      /** @description Access denied (tenant not found or insufficient permissions). */
+      /** @description Tenant unavailable or insufficient permissions. */
       403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Another tenant access start is in progress. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Invalid reason or duration. */
+      422: {
         headers: {
           [name: string]: unknown;
         };

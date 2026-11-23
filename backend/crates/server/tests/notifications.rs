@@ -1,4 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+mod session_fixture;
+use session_fixture::PlatformAccess;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -28,7 +31,7 @@ fn test_config(environment: Environment) -> config::AppConfig {
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment,
-        cors_allowed_origins: vec![],
+        cors_allowed_origins: vec![session_fixture::DASHBOARD_ORIGIN.into()],
         log_format: config::LogFormat::Pretty,
         smtp_url: None,
         smtp_from: None,
@@ -2084,15 +2087,24 @@ async fn assignment_by_actor_without_membership_notifies_assignee() {
 
     let state = setup_state(pool.clone());
 
+    let access = PlatformAccess::open(
+        &pool,
+        &Environment::Test,
+        actor_user_id,
+        tenant_id,
+        |request| send_state(&state, request),
+    )
+    .await;
+
     let payload = json!({"assigned_membership_id": assignee_mid});
     let response = send_state(
         &state,
-        json_patch(
+        access.request(json_patch(
             &format!("/api/v1/tenant/conversations/{conv_id}"),
             actor_user_id,
             tenant_id,
             payload,
-        ),
+        )),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);

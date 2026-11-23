@@ -120,6 +120,16 @@ grant **no tenant permissions on their own**. Acting inside a tenant requires an
 Non-production environments may keep today's direct staff access, gated by the existing
 `is_production` flag, so test setup doesn't need impersonation sessions.
 
+**Status (MOH-97).** Platform access uses `POST /platform/tenants/{id}/switch` with a
+10–500 character reason. Access lasts 60 minutes by default and at most four hours. One session
+can be open per platform user, and only the sign-in that opened it can use it. The dashboard
+shows the tenant name, time remaining and an end control. The start, end and expiry events record
+the reason and session ID, and tenant audit entries written during access carry that ID.
+Tenant owners can see the lifecycle entries in their audit log. Tenant routes enforce the gate
+in all environments. The remaining target work includes access modes, a second approver and
+the `imp` claim. The switch route retains its existing MFA step-up requirement. Fresh MFA
+enforcement as part of the target impersonation flow remains future work.
+
 ### 4. API keys (server-to-server)
 
 API keys are a separate **principal kind** (`PrincipalKind::ApiKey`). They don't belong to any
@@ -183,10 +193,10 @@ part of this decision but not built yet. See the gap table below.
      - Unknown stored role: log an error, audit `unknown_role`, and **fail closed** (same
        response as no membership).
      - Otherwise the permissions are `tenant_role_permissions(role)`.
-   - **Platform user:** today, `staff_tenant_permissions(platform_role, is_production)`.
-     *(Target, production)* the request must carry an `imp` claim for an active impersonation
-     session **for this tenant**. Otherwise **404**. Effective permissions are the mode-capped
-     intersection from §3.
+   - **Platform user:** require an open, unexpired access session for this tenant and sign-in.
+     Otherwise return **403** with `platform_access_required` or `platform_access_expired`.
+     Effective permissions use `staff_tenant_permissions(platform_role, is_production)`.
+     The target session uses an `imp` claim and the mode-capped intersection from §3.
    - **Invalid platform role:** empty permission set, with a warning logged.
    - *(Target)* **API key:** the key's stored permission subset.
 7. **Check tenant status.** If the tenant isn't `active` and the caller is a tenant user (or API
@@ -251,7 +261,7 @@ events, so a role change takes effect within one request after the event, or wit
 
 | # | Gap | Where | Follow-up |
 | -- | -- | -- | -- |
-| Z1 | Production staff tenant access needs no impersonation session. `/platform/tenants/{id}/switch` only writes the `platform.tenant_switched` audit row. | `backend/crates/modules/tenancy/src/lib.rs` (`PrincipalKind::Platform` branch), `tenancy/src/routes.rs` (`switch_tenant`), `authz/src/matrix.rs` (`staff_tenant_permissions`) | **Highest priority.** Add the `impersonation_sessions` migration, the start/end endpoints, the `imp` claim, the middleware check, the dashboard banner and the tenant-visible audit. |
+| Z1 | MOH-97 enforces time-limited platform access sessions, with a dashboard banner and tenant-visible audit. Sessions are bound to the current sign-in. | `backend/crates/modules/tenancy/src/lib.rs` (platform tenant context), `backend/migrations/0082_platform_access_sessions.sql` (sessions and audit linkage) | The target design still calls for access modes, a second approver, the `imp` claim and its dedicated step-up flow. |
 | Z2 | An unknown tenant and a missing membership both return **403** (`ApiError::unauthorized` maps to `FORBIDDEN`). The architecture doc says 404. | `tenancy/src/lib.rs` (`forbidden_response_with_request_id`) | Switch both cases to `ApiError::not_found` and update the frontend tenant-switch handling and contract tests. |
 | Z3 | API keys don't exist. There is no `PrincipalKind::ApiKey`. | `identity/src/lib.rs` | Add the `api_keys` table, the bearer resolution in `principal_middleware`, and the management endpoints under `integrations.manage`. |
 | Z4 | There's no generic policy layer. Resource rules are ad hoc in handlers. | Handlers in `conversations`, `escalations`, `tenancy::members` | Add a `Policy` trait per crate, starting with conversation assignment, PII export and owner protection. |

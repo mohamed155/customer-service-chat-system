@@ -1,5 +1,5 @@
 import { HttpInterceptorFn } from '@angular/common/http';
-import { inject } from '@angular/core';
+import { inject, Injector } from '@angular/core';
 import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { catchError, throwError } from 'rxjs';
@@ -15,6 +15,7 @@ import { REQUEST_ID_HEADER } from '../errors/request-reference';
 import { APP_PATHS } from '../router/app-paths';
 import { selectActiveTenant, tenantContextActions } from '../state/tenant-context.feature';
 import { CurrentUserService } from '../tenant/current-user.service';
+import { TenantContextService } from '../tenant/tenant-context.service';
 import {
   apiRelativePath,
   isIdentityEndpoint,
@@ -26,6 +27,7 @@ import {
 
 export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
   const store = inject(Store);
+  const injector = inject(Injector);
   const router = inject(Router);
   const config = inject(APP_CONFIG);
   const currentUser = inject(CurrentUserService);
@@ -34,6 +36,7 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
   const activeTenant = store.selectSignal(selectActiveTenant);
 
   const path = apiRelativePath(request.url, config.apiBaseUrl);
+  const requestTenant = activeTenant();
 
   return next(request).pipe(
     catchError((error: unknown) => {
@@ -50,6 +53,18 @@ export const apiErrorInterceptor: HttpInterceptorFn = (request, next) => {
         void router.navigate([`/${APP_PATHS.auth.base}/${APP_PATHS.auth.login}`], {
           queryParams: { returnUrl: currentPath() },
         });
+      } else if (
+        apiError.status === 403 &&
+        path !== null &&
+        !isPlatformEndpoint(path) &&
+        (apiError.code === 'platform_access_required' ||
+          apiError.code === 'platform_access_expired')
+      ) {
+        const tenantContext = injector.get(TenantContextService);
+        if (tenantContext.rejectAccess(request.headers.get('X-Tenant-ID'), requestTenant)) {
+          errorNotifications.show(locale.translate(errorMessageKey(apiError)), apiError.requestId);
+          void router.navigate([`/${APP_PATHS.platform.base}`, APP_PATHS.platform.tenants]);
+        }
       } else if (apiError.status === 403 && apiError.code === MFA_ENROLMENT_REQUIRED) {
         // The account needs a second factor before anything else: send the user to set one up,
         // and bring them back to where they were afterwards.

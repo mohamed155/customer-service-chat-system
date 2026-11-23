@@ -90,6 +90,7 @@ fn row_to_dto(row: &queries::AuditRow) -> model::AuditEntryDto {
         resource_type: row.resource_type.clone(),
         resource_id: row.resource_id.clone(),
         tenant_id: row.tenant_id,
+        platform_access_session_id: row.platform_access_session_id,
         details: row.details.clone(),
         created_at: row.created_at,
     }

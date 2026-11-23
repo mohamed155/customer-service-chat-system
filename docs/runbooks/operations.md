@@ -1,6 +1,6 @@
 # Operations Runbook
 
-Six common operational tasks for the AI Customer Service Platform.
+Operational tasks for the AI Customer Service Platform.
 
 ---
 
@@ -762,3 +762,22 @@ reference the retired table during session validation and MFA verification. Star
 release after the migration succeeds. Any MFA challenge already in flight from the previous release
 requires restarting sign-in. Restore a compatible database schema before restarting a previous
 release in a rollback.
+
+## 13. Find or End Platform Access to a Tenant
+
+- In the dashboard, the access banner shows the tenant and time left. Select **End access**
+  to close the session and return to the platform tenants list. The session is tied to
+  the sign-in that started it.
+- For API clients with `platform.tenants.switch`, `GET /api/v1/platform/access-session`
+  returns the current session or 404 when there is none. Call
+  `POST /api/v1/platform/access-session/end` to close it. Repeating the request returns
+  204.
+- Tenant requests are refused at expiry, even before the background sweep records it.
+  Signing out or revoking the underlying sign-in blocks tenant requests immediately.
+  The worker then closes the access record and writes the lifecycle event. Open tenant
+  event streams also close when their access or sign-in ends.
+- To investigate access, filter the platform audit log by tenant and the **Tenant**
+  category. The lifecycle events are `platform.tenant_access_started`,
+  `platform.tenant_access_ended`, and `platform.tenant_access_expired`. Match the
+  `platform_access_session_id` on other audit entries to follow actions during the session.
+  Tenant owners with `audit.view` can see these records and the reason in their audit log.

@@ -67,8 +67,23 @@
     "loading": "Loading tenants...",
     "loadFailed": "The tenants could not be loaded.",
     "retry": "Try again",
-    "switchFailed": "Could not switch tenant. Try again.",
     "labelWithName": "Switch tenant: {name}"
+  },
+  "platformAccess": {
+    "startTitle": "Start access to {tenant}",
+    "start": "Start access",
+    "starting": "Starting access…",
+    "startNew": "Start new access",
+    "end": "End access",
+    "active": "Platform access to {tenant} · {count, plural, one {# minute left} other {# minutes left}}",
+    "expired": "Access to {tenant} has expired.",
+    "reasonLabel": "Reason",
+    "reasonHint": "Tenant owners can see this reason. Use 10–500 characters ({count}/500).",
+    "reasonTooShort": "Enter at least 10 characters.",
+    "reasonTooLong": "Enter 500 characters or fewer.",
+    "durationLabel": "Access duration",
+    "durationOption": "{count, plural, one {# minute} other {# minutes}}",
+    "durationInvalid": "Select a duration from 5 to 240 minutes."
   },
   "topbar": {
     "toggleSidebar": "Toggle sidebar",
@@ -265,6 +280,7 @@
     "dismiss": "Dismiss alert"
   },
   "audit": {
+    "platformAccessSession": "Platform access session",
     "entry": "Audit Entry",
     "time": "Time",
     "actor": "Actor",
@@ -382,6 +398,9 @@
       "platform": {
         "tenant_created": "Tenant created",
         "tenant_status_changed": "Tenant status changed",
+        "tenant_access_started": "Platform access started",
+        "tenant_access_ended": "Platform access ended",
+        "tenant_access_expired": "Platform access expired",
         "tenant_switched": "Switched tenant",
         "tenant_updated": "Tenant updated"
       },
@@ -563,6 +582,8 @@
     "timeout": "The server took too long to answer. Try again.",
     "accessDenied": "You do not have access to this action.",
     "tenantAccessDenied": "You don't have access to this tenant.",
+    "platformAccessRequired": "Start a tenant access session with a reason to continue.",
+    "platformAccessExpired": "Your access to this tenant ended. Start a new session with a reason.",
     "notFound": "The requested item could not be found.",
     "tooManyRequests": "Too many requests. Please try again shortly.",
     "unavailable": "The service is temporarily unavailable. Please try again.",

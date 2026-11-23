@@ -1080,6 +1080,7 @@ export interface AuditEntryWire {
   resource_type: string;
   resource_id: string;
   tenant_id: string | null;
+  platform_access_session_id?: Schemas['AuditEntryDto']['platform_access_session_id'];
   details: Record<string, unknown>;
   created_at: string;
 }
@@ -1111,6 +1112,7 @@ export interface AuditEntry {
   resourceType: string;
   resourceId: string;
   tenantId: string | null;
+  platformAccessSessionId?: string | null;
   details: Record<string, unknown>;
   createdAt: string;
 }
@@ -1142,6 +1144,7 @@ export function auditListFromWire(wire: AuditListWire): AuditList {
       resourceType: entry.resource_type,
       resourceId: entry.resource_id,
       tenantId: entry.tenant_id,
+      platformAccessSessionId: entry.platform_access_session_id ?? null,
       details: entry.details,
       createdAt: entry.created_at,
     })),

@@ -33,6 +33,15 @@ describe('AuditDetailDrawerComponent', () => {
     expect(parsed).toEqual(AUDIT_ENTRY_FIXTURES[0].details);
   });
 
+  it('shows the access session linked to a platform audit entry', async () => {
+    const { fixture } = await setup({
+      entry: { ...AUDIT_ENTRY_FIXTURES[0], platformAccessSessionId: 'access-123' },
+    });
+
+    expect(fixture.nativeElement.textContent).toContain('Platform access session');
+    expect(fixture.nativeElement.textContent).toContain('access-123');
+  });
+
   it('close button emits closed', async () => {
     const { fixture } = await setup({ entry: AUDIT_ENTRY_FIXTURES[0], open: true });
     const spy = vi.fn();

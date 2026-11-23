@@ -10,10 +10,7 @@ INSERT INTO users (id, email, display_name) VALUES
   ('10000000-0000-0000-0000-000000000002', 'admin@t150.test', 'T150 Admin'),
   ('10000000-0000-0000-0000-000000000003', 'manager@t150.test', 'T150 Manager'),
   ('10000000-0000-0000-0000-000000000004', 'member@t150.test', 'T150 Member'),
-  ('10000000-0000-0000-0000-000000000005', 'foreign@t150.test', 'Foreign Member'),
-  ('10000000-0000-0000-0000-000000000006', 'platform@t150.test', 'Platform Admin');
-
-UPDATE users SET platform_role = 'super_admin' WHERE id = '10000000-0000-0000-0000-000000000006';
+  ('10000000-0000-0000-0000-000000000005', 'foreign@t150.test', 'Foreign Member');
 
 INSERT INTO tenants (id, name, slug) VALUES
   ('20000000-0000-0000-0000-000000000001', 'T150 Alpha', 't150-alpha'),
