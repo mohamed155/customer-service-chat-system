@@ -414,8 +414,9 @@ pub mod isolation {
     /// - every other table is in [`GLOBAL_TABLES`], so a new table cannot skip the decision;
     /// - every entry of [`GLOBAL_TABLES`] still exists;
     /// - foreign keys between tenant-owned tables reference `(tenant_id, id)` through
-    ///   `(tenant_id, <child reference>)`; referenced partitions are included, while partition
-    ///   child constraints are skipped because PostgreSQL clones them from the partitioned table.
+    ///   `(tenant_id, <child reference>)`; partitions count on both sides, and constraints PostgreSQL
+    ///   cloned from a partitioned table (`conparentid <> 0`) are skipped so they are not reported
+    ///   twice.
     pub async fn rls_rule_violations(conn: &mut sqlx::PgConnection) -> Vec<String> {
         let tables: Vec<(String, bool, bool, bool, bool)> = sqlx::query_as(
             "SELECT c.relname::text, \
@@ -488,7 +489,7 @@ pub mod isolation {
                  JOIN pg_attribute tenant ON tenant.attrelid = c.oid \
                    AND tenant.attname = 'tenant_id' AND NOT tenant.attisdropped \
                  WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') \
-                   AND NOT c.relispartition AND NOT c.relname = ANY($1) \
+                   AND NOT c.relname = ANY($1) \
              ), tenant_parents AS (\
                  SELECT c.oid, c.relname::text, tenant.attnum AS tenant_id_attnum \
                  FROM pg_class c \

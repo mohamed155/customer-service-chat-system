@@ -668,7 +668,7 @@ async fn all_inventory_foreign_keys_are_composite_in_the_catalog() {
              JOIN pg_attribute tenant ON tenant.attrelid = c.oid \
                AND tenant.attname = 'tenant_id' AND NOT tenant.attisdropped \
              WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') \
-               AND NOT c.relispartition AND NOT c.relname = ANY($1) \
+               AND NOT c.relname = ANY($1) \
          ), tenant_parents AS (\
              SELECT c.oid, c.relname::text, tenant.attnum AS tenant_id_attnum \
              FROM pg_class c \

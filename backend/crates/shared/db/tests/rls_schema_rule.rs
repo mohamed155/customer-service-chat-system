@@ -250,6 +250,37 @@ async fn a_single_column_foreign_key_to_a_tenant_partition_is_reported() {
 }
 
 #[tokio::test]
+async fn a_single_column_foreign_key_defined_on_a_tenant_partition_is_reported() {
+    if !can_run() {
+        return;
+    }
+    let found = violations_after(
+        &[
+            "CREATE TABLE planted_childpart_parent (id uuid PRIMARY KEY, tenant_id uuid NOT NULL, UNIQUE (tenant_id, id))",
+            "CREATE TABLE planted_childpart_child (id uuid NOT NULL, tenant_id uuid NOT NULL, parent_id uuid NOT NULL, PRIMARY KEY (tenant_id, id)) PARTITION BY LIST (tenant_id)",
+            "CREATE TABLE planted_childpart_child_a PARTITION OF planted_childpart_child FOR VALUES IN ('00000000-0000-0000-0000-000000000001')",
+            "ALTER TABLE planted_childpart_child_a ADD CONSTRAINT planted_childpart_direct_fkey FOREIGN KEY (parent_id) REFERENCES planted_childpart_parent(id)",
+            "ALTER TABLE planted_childpart_parent ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_childpart_parent FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_childpart_parent \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+            "ALTER TABLE planted_childpart_child ENABLE ROW LEVEL SECURITY",
+            "ALTER TABLE planted_childpart_child FORCE ROW LEVEL SECURITY",
+            "CREATE POLICY tenant_isolation ON planted_childpart_child \
+             USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid) \
+             WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)",
+        ],
+        "planted_childpart_child_a",
+    )
+    .await;
+    assert_eq!(
+        found,
+        ["planted_childpart_child_a: foreign key planted_childpart_direct_fkey to planted_childpart_parent must be composite (tenant_id, ...) -> (tenant_id, id)"]
+    );
+}
+
+#[tokio::test]
 async fn a_single_column_foreign_key_to_a_global_table_passes() {
     if !can_run() {
         return;
