@@ -311,7 +311,7 @@ enterprise, pool for everyone else).
 ### 7.1 PostgreSQL conventions
 
 - Primary keys: **UUIDv7** (time-ordered → good B-tree locality, sortable, no enumeration).
-- Every table has `created_at`, except a few such as `knowledge_item_tags` and `revoked_sessions`.
+- Every table has `created_at`, except a few such as `knowledge_item_tags` and `refresh_tokens`.
   `updated_at` is not universal: immutable and append-only tables (`messages`, `ai_generations`,
   `ai_usage_records`), join tables, and tables that keep their own state timestamps
   (`outbox_events.processed_at`) go without it.

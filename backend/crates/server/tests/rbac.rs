@@ -1,4 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+
+mod session_fixture;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -131,11 +133,10 @@ const PLATFORM_OPERATIONS_DENY_BY_DEFAULT: &[(&str, Method)] = &[
 ];
 
 fn test_config(environment: Environment) -> config::AppConfig {
+    session_fixture::configure_keys();
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment,
@@ -227,18 +228,14 @@ async fn send(pool: sqlx::PgPool, environment: Environment, request: Request<Bod
         .expect("request should complete")
 }
 
-fn session_cookie(user_id: Uuid, environment: Environment) -> String {
-    let config = test_config(environment);
-    let (token, _, _) = identity::session::issue_token(
-        &config.auth_jwt_secret,
-        config.auth_session_ttl_seconds,
-        user_id,
-    )
-    .unwrap();
-    format!("app_session={token}")
+async fn session_cookie(pool: &sqlx::PgPool, user_id: Uuid, environment: Environment) -> String {
+    session_fixture::configure_keys();
+    let issued = session_fixture::start(pool, &environment, user_id).await;
+    format!("__Host-app_session={}", issued.access_token)
 }
 
-fn authenticated_request(
+async fn authenticated_request(
+    pool: &sqlx::PgPool,
     uri: &str,
     method: Method,
     user_id: Uuid,
@@ -248,7 +245,7 @@ fn authenticated_request(
     let mut builder = Request::builder().uri(uri).method(method);
     if environment == Environment::Production {
         builder = builder
-            .header("cookie", session_cookie(user_id, environment))
+            .header("cookie", session_cookie(pool, user_id, environment).await)
             .header("origin", "http://localhost:4200")
             .header("x-requested-with", "XMLHttpRequest");
     } else {
@@ -260,7 +257,8 @@ fn authenticated_request(
     builder.body(Body::empty()).unwrap()
 }
 
-fn authenticated_json_request(
+async fn authenticated_json_request(
+    pool: &sqlx::PgPool,
     uri: &str,
     method: Method,
     user_id: Uuid,
@@ -274,7 +272,7 @@ fn authenticated_json_request(
         .header("content-type", "application/json");
     if environment == Environment::Production {
         builder = builder
-            .header("cookie", session_cookie(user_id, environment))
+            .header("cookie", session_cookie(pool, user_id, environment).await)
             .header("origin", "http://localhost:4200")
             .header("x-requested-with", "XMLHttpRequest");
     } else {
@@ -356,7 +354,7 @@ async fn assert_status(
     let response = send(
         pool.clone(),
         environment.clone(),
-        authenticated_request(uri, Method::GET, user_id, tenant_id, environment),
+        authenticated_request(pool, uri, Method::GET, user_id, tenant_id, environment).await,
     )
     .await;
     let status = response.status();
@@ -477,12 +475,14 @@ async fn all_tenant_roles_have_representative_allows_and_denies() {
             pool.clone(),
             Environment::Test,
             authenticated_request(
+                &pool,
                 &format!("/api/v1/platform/tenants/{tenant_id}/switch"),
                 Method::POST,
                 user_id,
                 None,
                 Environment::Test,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(switch.status(), StatusCode::FORBIDDEN);
@@ -581,12 +581,14 @@ async fn tenant_team_routes_cover_actual_methods_for_roles_and_anonymous_callers
             pool.clone(),
             Environment::Test,
             authenticated_request(
+                &pool,
                 "/api/v1/tenant/members",
                 Method::GET,
                 actor,
                 Some(tenant_id),
                 Environment::Test,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -603,12 +605,14 @@ async fn tenant_team_routes_cover_actual_methods_for_roles_and_anonymous_callers
             pool.clone(),
             Environment::Test,
             authenticated_request(
+                &pool,
                 "/api/v1/tenant/members/invitations",
                 Method::GET,
                 actor,
                 Some(tenant_id),
                 Environment::Test,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -625,6 +629,7 @@ async fn tenant_team_routes_cover_actual_methods_for_roles_and_anonymous_callers
             pool.clone(),
             Environment::Test,
             authenticated_json_request(
+                &pool,
                 "/api/v1/tenant/members/invitations",
                 Method::POST,
                 actor,
@@ -634,7 +639,8 @@ async fn tenant_team_routes_cover_actual_methods_for_roles_and_anonymous_callers
                     "email": format!("post-{role}-{}@example.com", Uuid::new_v4().simple()),
                     "role": "agent",
                 }),
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -651,13 +657,15 @@ async fn tenant_team_routes_cover_actual_methods_for_roles_and_anonymous_callers
             pool.clone(),
             Environment::Test,
             authenticated_json_request(
+                &pool,
                 &format!("/api/v1/tenant/members/{target_id}"),
                 Method::PATCH,
                 actor,
                 Some(tenant_id),
                 Environment::Test,
                 json!({"status": "disabled"}),
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -674,12 +682,14 @@ async fn tenant_team_routes_cover_actual_methods_for_roles_and_anonymous_callers
             pool.clone(),
             Environment::Test,
             authenticated_request(
+                &pool,
                 &format!("/api/v1/tenant/members/invitations/{invitation_id}"),
                 Method::DELETE,
                 actor,
                 Some(tenant_id),
                 Environment::Test,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -776,12 +786,14 @@ async fn production_staff_team_route_matrix_is_method_aware() {
             pool.clone(),
             Environment::Production,
             authenticated_request(
+                &pool,
                 "/api/v1/tenant/members",
                 Method::GET,
                 actor,
                 Some(tenant_id),
                 Environment::Production,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -797,12 +809,14 @@ async fn production_staff_team_route_matrix_is_method_aware() {
             pool.clone(),
             Environment::Production,
             authenticated_request(
+                &pool,
                 "/api/v1/tenant/members/invitations",
                 Method::GET,
                 actor,
                 Some(tenant_id),
                 Environment::Production,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -818,13 +832,15 @@ async fn production_staff_team_route_matrix_is_method_aware() {
             pool.clone(),
             Environment::Production,
             authenticated_json_request(
+                &pool,
                 "/api/v1/tenant/members/invitations",
                 Method::POST,
                 actor,
                 Some(tenant_id),
                 Environment::Production,
                 json!({"email": format!("prod-{role}@example.com"), "role": "agent"}),
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -840,13 +856,15 @@ async fn production_staff_team_route_matrix_is_method_aware() {
             pool.clone(),
             Environment::Production,
             authenticated_json_request(
+                &pool,
                 &format!("/api/v1/tenant/members/{target_id}"),
                 Method::PATCH,
                 actor,
                 Some(tenant_id),
                 Environment::Production,
                 json!({"status": "disabled"}),
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -862,12 +880,14 @@ async fn production_staff_team_route_matrix_is_method_aware() {
             pool.clone(),
             Environment::Production,
             authenticated_request(
+                &pool,
                 &format!("/api/v1/tenant/members/invitations/{invitation_id}"),
                 Method::DELETE,
                 actor,
                 Some(tenant_id),
                 Environment::Production,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -1034,12 +1054,14 @@ async fn all_platform_roles_have_representative_allows_and_denies() {
             pool.clone(),
             Environment::Test,
             authenticated_request(
+                &pool,
                 &format!("/api/v1/platform/tenants/{tenant_id}/switch"),
                 Method::POST,
                 user_id,
                 None,
                 Environment::Test,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(switch.status(), StatusCode::OK);
@@ -1101,15 +1123,17 @@ async fn protected_routes_distinguish_anonymous_401_from_permission_403() {
     );
 
     let denied = send(
-        pool,
+        pool.clone(),
         Environment::Test,
         authenticated_request(
+            &pool,
             "/api/v1/test/tenant/settings/manage",
             Method::GET,
             viewer,
             Some(tenant_id),
             Environment::Test,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(denied.status(), StatusCode::FORBIDDEN);
@@ -1148,15 +1172,17 @@ async fn no_role_user_is_denied_by_every_protected_api_route() {
         .await;
     }
     let switch = send(
-        pool,
+        pool.clone(),
         Environment::Test,
         authenticated_request(
+            &pool,
             &format!("/api/v1/platform/tenants/{tenant_id}/switch"),
             Method::POST,
             user_id,
             None,
             Environment::Test,
-        ),
+        )
+        .await,
     )
     .await;
     assert!(!switch.status().is_success());
@@ -1174,12 +1200,14 @@ async fn permission_denial_writes_audit_reason_without_exposing_permission() {
         pool.clone(),
         Environment::Test,
         authenticated_request(
+            &pool,
             "/api/v1/test/tenant/settings/manage",
             Method::GET,
             viewer,
             Some(tenant_id),
             Environment::Test,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
@@ -1216,7 +1244,15 @@ async fn me_returns_exact_tenant_permission_payloads() {
         let response = send(
             pool.clone(),
             Environment::Test,
-            authenticated_request("/api/v1/me", Method::GET, user_id, None, Environment::Test),
+            authenticated_request(
+                &pool,
+                "/api/v1/me",
+                Method::GET,
+                user_id,
+                None,
+                Environment::Test,
+            )
+            .await,
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
@@ -1263,12 +1299,14 @@ async fn me_returns_exact_platform_support_payload_in_production() {
         pool.clone(),
         Environment::Production,
         authenticated_request(
+            &pool,
             "/api/v1/me",
             Method::GET,
             user_id,
             None,
             Environment::Production,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1457,7 +1495,7 @@ async fn staff_tenant_access_is_environment_aware() {
 
     for role in roles {
         let user_id = seed_user(&pool, Some(role)).await;
-        let cookie = session_cookie(user_id, Environment::Production);
+        let cookie = session_cookie(&pool, user_id, Environment::Production).await;
         // Expected access is derived from the authoritative staff matrix so
         // the list of routes and the matrix cannot drift apart.
         let platform_role = match role {
@@ -1663,12 +1701,14 @@ async fn me_staff_tenant_permissions_follow_environment_for_every_platform_role(
                 pool.clone(),
                 environment.clone(),
                 authenticated_request(
+                    &pool,
                     "/api/v1/me",
                     Method::GET,
                     user_id,
                     None,
                     environment.clone(),
-                ),
+                )
+                .await,
             )
             .await;
             assert_eq!(response.status(), StatusCode::OK);
@@ -1697,12 +1737,14 @@ async fn platform_tenant_detail_allowed_for_every_platform_role() {
             pool.clone(),
             Environment::Test,
             authenticated_request(
+                &pool,
                 &format!("/api/v1/platform/tenants/{tenant_id}"),
                 Method::GET,
                 user_id,
                 None,
                 Environment::Test,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -1728,12 +1770,14 @@ async fn platform_tenant_detail_denied_for_every_tenant_role() {
             pool.clone(),
             Environment::Test,
             authenticated_request(
+                &pool,
                 &format!("/api/v1/platform/tenants/{tenant_id}"),
                 Method::GET,
                 user_id,
                 None,
                 Environment::Test,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(
@@ -1756,15 +1800,17 @@ async fn platform_tenants_list_invalid_status_filter_returns_422() {
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
+        pool.clone(),
         Environment::Test,
         authenticated_request(
+            &pool,
             "/api/v1/platform/tenants?status=invalid",
             Method::GET,
             user_id,
             None,
             Environment::Test,
-        ),
+        )
+        .await,
     )
     .await;
 
@@ -1929,12 +1975,14 @@ async fn no_role_user_is_denied_on_every_platform_tenant_endpoint() {
                 .unwrap()
         } else {
             authenticated_request(
+                &pool,
                 &actual_uri,
                 method.clone(),
                 user_id,
                 None,
                 Environment::Test,
             )
+            .await
         };
         let response = send(pool.clone(), Environment::Test, request).await;
         assert_eq!(
@@ -2009,12 +2057,14 @@ async fn customer_routes_respect_the_role_matrix() {
             &pool,
             Environment::Test,
             authenticated_request(
+                &pool,
                 "/api/v1/tenant/customers",
                 Method::GET,
                 user_id,
                 Some(tenant_id),
                 Environment::Test,
-            ),
+            )
+            .await,
             if *can_view {
                 StatusCode::OK
             } else {
@@ -2040,13 +2090,15 @@ async fn customer_routes_respect_the_role_matrix() {
             &pool,
             Environment::Test,
             authenticated_json_request(
+                &pool,
                 "/api/v1/tenant/customers",
                 Method::POST,
                 user_id,
                 Some(tenant_id),
                 Environment::Test,
                 create_body,
-            ),
+            )
+            .await,
             if *can_manage {
                 StatusCode::CREATED
             } else {
@@ -2061,12 +2113,14 @@ async fn customer_routes_respect_the_role_matrix() {
             &pool,
             Environment::Test,
             authenticated_request(
+                &pool,
                 &format!("/api/v1/tenant/customers/{customer_id}"),
                 Method::GET,
                 user_id,
                 Some(tenant_id),
                 Environment::Test,
-            ),
+            )
+            .await,
             if *can_view {
                 StatusCode::OK
             } else {
@@ -2090,13 +2144,15 @@ async fn customer_routes_respect_the_role_matrix() {
             &pool,
             Environment::Test,
             authenticated_json_request(
+                &pool,
                 &format!("/api/v1/tenant/customers/{customer_id}"),
                 Method::PATCH,
                 user_id,
                 Some(tenant_id),
                 Environment::Test,
                 patch_body,
-            ),
+            )
+            .await,
             if *can_manage {
                 StatusCode::OK
             } else {
@@ -2119,12 +2175,14 @@ async fn customer_routes_respect_the_role_matrix() {
             &pool,
             Environment::Test,
             authenticated_request(
+                &pool,
                 &format!("/api/v1/tenant/customers/{customer_id}/conversations"),
                 Method::GET,
                 user_id,
                 Some(tenant_id),
                 Environment::Test,
-            ),
+            )
+            .await,
             if *can_view {
                 StatusCode::OK
             } else {

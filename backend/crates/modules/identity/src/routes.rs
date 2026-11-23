@@ -145,9 +145,10 @@ pub async fn authenticate_login(
     match crate::mfa::is_enrolled(pool, user.id).await {
         Ok(true) => {
             let (jwt, _) =
-                session::issue_pending(&config.auth_jwt_secret, user.id).map_err(|e| {
-                    LoginError::Internal(format!("Challenge token issuance failed: {e}"))
-                })?;
+                session::issue_pending(crate::keys::keys_for(&config.environment), user.id)
+                    .map_err(|e| {
+                        LoginError::Internal(format!("Challenge token issuance failed: {e}"))
+                    })?;
             return Ok(LoginOutcome::MfaRequired {
                 user_id: user.id,
                 pending_cookie: session::build_pending_cookie(&jwt),
@@ -186,8 +187,7 @@ pub async fn authenticate_login(
 /// Logout the current session.
 ///
 /// On success the session is revoked, so its access token stops working at once, and the response
-/// clears the session cookies by setting already-expired `Set-Cookie` headers. A token of the HS256
-/// cutover window has no session row; its JWT ID (JTI) is recorded in `revoked_sessions` instead.
+/// clears the session cookies by setting already-expired `Set-Cookie` headers.
 ///
 /// # OpenAPI
 ///

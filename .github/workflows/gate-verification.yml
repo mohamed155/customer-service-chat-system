@@ -27,7 +27,6 @@ jobs:
     env:
       MIGRATION_DATABASE_URL: postgres://app_owner:app_owner_ci@localhost:5432/customer_service
       DATABASE_URL: postgres://app_runtime:app_runtime_ci@localhost:5432/customer_service
-      AUTH_JWT_SECRET: 0123456789abcdef0123456789abcdef
       REQUIRE_DB_TESTS: "1"
       REDIS_URL: redis://localhost:6379
     steps:

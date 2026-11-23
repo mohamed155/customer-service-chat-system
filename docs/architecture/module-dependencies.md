@@ -24,7 +24,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `email` | flat | – | `tenancy` | – |
 | `escalations` | flat | `conversations`, `identity`, `tenancy`, `tools` | `notifications`, `widgets` | `agent_availability`, `agent_skills`, `escalations`, `skills` |
 | `feedback` | flat | `tenancy`, `widgets` | – | `conversation_feedback` |
-| `identity` | flat | – | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `tenancy`, `tools`, `widgets` | `auth_sessions`, `mfa_factors`, `mfa_recovery_codes`, `refresh_tokens`, `revoked_sessions`, `users` |
+| `identity` | flat | – | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `tenancy`, `tools`, `widgets` | `auth_sessions`, `mfa_factors`, `mfa_recovery_codes`, `refresh_tokens`, `users` |
 | `integrations` | flat | `identity`, `tenancy` | `conversations`, `whatsapp` | `integration_catalog`, `integration_connections`, `integration_events`, `integration_secrets`, `integration_webhook_deliveries` |
 | `knowledge` | flat | `authz`, `identity`, `tenancy` | – | `knowledge_categories`, `knowledge_chunks`, `knowledge_documents`, `knowledge_index_state`, `knowledge_item_tags`, `knowledge_items` |
 | `notifications` | flat | `authz`, `escalations`, `identity`, `tenancy` | – | `notifications` |
@@ -133,9 +133,8 @@ Counts of SQL references to a table another module owns, per crate. They may onl
 | `server` | `integration_catalog` | `integrations` | 2 |
 | `server` | `integration_connections` | `integrations` | 3 |
 | `server` | `integration_secrets` | `integrations` | 2 |
-| `server` | `revoked_sessions` | `identity` | 1 |
 | `server` | `tenant_rate_limit_overrides` | `tenancy` | 1 |
 | `server` | `tenant_tools` | `tools` | 2 |
 | `whatsapp` | `integration_connections` | `integrations` | 1 |
 
-Total: 36.
+Total: 35.

@@ -18,7 +18,6 @@ use uuid::Uuid;
 
 const TEST_ORIGIN: &str = "http://localhost:4200";
 const PASSWORD: &str = "correct-horse-battery-1";
-const JWT_SECRET: &str = "test-auth-jwt-secret-at-least-32-bytes";
 
 // Every test resets the same tables, so they take turns.
 static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -27,8 +26,6 @@ fn test_config() -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
@@ -102,7 +99,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 async fn reset() {
     db::testing::migrate().await;
     sqlx::query(
-        "TRUNCATE TABLE mfa_recovery_codes, mfa_factors, revoked_sessions, tenant_memberships, \
+        "TRUNCATE TABLE mfa_recovery_codes, mfa_factors, tenant_memberships, \
          tenants, users, audit_logs, secret_keks RESTART IDENTITY CASCADE",
     )
     .execute(&db::testing::owner_pool())
@@ -331,28 +328,43 @@ async fn seed_member(tenant: Uuid, role: &str) -> (Uuid, Uuid, String) {
 }
 
 /// A session for `user` with the given second-factor state, as the cookie header value.
-fn cookie_for(user: Uuid, auth: session::SessionAuth) -> String {
-    let (jwt, _, _) = session::issue_session(JWT_SECRET, 3600, user, auth).unwrap();
-    format!("__Host-app_session={jwt}")
+async fn cookie_for(pool: &sqlx::PgPool, user: Uuid, auth: session::SessionAuth) -> String {
+    let issued = sessions::start(
+        pool,
+        keys::keys_for(&config::Environment::Test),
+        user,
+        auth,
+        &sessions::ClientMeta::default(),
+    )
+    .await
+    .unwrap();
+    format!("__Host-app_session={}", issued.access_token)
 }
 
-fn password_only(user: Uuid) -> String {
-    cookie_for(user, session::SessionAuth::password())
+async fn password_only(pool: &sqlx::PgPool, user: Uuid) -> String {
+    cookie_for(pool, user, session::SessionAuth::password()).await
 }
 
-fn fresh(user: Uuid) -> String {
-    cookie_for(user, session::SessionAuth::second_factor(session::AMR_OTP))
+async fn fresh(pool: &sqlx::PgPool, user: Uuid) -> String {
+    cookie_for(
+        pool,
+        user,
+        session::SessionAuth::second_factor(session::AMR_OTP),
+    )
+    .await
 }
 
 /// A second factor that was proven, but more than five minutes ago.
-fn stale(user: Uuid) -> String {
+async fn stale(pool: &sqlx::PgPool, user: Uuid) -> String {
     cookie_for(
+        pool,
         user,
         session::SessionAuth {
             amr: vec!["pwd".into(), "otp".into()],
             mfa_at: Some(chrono::Utc::now().timestamp() - 400),
         },
     )
+    .await
 }
 
 fn tenant_get(uri: &str, tenant: Uuid, cookie: &str) -> Request<Body> {
@@ -416,10 +428,10 @@ async fn enrol(app: &axum::Router, user: Uuid) -> Vec<u8> {
 
 #[tokio::test]
 async fn a_session_without_a_second_factor_is_held_at_the_door_when_mfa_is_required() {
-    let (_pool, app, _lock) = setup!();
+    let (pool, app, _lock) = setup!();
     let tenant = seed_tenant().await;
     let (user, _, _) = seed_member(tenant, "owner").await;
-    let cookie = password_only(user);
+    let cookie = password_only(&pool, user).await;
 
     // Tenant routes are refused with the code a client looks for.
     let blocked = send(&app, tenant_get("/api/v1/tenant/members", tenant, &cookie)).await;
@@ -497,7 +509,7 @@ async fn a_session_without_a_second_factor_is_held_at_the_door_when_mfa_is_requi
 
 #[tokio::test]
 async fn platform_routes_need_a_second_factor_too() {
-    let (_pool, app, _lock) = setup!();
+    let (pool, app, _lock) = setup!();
     let (staff, _) = seed_user().await;
     sqlx::query("UPDATE users SET platform_role = 'super_admin' WHERE id = $1")
         .bind(staff)
@@ -510,7 +522,7 @@ async fn platform_routes_need_a_second_factor_too() {
             Request::get("/api/v1/platform/tenants")
                 .body(Body::empty())
                 .unwrap(),
-            &password_only(staff),
+            &password_only(&pool, staff).await,
         ),
     )
     .await;
@@ -522,7 +534,7 @@ async fn platform_routes_need_a_second_factor_too() {
             Request::get("/api/v1/platform/tenants")
                 .body(Body::empty())
                 .unwrap(),
-            &fresh(staff),
+            &fresh(&pool, staff).await,
         ),
     )
     .await;
@@ -534,12 +546,16 @@ async fn nothing_is_enforced_when_mfa_is_not_required() {
     let Some(pool) = get_pool().await else { return };
     let _serial = DB_LOCK.lock().await;
     reset().await;
-    let app = router::app(state(pool, test_config())); // auth_mfa_required: false
+    let app = router::app(state(pool.clone(), test_config())); // auth_mfa_required: false
     let tenant = seed_tenant().await;
     let (user, _, _) = seed_member(tenant, "owner").await;
     let ok = send(
         &app,
-        tenant_get("/api/v1/tenant/members", tenant, &password_only(user)),
+        tenant_get(
+            "/api/v1/tenant/members",
+            tenant,
+            &password_only(&pool, user).await,
+        ),
     )
     .await;
     assert_eq!(ok.status(), StatusCode::OK);
@@ -549,7 +565,7 @@ async fn nothing_is_enforced_when_mfa_is_not_required() {
             Request::get("/api/v1/auth/mfa/status")
                 .body(Body::empty())
                 .unwrap(),
-            &password_only(user),
+            &password_only(&pool, user).await,
         ),
     )
     .await;
@@ -558,12 +574,12 @@ async fn nothing_is_enforced_when_mfa_is_not_required() {
 
 #[tokio::test]
 async fn sensitive_actions_need_a_fresh_code_and_a_step_up_unlocks_them() {
-    let (_pool, app, _lock) = setup!();
+    let (pool, app, _lock) = setup!();
     let tenant = seed_tenant().await;
     let (owner, _, _) = seed_member(tenant, "owner").await;
     let (_member, member_membership, _) = seed_member(tenant, "agent").await;
     let secret = enrol(&app, owner).await;
-    let cookie = stale(owner);
+    let cookie = stale(&pool, owner).await;
 
     // Reads are fine; secret changes and role changes are held for a fresh code.
     assert_eq!(
@@ -643,9 +659,8 @@ async fn sensitive_actions_need_a_fresh_code_and_a_step_up_unlocks_them() {
         "__Host-app_session={}",
         cookie_value(&up, "__Host-app_session").unwrap()
     );
-    let claims = session::validate_session_token(
+    let claims = session::validate_access_token(
         identity::keys::keys_for(&config::Environment::Test),
-        JWT_SECRET,
         fresh_cookie.trim_start_matches("__Host-app_session="),
     )
     .unwrap();
@@ -680,7 +695,7 @@ async fn sensitive_actions_need_a_fresh_code_and_a_step_up_unlocks_them() {
 
 #[tokio::test]
 async fn stepping_up_needs_a_session_and_exactly_one_credential() {
-    let (_pool, app, _lock) = setup!();
+    let (pool, app, _lock) = setup!();
     let none = send(
         &app,
         json_request(
@@ -696,7 +711,7 @@ async fn stepping_up_needs_a_session_and_exactly_one_credential() {
         &app,
         with_cookie(
             json_request(Method::POST, "/api/v1/auth/mfa/step-up", json!({})),
-            &password_only(user),
+            &password_only(&pool, user).await,
         ),
     )
     .await;
@@ -707,7 +722,7 @@ async fn stepping_up_needs_a_session_and_exactly_one_credential() {
 
 #[tokio::test]
 async fn recovery_codes_can_be_replaced_after_a_step_up() {
-    let (_pool, app, _lock) = setup!();
+    let (pool, app, _lock) = setup!();
     let (user, email) = seed_user().await;
     enrol(&app, user).await;
     let old: Vec<String> =
@@ -722,7 +737,7 @@ async fn recovery_codes_can_be_replaced_after_a_step_up() {
         &app,
         with_cookie(
             json_request(Method::POST, "/api/v1/auth/mfa/recovery-codes", json!({})),
-            &stale(user),
+            &stale(&pool, user).await,
         ),
     )
     .await;
@@ -733,7 +748,7 @@ async fn recovery_codes_can_be_replaced_after_a_step_up() {
         &app,
         with_cookie(
             json_request(Method::POST, "/api/v1/auth/mfa/recovery-codes", json!({})),
-            &fresh(user),
+            &fresh(&pool, user).await,
         ),
     )
     .await;
@@ -786,14 +801,6 @@ async fn a_tenant_owner_resets_a_members_factor_and_ends_their_sessions() {
     .unwrap();
     let access_cookie = format!("{}={}", session::SESSION_COOKIE_NAME, issued.access_token);
     let refresh_cookie = format!("{}={}", session::REFRESH_COOKIE_NAME, issued.refresh_token);
-    let (legacy_jwt, _, _) = session::issue_session(
-        JWT_SECRET,
-        3600,
-        member,
-        session::SessionAuth::second_factor(session::AMR_OTP),
-    )
-    .unwrap();
-    let legacy_cookie = format!("{}={legacy_jwt}", session::LEGACY_SESSION_COOKIE_NAME);
     let me = |cookie: &str| {
         with_cookie(
             Request::get("/api/v1/me").body(Body::empty()).unwrap(),
@@ -804,19 +811,15 @@ async fn a_tenant_owner_resets_a_members_factor_and_ends_their_sessions() {
         send(&app, me(&access_cookie)).await.status(),
         StatusCode::OK
     );
-    assert_eq!(
-        send(&app, me(&legacy_cookie)).await.status(),
-        StatusCode::OK
-    );
 
     let url = format!("/api/v1/tenant/members/{member_membership}/mfa/reset");
     let reset = |cookie: &str| tenant_json(Method::POST, &url, tenant, cookie, json!({}));
 
     // Needs a fresh code from the owner first.
-    let held = send(&app, reset(&stale(owner))).await;
+    let held = send(&app, reset(&stale(&pool, owner).await)).await;
     assert_eq!(held.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(error_code(held).await, "mfa_step_up_required");
-    let done = send(&app, reset(&fresh(owner))).await;
+    let done = send(&app, reset(&fresh(&pool, owner).await)).await;
     assert_eq!(done.status(), StatusCode::NO_CONTENT);
 
     // The factor and codes are gone, the member's sessions stopped, and it is audited.
@@ -854,11 +857,6 @@ async fn a_tenant_owner_resets_a_members_factor_and_ends_their_sessions() {
     .await
     .unwrap();
     assert_eq!(revoke_reason.as_deref(), Some(sessions::reason::MFA_RESET));
-    assert_eq!(
-        send(&app, me(&legacy_cookie)).await.status(),
-        StatusCode::UNAUTHORIZED,
-        "the cutover also rejects a rowless HS256 session"
-    );
     let row: (Uuid, String, Value) = sqlx::query_as(
         "SELECT actor_user_id, resource_id, details FROM audit_logs WHERE action = 'auth.mfa_reset'",
     )
@@ -869,9 +867,7 @@ async fn a_tenant_owner_resets_a_members_factor_and_ends_their_sessions() {
     assert_eq!(row.1, member.to_string());
     assert_eq!(row.2["by"], "tenant");
 
-    // The member signs in with a password again (a second later: a session from the second of the
-    // reset is one the reset ends) and is held until they set a factor up.
-    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    // The member signs in again and is held until they set a factor up.
     let login = send(
         &app,
         json_request(
@@ -892,7 +888,7 @@ async fn a_tenant_owner_resets_a_members_factor_and_ends_their_sessions() {
 
 #[tokio::test]
 async fn a_tenant_cannot_reset_a_user_other_workspaces_or_platform_depend_on() {
-    let (_pool, app, _lock) = setup!();
+    let (pool, app, _lock) = setup!();
     let tenant = seed_tenant().await;
     let other_tenant = seed_tenant().await;
     let (owner, owner_membership, _) = seed_member(tenant, "owner").await;
@@ -927,12 +923,12 @@ async fn a_tenant_cannot_reset_a_user_other_workspaces_or_platform_depend_on() {
     };
     // A user who also belongs to another workspace, and platform staff: refused.
     for (name, membership) in [("shared", shared_membership), ("staff", staff_membership)] {
-        let r = send(&app, attempt(membership, &fresh(owner))).await;
+        let r = send(&app, attempt(membership, &fresh(&pool, owner).await)).await;
         assert_eq!(r.status(), StatusCode::FORBIDDEN, "{name}");
     }
     // Your own: refused. Someone who is not an owner: refused. An unknown member: not found.
     assert_eq!(
-        send(&app, attempt(owner_membership, &fresh(owner)))
+        send(&app, attempt(owner_membership, &fresh(&pool, owner).await))
             .await
             .status(),
         StatusCode::UNPROCESSABLE_ENTITY
@@ -946,13 +942,16 @@ async fn a_tenant_cannot_reset_a_user_other_workspaces_or_platform_depend_on() {
         (id, 0, 0)
     };
     assert_eq!(
-        send(&app, attempt(shared_membership, &fresh(admin_user)))
-            .await
-            .status(),
+        send(
+            &app,
+            attempt(shared_membership, &fresh(&pool, admin_user).await)
+        )
+        .await
+        .status(),
         StatusCode::FORBIDDEN
     );
     assert_eq!(
-        send(&app, attempt(Uuid::new_v4(), &fresh(owner)))
+        send(&app, attempt(Uuid::new_v4(), &fresh(&pool, owner).await))
             .await
             .status(),
         StatusCode::NOT_FOUND
@@ -970,7 +969,7 @@ async fn a_tenant_cannot_reset_a_user_other_workspaces_or_platform_depend_on() {
 
 #[tokio::test]
 async fn a_platform_administrator_resets_any_users_factor() {
-    let (_pool, app, _lock) = setup!();
+    let (pool, app, _lock) = setup!();
     let tenant = seed_tenant().await;
     let (target, _, _) = seed_member(tenant, "owner").await;
     enrol(&app, target).await;
@@ -986,12 +985,16 @@ async fn a_platform_administrator_resets_any_users_factor() {
 
     // A tenant owner has no say here.
     assert_eq!(
-        send(&app, post(&url, &fresh(target))).await.status(),
+        send(&app, post(&url, &fresh(&pool, target).await))
+            .await
+            .status(),
         StatusCode::FORBIDDEN
     );
     // The administrator needs a fresh code; you cannot reset yourself; unknown users are not found.
     assert_eq!(
-        send(&app, post(&url, &stale(admin))).await.status(),
+        send(&app, post(&url, &stale(&pool, admin).await))
+            .await
+            .status(),
         StatusCode::UNAUTHORIZED
     );
     assert_eq!(
@@ -999,7 +1002,7 @@ async fn a_platform_administrator_resets_any_users_factor() {
             &app,
             post(
                 &format!("/api/v1/platform/users/{admin}/mfa/reset"),
-                &fresh(admin)
+                &fresh(&pool, admin).await
             )
         )
         .await
@@ -1011,7 +1014,7 @@ async fn a_platform_administrator_resets_any_users_factor() {
             &app,
             post(
                 &format!("/api/v1/platform/users/{}/mfa/reset", Uuid::new_v4()),
-                &fresh(admin)
+                &fresh(&pool, admin).await
             )
         )
         .await
@@ -1019,7 +1022,9 @@ async fn a_platform_administrator_resets_any_users_factor() {
         StatusCode::NOT_FOUND
     );
     assert_eq!(
-        send(&app, post(&url, &fresh(admin))).await.status(),
+        send(&app, post(&url, &fresh(&pool, admin).await))
+            .await
+            .status(),
         StatusCode::NO_CONTENT
     );
     let factors: i64 = sqlx::query_scalar("SELECT count(*) FROM mfa_factors WHERE user_id = $1")

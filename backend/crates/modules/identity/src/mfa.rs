@@ -506,18 +506,12 @@ pub async fn reset(
         .await?
         .rows_affected()
         > 0;
-    sqlx::query("UPDATE users SET sessions_valid_after = now() WHERE id = $1")
-        .bind(target_user_id)
-        .execute(&mut *tx)
-        .await?;
-    // `sessions_valid_after` ends the HS256 sessions of the cutover window; the others have rows.
-    sqlx::query(
-        "UPDATE auth_sessions SET revoked_at = now(), revoke_reason = $2 \
-         WHERE user_id = $1 AND revoked_at IS NULL",
+    crate::sessions::revoke_user_sessions_in(
+        &mut tx,
+        target_user_id,
+        crate::sessions::reason::MFA_RESET,
+        None,
     )
-    .bind(target_user_id)
-    .bind(crate::sessions::reason::MFA_RESET)
-    .execute(&mut *tx)
     .await?;
     tx.commit().await?;
 

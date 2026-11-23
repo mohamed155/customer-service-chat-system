@@ -19,8 +19,6 @@ fn test_config(environment: Environment) -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment,
@@ -113,21 +111,9 @@ fn authenticated_request(
     method: Method,
     user_id: Uuid,
     tenant_id: Option<Uuid>,
-    environment: Environment,
 ) -> Request<Body> {
     let mut builder = Request::builder().uri(uri).method(method);
-    if environment == Environment::Production {
-        let config = test_config(environment.clone());
-        let (token, _, _) = identity::session::issue_token(
-            &config.auth_jwt_secret,
-            config.auth_session_ttl_seconds,
-            user_id,
-        )
-        .unwrap();
-        builder = builder.header("cookie", format!("app_session={token}"));
-    } else {
-        builder = builder.header("X-Dev-User-Id", user_id.to_string());
-    }
+    builder = builder.header("X-Dev-User-Id", user_id.to_string());
     if let Some(tenant_id) = tenant_id {
         builder = builder.header("X-Tenant-ID", tenant_id.to_string());
     }
@@ -237,7 +223,6 @@ async fn tenant_isolation_tenant_a_does_not_see_tenant_b_rows() {
             Method::GET,
             admin,
             Some(tenant_a),
-            Environment::Test,
         ),
     )
     .await;
@@ -291,7 +276,6 @@ async fn platform_level_rows_are_excluded_from_tenant_endpoint() {
             Method::GET,
             admin,
             Some(tenant),
-            Environment::Test,
         ),
     )
     .await;
@@ -342,7 +326,6 @@ async fn ordering_is_newest_first() {
             Method::GET,
             admin,
             Some(tenant),
-            Environment::Test,
         ),
     )
     .await;
@@ -387,7 +370,6 @@ async fn cursor_pagination_returns_all_pages() {
                 Method::GET,
                 admin,
                 Some(tenant),
-                Environment::Test,
             ),
         )
         .await;
@@ -410,7 +392,7 @@ async fn cursor_pagination_returns_all_pages() {
         let response = send(
             pool.clone(),
             Environment::Test,
-            authenticated_request(&uri, Method::GET, admin, Some(tenant), Environment::Test),
+            authenticated_request(&uri, Method::GET, admin, Some(tenant)),
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
@@ -475,7 +457,6 @@ async fn category_filter_returns_only_matching_rows() {
             Method::GET,
             admin,
             Some(tenant),
-            Environment::Test,
         ),
     )
     .await;
@@ -515,7 +496,6 @@ async fn system_actor_returns_kind_system() {
             Method::GET,
             admin,
             Some(tenant),
-            Environment::Test,
         ),
     )
     .await;
@@ -561,7 +541,6 @@ async fn deleted_actor_has_deleted_flag() {
             Method::GET,
             admin,
             Some(tenant),
-            Environment::Test,
         ),
     )
     .await;
@@ -601,7 +580,6 @@ async fn platform_staff_actor_has_is_platform_staff_flag() {
             Method::GET,
             admin,
             Some(tenant),
-            Environment::Test,
         ),
     )
     .await;
@@ -626,7 +604,6 @@ async fn invalid_category_returns_422() {
             Method::GET,
             admin,
             Some(tenant),
-            Environment::Test,
         ),
     )
     .await;
@@ -648,7 +625,6 @@ async fn invalid_date_returns_422() {
             Method::GET,
             admin,
             Some(tenant),
-            Environment::Test,
         ),
     )
     .await;
@@ -670,7 +646,6 @@ async fn invalid_cursor_returns_422() {
             Method::GET,
             admin,
             Some(tenant),
-            Environment::Test,
         ),
     )
     .await;
@@ -790,7 +765,6 @@ async fn platform_user_sees_all_tenants_and_platform_rows() {
             Method::GET,
             platform_user,
             None,
-            Environment::Test,
         ),
     )
     .await;
@@ -856,7 +830,6 @@ async fn platform_filter_by_tenant_narrows_results() {
             Method::GET,
             platform_user,
             None,
-            Environment::Test,
         ),
     )
     .await;
@@ -882,13 +855,7 @@ async fn tenant_only_user_is_denied_platform_endpoint() {
     let response = send(
         pool.clone(),
         Environment::Test,
-        authenticated_request(
-            "/api/v1/platform/audit-logs",
-            Method::GET,
-            user_id,
-            None,
-            Environment::Test,
-        ),
+        authenticated_request("/api/v1/platform/audit-logs", Method::GET, user_id, None),
     )
     .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
@@ -904,13 +871,7 @@ async fn all_five_platform_roles_can_access_platform_audit() {
         let response = send(
             pool.clone(),
             Environment::Test,
-            authenticated_request(
-                "/api/v1/platform/audit-logs",
-                Method::GET,
-                user_id,
-                None,
-                Environment::Test,
-            ),
+            authenticated_request("/api/v1/platform/audit-logs", Method::GET, user_id, None),
         )
         .await;
         assert_eq!(
@@ -1135,13 +1096,7 @@ async fn performance_list_under_two_seconds() {
     let response = send(
         pool.clone(),
         Environment::Test,
-        authenticated_request(
-            &base(""),
-            Method::GET,
-            actor,
-            Some(tenant_id),
-            Environment::Test,
-        ),
+        authenticated_request(&base(""), Method::GET, actor, Some(tenant_id)),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1162,7 +1117,6 @@ async fn performance_list_under_two_seconds() {
             Method::GET,
             actor,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;
@@ -1184,7 +1138,7 @@ async fn performance_list_under_two_seconds() {
         let response = send(
             pool.clone(),
             Environment::Test,
-            authenticated_request(&uri, Method::GET, actor, Some(tenant_id), Environment::Test),
+            authenticated_request(&uri, Method::GET, actor, Some(tenant_id)),
         )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
@@ -1204,7 +1158,7 @@ async fn performance_list_under_two_seconds() {
     let response = send(
         pool.clone(),
         Environment::Test,
-        authenticated_request(&uri, Method::GET, actor, Some(tenant_id), Environment::Test),
+        authenticated_request(&uri, Method::GET, actor, Some(tenant_id)),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -1225,7 +1179,6 @@ async fn performance_list_under_two_seconds() {
             Method::GET,
             actor,
             Some(tenant_id),
-            Environment::Test,
         ),
     )
     .await;

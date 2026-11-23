@@ -2,6 +2,8 @@
 //! replay, lockout, recovery codes, the challenge cookie, rate limiting, audit and key shredding.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
+mod session_fixture;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -18,7 +20,6 @@ use uuid::Uuid;
 
 const TEST_ORIGIN: &str = "http://localhost:4200";
 const PASSWORD: &str = "correct-horse-battery-1";
-const JWT_SECRET: &str = "test-auth-jwt-secret-at-least-32-bytes";
 
 // Every test resets the same tables, so they take turns.
 static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -27,8 +28,6 @@ fn test_config() -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
@@ -102,7 +101,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 async fn reset() {
     db::testing::migrate().await;
     sqlx::query(
-        "TRUNCATE TABLE mfa_recovery_codes, mfa_factors, revoked_sessions, tenant_memberships, \
+        "TRUNCATE TABLE mfa_recovery_codes, mfa_factors, tenant_memberships, \
          tenants, users, audit_logs, secret_keks RESTART IDENTITY CASCADE",
     )
     .execute(&db::testing::owner_pool())
@@ -391,12 +390,9 @@ async fn enrolment_shows_the_secret_once_and_confirming_activates_the_factor() {
     .await;
     assert_eq!(confirm.status(), StatusCode::OK);
     let jwt = cookie_value(&confirm, "__Host-app_session").expect("a replacement session");
-    let claims = session::validate_session_token(
-        identity::keys::keys_for(&config::Environment::Test),
-        JWT_SECRET,
-        &jwt,
-    )
-    .unwrap();
+    let claims =
+        session::validate_access_token(identity::keys::keys_for(&config::Environment::Test), &jwt)
+            .unwrap();
     assert_eq!(claims.sub, user);
     assert_eq!(claims.amr, vec!["pwd", "otp"]);
     assert!(claims.second_factor_fresh(chrono::Utc::now().timestamp(), 300));
@@ -524,10 +520,12 @@ async fn a_user_with_no_password_cannot_start_enrolment() {
 
 #[tokio::test]
 async fn a_session_that_skipped_the_second_factor_stops_working_once_the_user_enrols() {
-    let (_pool, app, _lock) = setup!();
+    let (pool, app, _lock) = setup!();
     let (user, _email) = seed_user().await;
     // A password-only session, such as one stolen before the user enrolled.
-    let (old, _, _) = session::issue_token(JWT_SECRET, 600, user).unwrap();
+    let old = session_fixture::start(&pool, &config::Environment::Test, user)
+        .await
+        .access_token;
     let me = |jwt: &str| {
         with_cookie(
             Request::get("/api/v1/me").body(Body::empty()).unwrap(),
@@ -577,7 +575,9 @@ async fn a_session_that_skipped_the_second_factor_stops_working_once_the_user_en
         send(&app, me(&old)).await.status(),
         StatusCode::UNAUTHORIZED
     );
-    let (other, _, _) = session::issue_token(JWT_SECRET, 600, user).unwrap();
+    let other = session_fixture::start(&pool, &config::Environment::Test, user)
+        .await
+        .access_token;
     assert_eq!(
         send(&app, me(&other)).await.status(),
         StatusCode::UNAUTHORIZED
@@ -647,12 +647,9 @@ async fn sign_in_is_two_steps_and_the_session_records_the_second_factor() {
     let verify = send(&app, verify_request(&pending, json!({ "code": code }))).await;
     assert_eq!(verify.status(), StatusCode::OK);
     let jwt = cookie_value(&verify, "__Host-app_session").expect("a session");
-    let claims = session::validate_session_token(
-        identity::keys::keys_for(&config::Environment::Test),
-        JWT_SECRET,
-        &jwt,
-    )
-    .unwrap();
+    let claims =
+        session::validate_access_token(identity::keys::keys_for(&config::Environment::Test), &jwt)
+            .unwrap();
     assert_eq!(
         (claims.sub, claims.amr.clone()),
         (user, vec!["pwd".to_owned(), "otp".to_owned()])
@@ -890,9 +887,8 @@ async fn a_recovery_code_signs_in_once() {
     )
     .await;
     assert_eq!(first.status(), StatusCode::OK);
-    let claims = session::validate_session_token(
+    let claims = session::validate_access_token(
         identity::keys::keys_for(&config::Environment::Test),
-        JWT_SECRET,
         &cookie_value(&first, "__Host-app_session").unwrap(),
     )
     .unwrap();
@@ -984,19 +980,15 @@ async fn an_expired_or_foreign_challenge_is_refused() {
     let (user, _email, secret, _) = enrolled_user(&app).await;
     let code = totp::code_at(&secret, now() + 30, 6);
 
+    let keys = identity::keys::keys_for(&config::Environment::Test);
+    let (kid, key) = keys.signing().unwrap();
+    let (_, mut claims) = session::issue_pending(keys, user).unwrap();
     let past = chrono::Utc::now().timestamp() - 400;
-    let expired = jsonwebtoken::encode(
-        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
-        &session::PendingClaims {
-            sub: user,
-            jti: Uuid::new_v4(),
-            iat: past,
-            exp: past + 300,
-            aud: "mfa_pending".into(),
-        },
-        &jsonwebtoken::EncodingKey::from_secret(JWT_SECRET.as_bytes()).unwrap(),
-    )
-    .unwrap();
+    claims.iat = past;
+    claims.exp = past + 300;
+    let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::EdDSA);
+    header.kid = Some(kid.to_owned());
+    let expired = jsonwebtoken::encode(&header, &claims, key).unwrap();
     let r = send(
         &app,
         verify_request(
@@ -1008,7 +1000,8 @@ async fn an_expired_or_foreign_challenge_is_refused() {
     assert_eq!(r.status(), StatusCode::UNAUTHORIZED, "expired");
 
     let (foreign, _) =
-        session::issue_pending("another-secret-with-at-least-32-bytes!!", user).unwrap();
+        session::issue_pending(&identity::keys::KeySet::generate("foreign").unwrap(), user)
+            .unwrap();
     let r = send(
         &app,
         verify_request(
@@ -1020,8 +1013,32 @@ async fn an_expired_or_foreign_challenge_is_refused() {
     assert_eq!(
         r.status(),
         StatusCode::UNAUTHORIZED,
-        "signed with another secret"
+        "signed with a foreign key"
     );
+    let now = chrono::Utc::now().timestamp();
+    let legacy = jsonwebtoken::encode(
+        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+        &json!({
+            "sub": user, "jti": Uuid::new_v4(), "iat": now, "exp": now + 300,
+            "aud": "mfa_pending"
+        }),
+        &jsonwebtoken::EncodingKey::from_secret(b"test-auth-jwt-secret-at-least-32-bytes").unwrap(),
+    )
+    .unwrap();
+    let r = send(
+        &app,
+        verify_request(
+            &format!("app_mfa_pending={legacy}"),
+            json!({ "code": code }),
+        ),
+    )
+    .await;
+    assert_eq!(
+        r.status(),
+        StatusCode::UNAUTHORIZED,
+        "retired challenge format"
+    );
+
     let r = send(
         &app,
         verify_request("app_mfa_pending=not-a-token", json!({ "code": code })),
@@ -1032,7 +1049,7 @@ async fn an_expired_or_foreign_challenge_is_refused() {
 
 #[tokio::test]
 async fn a_challenge_is_not_a_session_and_a_session_is_not_a_challenge() {
-    let (_pool, app, _lock) = setup!();
+    let (pool, app, _lock) = setup!();
     let (user, email, secret, _) = enrolled_user(&app).await;
     let pending = password_step(&app, &email).await;
     let token = pending.trim_start_matches("app_mfa_pending=");
@@ -1048,7 +1065,9 @@ async fn a_challenge_is_not_a_session_and_a_session_is_not_a_challenge() {
     .await;
     assert_eq!(me.status(), StatusCode::UNAUTHORIZED);
     // A session in the challenge cookie completes nothing.
-    let (jwt, _, _) = session::issue_token(JWT_SECRET, 60, user).unwrap();
+    let jwt = session_fixture::start(&pool, &config::Environment::Test, user)
+        .await
+        .access_token;
     let code = totp::code_at(&secret, now() + 30, 6);
     let r = send(
         &app,
@@ -1074,13 +1093,9 @@ async fn a_user_without_a_factor_still_signs_in_with_a_password() {
     assert_eq!(login.status(), StatusCode::OK);
     let jwt = cookie_value(&login, "__Host-app_session").unwrap();
     assert_eq!(
-        session::validate_session_token(
-            identity::keys::keys_for(&config::Environment::Test),
-            JWT_SECRET,
-            &jwt
-        )
-        .unwrap()
-        .amr,
+        session::validate_access_token(identity::keys::keys_for(&config::Environment::Test), &jwt)
+            .unwrap()
+            .amr,
         vec!["pwd"]
     );
     // An unconfirmed enrolment does not change that.

@@ -152,7 +152,6 @@
         "users",
         "mfa_factors",
         "mfa_recovery_codes",
-        "revoked_sessions",
         "auth_sessions",
         "refresh_tokens"
       ]
@@ -285,7 +284,6 @@
     },
     "server": {
       "tenant_rate_limit_overrides": 1,
-      "revoked_sessions": 1,
       "ai_credentials": 2,
       "integration_secrets": 2,
       "integration_connections": 3,

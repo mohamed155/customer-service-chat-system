@@ -1,5 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, encode, Algorithm, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -12,17 +12,14 @@ pub struct SessionClaims {
     pub iat: i64,
     pub exp: i64,
     /// How the user authenticated (RFC 8176 values): `pwd` for the password, `otp` for an
-    /// authenticator code, `rcv` for a recovery code. Sessions issued before MFA have no `amr`;
-    /// they read as empty, which counts as "no second factor".
+    /// authenticator code, `rcv` for a recovery code.
     #[serde(default)]
     pub amr: Vec<String>,
     /// When the second factor was last proven (Unix seconds), for step-up checks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mfa_at: Option<i64>,
-    /// The session this token belongs to: the id of its `auth_sessions` row. Only EdDSA access
-    /// tokens have one; the HS256 tokens of the cutover window are tracked by `jti` instead.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sid: Option<Uuid>,
+    /// The id of the session's `auth_sessions` row.
+    pub sid: Uuid,
     /// Issuer, audience and kind (`tenant_user` or `platform_user`) of an EdDSA access token.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub iss: Option<String>,
@@ -76,58 +73,6 @@ impl SessionAuth {
     }
 }
 
-/// An HS256 token, as sessions were issued before EdDSA access tokens (MOH-93). Nothing in the
-/// server issues these any more; they are verified during the cutover window
-/// ([`legacy_hs256_accepted`]) and tests still mint them.
-///
-/// A session with a password alone (sign-up, invitation accept). Sign-in with a second factor uses
-/// [`issue_session`].
-pub fn issue_token(secret: &str, ttl: u64, user_id: Uuid) -> Result<(String, Uuid, DateTime<Utc>)> {
-    issue_session(secret, ttl, user_id, SessionAuth::password())
-}
-
-pub fn issue_session(
-    secret: &str,
-    ttl: u64,
-    user_id: Uuid,
-    auth: SessionAuth,
-) -> Result<(String, Uuid, DateTime<Utc>)> {
-    let issued_at = Utc::now();
-    let expires_at = issued_at + Duration::seconds(ttl as i64);
-    // uuid-v4-ok: session token ID: random so it reveals no time and can't be guessed from the clock
-    let jti = Uuid::new_v4();
-    let claims = SessionClaims {
-        sub: user_id,
-        jti,
-        iat: issued_at.timestamp(),
-        exp: expires_at.timestamp(),
-        amr: auth.amr,
-        mfa_at: auth.mfa_at,
-        sid: None,
-        iss: None,
-        aud: None,
-        typ: None,
-    };
-    let key = EncodingKey::from_secret(secret.as_bytes())?;
-    let jwt = encode(&Header::new(Algorithm::HS256), &claims, &key)?;
-
-    Ok((jwt, jti, expires_at))
-}
-
-pub fn validate_token(secret: &str, jwt: &str) -> Result<SessionClaims> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.leeway = 0;
-    validation.reject_tokens_expiring_in_less_than = 1;
-    validation.validate_exp = true;
-
-    let key = DecodingKey::from_secret(secret.as_bytes())?;
-    decode::<SessionClaims>(jwt, &key, &validation).map(|token| token.claims)
-}
-
-// ---------------------------------------------------------------------------
-// EdDSA access tokens (ADR-005 §2).
-// ---------------------------------------------------------------------------
-
 /// The `iss` and `aud` of every access token. Both are validated.
 pub const ISSUER: &str = "helix";
 pub const AUDIENCE: &str = "helix-dashboard";
@@ -158,22 +103,6 @@ pub fn access_ttl_seconds() -> u64 {
     })
 }
 
-/// Whether HS256 session tokens still sign people in: the cutover window after EdDSA tokens were
-/// introduced. On until `AUTH_ACCEPT_HS256` is `false`; the follow-up release removes the code.
-pub fn legacy_hs256_accepted() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| {
-        std::env::var("AUTH_ACCEPT_HS256")
-            .map(|v| {
-                !matches!(
-                    v.trim().to_ascii_lowercase().as_str(),
-                    "false" | "0" | "no" | "off"
-                )
-            })
-            .unwrap_or(true)
-    })
-}
-
 /// Signs an access token for session `sid`, with the key that signs now. `platform` selects the
 /// `typ` claim.
 pub fn issue_access_token(
@@ -184,9 +113,6 @@ pub fn issue_access_token(
     platform: bool,
     auth: SessionAuth,
 ) -> Result<(String, Uuid, DateTime<Utc>)> {
-    let (kid, key) = keys.signing().ok_or_else(|| {
-        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
-    })?;
     let issued_at = Utc::now();
     let expires_at = issued_at + Duration::seconds(ttl as i64);
     // uuid-v4-ok: access token ID: random so it reveals no time and can't be guessed from the clock
@@ -198,7 +124,7 @@ pub fn issue_access_token(
         exp: expires_at.timestamp(),
         amr: auth.amr,
         mfa_at: auth.mfa_at,
-        sid: Some(sid),
+        sid,
         iss: Some(ISSUER.to_owned()),
         aud: Some(AUDIENCE.to_owned()),
         typ: Some(
@@ -210,16 +136,39 @@ pub fn issue_access_token(
             .to_owned(),
         ),
     };
-    let mut header = Header::new(Algorithm::EdDSA);
-    header.kid = Some(kid.to_owned());
-    let jwt = encode(&header, &claims, key)?;
-    Ok((jwt, jti, expires_at))
+    Ok((sign(keys, &claims)?, jti, expires_at))
 }
 
 /// Verifies an EdDSA access token against `keys`. Only `alg = EdDSA` with a known `kid` is
 /// accepted, so `none` and the HMAC algorithms can't be used to forge one (algorithm confusion).
 /// `iss`, `aud`, `exp`, `sid` and `typ` are all required and checked, with no leeway.
 pub fn validate_access_token(keys: &crate::keys::KeySet, jwt: &str) -> Result<SessionClaims> {
+    use jsonwebtoken::errors::{Error, ErrorKind};
+
+    let claims: SessionClaims = verify(keys, jwt, AUDIENCE)?;
+    if !matches!(
+        claims.typ.as_deref(),
+        Some(TYP_TENANT_USER | TYP_PLATFORM_USER)
+    ) {
+        return Err(Error::from(ErrorKind::InvalidToken));
+    }
+    Ok(claims)
+}
+
+fn sign(keys: &crate::keys::KeySet, claims: &impl Serialize) -> Result<String> {
+    let (kid, key) = keys.signing().ok_or_else(|| {
+        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
+    })?;
+    let mut header = Header::new(Algorithm::EdDSA);
+    header.kid = Some(kid.to_owned());
+    encode(&header, claims, key)
+}
+
+fn verify<T: serde::de::DeserializeOwned>(
+    keys: &crate::keys::KeySet,
+    jwt: &str,
+    audience: &str,
+) -> Result<T> {
     use jsonwebtoken::errors::{Error, ErrorKind};
 
     let header = jsonwebtoken::decode_header(jwt)?;
@@ -231,54 +180,22 @@ pub fn validate_access_token(keys: &crate::keys::KeySet, jwt: &str) -> Result<Se
         .as_deref()
         .and_then(|kid| keys.verifying(kid))
         .ok_or_else(|| Error::from(ErrorKind::InvalidKeyFormat))?;
-
     let mut validation = Validation::new(Algorithm::EdDSA);
     validation.leeway = 0;
     validation.reject_tokens_expiring_in_less_than = 1;
-    validation.validate_exp = true;
-    validation.set_audience(&[AUDIENCE]);
+    validation.set_audience(&[audience]);
     validation.set_issuer(&[ISSUER]);
     validation.set_required_spec_claims(&["exp", "sub", "iss", "aud"]);
-
-    let claims = decode::<SessionClaims>(jwt, key, &validation)?.claims;
-    let typed = matches!(
-        claims.typ.as_deref(),
-        Some(TYP_TENANT_USER | TYP_PLATFORM_USER)
-    );
-    if claims.sid.is_none() || !typed {
-        return Err(Error::from(ErrorKind::InvalidToken));
-    }
-    Ok(claims)
+    decode(jwt, key, &validation).map(|token| token.claims)
 }
 
-/// Verifies a session token of either kind: an EdDSA access token, or, while
-/// [`legacy_hs256_accepted`] holds and a secret is configured, an HS256 token.
-pub fn validate_session_token(
-    keys: &crate::keys::KeySet,
-    legacy_secret: &str,
-    jwt: &str,
-) -> Result<SessionClaims> {
-    match jsonwebtoken::decode_header(jwt)?.alg {
-        Algorithm::EdDSA => validate_access_token(keys, jwt),
-        Algorithm::HS256 if legacy_hs256_accepted() && !legacy_secret.is_empty() => {
-            validate_token(legacy_secret, jwt)
-        }
-        _ => Err(jsonwebtoken::errors::Error::from(
-            jsonwebtoken::errors::ErrorKind::InvalidAlgorithm,
-        )),
-    }
-}
-
-// ---------------------------------------------------------------------------
-// The sign-in challenge: proof of the password, waiting for the second factor.
-// ---------------------------------------------------------------------------
+// The sign-in challenge proves the password while the second step is pending.
 
 /// How long the second step may take after the password step.
 pub const PENDING_TTL_SECONDS: u64 = 300;
-/// The `aud` of a challenge token. A session token has no audience and the session check accepts
-/// none, so a challenge can never be used as a session; the challenge check requires this one, so a
-/// session can never be used as a challenge.
+/// Challenges carry a different audience and kind from access tokens.
 const PENDING_AUDIENCE: &str = "mfa_pending";
+const TYP_PENDING: &str = "mfa_pending";
 pub const PENDING_COOKIE_NAME: &str = "app_mfa_pending";
 /// The cookie is only sent to the second-step routes.
 pub const PENDING_COOKIE_PATH: &str = "/api/v1/auth/mfa";
@@ -290,9 +207,11 @@ pub struct PendingClaims {
     pub iat: i64,
     pub exp: i64,
     pub aud: String,
+    pub iss: String,
+    pub typ: String,
 }
 
-pub fn issue_pending(secret: &str, user_id: Uuid) -> Result<(String, PendingClaims)> {
+pub fn issue_pending(keys: &crate::keys::KeySet, user_id: Uuid) -> Result<(String, PendingClaims)> {
     let issued_at = Utc::now();
     let claims = PendingClaims {
         sub: user_id,
@@ -301,20 +220,20 @@ pub fn issue_pending(secret: &str, user_id: Uuid) -> Result<(String, PendingClai
         iat: issued_at.timestamp(),
         exp: (issued_at + Duration::seconds(PENDING_TTL_SECONDS as i64)).timestamp(),
         aud: PENDING_AUDIENCE.to_owned(),
+        iss: ISSUER.to_owned(),
+        typ: TYP_PENDING.to_owned(),
     };
-    let key = EncodingKey::from_secret(secret.as_bytes())?;
-    let jwt = encode(&Header::new(Algorithm::HS256), &claims, &key)?;
-    Ok((jwt, claims))
+    Ok((sign(keys, &claims)?, claims))
 }
 
-pub fn validate_pending(secret: &str, jwt: &str) -> Result<PendingClaims> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.leeway = 0;
-    validation.reject_tokens_expiring_in_less_than = 1;
-    validation.validate_exp = true;
-    validation.set_audience(&[PENDING_AUDIENCE]);
-    let key = DecodingKey::from_secret(secret.as_bytes())?;
-    decode::<PendingClaims>(jwt, &key, &validation).map(|token| token.claims)
+pub fn validate_pending(keys: &crate::keys::KeySet, jwt: &str) -> Result<PendingClaims> {
+    use jsonwebtoken::errors::{Error, ErrorKind};
+
+    let claims: PendingClaims = verify(keys, jwt, PENDING_AUDIENCE)?;
+    if claims.typ != TYP_PENDING {
+        return Err(Error::from(ErrorKind::InvalidToken));
+    }
+    Ok(claims)
 }
 
 pub fn build_pending_cookie(jwt: &str) -> String {
@@ -342,8 +261,6 @@ pub fn pending_token_from_cookie_header(cookie_header: &str) -> Option<&str> {
 /// The access token cookie. The `__Host-` prefix pins it to the exact host: a sibling subdomain
 /// can't set or overwrite it (ADR-005 §4).
 pub const SESSION_COOKIE_NAME: &str = "__Host-app_session";
-/// The access token cookie of the HS256 sessions of the cutover window.
-pub const LEGACY_SESSION_COOKIE_NAME: &str = "app_session";
 /// The refresh token cookie, sent only to the refresh endpoint.
 pub const REFRESH_COOKIE_NAME: &str = "__Secure-app_refresh";
 pub const REFRESH_COOKIE_PATH: &str = "/api/v1/auth/refresh";
@@ -360,12 +277,6 @@ fn session_cookie_string(value: &str, max_age: u64) -> String {
     format!(
         "{SESSION_COOKIE_NAME}={value}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={max_age}"
     )
-}
-
-/// Clears the cookie of an HS256 session, which keeps its old name and is still accepted during the
-/// cutover window.
-pub fn clear_legacy_session_cookie() -> String {
-    format!("{LEGACY_SESSION_COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0")
 }
 
 pub fn build_refresh_cookie(token: &str, max_age: u64) -> String {
@@ -389,11 +300,9 @@ fn cookie_value<'a>(cookie_header: &'a str, name: &str) -> Option<&'a str> {
     })
 }
 
-/// The access token in a `Cookie` header: the `__Host-` one, else (during the cutover window) the
-/// old HS256 one.
+/// The access token in a `Cookie` header.
 pub fn access_token_from_cookie_header(cookie_header: &str) -> Option<&str> {
     cookie_value(cookie_header, SESSION_COOKIE_NAME)
-        .or_else(|| cookie_value(cookie_header, LEGACY_SESSION_COOKIE_NAME))
 }
 
 /// The refresh token in a `Cookie` header.
@@ -406,149 +315,88 @@ mod tests {
     use super::*;
     use uuid::Uuid;
 
-    const SECRET: &str = "test-secret-with-at-least-thirty-two-bytes";
-    const OTHER_SECRET: &str = "other-secret-with-at-least-thirty-two-bytes";
-
-    #[test]
-    fn issue_and_validate_round_trip() {
-        let user_id = Uuid::new_v4();
-
-        let (jwt, jti, expires_at) = issue_token(SECRET, 60, user_id).unwrap();
-        let claims = validate_token(SECRET, &jwt).unwrap();
-
-        assert_eq!(claims.sub, user_id);
-        assert_eq!(claims.jti, jti);
-        assert_eq!(claims.exp, expires_at.timestamp());
-        assert!(claims.exp > claims.iat);
-    }
-
-    #[test]
-    fn expired_token_is_rejected() {
-        let (jwt, _, _) = issue_token(SECRET, 0, Uuid::new_v4()).unwrap();
-
-        assert!(validate_token(SECRET, &jwt).is_err());
-    }
-
-    #[test]
-    fn tampered_payload_is_rejected() {
-        let (jwt, _, _) = issue_token(SECRET, 60, Uuid::new_v4()).unwrap();
-        let mut parts: Vec<&str> = jwt.split('.').collect();
-        parts[1] = if parts[1] == "e30" { "e31" } else { "e30" };
-        let tampered = parts.join(".");
-
-        assert!(validate_token(SECRET, &tampered).is_err());
-    }
-
-    #[test]
-    fn wrong_secret_is_rejected() {
-        let (jwt, _, _) = issue_token(SECRET, 60, Uuid::new_v4()).unwrap();
-
-        assert!(validate_token(OTHER_SECRET, &jwt).is_err());
-    }
-
     #[test]
     fn password_sessions_have_no_second_factor_and_second_factor_sessions_do() {
-        let (jwt, _, _) = issue_token(SECRET, 60, Uuid::new_v4()).unwrap();
-        let claims = validate_token(SECRET, &jwt).unwrap();
+        let keys = KeySet::generate("k1").unwrap();
+        let (jwt, _, _) = access(&keys, 60, false);
+        let claims = validate_access_token(&keys, &jwt).unwrap();
         assert_eq!(claims.amr, vec!["pwd"]);
         assert!(!claims.has_second_factor());
         assert!(!claims.second_factor_fresh(Utc::now().timestamp(), 300));
 
-        let (jwt, _, _) = issue_session(
-            SECRET,
+        let (jwt, _, _) = issue_access_token(
+            &keys,
             60,
             Uuid::new_v4(),
+            Uuid::new_v4(),
+            false,
             SessionAuth::second_factor(AMR_OTP),
         )
         .unwrap();
-        let claims = validate_token(SECRET, &jwt).unwrap();
+        let claims = validate_access_token(&keys, &jwt).unwrap();
         assert_eq!(claims.amr, vec!["pwd", "otp"]);
         assert!(claims.has_second_factor());
         let now = Utc::now().timestamp();
         assert!(claims.second_factor_fresh(now, 300));
-        assert!(
-            !claims.second_factor_fresh(now + 301, 300),
-            "stale after the window"
-        );
-        assert!(
-            !claims.second_factor_fresh(now - 10, 300),
-            "not from the future"
-        );
+        assert!(!claims.second_factor_fresh(now + 301, 300));
+        assert!(!claims.second_factor_fresh(now - 10, 300));
     }
 
     #[test]
-    fn a_token_from_before_mfa_still_validates_and_counts_as_no_second_factor() {
-        // The claims a pre-MFA build wrote: no amr, no mfa_at.
-        #[derive(Serialize)]
-        struct Old {
-            sub: Uuid,
-            jti: Uuid,
-            iat: i64,
-            exp: i64,
-        }
-        let now = Utc::now().timestamp();
-        let jwt = encode(
-            &Header::new(Algorithm::HS256),
-            &Old {
-                sub: Uuid::new_v4(),
-                jti: Uuid::new_v4(),
-                iat: now,
-                exp: now + 60,
+    fn a_pending_token_has_its_own_audience_kind_and_lifetime() {
+        let keys = KeySet::generate("k1").unwrap();
+        let user = Uuid::new_v4();
+        let (jwt, issued) = issue_pending(&keys, user).unwrap();
+        let header = jsonwebtoken::decode_header(&jwt).unwrap();
+        assert_eq!(header.alg, Algorithm::EdDSA);
+        assert_eq!(header.kid.as_deref(), Some("k1"));
+        let claims = validate_pending(&keys, &jwt).unwrap();
+        assert_eq!(claims, issued);
+        assert_eq!(claims.sub, user);
+        assert_eq!(claims.exp - claims.iat, 300);
+        assert_eq!(claims.iss, "helix");
+        assert_eq!(claims.aud, "mfa_pending");
+        assert_eq!(claims.typ, "mfa_pending");
+        assert!(validate_access_token(&keys, &jwt).is_err());
+        assert!(validate_pending(&keys, &access(&keys, 60, false).0).is_err());
+    }
+
+    #[test]
+    fn pending_validation_rejects_expired_or_mismatched_claims() {
+        let keys = KeySet::generate("k1").unwrap();
+        let (_, claims) = issue_pending(&keys, Uuid::new_v4()).unwrap();
+        for invalid in [
+            PendingClaims {
+                exp: claims.iat - 1,
+                ..claims.clone()
             },
-            &EncodingKey::from_secret(SECRET.as_bytes()).unwrap(),
-        )
-        .unwrap();
-        let claims = validate_token(SECRET, &jwt).unwrap();
-        assert!(claims.amr.is_empty() && claims.mfa_at.is_none());
-        assert!(!claims.has_second_factor());
+            PendingClaims {
+                typ: TYP_TENANT_USER.into(),
+                ..claims.clone()
+            },
+            PendingClaims {
+                aud: AUDIENCE.into(),
+                ..claims.clone()
+            },
+            PendingClaims {
+                iss: "another-issuer".into(),
+                ..claims.clone()
+            },
+        ] {
+            assert!(validate_pending(&keys, &sign(&keys, &invalid).unwrap()).is_err());
+        }
     }
 
     #[test]
-    fn a_challenge_token_is_never_a_session_and_a_session_never_a_challenge() {
-        let user = Uuid::new_v4();
-        let (challenge, claims) = issue_pending(SECRET, user).unwrap();
-        assert_eq!(claims.exp - claims.iat, PENDING_TTL_SECONDS as i64);
-        assert_eq!(validate_pending(SECRET, &challenge).unwrap().sub, user);
-        // Put in the session cookie, it is refused: it carries an audience.
-        assert!(validate_token(SECRET, &challenge).is_err());
-
-        let (session, _, _) = issue_token(SECRET, 60, user).unwrap();
-        assert!(validate_pending(SECRET, &session).is_err());
-        // A challenge for another secret, or an expired one, is refused too.
-        assert!(validate_pending(OTHER_SECRET, &challenge).is_err());
-    }
-
-    /// An empty secret signs and verifies nothing: the gateway process runs with an empty
-    /// `auth_jwt_secret`, and a token "signed" with no key must never be accepted by anyone.
-    #[test]
-    fn an_empty_secret_issues_and_validates_nothing() {
-        let user = Uuid::new_v4();
-        assert!(issue_token("", 60, user).is_err());
-        assert!(issue_pending("", user).is_err());
-
-        let (session, _, _) = issue_token(SECRET, 60, user).unwrap();
-        let (challenge, _) = issue_pending(SECRET, user).unwrap();
-        assert!(validate_token("", &session).is_err());
-        assert!(validate_pending("", &challenge).is_err());
-    }
-
-    #[test]
-    fn an_expired_challenge_is_refused() {
-        let past = Utc::now().timestamp() - 400;
-        let claims = PendingClaims {
-            sub: Uuid::new_v4(),
-            jti: Uuid::new_v4(),
-            iat: past,
-            exp: past + PENDING_TTL_SECONDS as i64,
-            aud: PENDING_AUDIENCE.to_owned(),
-        };
-        let jwt = encode(
-            &Header::new(Algorithm::HS256),
-            &claims,
-            &EncodingKey::from_secret(SECRET.as_bytes()).unwrap(),
-        )
-        .unwrap();
-        assert!(validate_pending(SECRET, &jwt).is_err());
+    fn pending_validation_rejects_tampering_and_untrusted_signing_keys() {
+        let keys = KeySet::generate("k1").unwrap();
+        let (jwt, _) = issue_pending(&keys, Uuid::new_v4()).unwrap();
+        let mut parts: Vec<_> = jwt.split('.').collect();
+        parts[1] = "e30";
+        assert!(validate_pending(&keys, &parts.join(".")).is_err());
+        let other = KeySet::generate("k1").unwrap();
+        assert!(validate_pending(&other, &jwt).is_err());
+        assert!(issue_pending(&KeySet::empty(), Uuid::new_v4()).is_err());
     }
 
     #[test]
@@ -608,7 +456,7 @@ mod tests {
 
         let claims = validate_access_token(&keys, &jwt).unwrap();
         assert_eq!(claims.sub, user);
-        assert_eq!(claims.sid, Some(sid));
+        assert_eq!(claims.sid, sid);
         assert_eq!(claims.iss.as_deref(), Some(ISSUER));
         assert_eq!(claims.aud.as_deref(), Some(AUDIENCE));
         assert_eq!(claims.typ.as_deref(), Some(TYP_TENANT_USER));
@@ -647,6 +495,7 @@ mod tests {
     fn rotation_a_token_of_the_previous_key_verifies_until_that_key_is_dropped() {
         let old = KeySet::generate("old").unwrap();
         let (jwt, _, _) = access(&old, 600, false);
+        let (pending, _) = issue_pending(&old, Uuid::new_v4()).unwrap();
 
         // The set after rotation: a new key signs, the old public key still verifies.
         let old_public = old.jwks()["keys"][0]["x"].as_str().unwrap().to_owned();
@@ -668,6 +517,7 @@ mod tests {
             validate_access_token(&rotated, &jwt).is_ok(),
             "old token still verifies"
         );
+        assert!(validate_pending(&rotated, &pending).is_ok());
         let (fresh, _, _) = access(&rotated, 600, false);
         assert_eq!(
             jsonwebtoken::decode_header(&fresh).unwrap().kid.as_deref(),
@@ -681,6 +531,7 @@ mod tests {
         )
         .unwrap();
         assert!(validate_access_token(&only_new, &jwt).is_err());
+        assert!(validate_pending(&only_new, &pending).is_err());
     }
 
     #[test]
@@ -698,7 +549,7 @@ mod tests {
             exp: Utc::now().timestamp() + 600,
             amr: vec![],
             mfa_at: None,
-            sid: Some(Uuid::new_v4()),
+            sid: Uuid::new_v4(),
             iss: Some(ISSUER.into()),
             aud: Some(AUDIENCE.into()),
             typ: Some(TYP_TENANT_USER.into()),
@@ -708,18 +559,10 @@ mod tests {
         let forged = encode(
             &header,
             &claims,
-            &EncodingKey::from_secret(public.as_bytes()).unwrap(),
+            &jsonwebtoken::EncodingKey::from_secret(public.as_bytes()).unwrap(),
         )
         .unwrap();
         assert!(validate_access_token(&keys, &forged).is_err());
-        assert!(
-            validate_session_token(&keys, "", &forged).is_err(),
-            "no legacy secret, no HS256"
-        );
-        // With the legacy secret configured the HS256 path verifies the signature, which does not
-        // match, so the forgery still fails.
-        assert!(validate_session_token(&keys, SECRET, &forged).is_err());
-
         // `alg: none`.
         let none = format!(
             "{}.{}.",
@@ -727,7 +570,6 @@ mod tests {
             base64_url(serde_json::to_string(&claims).unwrap().as_bytes())
         );
         assert!(validate_access_token(&keys, &none).is_err());
-        assert!(validate_session_token(&keys, SECRET, &none).is_err());
     }
 
     fn base64_url(bytes: &[u8]) -> String {
@@ -746,7 +588,7 @@ mod tests {
             exp: Utc::now().timestamp() + 600,
             amr: vec![],
             mfa_at: None,
-            sid: Some(Uuid::new_v4()),
+            sid: Uuid::new_v4(),
             iss: Some(ISSUER.into()),
             aud: Some(AUDIENCE.into()),
             typ: Some(TYP_TENANT_USER.into()),
@@ -758,9 +600,9 @@ mod tests {
         };
         assert!(validate_access_token(&keys, &sign(&base)).is_ok());
 
-        let mut no_sid = base.clone();
-        no_sid.sid = None;
-        assert!(validate_access_token(&keys, &sign(&no_sid)).is_err());
+        let mut no_sid = serde_json::to_value(&base).unwrap();
+        no_sid.as_object_mut().unwrap().remove("sid");
+        assert!(validate_access_token(&keys, &super::sign(&keys, &no_sid).unwrap()).is_err());
         let mut other_aud = base.clone();
         other_aud.aud = Some("someone-else".into());
         assert!(validate_access_token(&keys, &sign(&other_aud)).is_err());
@@ -773,13 +615,6 @@ mod tests {
         let mut odd_typ = base;
         odd_typ.typ = Some("admin".into());
         assert!(validate_access_token(&keys, &sign(&odd_typ)).is_err());
-    }
-
-    #[test]
-    fn an_mfa_challenge_is_never_an_access_token() {
-        let keys = KeySet::generate("k1").unwrap();
-        let (challenge, _) = issue_pending(SECRET, Uuid::new_v4()).unwrap();
-        assert!(validate_session_token(&keys, SECRET, &challenge).is_err());
     }
 
     #[test]
@@ -800,16 +635,12 @@ mod tests {
     }
 
     #[test]
-    fn the_cookie_headers_are_read_by_name_with_the_new_name_first() {
+    fn only_current_cookie_names_are_read() {
         assert_eq!(
             access_token_from_cookie_header("a=b; __Host-app_session=new; app_session=old"),
             Some("new")
         );
-        assert_eq!(
-            access_token_from_cookie_header("app_session=old"),
-            Some("old"),
-            "an HS256 session of the cutover window"
-        );
+        assert_eq!(access_token_from_cookie_header("app_session=old"), None);
         assert_eq!(access_token_from_cookie_header("xapp_session=nope"), None);
         assert_eq!(access_token_from_cookie_header("__Host-app_session="), None);
         assert_eq!(

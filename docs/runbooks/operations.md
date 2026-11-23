@@ -191,8 +191,7 @@ Six common operational tasks for the AI Customer Service Platform.
 
 ## 4. Rotate a Credential
 
-This covers rotation of `AUTH_JWT_SECRET`,
-`APP_AI_KEY_ENCRYPTION_KEY`, `APP_INTEGRATION_SECRETS_KEY`, and S3
+This covers rotation of `APP_AI_KEY_ENCRYPTION_KEY`, `APP_INTEGRATION_SECRETS_KEY`, and S3
 credentials.
 
 ### Steps
@@ -201,8 +200,6 @@ credentials.
 
    ```bash
    # For keys requiring base64 of 32 bytes:
-   openssl rand -base64 32
-   # For AUTH_JWT_SECRET (also base64 of 32+ bytes):
    openssl rand -base64 32
    ```
 
@@ -220,14 +217,10 @@ credentials.
    (section 7); replacing one earlier makes the secrets still sealed under it
    unreadable. To rotate the key that protects tenant secrets going forward,
    rotate the root key (section 7), not these.
-5. **For `AUTH_JWT_SECRET`**: All existing sessions signed with the old secret
-   become invalid on restart. Coordinate rotation with a maintenance window.
-   Users will need to re-authenticate.
 
 ### Expected outcome
 
 - The application starts successfully with the new credential.
-- For JWT: existing sessions are invalidated; users sign in again.
 - For `APP_AI_KEY_ENCRYPTION_KEY` and `APP_INTEGRATION_SECRETS_KEY`: only safe
   after section 7 has moved every secret off them.
 
@@ -712,8 +705,8 @@ access-token lifetime (10 minutes by default).
 3. **Make it sign.** Once the release from step 2 has reached every process, deploy `[new, old]`.
    New tokens carry the new `kid`; tokens of the old key still verify.
 4. **Drop the old key** after at least one access-token lifetime (`AUTH_ACCESS_TTL_SECONDS`, 10
-   minutes by default; wait 15 to be safe): deploy `[new]`. A browser that still holds an old token
-   gets a `401`, refreshes with its refresh cookie, and carries on.
+   minutes by default; wait 15 to be safe). This also covers the five-minute MFA challenges. Deploy
+   `[new]`. A browser that still holds an old access token gets a `401` and refreshes.
 5. **Compromise:** skip the waiting and deploy `[new]` at step 3. Everyone is refused once, then
    signs in again by refreshing. If the refresh tokens may be exposed as well, end every session
    (run as the schema owner), which makes everybody sign in with a password:
@@ -738,7 +731,20 @@ instead; the base64url public key of a key is the `x` of `KeySet::jwks`.
   not 32 bytes). The old release keeps serving (`ops/deploy.sh` aborts on a readiness timeout).
 - **Many `401` after a deploy**: a process verifies with a key list that lacks the signing key of
   another. Roll the list back to the previous release's, then redo steps 2 and 3 in order.
-- **Turning off the HS256 window**: set `AUTH_ACCEPT_HS256=false` once `AUTH_SESSION_TTL_SECONDS`
-  (8 hours by default) has passed since the release that introduced EdDSA tokens: an HS256 token
-  issued just before it lives that long. Sessions still holding an HS256 token sign
-  in again once (the refresh cookie does not exist for them).
+- **An old session cookie remains after cutover**. The API ignores it. Anyone who only has that
+  cookie signs in again. The retired `AUTH_JWT_SECRET`, `AUTH_ACCEPT_HS256` and
+  `AUTH_SESSION_TTL_SECONDS` variables are ignored, including at startup.
+
+### Before you deploy the HS256 cutover
+
+Deploy migration 0080 only after PR #146 is fully rolled out and its 8-hour transition window
+has elapsed. Measure the window from the last instance that could issue an HS256 session if
+that instance remained live during the rollout.
+
+Schedule a maintenance window and deploy manually. The normal `ops/deploy.sh` sequence migrates
+while the previous API is live and can restart that API on readiness failure. Drain and stop all
+previous API processes before running migration 0080 as `app_owner`. Those processes still
+reference the retired table during session validation and MFA verification. Start the cutover
+release after the migration succeeds. Any MFA challenge already in flight from the previous release
+requires restarting sign-in. Restore a compatible database schema before restarting a previous
+release in a rollback.

@@ -1,4 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+
+mod session_fixture;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -18,8 +20,6 @@ fn test_config() -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: TEST_ENV,
@@ -112,22 +112,21 @@ async fn body_json(response: Response) -> serde_json::Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
-fn session_cookie(user_id: Uuid) -> String {
-    let config = test_config();
-    let (token, _, _) = identity::session::issue_token(
-        &config.auth_jwt_secret,
-        config.auth_session_ttl_seconds,
-        user_id,
-    )
-    .unwrap();
-    format!("app_session={token}")
+async fn session_cookie(pool: &sqlx::PgPool, user_id: Uuid) -> String {
+    let issued = session_fixture::start(pool, &TEST_ENV, user_id).await;
+    format!("__Host-app_session={}", issued.access_token)
 }
 
-fn authenticated_request(uri: &str, method: Method, user_id: Uuid) -> Request<Body> {
+async fn authenticated_request(
+    pool: &sqlx::PgPool,
+    uri: &str,
+    method: Method,
+    user_id: Uuid,
+) -> Request<Body> {
     Request::builder()
         .uri(uri)
         .method(method)
-        .header("cookie", session_cookie(user_id))
+        .header("cookie", session_cookie(pool, user_id).await)
         .body(Body::empty())
         .unwrap()
 }
@@ -222,12 +221,14 @@ async fn platform_ai_providers_failure_rate_and_verdict() {
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
+        pool.clone(),
         authenticated_request(
+            &pool,
             "/api/v1/platform/ai-providers?window=7d",
             Method::GET,
             user_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -269,12 +270,14 @@ async fn platform_ai_providers_degraded_verdict() {
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
+        pool.clone(),
         authenticated_request(
+            &pool,
             "/api/v1/platform/ai-providers?window=7d",
             Method::GET,
             user_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -314,12 +317,14 @@ async fn platform_ai_providers_categories_sum_to_failures() {
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
+        pool.clone(),
         authenticated_request(
+            &pool,
             "/api/v1/platform/ai-providers?window=7d",
             Method::GET,
             user_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -354,12 +359,14 @@ async fn platform_ai_providers_insufficient_data_and_no_activity() {
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
+        pool.clone(),
         authenticated_request(
+            &pool,
             "/api/v1/platform/ai-providers?window=7d",
             Method::GET,
             user_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -405,12 +412,14 @@ async fn platform_ai_providers_recent_failures_capped_at_50() {
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
+        pool.clone(),
         authenticated_request(
+            &pool,
             "/api/v1/platform/ai-providers?window=7d",
             Method::GET,
             user_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -426,12 +435,14 @@ async fn platform_ai_providers_invalid_window_returns_422() {
     setup(&pool).await;
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
+        pool.clone(),
         authenticated_request(
+            &pool,
             "/api/v1/platform/ai-providers?window=90d",
             Method::GET,
             user_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
@@ -448,10 +459,12 @@ async fn platform_ai_providers_valid_windows_200() {
         let resp = send(
             pool.clone(),
             authenticated_request(
+                &pool,
                 &format!("/api/v1/platform/ai-providers?window={w}"),
                 Method::GET,
                 user_id,
-            ),
+            )
+            .await,
         )
         .await;
         assert_eq!(resp.status(), StatusCode::OK, "window={w} should be 200");
@@ -478,12 +491,14 @@ async fn platform_ai_providers_no_sensitive_content_in_response() {
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
+        pool.clone(),
         authenticated_request(
+            &pool,
             "/api/v1/platform/ai-providers?window=7d",
             Method::GET,
             user_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);

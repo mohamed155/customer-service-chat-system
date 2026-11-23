@@ -1,4 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+
+mod session_fixture;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -35,11 +37,10 @@ pub const TEST_ORIGIN: &str = "http://localhost:4200";
 
 /// Build an `AppConfig` with test-friendly defaults.
 pub fn test_config() -> config::AppConfig {
+    session_fixture::configure_keys();
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
@@ -234,10 +235,13 @@ fn strip_request_id(mut body: serde_json::Value) -> serde_json::Value {
     body
 }
 
-fn session_cookie_for(config: &config::AppConfig, user_id: uuid::Uuid, ttl: u64) -> String {
-    let (jwt, _, _) =
-        identity::session::issue_token(&config.auth_jwt_secret, ttl, user_id).unwrap();
-    format!("app_session={jwt}")
+async fn session_cookie_for(
+    pool: &sqlx::PgPool,
+    config: &config::AppConfig,
+    user_id: uuid::Uuid,
+) -> String {
+    let issued = session_fixture::start(pool, &config.environment, user_id).await;
+    format!("__Host-app_session={}", issued.access_token)
 }
 
 fn get_me_request(cookie: &str) -> Request<Body> {
@@ -529,15 +533,25 @@ mod tests {
         let email = unique_test_email();
         let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
 
-        let expired_cookie = session_cookie_for(&config, user_id, 0);
-        let valid_cookie = session_cookie_for(&config, user_id, 28_800);
+        let issued = session_fixture::start(&pool, &config.environment, user_id).await;
+        let (expired, _, _) = identity::session::issue_access_token(
+            identity::keys::keys_for(&config.environment),
+            0,
+            user_id,
+            issued.sid,
+            false,
+            identity::session::SessionAuth::password(),
+        )
+        .unwrap();
+        let expired_cookie = format!("__Host-app_session={expired}");
+        let valid_cookie = session_cookie_for(&pool, &config, user_id).await;
         let mut tampered_cookie = valid_cookie.clone();
         tampered_cookie.push('x');
 
         let requests = [
             get_me_request(&expired_cookie),
             get_me_request(&tampered_cookie),
-            get_me_request("app_session=not-a-jwt"),
+            get_me_request("__Host-app_session=not-a-jwt"),
         ];
 
         for request in requests {
@@ -556,7 +570,7 @@ mod tests {
         let config = test_config();
         let email = unique_test_email();
         let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
-        let cookie = session_cookie_for(&config, user_id, 28_800);
+        let cookie = session_cookie_for(&pool, &config, user_id).await;
 
         sqlx::query("UPDATE users SET deleted_at = now() WHERE id = $1")
             .bind(user_id)
@@ -581,7 +595,7 @@ mod tests {
 
         let email = unique_test_email();
         let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
-        let cookie = session_cookie_for(&config, user_id, 28_800);
+        let cookie = session_cookie_for(&pool, &config, user_id).await;
 
         let dev_header_res = send_request_with_config(
             pool.clone(),
@@ -634,7 +648,7 @@ mod tests {
     async fn csrf_session(pool: &sqlx::PgPool, config: &config::AppConfig) -> String {
         let email = unique_test_email();
         let user_id = seed_user_with_password(pool, &email, None, "Passw0rd!").await;
-        session_cookie_for(config, user_id, 28_800)
+        session_cookie_for(pool, config, user_id).await
     }
 
     #[tokio::test]
@@ -1060,6 +1074,7 @@ mod tests {
         let email = unique_test_email();
         let user_id = seed_user_with_password(&pool, &email, None, "Passw0rd!").await;
 
+        let cookie = session_cookie_for(&pool, &test_config(), user_id).await;
         let logout = send_request(
             pool.clone(),
             Request::builder()
@@ -1081,14 +1096,19 @@ mod tests {
             .expect("logout should clear cookie");
         assert!(clear_cookie.contains("Max-Age=0"));
 
-        let revoked_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM revoked_sessions WHERE user_id = $1")
-                .bind(user_id)
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+        let revoked_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM auth_sessions WHERE user_id = $1 AND revoked_at IS NOT NULL",
+        )
+        .bind(user_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
 
         assert_eq!(revoked_count, 0);
+        assert_eq!(
+            send_request(pool, get_me_request(&cookie)).await.status(),
+            200
+        );
     }
 
     #[tokio::test]

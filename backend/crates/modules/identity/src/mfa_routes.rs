@@ -445,19 +445,3 @@ pub fn append_cookies(response: &mut Response, cookies: Vec<String>) {
 async fn end_replaced_session(pool: &PgPool, old: &session::SessionClaims) -> sqlx::Result<()> {
     crate::sessions::revoke_claims(pool, old, crate::sessions::reason::REPLACED).await
 }
-
-/// Stop a session id from working again (logout does the same).
-pub async fn revoke(pool: &PgPool, user_id: uuid::Uuid, jti: uuid::Uuid, exp: i64) {
-    let result = sqlx::query(
-        "INSERT INTO revoked_sessions (jti, user_id, expires_at) VALUES ($1, $2, $3) \
-         ON CONFLICT (jti) DO NOTHING",
-    )
-    .bind(jti)
-    .bind(user_id)
-    .bind(chrono::DateTime::from_timestamp(exp, 0).unwrap_or_else(chrono::Utc::now))
-    .execute(pool)
-    .await;
-    if let Err(error) = result {
-        tracing::error!(%error, "could not revoke a session id");
-    }
-}

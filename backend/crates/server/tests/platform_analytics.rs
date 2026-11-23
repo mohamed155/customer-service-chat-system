@@ -1,4 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+
+mod session_fixture;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -18,8 +20,6 @@ fn test_config() -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: TEST_ENV,
@@ -131,31 +131,36 @@ async fn body_json(response: Response) -> serde_json::Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
-fn session_cookie(user_id: Uuid) -> String {
-    let config = test_config();
-    let (token, _, _) = identity::session::issue_token(
-        &config.auth_jwt_secret,
-        config.auth_session_ttl_seconds,
-        user_id,
-    )
-    .unwrap();
-    format!("app_session={token}")
+async fn session_cookie(pool: &sqlx::PgPool, user_id: Uuid) -> String {
+    let issued = session_fixture::start(pool, &TEST_ENV, user_id).await;
+    format!("__Host-app_session={}", issued.access_token)
 }
 
-fn authenticated_request(uri: &str, method: Method, user_id: Uuid) -> Request<Body> {
+async fn authenticated_request(
+    pool: &sqlx::PgPool,
+    uri: &str,
+    method: Method,
+    user_id: Uuid,
+) -> Request<Body> {
     Request::builder()
         .uri(uri)
         .method(method)
-        .header("cookie", session_cookie(user_id))
+        .header("cookie", session_cookie(pool, user_id).await)
         .body(Body::empty())
         .unwrap()
 }
 
-fn tenant_request(uri: &str, method: Method, user_id: Uuid, tenant_id: Uuid) -> Request<Body> {
+async fn tenant_request(
+    pool: &sqlx::PgPool,
+    uri: &str,
+    method: Method,
+    user_id: Uuid,
+    tenant_id: Uuid,
+) -> Request<Body> {
     Request::builder()
         .uri(uri)
         .method(method)
-        .header("cookie", session_cookie(user_id))
+        .header("cookie", session_cookie(pool, user_id).await)
         .header("X-Tenant-ID", tenant_id.to_string())
         .body(Body::empty())
         .unwrap()
@@ -263,8 +268,14 @@ async fn platform_analytics_summary_includes_all_tenants_excluding_soft_deleted(
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
-        authenticated_request("/api/v1/platform/analytics/summary", Method::GET, user_id),
+        pool.clone(),
+        authenticated_request(
+            &pool,
+            "/api/v1/platform/analytics/summary",
+            Method::GET,
+            user_id,
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -292,8 +303,14 @@ async fn platform_analytics_active_conversations_counts_open_and_pending() {
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
-        authenticated_request("/api/v1/platform/analytics/summary", Method::GET, user_id),
+        pool.clone(),
+        authenticated_request(
+            &pool,
+            "/api/v1/platform/analytics/summary",
+            Method::GET,
+            user_id,
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -316,12 +333,14 @@ async fn platform_analytics_ai_usage_totals_match() {
 
     let user_id = seed_user(&pool, Some("super_admin")).await;
     let response = send(
-        pool,
+        pool.clone(),
         authenticated_request(
+            &pool,
             "/api/v1/platform/analytics/summary?from=2026-07-19&to=2026-07-23",
             Method::GET,
             user_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -345,10 +364,12 @@ async fn platform_analytics_invalid_date_range_returns_422() {
     let resp = send(
         pool.clone(),
         authenticated_request(
+            &pool,
             "/api/v1/platform/analytics/summary?from=2026-07-25&to=2026-06-25",
             Method::GET,
             user_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
@@ -357,10 +378,12 @@ async fn platform_analytics_invalid_date_range_returns_422() {
     let resp = send(
         pool.clone(),
         authenticated_request(
+            &pool,
             "/api/v1/platform/analytics/summary?from=2025-01-01&to=2026-07-25",
             Method::GET,
             user_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
@@ -374,8 +397,14 @@ async fn platform_analytics_defaults_to_last_30_days() {
     let user_id = seed_user(&pool, Some("super_admin")).await;
 
     let response = send(
-        pool,
-        authenticated_request("/api/v1/platform/analytics/summary", Method::GET, user_id),
+        pool.clone(),
+        authenticated_request(
+            &pool,
+            "/api/v1/platform/analytics/summary",
+            Method::GET,
+            user_id,
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -391,13 +420,15 @@ async fn platform_analytics_tenant_role_user_gets_403() {
     seed_membership(&pool, tenant_id, user_id).await;
 
     let response = send(
-        pool,
+        pool.clone(),
         tenant_request(
+            &pool,
             "/api/v1/platform/analytics/summary",
             Method::GET,
             user_id,
             tenant_id,
-        ),
+        )
+        .await,
     )
     .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);

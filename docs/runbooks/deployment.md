@@ -47,6 +47,10 @@ Use `ops/deploy.sh <git-sha>` (see [contract](../../ops/deploy.sh)).
 
 The script runs migrations before touching the running stack. If migrations fail, the old release stays live. If the new stack fails its readiness check within 120 seconds, the old release is restored.
 
+For a release containing migration 0080, follow the
+[HS256 cutover steps](operations.md#before-you-deploy-the-hs256-cutover). They require draining the
+previous API release before migration and restoring a compatible schema before an image rollback.
+
 Before migrating, it runs `infra/postgres/init/02-roles.sh` in the Postgres container. The script
 is idempotent and makes sure `app_owner`, `app_runtime` and `app_platform` (the login-less owner of
 the cross-tenant functions) exist with the right attributes and grants. It fails the deploy if the
@@ -69,9 +73,12 @@ script and the Compose stack run `all`. Splitting a deployment into separate `ap
   sent to public endpoints (ADR-010 section 4).
 
 A `gateway` process serves only the widget, integration-hook and WhatsApp-webhook routes. It has
-no cookie sessions, no platform or tenant routes and no API docs, and it doesn't load the session-signing secret or
-the AI key (`AUTH_JWT_SECRET` and `APP_AI_KEY_ENCRYPTION_KEY` can be left out of its environment). It still needs `APP_INTEGRATION_SECRETS_KEY` to verify channel
-webhook signatures, until the secrets still sealed under it have been moved to envelope encryption (`server secrets reencrypt`, ADR-014). Every process, the gateway included, must have the same `APP_SECRETS_ROOT_KEY`: the gateway holds only the integration key, so without it the root key it derives differs and it cannot unwrap the keys the other processes wrote.
+no cookie sessions, no platform or tenant routes and no API docs. It can run without
+`APP_AI_KEY_ENCRYPTION_KEY`. It still needs `APP_INTEGRATION_SECRETS_KEY` to verify channel webhook
+signatures until the secrets still sealed under it have been moved to envelope encryption
+(`server secrets reencrypt`, ADR-014). Every process, the gateway included, must have the same
+`APP_SECRETS_ROOT_KEY`: the gateway holds only the integration key, so without the root key it
+derives a different one and cannot unwrap the keys the other processes wrote.
 
 The widget's public API lives at `/widget/v1/*` on the public host, next to the static widget
 app under `/widget/*`. `infra/Caddyfile` sends `/widget/v1/*` to the backend as `/api/v1/widget/v1/*`

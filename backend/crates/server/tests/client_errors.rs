@@ -2,6 +2,8 @@
 //! is limited, what is logged and counted, and what is not.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
 
+mod session_fixture;
+
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -27,8 +29,6 @@ fn test_config() -> config::AppConfig {
     config::AppConfig {
         database_url: "postgres://localhost:5432/test".into(),
         redis_url: "redis://127.0.0.1:6379".into(),
-        auth_jwt_secret: "test-auth-jwt-secret-at-least-32-bytes".into(),
-        auth_session_ttl_seconds: 28_800,
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: config::Environment::Test,
@@ -102,7 +102,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 async fn reset() {
     db::testing::migrate().await;
     sqlx::query(
-        "TRUNCATE TABLE revoked_sessions, tenant_memberships, tenants, users, audit_logs \
+        "TRUNCATE TABLE tenant_memberships, tenants, users, audit_logs \
          RESTART IDENTITY CASCADE",
     )
     .execute(&db::testing::owner_pool())
@@ -134,7 +134,7 @@ macro_rules! setup {
         reset().await;
         let app = router::app(state(pool.clone(), test_config()));
         let user = seed_user().await;
-        (app, user, _serial)
+        (app, user, _serial, pool)
     }};
 }
 
@@ -214,7 +214,7 @@ fn capture_logs() -> (Captured, tracing::subscriber::DefaultGuard) {
 
 #[tokio::test]
 async fn a_signed_in_user_reports_errors_and_each_one_is_logged_with_its_context() {
-    let (app, user, _lock) = setup!();
+    let (app, user, _lock, _pool) = setup!();
     let (logs, _guard) = capture_logs();
     let tenant = Uuid::new_v4();
     let request_id = "req_0191f3a2-6b1e-7c3d-8e4f-5a6b7c8d9e0f";
@@ -265,7 +265,7 @@ async fn a_signed_in_user_reports_errors_and_each_one_is_logged_with_its_context
 
 #[tokio::test]
 async fn a_tenant_the_browser_names_is_logged_as_a_claim_never_as_the_tenant() {
-    let (app, user, _lock) = setup!();
+    let (app, user, _lock, _pool) = setup!();
     let (logs, _guard) = capture_logs();
     let foreign = Uuid::new_v4(); // a workspace the user does not belong to
 
@@ -291,7 +291,7 @@ async fn a_tenant_the_browser_names_is_logged_as_a_claim_never_as_the_tenant() {
 
 #[tokio::test]
 async fn control_characters_cannot_forge_a_log_line() {
-    let (app, user, _lock) = setup!();
+    let (app, user, _lock, _pool) = setup!();
     let (logs, _guard) = capture_logs();
 
     let response = send(
@@ -316,20 +316,18 @@ async fn control_characters_cannot_forge_a_log_line() {
 
 #[tokio::test]
 async fn reporting_needs_a_session() {
-    let (app, _user, _lock) = setup!();
+    let (app, _user, _lock, _pool) = setup!();
 
     let response = send(&app, report_request(json!({ "reports": [report("x")] }))).await;
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
-fn cookie_report(user: Uuid, headers: &[(&str, &str)]) -> Request<Body> {
-    let (jwt, _, _) =
-        identity::session::issue_token(&test_config().auth_jwt_secret, 28_800, user).unwrap();
+fn cookie_report(jwt: &str, headers: &[(&str, &str)]) -> Request<Body> {
     let mut builder = Request::builder()
         .uri("/api/v1/client-errors")
         .method(Method::POST)
-        .header("cookie", format!("app_session={jwt}"))
+        .header("cookie", format!("__Host-app_session={jwt}"))
         .header("content-type", "application/json");
     for (name, value) in headers {
         builder = builder.header(*name, *value);
@@ -341,7 +339,8 @@ fn cookie_report(user: Uuid, headers: &[(&str, &str)]) -> Request<Body> {
 
 #[tokio::test]
 async fn a_session_cookie_request_needs_the_allowed_origin_and_the_csrf_header() {
-    let (app, user, _lock) = setup!();
+    let (app, user, _lock, pool) = setup!();
+    let issued = session_fixture::start(&pool, &config::Environment::Test, user).await;
     let (logs, _guard) = capture_logs();
 
     for (what, headers) in [
@@ -355,7 +354,7 @@ async fn a_session_cookie_request_needs_the_allowed_origin_and_the_csrf_header()
         ),
         ("no custom header", vec![("origin", TEST_ORIGIN)]),
     ] {
-        let response = send(&app, cookie_report(user, &headers)).await;
+        let response = send(&app, cookie_report(&issued.access_token, &headers)).await;
         assert_eq!(response.status(), StatusCode::FORBIDDEN, "{what}");
     }
     assert!(
@@ -367,7 +366,7 @@ async fn a_session_cookie_request_needs_the_allowed_origin_and_the_csrf_header()
     let response = send(
         &app,
         cookie_report(
-            user,
+            &issued.access_token,
             &[
                 ("origin", TEST_ORIGIN),
                 ("x-requested-with", "XMLHttpRequest"),
@@ -381,7 +380,7 @@ async fn a_session_cookie_request_needs_the_allowed_origin_and_the_csrf_header()
 
 #[tokio::test]
 async fn a_body_over_the_limit_is_refused_and_nothing_is_logged() {
-    let (app, user, _lock) = setup!();
+    let (app, user, _lock, _pool) = setup!();
     let (logs, _guard) = capture_logs();
     let big = "x".repeat(server::client_errors::MAX_BODY_BYTES + 1);
 
@@ -398,7 +397,7 @@ async fn a_body_over_the_limit_is_refused_and_nothing_is_logged() {
 
 #[tokio::test]
 async fn invalid_reports_are_refused_and_nothing_is_logged() {
-    let (app, user, _lock) = setup!();
+    let (app, user, _lock, _pool) = setup!();
     let (logs, _guard) = capture_logs();
     let long = |n: usize| "x".repeat(n);
     let twenty_one: Vec<Value> = (0..21).map(|i| report(&format!("e{i}"))).collect();
@@ -475,7 +474,7 @@ async fn invalid_reports_are_refused_and_nothing_is_logged() {
 
 #[tokio::test]
 async fn a_user_has_a_budget_of_requests() {
-    let (app, user, _lock) = setup!();
+    let (app, user, _lock, _pool) = setup!();
     let body = json!({ "reports": [report("x")] });
 
     for i in 0..server::client_errors::REQUESTS_PER_USER {
@@ -496,7 +495,7 @@ async fn a_user_has_a_budget_of_requests() {
 
 #[tokio::test]
 async fn reports_are_counted_by_kind_and_release_only() {
-    let (app, user, _lock) = setup!();
+    let (app, user, _lock, _pool) = setup!();
     observability::metrics::init();
 
     let response = send(
@@ -542,7 +541,7 @@ fn counter(kind: &str) -> f64 {
 
 #[tokio::test]
 async fn one_user_can_add_only_a_small_budget_to_the_alert_counter() {
-    let (app, user, _lock) = setup!();
+    let (app, user, _lock, _pool) = setup!();
     let (logs, _guard) = capture_logs();
     observability::metrics::init();
     let before = counter("chunk_load");
