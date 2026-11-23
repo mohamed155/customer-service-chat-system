@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde_json::json;
 use sqlx::PgPool;
 use tracing::error;
@@ -69,6 +70,40 @@ pub async fn login_failed(pool: &PgPool, email: &str, reason: &str) {
             "email": email,
             "reason": reason,
         }),
+    )
+    .await;
+}
+
+pub async fn account_locked(
+    pool: &PgPool,
+    user_id: Uuid,
+    failed_attempts: i32,
+    locked_until: DateTime<Utc>,
+    lock_seconds: i32,
+) {
+    let resource_id = user_id.to_string();
+    record(
+        pool,
+        "auth.account_locked",
+        None,
+        Some(&resource_id),
+        &json!({
+            "failed_attempts": failed_attempts,
+            "locked_until": locked_until,
+            "lock_seconds": lock_seconds,
+        }),
+    )
+    .await;
+}
+
+pub async fn account_unlocked(pool: &PgPool, user_id: Uuid, reason: &str) {
+    let resource_id = user_id.to_string();
+    record(
+        pool,
+        "auth.account_unlocked",
+        None,
+        Some(&resource_id),
+        &json!({ "reason": reason }),
     )
     .await;
 }

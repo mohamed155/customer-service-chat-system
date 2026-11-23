@@ -145,15 +145,18 @@ async fn eligible_user(pool: &PgPool, hash: &str) -> sqlx::Result<Option<Uuid>> 
     .await
 }
 
-async fn lock_eligible_account(conn: &mut PgConnection, user: Uuid) -> sqlx::Result<bool> {
-    let found: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL AND password_hash IS NOT NULL
+async fn lock_eligible_account(
+    conn: &mut PgConnection,
+    user: Uuid,
+) -> sqlx::Result<Option<(i32, Option<DateTime<Utc>>)>> {
+    sqlx::query_as(
+        "SELECT failed_login_count, locked_until
+         FROM users WHERE id = $1 AND deleted_at IS NULL AND password_hash IS NOT NULL
          FOR UPDATE",
     )
     .bind(user)
     .fetch_optional(conn)
-    .await?;
-    Ok(found.is_some())
+    .await
 }
 
 async fn lock_valid_token(conn: &mut PgConnection, user: Uuid, hash: &str) -> sqlx::Result<bool> {
@@ -176,7 +179,10 @@ async fn lock_valid_token(conn: &mut PgConnection, user: Uuid, hash: &str) -> sq
 
 async fn change_password(conn: &mut PgConnection, user: Uuid, hash: &str) -> sqlx::Result<()> {
     sqlx::query(
-        "UPDATE users SET password_hash = $1, password_reset_at = clock_timestamp() WHERE id = $2",
+        "UPDATE users
+         SET password_hash = $1, password_reset_at = clock_timestamp(),
+             failed_login_count = 0, last_failed_login_at = NULL, locked_until = NULL
+         WHERE id = $2",
     )
     .bind(hash)
     .bind(user)
@@ -229,9 +235,11 @@ impl PasswordResetStore for PgPool {
         let mut tx = self.begin().await?;
         // Issuance and redemption both lock the user first. This serializes changes across
         // multiple reset requests and establishes a consistent order for token/session locks.
-        if !lock_eligible_account(&mut tx, user).await?
-            || !lock_valid_token(&mut tx, user, token_hash).await?
-        {
+        let Some((failed_login_count, locked_until)) = lock_eligible_account(&mut tx, user).await?
+        else {
+            return Err(ResetError::InvalidToken);
+        };
+        if !lock_valid_token(&mut tx, user, token_hash).await? {
             return Err(ResetError::InvalidToken);
         }
         change_password(&mut tx, user, password_hash).await?;
@@ -245,6 +253,16 @@ impl PasswordResetStore for PgPool {
             &serde_json::json!({}),
         )
         .await?;
+        if failed_login_count > 0 || locked_until.is_some() {
+            audit::record_in(
+                &mut *tx,
+                "auth.account_unlocked",
+                Some(user),
+                Some(&user.to_string()),
+                &serde_json::json!({ "reason": "password_reset" }),
+            )
+            .await?;
+        }
         tx.commit().await?;
         Ok(())
     }

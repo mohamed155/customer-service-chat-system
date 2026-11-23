@@ -154,7 +154,8 @@
         "auth_sessions",
         "refresh_tokens",
         "password_reset_requests",
-        "password_reset_tokens"
+        "password_reset_tokens",
+        "login_lockout_notifications"
       ]
     },
     "integrations": {

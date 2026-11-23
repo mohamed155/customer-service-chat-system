@@ -11,7 +11,7 @@ use sqlx::PgPool;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{audit, password, session, Principal};
+use crate::{audit, login_lockout, password, session, Principal};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccountCreationInput {
@@ -73,16 +73,6 @@ pub struct LoginRequest {
     pub password: String,
 }
 
-#[derive(sqlx::FromRow)]
-struct LoginUser {
-    id: Uuid,
-    email: String,
-    display_name: String,
-    platform_role: Option<String>,
-    password_hash: Option<String>,
-    password_reset_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
 pub struct LoginSuccess {
     pub principal: Principal,
     /// The `Set-Cookie` values: the access token and the refresh token.
@@ -121,25 +111,45 @@ pub async fn authenticate_login(
         return Err(LoginError::Validation);
     }
 
-    let user = match fetch_login_user(pool, &email).await {
-        Ok(user) => user,
-        Err(error) => {
-            return Err(LoginError::Internal(format!(
-                "Database query failed: {error}"
-            )))
-        }
-    };
-
+    let request_trace_id = headers
+        .get("x-request-id")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned)
+        .unwrap_or_else(|| kernel::ids::new_id().to_string());
+    let attempt = login_lockout::begin_login(pool, &email, config.login_lockout)
+        .await
+        .map_err(|error| LoginError::Internal(format!("Database query failed: {error}")))?;
+    let user = attempt.account().cloned();
     let verified = verify_login_password(user.as_ref(), password).await;
-    if !verified {
-        audit::login_failed(pool, &email, "invalid_credentials").await;
+    let Some(user) = user else {
+        login_lockout::finalize_failed_password(
+            pool,
+            attempt,
+            &email,
+            &request_trace_id,
+            config.login_lockout,
+        )
+        .await;
+        return Err(LoginError::InvalidCredentials);
+    };
+    if user.password_hash.is_none() || !attempt.can_authenticate() || !verified {
+        login_lockout::finalize_failed_password(
+            pool,
+            attempt,
+            &email,
+            &request_trace_id,
+            config.login_lockout,
+        )
+        .await;
         return Err(LoginError::InvalidCredentials);
     }
 
-    let Some(user) = user else {
-        audit::login_failed(pool, &email, "invalid_credentials").await;
+    let cleared = login_lockout::complete_password_success(pool, attempt)
+        .await
+        .map_err(|error| LoginError::Internal(format!("Login counter reset failed: {error}")))?;
+    if !cleared {
         return Err(LoginError::InvalidCredentials);
-    };
+    }
 
     rehash_if_outdated(pool, &user, &password_for_rehash).await;
 
@@ -241,21 +251,15 @@ pub async fn logout(
     }
     response
 }
-async fn fetch_login_user(pool: &PgPool, email: &str) -> sqlx::Result<Option<LoginUser>> {
-    sqlx::query_as(
-        "SELECT id, email::text, display_name, platform_role, password_hash, password_reset_at
-         FROM users WHERE lower(email) = lower($1) AND deleted_at IS NULL",
-    )
-    .bind(email)
-    .fetch_optional(pool)
-    .await
-}
-
 /// Replace a hash made with older parameters by one made with the current ones, now that the
 /// plain password is at hand. A failure is logged and ignored: the login already succeeded, and the
 /// next login tries again. The update only applies if the stored hash is still the one that was
 /// verified, so a password change that happens in between is never overwritten.
-async fn rehash_if_outdated(pool: &PgPool, user: &LoginUser, password: &str) {
+async fn rehash_if_outdated(
+    pool: &PgPool,
+    user: &crate::application::login_lockout::LoginAccount,
+    password: &str,
+) {
     let Some(old_hash) = user.password_hash.as_deref() else {
         return;
     };
@@ -289,7 +293,10 @@ async fn rehash_if_outdated(pool: &PgPool, user: &LoginUser, password: &str) {
     }
 }
 
-async fn verify_login_password(user: Option<&LoginUser>, password: String) -> bool {
+async fn verify_login_password(
+    user: Option<&crate::application::login_lockout::LoginAccount>,
+    password: String,
+) -> bool {
     let password_hash = user.and_then(|user| user.password_hash.clone());
     let result = tokio::task::spawn_blocking(move || match password_hash {
         Some(hash) => password::verify_password(&password, &hash),

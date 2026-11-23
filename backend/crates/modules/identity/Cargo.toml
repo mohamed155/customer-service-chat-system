@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+async-trait.workspace = true
 secrets = { path = "../../shared/secrets" }
 hmac.workspace = true
 email = { path = "../email" }

@@ -136,6 +136,9 @@ async fn run_migrations_succeeds() {
         (92, "composite tenant foreign keys"),
         (93, "validate composite tenant foreign keys"),
         (94, "contract composite tenant foreign keys"),
+        (95, "login lockout"),
+        (96, "login lockout notifications"),
+        (97, "login lockout finalization"),
     ];
     assert_eq!(
         rows.len(),
