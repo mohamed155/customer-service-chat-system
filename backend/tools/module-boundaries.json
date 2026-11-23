@@ -20,7 +20,6 @@
     "knowledge",
     "notifications",
     "platform",
-    "tenancy",
     "tools",
     "whatsapp",
     "widgets"
@@ -213,7 +212,8 @@
         "tenants",
         "tenant_memberships",
         "tenant_invitations",
-        "tenant_rate_limit_overrides"
+        "tenant_rate_limit_overrides",
+        "platform_access_sessions"
       ]
     },
     "tools": {

@@ -57,7 +57,7 @@
               },
               "budgets": [
                 { "type": "initial", "maximumWarning": "735kb", "maximumError": "750kb" },
-                { "type": "allScript", "maximumWarning": "2270kb", "maximumError": "2320kb" },
+                { "type": "allScript", "maximumWarning": "2290kb", "maximumError": "2340kb" },
                 { "type": "anyScript", "maximumError": "450kb" },
                 {
                   "type": "bundle",

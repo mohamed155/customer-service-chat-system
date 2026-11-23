@@ -10,12 +10,14 @@ import { TopbarComponent } from '../topbar/topbar.component';
 import { LayoutStore } from './layout.store';
 import { ErrorReferenceComponent } from '../../shared/components/error-reference/error-reference.component';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { PlatformAccessBannerComponent } from '../platform-access/platform-access-banner.component';
 
 @Component({
   selector: 'app-shell',
   imports: [
     BreadcrumbComponent,
     ErrorReferenceComponent,
+    PlatformAccessBannerComponent,
     RouterOutlet,
     SidebarComponent,
     TopbarComponent,

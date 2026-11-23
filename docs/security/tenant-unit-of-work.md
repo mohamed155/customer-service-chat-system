@@ -194,11 +194,22 @@ the shared way to do it; **a table is not under Row-Level Security until it is i
 `backend/crates/shared/db/tests/rls_schema_rule.rs` (run in the backend `verify` job, which is a required
 check) reads the catalog and fails when:
 
-- a table in `public` has a `tenant_id` column but RLS is not enabled, not forced, or there is no policy
+- a tenant-owned table in `public` has a `tenant_id` column but RLS is not enabled, not forced, or there is no policy
   for all commands with both `USING` and `WITH CHECK`;
 - a table has no `tenant_id` and is not in the explicit global list
   (`db::testing::isolation::GLOBAL_TABLES`), so a new table cannot skip the decision;
-- a table in the global list carries a `tenant_id` column, or no longer exists.
+- a table in the global list carries a `tenant_id` column outside the specific exception below, or
+  no longer exists.
+
+`platform_access_sessions` is global platform authorization state. The request gate reads it before
+there is a tenant context, and the worker closes sessions across tenants. Its `tenant_id` foreign
+key identifies the workspace that access covers. The schema rule names this exception explicitly.
+Lifecycle audit rows still use the affected tenant's scope and follow the `audit_logs` RLS policy.
+The audit writer carries the validated session ID through each platform tenant request. A
+request that finishes after a session is replaced keeps its original attribution. The audit
+insert trigger links only the session's own lifecycle rows. A write outside a tenant request
+that an access session authorized, such as a `/platform/*` route, carries no link: nothing in the
+insert can tell which sign-in made it, so guessing could attach it to the wrong session.
 
 The other tests in that file plant a table that breaks each part of the rule inside a transaction that is
 rolled back, and check that the matching message appears, so the check is shown to fail. A new tenant table
@@ -232,5 +243,5 @@ Adding a table group:
   written inside that tenant's Unit of Work.
 - `tenant_memberships` and `tenant_invitations` are read before a tenant is known (sign-in,
   invitation accept); those reads belong to the pre-tenant table above.
-- Every table with a `tenant_id` column has forced Row-Level Security, and a CI test keeps it so (see
+- Every tenant-owned table with a `tenant_id` column has forced Row-Level Security, and a CI test keeps it so (see
   [The schema rule](#the-schema-rule)).

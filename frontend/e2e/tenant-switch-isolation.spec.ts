@@ -1,5 +1,6 @@
 import { Page, Route } from '@playwright/test';
 import { expect, test } from './support/test';
+import { mockPlatformAccess, submitPlatformAccess } from './support/platform-access';
 
 // MOH-61: switching the active workspace in place must never leave the old workspace's data on
 // screen, not even while the new workspace's data is still loading, and a response that was
@@ -100,6 +101,7 @@ async function installApi(
   seen: { tenant: string | undefined }[],
   modes: Modes = {},
 ) {
+  const platformAccess = mockPlatformAccess([tenantA, tenantB], { initialTenant: tenantA });
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace('/api/v1', '');
@@ -107,8 +109,8 @@ async function installApi(
     if (path === '/platform/tenants') {
       return json(route, { items: [tenantA, tenantB], nextCursor: null });
     }
-    const switched = /^\/platform\/tenants\/([^/]+)\/switch$/.exec(path);
-    if (switched) return json(route, switched[1] === tenantA.id ? tenantA : tenantB);
+    const access = platformAccess(route, path);
+    if (access) return access;
     if (path === '/tenant/conversations') {
       const tenant = route.request().headers()['x-tenant-id'];
       seen.push({ tenant });
@@ -149,6 +151,7 @@ async function installApi(
 async function switchToNorthwind(page: Page) {
   await page.getByRole('button', { name: 'Switch tenant' }).click();
   await page.locator('.option').filter({ hasText: tenantB.name }).click();
+  await submitPlatformAccess(page);
 }
 
 test.describe('switching workspace in place', () => {

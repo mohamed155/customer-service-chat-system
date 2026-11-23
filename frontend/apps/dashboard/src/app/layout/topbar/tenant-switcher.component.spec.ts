@@ -15,11 +15,30 @@ const fakeTenants: TenantSummary[] = [
   { id: 't-3', name: 'Initech', slug: 'initech', status: 'suspended', plan: 'professional' },
 ];
 
+const reason = 'Reviewing a customer request';
+const switchResponse = (tenant: TenantSummary) => ({
+  data: {
+    ...tenant,
+    accessSession: {
+      id: 's-1',
+      tenantId: tenant.id,
+      reason,
+      startedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+    },
+  },
+});
 const page = (items: TenantSummary[]) => ({ data: { items, nextCursor: null, hasMore: false } });
 
 describe('TenantSwitcherComponent', () => {
   async function setup(isPlatform = true) {
-    const api = { list: vi.fn(), post: vi.fn() };
+    const api = {
+      list: vi.fn(),
+      post: vi.fn(),
+      get: vi
+        .fn()
+        .mockReturnValue(throwError(() => ({ status: 503, code: 'service_unavailable' }))),
+    };
     api.list.mockReturnValue(of(page(fakeTenants)));
 
     TestBed.configureTestingModule({
@@ -177,6 +196,24 @@ describe('TenantSwitcherComponent', () => {
     });
   });
 
+  function dialog(fixture: ComponentFixture<TenantSwitcherComponent>): HTMLElement {
+    return el(fixture).querySelector('[role="dialog"]') as HTMLElement;
+  }
+
+  function enterReason(fixture: ComponentFixture<TenantSwitcherComponent>, value: string): void {
+    const input = dialog(fixture).querySelector('textarea') as HTMLTextAreaElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  }
+
+  function submitAccess(fixture: ComponentFixture<TenantSwitcherComponent>): void {
+    dialog(fixture)
+      .querySelector('form')
+      ?.dispatchEvent(new Event('submit', { cancelable: true }));
+    fixture.detectChanges();
+  }
+
   describe('keyboard', () => {
     const highlighted = (fixture: ComponentFixture<unknown>) =>
       options(fixture).findIndex(
@@ -236,13 +273,20 @@ describe('TenantSwitcherComponent', () => {
 
     it('selects the highlighted option with Enter', async () => {
       const { fixture, api } = await setup();
-      api.post.mockReturnValue(of({ data: fakeTenants[1] }));
+      api.post.mockReturnValue(of(switchResponse(fakeTenants[1])));
       await openList(fixture);
 
       press(fixture, search(fixture), 'ArrowDown');
       press(fixture, search(fixture), 'Enter');
 
-      expect(api.post).toHaveBeenCalledWith('/platform/tenants/t-2/switch', undefined);
+      expect(dialog(fixture).textContent).toContain('Globex Inc');
+      expect(api.post).not.toHaveBeenCalled();
+      enterReason(fixture, reason);
+      submitAccess(fixture);
+      expect(api.post).toHaveBeenCalledWith('/platform/tenants/t-2/switch', {
+        reason,
+        durationMinutes: 60,
+      });
     });
 
     it('keeps the highlight inside a filtered list and resets it when the filter changes', async () => {
@@ -312,15 +356,18 @@ describe('TenantSwitcherComponent', () => {
       other.remove();
     });
 
-    it('returns to the trigger after a selection', async () => {
+    it('returns to the trigger after cancelling the access form', async () => {
       const { fixture, api } = await setup();
-      api.post.mockReturnValue(of({ data: fakeTenants[0] }));
+      api.post.mockReturnValue(of(switchResponse(fakeTenants[0])));
       await openList(fixture);
 
       options(fixture)[0].click();
       fixture.detectChanges();
+      press(fixture, dialog(fixture), 'Escape');
+      await fixture.whenStable();
 
-      expect(el(fixture).querySelector('.dropdown')).toBeNull();
+      expect(api.post).not.toHaveBeenCalled();
+      expect(el(fixture).querySelector('[role="dialog"]')).toBeNull();
       expect(document.activeElement).toBe(trigger(fixture));
     });
 
@@ -352,64 +399,89 @@ describe('TenantSwitcherComponent', () => {
     });
   });
 
-  describe('selecting', () => {
-    it('switches tenant on click through the store', async () => {
-      const { fixture, api, store } = await setup();
-      const dispatch = vi.spyOn(store, 'dispatch');
-      api.post.mockReturnValue(of({ data: fakeTenants[0] }));
-      await openList(fixture);
-
-      options(fixture)[0].click();
-
-      expect(api.post).toHaveBeenCalledWith('/platform/tenants/t-1/switch', undefined);
-      expect(dispatch).toHaveBeenCalledWith(
-        tenantContextActions.switchTenantRequested({ tenantId: 't-1' }),
-      );
-      expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ tenant: expect.anything() }));
-    });
-
-    it('shows an inline error and stays open when the switch fails', async () => {
+  describe('starting access', () => {
+    it('validates the trimmed reason before submitting', async () => {
       const { fixture, api } = await setup();
-      api.post.mockReturnValue(throwError(() => new Error('boom')));
       await openList(fixture);
-
       options(fixture)[0].click();
       fixture.detectChanges();
 
-      const alert = el(fixture).querySelector('[role="alert"]');
-      expect(alert?.textContent).toContain('Could not switch tenant');
-      expect(el(fixture).querySelector('.dropdown')).toBeTruthy();
+      enterReason(fixture, '  Too short  ');
+      submitAccess(fixture);
+
+      expect(api.post).not.toHaveBeenCalled();
+      expect(dialog(fixture).textContent).toContain('at least 10 characters');
     });
 
-    it('cancels a switch still in flight when another tenant is picked', async () => {
-      const { fixture, api } = await setup();
-      const first = new Subject<{ data: TenantSummary }>();
-      const second = new Subject<{ data: TenantSummary }>();
-      api.post.mockReturnValueOnce(first).mockReturnValueOnce(second);
-      await openList(fixture);
-
-      options(fixture)[0].click();
-      expect(first.observed).toBe(true);
-      options(fixture)[1].click();
-
-      expect(first.observed).toBe(false);
-      expect(second.observed).toBe(true);
-    });
-
-    it('abandons a switch still on its way when the list is closed, so it cannot fail unseen', async () => {
+    it('sends the trimmed reason and selected duration through the store', async () => {
       const { fixture, api, store } = await setup();
       const dispatch = vi.spyOn(store, 'dispatch');
-      const pending = new Subject<{ data: TenantSummary }>();
+      api.post.mockReturnValue(of(switchResponse(fakeTenants[0])));
+      await openList(fixture);
+      options(fixture)[0].click();
+      fixture.detectChanges();
+
+      enterReason(fixture, `  ${reason}  `);
+      const duration = dialog(fixture).querySelector('select') as HTMLSelectElement;
+      expect(duration.value).toBe('60');
+      duration.value = '240';
+      duration.dispatchEvent(new Event('change'));
+      submitAccess(fixture);
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(api.post).toHaveBeenCalledWith('/platform/tenants/t-1/switch', {
+        reason,
+        durationMinutes: 240,
+      });
+      expect(dispatch).toHaveBeenCalledWith(
+        tenantContextActions.switchTenantSucceeded({ tenant: fakeTenants[0] }),
+      );
+      expect(el(fixture).querySelector('[role="dialog"]')).toBeNull();
+    });
+
+    it('shows translated server field errors and keeps the reason available to edit', async () => {
+      const { fixture, api } = await setup();
+      api.post.mockReturnValue(
+        throwError(() => ({
+          status: 422,
+          code: 'validation_failed',
+          requestId: 'req_validation',
+          details: [{ field: 'reason', code: 'too_long', message: 'Raw internal error' }],
+        })),
+      );
+      await openList(fixture);
+      options(fixture)[0].click();
+      fixture.detectChanges();
+
+      enterReason(fixture, reason);
+      submitAccess(fixture);
+      await Promise.resolve();
+      fixture.detectChanges();
+
+      expect(dialog(fixture).textContent).toContain('500 characters or fewer');
+      expect(dialog(fixture).textContent).not.toContain('Raw internal error');
+      expect(dialog(fixture).querySelector('textarea')?.value).toBe(reason);
+      enterReason(fixture, 'Editing the customer request');
+      expect(dialog(fixture).querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('prevents a duplicate or abandoned write while access is being started', async () => {
+      const { fixture, api } = await setup();
+      const pending = new Subject<ReturnType<typeof switchResponse>>();
       api.post.mockReturnValue(pending);
       await openList(fixture);
-
       options(fixture)[0].click();
-      expect(pending.observed).toBe(true);
-      press(fixture, search(fixture), 'Escape');
+      fixture.detectChanges();
 
-      expect(pending.observed).toBe(false);
-      expect(dispatch).toHaveBeenCalledWith(tenantContextActions.switchTenantCancelled());
-      expect(el(fixture).querySelector('[role="alert"]')).toBeNull();
+      enterReason(fixture, reason);
+      submitAccess(fixture);
+      submitAccess(fixture);
+      press(fixture, dialog(fixture), 'Escape');
+
+      expect(api.post).toHaveBeenCalledTimes(1);
+      expect(pending.observed).toBe(true);
+      expect(dialog(fixture)).toBeTruthy();
     });
   });
 

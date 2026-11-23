@@ -11,6 +11,13 @@
         {{ 'platform.tenantDetail.back' | transloco }}
       </a>
       @if (tenant(); as t) {
+        <app-button
+          *appHasPermission="'platform.tenants.switch'"
+          variant="secondary"
+          (pressed)="accessTarget.set(t)"
+        >
+          {{ 'platformAccess.start' | transloco }}
+        </app-button>
         <a
           *appHasPermission="'platform.tenants.manage'"
           [routerLink]="['/', APP_PATHS.platform.base, APP_PATHS.platform.tenants, t.id, 'edit']"
@@ -136,3 +143,14 @@
     </div>
   }
 </app-page-container>
+@defer (when accessTarget(); prefetch on idle) {
+  @if (accessTarget(); as target) {
+    <app-platform-access-dialog
+      [tenant]="target"
+      (started)="openTenantWorkspace()"
+      (closed)="accessTarget.set(null)"
+    />
+  }
+} @error {
+  <p role="alert">{{ 'platformAccess.loadError' | transloco }}</p>
+}

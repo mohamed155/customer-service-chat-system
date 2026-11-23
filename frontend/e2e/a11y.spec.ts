@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { Page, Route } from '@playwright/test';
+import { noPlatformAccess } from './support/platform-access';
 import { expect, test } from './support/test';
 import { HOST_URL, installWidgetHarness } from './support/widget-harness';
 
@@ -122,6 +123,7 @@ async function mockApi(
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
     if (path === '/me') return json(route, identity);
+    if (path === '/platform/access-session') return noPlatformAccess(route);
     if (options.hold?.includes(path)) return new Promise<void>(() => undefined);
     if (options.emptyInbox && path === '/tenant/conversations') {
       return json(route, { data: [], pagination: { next_cursor: null, has_more: false } });

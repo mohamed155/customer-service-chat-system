@@ -1,4 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+mod session_fixture;
+use session_fixture::PlatformAccess;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -60,7 +63,7 @@ fn test_config() -> config::AppConfig {
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: TEST_ENV,
-        cors_allowed_origins: vec![],
+        cors_allowed_origins: vec![session_fixture::DASHBOARD_ORIGIN.into()],
         log_format: config::LogFormat::Pretty,
         smtp_url: None,
         smtp_from: None,
@@ -550,7 +553,17 @@ async fn empty_roster() {
         .unwrap();
 
     let other_tenant = seed_tenant(&pool).await;
-    let body = assert_ok_response(&pool, "/api/v1/tenant/members", staff, other_tenant).await;
+    let access = PlatformAccess::open(&pool, &TEST_ENV, staff, other_tenant, |request| {
+        send(pool.clone(), request)
+    })
+    .await;
+    let response = send(
+        pool.clone(),
+        access.scoped_request(Method::GET, "/api/v1/tenant/members", other_tenant, None),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_json(response).await;
     let items = body["items"].as_array().unwrap();
     assert!(items.is_empty());
     assert!(body["nextCursor"].is_null());
@@ -3276,6 +3289,10 @@ async fn role_change_last_owner_demotion_refused() {
         .execute(&pool)
         .await
         .unwrap();
+    let access = PlatformAccess::open(&pool, &TEST_ENV, platform, tenant_id, |request| {
+        send(pool.clone(), request)
+    })
+    .await;
 
     let membership_id: Uuid = sqlx::query_scalar(
         "SELECT id FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2",
@@ -3293,7 +3310,7 @@ async fn role_change_last_owner_demotion_refused() {
         Some(tenant_id),
         serde_json::json!({ "role": "admin" }),
     );
-    let response = send(pool.clone(), request).await;
+    let response = send(pool.clone(), access.request(request)).await;
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
@@ -3480,6 +3497,11 @@ async fn role_change_concurrent_demotions() {
         .await
         .unwrap();
 
+    let access = PlatformAccess::open(&pool, &TEST_ENV, platform, tenant_id, |request| {
+        send(pool.clone(), request)
+    })
+    .await;
+
     let req_a = json_request(
         &format!("/api/v1/tenant/members/{membership_a}"),
         Method::PATCH,
@@ -3495,7 +3517,10 @@ async fn role_change_concurrent_demotions() {
         serde_json::json!({ "role": "admin" }),
     );
 
-    let (res_a, res_b) = tokio::join!(send(pool.clone(), req_a), send(pool.clone(), req_b));
+    let (res_a, res_b) = tokio::join!(
+        send(pool.clone(), access.request(req_a)),
+        send(pool.clone(), access.request(req_b))
+    );
     let ok_count = [res_a.status(), res_b.status()]
         .iter()
         .filter(|s| **s == StatusCode::OK)
@@ -3547,6 +3572,11 @@ async fn last_owner_changes_remain_conflicted_under_concurrency() {
         .await
         .unwrap();
 
+    let access = PlatformAccess::open(&pool, &TEST_ENV, platform, tenant_id, |request| {
+        send(pool.clone(), request)
+    })
+    .await;
+
     let req_a = json_request(
         &format!("/api/v1/tenant/members/{membership_a}"),
         Method::PATCH,
@@ -3562,7 +3592,10 @@ async fn last_owner_changes_remain_conflicted_under_concurrency() {
         serde_json::json!({ "status": "disabled" }),
     );
 
-    let (res_a, res_b) = tokio::join!(send(pool.clone(), req_a), send(pool.clone(), req_b));
+    let (res_a, res_b) = tokio::join!(
+        send(pool.clone(), access.request(req_a)),
+        send(pool.clone(), access.request(req_b))
+    );
     let statuses = [res_a.status(), res_b.status()];
     let ok_count = statuses.iter().filter(|s| **s == StatusCode::OK).count();
     let conflict_count = statuses
@@ -3859,6 +3892,10 @@ async fn disable_last_owner_refused() {
         .execute(&pool)
         .await
         .unwrap();
+    let access = PlatformAccess::open(&pool, &TEST_ENV, platform, tenant_id, |request| {
+        send(pool.clone(), request)
+    })
+    .await;
 
     let membership_id: Uuid = sqlx::query_scalar(
         "SELECT id FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2",
@@ -3876,7 +3913,7 @@ async fn disable_last_owner_refused() {
         Some(tenant_id),
         serde_json::json!({ "status": "disabled" }),
     );
-    let response = send(pool.clone(), request).await;
+    let response = send(pool.clone(), access.request(request)).await;
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 

@@ -71,6 +71,8 @@ const EXPECTED: &[(&str, &str)] = &[
     ("GET", "/platform/tenants/{id}"),
     ("PATCH", "/platform/tenants/{id}"),
     ("POST", "/platform/tenants/{id}/switch"),
+    ("GET", "/platform/access-session"),
+    ("POST", "/platform/access-session/end"),
     ("POST", "/platform/users/{id}/mfa/reset"),
     // Platform AI
     ("GET", "/platform/ai/config"),

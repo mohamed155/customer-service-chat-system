@@ -68,6 +68,14 @@ the migration in the pull request. If the label does not exist in the repository
 
 The first pull request that adds this file has nothing to compare with; the job says so and passes.
 
+### Platform tenant access (MOH-97)
+
+Clients calling `POST /platform/tenants/{id}/switch` must send a JSON body with a
+`reason` of 10–500 characters after trimming. The optional `durationMinutes` accepts
+5–240 minutes and defaults to 60. The response adds `accessSession` to the tenant summary.
+Use the same sign-in for subsequent tenant requests. Retrieve the current session with
+`GET /platform/access-session` and end it with `POST /platform/access-session/end`.
+
 ## The generated TypeScript types
 
 `pnpm gen:api` (in `frontend/`) runs `openapi-typescript` on `openapi.json` and formats the result with

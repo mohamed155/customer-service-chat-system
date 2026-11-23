@@ -18,6 +18,7 @@ import { CurrentUserService } from '../../core/tenant/current-user.service';
 import { TenantContextService } from '../../core/tenant/tenant-context.service';
 import { TenantSummary } from '../../core/api/tenant-api.models';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { PlatformAccessDialogComponent } from '../platform-access/platform-access-dialog.component';
 
 let nextId = 0;
 
@@ -29,12 +30,12 @@ let nextId = 0;
  * jump to the ends (they steer the list, not the caret, in this short field), Enter picks,
  * Escape closes. Focus goes back to the button after Escape, a click outside and a selection.
  *
- * Loading and switching are RxJS pipelines: a new load replaces the one in flight, closing the
+ * Loading uses an RxJS pipeline: a new load replaces the one in flight, closing the
  * list cancels it, and the list is never overwritten by an answer that arrives late.
  */
 @Component({
   selector: 'app-tenant-switcher',
-  imports: [FormsModule, TuiIcon, TranslocoPipe],
+  imports: [FormsModule, PlatformAccessDialogComponent, TuiIcon, TranslocoPipe],
   templateUrl: './tenant-switcher.component.html',
   styles: [
     `
@@ -197,7 +198,7 @@ export class TenantSwitcherComponent {
   protected readonly tenants = signal<TenantSummary[]>([]);
   protected readonly loading = signal(false);
   protected readonly loadFailed = signal(false);
-  protected readonly switchFailed = signal(false);
+  protected readonly accessTarget = signal<TenantSummary | null>(null);
 
   protected readonly activeTenant = this.tenantContext.activeTenant;
   protected readonly isPlatformUser = this.currentUser.isPlatformUser;
@@ -255,26 +256,6 @@ export class TenantSwitcherComponent {
     ),
   );
 
-  /** Switches to the picked tenant; picking another, or closing the list, abandons a switch still in flight. */
-  private readonly choose = rxMethod<TenantSummary>(
-    pipe(
-      switchMap((tenant) => {
-        this.switchFailed.set(false);
-        return this.tenantContext.select$(tenant.id).pipe(
-          tap(() => {
-            if (this.open()) this.closeAndFocusTrigger();
-          }),
-          catchError(() => {
-            this.switchFailed.set(true);
-            return EMPTY;
-          }),
-          // Closing the list abandons a switch still on its way: it must not fail unseen.
-          takeUntil(this.closed$),
-        );
-      }),
-    ),
-  );
-
   toggle(): void {
     if (this.open()) {
       this.close();
@@ -293,7 +274,6 @@ export class TenantSwitcherComponent {
   protected openList(): void {
     this.query.set('');
     this.moved.set(null);
-    this.switchFailed.set(false);
     this.open.set(true);
     this.load();
     afterNextRender(() => this.searchInput()?.nativeElement.focus(), { injector: this.injector });
@@ -391,6 +371,7 @@ export class TenantSwitcherComponent {
   }
 
   select(tenant: TenantSummary): void {
-    this.choose(tenant);
+    this.closeAndFocusTrigger();
+    this.accessTarget.set(tenant);
   }
 }

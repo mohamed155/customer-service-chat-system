@@ -1,11 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { Browser, BrowserContext, expect, Page, test } from '@playwright/test';
 import pg from 'pg';
+import { submitPlatformAccess } from './support/platform-access';
 
 const OWNER = '10000000-0000-0000-0000-000000000001';
 const MANAGER = '10000000-0000-0000-0000-000000000003';
 const MEMBER = '10000000-0000-0000-0000-000000000004';
-const PLATFORM = '10000000-0000-0000-0000-000000000006';
 const ALPHA = '20000000-0000-0000-0000-000000000001';
 const BETA = '20000000-0000-0000-0000-000000000002';
 const ADMIN_MEMBERSHIP = '30000000-0000-0000-0000-000000000002';
@@ -51,6 +52,49 @@ async function devContext(
     { id: userId, activeTenant: tenant },
   );
   return { context, page: await context.newPage() };
+}
+
+async function platformContext(browser: Browser) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto('/auth/login');
+  const signup = {
+    email: `platform-${randomUUID()}@t150.test`,
+    password: randomUUID(),
+    displayName: 'Platform Staff',
+    workspaceName: 'Platform Browser Test',
+  };
+  const signedIn = page.waitForResponse((response) =>
+    response.url().endsWith('/api/v1/auth/signup'),
+  );
+  const status = await page.evaluate(async (data) => {
+    const response = await fetch('/api/v1/auth/signup', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-requested-with': 'XMLHttpRequest' },
+      body: JSON.stringify(data),
+    });
+    return response.status;
+  }, signup);
+  expect(status).toBe(201);
+  const account = (await (await signedIn).json()) as { id: string };
+  await database.query('UPDATE users SET platform_role = $1 WHERE id = $2', [
+    'super_admin',
+    account.id,
+  ]);
+  return { context, page };
+}
+
+async function startTenantAccess(page: Page, tenant: (typeof tenants)[keyof typeof tenants]) {
+  await page.getByRole('button', { name: 'Switch tenant' }).click();
+  await page.getByRole('option', { name: new RegExp(tenant.name) }).click();
+  const switched = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/v1/platform/tenants/${tenant.id}/switch`),
+  );
+  await submitPlatformAccess(page);
+  expect((await switched).status()).toBe(200);
+  await expect(page.locator('app-platform-access-banner').getByRole('status')).toContainText(
+    `Platform access to ${tenant.name}`,
+  );
 }
 
 async function inviteThroughUi(page: Page, email: string, role: string) {
@@ -99,7 +143,7 @@ test('T150 browser workflow enforces tenant team lifecycle end to end', async ({
   const ownerBeta = await devContext(browser, OWNER, tenants.beta);
   const manager = await devContext(browser, MANAGER, tenants.alpha);
   const member = await devContext(browser, MEMBER, tenants.alpha);
-  const platform = await devContext(browser, PLATFORM, tenants.alpha);
+  const platform = await platformContext(browser);
 
   const initialRosterResponse = ownerAlpha.page.waitForResponse((response) =>
     response.url().includes('/api/v1/tenant/members?'),
@@ -111,27 +155,17 @@ test('T150 browser workflow enforces tenant team lifecycle end to end', async ({
   await expect(ownerAlpha.page.getByText('admin@t150.test')).toBeVisible();
   await expect(ownerAlpha.page.getByText('foreign@t150.test')).toHaveCount(0);
 
-  // Browser tenant switching must replace the roster rather than merge foreign records.
+  // The platform actor signs in, starts access with a reason and keeps it on a reload.
+  await platform.page.goto('/tenant/select');
+  await startTenantAccess(platform.page, tenants.alpha);
   await platform.page.goto('/tenant/team');
   await expect(platform.page.getByText('admin@t150.test')).toBeVisible();
-  await platform.page.getByRole('button', { name: 'Switch tenant' }).click();
-  const switchResponse = platform.page.waitForResponse((response) =>
-    response.url().endsWith(`/api/v1/platform/tenants/${BETA}/switch`),
-  );
-  await platform.page.locator('.option').filter({ hasText: 'T150 Beta' }).click();
-  expect((await switchResponse).status()).toBe(200);
-  await expect
-    .poll(() =>
-      platform.page.evaluate(() => JSON.parse(localStorage.getItem('app.tenant') ?? 'null')?.id),
-    )
-    .toBe(BETA);
-  await platform.context.setExtraHTTPHeaders({
-    'X-Dev-User-Id': PLATFORM,
-    'X-Tenant-ID': BETA,
-  });
-  await platform.page.goto('/tenant/team');
+  await startTenantAccess(platform.page, tenants.beta);
+  await platform.page.reload();
   await expect(platform.page.getByText('foreign@t150.test')).toBeVisible();
   await expect(platform.page.getByText('admin@t150.test')).toHaveCount(0);
+  await platform.page.getByRole('button', { name: 'End access' }).click();
+  await expect(platform.page).toHaveURL('/platform/tenants');
 
   // foreign-membership: crafted mutation is refused and leaves the real foreign row unchanged.
   const foreignStatus = await ownerAlpha.page.evaluate(async (membershipId) => {

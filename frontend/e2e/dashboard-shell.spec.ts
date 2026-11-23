@@ -1,5 +1,6 @@
 import { Page, Route } from '@playwright/test';
 import { expect, test } from './support/test';
+import { mockPlatformAccess, submitPlatformAccess } from './support/platform-access';
 
 const TENANT_PERMISSIONS = [
   'overview.view',
@@ -20,7 +21,13 @@ async function expectNoWorkspaceNavigation(page: Page): Promise<void> {
   await expect(nav).not.toContainText('Overview');
 }
 
-const tenant = { id: 'tenant-1', name: 'Acme Support', slug: 'acme-support', status: 'active' };
+const tenant = {
+  id: 'tenant-1',
+  name: 'Acme Support',
+  slug: 'acme-support',
+  status: 'active',
+  plan: 'trial',
+};
 
 const identities = {
   tenant: {
@@ -61,13 +68,15 @@ const identities = {
 } as const;
 
 async function mockApi(page: Page, identity: (typeof identities)[keyof typeof identities]) {
+  const platformAccess = mockPlatformAccess([tenant]);
   await page.route('**/api/v1/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace('/api/v1', '');
 
     if (path === '/me') return json(route, identity);
     if (path === '/platform/tenants') return json(route, { items: [tenant], nextCursor: null });
-    if (path === `/platform/tenants/${tenant.id}/switch`) return json(route, tenant);
+    const access = platformAccess(route, path);
+    if (access) return access;
     if (path === '/auth/logout') return json(route, null);
     return json(route, { items: [], nextCursor: null });
   });
@@ -117,11 +126,20 @@ test.describe('dashboard shell', () => {
 
     await page.getByRole('button', { name: 'Switch tenant' }).click();
     await page.locator('.option').filter({ hasText: 'Acme Support' }).click();
+    await submitPlatformAccess(page);
 
     await expect(page.getByRole('button', { name: 'Switch tenant' })).toContainText('Acme Support');
     await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toContainText(
       'Overview',
     );
+    const banner = page.locator('app-platform-access-banner');
+    await expect(banner.getByRole('status')).toContainText('Platform access to Acme Support');
+    await page.reload();
+    await expect(banner.getByRole('status')).toContainText('60 minutes left');
+    await banner.getByRole('button', { name: 'End access' }).click();
+    await expect(page).toHaveURL('/platform/tenants');
+    await expect(banner.getByRole('status')).toHaveCount(0);
+    await expectNoWorkspaceNavigation(page);
   });
 
   test('switches tenant with the keyboard alone and puts focus back on the trigger', async ({
@@ -148,6 +166,13 @@ test.describe('dashboard shell', () => {
     await page.keyboard.press('Enter');
     await expect(search).toBeFocused();
     await page.keyboard.press('Home');
+    await page.keyboard.press('Enter');
+
+    await expect(page.getByLabel('Reason')).toBeFocused();
+    await page.keyboard.type('Investigating a customer request');
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
     await page.keyboard.press('Enter');
 
     await expect(trigger).toContainText('Acme Support');
@@ -226,12 +251,15 @@ test.describe('dashboard shell', () => {
   }) => {
     let releaseIdentity!: () => void;
     const identityReleased = new Promise<void>((resolve) => (releaseIdentity = resolve));
+    const platformAccess = mockPlatformAccess([tenant]);
     await page.route('**/api/v1/**', async (route) => {
-      const path = new URL(route.request().url()).pathname;
-      if (path.endsWith('/me')) {
+      const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
+      if (path === '/me') {
         await identityReleased;
         return json(route, identities.platform);
       }
+      const access = platformAccess(route, path);
+      if (access) return access;
       return json(route, { items: [tenant], nextCursor: null });
     });
 
@@ -363,6 +391,7 @@ test.describe('dashboard shell', () => {
   }) => {
     let releaseIdentity!: () => void;
     const identityReleased = new Promise<void>((resolve) => (releaseIdentity = resolve));
+    const platformAccess = mockPlatformAccess([tenant]);
     await page.route('**/api/v1/**', async (route) => {
       const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
       if (path === '/me') {
@@ -370,7 +399,8 @@ test.describe('dashboard shell', () => {
         return json(route, identities.platform);
       }
       if (path === '/platform/tenants') return json(route, { items: [tenant], nextCursor: null });
-      if (path === `/platform/tenants/${tenant.id}/switch`) return json(route, tenant);
+      const access = platformAccess(route, path);
+      if (access) return access;
       if (path === '/auth/logout') return json(route, null);
       return json(route, { items: [], nextCursor: null });
     });
@@ -387,6 +417,7 @@ test.describe('dashboard shell', () => {
 
     await page.getByRole('button', { name: 'Switch tenant' }).click();
     await page.locator('.option').filter({ hasText: 'Acme Support' }).click();
+    await submitPlatformAccess(page);
     await expect(page.getByRole('button', { name: 'Switch tenant' })).toContainText('Acme Support');
     await expect(page.locator('.skeleton-shell')).toHaveCount(0);
   });
@@ -510,15 +541,14 @@ test.describe('dashboard shell', () => {
     test.slow();
     let releaseSwitch!: () => void;
     const switchReleased = new Promise<void>((resolve) => (releaseSwitch = resolve));
+    const platformAccess = mockPlatformAccess([tenant], { beforeStart: switchReleased });
 
     await page.route('**/api/v1/**', async (route) => {
       const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
       if (path === '/me') return json(route, identities.platform);
       if (path === '/platform/tenants') return json(route, { items: [tenant], nextCursor: null });
-      if (path === `/platform/tenants/${tenant.id}/switch`) {
-        await switchReleased;
-        return json(route, tenant);
-      }
+      const access = platformAccess(route, path);
+      if (access) return access;
       if (path === '/auth/logout') return json(route, null);
       return json(route, { items: [], nextCursor: null });
     });
@@ -528,6 +558,7 @@ test.describe('dashboard shell', () => {
 
     await page.getByRole('button', { name: 'Switch tenant' }).click();
     await page.locator('.option').filter({ hasText: 'Acme Support' }).click();
+    await submitPlatformAccess(page);
 
     await expectNoWorkspaceNavigation(page);
 
@@ -542,16 +573,29 @@ test.describe('dashboard shell', () => {
   test('renders tenant switch without bootstrap skeleton', async ({ page }) => {
     test.slow();
     const tenants = [
-      { id: 'tenant-a', name: 'Alpha Support', slug: 'alpha-support', status: 'active' },
-      { id: 'tenant-b', name: 'Beta Support', slug: 'beta-support', status: 'active' },
+      {
+        id: 'tenant-a',
+        name: 'Alpha Support',
+        slug: 'alpha-support',
+        status: 'active',
+        plan: 'trial',
+      },
+      {
+        id: 'tenant-b',
+        name: 'Beta Support',
+        slug: 'beta-support',
+        status: 'active',
+        plan: 'trial',
+      },
     ];
+    const platformAccess = mockPlatformAccess(tenants);
 
     await page.route('**/api/v1/**', async (route) => {
       const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
       if (path === '/me') return json(route, identities.platform);
       if (path === '/platform/tenants') return json(route, { items: tenants, nextCursor: null });
-      if (path === `/platform/tenants/${tenants[0].id}/switch`) return json(route, tenants[0]);
-      if (path === `/platform/tenants/${tenants[1].id}/switch`) return json(route, tenants[1]);
+      const access = platformAccess(route, path);
+      if (access) return access;
       if (path === '/auth/logout') return json(route, null);
       return json(route, { items: [], nextCursor: null });
     });
@@ -561,6 +605,7 @@ test.describe('dashboard shell', () => {
 
     await page.getByRole('button', { name: 'Switch tenant' }).click();
     await page.locator('.option').filter({ hasText: 'Alpha Support' }).click();
+    await submitPlatformAccess(page);
 
     await expect(page.locator('.skeleton-shell')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Switch tenant' })).toContainText(

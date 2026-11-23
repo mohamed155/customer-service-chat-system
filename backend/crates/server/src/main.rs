@@ -284,26 +284,30 @@ fn spawn_workers(
     let session_retention_sweeper = {
         let pool = state.db.clone();
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(6 * 3600));
+            let mut retention = tokio::time::interval(Duration::from_secs(6 * 3600));
+            let mut access_sessions = tokio::time::interval(Duration::from_secs(60));
+            access_sessions.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
-                interval.tick().await;
-                match identity::sessions::sweep_ended(&pool).await {
-                    Ok(count) => {
-                        if count > 0 {
-                            tracing::info!(
-                                count,
-                                "session retention sweep: deleted ended sessions"
-                            );
+                tokio::select! {
+                    _ = access_sessions.tick() => {
+                        match tenancy::sweep_platform_access_sessions(&pool).await {
+                            Ok(count) if count > 0 => tracing::info!(count, "platform access session sweep"),
+                            Ok(_) => {}
+                            Err(error) => tracing::warn!(%error, "platform access session sweep failed"),
                         }
                     }
-                    Err(e) => {
-                        tracing::warn!(%e, "session retention sweep failed");
+                    _ = retention.tick() => {
+                        match identity::sessions::sweep_ended(&pool).await {
+                            Ok(count) if count > 0 => tracing::info!(count, "session retention sweep: deleted ended sessions"),
+                            Ok(_) => {}
+                            Err(error) => tracing::warn!(%error, "session retention sweep failed"),
+                        }
+                        match identity::password_reset::sweep_tokens(&pool).await {
+                            Ok(count) if count > 0 => tracing::info!(count, "password reset token sweep"),
+                            Ok(_) => {}
+                            Err(error) => tracing::warn!(%error, "password reset token sweep failed"),
+                        }
                     }
-                }
-                match identity::password_reset::sweep_tokens(&pool).await {
-                    Ok(count) if count > 0 => tracing::info!(count, "password reset token sweep"),
-                    Ok(_) => {}
-                    Err(error) => tracing::warn!(%error, "password reset token sweep failed"),
                 }
             }
         })

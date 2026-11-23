@@ -1,6 +1,6 @@
 use authz::{platform_permission_middleware, require_permission, Permission};
 use axum::extract::{DefaultBodyLimit, Request};
-use axum::http::{header, header::SET_COOKIE, HeaderName, Method, StatusCode};
+use axum::http::{header, header::SET_COOKIE, HeaderName, HeaderValue, Method, StatusCode};
 use axum::middleware::from_fn_with_state;
 use axum::response::{IntoResponse, Response};
 use axum::routing::MethodRouter;
@@ -21,6 +21,7 @@ use std::time::Duration;
 use storage::{ObjectStorage, StorageBackend, StorageKind};
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::set_header::SetResponseHeaderLayer;
 use utoipa::OpenApi;
 use utoipa_axum::router::{OpenApiRouter, UtoipaMethodRouterExt};
 use utoipa_axum::routes;
@@ -616,6 +617,8 @@ fn authenticated_routes() -> OpenApiRouter<sqlx::PgPool> {
 }
 
 fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
+    use tenancy::api::platform_access;
+
     let mut router = OpenApiRouter::new()
         .routes(
             routes!(
@@ -646,8 +649,22 @@ fn platform_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             }),
         )
         .routes(
-            routes!(tenancy::routes::switch_tenant)
+            routes!(platform_access::switch_tenant)
                 .layer(middleware::from_fn(identity::step_up::require_step_up))
+                .layer(require_permission(Permission::PlatformTenantsSwitch)),
+        )
+        .routes(
+            routes!(platform_access::get_access_session)
+                .layer::<_, std::convert::Infallible>(require_permission(
+                    Permission::PlatformTenantsSwitch,
+                ))
+                .layer(SetResponseHeaderLayer::overriding(
+                    header::CACHE_CONTROL,
+                    HeaderValue::from_static("no-store"),
+                )),
+        )
+        .routes(
+            routes!(platform_access::end_access_session)
                 .layer(require_permission(Permission::PlatformTenantsSwitch)),
         )
         .routes(

@@ -1,4 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)] // test code: a failed unwrap is the failed test
+mod session_fixture;
+use session_fixture::PlatformAccess;
+
 #[path = "support/openai_mock.rs"]
 mod openai_mock;
 use std::sync::Arc;
@@ -26,7 +29,7 @@ fn test_config() -> config::AppConfig {
         port: 0,
         bind_address: "0.0.0.0".into(),
         environment: TEST_ENV,
-        cors_allowed_origins: vec![],
+        cors_allowed_origins: vec![session_fixture::DASHBOARD_ORIGIN.into()],
         log_format: config::LogFormat::Pretty,
         smtp_url: None,
         smtp_from: None,
@@ -3028,6 +3031,15 @@ async fn platform_actor_attribution_via_tenant_switch() {
 
     seed_membership(&pool, tenant_id, platform_user_id, "admin").await;
 
+    let access = PlatformAccess::open(
+        &pool,
+        &config::Environment::Test,
+        platform_user_id,
+        tenant_id,
+        |request| send(&state, request),
+    )
+    .await;
+
     // Platform user modifies agent config in tenant context
     let put_payload = serde_json::json!({
         "name": "Platform-Modified Agent",
@@ -3041,12 +3053,12 @@ async fn platform_actor_attribution_via_tenant_switch() {
 
     let put_resp = send(
         &state,
-        json_put(
+        access.request(json_put(
             "/api/v1/tenant/ai/agent",
             platform_user_id,
             tenant_id,
             put_payload,
-        ),
+        )),
     )
     .await;
     assert_eq!(put_resp.status(), StatusCode::CREATED);

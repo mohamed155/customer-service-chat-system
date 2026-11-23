@@ -33,7 +33,9 @@ This is the authoritative inventory of every endpoint the OpenAPI document MUST 
 | POST | `/platform/tenants` | `CreateTenantRequest` | 201 `PlatformTenantDetail` | 400, 403, 409, 422 | cookie | `platform.tenants.manage` |
 | GET | `/platform/tenants/{id}` | path `id: uuid` | 200 `PlatformTenantDetail` | 401, 403, 404 | cookie | `platform.tenants.list` |
 | PATCH | `/platform/tenants/{id}` | `UpdateTenantRequest` | 200 `PlatformTenantDetail` | 400, 403, 404, 422 | cookie | `platform.tenants.manage` |
-| POST | `/platform/tenants/{id}/switch` | path `id: uuid` | 200 (switch result) | 403, 404 | cookie | `platform.tenants.switch` |
+| POST | `/platform/tenants/{id}/switch` | path `id: uuid`, `StartPlatformAccessRequest` | 200 `SwitchTenantResponse` | 400, 401, 403, 409, 422 | cookie | `platform.tenants.switch` |
+| GET | `/platform/access-session` | — | 200 `PlatformAccessSession` | 401, 403, 404 | cookie | `platform.tenants.switch` |
+| POST | `/platform/access-session/end` | — | 204 | 401, 403 | cookie | `platform.tenants.switch` |
 
 ## Platform — AI config (tag: platform-ai)
 

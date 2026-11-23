@@ -1,6 +1,10 @@
+pub mod api;
+mod application;
 pub mod audit;
 pub mod authorize;
 pub mod directory;
+mod domain;
+mod infrastructure;
 pub mod invitations;
 pub mod members;
 pub mod routes;
@@ -16,6 +20,17 @@ use kernel::ApiError;
 use std::str::FromStr;
 use tracing::field;
 use uuid::Uuid;
+
+pub use infrastructure::platform_access::sweep as sweep_platform_access_sessions;
+
+/// Proof of the access session that authorized a request. Streaming endpoints revalidate
+/// the same grant as they send events, even after the request's response headers were sent.
+#[derive(Clone, Copy)]
+pub struct PlatformAccessGrant {
+    pub id: Uuid,
+    expires_at: chrono::DateTime<chrono::Utc>,
+    auth_session_id: Uuid,
+}
 
 #[derive(Debug, Clone)]
 pub struct TenantContext {
@@ -136,6 +151,25 @@ pub async fn tenant_context_middleware(
         }
     };
 
+    let access_grant = if principal.kind() == identity::PrincipalKind::Platform {
+        let claims = request
+            .extensions()
+            .get::<identity::session::SessionClaims>();
+        match api::platform_access::require_access_session(
+            &config.pool,
+            principal.user_id,
+            tenant_id,
+            claims,
+        )
+        .await
+        {
+            Ok(grant) => Some(grant),
+            Err(error) => return error.with_request_id(&request_id).into_response(),
+        }
+    } else {
+        None
+    };
+
     let (tenant_role, permissions) = match principal.kind() {
         identity::PrincipalKind::InvalidPlatformRole => {
             tracing::warn!(
@@ -216,7 +250,18 @@ pub async fn tenant_context_middleware(
 
     request.extensions_mut().insert(ctx);
     request.extensions_mut().insert(permissions);
-    let mut response = next.run(request).await;
+    let mut response = if let Some(grant) = access_grant {
+        request.extensions_mut().insert(grant);
+        audit_log::with_platform_access_session(
+            principal.user_id,
+            tenant_id,
+            grant.id,
+            next.run(request),
+        )
+        .await
+    } else {
+        next.run(request).await
+    };
     // Lets the server-error log name the tenant (see the server's `internal_error` middleware).
     response
         .extensions_mut()

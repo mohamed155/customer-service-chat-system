@@ -54,7 +54,10 @@ describe('component tests with the English catalog', () => {
         if (typeof value === 'string') {
           // Every message that takes a value gets one, so a typo in a message fails here.
           const params = Object.fromEntries(
-            [...value.matchAll(/\{(\w+)/g)].map((m) => [m[1], 'x']),
+            [...value.matchAll(/\{(\w+)(?:,\s*(\w+))?/g)].map(([, name, format]) => [
+              name,
+              ['plural', 'selectordinal', 'number', 'date', 'time'].includes(format) ? 1 : 'x',
+            ]),
           );
           expect(() => transloco.translate(here.join('.'), params), here.join('.')).not.toThrow();
         } else {

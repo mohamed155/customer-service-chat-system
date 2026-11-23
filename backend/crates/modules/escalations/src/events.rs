@@ -1,4 +1,5 @@
 use std::convert::Infallible;
+use std::future::ready;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -8,14 +9,14 @@ use axum::extract::State;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use tokio_stream::wrappers::errors::BroadcastStreamRecvError;
 use tokio_stream::wrappers::BroadcastStream;
 use tracing::{error, info};
 use uuid::Uuid;
 
 use identity::Principal;
-use tenancy::TenantContext;
+use tenancy::{PlatformAccessGrant, TenantContext};
 
 use crate::audit;
 use crate::presence;
@@ -189,6 +190,7 @@ pub async fn stream_events(
     ctx: TenantContext,
     Extension(principal): Extension<Principal>,
     Extension(runtime): Extension<Arc<presence::Runtime>>,
+    grant: Option<Extension<PlatformAccessGrant>>,
 ) -> Response {
     let mut uow = match ctx.unit_of_work(&pool).await {
         Ok(u) => u,
@@ -279,10 +281,20 @@ pub async fn stream_events(
         membership_id,
     };
 
-    let sse =
-        Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(20)).text(""));
-
-    sse.into_response()
+    let keep_alive = KeepAlive::new().interval(Duration::from_secs(20)).text("");
+    if let Some(Extension(grant)) = grant {
+        let stream_pool = pool.clone();
+        let guarded = stream
+            .then(move |event| {
+                let pool = stream_pool.clone();
+                async move { grant.is_current(&pool).await.then_some(event) }
+            })
+            .take_while(|event| ready(event.is_some()))
+            .filter_map(ready)
+            .take_until(grant.wait_for_end(pool));
+        return Sse::new(guarded).keep_alive(keep_alive).into_response();
+    }
+    Sse::new(stream).keep_alive(keep_alive).into_response()
 }
 
 // ---------------------------------------------------------------------------

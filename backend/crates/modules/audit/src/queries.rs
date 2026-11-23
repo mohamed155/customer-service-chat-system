@@ -26,6 +26,7 @@ pub struct AuditRow {
     pub resource_type: String,
     pub resource_id: String,
     pub tenant_id: Option<Uuid>,
+    pub platform_access_session_id: Option<Uuid>,
     pub details: serde_json::Value,
     pub created_at: DateTime<Utc>,
     pub display_name: Option<String>,
@@ -50,7 +51,7 @@ pub async fn list_platform_entries(
     limit: i64,
 ) -> Result<Vec<AuditRow>, sqlx::Error> {
     let rows = sqlx::query_as::<_, AuditRow>(
-        "SELECT id, action, actor_user_id, resource_type, resource_id, tenant_id, details, \
+        "SELECT id, action, actor_user_id, resource_type, resource_id, tenant_id, platform_access_session_id, details, \
                 created_at, display_name, email, platform_role, deleted_at \
          FROM xtenant.platform_audit_entries($1, $2, $3, $4, $5, $6, $7, $8, $9)",
     )
@@ -83,7 +84,7 @@ pub async fn list_entries(
 ) -> Result<Vec<AuditRow>, sqlx::Error> {
     let mut builder = sqlx::QueryBuilder::new(
         "SELECT a.id, a.action, a.actor_user_id, a.resource_type, a.resource_id, \
-                a.tenant_id, a.details, a.created_at, \
+                a.tenant_id, a.platform_access_session_id, a.details, a.created_at, \
                 NULL::text AS display_name, NULL::text AS email, \
                 NULL::text AS platform_role, NULL::timestamptz AS deleted_at \
          FROM audit_logs a \

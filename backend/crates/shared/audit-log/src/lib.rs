@@ -19,6 +19,8 @@
 //! - [`record`] — writes the record in a transaction of its own and only logs a failure. Use it
 //!   for a record about something that has already happened and changes nothing that must stay
 //!   consistent with it (a rate-limit refusal, a tool that ran).
+//! - [`with_platform_access_session`] — retains the session that authorized a tenant request while
+//!   its handler executes.
 //!
 //! # Rows
 //! - A row for a tenant is inserted directly: Row-Level Security refuses it unless the transaction
@@ -31,11 +33,42 @@
 //!   `actor_user_id` column references `users`, so it is stored as NULL.
 //!
 //! # Dependencies
-//! - `db` (the tenant Unit of Work), `sqlx`, `tracing`. Never a module.
+//! - `db` (the tenant Unit of Work), `sqlx`, `tokio` (request scope), `tracing`. Never a module.
 
 use sqlx::{PgConnection, PgPool};
+use std::future::Future;
 use tracing::error;
 use uuid::Uuid;
+
+struct PlatformAccessLink {
+    actor_id: Uuid,
+    tenant_id: Uuid,
+    session_id: Uuid,
+}
+
+tokio::task_local! {
+    static PLATFORM_ACCESS_LINK: PlatformAccessLink;
+}
+
+/// Runs a tenant request under its validated access grant, so in-flight writes keep their original
+/// attribution if the platform user ends or replaces access while the request is executing.
+pub async fn with_platform_access_session<F: Future>(
+    actor_id: Uuid,
+    tenant_id: Uuid,
+    session_id: Uuid,
+    request: F,
+) -> F::Output {
+    PLATFORM_ACCESS_LINK
+        .scope(
+            PlatformAccessLink {
+                actor_id,
+                tenant_id,
+                session_id,
+            },
+            request,
+        )
+        .await
+}
 
 /// Writes an audit record in the caller's transaction.
 ///
@@ -146,9 +179,18 @@ async fn insert_tenant_row(
     resource_id: Option<&str>,
     details: &serde_json::Value,
 ) -> sqlx::Result<()> {
+    let access_session_id = PLATFORM_ACCESS_LINK
+        .try_with(|link| {
+            (actor_user_id == Some(link.actor_id) && tenant_id == link.tenant_id)
+                .then_some(link.session_id)
+        })
+        .ok()
+        .flatten();
     sqlx::query(
-        "INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id, tenant_id, details) \
-         VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO audit_logs (
+             actor_user_id, action, resource_type, resource_id, tenant_id, details,
+             platform_access_session_id
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(actor_user_id)
     .bind(action)
@@ -156,6 +198,7 @@ async fn insert_tenant_row(
     .bind(resource_id)
     .bind(tenant_id)
     .bind(details)
+    .bind(access_session_id)
     .execute(conn)
     .await
     .map(|_| ())

@@ -20,6 +20,8 @@ export const ERROR_CODE_KEYS: Readonly<Record<string, string>> = {
   validation_failed: marker('errors.requestFailed'),
   unauthenticated: marker('errors.accessDenied'),
   unauthorized: marker('errors.tenantAccessDenied'),
+  platform_access_required: marker('errors.platformAccessRequired'),
+  platform_access_expired: marker('errors.platformAccessExpired'),
   not_found: marker('errors.notFound'),
   conflict: marker('errors.requestFailed'),
   gone: marker('errors.requestFailed'),

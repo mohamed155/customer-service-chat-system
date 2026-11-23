@@ -25,6 +25,8 @@ use crate::{
     session::{self, SessionAuth},
 };
 
+pub use crate::infrastructure::session_status::active_session_ids;
+
 /// Prefix of every refresh token, so a leaked one is recognisable in a log or a scanner.
 pub const REFRESH_PREFIX: &str = "rt_";
 

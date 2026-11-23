@@ -387,10 +387,9 @@ pub mod isolation {
         }
     }
 
-    /// Tables in `public` that deliberately have no `tenant_id` and no Row-Level Security: shared
-    /// reference data and platform-wide records. **Adding a table here is a decision to keep it
-    /// out of tenant isolation**; a table with a `tenant_id` column can never be listed (it must be
-    /// protected), and a table with neither is reported until it is classified one way or the other.
+    /// Tables in `public` classified as global: shared reference data and platform-wide records.
+    /// Adding a table here is a decision to keep it out of tenant isolation. The platform access
+    /// session table is the specific exception that references a tenant by `tenant_id`.
     pub const GLOBAL_TABLES: &[&str] = &[
         "_sqlx_migrations",
         "auth_sessions",
@@ -400,6 +399,7 @@ pub mod isolation {
         "mfa_recovery_codes",
         "password_reset_requests",
         "password_reset_tokens",
+        "platform_access_sessions",
         "refresh_tokens",
         "secret_keks",
         "tenants",
@@ -409,8 +409,8 @@ pub mod isolation {
     /// Checks the tenant-isolation rule against the current schema (ADR-004 sections 2 and 7) and
     /// returns one message per violation; an empty list means the rule holds:
     ///
-    /// - every table in `public` with a `tenant_id` column has Row-Level Security enabled **and**
-    ///   forced, and a policy for all commands with both `USING` and `WITH CHECK`;
+    /// - every tenant-owned table in `public` has Row-Level Security enabled **and** forced, and
+    ///   a policy for all commands with both `USING` and `WITH CHECK`;
     /// - every other table is in [`GLOBAL_TABLES`], so a new table cannot skip the decision;
     /// - every entry of [`GLOBAL_TABLES`] still exists.
     pub async fn rls_rule_violations(conn: &mut sqlx::PgConnection) -> Vec<String> {
@@ -432,6 +432,16 @@ pub mod isolation {
 
         let mut violations = Vec::new();
         for (name, has_tenant_id, enabled, forced, has_policy) in &tables {
+            // This platform-owned authorization table must be read before a tenant Unit of Work
+            // exists and is swept across tenants. The FK records which tenant access was granted.
+            if name == "platform_access_sessions" && GLOBAL_TABLES.contains(&name.as_str()) {
+                if !has_tenant_id || *enabled || *forced || *has_policy {
+                    violations.push(format!(
+                        "{name}: must be global platform authorization state with a tenant_id reference"
+                    ));
+                }
+                continue;
+            }
             if *has_tenant_id {
                 if GLOBAL_TABLES.contains(&name.as_str()) {
                     violations.push(format!(

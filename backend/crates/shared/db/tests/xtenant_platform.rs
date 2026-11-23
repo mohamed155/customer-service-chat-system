@@ -563,23 +563,39 @@ async fn platform_audit_entries_lists_every_tenants_entries_and_records_who_aske
         "app_runtime must not read audit_logs directly without a tenant"
     );
 
-    let rows: Vec<(String, Option<Uuid>, Option<String>)> = sqlx::query_as(
-        "SELECT resource_id, tenant_id, display_name \
+    #[derive(sqlx::FromRow)]
+    struct ListedAuditRow {
+        resource_id: String,
+        tenant_id: Option<Uuid>,
+        display_name: Option<String>,
+        platform_access_session_id: Option<Uuid>,
+    }
+
+    let rows: Vec<ListedAuditRow> = sqlx::query_as(
+        "SELECT resource_id, tenant_id, display_name, platform_access_session_id \
          FROM xtenant.platform_audit_entries($1, NULL, NULL, NULL, ARRAY['xtenant.test.%'], NULL, NULL, NULL, 10)",
     )
     .bind(admin)
     .fetch_all(&mut *tx)
     .await
     .unwrap();
-    let mut seen: Vec<(String, Option<Uuid>)> = rows.iter().map(|r| (r.0.clone(), r.1)).collect();
+    let mut seen: Vec<_> = rows
+        .iter()
+        .map(|r| (r.resource_id.clone(), r.tenant_id))
+        .collect();
     seen.sort();
     assert_eq!(
         seen,
         vec![("r1".to_string(), Some(t1)), ("r2".to_string(), Some(t2))]
     );
     assert!(
-        rows.iter().all(|r| r.2.as_deref() == Some("Xtenant Test")),
+        rows.iter()
+            .all(|r| r.display_name.as_deref() == Some("Xtenant Test")),
         "the actor is joined"
+    );
+    assert!(
+        rows.iter().all(|r| r.platform_access_session_id.is_none()),
+        "no access session was opened"
     );
 
     let one: Vec<(String,)> = sqlx::query_as(
