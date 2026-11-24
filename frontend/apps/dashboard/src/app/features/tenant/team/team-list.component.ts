@@ -152,6 +152,11 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
         gap: var(--app-space-2);
         align-items: center;
       }
+      .capacity-placeholder {
+        display: block;
+        min-width: 160px;
+        min-height: 36px;
+      }
     `,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,

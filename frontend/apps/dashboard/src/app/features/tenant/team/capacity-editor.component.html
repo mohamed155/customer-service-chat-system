@@ -1,4 +1,15 @@
-@if (capacity(); as capacity) {
+@if (store.routingCapacityStatus() === 'pending' || store.routingCapacityStatus() === 'loading') {
+  <span role="status">{{ 'team.capacity.loading' | transloco }}</span>
+} @else if (store.routingCapacityStatus() === 'error') {
+  <div class="capacity-editor">
+    <app-inline-alert tone="error" [requestId]="store.routingCapacityError()?.requestId">{{
+      errorKey(store.routingCapacityError()) | transloco
+    }}</app-inline-alert>
+    <app-button variant="ghost" (pressed)="store.loadRoutingCapacity()">{{
+      'team.capacity.retry' | transloco
+    }}</app-button>
+  </div>
+} @else if (capacity(); as capacity) {
   <div class="capacity-editor">
     @if (canManage()) {
       <div class="capacity-controls">
@@ -55,5 +66,5 @@
     }
   </div>
 } @else {
-  <span class="muted">—</span>
+  <span class="muted">{{ 'team.capacity.missing' | transloco }}</span>
 }

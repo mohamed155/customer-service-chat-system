@@ -1,13 +1,14 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { TeamMember } from '../../../core/api/tenant-api.models';
 import { APP_CONFIG } from '../../../core/config/app-config';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { RoutingCapacityApiService } from '../../../core/api/routing-capacity-api.service';
 import { MfaService } from '../../../core/auth/mfa.service';
 import { CurrentUserService } from '../../../core/tenant/current-user.service';
+import { LocaleService } from '../../../core/i18n/locale.service';
 import {
   provideTenantStore,
   tenantStore,
@@ -182,6 +183,48 @@ describe('TeamListComponent', () => {
     });
   });
 
+  it('shows capacity loading, errors with request ID, and retries without blocking the roster', async () => {
+    const pending = new Subject<never>();
+    mockApi.getMembers.mockReturnValue(
+      of({ data: { items: members, nextCursor: null, hasMore: false } }),
+    );
+    mockApi.getInvitations.mockReturnValue(
+      of({ data: { items: [], nextCursor: null, hasMore: false } }),
+    );
+    mockRoutingCapacityApi.get
+      .mockReturnValueOnce(pending)
+      .mockReturnValueOnce(of({ data: { default_capacity: 10, agents: [] } }));
+    configureModule();
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(TeamListComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const root: HTMLElement = fixture.nativeElement;
+    expect(root.textContent).toContain('Loading capacity');
+    expect(root.textContent).toContain('Alice');
+    pending.error({
+      code: 'unavailable',
+      message: 'Unavailable',
+      status: 503,
+      requestId: 'req-test',
+    });
+    fixture.detectChanges();
+    expect(root.textContent).toContain('reqtest');
+    expect(
+      root.querySelector('app-inline-alert[role="alert"], app-inline-alert [role="alert"]'),
+    ).toBeTruthy();
+    expect(root.textContent).toContain('Disable');
+    const retry = Array.from(root.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Retry',
+    );
+    expect(retry).toBeTruthy();
+    retry!.click();
+    fixture.detectChanges();
+    expect(mockRoutingCapacityApi.get).toHaveBeenCalledTimes(2);
+    expect(root.textContent).toContain('Capacity unavailable for this member');
+  });
+
   it.each(['malformed', 'failed'] as const)(
     'keeps member actions working when capacity loading is %s',
     async (outcome) => {
@@ -300,6 +343,42 @@ describe('TeamListComponent', () => {
     inherit?.click();
     fixture.detectChanges();
     expect(mockRoutingCapacityApi.setAgent).toHaveBeenNthCalledWith(2, 'm-1', null);
+  });
+
+  it('formats a numeric override using the active formatting locale', async () => {
+    mockApi.getMembers.mockReturnValue(
+      of({ data: { items: members, nextCursor: null, hasMore: false } }),
+    );
+    mockApi.getInvitations.mockReturnValue(
+      of({ data: { items: [], nextCursor: null, hasMore: false } }),
+    );
+    mockRoutingCapacityApi.get.mockReturnValue(
+      of({
+        data: {
+          default_capacity: 10,
+          agents: [
+            {
+              membership_id: 'm-1',
+              display_name: 'Alice',
+              override: 12,
+              effective: 12,
+              open_load: 2,
+            },
+          ],
+        },
+      }),
+    );
+    configureModule();
+    await TestBed.compileComponents();
+    vi.spyOn(TestBed.inject(LocaleService), 'formatLocale').mockReturnValue('ar-EG');
+    const fixture = TestBed.createComponent(TeamListComponent);
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain(
+        new Intl.NumberFormat('ar-EG').format(12),
+      );
+    });
   });
 
   it('shows invite button when user can manage', async () => {

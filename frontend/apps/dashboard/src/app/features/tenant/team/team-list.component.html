@@ -203,10 +203,13 @@
                   </td>
                   <td class="muted">{{ member.joinedAt | localeDate: 'date' }}</td>
                   <td>
+                    <!-- Deferred to keep the team page within its bundle budget. -->
                     @defer (on immediate) {
                       <app-capacity-editor [member]="member" [canManage]="canManage()" />
                     } @placeholder {
-                      <span class="muted">—</span>
+                      <span class="muted capacity-placeholder">—</span>
+                    } @error {
+                      <span role="alert">{{ 'team.capacity.editorError' | transloco }}</span>
                     }
                   </td>
                   @if (canManage()) {

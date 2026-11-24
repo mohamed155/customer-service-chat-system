@@ -246,6 +246,10 @@ pub async fn claim_in_tx(
     claimant_membership_id: Uuid,
     actor_user_id: Uuid,
 ) -> Result<crate::model::Escalation, ClaimError> {
+    queries::take_tenant_routing_lock_in_tx(tx, tenant_id)
+        .await
+        .map_err(|e| ClaimError::Internal(e.to_string()))?;
+
     let updated = sqlx::query(
         "UPDATE escalations SET status = 'assigned', routing_reason = 'manual_claim', \
          assigned_membership_id = $1, assigned_at = now() \

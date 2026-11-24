@@ -629,7 +629,8 @@ async fn relabel_reassignment_in_tx(
          assigned_at = COALESCE(assigned_at, now()) \
          WHERE tenant_id = $1 AND conversation_id = $2 \
          AND status = 'assigned' \
-         AND routing_reason IS DISTINCT FROM 'manual_reassignment' \
+         AND (routing_reason IS DISTINCT FROM 'manual_reassignment' \
+              OR ($3 IS NOT NULL AND assigned_membership_id IS DISTINCT FROM $3)) \
          RETURNING id",
     )
     .bind(tenant_id)

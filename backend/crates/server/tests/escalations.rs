@@ -2230,6 +2230,135 @@ async fn patch_assignee_escalated_conversation_relabels() {
 
 #[tokio::test]
 #[serial_test::serial(escalations_db)]
+async fn successive_manual_reassignments_update_assignee_and_clock_once() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let state = app_state(pool.clone());
+    let tenant = seed_tenant(&pool, "successive-reassignment").await;
+    let b = seed_member(&pool, tenant, "b@successive.test", "agent").await;
+    let c = seed_member(&pool, tenant, "c@successive.test", "agent").await;
+    let customer = seed_customer(&pool, tenant, "Customer", None, None).await;
+    let conv = seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await;
+    let response = send_post(
+        &state,
+        b.user_id,
+        tenant,
+        &format!("/api/v1/tenant/conversations/{conv}/escalate"),
+        &serde_json::json!({"reason": "reassignment"}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let id: Uuid = body_json(response).await["id"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let event = |old, new| {
+        serde_json::json!({"tenantId": tenant, "conversationId": conv,
+        "oldMembershipId": old, "newMembershipId": new})
+    };
+    insert_escalation_event(
+        tenant,
+        conv,
+        "conversation.assignment_changed",
+        event(None, Some(b.membership_id)),
+    )
+    .await;
+    process_outbox(&state).await;
+    let count = fetch_audit_count(&pool, "escalation.assigned", id).await;
+    let payload = event(Some(b.membership_id), Some(c.membership_id));
+    insert_escalation_event(
+        tenant,
+        conv,
+        "conversation.assignment_changed",
+        payload.clone(),
+    )
+    .await;
+    process_outbox(&state).await;
+    let assigned: Uuid = sqlx::query_scalar(
+        "SELECT assigned_membership_id FROM escalations WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(tenant)
+    .bind(id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(assigned, c.membership_id);
+    let clock: chrono::DateTime<chrono::Utc> = sqlx::query_scalar("SELECT last_assigned_at FROM agent_availability WHERE tenant_id = $1 AND membership_id = $2")
+        .bind(tenant).bind(c.membership_id).fetch_one(&db::testing::seed_pool()).await.unwrap();
+    assert_eq!(
+        fetch_audit_count(&pool, "escalation.assigned", id).await,
+        count + 1
+    );
+    insert_escalation_event(tenant, conv, "conversation.assignment_changed", payload).await;
+    process_outbox(&state).await;
+    let replay_clock: chrono::DateTime<chrono::Utc> = sqlx::query_scalar("SELECT last_assigned_at FROM agent_availability WHERE tenant_id = $1 AND membership_id = $2")
+        .bind(tenant).bind(c.membership_id).fetch_one(&db::testing::seed_pool()).await.unwrap();
+    assert_eq!(clock, replay_clock);
+    assert_eq!(
+        fetch_audit_count(&pool, "escalation.assigned", id).await,
+        count + 1
+    );
+    insert_escalation_event(
+        tenant,
+        conv,
+        "conversation.assignment_changed",
+        event(Some(c.membership_id), None),
+    )
+    .await;
+    process_outbox(&state).await;
+    let assigned_after_null: Uuid = sqlx::query_scalar(
+        "SELECT assigned_membership_id FROM escalations WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(tenant)
+    .bind(id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(assigned_after_null, c.membership_id);
+    assert_eq!(
+        fetch_audit_count(&pool, "escalation.assigned", id).await,
+        count + 1
+    );
+}
+
+#[tokio::test]
+#[serial_test::serial(escalations_db)]
+async fn manual_claim_acquires_routing_lock_before_updating() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let tenant = seed_tenant(&pool, "claim-routing-lock").await;
+    let mut holder = db::UnitOfWork::begin_for_tenant(&pool, tenant)
+        .await
+        .unwrap();
+    escalations::queries::take_tenant_routing_lock_in_tx(&mut holder, tenant)
+        .await
+        .unwrap();
+    let mut claimant = db::UnitOfWork::begin_for_tenant(&pool, tenant)
+        .await
+        .unwrap();
+    sqlx::query("SET LOCAL lock_timeout = '300ms'")
+        .execute(&mut **claimant)
+        .await
+        .unwrap();
+    let result = escalations::routing::claim_in_tx(
+        &mut claimant,
+        tenant,
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+        Uuid::new_v4(),
+    )
+    .await;
+    assert!(
+        matches!(result, Err(escalations::routing::ClaimError::Internal(_))),
+        "claim must wait for the tenant lock: {result:?}"
+    );
+    drop(claimant);
+    holder.commit().await.unwrap();
+}
+
+#[tokio::test]
+#[serial_test::serial(escalations_db)]
 async fn routing_engine_origin_does_not_relabel() {
     let Some(pool) = get_pool().await else { return };
     setup(&pool).await;

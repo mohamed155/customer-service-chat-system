@@ -5,6 +5,7 @@ import { AgentCapacity } from '../../../core/api/routing-capacity-api.service';
 import { ApiError } from '../../../core/api/api.models';
 import { errorMessageKey } from '../../../core/errors/error-message';
 import { LocaleService } from '../../../core/i18n/locale.service';
+import { formatNumber } from '../../../core/i18n/format';
 import { marker } from '../../../core/i18n/marker';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
@@ -60,7 +61,7 @@ export class CapacityEditorComponent {
     const override = capacity['override'];
     return override === null || override === undefined
       ? this.locale.translate(marker('team.capacity.inherit'))
-      : String(override);
+      : formatNumber(override, this.locale.formatLocale());
   }
 
   protected updateAgentCapacity(membershipId: string, rawCapacity: string): void {
