@@ -39,6 +39,7 @@ knowledge = { path = "../modules/knowledge" }
 tools = { path = "../modules/tools" }
 whatsapp = { path = "../modules/whatsapp" }
 widgets = { path = "../modules/widgets" }
+privacy = { path = "../modules/privacy" }
 storage = { path = "../shared/storage" }
 uuid = { workspace = true }
 tokio.workspace = true
@@ -51,6 +52,7 @@ utoipa-axum.workspace = true
 utoipa-swagger-ui.workspace = true
 
 [dev-dependencies]
+zip = { version = "9.4", default-features = false }
 jsonwebtoken.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 ai-providers = { path = "../ai-providers" }

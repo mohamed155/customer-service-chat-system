@@ -7,13 +7,15 @@ const RESOURCE_TYPE_SKILL: &str = "skill";
 const RESOURCE_TYPE_MEMBER: &str = "member";
 const RESOURCE_TYPE_AVAILABILITY: &str = "availability";
 
+#[allow(clippy::too_many_arguments)]
 pub async fn record_escalation_created(
     tx: &mut Transaction<'_, Postgres>,
     actor_user_id: Uuid,
     tenant_id: Uuid,
     escalation_id: Uuid,
     conversation_id: Uuid,
-    reason: &str,
+    reason_length: usize,
+    required_skill_ids: &[Uuid],
 ) -> Result<(), sqlx::Error> {
     audit_log::record_in_tx(
         tx,
@@ -22,7 +24,11 @@ pub async fn record_escalation_created(
         Some(tenant_id),
         RESOURCE_TYPE_ESCALATION,
         Some(&escalation_id.to_string()),
-        &json!({ "conversation_id": conversation_id.to_string(), "reason": reason }),
+        &json!({
+            "conversation_id": conversation_id,
+            "reason_length": reason_length,
+            "required_skill_ids": required_skill_ids,
+        }),
     )
     .await
 }
@@ -34,7 +40,7 @@ pub async fn record_escalation_assigned(
     tenant_id: Uuid,
     escalation_id: Uuid,
     routing_reason: &str,
-    matched_skill_names: &[String],
+    matched_skill_ids: &[Uuid],
     load_count: i64,
     assigned_membership_id: Uuid,
 ) -> Result<(), sqlx::Error> {
@@ -47,7 +53,7 @@ pub async fn record_escalation_assigned(
         Some(&escalation_id.to_string()),
         &json!({
             "routing_reason": routing_reason,
-            "matched_skills": matched_skill_names,
+            "matched_skill_ids": matched_skill_ids,
             "load_count": load_count,
             "assigned_membership_id": assigned_membership_id.to_string(),
         }),

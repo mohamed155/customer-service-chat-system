@@ -53,3 +53,6 @@ pub mod routes;
 pub mod sender;
 pub mod webhook;
 pub mod window;
+
+/// Customer data operations for the tenant privacy workflow.
+pub mod customer_privacy;

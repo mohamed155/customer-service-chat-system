@@ -89,7 +89,8 @@ pub async fn update_contact_field_in_tx(
 
     let sql = format!(
         "UPDATE customers SET {field} = $1, updated_at = now() \
-         WHERE tenant_id = $2 AND id = $3 AND deleted_at IS NULL"
+         WHERE tenant_id = $2 AND id = $3 AND deleted_at IS NULL \
+           AND erasure_pending_at IS NULL AND erased_at IS NULL"
     );
 
     let rows = sqlx::query(sqlx::AssertSqlSafe(sql))

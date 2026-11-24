@@ -139,3 +139,6 @@ pub async fn customer_exists_in_tx(
     .fetch_one(&mut **tx)
     .await
 }
+
+/// Customer data operations for the tenant privacy workflow.
+pub mod customer_privacy;

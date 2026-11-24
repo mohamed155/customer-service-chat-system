@@ -1,0 +1,75 @@
+use sqlx::PgConnection;
+use uuid::Uuid;
+
+// UUID parameters come from Uuid::to_string, which uses canonical lowercase spelling.
+// Require one structured match and reject any supplied identifier that conflicts with
+// it or cannot be verified. Only absent fields may bypass a conflict check.
+const CUSTOMER_DELIVERY_PREDICATE: &str = "
+    tenant_id = $1
+    AND (privacy_normalized_uuid(payload->>'customer_id') = $2 OR privacy_normalized_uuid(payload->>'customerId') = $2
+         OR privacy_normalized_uuid(payload->>'conversation_id') = ANY($3) OR privacy_normalized_uuid(payload->>'conversationId') = ANY($3)
+         OR privacy_normalized_uuid(payload->>'message_id') = ANY($4) OR privacy_normalized_uuid(payload->>'messageId') = ANY($4))
+    AND (payload->>'customer_id' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'customer_id') = $2, false))
+    AND (payload->>'customerId' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'customerId') = $2, false))
+    AND (payload->>'conversation_id' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'conversation_id') = ANY($3), false))
+    AND (payload->>'conversationId' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'conversationId') = ANY($3), false))
+    AND (payload->>'message_id' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'message_id') = ANY($4), false))
+    AND (payload->>'messageId' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'messageId') = ANY($4), false))";
+
+/// Stream all webhook deliveries attributed to the customer into the export.
+/// The connection must belong to the caller's tenant Unit of Work, and the
+/// conversation and message IDs must belong to this customer in that tenant.
+/// Returns any query or export write error.
+pub async fn export_customer(
+    conn: &mut PgConnection,
+    tenant: Uuid,
+    customer: Uuid,
+    conversations: &[Uuid],
+    messages: &[Uuid],
+    export: &mut dyn db::json_export::JsonExport,
+) -> sqlx::Result<()> {
+    let conversations: Vec<_> = conversations.iter().map(Uuid::to_string).collect();
+    let messages: Vec<_> = messages.iter().map(Uuid::to_string).collect();
+    let sql = format!(
+        "SELECT to_jsonb(r) FROM integration_webhook_deliveries r
+         WHERE {CUSTOMER_DELIVERY_PREDICATE} ORDER BY id"
+    );
+    db::json_export::write_rows(
+        conn,
+        export,
+        "integration_webhook_deliveries.json",
+        sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
+            .bind(tenant)
+            .bind(customer.to_string())
+            .bind(conversations)
+            .bind(messages),
+    )
+    .await
+}
+
+/// Clear the payload of attributed webhook deliveries, retaining delivery metadata.
+/// The connection must belong to the caller's tenant Unit of Work, and the
+/// conversation and message IDs must belong to this customer in that tenant.
+/// Returns any database error within the caller-managed transaction.
+pub async fn erase_customer(
+    conn: &mut PgConnection,
+    tenant: Uuid,
+    customer: Uuid,
+    conversations: &[Uuid],
+    messages: &[Uuid],
+) -> sqlx::Result<()> {
+    let conversations: Vec<_> = conversations.iter().map(Uuid::to_string).collect();
+    let messages: Vec<_> = messages.iter().map(Uuid::to_string).collect();
+    let sql = format!(
+        "UPDATE integration_webhook_deliveries SET payload = '{{}}'::jsonb
+         WHERE {CUSTOMER_DELIVERY_PREDICATE}"
+    );
+    sqlx::query(sqlx::AssertSqlSafe(sql))
+        .bind(tenant)
+        .bind(customer.to_string())
+        .bind(conversations)
+        .bind(messages)
+        .execute(conn)
+        .await?;
+    Ok(())
+}

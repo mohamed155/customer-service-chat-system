@@ -44,6 +44,8 @@ pub struct CustomerDetail {
     pub channels: Vec<String>,
     pub created_at: sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
     pub updated_at: sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
+    pub erasure_pending_at: Option<sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>>,
+    pub erased_at: Option<sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>>,
     pub identifiers: Vec<ChannelIdentifier>,
     pub metadata: BTreeMap<String, String>,
 }

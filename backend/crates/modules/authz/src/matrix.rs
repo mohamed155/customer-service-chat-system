@@ -7,6 +7,8 @@ const TENANT_ADMIN: &[Permission] = &[
     Permission::ConversationsManage,
     Permission::CustomersView,
     Permission::CustomersManage,
+    Permission::CustomersExport,
+    Permission::CustomersErase,
     Permission::AiAgentView,
     Permission::AiAgentManage,
     Permission::KnowledgeBaseView,

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::path::Path;
+use std::pin::Pin;
 use std::sync::Mutex;
 
 #[derive(Debug)]
@@ -19,11 +21,31 @@ impl fmt::Display for StorageError {
 
 impl std::error::Error for StorageError {}
 
+pub type ObjectReader = Pin<Box<dyn tokio::io::AsyncRead + Send>>;
+
 #[async_trait::async_trait]
 pub trait ObjectStorage: Send + Sync + 'static {
     async fn put(&self, key: &str, content_type: &str, bytes: Vec<u8>) -> Result<(), StorageError>;
     async fn get(&self, key: &str) -> Result<(Vec<u8>, String), StorageError>;
     async fn delete(&self, key: &str) -> Result<(), StorageError>;
+
+    async fn get_reader(&self, key: &str) -> Result<ObjectReader, StorageError> {
+        let (bytes, _) = self.get(key).await?;
+        Ok(Box::pin(std::io::Cursor::new(bytes)))
+    }
+
+    async fn put_file(
+        &self,
+        key: &str,
+        content_type: &str,
+        path: &Path,
+    ) -> Result<(), StorageError> {
+        let bytes = tokio::fs::read(path)
+            .await
+            .map_err(|error| StorageError::Other(error.to_string()))?;
+        self.put(key, content_type, bytes).await
+    }
+
     async fn probe(&self) -> Result<(), StorageError>;
 }
 
@@ -140,6 +162,48 @@ impl ObjectStorage for S3Storage {
         Ok((bytes.to_vec(), content_type))
     }
 
+    async fn get_reader(&self, key: &str) -> Result<ObjectReader, StorageError> {
+        let output = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+            .map_err(|error| {
+                if error
+                    .as_service_error()
+                    .is_some_and(|error| error.is_no_such_key())
+                {
+                    StorageError::NotFound
+                } else {
+                    StorageError::Other(error.to_string())
+                }
+            })?;
+        Ok(Box::pin(output.body.into_async_read()))
+    }
+
+    async fn put_file(
+        &self,
+        key: &str,
+        content_type: &str,
+        path: &Path,
+    ) -> Result<(), StorageError> {
+        let body = aws_sdk_s3::primitives::ByteStream::from_path(path)
+            .await
+            .map_err(|error| StorageError::Other(error.to_string()))?;
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .content_type(content_type)
+            .body(body)
+            .send()
+            .await
+            .map_err(|error| StorageError::Other(error.to_string()))?;
+        Ok(())
+    }
+
     async fn delete(&self, key: &str) -> Result<(), StorageError> {
         self.client
             .delete_object()
@@ -163,28 +227,102 @@ impl ObjectStorage for S3Storage {
     }
 }
 
+#[derive(Clone)]
+enum StoredObject {
+    Bytes(std::sync::Arc<[u8]>, String),
+    File(std::sync::Arc<TemporaryObject>, String),
+}
+
+struct TemporaryObject(std::path::PathBuf);
+
+impl Drop for TemporaryObject {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 #[derive(Default)]
-pub struct InMemoryStorage(Mutex<HashMap<String, (Vec<u8>, String)>>);
+pub struct InMemoryStorage(Mutex<HashMap<String, StoredObject>>);
+
+impl InMemoryStorage {
+    fn lookup(&self, key: &str) -> Result<StoredObject, StorageError> {
+        self.0
+            .lock()
+            .map_err(|e| StorageError::Other(format!("lock poisoned: {e}")))?
+            .get(key)
+            .cloned()
+            .ok_or(StorageError::NotFound)
+    }
+
+    fn insert(&self, key: &str, object: StoredObject) -> Result<(), StorageError> {
+        self.0
+            .lock()
+            .map_err(|e| StorageError::Other(format!("lock poisoned: {e}")))?
+            .insert(key.to_owned(), object);
+        Ok(())
+    }
+}
 
 #[async_trait::async_trait]
 impl ObjectStorage for InMemoryStorage {
     async fn put(&self, key: &str, content_type: &str, bytes: Vec<u8>) -> Result<(), StorageError> {
-        let mut map = self
-            .0
-            .lock()
-            .map_err(|e| StorageError::Other(format!("lock poisoned: {e}")))?;
-        map.insert(key.to_owned(), (bytes, content_type.to_owned()));
-        Ok(())
+        self.insert(
+            key,
+            StoredObject::Bytes(bytes.into(), content_type.to_owned()),
+        )
     }
 
     async fn get(&self, key: &str) -> Result<(Vec<u8>, String), StorageError> {
-        let map = self
-            .0
-            .lock()
-            .map_err(|e| StorageError::Other(format!("lock poisoned: {e}")))?;
-        map.get(key)
-            .map(|(bytes, ct)| (bytes.clone(), ct.clone()))
-            .ok_or(StorageError::NotFound)
+        match self.lookup(key)? {
+            StoredObject::Bytes(bytes, content_type) => Ok((bytes.to_vec(), content_type)),
+            StoredObject::File(object, content_type) => {
+                let bytes = tokio::fs::read(&object.0)
+                    .await
+                    .map_err(|error| StorageError::Other(error.to_string()))?;
+                Ok((bytes, content_type))
+            }
+        }
+    }
+
+    async fn get_reader(&self, key: &str) -> Result<ObjectReader, StorageError> {
+        match self.lookup(key)? {
+            StoredObject::Bytes(bytes, _) => Ok(Box::pin(std::io::Cursor::new(bytes))),
+            StoredObject::File(object, _) => {
+                let file = tokio::fs::File::open(&object.0)
+                    .await
+                    .map_err(|error| StorageError::Other(error.to_string()))?;
+                Ok(Box::pin(file))
+            }
+        }
+    }
+
+    async fn put_file(
+        &self,
+        key: &str,
+        content_type: &str,
+        path: &Path,
+    ) -> Result<(), StorageError> {
+        let mut source = tokio::fs::File::open(path)
+            .await
+            .map_err(|error| StorageError::Other(error.to_string()))?;
+        let destination =
+            std::env::temp_dir().join(format!("storage-object-{}", uuid::Uuid::now_v7()));
+        let mut options = tokio::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options
+            .open(&destination)
+            .await
+            .map_err(|error| StorageError::Other(error.to_string()))?;
+        let object = std::sync::Arc::new(TemporaryObject(destination));
+        tokio::io::copy(&mut source, &mut file)
+            .await
+            .map_err(|error| StorageError::Other(error.to_string()))?;
+        tokio::io::AsyncWriteExt::flush(&mut file)
+            .await
+            .map_err(|error| StorageError::Other(error.to_string()))?;
+        self.insert(key, StoredObject::File(object, content_type.to_owned()))
     }
 
     async fn delete(&self, key: &str) -> Result<(), StorageError> {

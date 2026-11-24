@@ -64,26 +64,64 @@ pub async fn mark_stored(
     size_bytes: i64,
 ) -> sqlx::Result<()> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
-    let result: sqlx::Result<()> = async {
-        sqlx::query(
-            "UPDATE message_attachments \
-             SET status = 'stored', storage_key = $1, mime_type = $2, size_bytes = $3 \
-             WHERE id = $4 AND tenant_id = $5",
-        )
-        .bind(storage_key)
-        .bind(mime_type)
-        .bind(size_bytes)
-        .bind(id)
-        .bind(tenant_id)
-        .execute(uow.conn())
-        .await?;
-        Ok(())
+    mark_stored_in_tenant(
+        uow.conn(),
+        tenant_id,
+        id,
+        storage_key,
+        mime_type,
+        size_bytes,
+    )
+    .await?;
+    uow.commit().await
+}
+
+/// Locks a pending attachment in the caller-managed transaction for the validated tenant.
+/// The lock lasts until commit or rollback. Returns false if the attachment is absent or
+/// no longer pending, and propagates database errors.
+pub async fn lock_pending(
+    conn: &mut sqlx::PgConnection,
+    tenant: Uuid,
+    id: Uuid,
+) -> sqlx::Result<bool> {
+    Ok(sqlx::query_scalar::<_, Uuid>(
+        "SELECT id FROM message_attachments
+         WHERE tenant_id = $1 AND id = $2 AND status = 'pending' FOR UPDATE",
+    )
+    .bind(tenant)
+    .bind(id)
+    .fetch_optional(conn)
+    .await?
+    .is_some())
+}
+
+/// Records storage metadata for the attachment in the validated tenant.
+/// Pass the same tenant transaction used to lock the pending attachment when fencing a
+/// media upload. Returns [`sqlx::Error::RowNotFound`] if no row matches the tenant and ID.
+pub async fn mark_stored_in_tenant(
+    conn: &mut sqlx::PgConnection,
+    tenant: Uuid,
+    id: Uuid,
+    storage_key: &str,
+    mime_type: &str,
+    size_bytes: i64,
+) -> sqlx::Result<()> {
+    let updated = sqlx::query(
+        "UPDATE message_attachments
+         SET status = 'stored', storage_key = $1, mime_type = $2, size_bytes = $3
+         WHERE id = $4 AND tenant_id = $5",
+    )
+    .bind(storage_key)
+    .bind(mime_type)
+    .bind(size_bytes)
+    .bind(id)
+    .bind(tenant)
+    .execute(conn)
+    .await?;
+    if updated.rows_affected() == 0 {
+        return Err(sqlx::Error::RowNotFound);
     }
-    .await;
-    if result.is_ok() {
-        uow.commit().await?;
-    }
-    result
+    Ok(())
 }
 
 /// Counts one more failed fetch, and marks the attachment failed once it has used
@@ -124,6 +162,21 @@ pub async fn stored_for_conversation(
     attachment_id: Uuid,
 ) -> sqlx::Result<Option<AttachmentRow>> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
+    let customer: Option<Uuid> = sqlx::query_scalar(
+        "SELECT customer_id FROM conversations WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(tenant_id)
+    .bind(conversation_id)
+    .fetch_optional(uow.conn())
+    .await?;
+    let Some(customer) = customer else {
+        return Ok(None);
+    };
+    if customers::customer_privacy::lock_customer(uow.conn(), tenant_id, customer).await?
+        != Some(false)
+    {
+        return Ok(None);
+    }
     let result: sqlx::Result<Option<AttachmentRow>> = async {
         sqlx::query_as::<_, AttachmentRow>(
             "SELECT a.id, a.tenant_id, a.message_id, a.kind, a.status, a.provider_media_id, \

@@ -14,25 +14,26 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 
 | Module | Layout | Depends on (modules) | Used by (modules) | Tables owned |
 | -- | -- | -- | -- | -- |
-| `ai` | flat | `authz`, `billing`, `conversations`, `identity`, `tenancy` | – | `agent_avatar_uploads`, `agent_configurations`, `agent_prompt_versions`, `agent_prompts`, `ai_configurations`, `ai_credentials`, `ai_generations`, `ai_usage_records` |
+| `ai` | flat | `authz`, `billing`, `conversations`, `identity`, `tenancy` | `privacy` | `agent_avatar_uploads`, `agent_configurations`, `agent_prompt_versions`, `agent_prompts`, `ai_configurations`, `ai_credentials`, `ai_generations`, `ai_usage_records` |
 | `analytics` | flat | `tenancy` | – | – |
 | `audit` | flat | `identity`, `tenancy` | – | `audit_logs` |
-| `authz` | flat | `identity` | `ai`, `customers`, `knowledge`, `notifications`, `tenancy` | – |
+| `authz` | flat | `identity` | `ai`, `customers`, `knowledge`, `notifications`, `privacy`, `tenancy` | – |
 | `billing` | flat | `identity`, `tenancy` | `ai` | `billing_plans`, `tenant_subscriptions` |
-| `conversations` | layered | `customers`, `identity`, `integrations`, `tenancy` | `ai`, `escalations`, `tools`, `whatsapp`, `widgets` | `conversations`, `message_attachments`, `message_citations`, `messages` |
-| `customers` | flat | `authz`, `identity`, `tenancy` | `conversations`, `tools`, `whatsapp`, `widgets` | `customer_channel_identifiers`, `customers` |
+| `conversations` | layered | `customers`, `identity`, `integrations`, `tenancy` | `ai`, `escalations`, `privacy`, `tools`, `whatsapp`, `widgets` | `conversations`, `message_attachments`, `message_citations`, `messages` |
+| `customers` | flat | `authz`, `identity`, `tenancy` | `conversations`, `privacy`, `tools`, `whatsapp`, `widgets` | `customer_channel_identifiers`, `customers` |
 | `email` | flat | – | `identity`, `tenancy` | – |
-| `escalations` | flat | `conversations`, `identity`, `tenancy`, `tools` | `notifications`, `widgets` | `agent_availability`, `agent_skills`, `escalations`, `skills` |
-| `feedback` | flat | `tenancy`, `widgets` | – | `conversation_feedback` |
-| `identity` | flat | `email` | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `tenancy`, `tools`, `widgets` | `auth_sessions`, `login_lockout_notifications`, `mfa_factors`, `mfa_recovery_codes`, `password_reset_requests`, `password_reset_tokens`, `refresh_tokens`, `users` |
-| `integrations` | flat | `identity`, `tenancy` | `conversations`, `whatsapp` | `integration_catalog`, `integration_connections`, `integration_events`, `integration_secrets`, `integration_webhook_deliveries` |
+| `escalations` | flat | `conversations`, `identity`, `tenancy`, `tools` | `notifications`, `privacy`, `widgets` | `agent_availability`, `agent_skills`, `escalations`, `skills` |
+| `feedback` | flat | `tenancy`, `widgets` | `privacy` | `conversation_feedback` |
+| `identity` | flat | `email` | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `privacy`, `tenancy`, `tools`, `widgets` | `auth_sessions`, `login_lockout_notifications`, `mfa_factors`, `mfa_recovery_codes`, `password_reset_requests`, `password_reset_tokens`, `refresh_tokens`, `users` |
+| `integrations` | flat | `identity`, `tenancy` | `conversations`, `privacy`, `whatsapp` | `integration_catalog`, `integration_connections`, `integration_events`, `integration_secrets`, `integration_webhook_deliveries` |
 | `knowledge` | flat | `authz`, `identity`, `tenancy` | – | `knowledge_categories`, `knowledge_chunks`, `knowledge_documents`, `knowledge_index_state`, `knowledge_item_tags`, `knowledge_items` |
 | `notifications` | flat | `authz`, `escalations`, `identity`, `tenancy` | – | `notifications` |
 | `platform` | flat | `tenancy` | – | – |
-| `tenancy` | layered | `authz`, `email`, `identity` | `ai`, `analytics`, `audit`, `billing`, `conversations`, `customers`, `escalations`, `feedback`, `integrations`, `knowledge`, `notifications`, `platform`, `tools`, `whatsapp`, `widgets` | `platform_access_sessions`, `tenant_invitations`, `tenant_memberships`, `tenant_rate_limit_overrides`, `tenants` |
-| `tools` | flat | `conversations`, `customers`, `identity`, `tenancy` | `escalations` | `tenant_tool_policies`, `tenant_tools`, `tool_requests` |
-| `whatsapp` | flat | `conversations`, `customers`, `integrations`, `tenancy` | – | `whatsapp_message_meta` |
-| `widgets` | flat | `conversations`, `customers`, `escalations`, `identity`, `tenancy` | `feedback` | `widget_instances`, `widget_sessions` |
+| `privacy` | flat | `ai`, `authz`, `conversations`, `customers`, `escalations`, `feedback`, `identity`, `integrations`, `tenancy`, `tools`, `whatsapp`, `widgets` | – | `privacy_request_steps`, `privacy_requests` |
+| `tenancy` | layered | `authz`, `email`, `identity` | `ai`, `analytics`, `audit`, `billing`, `conversations`, `customers`, `escalations`, `feedback`, `integrations`, `knowledge`, `notifications`, `platform`, `privacy`, `tools`, `whatsapp`, `widgets` | `platform_access_sessions`, `tenant_invitations`, `tenant_memberships`, `tenant_rate_limit_overrides`, `tenants` |
+| `tools` | flat | `conversations`, `customers`, `identity`, `tenancy` | `escalations`, `privacy` | `tenant_tool_policies`, `tenant_tools`, `tool_requests` |
+| `whatsapp` | flat | `conversations`, `customers`, `integrations`, `tenancy` | `privacy` | `whatsapp_message_meta` |
+| `widgets` | flat | `conversations`, `customers`, `escalations`, `identity`, `tenancy` | `feedback`, `privacy` | `widget_instances`, `widget_sessions` |
 
 Shared tables, owned by no module: `outbox_events`, `secret_keks`.
 
@@ -75,6 +76,18 @@ flowchart LR
   notifications --> identity
   notifications --> tenancy
   platform --> tenancy
+  privacy --> ai
+  privacy --> authz
+  privacy --> conversations
+  privacy --> customers
+  privacy --> escalations
+  privacy --> feedback
+  privacy --> identity
+  privacy --> integrations
+  privacy --> tenancy
+  privacy --> tools
+  privacy --> whatsapp
+  privacy --> widgets
   tenancy --> authz
   tenancy --> email
   tenancy --> identity

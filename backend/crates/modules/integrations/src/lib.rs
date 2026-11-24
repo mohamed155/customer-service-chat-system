@@ -59,3 +59,6 @@ pub mod retention;
 pub mod routes;
 pub mod status;
 pub mod webhook;
+
+/// Customer data operations for attributed webhook deliveries.
+pub mod customer_privacy;

@@ -36,6 +36,7 @@ pub mod internal_error;
 pub mod mfa_admin;
 pub mod openapi;
 mod password_reset;
+pub mod privacy_ports;
 pub mod rate_limit;
 pub mod rate_limit_audit;
 pub mod router;

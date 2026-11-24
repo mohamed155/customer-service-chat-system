@@ -31,6 +31,10 @@ reference an object captured after the mirror. For strict consistency, quiesce w
 or take a consistent snapshot before running the backup. The reverse order can produce
 a row pointing at an object that was never captured (FR-029).
 
+An erasure between the mirror and the database dump can also leave objects in the backup
+whose database locators are already gone. Reconcile the restored object store before
+resuming access.
+
 ## Documented RPO and RTO
 
 | Objective | Target | Measurement |
@@ -44,6 +48,12 @@ either objective is missed.
 ## Restore Procedure
 
 Use `ops/restore.sh` to restore from a specific backup:
+
+Before the live restore, close public ingress at the load balancer or network rule and stop the API,
+gateway and every background worker, including processes running with `APP_RUN_MODE=worker` or
+`APP_RUN_MODE=all`. For this procedure, “stopped” means public ingress stays closed; a controlled,
+internal-only replay window may run after the restore. Keep ingress closed until every check under
+[Before resuming access](#before-resuming-access) passes.
 
 ```bash
 # Identify the backup timestamp from the off-host S3 bucket
@@ -95,6 +105,148 @@ If the automated script is unavailable, follow these steps:
    ```bash
    sqlx migrate run
    ```
+
+### Replay customer erasures
+
+Before serving restored PostgreSQL data or restored objects, reconcile the restore point with the
+customer erasures in the durable request ledger outside the restored snapshot. Erasure steps run in
+the privacy worker, which starts in `worker` and `all` modes. The erase endpoint needs an API
+process, so keep public ingress closed and open a controlled replay window after the restore:
+
+1. Start one internal-only API process with `APP_RUN_MODE=api` and one internal-only worker with
+   `APP_RUN_MODE=worker`, connected to the restored database, Redis and object store. Restrict both
+   processes so only the operator can reach them.
+2. There is no privacy-only run mode today. `APP_RUN_MODE=worker` runs ordinary background
+   processing against the restored database: the same work a normal worker runs once access
+   resumes. Its PostgreSQL jobs are: privacy request worker (claims requests and updates
+   export/erase state); invitation, password-reset, and login-lockout delivery workers (claim and
+   update delivery records); escalation outbox worker (claims events and updates assignments);
+   agent responder (claims conversation/tool events and writes response state); widget-session
+   sweeper (deletes expired sessions); session-retention sweeper (expires platform access sessions
+   and deletes ended sessions and reset tokens); tool-expiry sweeper (expires approvals); knowledge
+   indexer (claims indexing events and updates index state); notifications worker (claims its
+   outbox and stores notifications); notification-retention sweeper (deletes expired notifications);
+   and integration-retention sweeper (deletes expired integration events and webhook deliveries).
+   At startup it also queries available agents and schedules presence-revert timers; a 15-second
+   queue-health poll reads platform, password-reset, and lockout queues for metrics. When
+   `APP_INTEGRATION_SECRETS_KEY` is set, the WhatsApp media worker (claims and updates media jobs)
+   and sender worker (claims outbound events and updates send state) also start. Privacy,
+   knowledge, and WhatsApp media jobs use the configured object store.
+
+   Invitation, password-reset, and login-lockout workers can send email through SMTP; leave
+   `SMTP_URL` unset to disable email. The agent responder and knowledge indexer can call tenant-
+   configured AI providers, and the agent responder can invoke configured HTTP tools. No worker
+   sends outbound integration webhooks; the generic webhook endpoint is inbound-only. If
+   `APP_INTEGRATION_SECRETS_KEY` is set, the WhatsApp sender and media workers also call Meta's
+   APIs; leave it unset to disable those workers. There is no configuration switch to disable
+   queued AI or HTTP-tool work. To ensure nothing leaves the deployment, use the restored internal
+   S3-compatible endpoint (`APP_S3_ENDPOINT`) and enforce default-deny network egress for the replay
+   API and worker, allowing only restored PostgreSQL, Redis, and object storage. If using a proxy,
+   keep it in-deployment and prevent it from forwarding outside the environment.
+   `APP_AI_OPENAI_BASE_URL`, `APP_AI_ANTHROPIC_BASE_URL`, and `APP_AI_GEMINI_BASE_URL` are routing
+   overrides, not disable switches. A privacy-only worker mode would remove this caveat and is a
+   recommended follow-up.
+3. For every ledger erasure whose request is missing from the restored database or whose status is
+   not `completed`, POST `/api/v1/tenant/customers/{id}/erase` with
+   `{"confirm":"<customer-id>"}`, using a tenant-admin session and completing the required
+   step-up. A repeat POST returns the existing receipt. The worker automatically continues queued
+   requests, running requests with an expired lease, and failed requests below the attempt limit.
+   Before polling an erase request that is `failed` at the attempt limit, requeue that same request
+   using the [exhausted-request procedure](customer-privacy.md#requeue-an-exhausted-erase-request).
+   Keep the worker running until each request reports `completed`.
+4. Before continuing, run this query against the restored database and require a result of `0` for
+   every ledger customer:
+
+   ```sql
+   SELECT count(*) FROM privacy_requests
+   WHERE kind = 'erase' AND status <> 'completed';
+   ```
+
+5. Stop the replay-window API and worker processes. Continue to
+   [Reconcile restored privacy objects](#reconcile-restored-privacy-objects) while public ingress
+   remains closed, even when every erasure receipt already shows completion. Keep backup copies
+   under the configured retention schedule.
+
+### Reconcile restored privacy objects
+
+After the replay window has stopped, keep the API, gateway and all background workers stopped while
+reconciling objects. Public ingress must remain closed through this step and until every check under
+[Before resuming access](#before-resuming-access) passes. Use the restored database's bootstrap
+superuser and AWS CLI v2 with credentials for the restored application bucket. Set the usual `PG*`
+variables for the restored database, `APP_S3_ENDPOINT` and `APP_S3_BUCKET` for the restored object
+store, and the corresponding AWS CLI credentials and region. With Bash, `psql` and `jq` installed,
+generate a deletion manifest. Listing from both prefix roots includes every tenant prefix in the
+restored bucket, including tenants absent from the restored database.
+
+Before building the manifest, check the bucket's versioning state. The command below exits non-zero
+for `Enabled` or `Suspended` versioning. Those buckets need a separate version-aware procedure that
+uses `list-object-versions` and deletes every object version and delete marker by `VersionId`; a
+plain `delete-object` without `VersionId` only adds a delete marker and leaves noncurrent versions.
+That noncurrent-version limitation is recorded in [ADR-020](../adr/0020-customer-data-export-and-erasure.md#known-limitations).
+
+```bash
+set -euo pipefail
+: "${APP_S3_ENDPOINT:?Set the restored S3 endpoint}"
+: "${APP_S3_BUCKET:?Set the restored application bucket}"
+versioning_status=$(aws --no-cli-pager --endpoint-url "$APP_S3_ENDPOINT" s3api get-bucket-versioning \
+    --bucket "$APP_S3_BUCKET" --query 'Status' --output text)
+if [[ "$versioning_status" == Enabled || "$versioning_status" == Suspended ]]; then
+    printf 'Refusing privacy-object reconciliation: bucket versioning is %s; use the version-aware procedure.\n' \
+        "$versioning_status" >&2
+    exit 1
+fi
+privacy_dir=$(mktemp -d)
+trap 'rm -rf "$privacy_dir"' EXIT
+
+psql -XAt -v ON_ERROR_STOP=1 > "$privacy_dir/referenced.json" <<'SQL'
+SELECT COALESCE(json_agg(key), '[]'::json)
+FROM (
+    SELECT COALESCE(storage_key, 'whatsapp-media/' || tenant_id || '/' || id) AS key
+      FROM message_attachments
+    UNION
+    SELECT object_key AS key
+      FROM privacy_requests
+     WHERE kind = 'export' AND status = 'completed'
+       AND expires_at > now() AND object_key IS NOT NULL
+) AS referenced;
+SQL
+
+list_orphans() {
+    for prefix in whatsapp-media/ privacy-exports/; do
+        aws --no-cli-pager --endpoint-url "$APP_S3_ENDPOINT" s3api list-objects-v2 \
+            --bucket "$APP_S3_BUCKET" --prefix "$prefix" --output json |
+            jq -c --arg bucket "$APP_S3_BUCKET" --slurpfile referenced "$privacy_dir/referenced.json" '
+                ($referenced[0] | INDEX(.)) as $keep
+                | .Contents[]?.Key
+                | select($keep[.] == null)
+                | {Bucket: $bucket, Key: .}
+            ' || return 1
+    done
+}
+
+list_orphans > "$privacy_dir/orphans.jsonl"
+cat "$privacy_dir/orphans.jsonl"
+```
+
+Confirm the target bucket and manifest, then run the following in the same shell.
+If the final check fails, inspect the remaining objects before allowing access.
+
+```bash
+while IFS= read -r object; do
+    aws --no-cli-pager --endpoint-url "$APP_S3_ENDPOINT" s3api delete-object --cli-input-json "$object"
+done < "$privacy_dir/orphans.jsonl"
+
+list_orphans > "$privacy_dir/remaining.jsonl"
+test ! -s "$privacy_dir/remaining.jsonl"
+```
+
+### Before resuming access
+
+- Verify the restored schema matches the intended application version.
+- Verify every post-backup ledger erasure is completed and the non-completed erase query above
+  returns `0`.
+- Verify the restored bucket has no orphaned WhatsApp media or privacy export objects.
+- Start the normal application processes, then reopen public ingress.
 
 ## Drill Procedure
 

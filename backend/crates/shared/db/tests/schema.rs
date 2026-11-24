@@ -139,6 +139,9 @@ async fn run_migrations_succeeds() {
         (95, "login lockout"),
         (96, "login lockout notifications"),
         (97, "login lockout finalization"),
+        (98, "customer privacy"),
+        (99, "customer privacy fences"),
+        (100, "webhook delivery privacy fence"),
     ];
     assert_eq!(
         rows.len(),

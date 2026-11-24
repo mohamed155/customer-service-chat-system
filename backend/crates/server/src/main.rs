@@ -24,8 +24,16 @@ use server::run_mode::RunMode;
 use server::state::AppState;
 use std::sync::Arc;
 use std::time::Duration;
+use storage::StorageKind;
 use tokio::net::TcpListener;
 use tokio::task::JoinSet;
+
+fn validate_worker_storage(mode: RunMode, kind: StorageKind) -> Result<(), &'static str> {
+    if mode == RunMode::Worker && kind == StorageKind::InMemory {
+        return Err("APP_RUN_MODE=worker requires shared S3-compatible object storage");
+    }
+    Ok(())
+}
 
 // A process that cannot load its configuration, bind its port or install its signal handlers
 // reports the error and stops: this is startup, not a request path (MOH-83).
@@ -141,6 +149,10 @@ async fn main() {
     // Object storage is chosen here, before the state, so that readiness can ask it too.
     let (storage, storage_backend) =
         storage::select_storage(config.s3.as_ref(), config.outbound_http.storage).await;
+    if let Err(error) = validate_worker_storage(mode, storage_backend.kind) {
+        eprintln!("Config error: {error}");
+        std::process::exit(1);
+    }
 
     // What `/ready` checks: the three dependencies a request needs (PostgreSQL, Redis, object
     // storage), each inside `READY_PROBE_TIMEOUT_MS` (MOH-81).
@@ -454,6 +466,17 @@ fn spawn_workers(
     }
 
     let mut workers = JoinSet::new();
+    let privacy_worker = privacy::Worker {
+        pool: state.db.clone(),
+        cache: state.cache.clone(),
+        storage: storage.clone(),
+        notifications: Arc::new(server::privacy_ports::NotificationPort),
+    };
+    workers.spawn(async move {
+        privacy::run(privacy_worker).await;
+        "privacy request worker"
+    });
+
     workers.spawn(async move {
         let _ = delivery_worker.await;
         "delivery worker"
@@ -667,6 +690,28 @@ async fn secrets_command(args: &[String]) -> i32 {
         _ => {
             eprintln!("{SECRETS_USAGE}");
             1
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_worker_mode_requires_shared_storage() {
+        for mode in [
+            RunMode::Api,
+            RunMode::Gateway,
+            RunMode::Worker,
+            RunMode::All,
+        ] {
+            assert!(validate_worker_storage(mode, StorageKind::S3).is_ok());
+            assert_eq!(
+                validate_worker_storage(mode, StorageKind::InMemory).is_err(),
+                mode == RunMode::Worker,
+                "{mode} with in-memory storage"
+            );
         }
     }
 }

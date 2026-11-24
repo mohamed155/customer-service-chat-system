@@ -1197,6 +1197,17 @@
         ],
         "type": "object"
       },
+      "Confirmation": {
+        "properties": {
+          "confirm": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "ConnectPayload": {
         "properties": {
           "config": {
@@ -1881,6 +1892,20 @@
             "type": "string"
           },
           "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "erased_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "erasure_pending_at": {
+            "format": "date-time",
             "type": [
               "string",
               "null"
@@ -5012,6 +5037,22 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "RequestStatus": {
+        "properties": {
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "status"
         ],
         "type": "object"
       },
@@ -9691,7 +9732,7 @@
     },
     "/platform/tenants/{id}/switch": {
       "post": {
-        "description": "Starts time-limited access to the target tenant for the current sign-in. A previous access session ends when the new one starts. Requires permission: platform.tenants.switch",
+        "description": "Starts time-limited access to the target tenant for the current sign-in. A previous access session ends when the new one starts. Keep customer personal data out of the access reason. Requires permission: platform.tenants.switch",
         "operationId": "switch_platform_tenant",
         "parameters": [
           {
@@ -14288,6 +14329,366 @@
         "summary": "List a customer's recent conversations",
         "tags": [
           "conversations"
+        ]
+      }
+    },
+    "/tenant/customers/{id}/erase": {
+      "post": {
+        "operationId": "erase_customer",
+        "parameters": [
+          {
+            "description": "Customer identifier",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Confirmation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestStatus"
+                }
+              }
+            },
+            "description": "Erasure receipt"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Insufficient permissions"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Customer unavailable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Confirmation required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/tenant/customers/{id}/export": {
+      "post": {
+        "operationId": "export_customer",
+        "parameters": [
+          {
+            "description": "Customer identifier",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Confirmation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestStatus"
+                }
+              }
+            },
+            "description": "Export queued"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Insufficient permissions"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Customer unavailable"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Customer is being erased"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Confirmation required"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/tenant/customers/{id}/export/{request_id}/download": {
+      "get": {
+        "operationId": "download",
+        "parameters": [
+          {
+            "description": "Customer identifier",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Privacy request identifier",
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {}
+            },
+            "description": "Customer export ZIP"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Insufficient permissions"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bundle unavailable"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/tenant/customers/{id}/privacy-requests/{request_id}": {
+      "get": {
+        "operationId": "request_status",
+        "parameters": [
+          {
+            "description": "Customer identifier",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Privacy request identifier",
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestStatus"
+                }
+              }
+            },
+            "description": "Request status"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Insufficient permissions"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request unavailable"
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "tags": [
+          "customers"
         ]
       }
     },

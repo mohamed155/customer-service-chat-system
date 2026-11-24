@@ -312,6 +312,14 @@ enterprise, pool for everyone else).
   server signs the customer ID with a secret; the widget sends the signature; we verify. Prevents
   customers impersonating each other to read history.
 
+### 6.4 Customer privacy
+
+The privacy module owns export and erasure requests and coordinates tenant-scoped work through
+the owning modules. Use `POST /tenant/customers/{id}/export` or
+`POST /tenant/customers/{id}/erase` with the corresponding permission, ID confirmation and
+MFA step-up where enabled. Poll the request status and use the authenticated download endpoint
+for completed exports. See [ADR-020](../adr/0020-customer-data-export-and-erasure.md).
+
 ---
 
 ## 7. Data architecture

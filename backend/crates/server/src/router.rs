@@ -1284,6 +1284,21 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
             routes!(widgets::admin_routes::get_snippet)
                 .layer(require_permission(Permission::WidgetsView)),
         )
+        .routes(
+            routes!(privacy::routes::export_customer)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
+                .layer(require_permission(Permission::CustomersExport)),
+        )
+        .routes(
+            routes!(privacy::routes::erase_customer)
+                .layer(middleware::from_fn(identity::step_up::require_step_up))
+                .layer(require_permission(Permission::CustomersErase)),
+        )
+        .routes(routes!(privacy::routes::request_status))
+        .routes(
+            routes!(privacy::routes::download)
+                .layer(require_permission(Permission::CustomersExport)),
+        )
         // WhatsApp attachment download (spec 029)
         .merge(whatsapp::routes::tenant_router().into());
     if include_test_routes {

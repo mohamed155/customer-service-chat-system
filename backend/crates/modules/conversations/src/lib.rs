@@ -83,3 +83,6 @@ pub mod inbound {
 pub mod attachments {
     pub use crate::infrastructure::attachments::*;
 }
+
+/// Customer data operations for the tenant privacy workflow.
+pub mod customer_privacy;
