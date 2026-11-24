@@ -182,6 +182,56 @@ describe('TeamListComponent', () => {
     });
   });
 
+  it.each(['malformed', 'failed'] as const)(
+    'keeps member actions working when capacity loading is %s',
+    async (outcome) => {
+      mockApi.getMembers
+        .mockReturnValueOnce(of({ data: { items: members, nextCursor: null, hasMore: false } }))
+        .mockReturnValue(
+          of({
+            data: {
+              items: [{ ...members[0], status: 'disabled' }, members[1]],
+              nextCursor: null,
+              hasMore: false,
+            },
+          }),
+        );
+      mockApi.getInvitations.mockReturnValue(
+        of({ data: { items: [], nextCursor: null, hasMore: false } }),
+      );
+      mockApi.patchMember.mockReturnValue(of({ data: { ...members[0], status: 'disabled' } }));
+      mockRoutingCapacityApi.get.mockReturnValue(
+        outcome === 'malformed'
+          ? of({ data: { items: [], nextCursor: null, hasMore: false } })
+          : throwError(() => ({ code: 'unavailable', message: 'Unavailable', status: 503 })),
+      );
+      configureModule();
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(TeamListComponent);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const root: HTMLElement = fixture.nativeElement;
+      const row = Array.from(root.querySelectorAll('tr')).find((item) =>
+        item.textContent?.includes('Alice'),
+      );
+      expect(row).toBeTruthy();
+      const disable = Array.from(row!.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Disable',
+      );
+      expect(disable).toBeTruthy();
+      disable!.click();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(mockApi.patchMember).toHaveBeenCalledWith('m-1', { status: 'disabled' });
+        const updated = Array.from(root.querySelectorAll('tr')).find((item) =>
+          item.textContent?.includes('Alice'),
+        );
+        expect(updated?.textContent).toContain('Disabled');
+      });
+    },
+  );
+
   it('shows effective capacity and open load, and applies or clears an override', async () => {
     mockApi.getMembers.mockReturnValue(
       of({ data: { items: members, nextCursor: null, hasMore: false } }),

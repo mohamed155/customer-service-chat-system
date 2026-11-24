@@ -1,6 +1,7 @@
 import { Page, Route } from '@playwright/test';
 import { expect, test } from './support/test';
 import { mockPlatformAccess, submitPlatformAccess } from './support/platform-access';
+import { routingCapacity } from './support/routing-capacity';
 
 type MemberRole = 'owner' | 'admin' | 'manager' | 'agent' | 'viewer';
 type MemberStatus = 'active' | 'disabled';
@@ -267,6 +268,10 @@ async function installTeamApi(page: Page, state: TeamState) {
 
     const access = platformAccess(route, path);
     if (access) return access;
+
+    if (method === 'GET' && path === '/tenant/routing/capacity') {
+      return json(route, routingCapacity(state.membersByTenant[tenant.id] ?? []));
+    }
 
     if (method === 'GET' && path === '/tenant/members') {
       const q = url.searchParams.get('q')?.toLowerCase();

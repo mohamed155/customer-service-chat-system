@@ -1,5 +1,6 @@
 import { expect, Page, Route, test } from '@playwright/test';
 import { noPlatformAccess } from './support/platform-access';
+import { routingCapacity } from './support/routing-capacity';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { dashboardCsp } = require('./support/csp.cjs') as { dashboardCsp: () => string };
 
@@ -99,6 +100,8 @@ async function mockSignedIn(page: Page, me: unknown = identity) {
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
     if (path === '/me') return json(route, me);
+    if (path === '/tenant/routing/capacity' && route.request().method() === 'GET')
+      return json(route, routingCapacity());
     if (path === '/platform/access-session') return noPlatformAccess(route);
     return json(route, { items: [], nextCursor: null });
   });

@@ -49,9 +49,12 @@ export class CapacityEditorComponent {
   readonly canManage = input.required<boolean>();
   protected readonly store = inject(TeamStore);
   private readonly locale = inject(LocaleService);
-  protected readonly capacity = computed(() =>
-    this.store.routingCapacity()?.agents.find((agent) => agent.membership_id === this.member().id),
-  );
+  protected readonly capacity = computed(() => {
+    const agents = this.store.routingCapacity()?.agents;
+    return Array.isArray(agents)
+      ? agents.find((agent) => agent?.membership_id === this.member().id)
+      : undefined;
+  });
 
   protected capacityOverrideLabel(capacity: AgentCapacity): string {
     const override = capacity['override'];
