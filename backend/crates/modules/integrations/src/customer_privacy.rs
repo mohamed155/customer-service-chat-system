@@ -9,12 +9,12 @@ const CUSTOMER_DELIVERY_PREDICATE: &str = "
     AND (privacy_normalized_uuid(payload->>'customer_id') = $2 OR privacy_normalized_uuid(payload->>'customerId') = $2
          OR privacy_normalized_uuid(payload->>'conversation_id') = ANY($3) OR privacy_normalized_uuid(payload->>'conversationId') = ANY($3)
          OR privacy_normalized_uuid(payload->>'message_id') = ANY($4) OR privacy_normalized_uuid(payload->>'messageId') = ANY($4))
-    AND COALESCE(privacy_normalized_uuid(payload->>'customer_id') = $2, payload->>'customer_id' IS NULL)
-    AND COALESCE(privacy_normalized_uuid(payload->>'customerId') = $2, payload->>'customerId' IS NULL)
-    AND COALESCE(privacy_normalized_uuid(payload->>'conversation_id') = ANY($3), payload->>'conversation_id' IS NULL)
-    AND COALESCE(privacy_normalized_uuid(payload->>'conversationId') = ANY($3), payload->>'conversationId' IS NULL)
-    AND COALESCE(privacy_normalized_uuid(payload->>'message_id') = ANY($4), payload->>'message_id' IS NULL)
-    AND COALESCE(privacy_normalized_uuid(payload->>'messageId') = ANY($4), payload->>'messageId' IS NULL)";
+    AND (payload->>'customer_id' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'customer_id') = $2, false))
+    AND (payload->>'customerId' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'customerId') = $2, false))
+    AND (payload->>'conversation_id' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'conversation_id') = ANY($3), false))
+    AND (payload->>'conversationId' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'conversationId') = ANY($3), false))
+    AND (payload->>'message_id' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'message_id') = ANY($4), false))
+    AND (payload->>'messageId' IS NULL OR COALESCE(privacy_normalized_uuid(payload->>'messageId') = ANY($4), false))";
 
 /// Stream all webhook deliveries attributed to the customer into the export.
 /// The connection must belong to the caller's tenant Unit of Work, and the

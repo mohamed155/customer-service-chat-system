@@ -49,9 +49,11 @@ either objective is missed.
 
 Use `ops/restore.sh` to restore from a specific backup:
 
-Before the live restore, stop application traffic to the API and gateway and stop every background
-worker, including processes running with `APP_RUN_MODE=worker` or `APP_RUN_MODE=all`. Keep them
-stopped until every check under [Before resuming access](#before-resuming-access) passes.
+Before the live restore, close public ingress at the load balancer or network rule and stop the API,
+gateway and every background worker, including processes running with `APP_RUN_MODE=worker` or
+`APP_RUN_MODE=all`. For this procedure, “stopped” means public ingress stays closed; a controlled,
+internal-only replay window may run after the restore. Keep ingress closed until every check under
+[Before resuming access](#before-resuming-access) passes.
 
 ```bash
 # Identify the backup timestamp from the off-host S3 bucket
@@ -107,25 +109,49 @@ If the automated script is unavailable, follow these steps:
 ### Replay customer erasures
 
 Before serving restored PostgreSQL data or restored objects, reconcile the restore point with the
-completed customer erasure requests recorded after it. Obtain the tenant and customer IDs from
-the durable request ledger outside the restored snapshot. Replay those erasures against the
-restored data and verify each completion, including attachment and export object cleanup, before
-restoring access. Keep backup copies under the configured retention schedule.
+customer erasures in the durable request ledger outside the restored snapshot. Erasure steps run in
+the privacy worker, which starts in `worker` and `all` modes. The erase endpoint needs an API
+process, so keep public ingress closed and open a controlled replay window after the restore:
 
-If the restored database already has the erasure receipt, repeating the erase POST returns it
-without deleting any resurrected objects. Run the object reconciliation even when every erasure
-receipt shows completion.
+1. Start one internal-only API process with `APP_RUN_MODE=api` and one internal-only worker with
+   `APP_RUN_MODE=worker`, connected to the restored database, Redis and object store. Restrict both
+   processes so only the operator can reach them.
+2. The worker mode starts all background workers, not only privacy: invitation and password-reset
+   delivery, login-lockout notifications, escalation/agent/notification outbox work, knowledge
+   indexing, and widget/session/tool/notification/integration sweepers. When
+   `APP_INTEGRATION_SECRETS_KEY` is configured, it also starts the WhatsApp sender and media
+   workers. Leave that key unset for this replay window; `main.rs` logs that the WhatsApp workers
+   are disabled. Configure the restored environment's other outbound integrations for safe,
+   non-production delivery before starting the worker.
+3. For every ledger erasure whose request is missing from the restored database or whose status is
+   not `completed`, POST `/api/v1/tenant/customers/{id}/erase` with
+   `{"confirm":"<customer-id>"}`, using a tenant-admin session and completing the required
+   step-up. An existing receipt is returned; the worker continues queued, running or failed
+   requests, and expired leases are reclaimed automatically. Keep the worker running until each
+   request reports `completed`.
+4. Before continuing, run this query against the restored database and require a result of `0` for
+   every ledger customer:
+
+   ```sql
+   SELECT count(*) FROM privacy_requests
+   WHERE kind = 'erase' AND status <> 'completed';
+   ```
+
+5. Stop the replay-window API and worker processes. Continue to
+   [Reconcile restored privacy objects](#reconcile-restored-privacy-objects) while public ingress
+   remains closed, even when every erasure receipt already shows completion. Keep backup copies
+   under the configured retention schedule.
 
 ### Reconcile restored privacy objects
 
-The API, gateway and all background workers must already be stopped before a live restore; keep
-them stopped through reconciliation and until every check under [Before resuming
-access](#before-resuming-access) passes. Use the restored database's bootstrap superuser and AWS
-CLI v2 with credentials for the restored application bucket. Set the usual `PG*` variables for the
-restored database, `APP_S3_ENDPOINT` and `APP_S3_BUCKET` for the restored object store, and the
-corresponding AWS CLI credentials and region. With Bash, `psql` and `jq` installed, generate a
-deletion manifest. Listing from both prefix roots includes every tenant prefix in the restored
-bucket, including tenants absent from the restored database.
+After the replay window has stopped, keep the API, gateway and all background workers stopped while
+reconciling objects. Public ingress must remain closed through this step and until every check under
+[Before resuming access](#before-resuming-access) passes. Use the restored database's bootstrap
+superuser and AWS CLI v2 with credentials for the restored application bucket. Set the usual `PG*`
+variables for the restored database, `APP_S3_ENDPOINT` and `APP_S3_BUCKET` for the restored object
+store, and the corresponding AWS CLI credentials and region. With Bash, `psql` and `jq` installed,
+generate a deletion manifest. Listing from both prefix roots includes every tenant prefix in the
+restored bucket, including tenants absent from the restored database.
 
 Before building the manifest, check the bucket's versioning state. The command below exits non-zero
 for `Enabled` or `Suspended` versioning. Those buckets need a separate version-aware procedure that
@@ -192,9 +218,10 @@ test ! -s "$privacy_dir/remaining.jsonl"
 ### Before resuming access
 
 - Verify the restored schema matches the intended application version.
-- Verify post-backup erasures against the durable ledger.
+- Verify every post-backup ledger erasure is completed and the non-completed erase query above
+  returns `0`.
 - Verify the restored bucket has no orphaned WhatsApp media or privacy export objects.
-- Resume application traffic and background workers.
+- Start the normal application processes, then reopen public ingress.
 
 ## Drill Procedure
 

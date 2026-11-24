@@ -152,6 +152,201 @@ async fn seed(pool: &PgPool, marker: &str) -> (Uuid, Uuid, Uuid, Uuid) {
     (tenant, user, customer, conversation)
 }
 
+#[derive(Default)]
+struct CapturedJsonExport {
+    rows: Vec<serde_json::Value>,
+}
+
+impl db::json_export::JsonExport for CapturedJsonExport {
+    fn start(&mut self, _name: &str) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    fn row(&mut self, value: &serde_json::Value) -> std::io::Result<()> {
+        self.rows.push(value.clone());
+        Ok(())
+    }
+
+    fn end(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn webhook_deliveries_with_empty_subject_lists_export_and_erase_only_unambiguous_matches() {
+    let Some(pool) = pool().await else { return };
+    let (tenant, _, _, unrelated_conversation) = seed(&pool, "privacy-webhook-empty-subject").await;
+    let owner = db::testing::seed_pool();
+    let customer_without_conversations: Uuid = sqlx::query_scalar(
+        "INSERT INTO customers (tenant_id, display_name) VALUES ($1, 'No conversations') RETURNING id",
+    )
+    .bind(tenant)
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    let customer_without_messages: Uuid = sqlx::query_scalar(
+        "INSERT INTO customers (tenant_id, display_name) VALUES ($1, 'No messages') RETURNING id",
+    )
+    .bind(tenant)
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    let empty_messages_conversation: Uuid = sqlx::query_scalar(
+        "INSERT INTO conversations (tenant_id, customer_id, channel, status)
+         VALUES ($1, $2, 'web_chat', 'open') RETURNING id",
+    )
+    .bind(tenant)
+    .bind(customer_without_messages)
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    let _: Uuid = sqlx::query_scalar(
+        "INSERT INTO integration_connections
+             (tenant_id, catalog_id, webhook_token_hash, webhook_token_ciphertext, webhook_token_nonce)
+         SELECT $1, id, $2, $2, $2 FROM integration_catalog WHERE slug = 'generic-webhook'
+         RETURNING id",
+    )
+    .bind(tenant)
+    .bind(Uuid::new_v4().as_bytes().as_slice())
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    let customer_id_delivery = seed_delivery(
+        tenant,
+        &serde_json::json!({"customer_id": customer_without_conversations, "text": "private"}),
+    )
+    .await;
+    let customer_id_camel_delivery = seed_delivery(
+        tenant,
+        &serde_json::json!({"customerId": customer_without_conversations, "text": "private"}),
+    )
+    .await;
+    let empty_messages_delivery = seed_delivery(
+        tenant,
+        &serde_json::json!({"customer_id": customer_without_messages, "text": "private"}),
+    )
+    .await;
+    let foreign_conversation_delivery = seed_delivery(
+        tenant,
+        &serde_json::json!({
+            "customer_id": customer_without_conversations,
+            "conversation_id": unrelated_conversation,
+            "text": "foreign reference",
+        }),
+    )
+    .await;
+    let malformed_id_delivery = seed_delivery(
+        tenant,
+        &serde_json::json!({
+            "customer_id": customer_without_conversations,
+            "message_id": "not-a-uuid",
+            "text": "malformed reference",
+        }),
+    )
+    .await;
+
+    let (conversation_count, message_count): (i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM conversations WHERE tenant_id = $1 AND customer_id = $2),
+                (SELECT count(*) FROM messages m JOIN conversations c
+                   ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
+                  WHERE c.tenant_id = $1 AND c.customer_id = $2)",
+    )
+    .bind(tenant)
+    .bind(customer_without_conversations)
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    assert_eq!((conversation_count, message_count), (0, 0));
+    let message_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM messages WHERE tenant_id = $1 AND conversation_id = $2",
+    )
+    .bind(tenant)
+    .bind(empty_messages_conversation)
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    assert_eq!(message_count, 0);
+
+    let mut work = db::UnitOfWork::begin_for_tenant(&pool, tenant)
+        .await
+        .unwrap();
+    let mut no_conversations_export = CapturedJsonExport::default();
+    integrations::customer_privacy::export_customer(
+        work.conn(),
+        tenant,
+        customer_without_conversations,
+        &[],
+        &[],
+        &mut no_conversations_export,
+    )
+    .await
+    .unwrap();
+    let exported_ids: BTreeSet<Uuid> = no_conversations_export
+        .rows
+        .iter()
+        .map(|delivery| serde_json::from_value(delivery["id"].clone()).unwrap())
+        .collect();
+    assert_eq!(
+        exported_ids,
+        BTreeSet::from([customer_id_delivery, customer_id_camel_delivery]),
+        "only absent or matching identifiers may be attributed"
+    );
+
+    let mut empty_messages_export = CapturedJsonExport::default();
+    integrations::customer_privacy::export_customer(
+        work.conn(),
+        tenant,
+        customer_without_messages,
+        &[empty_messages_conversation],
+        &[],
+        &mut empty_messages_export,
+    )
+    .await
+    .unwrap();
+    let exported_ids: BTreeSet<Uuid> = empty_messages_export
+        .rows
+        .iter()
+        .map(|delivery| serde_json::from_value(delivery["id"].clone()).unwrap())
+        .collect();
+    assert_eq!(exported_ids, BTreeSet::from([empty_messages_delivery]));
+
+    integrations::customer_privacy::erase_customer(
+        work.conn(),
+        tenant,
+        customer_without_conversations,
+        &[],
+        &[],
+    )
+    .await
+    .unwrap();
+    integrations::customer_privacy::erase_customer(
+        work.conn(),
+        tenant,
+        customer_without_messages,
+        &[empty_messages_conversation],
+        &[],
+    )
+    .await
+    .unwrap();
+    work.commit().await.unwrap();
+
+    for id in [
+        customer_id_delivery,
+        customer_id_camel_delivery,
+        empty_messages_delivery,
+    ] {
+        assert_eq!(delivery_payload(id).await, serde_json::json!({}));
+    }
+    assert_eq!(
+        delivery_payload(foreign_conversation_delivery).await["text"],
+        "foreign reference"
+    );
+    assert_eq!(
+        delivery_payload(malformed_id_delivery).await["text"],
+        "malformed reference"
+    );
+}
+
 #[tokio::test]
 async fn export_then_erase_preserves_history_and_other_tenant_data() {
     let Some((_, redis_cache)) = redis().await else {
