@@ -16,11 +16,15 @@ backend is in memory.
 
 Erasure starts with an erasure-pending customer and completes after the worker finishes all
 steps. A repeat POST returns the same receipt. The worker retries transient failures with a
-delay and skips completed steps. For a persistent failure, inspect worker health, verify SQL,
-cache and object-storage availability, and review generic failure codes in the request record.
-After resolving the underlying fault, an operator can requeue an exhausted erase request in
-a tenant-scoped transaction. Bind the validated tenant ID and request ID as `$1` and `$2`.
-Keep the existing request, its completed steps, and object locators.
+delay and skips completed steps.
+
+## Requeue an exhausted erase request
+
+For a persistent failure, inspect worker health, verify SQL, cache and object-storage availability,
+and review generic failure codes in the request record. After resolving the underlying fault, an
+operator can requeue an exhausted erase request in a tenant-scoped transaction. Bind the validated
+tenant ID and request ID as `$1` and `$2`. Keep the existing request, its completed steps, and
+object locators.
 
 ```sql
 UPDATE privacy_requests

@@ -116,19 +116,44 @@ process, so keep public ingress closed and open a controlled replay window after
 1. Start one internal-only API process with `APP_RUN_MODE=api` and one internal-only worker with
    `APP_RUN_MODE=worker`, connected to the restored database, Redis and object store. Restrict both
    processes so only the operator can reach them.
-2. The worker mode starts all background workers, not only privacy: invitation and password-reset
-   delivery, login-lockout notifications, escalation/agent/notification outbox work, knowledge
-   indexing, and widget/session/tool/notification/integration sweepers. When
-   `APP_INTEGRATION_SECRETS_KEY` is configured, it also starts the WhatsApp sender and media
-   workers. Leave that key unset for this replay window; `main.rs` logs that the WhatsApp workers
-   are disabled. Configure the restored environment's other outbound integrations for safe,
-   non-production delivery before starting the worker.
+2. There is no privacy-only run mode today. `APP_RUN_MODE=worker` runs ordinary background
+   processing against the restored database: the same work a normal worker runs once access
+   resumes. Its PostgreSQL jobs are: privacy request worker (claims requests and updates
+   export/erase state); invitation, password-reset, and login-lockout delivery workers (claim and
+   update delivery records); escalation outbox worker (claims events and updates assignments);
+   agent responder (claims conversation/tool events and writes response state); widget-session
+   sweeper (deletes expired sessions); session-retention sweeper (expires platform access sessions
+   and deletes ended sessions and reset tokens); tool-expiry sweeper (expires approvals); knowledge
+   indexer (claims indexing events and updates index state); notifications worker (claims its
+   outbox and stores notifications); notification-retention sweeper (deletes expired notifications);
+   and integration-retention sweeper (deletes expired integration events and webhook deliveries).
+   At startup it also queries available agents and schedules presence-revert timers; a 15-second
+   queue-health poll reads platform, password-reset, and lockout queues for metrics. When
+   `APP_INTEGRATION_SECRETS_KEY` is set, the WhatsApp media worker (claims and updates media jobs)
+   and sender worker (claims outbound events and updates send state) also start. Privacy,
+   knowledge, and WhatsApp media jobs use the configured object store.
+
+   Invitation, password-reset, and login-lockout workers can send email through SMTP; leave
+   `SMTP_URL` unset to disable email. The agent responder and knowledge indexer can call tenant-
+   configured AI providers, and the agent responder can invoke configured HTTP tools. No worker
+   sends outbound integration webhooks; the generic webhook endpoint is inbound-only. If
+   `APP_INTEGRATION_SECRETS_KEY` is set, the WhatsApp sender and media workers also call Meta's
+   APIs; leave it unset to disable those workers. There is no configuration switch to disable
+   queued AI or HTTP-tool work. To ensure nothing leaves the deployment, use the restored internal
+   S3-compatible endpoint (`APP_S3_ENDPOINT`) and enforce default-deny network egress for the replay
+   API and worker, allowing only restored PostgreSQL, Redis, and object storage. If using a proxy,
+   keep it in-deployment and prevent it from forwarding outside the environment.
+   `APP_AI_OPENAI_BASE_URL`, `APP_AI_ANTHROPIC_BASE_URL`, and `APP_AI_GEMINI_BASE_URL` are routing
+   overrides, not disable switches. A privacy-only worker mode would remove this caveat and is a
+   recommended follow-up.
 3. For every ledger erasure whose request is missing from the restored database or whose status is
    not `completed`, POST `/api/v1/tenant/customers/{id}/erase` with
    `{"confirm":"<customer-id>"}`, using a tenant-admin session and completing the required
-   step-up. An existing receipt is returned; the worker continues queued, running or failed
-   requests, and expired leases are reclaimed automatically. Keep the worker running until each
-   request reports `completed`.
+   step-up. A repeat POST returns the existing receipt. The worker automatically continues queued
+   requests, running requests with an expired lease, and failed requests below the attempt limit.
+   Before polling an erase request that is `failed` at the attempt limit, requeue that same request
+   using the [exhausted-request procedure](customer-privacy.md#requeue-an-exhausted-erase-request).
+   Keep the worker running until each request reports `completed`.
 4. Before continuing, run this query against the restored database and require a result of `0` for
    every ledger customer:
 
