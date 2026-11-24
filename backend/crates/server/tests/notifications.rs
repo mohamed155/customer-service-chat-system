@@ -1800,6 +1800,15 @@ async fn auto_drain_resolves_others_rows() {
     let tenant_id = seed_tenant(&pool).await;
     let agent_a = seed_actor(&pool, tenant_id, "drain-other-a@test.com", "agent").await;
     let agent_b = seed_actor(&pool, tenant_id, "drain-other-b@test.com", "agent").await;
+    sqlx::query(
+        "INSERT INTO agent_availability (tenant_id, membership_id, state) \
+         VALUES ($1, $2, 'available')",
+    )
+    .bind(tenant_id)
+    .bind(agent_b.membership_id)
+    .execute(&db::testing::seed_pool())
+    .await
+    .unwrap();
     let customer_id = seed_customer(&pool, tenant_id).await;
     let conv_id = seed_conversation(&pool, tenant_id, customer_id).await;
 

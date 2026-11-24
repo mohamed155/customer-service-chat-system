@@ -117,6 +117,39 @@
         ],
         "type": "object"
       },
+      "AgentCapacity": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "effective": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "membership_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "open_load": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "override": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "membership_id",
+          "display_name",
+          "effective",
+          "open_load"
+        ],
+        "type": "object"
+      },
       "AgentConfigPayload": {
         "properties": {
           "avatar": {
@@ -5104,6 +5137,25 @@
         ],
         "type": "object"
       },
+      "RoutingCapacityResponse": {
+        "properties": {
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/AgentCapacity"
+            },
+            "type": "array"
+          },
+          "default_capacity": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "default_capacity",
+          "agents"
+        ],
+        "type": "object"
+      },
       "RoutingInfo": {
         "properties": {
           "assignedAt": {
@@ -5181,6 +5233,18 @@
         ],
         "type": "object"
       },
+      "SetAgentCapacityPayload": {
+        "properties": {
+          "capacity": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "SetAvailabilityPayload": {
         "properties": {
           "state": {
@@ -5189,6 +5253,18 @@
         },
         "required": [
           "state"
+        ],
+        "type": "object"
+      },
+      "SetDefaultCapacityPayload": {
+        "properties": {
+          "default_capacity": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "default_capacity"
         ],
         "type": "object"
       },
@@ -18041,6 +18117,343 @@
         "summary": "Mark a notification as read",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/tenant/routing/capacity": {
+      "get": {
+        "description": "Return the tenant default and per-agent overrides, effective capacities, and open/pending conversation loads. Requires permission: members.view.",
+        "operationId": "get_routing_capacity",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutingCapacityResponse"
+                }
+              }
+            },
+            "description": "Routing capacity settings."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Authentication required."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Insufficient permissions."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal server error."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Get routing capacity settings",
+        "tags": [
+          "escalations"
+        ]
+      }
+    },
+    "/tenant/routing/capacity/agents/{membership_id}": {
+      "put": {
+        "description": "Set an agent override from 0 through 200, or null to inherit the tenant default. Zero prevents automatic assignment. Increasing effective capacity drains the queue. Requires permission: members.manage.",
+        "operationId": "set_agent_routing_capacity",
+        "parameters": [
+          {
+            "description": "Tenant membership identifier",
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAgentCapacityPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutingCapacityResponse"
+                }
+              }
+            },
+            "description": "Updated routing capacity settings."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Validation failed (request body is not valid JSON)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Authentication required."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Insufficient permissions."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Membership not found in this tenant."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Capacity override must be null or between 0 and 200."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal server error."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Set an agent routing capacity override",
+        "tags": [
+          "escalations"
+        ]
+      }
+    },
+    "/tenant/routing/capacity/default": {
+      "put": {
+        "description": "Set the inherited per-agent capacity from 1 through 200. Increasing it drains the queue while agents have room. Requires permission: members.manage.",
+        "operationId": "set_default_routing_capacity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDefaultCapacityPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutingCapacityResponse"
+                }
+              }
+            },
+            "description": "Updated routing capacity settings."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Validation failed (request body is not valid JSON)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Authentication required."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Insufficient permissions."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Default capacity must be between 1 and 200."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "x-deprecated": true
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal server error."
+          }
+        },
+        "security": [
+          {
+            "session_cookie": []
+          }
+        ],
+        "summary": "Set the tenant routing capacity default",
+        "tags": [
+          "escalations"
         ]
       }
     },

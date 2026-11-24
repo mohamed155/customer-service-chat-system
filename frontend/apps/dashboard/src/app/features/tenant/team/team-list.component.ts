@@ -47,6 +47,7 @@ import { InviteDialogComponent } from './invite-dialog.component';
 import { InvitationTableComponent } from './invitation-table.component';
 import { RoleSelectComponent } from './role-select.component';
 import { SkillsManagerComponent } from './skills-manager.component';
+import { CapacityEditorComponent } from './capacity-editor.component';
 import { TeamStore } from './team.store';
 import { ApiError } from '../../../core/api/api.models';
 import { errorMessageKey } from '../../../core/errors/error-message';
@@ -84,6 +85,7 @@ const ROLE_RANKS: Record<MembershipRole, number> = {
     SearchInputComponent,
     SelectFilterComponent,
     SkillsManagerComponent,
+    CapacityEditorComponent,
     StatusBadgeComponent,
     ToolbarComponent,
     TranslocoPipe,

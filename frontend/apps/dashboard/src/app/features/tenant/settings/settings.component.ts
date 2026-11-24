@@ -1,16 +1,23 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Store } from '@ngrx/store';
 import { TranslocoPipe, provideTranslocoScope } from '@jsverse/transloco';
 import { HasPermissionDirective } from '../../../core/authz/has-permission.directive';
+import { PermissionsService } from '../../../core/authz/permissions.service';
 import { marker } from '../../../core/i18n/marker';
 import { APP_PATHS } from '../../../core/router/app-paths';
+import { errorMessageKey } from '../../../core/errors/error-message';
+import { ApiError } from '../../../core/api/api.models';
 import { appUiActions, selectThemeMode, ThemeMode } from '../../../core/state/app-ui.feature';
 import { selectActiveTenant } from '../../../core/state/tenant-context.feature';
 import { PageContainerComponent } from '../../../layout/page-container/page-container.component';
 import { PageHeaderComponent } from '../../../layout/page-header/page-header.component';
 import { DashboardCardComponent } from '../../../shared/components/dashboard-card/dashboard-card.component';
 import { SectionHeaderComponent } from '../../../shared/components/section-header/section-header.component';
+import { ButtonComponent } from '../../../shared/components/button/button.component';
+import { InlineAlertComponent } from '../../../shared/components/inline-alert/inline-alert.component';
+import { ErrorReferenceComponent } from '../../../shared/components/error-reference/error-reference.component';
+import { RoutingCapacityStore } from './routing-capacity.store';
 
 /**
  * What the settings page really has: the dashboard's own theme (kept in this browser), the
@@ -21,14 +28,17 @@ import { SectionHeaderComponent } from '../../../shared/components/section-heade
   selector: 'app-settings',
   imports: [
     DashboardCardComponent,
+    ButtonComponent,
+    ErrorReferenceComponent,
     HasPermissionDirective,
+    InlineAlertComponent,
     PageContainerComponent,
     PageHeaderComponent,
     RouterLink,
     SectionHeaderComponent,
     TranslocoPipe,
   ],
-  providers: [provideTranslocoScope('settings')],
+  providers: [RoutingCapacityStore, provideTranslocoScope('settings')],
   templateUrl: './settings.component.html',
   styles: [
     `
@@ -81,6 +91,29 @@ import { SectionHeaderComponent } from '../../../shared/components/section-heade
         padding: 0;
         list-style: none;
       }
+      .capacity-control {
+        display: grid;
+        gap: var(--app-space-2);
+      }
+      .capacity-control-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--app-space-2);
+      }
+      .capacity-control input {
+        width: 110px;
+        min-height: 40px;
+        padding-inline: var(--app-space-3);
+        border: 1px solid var(--app-border);
+        border-radius: var(--app-radius-md);
+        background: var(--app-panel);
+        color: var(--app-text);
+      }
+      .capacity-control p {
+        margin: 0;
+        color: var(--app-text-3);
+      }
       li a {
         color: var(--app-accent-strong);
         font-weight: 650;
@@ -100,8 +133,11 @@ import { SectionHeaderComponent } from '../../../shared/components/section-heade
 })
 export class SettingsComponent {
   private readonly store = inject(Store);
+  private readonly permissions = inject(PermissionsService);
   protected readonly tenant = this.store.selectSignal(selectActiveTenant);
   protected readonly themeMode = this.store.selectSignal(selectThemeMode);
+  protected readonly routingCapacity = inject(RoutingCapacityStore);
+  protected readonly canManageRouting = computed(() => this.permissions.has('members.manage'));
 
   protected readonly themeModes: readonly { id: ThemeMode; key: string }[] = [
     { id: 'light', key: marker('settings.theme.light') },
@@ -112,6 +148,15 @@ export class SettingsComponent {
   protected readonly teamLink = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.team}`;
   protected readonly billingLink = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.billing}`;
   protected readonly toolsLink = `/${APP_PATHS.tenant.base}/${APP_PATHS.tenant.settingsTools}`;
+
+  protected errorKey(error: ApiError | null): string {
+    return errorMessageKey(error ?? { code: 'unknown_error', message: '', status: 0 });
+  }
+
+  protected saveDefaultCapacity(value: number): void {
+    if (!Number.isInteger(value) || value < 1 || value > 200) return;
+    this.routingCapacity.saveDefault(value);
+  }
 
   protected setTheme(themeMode: ThemeMode): void {
     this.store.dispatch(appUiActions.themeModeChanged({ themeMode }));

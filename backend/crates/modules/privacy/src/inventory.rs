@@ -51,6 +51,7 @@ pub const TABLES: &[(&str, Disposition)] = &[
     ("privacy_request_steps", Disposition::Retain),
     ("privacy_requests", Disposition::Anonymize),
     ("refresh_tokens", Disposition::Retain),
+    ("routing_settings", Disposition::Retain),
     ("secret_keks", Disposition::Retain),
     ("skills", Disposition::Retain),
     ("tenant_invitations", Disposition::Retain),

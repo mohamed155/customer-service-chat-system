@@ -904,6 +904,17 @@ fn tenant_routes(include_test_routes: bool) -> OpenApiRouter<sqlx::PgPool> {
                 .layer(require_permission(Permission::ConversationsManage)),
         )
         .routes(
+            routes!(escalations::capacity::get).layer(require_permission(Permission::MembersView)),
+        )
+        .routes(
+            routes!(escalations::capacity::set_default)
+                .layer(require_permission(Permission::MembersManage)),
+        )
+        .routes(
+            routes!(escalations::capacity::set_agent)
+                .layer(require_permission(Permission::MembersManage)),
+        )
+        .routes(
             routes!(
                 escalations::routes::get_my_availability,
                 escalations::routes::set_my_availability

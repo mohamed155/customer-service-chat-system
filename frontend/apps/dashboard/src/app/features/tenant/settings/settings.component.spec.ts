@@ -6,9 +6,16 @@ import { provideTaiga } from '@taiga-ui/core';
 import { Permission } from '../../../core/authz/permissions';
 import { PermissionsService } from '../../../core/authz/permissions.service';
 import { appUiActions } from '../../../core/state/app-ui.feature';
+import { RoutingCapacityApiService } from '../../../core/api/routing-capacity-api.service';
+import { of } from 'rxjs';
 import { SettingsComponent } from './settings.component';
 
 describe('SettingsComponent', () => {
+  const routingCapacityApi = {
+    get: vi.fn(() => of({ data: { default_capacity: 10, agents: [] } })),
+    setDefault: vi.fn(() => of({ data: { default_capacity: 15, agents: [] } })),
+  };
+
   function mount(permissions: Permission[] = [], themeMode: string = 'system') {
     TestBed.configureTestingModule({
       imports: [SettingsComponent],
@@ -29,6 +36,7 @@ describe('SettingsComponent', () => {
           provide: PermissionsService,
           useValue: { has: (p: Permission) => permissions.includes(p) },
         },
+        { provide: RoutingCapacityApiService, useValue: routingCapacityApi },
       ],
     });
     const fixture = TestBed.createComponent(SettingsComponent);
@@ -83,5 +91,33 @@ describe('SettingsComponent', () => {
       (a) => a.getAttribute('href'),
     );
     expect(hrefs).toEqual(['/tenant/team', '/tenant/settings/tools']);
+  });
+
+  it('shows and saves the tenant default only for members who can manage the team', async () => {
+    const fixture = mount(['members.manage']);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.textContent).toContain('Routing capacity');
+    const input = element.querySelector<HTMLInputElement>('#routing-default-capacity');
+    expect(input?.value).toBe('10');
+    if (!input) throw new Error('routing capacity input should be present');
+    input.value = '15';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Save default'))
+      ?.click();
+
+    expect(routingCapacityApi.setDefault).toHaveBeenCalledWith(15);
+  });
+
+  it('does not request or display capacity controls without team management permission', () => {
+    const fixture = mount(['members.view']);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('Routing capacity');
+    expect(fixture.nativeElement.querySelector('#routing-default-capacity')).toBeFalsy();
   });
 });

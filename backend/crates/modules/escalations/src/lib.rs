@@ -1,16 +1,18 @@
 //! # Escalations Module
 //!
 //! Owns the human handoff & routing subsystem: agent skill catalogs, per-agent
-//! availability with presence-aware auto-revert, the escalation queue, a
-//! routing engine that assigns the best available agent (skill match → load
-//! fallback → queue), a per-tenant SSE event stream for real-time delivery,
-//! and the claim/close-out lifecycle.
+//! availability with presence-aware auto-revert, per-tenant and per-agent
+//! routing capacity, fair load-based assignment, the escalation queue, a
+//! per-tenant SSE event stream for real-time delivery, and the claim/close-out
+//! lifecycle.
 //!
 //! ## Ownership
-//! Four tables are entirely owned by this module:
+//! Five tables are entirely owned by this module:
 //! - `skills` — tenant skill catalog (hard-delete, R7).
 //! - `agent_skills` — per-agent skill assignments (join table, hard-link only).
-//! - `agent_availability` — per-membership toggle state (default `away`).
+//! - `agent_availability` — per-membership presence, optional capacity override,
+//!   and last-assignment time (presence defaults to `away`).
+//! - `routing_settings` — per-tenant default capacity (default 10).
 //! - `escalations` — one row per handoff attempt; at most one active per
 //!   conversation.
 //!
@@ -30,6 +32,8 @@
 //! - `GET  /tenant/skills`, `POST /tenant/skills`,
 //!   `PATCH /tenant/skills/{id}`, `DELETE /tenant/skills/{id}`
 //! - `PUT  /tenant/members/{membershipId}/skills`
+//! - `GET  /tenant/routing/capacity`, `PUT /tenant/routing/capacity/default`,
+//!   `PUT /tenant/routing/capacity/agents/{membership_id}`
 //! - `GET  /tenant/events` (SSE stream)
 //!
 //! ## Reusable query functions
@@ -55,6 +59,7 @@
 //!   The `POST …/escalate` endpoint is the interim test surface (research R6).
 
 pub mod audit;
+pub mod capacity;
 pub mod events;
 pub mod model;
 pub mod presence;

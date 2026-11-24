@@ -134,6 +134,10 @@ use utoipa::{openapi, Modify, OpenApi};
         escalations::routes::QueueListResponse,
         escalations::routes::SkillListResponse,
         escalations::routes::MemberSkillsResponse,
+        escalations::capacity::SetDefaultCapacityPayload,
+        escalations::capacity::SetAgentCapacityPayload,
+        escalations::capacity::AgentCapacity,
+        escalations::capacity::RoutingCapacityResponse,
         // Server composite handlers
         crate::handlers::TeamMemberWithSkills,
         // AI

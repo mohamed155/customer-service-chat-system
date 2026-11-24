@@ -134,7 +134,8 @@
         "escalations",
         "agent_availability",
         "skills",
-        "agent_skills"
+        "agent_skills",
+        "routing_settings"
       ]
     },
     "feedback": {

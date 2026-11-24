@@ -8,6 +8,7 @@ import {
 } from '../../../core/api/tenant-api.models';
 import { provideTenantStore, tenantStore } from '../../../core/state/testing/tenant-store.testing';
 import { TeamApiService } from './team-api.service';
+import { RoutingCapacityApiService } from '../../../core/api/routing-capacity-api.service';
 import { TeamStore } from './team.store';
 
 describe('TeamStore', () => {
@@ -18,6 +19,11 @@ describe('TeamStore', () => {
     createInvitation: vi.fn(),
     revokeInvitation: vi.fn(),
     patchMember: vi.fn(),
+  };
+  const mockRoutingCapacityApi = {
+    get: vi.fn(),
+    setDefault: vi.fn(),
+    setAgent: vi.fn(),
   };
 
   const mockInvitation: TenantInvitation = {
@@ -48,18 +54,31 @@ describe('TeamStore', () => {
     mockApi.createInvitation.mockReset();
     mockApi.revokeInvitation.mockReset();
     mockApi.patchMember.mockReset();
+    mockRoutingCapacityApi.get.mockReset();
+    mockRoutingCapacityApi.setDefault.mockReset();
+    mockRoutingCapacityApi.setAgent.mockReset();
+    mockRoutingCapacityApi.get.mockReturnValue(of({ data: { default_capacity: 10, agents: [] } }));
   });
 
   function configureStore() {
     TestBed.configureTestingModule({
-      providers: [TeamStore, { provide: TeamApiService, useValue: mockApi }],
+      providers: [
+        TeamStore,
+        { provide: TeamApiService, useValue: mockApi },
+        { provide: RoutingCapacityApiService, useValue: mockRoutingCapacityApi },
+      ],
     });
     return TestBed.inject(TeamStore);
   }
 
   function configureStoreWithTenant(activeTenant: TenantSummary | null = null) {
     TestBed.configureTestingModule({
-      providers: [TeamStore, { provide: TeamApiService, useValue: mockApi }, provideTenantStore()],
+      providers: [
+        TeamStore,
+        { provide: TeamApiService, useValue: mockApi },
+        { provide: RoutingCapacityApiService, useValue: mockRoutingCapacityApi },
+        provideTenantStore(),
+      ],
     });
     tenantStore().activate(activeTenant);
     return { store: TestBed.inject(TeamStore) };
@@ -81,6 +100,50 @@ describe('TeamStore', () => {
     expect(store.error()).toBeNull();
     expect(store.invitations()).toEqual([]);
     expect(store.lastCreatedInvitation()).toBeNull();
+  });
+
+  it('loads routing capacity and saves an agent override', () => {
+    mockApi.getMembers.mockReturnValue(
+      of({ data: { items: [], nextCursor: null, hasMore: false } }),
+    );
+    mockApi.getInvitations.mockReturnValue(
+      of({ data: { items: [], nextCursor: null, hasMore: false } }),
+    );
+    const initialCapacity = {
+      default_capacity: 10,
+      agents: [
+        {
+          membership_id: 'm-1',
+          display_name: 'Alice',
+          override: null,
+          effective: 10,
+          open_load: 2,
+        },
+      ],
+    };
+    mockRoutingCapacityApi.get.mockReturnValue(of({ data: initialCapacity }));
+    const updatedCapacity = {
+      default_capacity: 10,
+      agents: [
+        {
+          membership_id: 'm-1',
+          display_name: 'Alice',
+          override: 0,
+          effective: 0,
+          open_load: 2,
+        },
+      ],
+    };
+    mockRoutingCapacityApi.setAgent.mockReturnValue(of({ data: updatedCapacity }));
+    const store = configureStore();
+    TestBed.flushEffects();
+
+    expect(store.routingCapacity()).toEqual(initialCapacity);
+    store.setMemberCapacity({ membershipId: 'm-1', capacity: 0 });
+
+    expect(mockRoutingCapacityApi.setAgent).toHaveBeenCalledWith('m-1', 0);
+    expect(store.routingCapacity()).toEqual(updatedCapacity);
+    expect(store.capacityUpdateStatus()).toBe('success');
   });
 
   it('loads invitations on init', () => {

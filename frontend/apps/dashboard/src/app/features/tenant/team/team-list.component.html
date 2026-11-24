@@ -161,6 +161,7 @@
                 <th scope="col">{{ 'team.table.role' | transloco }}</th>
                 <th scope="col">{{ 'team.table.status' | transloco }}</th>
                 <th scope="col">{{ 'team.table.joined' | transloco }}</th>
+                <th scope="col">{{ 'team.capacity.heading' | transloco }}</th>
                 @if (canManage()) {
                   <th scope="col">{{ 'team.table.actions' | transloco }}</th>
                 }
@@ -201,6 +202,13 @@
                     />
                   </td>
                   <td class="muted">{{ member.joinedAt | localeDate: 'date' }}</td>
+                  <td>
+                    @defer (on immediate) {
+                      <app-capacity-editor [member]="member" [canManage]="canManage()" />
+                    } @placeholder {
+                      <span class="muted">—</span>
+                    }
+                  </td>
                   @if (canManage()) {
                     <td class="actions-cell">
                       @if (!isSelf(member) && canManageMember(member)) {

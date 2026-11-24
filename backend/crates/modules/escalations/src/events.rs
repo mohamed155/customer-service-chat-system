@@ -20,6 +20,7 @@ use tenancy::{PlatformAccessGrant, TenantContext};
 
 use crate::audit;
 use crate::presence;
+use crate::queries;
 use crate::routing;
 
 type RevocationExtensions = (
@@ -594,6 +595,7 @@ async fn relabel_reassignment_in_tx(
         .await?;
 
         if let Some((eid,)) = queued {
+            queries::record_last_assignment_in_tx(tx, tenant_id, mid).await?;
             audit::record_escalation_assigned(
                 tx,
                 Uuid::nil(),
@@ -638,6 +640,7 @@ async fn relabel_reassignment_in_tx(
 
     if let Some((eid,)) = escalation_id {
         if let Some(mid) = new_membership_id {
+            queries::record_last_assignment_in_tx(tx, tenant_id, mid).await?;
             audit::record_escalation_assigned(
                 tx,
                 Uuid::nil(),

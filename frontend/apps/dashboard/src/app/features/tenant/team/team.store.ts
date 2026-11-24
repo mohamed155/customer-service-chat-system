@@ -32,6 +32,10 @@ import { withTenantScope } from '../../../core/state/tenant-scope';
 import { TeamApiService } from './team-api.service';
 import { ApiError } from '../../../core/api/api.models';
 import { toApiError } from '../../../core/errors/api-error';
+import {
+  RoutingCapacityApiService,
+  RoutingCapacityResponse,
+} from '../../../core/api/routing-capacity-api.service';
 
 export type TeamListStatus = 'pending' | 'loading' | 'success' | 'error' | 'empty';
 export type MemberMutationStatus = 'idle' | 'submitting' | 'success' | 'error';
@@ -59,6 +63,12 @@ interface TeamState {
   revokeInvitationStatus: MemberMutationStatus;
   revokeInvitationError: ApiError | null;
   revokeInvitationId: string | null;
+  routingCapacity: RoutingCapacityResponse | null;
+  routingCapacityStatus: 'pending' | 'loading' | 'success' | 'error';
+  routingCapacityError: ApiError | null;
+  capacityUpdateStatus: MemberMutationStatus;
+  capacityUpdateError: ApiError | null;
+  capacityUpdateMembershipId: string | null;
 }
 
 const initialState: TeamState = {
@@ -84,337 +94,422 @@ const initialState: TeamState = {
   revokeInvitationStatus: 'idle',
   revokeInvitationError: null,
   revokeInvitationId: null,
+  routingCapacity: null,
+  routingCapacityStatus: 'pending',
+  routingCapacityError: null,
+  capacityUpdateStatus: 'idle',
+  capacityUpdateError: null,
+  capacityUpdateMembershipId: null,
 };
 
 export const TeamStore = signalStore(
   withState(initialState),
-  withMethods((store, api = inject(TeamApiService)) => {
-    const loadMembers = rxMethod<{ query: TeamMemberQuery; append?: boolean }>(
-      pipe(
-        tap(() => patchState(store, { status: 'loading' as const, error: null })),
-        switchMap(({ query, append }) =>
-          api.getMembers(query).pipe(
-            tap({
-              next: (response) => {
-                const data = response.data;
-                patchState(store, {
-                  members: append ? [...store.members(), ...data.items] : data.items,
-                  nextCursor: data.nextCursor ?? null,
-                  hasMore: data.hasMore ?? false,
-                  status:
-                    append || data.items.length > 0 ? ('success' as const) : ('empty' as const),
-                });
-              },
-              error: (err) =>
-                patchState(store, {
-                  status: 'error' as const,
-                  error: toApiError(err),
-                }),
+  withMethods(
+    (
+      store,
+      api = inject(TeamApiService),
+      routingCapacityApi = inject(RoutingCapacityApiService),
+    ) => {
+      const loadRoutingCapacity = rxMethod<void>(
+        pipe(
+          tap(() =>
+            patchState(store, {
+              routingCapacityStatus: 'loading' as const,
+              routingCapacityError: null,
             }),
-            catchError(() => EMPTY),
           ),
-        ),
-      ),
-    );
-
-    const loadInvitations = rxMethod<{ query: InvitationQuery; append?: boolean }>(
-      pipe(
-        tap(() =>
-          patchState(store, {
-            invitationsStatus: 'loading' as const,
-            invitationsError: null,
-          }),
-        ),
-        switchMap(({ query, append }) =>
-          api.getInvitations(query).pipe(
-            tap({
-              next: (response) =>
-                patchState(store, {
-                  invitations: append
-                    ? [...store.invitations(), ...response.data.items]
-                    : response.data.items,
-                  invitationNextCursor: response.data.nextCursor ?? null,
-                  invitationHasMore: response.data.hasMore ?? false,
-                  invitationsStatus: 'success' as const,
-                }),
-              error: (err) =>
-                patchState(store, {
-                  invitationsStatus: 'error' as const,
-                  invitationsError: toApiError(err),
-                }),
-            }),
-            catchError(() => EMPTY),
-          ),
-        ),
-      ),
-    );
-
-    const invitationBaseQuery = (): InvitationQuery => {
-      const query = { ...store.invitationQuery() };
-      delete query.cursor;
-      return query;
-    };
-
-    const pollInvitationDelivery = rxMethod<string | null>(
-      pipe(
-        switchMap((invitationId) => {
-          if (!invitationId) return EMPTY;
-          return timer(0, 1000).pipe(
-            exhaustMap(() =>
-              api.getInvitationDelivery(invitationId).pipe(
-                retry({
-                  count: 2,
-                  delay: (error) => {
-                    const status = (error as { status?: number })?.status;
-                    return status != null && status >= 400 && status < 500
-                      ? throwError(() => error)
-                      : timer(1000);
-                  },
-                }),
-              ),
+          switchMap(() =>
+            routingCapacityApi.get().pipe(
+              tap({
+                next: ({ data }) =>
+                  patchState(store, {
+                    routingCapacity: data,
+                    routingCapacityStatus: 'success' as const,
+                    routingCapacityError: null,
+                  }),
+                error: (error) =>
+                  patchState(store, {
+                    routingCapacityStatus: 'error' as const,
+                    routingCapacityError: toApiError(error),
+                  }),
+              }),
+              catchError(() => EMPTY),
             ),
-            tap((response) => {
-              const deliveryStatus = response.data.emailDeliveryStatus;
-              const invitations = store
-                .invitations()
-                .map((item) =>
-                  item.id === invitationId
-                    ? { ...item, emailDeliveryStatus: deliveryStatus }
-                    : item,
-                );
-              const invitation = invitations.find((item) => item.id === invitationId);
-              patchState(store, {
-                invitations,
-                invitationDeliveryPollingFailed: false,
-              });
-              const created = store.lastCreatedInvitation();
-              if (invitation && created?.invitation.id === invitationId) {
-                patchState(store, {
-                  lastCreatedInvitation: {
-                    ...created,
-                    invitation,
-                    emailDeliveryStatus: deliveryStatus,
-                    emailSent: deliveryStatus === 'sent',
-                  },
-                });
-              }
-            }),
-            takeWhile((response) => response.data.emailDeliveryStatus === 'queued', true),
-            catchError(() => {
-              patchState(store, {
-                invitationDeliveryPollingFailed: true,
-              });
-              return EMPTY;
-            }),
-          );
-        }),
-      ),
-    );
-
-    const resetInvitationPagination = (query: InvitationQuery): void => {
-      patchState(store, {
-        invitations: [],
-        invitationQuery: query,
-        invitationNextCursor: null,
-        invitationHasMore: false,
-      });
-    };
-
-    const createInvitation = rxMethod<CreateInvitationPayload>(
-      pipe(
-        tap(() =>
-          patchState(store, {
-            createInvitationStatus: 'submitting' as const,
-            createInvitationError: null,
-          }),
+          ),
         ),
-        switchMap((payload) =>
-          api.createInvitation(payload).pipe(
-            tap({
-              next: (response) => {
+      );
+
+      const setMemberCapacity = rxMethod<{ membershipId: string; capacity: number | null }>(
+        pipe(
+          tap(({ membershipId }) =>
+            patchState(store, {
+              capacityUpdateStatus: 'submitting' as const,
+              capacityUpdateError: null,
+              capacityUpdateMembershipId: membershipId,
+            }),
+          ),
+          exhaustMap(({ membershipId, capacity }) =>
+            routingCapacityApi.setAgent(membershipId, capacity).pipe(
+              tap({
+                next: ({ data }) =>
+                  patchState(store, {
+                    routingCapacity: data,
+                    routingCapacityStatus: 'success' as const,
+                    routingCapacityError: null,
+                    capacityUpdateStatus: 'success' as const,
+                    capacityUpdateError: null,
+                    capacityUpdateMembershipId: null,
+                  }),
+                error: (error) =>
+                  patchState(store, {
+                    capacityUpdateStatus: 'error' as const,
+                    capacityUpdateError: toApiError(error),
+                    capacityUpdateMembershipId: membershipId,
+                  }),
+              }),
+              catchError(() => EMPTY),
+            ),
+          ),
+        ),
+      );
+
+      const loadMembers = rxMethod<{ query: TeamMemberQuery; append?: boolean }>(
+        pipe(
+          tap(() => patchState(store, { status: 'loading' as const, error: null })),
+          switchMap(({ query, append }) =>
+            api.getMembers(query).pipe(
+              tap({
+                next: (response) => {
+                  const data = response.data;
+                  patchState(store, {
+                    members: append ? [...store.members(), ...data.items] : data.items,
+                    nextCursor: data.nextCursor ?? null,
+                    hasMore: data.hasMore ?? false,
+                    status:
+                      append || data.items.length > 0 ? ('success' as const) : ('empty' as const),
+                  });
+                },
+                error: (err) =>
+                  patchState(store, {
+                    status: 'error' as const,
+                    error: toApiError(err),
+                  }),
+              }),
+              catchError(() => EMPTY),
+            ),
+          ),
+        ),
+      );
+
+      const loadInvitations = rxMethod<{ query: InvitationQuery; append?: boolean }>(
+        pipe(
+          tap(() =>
+            patchState(store, {
+              invitationsStatus: 'loading' as const,
+              invitationsError: null,
+            }),
+          ),
+          switchMap(({ query, append }) =>
+            api.getInvitations(query).pipe(
+              tap({
+                next: (response) =>
+                  patchState(store, {
+                    invitations: append
+                      ? [...store.invitations(), ...response.data.items]
+                      : response.data.items,
+                    invitationNextCursor: response.data.nextCursor ?? null,
+                    invitationHasMore: response.data.hasMore ?? false,
+                    invitationsStatus: 'success' as const,
+                  }),
+                error: (err) =>
+                  patchState(store, {
+                    invitationsStatus: 'error' as const,
+                    invitationsError: toApiError(err),
+                  }),
+              }),
+              catchError(() => EMPTY),
+            ),
+          ),
+        ),
+      );
+
+      const invitationBaseQuery = (): InvitationQuery => {
+        const query = { ...store.invitationQuery() };
+        delete query.cursor;
+        return query;
+      };
+
+      const pollInvitationDelivery = rxMethod<string | null>(
+        pipe(
+          switchMap((invitationId) => {
+            if (!invitationId) return EMPTY;
+            return timer(0, 1000).pipe(
+              exhaustMap(() =>
+                api.getInvitationDelivery(invitationId).pipe(
+                  retry({
+                    count: 2,
+                    delay: (error) => {
+                      const status = (error as { status?: number })?.status;
+                      return status != null && status >= 400 && status < 500
+                        ? throwError(() => error)
+                        : timer(1000);
+                    },
+                  }),
+                ),
+              ),
+              tap((response) => {
+                const deliveryStatus = response.data.emailDeliveryStatus;
+                const invitations = store
+                  .invitations()
+                  .map((item) =>
+                    item.id === invitationId
+                      ? { ...item, emailDeliveryStatus: deliveryStatus }
+                      : item,
+                  );
+                const invitation = invitations.find((item) => item.id === invitationId);
                 patchState(store, {
-                  lastCreatedInvitation: response.data,
-                  invitations: [
-                    response.data.invitation,
-                    ...store
-                      .invitations()
-                      .filter((item) => item.id !== response.data.invitation.id),
-                  ],
+                  invitations,
                   invitationDeliveryPollingFailed: false,
                 });
-                patchState(store, { createInvitationStatus: 'success' as const });
-                if (response.data.emailDeliveryStatus === 'queued') {
-                  pollInvitationDelivery(response.data.invitation.id);
-                } else {
-                  loadInvitations({ query: invitationBaseQuery() });
+                const created = store.lastCreatedInvitation();
+                if (invitation && created?.invitation.id === invitationId) {
+                  patchState(store, {
+                    lastCreatedInvitation: {
+                      ...created,
+                      invitation,
+                      emailDeliveryStatus: deliveryStatus,
+                      emailSent: deliveryStatus === 'sent',
+                    },
+                  });
                 }
-                loadMembers({ query: store.query() });
-              },
-              error: (err) =>
+              }),
+              takeWhile((response) => response.data.emailDeliveryStatus === 'queued', true),
+              catchError(() => {
                 patchState(store, {
-                  createInvitationStatus: 'error' as const,
-                  createInvitationError: toApiError(err),
-                }),
-            }),
-            catchError(() => EMPTY),
-          ),
-        ),
-      ),
-    );
-
-    const revokeInvitation = rxMethod<string>(
-      pipe(
-        tap((id) =>
-          patchState(store, {
-            revokeInvitationStatus: 'submitting' as const,
-            revokeInvitationError: null,
-            revokeInvitationId: id,
+                  invitationDeliveryPollingFailed: true,
+                });
+                return EMPTY;
+              }),
+            );
           }),
         ),
-        mergeMap((id) =>
-          api.revokeInvitation(id).pipe(
-            tap({
-              next: () => {
-                patchState(store, {
-                  revokeInvitationStatus: 'success' as const,
-                  revokeInvitationError: null,
-                  revokeInvitationId: null,
-                });
-                loadInvitations({ query: invitationBaseQuery() });
-              },
-              error: (err) =>
-                patchState(store, {
-                  revokeInvitationStatus: 'error' as const,
-                  revokeInvitationError: toApiError(err),
-                  revokeInvitationId: id,
-                }),
+      );
+
+      const resetInvitationPagination = (query: InvitationQuery): void => {
+        patchState(store, {
+          invitations: [],
+          invitationQuery: query,
+          invitationNextCursor: null,
+          invitationHasMore: false,
+        });
+      };
+
+      const createInvitation = rxMethod<CreateInvitationPayload>(
+        pipe(
+          tap(() =>
+            patchState(store, {
+              createInvitationStatus: 'submitting' as const,
+              createInvitationError: null,
             }),
-            catchError(() => EMPTY),
+          ),
+          switchMap((payload) =>
+            api.createInvitation(payload).pipe(
+              tap({
+                next: (response) => {
+                  patchState(store, {
+                    lastCreatedInvitation: response.data,
+                    invitations: [
+                      response.data.invitation,
+                      ...store
+                        .invitations()
+                        .filter((item) => item.id !== response.data.invitation.id),
+                    ],
+                    invitationDeliveryPollingFailed: false,
+                  });
+                  patchState(store, { createInvitationStatus: 'success' as const });
+                  if (response.data.emailDeliveryStatus === 'queued') {
+                    pollInvitationDelivery(response.data.invitation.id);
+                  } else {
+                    loadInvitations({ query: invitationBaseQuery() });
+                  }
+                  loadMembers({ query: store.query() });
+                },
+                error: (err) =>
+                  patchState(store, {
+                    createInvitationStatus: 'error' as const,
+                    createInvitationError: toApiError(err),
+                  }),
+              }),
+              catchError(() => EMPTY),
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    const updateMember = rxMethod<{ id: string; payload: PatchMemberPayload }>(
-      pipe(
-        tap(({ id }) =>
+      const revokeInvitation = rxMethod<string>(
+        pipe(
+          tap((id) =>
+            patchState(store, {
+              revokeInvitationStatus: 'submitting' as const,
+              revokeInvitationError: null,
+              revokeInvitationId: id,
+            }),
+          ),
+          mergeMap((id) =>
+            api.revokeInvitation(id).pipe(
+              tap({
+                next: () => {
+                  patchState(store, {
+                    revokeInvitationStatus: 'success' as const,
+                    revokeInvitationError: null,
+                    revokeInvitationId: null,
+                  });
+                  loadInvitations({ query: invitationBaseQuery() });
+                },
+                error: (err) =>
+                  patchState(store, {
+                    revokeInvitationStatus: 'error' as const,
+                    revokeInvitationError: toApiError(err),
+                    revokeInvitationId: id,
+                  }),
+              }),
+              catchError(() => EMPTY),
+            ),
+          ),
+        ),
+      );
+
+      const updateMember = rxMethod<{ id: string; payload: PatchMemberPayload }>(
+        pipe(
+          tap(({ id }) =>
+            patchState(store, {
+              memberUpdateStatus: 'submitting' as const,
+              memberUpdateError: null,
+              memberUpdateMemberId: id,
+            }),
+          ),
+          mergeMap(({ id, payload }) =>
+            api.patchMember(id, payload).pipe(
+              tap({
+                next: () => {
+                  patchState(store, {
+                    memberUpdateStatus: 'success' as const,
+                    memberUpdateError: null,
+                    memberUpdateMemberId: null,
+                  });
+                  loadMembers({ query: store.query() });
+                },
+                error: (err) =>
+                  patchState(store, {
+                    memberUpdateStatus: 'error' as const,
+                    memberUpdateError: toApiError(err),
+                    memberUpdateMemberId: id,
+                  }),
+              }),
+              catchError(() => EMPTY),
+            ),
+          ),
+        ),
+      );
+
+      const searchMembers = rxMethod<string>(
+        pipe(
+          debounceTime(300),
+          distinctUntilChanged(),
+          tap((q) => {
+            const updatedQuery = { ...store.query(), q: q || undefined, cursor: undefined };
+            patchState(store, { query: updatedQuery });
+            loadMembers({ query: updatedQuery });
+          }),
+        ),
+      );
+
+      return {
+        loadMembers,
+        loadInvitations,
+        loadRoutingCapacity,
+        pollInvitationDelivery,
+        createInvitation,
+        revokeInvitation,
+        updateMember,
+        setMemberCapacity,
+        searchMembers,
+        setQuery(query: Partial<TeamMemberQuery>): void {
+          patchState(store, { query: { ...store.query(), ...query } });
+        },
+        setInvitationQuery(query: Partial<InvitationQuery>): void {
+          patchState(store, { invitationQuery: { ...store.invitationQuery(), ...query } });
+        },
+        setInvitationStatusFilter(status: InvitationStatus | undefined): void {
+          const updatedQuery = { ...store.invitationQuery(), status, cursor: undefined };
+          resetInvitationPagination(updatedQuery);
+          loadInvitations({ query: updatedQuery });
+        },
+        search(q: string): void {
+          searchMembers(q);
+        },
+        changeMemberRole(id: string, role: MembershipRole): void {
+          updateMember({ id, payload: { role } });
+        },
+        setMemberStatus(id: string, status: MemberStatus): void {
+          updateMember({ id, payload: { status } });
+        },
+        clearMemberUpdateError(): void {
           patchState(store, {
-            memberUpdateStatus: 'submitting' as const,
+            memberUpdateStatus: 'idle',
             memberUpdateError: null,
-            memberUpdateMemberId: id,
-          }),
-        ),
-        mergeMap(({ id, payload }) =>
-          api.patchMember(id, payload).pipe(
-            tap({
-              next: () => {
-                patchState(store, {
-                  memberUpdateStatus: 'success' as const,
-                  memberUpdateError: null,
-                  memberUpdateMemberId: null,
-                });
-                loadMembers({ query: store.query() });
-              },
-              error: (err) =>
-                patchState(store, {
-                  memberUpdateStatus: 'error' as const,
-                  memberUpdateError: toApiError(err),
-                  memberUpdateMemberId: id,
-                }),
-            }),
-            catchError(() => EMPTY),
-          ),
-        ),
-      ),
-    );
-
-    const searchMembers = rxMethod<string>(
-      pipe(
-        debounceTime(300),
-        distinctUntilChanged(),
-        tap((q) => {
-          const updatedQuery = { ...store.query(), q: q || undefined, cursor: undefined };
+            memberUpdateMemberId: null,
+          });
+        },
+        clearCapacityUpdateError(): void {
+          patchState(store, {
+            capacityUpdateStatus: 'idle' as const,
+            capacityUpdateError: null,
+            capacityUpdateMembershipId: null,
+          });
+        },
+        clearRevokeInvitationError(): void {
+          patchState(store, {
+            revokeInvitationStatus: 'idle',
+            revokeInvitationError: null,
+            revokeInvitationId: null,
+          });
+        },
+        filterByStatus(status: MemberStatus | undefined): void {
+          const updatedQuery = { ...store.query(), status, cursor: undefined };
           patchState(store, { query: updatedQuery });
           loadMembers({ query: updatedQuery });
-        }),
-      ),
-    );
-
-    return {
-      loadMembers,
-      loadInvitations,
-      pollInvitationDelivery,
-      createInvitation,
-      revokeInvitation,
-      updateMember,
-      searchMembers,
-      setQuery(query: Partial<TeamMemberQuery>): void {
-        patchState(store, { query: { ...store.query(), ...query } });
-      },
-      setInvitationQuery(query: Partial<InvitationQuery>): void {
-        patchState(store, { invitationQuery: { ...store.invitationQuery(), ...query } });
-      },
-      setInvitationStatusFilter(status: InvitationStatus | undefined): void {
-        const updatedQuery = { ...store.invitationQuery(), status, cursor: undefined };
-        resetInvitationPagination(updatedQuery);
-        loadInvitations({ query: updatedQuery });
-      },
-      search(q: string): void {
-        searchMembers(q);
-      },
-      changeMemberRole(id: string, role: MembershipRole): void {
-        updateMember({ id, payload: { role } });
-      },
-      setMemberStatus(id: string, status: MemberStatus): void {
-        updateMember({ id, payload: { status } });
-      },
-      clearMemberUpdateError(): void {
-        patchState(store, {
-          memberUpdateStatus: 'idle',
-          memberUpdateError: null,
-          memberUpdateMemberId: null,
-        });
-      },
-      clearRevokeInvitationError(): void {
-        patchState(store, {
-          revokeInvitationStatus: 'idle',
-          revokeInvitationError: null,
-          revokeInvitationId: null,
-        });
-      },
-      filterByStatus(status: MemberStatus | undefined): void {
-        const updatedQuery = { ...store.query(), status, cursor: undefined };
-        patchState(store, { query: updatedQuery });
-        loadMembers({ query: updatedQuery });
-      },
-      loadNext(): void {
-        if (!store.hasMore() || !store.nextCursor()) return;
-        const query = { ...store.query(), cursor: store.nextCursor()! };
-        patchState(store, { query });
-        loadMembers({ query, append: true });
-      },
-      retry(): void {
-        loadMembers({ query: store.query() });
-      },
-      clearLastCreatedInvitation(): void {
-        pollInvitationDelivery(null);
-        patchState(store, {
-          lastCreatedInvitation: null,
-          invitationDeliveryPollingFailed: false,
-        });
-      },
-      loadMoreInvitations(): void {
-        if (!store.invitationHasMore() || !store.invitationNextCursor()) return;
-        const query = { ...store.invitationQuery(), cursor: store.invitationNextCursor()! };
-        patchState(store, { invitationQuery: query });
-        loadInvitations({ query, append: true });
-      },
-    };
-  }),
+        },
+        loadNext(): void {
+          if (!store.hasMore() || !store.nextCursor()) return;
+          const query = { ...store.query(), cursor: store.nextCursor()! };
+          patchState(store, { query });
+          loadMembers({ query, append: true });
+        },
+        retry(): void {
+          loadMembers({ query: store.query() });
+        },
+        clearLastCreatedInvitation(): void {
+          pollInvitationDelivery(null);
+          patchState(store, {
+            lastCreatedInvitation: null,
+            invitationDeliveryPollingFailed: false,
+          });
+        },
+        loadMoreInvitations(): void {
+          if (!store.invitationHasMore() || !store.invitationNextCursor()) return;
+          const query = { ...store.invitationQuery(), cursor: store.invitationNextCursor()! };
+          patchState(store, { invitationQuery: query });
+          loadInvitations({ query, append: true });
+        },
+      };
+    },
+  ),
   withHooks((store) => ({
     onInit(): void {
       store.loadMembers({ query: store.query() });
       store.loadInvitations({ query: store.invitationQuery() });
+      store.loadRoutingCapacity();
     },
   })),
   withTenantScope({
@@ -423,6 +518,7 @@ export const TeamStore = signalStore(
     reload: (store) => {
       store.loadMembers({ query: store.query() });
       store.loadInvitations({ query: store.invitationQuery() });
+      store.loadRoutingCapacity();
     },
   }),
 );

@@ -8,7 +8,7 @@ payloads and immutable copies require the decisions listed below.
 
 ## PostgreSQL
 
-The schema review follows migrations through 0099, including the composite
+The schema review follows migrations through 0101, including the composite
 foreign-key rollout in 0092–0094. No migration creates or attaches partitions.
 Migration 0080 drops `revoked_sessions`. `_sqlx_migrations` is runner metadata
 with no application records. The `xtenant` schema contains privileged functions.
@@ -58,6 +58,7 @@ with no application records. The `xtenant` schema contains privileged functions.
 | `privacy_request_steps` | privacy | Request link and structured step status | Tenant and request ID | RETAIN | Resumable step records. [Migration 0098](../../backend/migrations/0098_customer_privacy.sql) |
 | `privacy_requests` | privacy | Customer ID, actor and export object locator | Tenant and customer ID | ANONYMIZE | Retain request metadata and clear locator on expiry or erasure. [Migration 0098](../../backend/migrations/0098_customer_privacy.sql) |
 | `refresh_tokens` | identity | None attributed | None | RETAIN | Identity session and token hash. [Migration 0079](../../backend/migrations/0079_auth_sessions_refresh_tokens.sql#L40) |
+| `routing_settings` | escalations | None attributed | Tenant only | RETAIN | Per-tenant automatic assignment capacity. [Migration 0101](../../backend/migrations/0101_routing_capacity.sql) |
 | `secret_keks` | Shared secrets | None attributed | None | RETAIN | Wrapped keys and scope metadata. Preserve unrelated encrypted data. [Migration 0076](../../backend/migrations/0076_envelope_encryption.sql#L18) |
 | `skills` | escalations | name if customer data was pasted | Tenant skill only | RETAIN | Routing configuration. Customer-specific escalations can carry copies. [Migration 0035](../../backend/migrations/0035_agent_skills.sql#L9) |
 | `tenant_invitations` | tenancy | None attributed | None | RETAIN | Invitation email, token hash and staff onboarding metadata. Separate identity scope. [Migration 0019](../../backend/migrations/0019_tenant_invitations.sql#L3) |

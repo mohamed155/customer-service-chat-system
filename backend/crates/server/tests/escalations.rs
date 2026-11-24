@@ -102,7 +102,7 @@ async fn get_pool() -> Option<sqlx::PgPool> {
 async fn setup(_pool: &sqlx::PgPool) {
     db::testing::migrate().await;
     sqlx::query(
-        "TRUNCATE TABLE escalations, agent_availability, agent_skills, skills, \
+        "TRUNCATE TABLE escalations, routing_settings, agent_availability, agent_skills, skills, \
          messages, customer_channel_identifiers, customers, conversations, \
          outbox_events, audit_logs, tenant_invitations, tenant_memberships, tenants, users \
          RESTART IDENTITY CASCADE",
@@ -2290,4 +2290,478 @@ async fn cross_tenant_conversation_detail_404() {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+#[serial_test::serial(escalations_db)]
+async fn routing_capacity_api_validates_authorizes_isolates_and_audits() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let state = app_state(pool.clone());
+    let tenant_a = seed_tenant(&pool, "capacity-api-a").await;
+    let tenant_b = seed_tenant(&pool, "capacity-api-b").await;
+    let admin_a = seed_admin(&pool, tenant_a, "capacity-admin-a@test").await;
+    let admin_b = seed_admin(&pool, tenant_b, "capacity-admin-b@test").await;
+    let agent_a = seed_member(&pool, tenant_a, "capacity-agent-a@test", "agent").await;
+    let viewer = seed_member(&pool, tenant_a, "capacity-viewer@test", "viewer").await;
+    let base = "/api/v1/tenant/routing/capacity";
+
+    let response = send_get(&state, admin_a.user_id, tenant_a, base).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_json(response).await;
+    assert_eq!(body["default_capacity"], 10);
+    let listed = body["agents"]
+        .as_array()
+        .expect("agents array")
+        .iter()
+        .find(|agent| agent["membership_id"] == agent_a.membership_id.to_string())
+        .expect("active agent listed");
+    assert_eq!(listed["display_name"], "Escalations Test User");
+    assert_eq!(listed["override"], serde_json::Value::Null);
+    assert_eq!(listed["effective"], 10);
+    assert_eq!(listed["open_load"], 0);
+
+    let response = send_get(&state, viewer.user_id, tenant_a, base).await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let response = send_put(
+        &state,
+        viewer.user_id,
+        tenant_a,
+        &format!("{base}/default"),
+        &serde_json::json!({"default_capacity": 3}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+    for invalid in [0, -1, 201] {
+        let response = send_put(
+            &state,
+            admin_a.user_id,
+            tenant_a,
+            &format!("{base}/default"),
+            &serde_json::json!({"default_capacity": invalid}),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+    let response = send_put(
+        &state,
+        admin_a.user_id,
+        tenant_a,
+        &format!("{base}/default"),
+        &serde_json::json!({"default_capacity": 3}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(body_json(response).await["default_capacity"], 3);
+
+    for invalid in [-1, 201] {
+        let response = send_put(
+            &state,
+            admin_a.user_id,
+            tenant_a,
+            &format!("{base}/agents/{}", agent_a.membership_id),
+            &serde_json::json!({"capacity": invalid}),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+    let response = send_put(
+        &state,
+        admin_a.user_id,
+        tenant_a,
+        &format!("{base}/agents/{}", agent_a.membership_id),
+        &serde_json::json!({"capacity": 0}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_json(response).await;
+    let listed = body["agents"]
+        .as_array()
+        .expect("agents array")
+        .iter()
+        .find(|agent| agent["membership_id"] == agent_a.membership_id.to_string())
+        .expect("active agent listed");
+    assert_eq!(listed["override"], 0);
+    assert_eq!(listed["effective"], 0);
+
+    let response = send_put(
+        &state,
+        admin_a.user_id,
+        tenant_a,
+        &format!("{base}/agents/{}", agent_a.membership_id),
+        &serde_json::json!({"capacity": null}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_json(response).await;
+    let listed = body["agents"]
+        .as_array()
+        .expect("agents array")
+        .iter()
+        .find(|agent| agent["membership_id"] == agent_a.membership_id.to_string())
+        .expect("active agent listed");
+    assert_eq!(listed["override"], serde_json::Value::Null);
+    assert_eq!(listed["effective"], 3);
+
+    let missing = Uuid::new_v4();
+    let response = send_put(
+        &state,
+        admin_a.user_id,
+        tenant_a,
+        &format!("{base}/agents/{missing}"),
+        &serde_json::json!({"capacity": 4}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let response = send_put(
+        &state,
+        admin_b.user_id,
+        tenant_b,
+        &format!("{base}/agents/{}", agent_a.membership_id),
+        &serde_json::json!({"capacity": 4}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let audit_rows: Vec<(String, serde_json::Value)> = sqlx::query_as(
+        "SELECT resource_id, details FROM audit_logs \
+         WHERE tenant_id = $1 AND action = 'routing.capacity_changed' ORDER BY created_at",
+    )
+    .bind(tenant_a)
+    .fetch_all(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(audit_rows.len(), 3);
+    assert!(audit_rows.iter().all(
+        |(resource_id, details)| resource_id == &tenant_a.to_string()
+            || resource_id == &agent_a.membership_id.to_string()
+                && details["membership_id"] == agent_a.membership_id.to_string()
+    ));
+    let audit_text =
+        serde_json::Value::Array(audit_rows.into_iter().map(|(_, details)| details).collect())
+            .to_string();
+    assert!(!audit_text.contains("Escalations Test User"));
+    assert!(!audit_text.contains("capacity-agent-a@test"));
+}
+
+async fn insert_escalation_event(
+    tenant_id: Uuid,
+    conversation_id: Uuid,
+    event_type: &str,
+    payload: serde_json::Value,
+) {
+    sqlx::query(
+        "INSERT INTO outbox_events \
+         (id, aggregate_type, aggregate_id, tenant_id, event_type, payload, created_at) \
+         VALUES ($1, 'conversation', $2, $3, $4, $5, now())",
+    )
+    .bind(Uuid::new_v4())
+    .bind(conversation_id.to_string())
+    .bind(tenant_id)
+    .bind(event_type)
+    .bind(payload)
+    .execute(&db::testing::seed_pool())
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+#[serial_test::serial(escalations_db)]
+async fn capacity_increase_and_freed_load_drain_queue_in_order_without_loss() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let state = app_state(pool.clone());
+    let tenant = seed_tenant(&pool, "capacity-drain").await;
+    let admin = seed_admin(&pool, tenant, "capacity-drain-admin@test").await;
+    let agent = seed_member(&pool, tenant, "capacity-drain-agent@test", "agent").await;
+    let reassignment_target =
+        seed_member(&pool, tenant, "capacity-drain-target@test", "agent").await;
+    let customer = seed_customer(&pool, tenant, "Capacity customer", None, None).await;
+    let initial_conversation = seed_conversation(
+        &pool,
+        tenant,
+        customer,
+        "web_chat",
+        "open",
+        Some(agent.membership_id),
+    )
+    .await;
+    let queued_conversations = [
+        seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await,
+        seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await,
+    ];
+    let third_conversation =
+        seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await;
+    sqlx::query("INSERT INTO routing_settings (tenant_id, default_capacity) VALUES ($1, 1)")
+        .bind(tenant)
+        .execute(&db::testing::seed_pool())
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO agent_availability (tenant_id, membership_id, state, capacity_override) \
+         VALUES ($1, $2, 'available', 1)",
+    )
+    .bind(tenant)
+    .bind(agent.membership_id)
+    .execute(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    seed_availability(&pool, tenant, reassignment_target.membership_id, "away").await;
+    let _guard = connect_presence(&state, agent.user_id, tenant).await;
+
+    let mut created_ids = Vec::new();
+    for conversation_id in queued_conversations {
+        let response = send_post(
+            &state,
+            agent.user_id,
+            tenant,
+            &format!("/api/v1/tenant/conversations/{conversation_id}/escalate"),
+            &serde_json::json!({"reason": "full agent"}),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = body_json(response).await;
+        assert_eq!(body["status"], "queued");
+        created_ids.push(body["id"].as_str().unwrap().parse::<Uuid>().unwrap());
+    }
+
+    let response = send_put(
+        &state,
+        admin.user_id,
+        tenant,
+        &format!(
+            "/api/v1/tenant/routing/capacity/agents/{}",
+            agent.membership_id
+        ),
+        &serde_json::json!({"capacity": 2}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body_json(response).await;
+    let agent_capacity = body["agents"]
+        .as_array()
+        .expect("agents array")
+        .iter()
+        .find(|capacity| capacity["membership_id"] == agent.membership_id.to_string())
+        .expect("updated agent capacity listed");
+    assert_eq!(agent_capacity["open_load"], 2);
+    let statuses: Vec<(Uuid, String)> = sqlx::query_as(
+        "SELECT id, status FROM escalations WHERE tenant_id = $1 \
+         AND conversation_id = ANY($2) ORDER BY escalated_at ASC, id ASC",
+    )
+    .bind(tenant)
+    .bind(queued_conversations.to_vec())
+    .fetch_all(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(statuses.len(), 2);
+    assert_eq!(statuses[0], (created_ids[0], "assigned".to_owned()));
+    assert_eq!(statuses[1], (created_ids[1], "queued".to_owned()));
+    let totals: (i64, i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*) FILTER (WHERE status = 'assigned'), \
+                COUNT(*) FILTER (WHERE status = 'queued'), COUNT(*) \
+         FROM escalations WHERE tenant_id = $1",
+    )
+    .bind(tenant)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(totals, (1, 1, 2));
+
+    sqlx::query("UPDATE conversations SET status = 'resolved' WHERE tenant_id = $1 AND id = $2")
+        .bind(tenant)
+        .bind(initial_conversation)
+        .execute(&db::testing::seed_pool())
+        .await
+        .unwrap();
+    insert_escalation_event(
+        tenant,
+        initial_conversation,
+        "conversation.status_changed",
+        serde_json::json!({
+            "tenantId": tenant,
+            "conversationId": initial_conversation,
+            "prevStatus": "open",
+            "newStatus": "resolved"
+        }),
+    )
+    .await;
+    process_outbox(&state).await;
+    let second_status: String =
+        sqlx::query_scalar("SELECT status FROM escalations WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant)
+            .bind(created_ids[1])
+            .fetch_one(&db::testing::seed_pool())
+            .await
+            .unwrap();
+    assert_eq!(second_status, "assigned");
+
+    let response = send_post(
+        &state,
+        agent.user_id,
+        tenant,
+        &format!("/api/v1/tenant/conversations/{third_conversation}/escalate"),
+        &serde_json::json!({"reason": "wait for reassignment"}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let third_body = body_json(response).await;
+    assert_eq!(third_body["status"], "queued");
+    let third_id = Uuid::parse_str(third_body["id"].as_str().unwrap()).unwrap();
+
+    let first_assigned_conversation: Uuid = sqlx::query_scalar(
+        "SELECT conversation_id FROM escalations WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(tenant)
+    .bind(created_ids[0])
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    sqlx::query(
+        "UPDATE conversations SET assigned_membership_id = $1 \
+         WHERE tenant_id = $2 AND id = $3",
+    )
+    .bind(reassignment_target.membership_id)
+    .bind(tenant)
+    .bind(first_assigned_conversation)
+    .execute(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    insert_escalation_event(
+        tenant,
+        first_assigned_conversation,
+        "conversation.assignment_changed",
+        serde_json::json!({
+            "tenantId": tenant,
+            "conversationId": first_assigned_conversation,
+            "oldMembershipId": agent.membership_id,
+            "newMembershipId": reassignment_target.membership_id
+        }),
+    )
+    .await;
+    process_outbox(&state).await;
+    let third_status: String =
+        sqlx::query_scalar("SELECT status FROM escalations WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant)
+            .bind(third_id)
+            .fetch_one(&db::testing::seed_pool())
+            .await
+            .unwrap();
+    assert_eq!(third_status, "assigned");
+    let assignments: Vec<(Uuid, String, Option<Uuid>)> = sqlx::query_as(
+        "SELECT id, status, assigned_membership_id FROM escalations WHERE tenant_id = $1 \
+         ORDER BY escalated_at ASC, id ASC",
+    )
+    .bind(tenant)
+    .fetch_all(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(assignments.len(), 3);
+    assert!(assignments
+        .iter()
+        .all(|(_, status, _)| status == "assigned"));
+    assert_eq!(assignments[0].2, Some(reassignment_target.membership_id));
+    assert_eq!(assignments[1].2, Some(agent.membership_id));
+    assert_eq!(assignments[2].2, Some(agent.membership_id));
+    let current_load: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM conversations WHERE tenant_id = $1 \
+         AND assigned_membership_id = $2 AND status IN ('open', 'pending') AND deleted_at IS NULL",
+    )
+    .bind(tenant)
+    .bind(agent.membership_id)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(current_load, 2, "the original member must stop at capacity");
+}
+
+#[tokio::test]
+#[serial_test::serial(escalations_db)]
+async fn concurrent_escalations_respect_each_agent_capacity_and_preserve_queue_total() {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let state = app_state(pool.clone());
+    let tenant = seed_tenant(&pool, "capacity-concurrent").await;
+    let agent_a = seed_member(&pool, tenant, "capacity-concurrent-a@test", "agent").await;
+    let agent_b = seed_member(&pool, tenant, "capacity-concurrent-b@test", "agent").await;
+    let customer = seed_customer(&pool, tenant, "Concurrent capacity", None, None).await;
+    let conversations = [
+        seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await,
+        seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await,
+        seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await,
+        seed_conversation(&pool, tenant, customer, "web_chat", "open", None).await,
+    ];
+    sqlx::query("INSERT INTO routing_settings (tenant_id, default_capacity) VALUES ($1, 1)")
+        .bind(tenant)
+        .execute(&db::testing::seed_pool())
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO agent_availability (tenant_id, membership_id, state, capacity_override) \
+         VALUES ($1, $2, 'available', 2)",
+    )
+    .bind(tenant)
+    .bind(agent_b.membership_id)
+    .execute(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    seed_availability(&pool, tenant, agent_a.membership_id, "available").await;
+    let _guard_a = connect_presence(&state, agent_a.user_id, tenant).await;
+    let _guard_b = connect_presence(&state, agent_b.user_id, tenant).await;
+
+    let state_ref = &state;
+    let user_id = agent_a.user_id;
+    let requests = conversations.map(|conversation_id| async move {
+        let uri = format!("/api/v1/tenant/conversations/{conversation_id}/escalate");
+        let payload = serde_json::json!({"reason": "concurrent capacity"});
+        send_post(state_ref, user_id, tenant, &uri, &payload).await
+    });
+    let responses = futures::future::join_all(requests).await;
+    let mut created_ids = Vec::new();
+    for response in responses {
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = body_json(response).await;
+        created_ids.push(Uuid::parse_str(body["id"].as_str().unwrap()).unwrap());
+    }
+
+    let counts: (i64, i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*) FILTER (WHERE status = 'assigned'), \
+                COUNT(*) FILTER (WHERE status = 'queued'), COUNT(*) \
+         FROM escalations WHERE tenant_id = $1",
+    )
+    .bind(tenant)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert_eq!(counts, (3, 1, 4));
+
+    let loads: Vec<(Uuid, i64)> = sqlx::query_as(
+        "SELECT assigned_membership_id, COUNT(*)::bigint FROM conversations \
+         WHERE tenant_id = $1 AND assigned_membership_id = ANY($2) \
+           AND status IN ('open', 'pending') AND deleted_at IS NULL \
+         GROUP BY assigned_membership_id",
+    )
+    .bind(tenant)
+    .bind(vec![agent_a.membership_id, agent_b.membership_id])
+    .fetch_all(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    for (membership_id, load) in &loads {
+        let cap = if *membership_id == agent_b.membership_id {
+            2
+        } else {
+            1
+        };
+        assert!(
+            *load <= cap,
+            "member {membership_id} has load {load} > {cap}"
+        );
+    }
+    assert_eq!(loads.iter().map(|(_, load)| load).sum::<i64>(), 3);
+    assert_eq!(
+        i64::try_from(created_ids.len()).unwrap(),
+        counts.0 + counts.1
+    );
 }

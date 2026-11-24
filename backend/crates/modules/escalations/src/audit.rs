@@ -224,3 +224,54 @@ pub async fn record_availability_changed(
     )
     .await
 }
+
+pub async fn record_tenant_routing_capacity_changed(
+    tx: &mut Transaction<'_, Postgres>,
+    actor_user_id: Uuid,
+    tenant_id: Uuid,
+    previous_capacity: i32,
+    new_capacity: i32,
+) -> Result<(), sqlx::Error> {
+    audit_log::record_in_tx(
+        tx,
+        "routing.capacity_changed",
+        Some(actor_user_id),
+        Some(tenant_id),
+        "routing_capacity",
+        Some(&tenant_id.to_string()),
+        &json!({
+            "previous_default_capacity": previous_capacity,
+            "new_default_capacity": new_capacity,
+        }),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn record_agent_routing_capacity_changed(
+    tx: &mut Transaction<'_, Postgres>,
+    actor_user_id: Uuid,
+    tenant_id: Uuid,
+    membership_id: Uuid,
+    previous_override: Option<i32>,
+    new_override: Option<i32>,
+    previous_effective: i32,
+    new_effective: i32,
+) -> Result<(), sqlx::Error> {
+    audit_log::record_in_tx(
+        tx,
+        "routing.capacity_changed",
+        Some(actor_user_id),
+        Some(tenant_id),
+        "routing_capacity",
+        Some(&membership_id.to_string()),
+        &json!({
+            "membership_id": membership_id.to_string(),
+            "previous_override": previous_override,
+            "new_override": new_override,
+            "previous_effective_capacity": previous_effective,
+            "new_effective_capacity": new_effective,
+        }),
+    )
+    .await
+}

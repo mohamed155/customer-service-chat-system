@@ -20,6 +20,71 @@
       }
     </app-dashboard-card>
 
+    @if (canManageRouting()) {
+      <app-dashboard-card>
+        <app-section-header
+          card-header
+          [title]="'settings.routingCapacity.title' | transloco"
+          [subtitle]="'settings.routingCapacity.subtitle' | transloco"
+        />
+        @if (routingCapacity.status() === 'pending' || routingCapacity.status() === 'loading') {
+          <p>{{ 'settings.routingCapacity.loading' | transloco }}</p>
+        } @else if (routingCapacity.status() === 'error') {
+          <app-inline-alert tone="error" [requestId]="routingCapacity.error()?.requestId">{{
+            errorKey(routingCapacity.error()) | transloco
+          }}</app-inline-alert>
+          @if (routingCapacity.error()?.requestId; as id) {
+            <app-error-reference [requestId]="id" />
+          }
+          <app-button variant="ghost" (pressed)="routingCapacity.retry()">
+            {{ 'settings.routingCapacity.retry' | transloco }}
+          </app-button>
+        } @else {
+          <div class="capacity-control">
+            <label for="routing-default-capacity">
+              {{ 'settings.routingCapacity.defaultLabel' | transloco }}
+            </label>
+            <div class="capacity-control-row">
+              <input
+                #capacityInput
+                id="routing-default-capacity"
+                type="number"
+                min="1"
+                max="200"
+                step="1"
+                [value]="routingCapacity.defaultCapacity()"
+                [attr.aria-describedby]="'routing-default-capacity-help'"
+                [disabled]="routingCapacity.saveStatus() === 'submitting'"
+              />
+              <app-button
+                variant="primary"
+                [disabled]="routingCapacity.saveStatus() === 'submitting'"
+                (pressed)="saveDefaultCapacity(capacityInput.valueAsNumber)"
+              >
+                {{
+                  (routingCapacity.saveStatus() === 'submitting'
+                    ? 'settings.routingCapacity.saving'
+                    : 'settings.routingCapacity.save'
+                  ) | transloco
+                }}
+              </app-button>
+            </div>
+            <p id="routing-default-capacity-help">
+              {{ 'settings.routingCapacity.help' | transloco }}
+            </p>
+          </div>
+          @if (routingCapacity.saveStatus() === 'error') {
+            <app-inline-alert tone="error" [requestId]="routingCapacity.saveError()?.requestId">{{
+              errorKey(routingCapacity.saveError()) | transloco
+            }}</app-inline-alert>
+            @if (routingCapacity.saveError()?.requestId; as id) {
+              <app-error-reference [requestId]="id" />
+            }
+          }
+        }
+      </app-dashboard-card>
+    }
+
     <app-dashboard-card>
       <app-section-header
         card-header

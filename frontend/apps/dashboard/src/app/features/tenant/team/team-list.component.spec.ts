@@ -5,6 +5,7 @@ import { of, throwError } from 'rxjs';
 import { TeamMember } from '../../../core/api/tenant-api.models';
 import { APP_CONFIG } from '../../../core/config/app-config';
 import { PermissionsService } from '../../../core/authz/permissions.service';
+import { RoutingCapacityApiService } from '../../../core/api/routing-capacity-api.service';
 import { MfaService } from '../../../core/auth/mfa.service';
 import { CurrentUserService } from '../../../core/tenant/current-user.service';
 import {
@@ -22,6 +23,11 @@ describe('TeamListComponent', () => {
     createInvitation: vi.fn(),
     revokeInvitation: vi.fn(),
     patchMember: vi.fn(),
+  };
+  const mockRoutingCapacityApi = {
+    get: vi.fn(),
+    setDefault: vi.fn(),
+    setAgent: vi.fn(),
   };
 
   const mockPermissions = { has: vi.fn().mockReturnValue(true) };
@@ -64,6 +70,7 @@ describe('TeamListComponent', () => {
         provideZonelessChangeDetection(),
         { provide: APP_CONFIG, useValue: { publicDashboardUrl: 'https://dashboard.example.com' } },
         { provide: TeamApiService, useValue: mockApi },
+        { provide: RoutingCapacityApiService, useValue: mockRoutingCapacityApi },
         { provide: PermissionsService, useValue: mockPermissions },
         { provide: CurrentUserService, useValue: mockCurrentUserService },
         ...extraProviders,
@@ -77,6 +84,25 @@ describe('TeamListComponent', () => {
     mockApi.createInvitation.mockReset();
     mockApi.revokeInvitation.mockReset();
     mockApi.patchMember.mockReset();
+    mockRoutingCapacityApi.get.mockReset();
+    mockRoutingCapacityApi.setDefault.mockReset();
+    mockRoutingCapacityApi.setAgent.mockReset();
+    mockRoutingCapacityApi.get.mockReturnValue(
+      of({
+        data: {
+          default_capacity: 10,
+          agents: [
+            {
+              membership_id: 'm-1',
+              display_name: 'Alice',
+              override: null,
+              effective: 10,
+              open_load: 2,
+            },
+          ],
+        },
+      }),
+    );
     mockPermissions.has.mockReturnValue(true);
     mockCurrentUserService.currentUser.mockReturnValue({
       id: 'current-user',
@@ -154,6 +180,76 @@ describe('TeamListComponent', () => {
       expect(fixture.nativeElement.textContent).toContain('Alice');
       expect(fixture.nativeElement.textContent).toContain('Bob');
     });
+  });
+
+  it('shows effective capacity and open load, and applies or clears an override', async () => {
+    mockApi.getMembers.mockReturnValue(
+      of({ data: { items: members, nextCursor: null, hasMore: false } }),
+    );
+    mockApi.getInvitations.mockReturnValue(
+      of({ data: { items: [], nextCursor: null, hasMore: false } }),
+    );
+    mockRoutingCapacityApi.setAgent
+      .mockReturnValueOnce(
+        of({
+          data: {
+            default_capacity: 10,
+            agents: [
+              {
+                membership_id: 'm-1',
+                display_name: 'Alice',
+                override: 4,
+                effective: 4,
+                open_load: 2,
+              },
+            ],
+          },
+        }),
+      )
+      .mockReturnValueOnce(
+        of({
+          data: {
+            default_capacity: 10,
+            agents: [
+              {
+                membership_id: 'm-1',
+                display_name: 'Alice',
+                override: null,
+                effective: 10,
+                open_load: 2,
+              },
+            ],
+          },
+        }),
+      );
+    configureModule();
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(TeamListComponent);
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain('effective limit: 10');
+      expect(fixture.nativeElement.textContent).toContain('open/pending load: 2');
+    });
+
+    const root: HTMLElement = fixture.nativeElement;
+    const input = root.querySelector<HTMLInputElement>(
+      '[aria-label="Capacity override for Alice"]',
+    );
+    expect(input).toBeTruthy();
+    if (!input) throw new Error('agent capacity input should be present');
+    input.value = '4';
+    input.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(mockRoutingCapacityApi.setAgent).toHaveBeenCalledWith('m-1', 4);
+
+    const inherit = Array.from(root.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Inherit'),
+    );
+    expect(inherit).toBeTruthy();
+    inherit?.click();
+    fixture.detectChanges();
+    expect(mockRoutingCapacityApi.setAgent).toHaveBeenNthCalledWith(2, 'm-1', null);
   });
 
   it('shows invite button when user can manage', async () => {
@@ -305,7 +401,7 @@ describe('TeamListComponent', () => {
 
     const roster = fixture.nativeElement.querySelector('app-data-table table');
     expect(roster.querySelector('caption')?.textContent).toContain('Team members');
-    expect(roster.querySelectorAll('th[scope="col"]')).toHaveLength(6);
+    expect(roster.querySelectorAll('th[scope="col"]')).toHaveLength(7);
     expect(
       fixture.nativeElement
         .querySelector('app-role-select app-choice-group [role="group"]')

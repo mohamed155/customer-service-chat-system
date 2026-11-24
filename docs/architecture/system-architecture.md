@@ -544,19 +544,26 @@ Implemented as a **pipeline of stages** (Chain of Responsibility), each stage a 
 ### 11.1 Algorithm
 
 ```text
+default_capacity = tenant_setting ?? 10             -- tenant setting range 1..=200
+capacity = agent_override ?? default_capacity       -- override NULL inherits, range 0..=200
+                                                     -- override 0 disables auto-assignment
 eligible = agents where tenant matches
                    and status = online
                    and active_count < capacity
+active_count = assigned conversations in open or pending status
 skilled  = eligible where required_skills ⊆ agent.skills          -- set containment
 pool     = skilled if non-empty else (fallback_enabled ? eligible : ∅)
 choose   = argmin over pool of (active_count / capacity,          -- least-loaded (normalized)
-                                last_assigned_at)                 -- tie-break: longest idle (fairness)
+                                last_assigned_at,                  -- longest idle (fairness)
+                                membership_id)                      -- deterministic final tie-break
 if none  → enqueue in shared queue
 ```
 
-- **Atomic assignment:** `UPDATE agent_load SET active = active + 1 WHERE agent_id = $1 AND
-  active < capacity` (conditional update) inside the transaction that sets the assignment, so two
-  concurrent escalations can't overfill an agent. Retry with next candidate on conflict.
+- **Atomic assignment:** automatic routing and queue drains take the tenant routing advisory
+  transaction lock before reading open/pending conversation load and writing an assignment. The
+  selected membership and availability rows are share-locked, and load is rechecked before the
+  assignment is written, so concurrent escalations cannot overfill an agent. Manual claims are an
+  explicit human choice and are not blocked by capacity; they still update `last_assigned_at`.
 - **Queue ordering:** priority, then waiting time with **aging** (priority increases with wait) to
   prevent starvation.
 - **SLA timers:** deadlines stored as timestamps; the scheduler scans an index on `due_at`
