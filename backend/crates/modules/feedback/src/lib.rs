@@ -40,3 +40,6 @@ pub mod model;
 pub mod public_routes;
 pub mod queries;
 pub mod tenant_routes;
+
+/// Customer data operations for the tenant privacy workflow.
+pub mod customer_privacy;

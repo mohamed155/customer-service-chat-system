@@ -90,6 +90,7 @@ const EXPIRED: &str = "platform_access_expired";
     summary = "Start a platform tenant access session",
     description = "Starts time-limited access to the target tenant for the current sign-in. \
                    A previous access session ends when the new one starts. \
+                   Keep customer personal data out of the access reason. \
                    Requires permission: platform.tenants.switch",
     params(("id" = Uuid, Path, description = "Tenant identifier")),
     request_body = StartPlatformAccessRequest,

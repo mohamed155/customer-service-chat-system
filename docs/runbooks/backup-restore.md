@@ -96,6 +96,14 @@ If the automated script is unavailable, follow these steps:
    sqlx migrate run
    ```
 
+### Replay customer erasures
+
+Before serving restored PostgreSQL data or restored objects, reconcile the restore point with the
+completed customer erasure requests recorded after it. Obtain the tenant and customer IDs from
+the durable request ledger outside the restored snapshot. Replay those erasures against the
+restored data and verify each completion, including attachment and export object cleanup, before
+restoring access. Keep backup copies under the configured retention schedule.
+
 ## Drill Procedure
 
 Run `ops/verify-backup.sh` to perform the FR-030 drill:

@@ -452,6 +452,7 @@ impl ConversationReader for PgUnit<'_, '_> {
              FROM conversations c \
              JOIN customers cu \
                ON cu.id = c.customer_id AND cu.tenant_id = c.tenant_id AND cu.deleted_at IS NULL \
+                  AND cu.erasure_pending_at IS NULL AND cu.erased_at IS NULL \
              LEFT JOIN widget_instances wi \
                ON wi.id = c.widget_instance_id AND wi.deleted_at IS NULL \
              LEFT JOIN conversation_feedback f \
@@ -565,6 +566,7 @@ impl ConversationReader for PgUnit<'_, '_> {
               FROM conversations cv \
               JOIN customers c \
                 ON c.id = cv.customer_id AND c.tenant_id = cv.tenant_id AND c.deleted_at IS NULL \
+               AND c.erasure_pending_at IS NULL AND c.erased_at IS NULL \
               LEFT JOIN widget_instances wi \
                 ON wi.id = cv.widget_instance_id AND wi.deleted_at IS NULL \
               LEFT JOIN conversation_feedback f \
@@ -602,7 +604,8 @@ impl ConversationReader for PgUnit<'_, '_> {
                ON cv.id = m.conversation_id AND cv.tenant_id = m.tenant_id \
              JOIN customers c \
                ON c.id = cv.customer_id AND c.tenant_id = cv.tenant_id \
-             WHERE m.tenant_id = $1 AND m.conversation_id = $2",
+             WHERE m.tenant_id = $1 AND m.conversation_id = $2 \
+                 AND c.erasure_pending_at IS NULL AND c.erased_at IS NULL",
         );
 
         let mut next_bind = 3u16;

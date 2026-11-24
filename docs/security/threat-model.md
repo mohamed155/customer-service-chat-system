@@ -106,6 +106,7 @@ Password recovery (MOH-94) addresses four risks:
 | I | Stale data of a previous tenant shown after switch | Tenant-scoped stores reset on switch | Gap to confirm: `NotificationsStore` (ADR-003 F2) | Frontend |
 | D | Escalation storms overfill agents | Atomic conditional capacity update in routing (§11.1) | Verify: routing is load-based under per-tenant advisory locks; confirm with a concurrency test | Conversations |
 | E | Agent reads conversations outside their scope | Policy layer (assigned-only unless Manager) | See ADR-006 current-state table | Identity & Access |
+| I | Erased customer content remains in operational tables or exported objects | Tenant-scoped, resumable erasure with export expiry and access checks | MOH-103 covers attributed records and objects. Historical audit and backups follow retention policy (ADR-020). | Identity & Access |
 
 ### 4.4 Widget and public gateway (`widgets`, future `gateway`)
 

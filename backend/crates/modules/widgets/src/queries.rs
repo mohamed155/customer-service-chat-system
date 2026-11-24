@@ -86,6 +86,20 @@ pub async fn touch_session(
 ) -> sqlx::Result<()> {
     let mut uow = db::UnitOfWork::begin_for_tenant(pool, tenant_id).await?;
     let result: sqlx::Result<()> = async {
+        let subject: Option<Uuid> = sqlx::query_scalar(
+            "SELECT customer_id FROM widget_sessions WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(tenant_id)
+        .bind(session_id)
+        .fetch_one(uow.conn())
+        .await?;
+        if let Some(customer) = subject {
+            if customers::customer_privacy::lock_customer(uow.conn(), tenant_id, customer).await?
+                != Some(false)
+            {
+                return Err(sqlx::Error::RowNotFound);
+            }
+        }
         let updated = sqlx::query(
             "UPDATE widget_sessions SET last_seen_at = now(), expires_at = $1 \
          WHERE id = $2 AND tenant_id = $3",

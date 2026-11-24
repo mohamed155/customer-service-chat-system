@@ -88,6 +88,13 @@ const EXPECTED: &[(&str, &str)] = &[
     ("GET", "/tenant/customers/{id}"),
     ("PATCH", "/tenant/customers/{id}"),
     ("GET", "/tenant/customers/{id}/conversations"),
+    ("POST", "/tenant/customers/{id}/export"),
+    ("POST", "/tenant/customers/{id}/erase"),
+    (
+        "GET",
+        "/tenant/customers/{id}/privacy-requests/{request_id}",
+    ),
+    ("GET", "/tenant/customers/{id}/export/{request_id}/download"),
     // Conversations
     ("GET", "/tenant/conversations"),
     ("POST", "/tenant/conversations"),

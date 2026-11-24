@@ -672,7 +672,7 @@ export interface paths {
     put?: never;
     /**
      * Start a platform tenant access session
-     * @description Starts time-limited access to the target tenant for the current sign-in. A previous access session ends when the new one starts. Requires permission: platform.tenants.switch
+     * @description Starts time-limited access to the target tenant for the current sign-in. A previous access session ends when the new one starts. Keep customer personal data out of the access reason. Requires permission: platform.tenants.switch
      */
     post: operations['switch_platform_tenant'];
     delete?: never;
@@ -1297,6 +1297,70 @@ export interface paths {
      * @description Return the top 20 conversations for the given customer, ordered by `last_activity_at DESC` (newest first). `pagination.has_more` is `true` when more than 20 rows exist beyond the returned window; `pagination.next_cursor` is currently always `null` (the windowed view does not yet support cursor pagination — the client can re-request to refresh). Returns 404 when the customer does not exist, is soft-deleted, or belongs to another tenant. Requires permission: customers.view
      */
     get: operations['get_conversation_history'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tenant/customers/{id}/erase': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['erase_customer'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tenant/customers/{id}/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: operations['export_customer'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tenant/customers/{id}/export/{request_id}/download': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['download'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tenant/customers/{id}/privacy-requests/{request_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get: operations['request_status'];
     put?: never;
     post?: never;
     delete?: never;
@@ -2551,6 +2615,9 @@ export interface components {
       /** @description A six-digit code from the authenticator app. */
       code: string;
     };
+    Confirmation: {
+      confirm?: string | null;
+    };
     ConnectPayload: {
       config: {
         [key: string]: unknown;
@@ -2778,6 +2845,10 @@ export interface components {
       created_at: string;
       display_name: string;
       email?: string | null;
+      /** Format: date-time */
+      erased_at?: string | null;
+      /** Format: date-time */
+      erasure_pending_at?: string | null;
       /** Format: uuid */
       id: string;
       identifiers: components['schemas']['ChannelIdentifier'][];
@@ -3693,6 +3764,11 @@ export interface components {
     };
     RenameSkillPayload: {
       name: string;
+    };
+    RequestStatus: {
+      /** Format: uuid */
+      request_id: string;
+      status: string;
     };
     RequiredSkillRef: {
       /** Format: uuid */
@@ -9229,6 +9305,220 @@ export interface operations {
       };
       /** @description Internal server error. */
       500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  erase_customer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Customer identifier */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['Confirmation'];
+      };
+    };
+    responses: {
+      /** @description Erasure receipt */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RequestStatus'];
+        };
+      };
+      /** @description Insufficient permissions */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Customer unavailable */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Confirmation required */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  export_customer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Customer identifier */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['Confirmation'];
+      };
+    };
+    responses: {
+      /** @description Export queued */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RequestStatus'];
+        };
+      };
+      /** @description Insufficient permissions */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Customer unavailable */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Customer is being erased */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Confirmation required */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  download: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Customer identifier */
+        id: string;
+        /** @description Privacy request identifier */
+        request_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Customer export ZIP */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/zip': unknown;
+        };
+      };
+      /** @description Insufficient permissions */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Bundle unavailable */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  request_status: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Customer identifier */
+        id: string;
+        /** @description Privacy request identifier */
+        request_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Request status */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RequestStatus'];
+        };
+      };
+      /** @description Insufficient permissions */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Request unavailable */
+      404: {
         headers: {
           [name: string]: unknown;
         };

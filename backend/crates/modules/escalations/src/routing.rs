@@ -81,7 +81,8 @@ pub async fn route_new_escalation_in_tx(
         tenant_id,
         escalation_id,
         conversation_id,
-        reason,
+        reason.chars().count(),
+        required_skill_ids,
     )
     .await
     .map_err(|e| RouteError::Internal(e.to_string()))?;
@@ -148,7 +149,7 @@ pub async fn route_new_escalation_in_tx(
             } else {
                 "load_fallback"
             },
-            &matched_names,
+            &cand.matched_ids,
             cand.load_count,
             cand.membership_id,
         )
@@ -387,7 +388,7 @@ pub async fn drain_one_for_membership_in_tx(
             tenant_id,
             escalation_id,
             "queue_auto",
-            &matched_names,
+            &req_skill_ids,
             0,
             membership_id,
         )
@@ -474,7 +475,7 @@ pub async fn drain_any_in_tx(
                 tenant_id,
                 escalation_id,
                 "queue_auto",
-                &matched_names,
+                &cand.matched_ids,
                 cand.load_count,
                 cand.membership_id,
             )

@@ -6,3 +6,6 @@ pub mod public_events;
 pub mod public_routes;
 pub mod queries;
 pub mod session;
+
+/// Customer data operations for the tenant privacy workflow.
+pub mod customer_privacy;

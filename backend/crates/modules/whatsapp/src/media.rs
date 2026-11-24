@@ -105,24 +105,31 @@ async fn process_one(
 
     let storage_key = format!("whatsapp-media/{}/{}", attachment.tenant_id, attachment.id);
 
+    let mut work = db::UnitOfWork::begin_for_tenant(pool, attachment.tenant_id).await?;
+    if !conversations::attachments::lock_pending(work.conn(), attachment.tenant_id, attachment.id)
+        .await?
+    {
+        return Ok(());
+    }
     match storage
         .put(&storage_key, &media_info.mime_type, bytes.to_vec())
         .await
     {
         Ok(()) => {
-            let size = bytes.len() as i64;
-            crate::queries::mark_attachment_stored(
-                pool,
+            conversations::attachments::mark_stored_in_tenant(
+                work.conn(),
                 attachment.tenant_id,
                 attachment.id,
                 &storage_key,
                 &media_info.mime_type,
-                size,
+                bytes.len() as i64,
             )
             .await?;
+            work.commit().await?;
         }
-        Err(e) => {
-            tracing::warn!(%e, %storage_key, "media worker: storage put failed");
+        Err(error) => {
+            drop(work);
+            tracing::warn!(%error, "media worker: storage put failed");
             crate::queries::mark_attachment_failed_attempt(
                 pool,
                 attachment.tenant_id,

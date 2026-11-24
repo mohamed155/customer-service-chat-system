@@ -61,3 +61,6 @@ pub mod presence;
 pub mod queries;
 pub mod routes;
 pub mod routing;
+
+/// Customer data operations for the tenant privacy workflow.
+pub mod customer_privacy;

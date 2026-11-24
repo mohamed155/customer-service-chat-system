@@ -52,5 +52,6 @@ ADR with **ADR-NNN**. Its §22 holds the Phase 0 backlog, which this index track
 | [ADR-017](0017-module-layering-and-ci-checked-boundaries.md) | Layering for new and changed modules, and CI-checked module boundaries (refines ADR-001) | Accepted |
 | [ADR-018](0018-partition-large-append-only-tables-on-measured-triggers.md) | Large append-only tables stay unpartitioned until a measured trigger fires | Accepted |
 | [ADR-019](0019-audit-log-shared-crate.md) | Audit log shared crate for writing audit records (MOH-196) | Accepted |
+| [ADR-020](0020-customer-data-export-and-erasure.md) | Tenant-scoped customer data export and erasure (MOH-103) | Accepted |
 
 Related: the [v1 STRIDE threat model](../security/threat-model.md) maps each module's threats to controls and to the ADR gaps above.

@@ -74,6 +74,8 @@ struct Graph {
     integration_event: Uuid,
     subscription: Uuid,
     rate_limit: Uuid,
+    privacy_request: Uuid,
+    privacy_step: Uuid,
 }
 
 async fn scalar_uuid(seed: &PgPool, sql: &str, binds: &[Uuid]) -> Uuid {
@@ -396,6 +398,20 @@ async fn seed_graph(seed: &PgPool) -> Graph {
         &[tenant],
     )
     .await;
+    let privacy_request = scalar_uuid(
+        seed,
+        "INSERT INTO privacy_requests (tenant_id, customer_id, requested_by, kind, status)
+         VALUES ($1, $2, $3, 'export', 'expired') RETURNING id",
+        &[tenant, customer, user],
+    )
+    .await;
+    let privacy_step = scalar_uuid(
+        seed,
+        "INSERT INTO privacy_request_steps (tenant_id, request_id, step_name, status)
+         VALUES ($1, $2, 'test', 'completed') RETURNING id",
+        &[tenant, privacy_request],
+    )
+    .await;
     Graph {
         tenant,
         customer,
@@ -436,6 +452,8 @@ async fn seed_graph(seed: &PgPool) -> Graph {
         integration_event,
         subscription,
         rate_limit,
+        privacy_request,
+        privacy_step,
     }
 }
 
@@ -748,6 +766,20 @@ fn entries() -> Vec<Entry> {
             row: |g| g.rate_limit,
             insert_sql: "INSERT INTO tenant_rate_limit_overrides (tenant_id, scope, max_requests, window_seconds) VALUES ($1, 'webhook', 5, 60)",
             args: |_| vec![],
+        },
+        Entry {
+            table: "privacy_requests",
+            id_column: "id",
+            row: |g| g.privacy_request,
+            insert_sql: "INSERT INTO privacy_requests (tenant_id, customer_id, requested_by, kind) VALUES ($1,$2,$3,'export')",
+            args: |g| vec![g.customer, g.user],
+        },
+        Entry {
+            table: "privacy_request_steps",
+            id_column: "id",
+            row: |g| g.privacy_step,
+            insert_sql: "INSERT INTO privacy_request_steps (tenant_id, request_id, step_name, status) VALUES ($1,$2,'probe','running')",
+            args: |g| vec![g.privacy_request],
         },
     ]
 }

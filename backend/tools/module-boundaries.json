@@ -20,6 +20,7 @@
     "knowledge",
     "notifications",
     "platform",
+    "privacy",
     "tools",
     "whatsapp",
     "widgets"
@@ -202,6 +203,10 @@
         "tenancy"
       ],
       "tables": []
+    },
+    "privacy": {
+      "dependsOn": ["ai", "authz", "conversations", "customers", "escalations", "feedback", "identity", "integrations", "tenancy", "tools", "whatsapp", "widgets"],
+      "tables": ["privacy_requests", "privacy_request_steps"]
     },
     "tenancy": {
       "dependsOn": [

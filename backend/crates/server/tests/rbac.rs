@@ -25,6 +25,8 @@ const TENANT_PERMISSIONS: &[&str] = &[
     "conversations.manage",
     "customers.view",
     "customers.manage",
+    "customers.export",
+    "customers.erase",
     "ai_agent.view",
     "ai_agent.manage",
     "knowledge_base.view",

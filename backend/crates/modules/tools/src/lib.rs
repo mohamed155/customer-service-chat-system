@@ -9,3 +9,6 @@ pub mod registry;
 pub mod routes;
 
 // Tool executions emit `tool.executed` audit entries via `audit::record_execution`.
+
+/// Customer data operations for the tenant privacy workflow.
+pub mod customer_privacy;

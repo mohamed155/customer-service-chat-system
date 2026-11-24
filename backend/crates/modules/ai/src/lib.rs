@@ -107,3 +107,6 @@ pub use service::{
 // Re-export ai_providers types that appear in the public API so consuming
 // crates never need a direct ai-providers dependency.
 pub use ai_providers::{ErrorCategory, Message, Role, TokenUsage};
+
+/// Customer data operations for the tenant privacy workflow.
+pub mod customer_privacy;

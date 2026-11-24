@@ -412,9 +412,11 @@ pub async fn get_customer(
             serde_json::Value,
             sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
             sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>,
+            Option<sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>>,
+            Option<sqlx::types::chrono::DateTime<sqlx::types::chrono::Utc>>,
         ),
     >(
-        "SELECT id, display_name, email::text AS email, phone, metadata, created_at, updated_at \
+        "SELECT id, display_name, email::text AS email, phone, metadata, created_at, updated_at, erasure_pending_at, erased_at \
          FROM customers \
          WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
     )
@@ -486,6 +488,8 @@ pub async fn get_customer(
             channels,
             created_at: row.5,
             updated_at: row.6,
+            erasure_pending_at: row.7,
+            erased_at: row.8,
             identifiers,
             metadata,
         }
@@ -718,6 +722,8 @@ pub async fn create_customer(
             channels,
             created_at,
             updated_at,
+            erasure_pending_at: None,
+            erased_at: None,
             identifiers: inserted_identifiers,
             metadata,
         }
@@ -829,6 +835,7 @@ pub async fn update_customer(
         "SELECT id, display_name, email::text, phone, metadata, created_at, updated_at \
          FROM customers \
          WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL \
+           AND erasure_pending_at IS NULL AND erased_at IS NULL \
          FOR UPDATE",
     )
     .bind(customer_id)
@@ -1162,6 +1169,8 @@ pub async fn update_customer(
             channels,
             created_at: final_created_at,
             updated_at: final_updated_at,
+            erasure_pending_at: None,
+            erased_at: None,
             identifiers,
             metadata,
         }

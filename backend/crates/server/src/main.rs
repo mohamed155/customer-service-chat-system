@@ -454,6 +454,17 @@ fn spawn_workers(
     }
 
     let mut workers = JoinSet::new();
+    let privacy_worker = privacy::Worker {
+        pool: state.db.clone(),
+        cache: state.cache.clone(),
+        storage: storage.clone(),
+        notifications: Arc::new(server::privacy_ports::NotificationPort),
+    };
+    workers.spawn(async move {
+        privacy::run(privacy_worker).await;
+        "privacy request worker"
+    });
+
     workers.spawn(async move {
         let _ = delivery_worker.await;
         "delivery worker"

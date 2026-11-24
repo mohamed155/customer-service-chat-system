@@ -48,3 +48,6 @@ pub mod queries;
 pub mod recipients;
 pub mod routes;
 pub mod worker;
+
+/// Customer data operations for the tenant privacy workflow.
+pub mod customer_privacy;

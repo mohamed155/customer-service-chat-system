@@ -890,6 +890,25 @@ async fn audit_escalation_created_and_assigned() {
     let assigned_count = fetch_audit_count(&pool, "escalation.assigned", escalation_id).await;
     assert_eq!(created_count, 1, "escalation.created must be recorded");
     assert_eq!(assigned_count, 1, "escalation.assigned must be recorded");
+    let details: Vec<serde_json::Value> = sqlx::query_scalar(
+        "SELECT details FROM audit_logs WHERE tenant_id = $1 AND resource_id = $2",
+    )
+    .bind(tenant)
+    .bind(escalation_id.to_string())
+    .fetch_all(&db::testing::seed_pool())
+    .await
+    .unwrap();
+    assert!(details.contains(&serde_json::json!({
+        "conversation_id": conv,
+        "reason_length": "audit test".len(),
+        "required_skill_ids": [],
+    })));
+    assert!(details
+        .iter()
+        .all(|detail| !detail.to_string().contains("audit test")));
+    assert!(details
+        .iter()
+        .all(|detail| detail.get("matched_skills").is_none()));
 }
 
 #[tokio::test]

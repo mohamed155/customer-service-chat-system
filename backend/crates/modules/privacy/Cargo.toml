@@ -1,0 +1,39 @@
+[package]
+name = "privacy"
+publish.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ai = { path = "../ai" }
+authz = { path = "../authz" }
+conversations = { path = "../conversations" }
+customers = { path = "../customers" }
+escalations = { path = "../escalations" }
+feedback = { path = "../feedback" }
+identity = { path = "../identity" }
+integrations = { path = "../integrations" }
+tenancy = { path = "../tenancy" }
+tools = { path = "../tools" }
+whatsapp = { path = "../whatsapp" }
+widgets = { path = "../widgets" }
+async-trait.workspace = true
+axum.workspace = true
+cache = { path = "../../shared/cache" }
+kernel = { path = "../../shared/kernel" }
+serde_json.workspace = true
+storage = { path = "../../shared/storage" }
+tokio = { workspace = true, features = ["fs", "io-util"] }
+tokio-util = { version = "0.7", features = ["io"] }
+tracing.workspace = true
+thiserror = "2"
+utoipa.workspace = true
+zip = { version = "9.4", default-features = false }
+audit-log = { path = "../../shared/audit-log" }
+db = { path = "../../shared/db" }
+serde.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

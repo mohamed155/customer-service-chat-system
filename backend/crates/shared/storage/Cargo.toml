@@ -10,8 +10,9 @@ aws-config.workspace = true
 aws-sdk-s3.workspace = true
 config = { path = "../config" }
 observability = { path = "../observability" }
-tokio.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util"] }
 tracing.workspace = true
+uuid.workspace = true
 
 [lints]
 workspace = true

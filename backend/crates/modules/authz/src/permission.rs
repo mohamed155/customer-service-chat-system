@@ -14,6 +14,10 @@ pub enum Permission {
     CustomersView,
     #[serde(rename = "customers.manage")]
     CustomersManage,
+    #[serde(rename = "customers.export")]
+    CustomersExport,
+    #[serde(rename = "customers.erase")]
+    CustomersErase,
     #[serde(rename = "ai_agent.view")]
     AiAgentView,
     #[serde(rename = "ai_agent.manage")]
@@ -75,12 +79,14 @@ pub enum Permission {
 }
 
 impl Permission {
-    pub const TENANT: [Self; 24] = [
+    pub const TENANT: [Self; 26] = [
         Self::OverviewView,
         Self::ConversationsView,
         Self::ConversationsManage,
         Self::CustomersView,
         Self::CustomersManage,
+        Self::CustomersExport,
+        Self::CustomersErase,
         Self::AiAgentView,
         Self::AiAgentManage,
         Self::KnowledgeBaseView,
@@ -102,12 +108,14 @@ impl Permission {
         Self::ToolsView,
     ];
 
-    pub const ALL: [Self; 33] = [
+    pub const ALL: [Self; 35] = [
         Self::OverviewView,
         Self::ConversationsView,
         Self::ConversationsManage,
         Self::CustomersView,
         Self::CustomersManage,
+        Self::CustomersExport,
+        Self::CustomersErase,
         Self::AiAgentView,
         Self::AiAgentManage,
         Self::KnowledgeBaseView,
@@ -147,6 +155,8 @@ impl fmt::Display for Permission {
             Self::ConversationsManage => "conversations.manage",
             Self::CustomersView => "customers.view",
             Self::CustomersManage => "customers.manage",
+            Self::CustomersExport => "customers.export",
+            Self::CustomersErase => "customers.erase",
             Self::AiAgentView => "ai_agent.view",
             Self::AiAgentManage => "ai_agent.manage",
             Self::KnowledgeBaseView => "knowledge_base.view",
@@ -213,12 +223,14 @@ mod tests {
 
     #[test]
     fn catalog_parity_with_contract() {
-        let contract_codes: [&str; 33] = [
+        let contract_codes: [&str; 35] = [
             "overview.view",
             "conversations.view",
             "conversations.manage",
             "customers.view",
             "customers.manage",
+            "customers.export",
+            "customers.erase",
             "ai_agent.view",
             "ai_agent.manage",
             "knowledge_base.view",

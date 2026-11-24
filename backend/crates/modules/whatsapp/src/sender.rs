@@ -218,11 +218,20 @@ pub async fn process_one(
         }
     };
 
-    // 6. Send via API
-    match api
-        .send_text(&access_token, &phone_number_id, &wa_identifier, &body)
-        .await
+    // Hold the customer's row lock until the outbound request is finished. A pending
+    // erasure therefore fences an already-claimed event before it reaches the provider.
+    let mut send_guard = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
+    if customers::customer_privacy::lock_customer(send_guard.conn(), event.tenant_id, customer_id)
+        .await?
+        != Some(false)
     {
+        return Ok(());
+    }
+    let sent = api
+        .send_text(&access_token, &phone_number_id, &wa_identifier, &body)
+        .await;
+    send_guard.commit().await?;
+    match sent {
         Ok(wamid) => {
             let mut tx = db::UnitOfWork::begin_for_tenant(pool, event.tenant_id).await?;
             queries::set_outbound_sent_in_tx(&mut tx, event.tenant_id, event.message_id, &wamid)
