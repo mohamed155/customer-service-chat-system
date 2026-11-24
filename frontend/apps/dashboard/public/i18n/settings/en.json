@@ -16,6 +16,16 @@
     "name": "Name",
     "slug": "Identifier"
   },
+  "routingCapacity": {
+    "title": "Routing capacity",
+    "subtitle": "Set the inherited limit for open conversations assigned to each agent",
+    "loading": "Loading routing capacity…",
+    "retry": "Try again",
+    "defaultLabel": "Default open conversations per agent",
+    "help": "Open and pending conversations count toward the limit. Per-agent overrides are set in Team; 0 prevents automatic assignment to that agent.",
+    "save": "Save default",
+    "saving": "Saving…"
+  },
   "manage": {
     "title": "Workspace settings",
     "subtitle": "These live on their own pages",

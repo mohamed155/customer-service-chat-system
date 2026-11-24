@@ -97,6 +97,11 @@ async fn seed_graph(seed: &PgPool) -> Graph {
             .fetch_one(seed)
             .await
             .unwrap();
+    sqlx::query("INSERT INTO routing_settings (tenant_id) VALUES ($1)")
+        .bind(tenant)
+        .execute(seed)
+        .await
+        .unwrap();
     let customer = scalar_uuid(
         seed,
         "INSERT INTO customers (tenant_id, display_name) VALUES ($1, 'C') RETURNING id",
@@ -675,6 +680,13 @@ fn entries() -> Vec<Entry> {
             row: |g| g.membership,
             insert_sql: "INSERT INTO agent_availability (tenant_id, membership_id) VALUES ($1, $2)",
             args: |g| vec![g.membership],
+        },
+        Entry {
+            table: "routing_settings",
+            id_column: "tenant_id",
+            row: |g| g.tenant,
+            insert_sql: "INSERT INTO routing_settings (tenant_id) VALUES ($1)",
+            args: |_| vec![],
         },
         Entry {
             table: "tenant_memberships",

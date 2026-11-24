@@ -1905,6 +1905,66 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/tenant/routing/capacity': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get routing capacity settings
+     * @description Return the tenant default and per-agent overrides, effective capacities, and open/pending conversation loads. Requires permission: members.view.
+     */
+    get: operations['get_routing_capacity'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tenant/routing/capacity/agents/{membership_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set an agent routing capacity override
+     * @description Set an agent override from 0 through 200, or null to inherit the tenant default. Zero prevents automatic assignment. Increasing effective capacity drains the queue. Requires permission: members.manage.
+     */
+    put: operations['set_agent_routing_capacity'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/tenant/routing/capacity/default': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set the tenant routing capacity default
+     * @description Set the inherited per-agent capacity from 1 through 200. Increasing it drains the queue while agents have room. Requires permission: members.manage.
+     */
+    put: operations['set_default_routing_capacity'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/tenant/skills': {
     parameters: {
       query?: never;
@@ -2298,6 +2358,17 @@ export interface components {
      */
     AddMessageResponseEnvelope: {
       data: components['schemas']['AddMessageResponse'];
+    };
+    AgentCapacity: {
+      display_name: string;
+      /** Format: int32 */
+      effective: number;
+      /** Format: uuid */
+      membership_id: string;
+      /** Format: int64 */
+      open_load: number;
+      /** Format: int32 */
+      override?: number | null;
     };
     AgentConfigPayload: {
       avatar: components['schemas']['AvatarPayload'];
@@ -3783,6 +3854,11 @@ export interface components {
       /** Format: int32 */
       baseVersion: number;
     };
+    RoutingCapacityResponse: {
+      agents: components['schemas']['AgentCapacity'][];
+      /** Format: int32 */
+      default_capacity: number;
+    };
     RoutingInfo: {
       /** Format: date-time */
       assignedAt: string;
@@ -3806,8 +3882,16 @@ export interface components {
       expiresAt: string;
       sessionToken: string;
     };
+    SetAgentCapacityPayload: {
+      /** Format: int32 */
+      capacity?: number | null;
+    };
     SetAvailabilityPayload: {
       state: components['schemas']['AvailabilityState'];
+    };
+    SetDefaultCapacityPayload: {
+      /** Format: int32 */
+      default_capacity: number;
     };
     SetMemberSkillsPayload: {
       skillIds: string[];
@@ -11648,6 +11732,217 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+    };
+  };
+  get_routing_capacity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Routing capacity settings. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoutingCapacityResponse'];
+        };
+      };
+      /** @description Authentication required. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Insufficient permissions. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Internal server error. */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  set_agent_routing_capacity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Tenant membership identifier */
+        membership_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetAgentCapacityPayload'];
+      };
+    };
+    responses: {
+      /** @description Updated routing capacity settings. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoutingCapacityResponse'];
+        };
+      };
+      /** @description Validation failed (request body is not valid JSON). */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Authentication required. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Insufficient permissions. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Membership not found in this tenant. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Capacity override must be null or between 0 and 200. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Internal server error. */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  set_default_routing_capacity: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SetDefaultCapacityPayload'];
+      };
+    };
+    responses: {
+      /** @description Updated routing capacity settings. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoutingCapacityResponse'];
+        };
+      };
+      /** @description Validation failed (request body is not valid JSON). */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Authentication required. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Insufficient permissions. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Default capacity must be between 1 and 200. */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+      /** @description Internal server error. */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorEnvelope'];
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
       };
     };
   };

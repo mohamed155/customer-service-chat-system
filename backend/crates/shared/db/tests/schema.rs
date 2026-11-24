@@ -142,6 +142,7 @@ async fn run_migrations_succeeds() {
         (98, "customer privacy"),
         (99, "customer privacy fences"),
         (100, "webhook delivery privacy fence"),
+        (101, "routing capacity"),
     ];
     assert_eq!(
         rows.len(),
@@ -3882,6 +3883,92 @@ async fn migration_0036_agent_availability() {
     .await
     .expect("query FK");
     assert!(fk.0, "agent_availability composite FK should exist");
+}
+
+// ---------------------------------------------------------------------------
+// MOH-104 — Migration 0101: routing capacity
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn migration_0101_routing_capacity() {
+    let pool = match get_pool().await {
+        Some(pool) => pool,
+        None => return,
+    };
+    db::testing::migrate().await;
+
+    for (table, column, udt, nullable) in [
+        ("agent_availability", "capacity_override", "int4", true),
+        (
+            "agent_availability",
+            "last_assigned_at",
+            "timestamptz",
+            true,
+        ),
+        ("routing_settings", "tenant_id", "uuid", false),
+        ("routing_settings", "default_capacity", "int4", false),
+        ("routing_settings", "updated_at", "timestamptz", false),
+    ] {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.columns \
+             WHERE table_name = $1 AND column_name = $2 AND udt_name = $3 \
+             AND is_nullable = $4)",
+        )
+        .bind(table)
+        .bind(column)
+        .bind(udt)
+        .bind(if nullable { "YES" } else { "NO" })
+        .fetch_one(&pool)
+        .await
+        .expect("query routing capacity column");
+        assert!(
+            exists.0,
+            "{table}.{column} must exist with the expected type"
+        );
+    }
+
+    let setting_check: Option<String> = sqlx::query_scalar(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint \
+         WHERE conrelid = 'routing_settings'::regclass \
+         AND conname = 'routing_settings_default_capacity_check' AND contype = 'c'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query routing default check");
+    let setting_check = setting_check.expect("routing default capacity check should exist");
+    assert!(
+        setting_check.contains("1") && setting_check.contains("200"),
+        "routing default must be constrained to 1..=200: {setting_check}"
+    );
+
+    let override_check: Option<String> = sqlx::query_scalar(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint \
+         WHERE conrelid = 'agent_availability'::regclass \
+         AND conname = 'agent_availability_capacity_override_check' AND contype = 'c'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query routing override check");
+    let override_check = override_check.expect("capacity override check should exist");
+    assert!(
+        override_check.contains("0") && override_check.contains("200"),
+        "capacity override must be constrained to 0..=200: {override_check}"
+    );
+
+    let rls: (bool, bool, bool) = sqlx::query_as(
+        "SELECT c.relrowsecurity, c.relforcerowsecurity, EXISTS ( \
+             SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid \
+               AND p.polcmd = '*' AND p.polqual IS NOT NULL AND p.polwithcheck IS NOT NULL \
+         ) FROM pg_class c WHERE c.oid = 'routing_settings'::regclass",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query routing settings RLS");
+    assert_eq!(
+        rls,
+        (true, true, true),
+        "routing_settings must have forced tenant RLS"
+    );
 }
 
 // ---------------------------------------------------------------------------

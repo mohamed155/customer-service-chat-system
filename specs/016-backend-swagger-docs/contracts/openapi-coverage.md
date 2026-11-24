@@ -82,6 +82,9 @@ This is the authoritative inventory of every endpoint the OpenAPI document MUST 
 | POST | `/tenant/conversations/{id}/escalate` | `EscalatePayload` | 200/201 `Escalation` | 400, 403, 404, 409, 422 | cookie | `conversations.manage` |
 | GET | `/tenant/escalations/queue` | query `QueueQueryParams` | 200 list of `QueueEntry` | 400, 403 | cookie | `conversations.view` |
 | POST | `/tenant/escalations/{id}/claim` | path `id: uuid` | 200 `Escalation` | 403, 404, 409 | cookie | `conversations.manage` |
+| GET | `/tenant/routing/capacity` | — | 200 `RoutingCapacityResponse` | 401, 403, 500 | cookie | `members.view` |
+| PUT | `/tenant/routing/capacity/default` | `SetDefaultCapacityPayload` (`default_capacity`: 1..=200) | 200 `RoutingCapacityResponse` | 400, 403, 422, 500 | cookie | `members.manage` |
+| PUT | `/tenant/routing/capacity/agents/{membership_id}` | `SetAgentCapacityPayload` (`capacity`: null or 0..=200) | 200 `RoutingCapacityResponse` | 400, 403, 404, 422, 500 | cookie | `members.manage` |
 
 ## Tenant — availability & skills (tag: escalations)
 

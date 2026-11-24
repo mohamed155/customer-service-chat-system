@@ -72,6 +72,16 @@
     "deleteLabel": "Delete skill {name}",
     "empty": "No skills defined yet."
   },
+  "capacity": {
+    "heading": "Routing capacity",
+    "inherit": "Inherit",
+    "overrideLabel": "Capacity override for {name}",
+    "summary": "Override: {override}; effective limit: {effective, number}; open/pending load: {load, number}",
+    "loading": "Loading capacity",
+    "missing": "Capacity unavailable for this member",
+    "retry": "Retry",
+    "editorError": "Unable to load capacity controls"
+  },
   "page": {
     "title": "Team",
     "description": "Manage team members and invitations",

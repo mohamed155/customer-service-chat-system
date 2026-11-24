@@ -139,6 +139,10 @@ pub async fn route_new_escalation_in_tx(
         .await
         .map_err(|e| RouteError::Internal(e.to_string()))?;
 
+        queries::record_last_assignment_in_tx(tx, tenant_id, cand.membership_id)
+            .await
+            .map_err(|e| RouteError::Internal(e.to_string()))?;
+
         audit::record_escalation_assigned(
             tx,
             actor_user_id,
@@ -242,6 +246,10 @@ pub async fn claim_in_tx(
     claimant_membership_id: Uuid,
     actor_user_id: Uuid,
 ) -> Result<crate::model::Escalation, ClaimError> {
+    queries::take_tenant_routing_lock_in_tx(tx, tenant_id)
+        .await
+        .map_err(|e| ClaimError::Internal(e.to_string()))?;
+
     let updated = sqlx::query(
         "UPDATE escalations SET status = 'assigned', routing_reason = 'manual_claim', \
          assigned_membership_id = $1, assigned_at = now() \
@@ -284,6 +292,12 @@ pub async fn claim_in_tx(
         .await
         .map_err(|e| ClaimError::Internal(e.to_string()))?;
 
+        // A manual claim is an explicit human choice, so it is not capacity-blocked; it still
+        // updates the fairness clock used for later automatic assignments.
+        queries::record_last_assignment_in_tx(tx, tenant_id, claimant_membership_id)
+            .await
+            .map_err(|e| ClaimError::Internal(e.to_string()))?;
+
         notify_escalation_assigned(
             tx,
             tenant_id,
@@ -311,6 +325,32 @@ pub async fn drain_one_for_membership_in_tx(
     actor_user_id: Uuid,
 ) -> sqlx::Result<Option<Uuid>> {
     queries::take_tenant_routing_lock_in_tx(tx, tenant_id).await?;
+
+    if !tenancy::directory::lock_active_member(
+        &mut **tx,
+        tenant_id,
+        membership_id,
+        &queries::ASSIGNABLE_ROLES,
+    )
+    .await?
+        || !queries::lock_available_in_tx(tx, tenant_id, membership_id).await?
+    {
+        return Ok(None);
+    }
+
+    let default_capacity = queries::default_capacity_in_tx(tx, tenant_id).await?;
+    let capacity = queries::capacity_override_in_tx(tx, tenant_id, membership_id)
+        .await?
+        .unwrap_or(default_capacity);
+    let current_load =
+        conversations::directory::open_load_by_member(tx, tenant_id, &[membership_id])
+            .await?
+            .get(&membership_id)
+            .copied()
+            .unwrap_or(0);
+    if capacity <= 0 || current_load >= i64::from(capacity) {
+        return Ok(None);
+    }
 
     // First try: skill-matching entry
     let candidate: Option<(Uuid, Vec<Uuid>, Vec<String>)> = sqlx::query_as(
@@ -362,6 +402,8 @@ pub async fn drain_one_for_membership_in_tx(
         .bind(escalation_id)
         .execute(&mut **tx)
         .await?;
+
+        queries::record_last_assignment_in_tx(tx, tenant_id, membership_id).await?;
 
         let conv_id: Uuid =
             sqlx::query_scalar("SELECT conversation_id FROM escalations WHERE id = $1")
@@ -452,6 +494,8 @@ pub async fn drain_any_in_tx(
             .bind(escalation_id)
             .execute(&mut **tx)
             .await?;
+
+            queries::record_last_assignment_in_tx(tx, tenant_id, cand.membership_id).await?;
 
             let conv_id: Uuid =
                 sqlx::query_scalar("SELECT conversation_id FROM escalations WHERE id = $1")

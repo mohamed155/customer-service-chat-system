@@ -1,0 +1,70 @@
+@if (store.routingCapacityStatus() === 'pending' || store.routingCapacityStatus() === 'loading') {
+  <span role="status">{{ 'team.capacity.loading' | transloco }}</span>
+} @else if (store.routingCapacityStatus() === 'error') {
+  <div class="capacity-editor">
+    <app-inline-alert tone="error" [requestId]="store.routingCapacityError()?.requestId">{{
+      errorKey(store.routingCapacityError()) | transloco
+    }}</app-inline-alert>
+    <app-button variant="ghost" (pressed)="store.loadRoutingCapacity()">{{
+      'team.capacity.retry' | transloco
+    }}</app-button>
+  </div>
+} @else if (capacity(); as capacity) {
+  <div class="capacity-editor">
+    @if (canManage()) {
+      <div class="capacity-controls">
+        <input
+          #capacityInput
+          type="number"
+          min="0"
+          max="200"
+          step="1"
+          [value]="capacity['override'] ?? ''"
+          [placeholder]="'team.capacity.inherit' | transloco"
+          [attr.aria-label]="
+            'team.capacity.overrideLabel' | transloco: { name: member().displayName }
+          "
+          [disabled]="store.capacityUpdateStatus() === 'submitting'"
+          (change)="updateAgentCapacity(member().id, capacityInput.value)"
+        />
+        @if (capacity['override'] !== null && capacity['override'] !== undefined) {
+          <app-button
+            variant="ghost"
+            [disabled]="store.capacityUpdateStatus() === 'submitting'"
+            (pressed)="
+              store.setMemberCapacity({
+                membershipId: member().id,
+                capacity: null,
+              })
+            "
+          >
+            {{ 'team.capacity.inherit' | transloco }}
+          </app-button>
+        }
+      </div>
+    }
+    <small class="capacity-summary">
+      {{
+        'team.capacity.summary'
+          | transloco
+            : {
+                override: capacityOverrideLabel(capacity),
+                effective: capacity.effective,
+                load: capacity.open_load,
+              }
+      }}
+    </small>
+    @if (
+      store.capacityUpdateStatus() === 'error' && store.capacityUpdateMembershipId() === member().id
+    ) {
+      <app-inline-alert tone="error" [requestId]="store.capacityUpdateError()?.requestId">{{
+        errorKey(store.capacityUpdateError()) | transloco
+      }}</app-inline-alert>
+      @if (store.capacityUpdateError()?.requestId; as id) {
+        <app-error-reference [requestId]="id" />
+      }
+    }
+  </div>
+} @else {
+  <span class="muted">{{ 'team.capacity.missing' | transloco }}</span>
+}

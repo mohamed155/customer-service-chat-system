@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { Page, Route } from '@playwright/test';
 import { noPlatformAccess } from './support/platform-access';
+import { routingCapacity } from './support/routing-capacity';
 import { expect, test } from './support/test';
 import { HOST_URL, installWidgetHarness } from './support/widget-harness';
 
@@ -198,6 +199,8 @@ async function mockApi(
     }
     if (path === '/tenant/feedback/summary')
       return json(route, { data: { count: 0, average: null } });
+    if (path === '/tenant/routing/capacity' && route.request().method() === 'GET')
+      return json(route, routingCapacity([member]));
     if (path === '/tenant/members') return json(route, page1([member]));
     if (path === '/tenant/knowledge/items') return json(route, page1([knowledgeItem]));
     if (path === '/tenant/knowledge/categories') return json(route, []);

@@ -107,6 +107,9 @@ const EXPECTED: &[(&str, &str)] = &[
     ("POST", "/tenant/conversations/{id}/escalate"),
     ("GET", "/tenant/escalations/queue"),
     ("POST", "/tenant/escalations/{id}/claim"),
+    ("GET", "/tenant/routing/capacity"),
+    ("PUT", "/tenant/routing/capacity/default"),
+    ("PUT", "/tenant/routing/capacity/agents/{membership_id}"),
     // Availability + skills
     ("GET", "/tenant/availability/me"),
     ("PUT", "/tenant/availability/me"),

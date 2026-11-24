@@ -1,12 +1,14 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideTaiga } from '@taiga-ui/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { TeamMember } from '../../../core/api/tenant-api.models';
 import { APP_CONFIG } from '../../../core/config/app-config';
 import { PermissionsService } from '../../../core/authz/permissions.service';
+import { RoutingCapacityApiService } from '../../../core/api/routing-capacity-api.service';
 import { MfaService } from '../../../core/auth/mfa.service';
 import { CurrentUserService } from '../../../core/tenant/current-user.service';
+import { LocaleService } from '../../../core/i18n/locale.service';
 import {
   provideTenantStore,
   tenantStore,
@@ -22,6 +24,11 @@ describe('TeamListComponent', () => {
     createInvitation: vi.fn(),
     revokeInvitation: vi.fn(),
     patchMember: vi.fn(),
+  };
+  const mockRoutingCapacityApi = {
+    get: vi.fn(),
+    setDefault: vi.fn(),
+    setAgent: vi.fn(),
   };
 
   const mockPermissions = { has: vi.fn().mockReturnValue(true) };
@@ -64,6 +71,7 @@ describe('TeamListComponent', () => {
         provideZonelessChangeDetection(),
         { provide: APP_CONFIG, useValue: { publicDashboardUrl: 'https://dashboard.example.com' } },
         { provide: TeamApiService, useValue: mockApi },
+        { provide: RoutingCapacityApiService, useValue: mockRoutingCapacityApi },
         { provide: PermissionsService, useValue: mockPermissions },
         { provide: CurrentUserService, useValue: mockCurrentUserService },
         ...extraProviders,
@@ -77,6 +85,25 @@ describe('TeamListComponent', () => {
     mockApi.createInvitation.mockReset();
     mockApi.revokeInvitation.mockReset();
     mockApi.patchMember.mockReset();
+    mockRoutingCapacityApi.get.mockReset();
+    mockRoutingCapacityApi.setDefault.mockReset();
+    mockRoutingCapacityApi.setAgent.mockReset();
+    mockRoutingCapacityApi.get.mockReturnValue(
+      of({
+        data: {
+          default_capacity: 10,
+          agents: [
+            {
+              membership_id: 'm-1',
+              display_name: 'Alice',
+              override: null,
+              effective: 10,
+              open_load: 2,
+            },
+          ],
+        },
+      }),
+    );
     mockPermissions.has.mockReturnValue(true);
     mockCurrentUserService.currentUser.mockReturnValue({
       id: 'current-user',
@@ -153,6 +180,204 @@ describe('TeamListComponent', () => {
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).toContain('Alice');
       expect(fixture.nativeElement.textContent).toContain('Bob');
+    });
+  });
+
+  it('shows capacity loading, errors with request ID, and retries without blocking the roster', async () => {
+    const pending = new Subject<never>();
+    mockApi.getMembers.mockReturnValue(
+      of({ data: { items: members, nextCursor: null, hasMore: false } }),
+    );
+    mockApi.getInvitations.mockReturnValue(
+      of({ data: { items: [], nextCursor: null, hasMore: false } }),
+    );
+    mockRoutingCapacityApi.get
+      .mockReturnValueOnce(pending)
+      .mockReturnValueOnce(of({ data: { default_capacity: 10, agents: [] } }));
+    configureModule();
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(TeamListComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const root: HTMLElement = fixture.nativeElement;
+    expect(root.textContent).toContain('Loading capacity');
+    expect(root.textContent).toContain('Alice');
+    pending.error({
+      code: 'unavailable',
+      message: 'Unavailable',
+      status: 503,
+      requestId: 'req-test',
+    });
+    fixture.detectChanges();
+    expect(root.textContent).toContain('reqtest');
+    expect(
+      root.querySelector('app-inline-alert[role="alert"], app-inline-alert [role="alert"]'),
+    ).toBeTruthy();
+    expect(root.textContent).toContain('Disable');
+    const retry = Array.from(root.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Retry',
+    );
+    expect(retry).toBeTruthy();
+    retry!.click();
+    fixture.detectChanges();
+    expect(mockRoutingCapacityApi.get).toHaveBeenCalledTimes(2);
+    expect(root.textContent).toContain('Capacity unavailable for this member');
+  });
+
+  it.each(['malformed', 'failed'] as const)(
+    'keeps member actions working when capacity loading is %s',
+    async (outcome) => {
+      mockApi.getMembers
+        .mockReturnValueOnce(of({ data: { items: members, nextCursor: null, hasMore: false } }))
+        .mockReturnValue(
+          of({
+            data: {
+              items: [{ ...members[0], status: 'disabled' }, members[1]],
+              nextCursor: null,
+              hasMore: false,
+            },
+          }),
+        );
+      mockApi.getInvitations.mockReturnValue(
+        of({ data: { items: [], nextCursor: null, hasMore: false } }),
+      );
+      mockApi.patchMember.mockReturnValue(of({ data: { ...members[0], status: 'disabled' } }));
+      mockRoutingCapacityApi.get.mockReturnValue(
+        outcome === 'malformed'
+          ? of({ data: { items: [], nextCursor: null, hasMore: false } })
+          : throwError(() => ({ code: 'unavailable', message: 'Unavailable', status: 503 })),
+      );
+      configureModule();
+      await TestBed.compileComponents();
+      const fixture = TestBed.createComponent(TeamListComponent);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const root: HTMLElement = fixture.nativeElement;
+      const row = Array.from(root.querySelectorAll('tr')).find((item) =>
+        item.textContent?.includes('Alice'),
+      );
+      expect(row).toBeTruthy();
+      const disable = Array.from(row!.querySelectorAll('button')).find(
+        (button) => button.textContent?.trim() === 'Disable',
+      );
+      expect(disable).toBeTruthy();
+      disable!.click();
+      await vi.waitFor(() => {
+        fixture.detectChanges();
+        expect(mockApi.patchMember).toHaveBeenCalledWith('m-1', { status: 'disabled' });
+        const updated = Array.from(root.querySelectorAll('tr')).find((item) =>
+          item.textContent?.includes('Alice'),
+        );
+        expect(updated?.textContent).toContain('Disabled');
+      });
+    },
+  );
+
+  it('shows effective capacity and open load, and applies or clears an override', async () => {
+    mockApi.getMembers.mockReturnValue(
+      of({ data: { items: members, nextCursor: null, hasMore: false } }),
+    );
+    mockApi.getInvitations.mockReturnValue(
+      of({ data: { items: [], nextCursor: null, hasMore: false } }),
+    );
+    mockRoutingCapacityApi.setAgent
+      .mockReturnValueOnce(
+        of({
+          data: {
+            default_capacity: 10,
+            agents: [
+              {
+                membership_id: 'm-1',
+                display_name: 'Alice',
+                override: 4,
+                effective: 4,
+                open_load: 2,
+              },
+            ],
+          },
+        }),
+      )
+      .mockReturnValueOnce(
+        of({
+          data: {
+            default_capacity: 10,
+            agents: [
+              {
+                membership_id: 'm-1',
+                display_name: 'Alice',
+                override: null,
+                effective: 10,
+                open_load: 2,
+              },
+            ],
+          },
+        }),
+      );
+    configureModule();
+    await TestBed.compileComponents();
+    const fixture = TestBed.createComponent(TeamListComponent);
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain('effective limit: 10');
+      expect(fixture.nativeElement.textContent).toContain('open/pending load: 2');
+    });
+
+    const root: HTMLElement = fixture.nativeElement;
+    const input = root.querySelector<HTMLInputElement>(
+      '[aria-label="Capacity override for Alice"]',
+    );
+    expect(input).toBeTruthy();
+    if (!input) throw new Error('agent capacity input should be present');
+    input.value = '4';
+    input.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(mockRoutingCapacityApi.setAgent).toHaveBeenCalledWith('m-1', 4);
+
+    const inherit = Array.from(root.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Inherit'),
+    );
+    expect(inherit).toBeTruthy();
+    inherit?.click();
+    fixture.detectChanges();
+    expect(mockRoutingCapacityApi.setAgent).toHaveBeenNthCalledWith(2, 'm-1', null);
+  });
+
+  it('formats a numeric override using the active formatting locale', async () => {
+    mockApi.getMembers.mockReturnValue(
+      of({ data: { items: members, nextCursor: null, hasMore: false } }),
+    );
+    mockApi.getInvitations.mockReturnValue(
+      of({ data: { items: [], nextCursor: null, hasMore: false } }),
+    );
+    mockRoutingCapacityApi.get.mockReturnValue(
+      of({
+        data: {
+          default_capacity: 10,
+          agents: [
+            {
+              membership_id: 'm-1',
+              display_name: 'Alice',
+              override: 12,
+              effective: 12,
+              open_load: 2,
+            },
+          ],
+        },
+      }),
+    );
+    configureModule();
+    await TestBed.compileComponents();
+    vi.spyOn(TestBed.inject(LocaleService), 'formatLocale').mockReturnValue('ar-EG');
+    const fixture = TestBed.createComponent(TeamListComponent);
+    fixture.detectChanges();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain(
+        new Intl.NumberFormat('ar-EG').format(12),
+      );
     });
   });
 
@@ -305,7 +530,7 @@ describe('TeamListComponent', () => {
 
     const roster = fixture.nativeElement.querySelector('app-data-table table');
     expect(roster.querySelector('caption')?.textContent).toContain('Team members');
-    expect(roster.querySelectorAll('th[scope="col"]')).toHaveLength(6);
+    expect(roster.querySelectorAll('th[scope="col"]')).toHaveLength(7);
     expect(
       fixture.nativeElement
         .querySelector('app-role-select app-choice-group [role="group"]')

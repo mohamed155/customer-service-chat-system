@@ -22,7 +22,7 @@ the `module-boundaries` step of the Backend workflow). To change a rule or accep
 | `conversations` | layered | `customers`, `identity`, `integrations`, `tenancy` | `ai`, `escalations`, `privacy`, `tools`, `whatsapp`, `widgets` | `conversations`, `message_attachments`, `message_citations`, `messages` |
 | `customers` | flat | `authz`, `identity`, `tenancy` | `conversations`, `privacy`, `tools`, `whatsapp`, `widgets` | `customer_channel_identifiers`, `customers` |
 | `email` | flat | – | `identity`, `tenancy` | – |
-| `escalations` | flat | `conversations`, `identity`, `tenancy`, `tools` | `notifications`, `privacy`, `widgets` | `agent_availability`, `agent_skills`, `escalations`, `skills` |
+| `escalations` | flat | `conversations`, `identity`, `tenancy`, `tools` | `notifications`, `privacy`, `widgets` | `agent_availability`, `agent_skills`, `escalations`, `routing_settings`, `skills` |
 | `feedback` | flat | `tenancy`, `widgets` | `privacy` | `conversation_feedback` |
 | `identity` | flat | `email` | `ai`, `audit`, `authz`, `billing`, `conversations`, `customers`, `escalations`, `integrations`, `knowledge`, `notifications`, `privacy`, `tenancy`, `tools`, `widgets` | `auth_sessions`, `login_lockout_notifications`, `mfa_factors`, `mfa_recovery_codes`, `password_reset_requests`, `password_reset_tokens`, `refresh_tokens`, `users` |
 | `integrations` | flat | `identity`, `tenancy` | `conversations`, `privacy`, `whatsapp` | `integration_catalog`, `integration_connections`, `integration_events`, `integration_secrets`, `integration_webhook_deliveries` |

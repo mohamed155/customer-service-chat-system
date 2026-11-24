@@ -1,5 +1,6 @@
 import { Page, Route } from '@playwright/test';
 import { expect, test } from './support/test';
+import { routingCapacity } from './support/routing-capacity';
 import type { ConversationDetailWire } from '../apps/dashboard/src/app/core/api/tenant-api.models';
 
 type EscalationStatus = 'queued' | 'assigned' | 'closed';
@@ -167,6 +168,8 @@ async function installEscalationApi(page: Page) {
     const method = route.request().method();
 
     if (path === '/me') return json(route, agentAIdentity());
+    if (path === '/tenant/routing/capacity' && method === 'GET')
+      return json(route, routingCapacity());
 
     // Skills
     if (path === '/tenant/skills' && method === 'GET')
