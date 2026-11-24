@@ -300,6 +300,16 @@ impl Worker {
         ai::customer_privacy::export_customer(conn, tenant, &ids, &mut archive).await?;
         escalations::customer_privacy::export_customer(conn, tenant, &ids, &mut archive).await?;
         feedback::customer_privacy::export_customer(conn, tenant, &ids, &mut archive).await?;
+        let messages = conversations::customer_privacy::message_ids(conn, tenant, &ids).await?;
+        integrations::customer_privacy::export_customer(
+            conn,
+            tenant,
+            customer,
+            &ids,
+            &messages,
+            &mut archive,
+        )
+        .await?;
         tools::customer_privacy::export_customer(conn, tenant, &ids, &mut archive).await?;
         whatsapp::customer_privacy::export_customer(conn, tenant, &ids, &mut archive).await?;
         widgets::customer_privacy::export_customer(conn, tenant, customer, &mut archive).await?;

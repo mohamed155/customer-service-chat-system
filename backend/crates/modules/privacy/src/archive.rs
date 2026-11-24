@@ -1,5 +1,5 @@
 use std::fs::{File, OpenOptions};
-use std::io::{self, Seek, SeekFrom, Write};
+use std::io::{self, BufWriter, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 use serde_json::Value;
@@ -8,10 +8,12 @@ use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
 
 const MAX_ARCHIVE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const ZIP_BUFFER_BYTES: usize = 64 * 1024;
+type ArchiveWriter = ZipWriter<BufWriter<CappedFile>>;
 
 pub struct Archive {
     pub path: PathBuf,
-    writer: Option<ZipWriter<CappedFile>>,
+    writer: Option<ArchiveWriter>,
     first_row: bool,
 }
 
@@ -29,22 +31,23 @@ impl Archive {
         let file = options.open(&path)?;
         Ok(Self {
             path,
-            writer: Some(ZipWriter::new(CappedFile(file))),
+            writer: Some(ZipWriter::new(BufWriter::with_capacity(
+                ZIP_BUFFER_BYTES,
+                CappedFile(file),
+            ))),
             first_row: true,
         })
     }
 
-    fn entry(&mut self, name: &str) -> io::Result<&mut ZipWriter<CappedFile>> {
+    fn entry(&mut self, name: &str) -> io::Result<&mut ArchiveWriter> {
         let writer = self
             .writer
             .as_mut()
             .ok_or_else(|| io::Error::other("archive closed"))?;
-        writer
-            .start_file(
-                name,
-                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
-            )
-            .map_err(io::Error::other)?;
+        writer.start_file(
+            name,
+            SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
+        )?;
         Ok(writer)
     }
 
@@ -69,13 +72,16 @@ impl Archive {
     }
 
     pub fn finish(&mut self) -> io::Result<()> {
-        self.writer
+        let mut buffer = self
+            .writer
             .take()
             .ok_or_else(|| io::Error::other("archive closed"))?
-            .finish()
-            .map_err(io::Error::other)?
-            .0
-            .sync_all()
+            .finish()?;
+        buffer.flush()?;
+        let file = buffer
+            .into_inner()
+            .map_err(io::IntoInnerError::into_error)?;
+        file.0.sync_all()
     }
 }
 
@@ -149,12 +155,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn archive_writer_refuses_to_cross_the_size_ceiling() -> io::Result<()> {
-        let archive = Archive::new()?;
+    fn archive_buffers_small_writes_until_finish() -> io::Result<()> {
+        use db::json_export::JsonExport;
+
+        let mut archive = Archive::new()?;
+        archive.start("rows.json")?;
+        let length_before_row = std::fs::metadata(&archive.path)?.len();
+        archive.row(&serde_json::json!({"id": 42}))?;
+        archive.end()?;
+        assert_eq!(std::fs::metadata(&archive.path)?.len(), length_before_row);
+
+        archive.finish()?;
+        let mut zip = zip::ZipArchive::new(File::open(&archive.path)?)?;
+        let rows: Value = serde_json::from_reader(zip.by_name("rows.json")?)?;
+        assert_eq!(rows, serde_json::json!([{"id": 42}]));
+        Ok(())
+    }
+
+    #[test]
+    fn archive_finish_refuses_to_cross_the_size_ceiling() -> io::Result<()> {
+        let mut archive = Archive::new()?;
+        archive.writer.take();
+        // Seek without allocating 2 GiB, then make the ZIP footer cross the limit.
         let mut file = CappedFile(OpenOptions::new().write(true).open(&archive.path)?);
         file.seek(SeekFrom::Start(MAX_ARCHIVE_BYTES))?;
+        archive.writer = Some(ZipWriter::new(BufWriter::with_capacity(
+            ZIP_BUFFER_BYTES,
+            file,
+        )));
         assert_eq!(
-            file.write_all(b"x").err().map(|error| error.kind()),
+            archive.finish().err().map(|error| error.kind()),
             Some(io::ErrorKind::FileTooLarge)
         );
         Ok(())

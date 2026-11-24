@@ -31,6 +31,10 @@ reference an object captured after the mirror. For strict consistency, quiesce w
 or take a consistent snapshot before running the backup. The reverse order can produce
 a row pointing at an object that was never captured (FR-029).
 
+An erasure between the mirror and the database dump can also leave objects in the backup
+whose database locators are already gone. Reconcile the restored object store before
+resuming access.
+
 ## Documented RPO and RTO
 
 | Objective | Target | Measurement |
@@ -103,6 +107,76 @@ completed customer erasure requests recorded after it. Obtain the tenant and cus
 the durable request ledger outside the restored snapshot. Replay those erasures against the
 restored data and verify each completion, including attachment and export object cleanup, before
 restoring access. Keep backup copies under the configured retention schedule.
+
+If the restored database already has the erasure receipt, repeating the erase POST returns it
+without deleting any resurrected objects. Run the object reconciliation even when every erasure
+receipt shows completion.
+
+### Reconcile restored privacy objects
+
+Keep application traffic and background workers stopped during reconciliation. Use the
+restored database's bootstrap superuser and AWS CLI v2 with credentials for the restored
+application bucket. Set the usual `PG*` variables for the restored database,
+`APP_S3_ENDPOINT` and `APP_S3_BUCKET` for the restored object store, and the corresponding
+AWS CLI credentials and region. With Bash, `psql` and `jq` installed, generate a deletion
+manifest. Listing from both prefix roots includes every tenant prefix in the restored
+bucket, including tenants absent from the restored database.
+
+```bash
+set -euo pipefail
+: "${APP_S3_ENDPOINT:?Set the restored S3 endpoint}"
+: "${APP_S3_BUCKET:?Set the restored application bucket}"
+privacy_dir=$(mktemp -d)
+trap 'rm -rf "$privacy_dir"' EXIT
+
+psql -XAt -v ON_ERROR_STOP=1 > "$privacy_dir/referenced.json" <<'SQL'
+SELECT COALESCE(json_agg(key), '[]'::json)
+FROM (
+    SELECT COALESCE(storage_key, 'whatsapp-media/' || tenant_id || '/' || id) AS key
+      FROM message_attachments
+    UNION
+    SELECT object_key AS key
+      FROM privacy_requests
+     WHERE kind = 'export' AND status = 'completed'
+       AND expires_at > now() AND object_key IS NOT NULL
+) AS referenced;
+SQL
+
+list_orphans() {
+    for prefix in whatsapp-media/ privacy-exports/; do
+        aws --no-cli-pager --endpoint-url "$APP_S3_ENDPOINT" s3api list-objects-v2 \
+            --bucket "$APP_S3_BUCKET" --prefix "$prefix" --output json |
+            jq -c --arg bucket "$APP_S3_BUCKET" --slurpfile referenced "$privacy_dir/referenced.json" '
+                ($referenced[0] | INDEX(.)) as $keep
+                | .Contents[]?.Key
+                | select($keep[.] == null)
+                | {Bucket: $bucket, Key: .}
+            ' || return 1
+    done
+}
+
+list_orphans > "$privacy_dir/orphans.jsonl"
+cat "$privacy_dir/orphans.jsonl"
+```
+
+Confirm the target bucket and manifest, then run the following in the same shell.
+If the final check fails, inspect the remaining objects before allowing access.
+
+```bash
+while IFS= read -r object; do
+    aws --no-cli-pager --endpoint-url "$APP_S3_ENDPOINT" s3api delete-object --cli-input-json "$object"
+done < "$privacy_dir/orphans.jsonl"
+
+list_orphans > "$privacy_dir/remaining.jsonl"
+test ! -s "$privacy_dir/remaining.jsonl"
+```
+
+### Before resuming access
+
+- Verify the restored schema matches the intended application version.
+- Verify post-backup erasures against the durable ledger.
+- Verify the restored bucket has no orphaned WhatsApp media or privacy export objects.
+- Resume application traffic and background workers.
 
 ## Drill Procedure
 

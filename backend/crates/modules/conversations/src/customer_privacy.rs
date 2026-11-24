@@ -1,6 +1,10 @@
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+/// Returns conversation IDs for the customer ID in the validated tenant.
+///
+/// Pass a connection from the caller-managed tenant transaction. Returns an empty list for
+/// no matches and a SQLx error if the query fails.
 pub async fn conversation_ids(
     conn: &mut PgConnection,
     tenant_id: Uuid,
@@ -13,6 +17,10 @@ pub async fn conversation_ids(
         .await
 }
 
+/// Streams conversations, messages and citations for the customer's conversation IDs.
+///
+/// Pass a connection from the caller-managed tenant transaction and the matching validated
+/// tenant ID. Returns a SQLx error if a query or export write fails.
 pub async fn export_customer(
     conn: &mut PgConnection,
     tenant_id: Uuid,
@@ -53,6 +61,7 @@ pub async fn export_customer(
     Ok(())
 }
 
+/// Attachment identifiers and metadata used to locate stored media for export and erasure.
 #[derive(sqlx::FromRow)]
 pub struct Attachment {
     pub id: Uuid,
@@ -61,6 +70,10 @@ pub struct Attachment {
     pub file_name: Option<String>,
 }
 
+/// Retrieves and locks attachments for the customer's conversation IDs in the validated tenant.
+///
+/// Pass a connection from the caller-managed tenant transaction. Row locks last until the
+/// transaction ends. Returns an empty list for no matches and a SQLx error if the query fails.
 pub async fn attachments(
     conn: &mut PgConnection,
     tenant_id: Uuid,
@@ -78,6 +91,10 @@ pub async fn attachments(
     .await
 }
 
+/// Redacts message bodies and removes citations while retaining conversations and message rows.
+///
+/// Pass the customer's conversation IDs and a connection from the caller-managed transaction
+/// for the validated tenant. Returns a SQLx error if either mutation fails.
 pub async fn erase_customer(
     conn: &mut PgConnection,
     tenant_id: Uuid,
@@ -101,6 +118,12 @@ pub async fn erase_customer(
     Ok(())
 }
 
+/// Removes the attachment row after the caller has deleted its stored media.
+///
+/// Pass the attachment ID obtained from [`attachments`] and the same validated tenant ID
+/// and caller-managed transaction to hold the row lock until commit or rollback. Returns
+/// a SQLx error if deletion fails. A missing row is an idempotent success rather than
+/// [`sqlx::Error::RowNotFound`].
 pub async fn delete_attachment(
     conn: &mut PgConnection,
     tenant_id: Uuid,
@@ -114,6 +137,10 @@ pub async fn delete_attachment(
     Ok(())
 }
 
+/// Returns message IDs linked to the customer's conversation IDs.
+///
+/// Pass a connection from the caller-managed tenant transaction and the matching validated
+/// tenant ID. Returns an empty list for no matches and a SQLx error if the query fails.
 pub async fn message_ids(
     conn: &mut PgConnection,
     tenant: Uuid,

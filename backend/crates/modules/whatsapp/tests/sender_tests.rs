@@ -101,7 +101,6 @@ struct SenderFixture {
     connection_id: Uuid,
     conversation_id: Uuid,
     message_id: Uuid,
-    #[allow(dead_code)]
     customer_id: Uuid,
     token: String,
     app_secret: String,
@@ -437,6 +436,78 @@ async fn sender_success_path() {
         wamid, "wamid.test.success",
         "wamid should match mock response"
     );
+}
+
+#[tokio::test]
+async fn sender_consumes_outbound_event_without_sending_when_erasure_is_pending() {
+    assert_erasure_fences_send(false).await;
+}
+
+#[tokio::test]
+async fn sender_consumes_outbound_event_without_sending_when_customer_is_erased() {
+    assert_erasure_fences_send(true).await;
+}
+
+async fn assert_erasure_fences_send(erased: bool) {
+    let Some(pool) = get_pool().await else { return };
+    setup(&pool).await;
+    let mk = master_key();
+    let fixture = setup_sender_fixture(&pool, &mk, true, 3600).await;
+    let seed = db::testing::seed_pool();
+
+    // Model a send that already prepared its delivery metadata before erasure.
+    // Keep the alias and queued event so lookup and claim reach the send fence.
+    sqlx::query(
+        "INSERT INTO whatsapp_message_meta
+         (tenant_id, message_id, conversation_id, direction, delivery_status)
+         VALUES ($1, $2, $3, 'outbound', 'pending')",
+    )
+    .bind(fixture.tenant_id)
+    .bind(fixture.message_id)
+    .bind(fixture.conversation_id)
+    .execute(&seed)
+    .await
+    .unwrap();
+    let updated = sqlx::query(
+        "UPDATE customers SET
+             erasure_pending_at = CASE WHEN NOT $3 THEN now() END,
+             erased_at = CASE WHEN $3 THEN now() END
+         WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(fixture.tenant_id)
+    .bind(fixture.customer_id)
+    .bind(erased)
+    .execute(&seed)
+    .await
+    .unwrap();
+    assert_eq!(updated.rows_affected(), 1);
+
+    let mock = whatsapp::api::MockWhatsAppApi::new();
+    mock.push_send_text(Ok("wamid.must.remain.unused".into()));
+    let result = whatsapp::sender::process_one(&pool, &mock, &mk).await;
+
+    // The mock pops its scripted response on every send_text call.
+    let unused_response = mock
+        .send_text("test", PHONE_NUMBER_ID, "+15551234567", "probe")
+        .await;
+    assert_eq!(
+        unused_response.as_deref().ok(),
+        Some("wamid.must.remain.unused"),
+        "the worker must make no provider send call"
+    );
+    result.expect("process_one should consume the event successfully");
+
+    let still_queued: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM outbox_events
+         WHERE tenant_id = $1 AND event_type = 'whatsapp.outbound_message'
+           AND payload->>'messageId' = $2)",
+    )
+    .bind(fixture.tenant_id.to_string())
+    .bind(fixture.message_id.to_string())
+    .fetch_one(&seed)
+    .await
+    .unwrap();
+    assert!(!still_queued, "the worker must consume the outbox event");
 }
 
 #[tokio::test]

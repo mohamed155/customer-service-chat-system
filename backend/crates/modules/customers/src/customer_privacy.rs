@@ -8,7 +8,7 @@ pub async fn lock_customer(
 ) -> sqlx::Result<Option<bool>> {
     sqlx::query_scalar(
         "SELECT erasure_pending_at IS NOT NULL OR erased_at IS NOT NULL FROM customers
-         WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE",
+         WHERE tenant_id = $1 AND id = $2 FOR UPDATE",
     )
     .bind(tenant_id)
     .bind(customer_id)
@@ -23,7 +23,7 @@ pub async fn is_active(
 ) -> sqlx::Result<bool> {
     sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM customers WHERE tenant_id = $1 AND id = $2
-         AND deleted_at IS NULL AND erasure_pending_at IS NULL AND erased_at IS NULL)",
+         AND erasure_pending_at IS NULL AND erased_at IS NULL)",
     )
     .bind(tenant_id)
     .bind(customer_id)
@@ -61,7 +61,7 @@ pub async fn export_customer(
         "customer.json",
         sqlx::query_scalar(
             "SELECT to_jsonb(c) FROM customers c
-         WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL
+         WHERE tenant_id = $1 AND id = $2
            AND erasure_pending_at IS NULL AND erased_at IS NULL",
         )
         .bind(tenant_id)

@@ -23,6 +23,56 @@ async fn pool() -> Option<PgPool> {
     Some(pool)
 }
 
+static PRIVACY_QUEUE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+async fn redis() -> Option<(String, Arc<cache::Cache>)> {
+    let required = std::env::var("REQUIRE_DB_TESTS").as_deref() == Ok("1");
+    let Ok(url) = std::env::var("REDIS_URL") else {
+        assert!(!required, "REDIS_URL is required for privacy worker tests");
+        return None;
+    };
+    let result = async {
+        let cache = cache::Cache::new(&url)?;
+        tokio::time::timeout(Duration::from_secs(5), cache.ping())
+            .await
+            .map_err(|_| "Redis ping timed out".to_owned())??;
+        Ok::<_, String>(cache)
+    }
+    .await;
+    match result {
+        Ok(cache) => Some((url, Arc::new(cache))),
+        Err(error) => {
+            assert!(
+                !required,
+                "REDIS_URL is unavailable for privacy worker tests: {error}"
+            );
+            None
+        }
+    }
+}
+
+async fn process_request(worker: &privacy::Worker, request: Uuid, expected_status: &str) {
+    let seed = db::testing::seed_pool();
+    let attempts = || {
+        sqlx::query_scalar::<_, i32>("SELECT attempts FROM privacy_requests WHERE id = $1")
+            .bind(request)
+            .fetch_one(&seed)
+    };
+    let before = attempts().await.unwrap();
+    assert!(worker.process_one().await.unwrap());
+    let (status, after): (String, i32) =
+        sqlx::query_as("SELECT status, attempts FROM privacy_requests WHERE id = $1")
+            .bind(request)
+            .fetch_one(&seed)
+            .await
+            .unwrap();
+    assert_eq!(
+        (status.as_str(), after),
+        (expected_status, before + 1),
+        "worker must advance exactly the expected request {request}"
+    );
+}
+
 #[test]
 fn documented_inventory_matches_code() {
     let documented: BTreeSet<_> =
@@ -104,6 +154,10 @@ async fn seed(pool: &PgPool, marker: &str) -> (Uuid, Uuid, Uuid, Uuid) {
 
 #[tokio::test]
 async fn export_then_erase_preserves_history_and_other_tenant_data() {
+    let Some((_, redis_cache)) = redis().await else {
+        return;
+    };
+    let _queue = PRIVACY_QUEUE.lock().await;
     let Some(pool) = pool().await else { return };
     let marker = format!("privacy-{}", Uuid::new_v4().simple());
     let (tenant, actor, customer, conversation) = seed(&pool, &marker).await;
@@ -111,12 +165,14 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
     let same_tenant_marker = format!("other-{}", Uuid::new_v4().simple());
     let (other_tenant, _, other_customer, other_conversation) = seed(&pool, &other_marker).await;
     let owner = db::testing::seed_pool();
-    sqlx::query("INSERT INTO customers (tenant_id,display_name) VALUES ($1,$2)")
-        .bind(tenant)
-        .bind(&same_tenant_marker)
-        .execute(&owner)
-        .await
-        .unwrap();
+    let same_tenant_customer: Uuid = sqlx::query_scalar(
+        "INSERT INTO customers (tenant_id,display_name) VALUES ($1,$2) RETURNING id",
+    )
+    .bind(tenant)
+    .bind(&same_tenant_marker)
+    .fetch_one(&owner)
+    .await
+    .unwrap();
     let storage = Arc::new(storage::InMemoryStorage::default());
     let attachment =
         seed_personal_content(storage.as_ref(), tenant, customer, conversation, &marker).await;
@@ -135,6 +191,27 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
          VALUES ($1,$2,'conversation',$3,'test.privacy',jsonb_build_object('text',$4::text),now())",
     ).bind(Uuid::new_v4()).bind(other_tenant.to_string()).bind(conversation.to_string())
         .bind(&other_marker).execute(&owner).await.unwrap();
+    let same_tenant_conversation: Uuid = sqlx::query_scalar(
+        "INSERT INTO conversations (tenant_id,customer_id,channel,status)
+         VALUES ($1,$2,'web_chat','open') RETURNING id",
+    )
+    .bind(tenant)
+    .bind(same_tenant_customer)
+    .fetch_one(&owner)
+    .await
+    .unwrap();
+    let mixed_payload = serde_json::json!({
+        "customer_id": customer,
+        "conversationId": same_tenant_conversation,
+        "text": same_tenant_marker,
+    });
+    let mixed = seed_delivery(tenant, &mixed_payload).await;
+    let unrelated = seed_delivery(
+        tenant,
+        &serde_json::json!({"customer_id": same_tenant_customer, "text": same_tenant_marker}),
+    )
+    .await;
+    let unattributed = seed_delivery(tenant, &serde_json::json!({"text": "opaque-webhook"})).await;
     let other_before = personal_table_snapshot(other_tenant).await;
     let to = chrono::Utc::now() + chrono::Duration::hours(1);
     let from = to - chrono::Duration::hours(2);
@@ -150,9 +227,7 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
     let worker = privacy::Worker {
         pool: pool.clone(),
         storage: storage.clone(),
-        cache: Arc::new(
-            cache::Cache::new(&std::env::var("REDIS_URL").expect("REDIS_URL")).unwrap(),
-        ),
+        cache: redis_cache,
         notifications: Arc::new(server::privacy_ports::NotificationPort),
     };
     assert!(matches!(
@@ -162,7 +237,7 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
     let export = privacy::request(&pool, tenant, customer, actor, privacy::Kind::Export)
         .await
         .unwrap();
-    assert!(worker.process_one().await.unwrap());
+    process_request(&worker, export.request_id, "completed").await;
     let export_key = format!("privacy-exports/{tenant}/{}.zip", export.request_id);
     let (bytes, content_type) = storage.get(&export_key).await.unwrap();
     assert_eq!(content_type, "application/zip");
@@ -190,6 +265,37 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
             assert!(file.contains(&marker));
         }
     }
+    file.clear();
+    archive
+        .by_name("integration_webhook_deliveries.json")
+        .unwrap()
+        .read_to_string(&mut file)
+        .unwrap();
+    let deliveries: Vec<serde_json::Value> = serde_json::from_str(&file).unwrap();
+    assert_eq!(deliveries.len(), 1);
+    assert_eq!(deliveries[0]["payload"]["text"], marker);
+    assert_eq!(
+        deliveries[0]["payload"]["conversation_id"],
+        conversation.to_string()
+    );
+
+    let uppercase = seed_delivery(
+        tenant,
+        &serde_json::json!({
+            "customer_id": customer.to_string().to_uppercase(),
+            "text": marker,
+        }),
+    )
+    .await;
+    let uppercase_alias = seed_delivery(
+        tenant,
+        &serde_json::json!({
+            "customerId": customer.to_string().to_uppercase(),
+            "conversation_id": conversation,
+            "text": marker,
+        }),
+    )
+    .await;
     let attachment_id = attachment.rsplit('/').next().unwrap();
     file.clear();
     archive
@@ -209,7 +315,22 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
         privacy::request(&pool, tenant, customer, actor, privacy::Kind::Export).await,
         Err(privacy::RequestError::Erasing)
     ));
-    assert!(worker.process_one().await.unwrap());
+    process_request(&worker, first.request_id, "completed").await;
+    assert_eq!(delivery_payload(uppercase).await, serde_json::json!({}));
+    assert_eq!(
+        delivery_payload(uppercase_alias).await,
+        serde_json::json!({})
+    );
+    assert_eq!(delivery_payload(mixed).await, mixed_payload);
+    assert_eq!(
+        delivery_payload(unrelated).await["text"],
+        same_tenant_marker
+    );
+    assert_eq!(
+        delivery_payload(unattributed).await["text"],
+        "opaque-webhook"
+    );
+
     assert!(matches!(
         storage.get(&export_key).await,
         Err(storage::StorageError::NotFound)
@@ -356,6 +477,10 @@ impl ObjectStorage for FailFirstDelete {
 
 #[tokio::test]
 async fn failed_storage_step_resumes_without_repeating_completed_steps() {
+    let Some((_, redis_cache)) = redis().await else {
+        return;
+    };
+    let _queue = PRIVACY_QUEUE.lock().await;
     let Some(pool) = pool().await else { return };
     let (tenant, actor, customer, conversation) = seed(&pool, "privacy-retry").await;
     let owner = db::testing::seed_pool();
@@ -386,9 +511,7 @@ async fn failed_storage_step_resumes_without_repeating_completed_steps() {
     let worker = privacy::Worker {
         pool: pool.clone(),
         storage: storage.clone(),
-        cache: Arc::new(
-            cache::Cache::new(&std::env::var("REDIS_URL").expect("REDIS_URL")).unwrap(),
-        ),
+        cache: redis_cache,
         notifications: Arc::new(server::privacy_ports::NotificationPort),
     };
     let (left, right) = tokio::join!(
@@ -397,7 +520,7 @@ async fn failed_storage_step_resumes_without_repeating_completed_steps() {
     );
     let request = left.unwrap();
     assert_eq!(request.request_id, right.unwrap().request_id);
-    assert!(worker.process_one().await.unwrap());
+    process_request(&worker, request.request_id, "failed").await;
     assert_eq!(
         privacy::request(&pool, tenant, customer, actor, privacy::Kind::Erase)
             .await
@@ -411,7 +534,7 @@ async fn failed_storage_step_resumes_without_repeating_completed_steps() {
         .execute(&owner)
         .await
         .unwrap();
-    assert!(worker.process_one().await.unwrap());
+    process_request(&worker, request.request_id, "completed").await;
     assert_eq!(
         privacy::request(&pool, tenant, customer, actor, privacy::Kind::Erase)
             .await
@@ -500,6 +623,10 @@ async fn privacy_routes_require_permissions_confirmation_tenant_and_step_up() {
     use server::state::AppState;
     use tower::ServiceExt;
 
+    let Some((redis_url, redis_cache)) = redis().await else {
+        return;
+    };
+    let _queue = PRIVACY_QUEUE.lock().await;
     let Some(pool) = pool().await else { return };
     let (tenant, owner, customer, _) = seed(&pool, "privacy-route").await;
     let (_, _, foreign, _) = seed(&pool, "privacy-foreign").await;
@@ -520,12 +647,11 @@ async fn privacy_routes_require_permissions_confirmation_tenant_and_step_up() {
             .await
             .unwrap();
     }
-    let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL");
     let store = Arc::new(storage::InMemoryStorage::default());
     let worker = privacy::Worker {
         pool: pool.clone(),
         storage: store.clone(),
-        cache: Arc::new(cache::Cache::new(&redis_url).unwrap()),
+        cache: redis_cache,
         notifications: Arc::new(server::privacy_ports::NotificationPort),
     };
     let make_router = |mfa_required| {
@@ -602,7 +728,7 @@ async fn privacy_routes_require_permissions_confirmation_tenant_and_step_up() {
     let export = privacy::request(&pool, tenant, customer, owner_id, privacy::Kind::Export)
         .await
         .unwrap();
-    assert!(worker.process_one().await.unwrap());
+    process_request(&worker, export.request_id, "completed").await;
     let download = |id: Uuid, token: &str| {
         Request::get(format!(
             "/api/v1/tenant/customers/{id}/export/{}/download",
@@ -657,7 +783,7 @@ async fn privacy_routes_require_permissions_confirmation_tenant_and_step_up() {
             .status(),
         StatusCode::NOT_FOUND
     );
-    assert!(worker.process_one().await.unwrap());
+    process_request(&worker, export.request_id, "expired").await;
     let expired: (String, Option<String>) =
         sqlx::query_as("SELECT status, object_key FROM privacy_requests WHERE id = $1")
             .bind(export.request_id)
@@ -665,6 +791,15 @@ async fn privacy_routes_require_permissions_confirmation_tenant_and_step_up() {
             .await
             .unwrap();
     assert_eq!(expired, ("expired".into(), None));
+    assert!(matches!(
+        store
+            .get(&format!(
+                "privacy-exports/{tenant}/{}.zip",
+                export.request_id
+            ))
+            .await,
+        Err(storage::StorageError::NotFound)
+    ));
     let session = identity::sessions::start(
         &pool,
         identity::keys::keys_for(&config::Environment::Test),
@@ -698,7 +833,80 @@ async fn privacy_routes_require_permissions_confirmation_tenant_and_step_up() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::ACCEPTED);
-    assert!(worker.process_one().await.unwrap());
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    let erase_id: Uuid = serde_json::from_value(receipt["request_id"].clone()).unwrap();
+    process_request(&worker, erase_id, "completed").await;
+}
+
+async fn seed_delivery(tenant: Uuid, payload: &serde_json::Value) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO integration_webhook_deliveries (tenant_id, connection_id, payload)
+         SELECT tenant_id, id, $2 FROM integration_connections WHERE tenant_id = $1
+         RETURNING id",
+    )
+    .bind(tenant)
+    .bind(payload)
+    .fetch_one(&db::testing::seed_pool())
+    .await
+    .unwrap()
+}
+
+async fn delivery_payload(id: Uuid) -> serde_json::Value {
+    sqlx::query_scalar("SELECT payload FROM integration_webhook_deliveries WHERE id = $1")
+        .bind(id)
+        .fetch_one(&db::testing::seed_pool())
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn soft_deleted_customer_can_be_exported_and_erased() {
+    let Some((_, redis_cache)) = redis().await else {
+        return;
+    };
+    let _queue = PRIVACY_QUEUE.lock().await;
+    let Some(pool) = pool().await else { return };
+    let (tenant, actor, customer, _) = seed(&pool, "soft-deleted-privacy-customer").await;
+    let seed = db::testing::seed_pool();
+    sqlx::query("UPDATE customers SET deleted_at = now() WHERE tenant_id = $1 AND id = $2")
+        .bind(tenant)
+        .bind(customer)
+        .execute(&seed)
+        .await
+        .unwrap();
+    let store = Arc::new(storage::InMemoryStorage::default());
+    let worker = privacy::Worker {
+        pool: pool.clone(),
+        storage: store.clone(),
+        cache: redis_cache,
+        notifications: Arc::new(server::privacy_ports::NotificationPort),
+    };
+    let export = privacy::request(&pool, tenant, customer, actor, privacy::Kind::Export)
+        .await
+        .unwrap();
+    process_request(&worker, export.request_id, "completed").await;
+    let key = format!("privacy-exports/{tenant}/{}.zip", export.request_id);
+    let (bytes, _) = store.get(&key).await.unwrap();
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let records: Vec<serde_json::Value> =
+        serde_json::from_reader(archive.by_name("customer.json").unwrap()).unwrap();
+    assert_eq!(records[0]["display_name"], "soft-deleted-privacy-customer");
+
+    let erase = privacy::request(&pool, tenant, customer, actor, privacy::Kind::Erase)
+        .await
+        .unwrap();
+    process_request(&worker, erase.request_id, "completed").await;
+    let tombstone: (String, Option<String>, bool, bool) = sqlx::query_as(
+        "SELECT display_name, email::text, erased_at IS NOT NULL, deleted_at IS NOT NULL
+         FROM customers WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(tenant)
+    .bind(customer)
+    .fetch_one(&seed)
+    .await
+    .unwrap();
+    assert_eq!(tombstone, ("[erased]".into(), None, true, true));
 }
 
 async fn seed_personal_content(

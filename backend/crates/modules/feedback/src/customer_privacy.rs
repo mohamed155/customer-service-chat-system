@@ -1,6 +1,10 @@
 use sqlx::PgConnection;
 use uuid::Uuid;
 
+/// Streams feedback records for the customer's conversation IDs to the export.
+///
+/// Pass a connection from the caller-managed tenant transaction and the matching validated
+/// tenant ID. Returns a SQLx error if the query or export fails.
 pub async fn export_customer(
     conn: &mut PgConnection,
     tenant_id: Uuid,
@@ -22,6 +26,10 @@ pub async fn export_customer(
     Ok(())
 }
 
+/// Clears comments and widget session IDs from the customer's feedback, retaining ratings.
+///
+/// Pass the customer's conversation IDs and a connection from the caller-managed transaction
+/// for the validated tenant. Returns a SQLx error if the update fails.
 pub async fn erase_customer(
     conn: &mut PgConnection,
     tenant_id: Uuid,

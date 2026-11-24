@@ -173,6 +173,8 @@ head -c 32 /dev/urandom | base64
 These variables must be set **together** or left **all unset**. A partial set
 causes a startup error. When all are unset the server uses ephemeral in-memory
 storage.
+`APP_RUN_MODE=worker` requires shared S3-compatible storage and exits at startup if the
+selected backend is in memory, including when S3 initialization falls back to in-memory storage.
 
 | Variable | Purpose | Default | Secret |
 |----------|---------|---------|--------|

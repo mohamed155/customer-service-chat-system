@@ -76,6 +76,9 @@ pub async fn mark_stored(
     uow.commit().await
 }
 
+/// Locks a pending attachment in the caller-managed transaction for the validated tenant.
+/// The lock lasts until commit or rollback. Returns false if the attachment is absent or
+/// no longer pending, and propagates database errors.
 pub async fn lock_pending(
     conn: &mut sqlx::PgConnection,
     tenant: Uuid,
@@ -92,6 +95,9 @@ pub async fn lock_pending(
     .is_some())
 }
 
+/// Records storage metadata for the attachment in the validated tenant.
+/// Pass the same tenant transaction used to lock the pending attachment when fencing a
+/// media upload. Returns [`sqlx::Error::RowNotFound`] if no row matches the tenant and ID.
 pub async fn mark_stored_in_tenant(
     conn: &mut sqlx::PgConnection,
     tenant: Uuid,

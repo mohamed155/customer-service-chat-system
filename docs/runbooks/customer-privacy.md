@@ -1,8 +1,9 @@
 # Customer export and erasure requests
 
 Act in the customer's tenant through the tenant API using an authorized Owner or Admin
-account. Complete MFA step-up when prompted. Use shared object storage when the API and
-worker run in separate processes. The in-memory backend is local to a single process.
+account. Complete MFA step-up when prompted. A standalone worker
+(`APP_RUN_MODE=worker`) requires shared S3-compatible storage and exits if its selected
+backend is in memory.
 
 1. Send `POST /api/v1/tenant/customers/{id}/export` or
    `POST /api/v1/tenant/customers/{id}/erase` with a JSON body containing
@@ -30,6 +31,8 @@ UPDATE privacy_requests
 
 Confirm exactly one row changed and poll the existing request ID.
 
-For restored backups, follow the
-[erasure replay procedure](backup-restore.md#replay-customer-erasures) before serving data.
+For restored backups, [replay post-backup erasures](backup-restore.md#replay-customer-erasures)
+and [reconcile restored privacy objects](backup-restore.md#reconcile-restored-privacy-objects)
+before serving data. Repeating an erase POST returns the existing receipt. Restored objects
+whose locators are already gone require the separate reconciliation step.
 Consult the [inventory](../security/personal-data-inventory.md) for retention exceptions.
