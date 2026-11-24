@@ -100,6 +100,14 @@ async fn late_webhook_deliveries_scrub_only_unambiguous_inactive_subjects() {
         .unwrap();
 
     let compact = pending.simple().to_string();
+    let malformed = [
+        format!("{{{pending}"),
+        format!("{pending}}}"),
+        format!("{}--{}", &compact[..4], &compact[4..]),
+        format!("{pending}-"),
+        format!("-{pending}"),
+        format!("{}-{}", &compact[..2], &compact[2..]),
+    ];
     let cases = [
         (
             json!({"customer_id": pending.to_string().to_uppercase()}),
@@ -123,6 +131,12 @@ async fn late_webhook_deliveries_scrub_only_unambiguous_inactive_subjects() {
         (json!({"customer_id": active}), false),
         (json!({"customer_id": foreign}), false),
         (json!({"customer_id": "malformed"}), false),
+        (json!({"customer_id": malformed[0].as_str()}), false),
+        (json!({"customer_id": malformed[1].as_str()}), false),
+        (json!({"customer_id": malformed[2].as_str()}), false),
+        (json!({"customer_id": malformed[3].as_str()}), false),
+        (json!({"customer_id": malformed[4].as_str()}), false),
+        (json!({"customer_id": malformed[5].as_str()}), false),
         (json!({"conversationId": ["malformed"]}), false),
         (json!({"message_id": Uuid::new_v4()}), false),
         (json!({"nested": {"customer_id": pending}}), false),

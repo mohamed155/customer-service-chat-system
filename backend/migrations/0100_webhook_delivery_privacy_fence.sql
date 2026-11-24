@@ -1,9 +1,12 @@
--- Validate the compact spelling before casting and return one canonical representation.
+-- Validate PostgreSQL's accepted spellings before casting and return one canonical representation.
 CREATE FUNCTION privacy_normalized_uuid(text) RETURNS text
 LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
 SET search_path = pg_catalog, public, pg_temp AS $$
-    SELECT CASE WHEN compact ~ '^[0-9a-f]{32}$' THEN compact::uuid::text END
-      FROM (VALUES (lower(translate($1, '{}-', '')))) AS input(compact)
+    SELECT CASE
+        WHEN lower($1) ~ '^(\{)?([0-9a-f]{4}-?){7}[0-9a-f]{4}(\})?$'
+         AND (left(lower($1), 1) = '{') = (right(lower($1), 1) = '}')
+        THEN translate(lower($1), '{}', '')::uuid::text
+    END
 $$;
 
 REVOKE ALL ON FUNCTION privacy_normalized_uuid(text) FROM PUBLIC;

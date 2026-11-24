@@ -237,6 +237,29 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
             .await,
         );
     }
+    let malformed_spellings = [
+        format!("{{{customer}"),
+        format!("{customer}}}"),
+        format!("{}--{}", &compact[..4], &compact[4..]),
+        format!("{customer}-"),
+        format!("-{customer}"),
+        format!("{}-{}", &compact[..2], &compact[2..]),
+    ];
+    let malformed_marker = format!("malformed-{}", Uuid::new_v4().simple());
+    let mut malformed_delivery_ids = Vec::new();
+    for spelling in &malformed_spellings {
+        malformed_delivery_ids.push(
+            seed_delivery(
+                tenant,
+                &serde_json::json!({
+                    "customer_id": spelling,
+                    "conversation_id": conversation,
+                    "text": malformed_marker,
+                }),
+            )
+            .await,
+        );
+    }
     let other_before = personal_table_snapshot(other_tenant).await;
     let to = chrono::Utc::now() + chrono::Duration::hours(1);
     let from = to - chrono::Duration::hours(2);
@@ -311,6 +334,12 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
     assert!(deliveries
         .iter()
         .all(|delivery| delivery["payload"]["text"] == marker));
+    for id in &malformed_delivery_ids {
+        assert!(
+            !exported_ids.contains(id),
+            "malformed UUID delivery {id} must not be exported"
+        );
+    }
 
     let attachment_id = attachment.rsplit('/').next().unwrap();
     file.clear();
@@ -331,6 +360,17 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
         privacy::request(&pool, tenant, customer, actor, privacy::Kind::Export).await,
         Err(privacy::RequestError::Erasing)
     ));
+    let mut late_malformed_delivery_ids = Vec::new();
+    let mut late_malformed_payloads = Vec::new();
+    for spelling in &malformed_spellings {
+        let payload = serde_json::json!({
+            "customer_id": spelling,
+            "conversation_id": conversation,
+            "text": malformed_marker,
+        });
+        late_malformed_delivery_ids.push(seed_delivery(tenant, &payload).await);
+        late_malformed_payloads.push(payload);
+    }
     process_request(&worker, first.request_id, "completed").await;
     for id in alternate_ids {
         assert_eq!(
@@ -340,6 +380,16 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
         );
     }
     assert_eq!(delivery_payload(malformed).await, malformed_payload);
+    for (id, payload) in late_malformed_delivery_ids
+        .into_iter()
+        .zip(late_malformed_payloads)
+    {
+        assert_eq!(
+            delivery_payload(id).await,
+            payload,
+            "malformed UUID delivery {id} must not be fenced"
+        );
+    }
     assert_eq!(delivery_payload(mixed).await, mixed_payload);
     assert_eq!(
         delivery_payload(unrelated).await["text"],

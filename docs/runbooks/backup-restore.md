@@ -49,6 +49,10 @@ either objective is missed.
 
 Use `ops/restore.sh` to restore from a specific backup:
 
+Before the live restore, stop application traffic to the API and gateway and stop every background
+worker, including processes running with `APP_RUN_MODE=worker` or `APP_RUN_MODE=all`. Keep them
+stopped until every check under [Before resuming access](#before-resuming-access) passes.
+
 ```bash
 # Identify the backup timestamp from the off-host S3 bucket
 mc ls remote/BACKUP_S3_BUCKET/db/
@@ -114,18 +118,32 @@ receipt shows completion.
 
 ### Reconcile restored privacy objects
 
-Keep application traffic and background workers stopped during reconciliation. Use the
-restored database's bootstrap superuser and AWS CLI v2 with credentials for the restored
-application bucket. Set the usual `PG*` variables for the restored database,
-`APP_S3_ENDPOINT` and `APP_S3_BUCKET` for the restored object store, and the corresponding
-AWS CLI credentials and region. With Bash, `psql` and `jq` installed, generate a deletion
-manifest. Listing from both prefix roots includes every tenant prefix in the restored
+The API, gateway and all background workers must already be stopped before a live restore; keep
+them stopped through reconciliation and until every check under [Before resuming
+access](#before-resuming-access) passes. Use the restored database's bootstrap superuser and AWS
+CLI v2 with credentials for the restored application bucket. Set the usual `PG*` variables for the
+restored database, `APP_S3_ENDPOINT` and `APP_S3_BUCKET` for the restored object store, and the
+corresponding AWS CLI credentials and region. With Bash, `psql` and `jq` installed, generate a
+deletion manifest. Listing from both prefix roots includes every tenant prefix in the restored
 bucket, including tenants absent from the restored database.
+
+Before building the manifest, check the bucket's versioning state. The command below exits non-zero
+for `Enabled` or `Suspended` versioning. Those buckets need a separate version-aware procedure that
+uses `list-object-versions` and deletes every object version and delete marker by `VersionId`; a
+plain `delete-object` without `VersionId` only adds a delete marker and leaves noncurrent versions.
+That noncurrent-version limitation is recorded in [ADR-020](../adr/0020-customer-data-export-and-erasure.md#known-limitations).
 
 ```bash
 set -euo pipefail
 : "${APP_S3_ENDPOINT:?Set the restored S3 endpoint}"
 : "${APP_S3_BUCKET:?Set the restored application bucket}"
+versioning_status=$(aws --no-cli-pager --endpoint-url "$APP_S3_ENDPOINT" s3api get-bucket-versioning \
+    --bucket "$APP_S3_BUCKET" --query 'Status' --output text)
+if [[ "$versioning_status" == Enabled || "$versioning_status" == Suspended ]]; then
+    printf 'Refusing privacy-object reconciliation: bucket versioning is %s; use the version-aware procedure.\n' \
+        "$versioning_status" >&2
+    exit 1
+fi
 privacy_dir=$(mktemp -d)
 trap 'rm -rf "$privacy_dir"' EXIT
 
