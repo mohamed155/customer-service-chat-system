@@ -202,7 +202,7 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
     .unwrap();
     let mixed_payload = serde_json::json!({
         "customer_id": customer,
-        "conversationId": same_tenant_conversation,
+        "conversationId": same_tenant_conversation.simple().to_string(),
         "text": same_tenant_marker,
     });
     let mixed = seed_delivery(tenant, &mixed_payload).await;
@@ -212,6 +212,31 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
     )
     .await;
     let unattributed = seed_delivery(tenant, &serde_json::json!({"text": "opaque-webhook"})).await;
+    let malformed_payload = serde_json::json!({
+        "customer_id": customer,
+        "messageId": "not-a-uuid",
+    });
+    let malformed = seed_delivery(tenant, &malformed_payload).await;
+    let compact = customer.simple().to_string();
+    let mut alternate_ids = Vec::new();
+    for spelling in [
+        customer.to_string().to_uppercase(),
+        compact.clone(),
+        format!("{{{customer}}}"),
+        format!("{}-{}", &compact[..4], &compact[4..]),
+    ] {
+        alternate_ids.push(
+            seed_delivery(
+                tenant,
+                &serde_json::json!({
+                    "customer_id": spelling,
+                    "conversationId": conversation.simple().to_string(),
+                    "text": marker,
+                }),
+            )
+            .await,
+        );
+    }
     let other_before = personal_table_snapshot(other_tenant).await;
     let to = chrono::Utc::now() + chrono::Duration::hours(1);
     let from = to - chrono::Duration::hours(2);
@@ -272,30 +297,21 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
         .read_to_string(&mut file)
         .unwrap();
     let deliveries: Vec<serde_json::Value> = serde_json::from_str(&file).unwrap();
-    assert_eq!(deliveries.len(), 1);
-    assert_eq!(deliveries[0]["payload"]["text"], marker);
-    assert_eq!(
-        deliveries[0]["payload"]["conversation_id"],
-        conversation.to_string()
-    );
+    let exported_ids: BTreeSet<_> = deliveries
+        .iter()
+        .map(|delivery| serde_json::from_value::<Uuid>(delivery["id"].clone()).unwrap())
+        .collect();
+    assert_eq!(deliveries.len(), alternate_ids.len() + 1);
+    for id in &alternate_ids {
+        assert!(
+            exported_ids.contains(id),
+            "alternate spelling delivery {id} is missing"
+        );
+    }
+    assert!(deliveries
+        .iter()
+        .all(|delivery| delivery["payload"]["text"] == marker));
 
-    let uppercase = seed_delivery(
-        tenant,
-        &serde_json::json!({
-            "customer_id": customer.to_string().to_uppercase(),
-            "text": marker,
-        }),
-    )
-    .await;
-    let uppercase_alias = seed_delivery(
-        tenant,
-        &serde_json::json!({
-            "customerId": customer.to_string().to_uppercase(),
-            "conversation_id": conversation,
-            "text": marker,
-        }),
-    )
-    .await;
     let attachment_id = attachment.rsplit('/').next().unwrap();
     file.clear();
     archive
@@ -316,11 +332,14 @@ async fn export_then_erase_preserves_history_and_other_tenant_data() {
         Err(privacy::RequestError::Erasing)
     ));
     process_request(&worker, first.request_id, "completed").await;
-    assert_eq!(delivery_payload(uppercase).await, serde_json::json!({}));
-    assert_eq!(
-        delivery_payload(uppercase_alias).await,
-        serde_json::json!({})
-    );
+    for id in alternate_ids {
+        assert_eq!(
+            delivery_payload(id).await,
+            serde_json::json!({}),
+            "delivery {id}"
+        );
+    }
+    assert_eq!(delivery_payload(malformed).await, malformed_payload);
     assert_eq!(delivery_payload(mixed).await, mixed_payload);
     assert_eq!(
         delivery_payload(unrelated).await["text"],

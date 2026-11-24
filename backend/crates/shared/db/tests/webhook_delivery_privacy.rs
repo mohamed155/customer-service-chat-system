@@ -99,7 +99,18 @@ async fn late_webhook_deliveries_scrub_only_unambiguous_inactive_subjects() {
         .await
         .unwrap();
 
+    let compact = pending.simple().to_string();
     let cases = [
+        (
+            json!({"customer_id": pending.to_string().to_uppercase()}),
+            true,
+        ),
+        (json!({"customer_id": compact}), true),
+        (json!({"customer_id": format!("{{{pending}}}")}), true),
+        (
+            json!({"customer_id": format!("{}-{}", &compact[..4], &compact[4..])}),
+            true,
+        ),
         (json!({"customer_id": pending, "detail": "private"}), true),
         (
             json!({"customerId": erased.to_string().to_uppercase()}),
@@ -119,7 +130,10 @@ async fn late_webhook_deliveries_scrub_only_unambiguous_inactive_subjects() {
             json!({"customer_id": active, "conversationId": conversation}),
             false,
         ),
-        (json!({"customer_id": pending, "customerId": active}), false),
+        (
+            json!({"customer_id": pending, "customerId": active.simple().to_string()}),
+            false,
+        ),
         (
             json!({"customer_id": pending, "messageId": "malformed"}),
             false,

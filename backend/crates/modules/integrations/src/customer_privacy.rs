@@ -3,18 +3,18 @@ use uuid::Uuid;
 
 // UUID parameters come from Uuid::to_string, which uses canonical lowercase spelling.
 // Require one structured match and reject any supplied identifier that conflicts with
-// it or cannot be verified. Text comparisons keep malformed UUIDs from causing errors.
+// it or cannot be verified. Only absent fields may bypass a conflict check.
 const CUSTOMER_DELIVERY_PREDICATE: &str = "
     tenant_id = $1
-    AND (lower(payload->>'customer_id') = $2 OR lower(payload->>'customerId') = $2
-         OR lower(payload->>'conversation_id') = ANY($3) OR lower(payload->>'conversationId') = ANY($3)
-         OR lower(payload->>'message_id') = ANY($4) OR lower(payload->>'messageId') = ANY($4))
-    AND COALESCE(lower(payload->>'customer_id') = $2, true)
-    AND COALESCE(lower(payload->>'customerId') = $2, true)
-    AND COALESCE(lower(payload->>'conversation_id') = ANY($3), true)
-    AND COALESCE(lower(payload->>'conversationId') = ANY($3), true)
-    AND COALESCE(lower(payload->>'message_id') = ANY($4), true)
-    AND COALESCE(lower(payload->>'messageId') = ANY($4), true)";
+    AND (privacy_normalized_uuid(payload->>'customer_id') = $2 OR privacy_normalized_uuid(payload->>'customerId') = $2
+         OR privacy_normalized_uuid(payload->>'conversation_id') = ANY($3) OR privacy_normalized_uuid(payload->>'conversationId') = ANY($3)
+         OR privacy_normalized_uuid(payload->>'message_id') = ANY($4) OR privacy_normalized_uuid(payload->>'messageId') = ANY($4))
+    AND COALESCE(privacy_normalized_uuid(payload->>'customer_id') = $2, payload->>'customer_id' IS NULL)
+    AND COALESCE(privacy_normalized_uuid(payload->>'customerId') = $2, payload->>'customerId' IS NULL)
+    AND COALESCE(privacy_normalized_uuid(payload->>'conversation_id') = ANY($3), payload->>'conversation_id' IS NULL)
+    AND COALESCE(privacy_normalized_uuid(payload->>'conversationId') = ANY($3), payload->>'conversationId' IS NULL)
+    AND COALESCE(privacy_normalized_uuid(payload->>'message_id') = ANY($4), payload->>'message_id' IS NULL)
+    AND COALESCE(privacy_normalized_uuid(payload->>'messageId') = ANY($4), payload->>'messageId' IS NULL)";
 
 /// Stream all webhook deliveries attributed to the customer into the export.
 /// The connection must belong to the caller's tenant Unit of Work, and the

@@ -53,9 +53,10 @@ Keep the customer row as a tombstone with `erased_at`. Clear personal columns an
 identifiers so a new contact can create a new customer. Remove widget sessions and attachments.
 Preserve the operational rows and structural columns read by analytics. Scrub personal content
 according to the inventory. Fence reads and new writes while erasure is pending, including
-workers and delivery callbacks. Export singly attributable webhook deliveries, and record
-late deliveries for pending or erased customers with an empty payload. Publish completion
-only after required steps finish.
+workers and delivery callbacks. Accept any valid UUID spelling when attributing webhook
+deliveries for export, erasure, and late delivery handling. Record late deliveries for
+pending or erased customers with an empty payload. Publish completion after all required
+steps finish.
 
 Write `customer.export_requested`, `customer.export_completed`,
 `customer.erase_requested` and `customer.erased` audit entries with actor, tenant, customer

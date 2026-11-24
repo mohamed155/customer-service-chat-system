@@ -1,9 +1,21 @@
+-- Validate the compact spelling before casting and return one canonical representation.
+CREATE FUNCTION privacy_normalized_uuid(text) RETURNS text
+LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+SET search_path = pg_catalog, public, pg_temp AS $$
+    SELECT CASE WHEN compact ~ '^[0-9a-f]{32}$' THEN compact::uuid::text END
+      FROM (VALUES (lower(translate($1, '{}-', '')))) AS input(compact)
+$$;
+
+REVOKE ALL ON FUNCTION privacy_normalized_uuid(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION privacy_normalized_uuid(text) TO app_runtime, app_platform;
+
 -- Keep the delivery receipt while fencing writes of payloads attributed to an erasing subject.
 CREATE FUNCTION scrub_erasing_customer_webhook_delivery() RETURNS trigger
 LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
     field_name text;
     raw_id text;
+    normalized_id text;
     parsed_id uuid;
     candidate uuid;
     subject uuid;
@@ -16,10 +28,11 @@ BEGIN
         IF raw_id IS NULL THEN
             CONTINUE;
         END IF;
-        IF raw_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        normalized_id := privacy_normalized_uuid(raw_id);
+        IF normalized_id IS NULL THEN
             RETURN NEW;
         END IF;
-        parsed_id := raw_id::uuid;
+        parsed_id := normalized_id::uuid;
 
         CASE field_name
             WHEN 'customer_id', 'customerId' THEN
